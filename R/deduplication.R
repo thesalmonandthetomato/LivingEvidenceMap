@@ -82,6 +82,13 @@ find_exact_duplicate_pairs <- function(data, fields, method) {
   })
 }
 
+empty_duplicate_pairs <- function() {
+  tibble::tibble(
+    record_i = integer(), record_j = integer(), method = character(),
+    status = character(), record_id_i = character(), record_id_j = character()
+  )
+}
+
 #' Generate Bramer-style duplicate candidates.
 #'
 #' Passes A and B are high-specificity automatic matches. Passes C-G reproduce
@@ -103,10 +110,14 @@ find_duplicate_candidates <- function(records) {
     find_exact_duplicate_pairs(data, c(".dedup_author", ".dedup_year"), "G_author_year")
   )
 
-  dplyr::bind_rows(
+  combined <- dplyr::bind_rows(
     automatic |> dplyr::mutate(status = "duplicate"),
     review |> dplyr::mutate(status = "review")
-  ) |>
+  )
+
+  if (!nrow(combined)) return(empty_duplicate_pairs())
+
+  combined |>
     dplyr::distinct(record_i, record_j, .keep_all = TRUE) |>
     dplyr::mutate(
       record_id_i = records$record_id[record_i],
