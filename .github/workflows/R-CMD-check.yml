@@ -18,4 +18,5 @@ jobs:
           extra-packages: any::testthat, any::dplyr, any::stringr, any::tibble
           needs: check
       - name: Run testthat
-        run: Rscript -e 'testthat::test_dir("tests/testthat")'
+        run: |
+          Rscript -e 'testthat::test_dir("tests/testthat", reporter = "progress")'
