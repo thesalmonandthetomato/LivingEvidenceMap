@@ -15,7 +15,7 @@ jobs:
           r-version: 'release'
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::testthat, any::dplyr, any::stringr, any::tibble
+          extra-packages: any::testthat, any::dplyr, any::stringr, any::tibble, any::purrr, any::stringi, any::stringdist, any::quanteda, any::glmnet, any::Matrix
           needs: check
       - name: Run testthat
         run: Rscript -e 'testthat::test_dir("tests/testthat", reporter = "progress")'
