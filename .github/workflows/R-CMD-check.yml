@@ -17,6 +17,13 @@ jobs:
         with:
           extra-packages: any::testthat, any::dplyr, any::stringr, any::tibble
           needs: check
-      - name: Run testthat
+      - name: Run testthat files individually
+        shell: bash
         run: |
-          Rscript -e 'testthat::test_dir("tests/testthat", reporter = "progress")'
+          set -o pipefail
+          for file in tests/testthat/test-*.R; do
+            echo "============================================================"
+            echo "RUNNING: $file"
+            echo "============================================================"
+            Rscript -e 'testthat::test_file(commandArgs(trailingOnly = TRUE)[1], reporter = "progress")' -- "$file"
+          done
