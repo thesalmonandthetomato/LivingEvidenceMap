@@ -27,14 +27,12 @@ testthat::test_that("target validation rejects missing required columns", {
 
 testthat::test_that("target configuration resolves relative record paths", {
   path <- tempfile(fileext = ".yml")
-  con <- file(path, open = "wt")
-  on.exit(close(con), add = TRUE)
+  on.exit(unlink(path), add = TRUE)
   writeLines(c(
     "target:",
     "  name: TEST",
     "  records_file: records.csv"
-  ), con)
-  close(con)
+  ), con = path)
   config <- read_target_config(path)
   testthat::expect_equal(config$target$name, "TEST")
   testthat::expect_true(fs::is_absolute_path(config$target$records_file))
