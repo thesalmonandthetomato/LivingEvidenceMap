@@ -1,0 +1,29 @@
+# R / RStudio
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# renv local state
+renv/library/
+renv/staging/
+renv/cache/
+
+# Local configuration / secrets
+.env
+*.local.yml
+
+# Generated outputs
+outputs/
+
+# Local raw data
+# Keep project reference dictionaries under version control; do not commit
+# sensitive or restricted source datasets.
+data/raw/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
