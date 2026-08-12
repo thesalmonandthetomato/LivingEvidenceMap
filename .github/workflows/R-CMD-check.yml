@@ -17,33 +17,5 @@ jobs:
         with:
           extra-packages: any::testthat, any::dplyr, any::stringr, any::tibble
           needs: check
-      - name: Run testthat files and capture diagnostics
-        shell: bash
-        run: |
-          set +e
-          mkdir -p testthat-logs
-          status=0
-          for file in tests/testthat/test-*.R; do
-            name=$(basename "$file" .R)
-            echo "============================================================"
-            echo "RUNNING: $file"
-            echo "============================================================"
-            TEST_FILE="$file" Rscript -e 'testthat::test_file(Sys.getenv("TEST_FILE"), reporter = "progress")' > "testthat-logs/${name}.log" 2>&1
-            rc=$?
-            cat "testthat-logs/${name}.log"
-            if [ "$rc" -ne 0 ]; then
-              status=1
-              echo "FAILED: $file (exit $rc)"
-            else
-              echo "PASSED: $file"
-            fi
-          done
-          echo "Overall test status: $status"
-          exit "$status"
-      - name: Upload testthat diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: testthat-logs
-          path: testthat-logs/
-          if-no-files-found: error
+      - name: Run testthat
+        run: Rscript -e 'testthat::test_dir("tests/testthat", reporter = "progress")'
