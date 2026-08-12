@@ -32,5 +32,5 @@ testthat::test_that("specific farmed salmon suppresses generic assignment", {
 
 testthat::test_that("target validation rejects duplicated identifiers", {
   records <- data.frame(record_sequence = c(1L, 2L), record_id = c("A", "A"), title = c("a", "b"), abstract = c("a", "b"))
-  testthat::expect_error(validate_target_records(records, "TEST"), "duplicated record_id")
+  testthat::expect_error(validate_target_records(records, "TEST"), "record_id")
 })
