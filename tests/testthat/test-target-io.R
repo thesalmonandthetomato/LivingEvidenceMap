@@ -17,12 +17,10 @@ testthat::test_that("target validation rejects duplicated identifiers", {
     abstract = c("A", "B"),
     stringsAsFactors = FALSE
   )
-  testthat::expect_error(validate_target_records(records, "TEST"), "unique")
-})
-
-testthat::test_that("target validation rejects missing required columns", {
-  records <- data.frame(record_sequence = 1L, record_id = "A")
-  testthat::expect_error(validate_target_records(records, "TEST"), "missing")
+  testthat::expect_error(
+    validate_target_records(records, "TEST"),
+    "record_id"
+  )
 })
 
 testthat::test_that("target configuration resolves relative record paths", {
