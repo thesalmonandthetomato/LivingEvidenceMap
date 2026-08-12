@@ -1,7 +1,13 @@
 # Load the species components directly for focused unit tests.
-# Package installation and namespace/export design will be added once the
-# core modules are stable; these tests deliberately exercise the source files.
+#
+# Resolve paths from the test file rather than relying on the process working
+# directory. This keeps the tests reproducible under both testthat and CI.
 
-source(file.path("R", "target.R"), local = FALSE)
-source(file.path("R", "species_detect.R"), local = FALSE)
-source(file.path("R", "species_assign.R"), local = FALSE)
+project_root <- normalizePath(
+  file.path(testthat::test_path(), "..", ".."),
+  mustWork = TRUE
+)
+
+source(file.path(project_root, "R", "target.R"), local = FALSE)
+source(file.path(project_root, "R", "species_detect.R"), local = FALSE)
+source(file.path(project_root, "R", "species_assign.R"), local = FALSE)
