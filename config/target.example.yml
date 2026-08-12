@@ -1,0 +1,16 @@
+# Copy this file for a concrete run, e.g. config/target_update_2026_08.yml.
+# Paths are resolved relative to this configuration file.
+
+target:
+  name: example
+  records_file: ../data/records.csv
+
+  # Existing annotation tables are declared here so the runner can reuse them.
+  # They are inputs, not files that the pipeline silently regenerates.
+  annotations:
+    species: ../data/annotations/species.csv
+    geography: ../data/annotations/geography.csv
+    primary_country: ../data/annotations/primary_country.csv
+
+output:
+  directory: ../outputs/example
