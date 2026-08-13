@@ -156,21 +156,32 @@ if (nrow(llm_input)) {
     stop("OPENAI_API_KEY is required because statistically uncertain records remain.")
   }
 
-  llm_results <- purrr::map_dfr(seq_len(nrow(llm_input)), function(i) {
-    row <- llm_input[i, ]
+  batch_size <- 25L
+  batch_starts <- seq(1L, nrow(llm_input), by = batch_size)
+  n_batches <- length(batch_starts)
+  message(sprintf(
+    "LLM screening: %d records in %d batches of up to %d.",
+    nrow(llm_input), n_batches, batch_size
+  ))
+
+  llm_results <- purrr::map_dfr(seq_along(batch_starts), function(batch_index) {
+    start <- batch_starts[[batch_index]]
+    end <- min(start + batch_size - 1L, nrow(llm_input))
+    batch <- llm_input[start:end, ]
 
     message(sprintf(
-      "LLM screening: record %d/%d.",
-      i, nrow(llm_input)
+      "LLM screening: batch %d/%d (%d records).",
+      batch_index, n_batches, nrow(batch)
     ))
 
-    screen_salmon_record(
-      llm_record_key = row$llm_record_key,
-      record_id = row$record_id,
-      title = row$title,
-      abstract = row$abstract,
-      api_key = api_key
-    )
+    result <- screen_salmon_batch(batch, api_key = api_key)
+
+    message(sprintf(
+      "LLM screening: batch %d/%d complete (%d records).",
+      batch_index, n_batches, nrow(result)
+    ))
+
+    result
   })
 } else {
   llm_results <- tibble::tibble(
@@ -182,6 +193,14 @@ if (nrow(llm_input)) {
     llm_error = character()
   )
 }
+
+if (nrow(llm_results) != nrow(llm_input)) {
+  stop(sprintf(
+    "LLM screening returned %d results for %d input records.",
+    nrow(llm_results), nrow(llm_input)
+  ))
+}
+
 readr::write_csv(llm_results, fs::path(output_dir, "llm_screening.csv"), na = "")
 
 final_screened <- relevance |>
