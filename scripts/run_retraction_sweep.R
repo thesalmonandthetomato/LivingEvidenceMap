@@ -46,13 +46,15 @@ now <- Sys.time()
 max_dois_per_run <- as.integer(Sys.getenv("OPENALEX_SWEEP_MAX_DOIS", "500"))
 if (is.na(max_dois_per_run) || max_dois_per_run < 1) max_dois_per_run <- 500L
 
-due <- corpus_dois |>
+due_all <- corpus_dois |>
   left_join(cache |> select(doi_for_lookup, next_check_at), by = "doi_for_lookup") |>
-  filter(is.na(next_check_at) | next_check_at <= now) |>
-  arrange(is.na(next_check_at), next_check_at, doi_for_lookup) |>
+  filter(is.na(next_check_at) | next_check_at <= now)
+
+due <- due_all |>
+  arrange(!is.na(next_check_at), next_check_at, doi_for_lookup) |>
   slice_head(n = max_dois_per_run)
 
-message(sprintf("Retraction sweep: %d corpus DOIs; %d due; checking %d this run.", nrow(corpus_dois), sum(is.na(corpus_dois$doi_for_lookup) == FALSE), nrow(due)))
+message(sprintf("Retraction sweep: %d corpus DOIs; %d due; checking %d this run.", nrow(corpus_dois), nrow(due_all), nrow(due)))
 
 if (nrow(due)) {
   results <- lookup_openalex_dois(due$doi_for_lookup, api_key = api_key, batch_size = 50L) |>
@@ -87,7 +89,7 @@ readr::write_csv(newly_detected, detected_file, na = "")
 readr::write_csv(
   tibble::tibble(
     swept_at = format(now, tz = "UTC", usetz = TRUE), corpus_dois = nrow(corpus_dois),
-    due_dois = nrow(due), checked_dois = nrow(due), currently_retracted = nrow(current_retracted),
+    due_dois = nrow(due_all), checked_dois = nrow(due), currently_retracted = nrow(current_retracted),
     newly_detected_retractions = nrow(newly_detected)
   ),
   sweep_audit_file,
