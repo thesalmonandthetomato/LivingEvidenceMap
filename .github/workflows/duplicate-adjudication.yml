@@ -1,16 +1,18 @@
-name: Duplicate adjudication
+name: Lens update
 
 on:
   workflow_dispatch:
 
 jobs:
-  adjudicate:
+  update:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: r-lib/actions/setup-r@v2
         with:
           r-version: 'release'
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           packages: |
@@ -29,34 +31,16 @@ jobs:
             any::quanteda
             any::glmnet
             any::Matrix
-      - name: Rebuild deterministic duplicate audit
-        run: Rscript scripts/run_lens_pre_llm.R
-      - name: Run API duplicate adjudication
+            any::purrr
+
+      - name: Run Lens update
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          Rscript - <<'RSCRIPT'
-          source("R/read_corpus.R")
-          source("scripts/duplicate_adjudication.R")
-          audit <- readr::read_csv("data/updates/2026-08-13_lens/deduplication_audit.csv", show_col_types = FALSE)
-          candidates <- audit |>
-            dplyr::filter(duplicate_status %in% c("probable_duplicate", "possible_duplicate", "doi_conflict_review"))
-          if (nrow(candidates) != 7) stop(sprintf("Expected 7 residual candidates, found %d", nrow(candidates)))
-          tmp <- tempfile(fileext = ".csv")
-          readr::write_csv(candidates, tmp)
-          run_duplicate_adjudication(
-            tmp,
-            "data/updates/2026-08-13_lens/lens-export.ris",
-            "data/reference/salmon_evidence_map.csv",
-            "data/updates/2026-08-13_lens/duplicate_adjudication.csv"
-          )
-          result <- readr::read_csv("data/updates/2026-08-13_lens/duplicate_adjudication.csv", show_col_types = FALSE)
-          if (nrow(result) != 7) stop(sprintf("Expected 7 adjudications, found %d", nrow(result)))
-          if (any(!result$decision %in% c("duplicate", "not_duplicate", "uncertain"))) stop("Invalid adjudication decision")
-          RSCRIPT
-      - name: Upload adjudication output
+        run: Rscript scripts/run_lens_update.R
+
+      - name: Upload Lens update outputs
         uses: actions/upload-artifact@v4
         with:
-          name: duplicate-adjudication
-          path: data/updates/2026-08-13_lens/duplicate_adjudication.csv
+          name: lens-update-2026-08-13
+          path: data/updates/2026-08-13_lens/
           if-no-files-found: error
