@@ -21,6 +21,29 @@ salmon_llm_response_schema <- function() {
   list(type="object", properties=list(decision=list(type="string", enum=c("retain","exclude","uncertain")), reason=list(type="string")), required=c("decision","reason"), additionalProperties=FALSE)
 }
 
+salmon_llm_batch_response_schema <- function() {
+  list(
+    type = "object",
+    properties = list(
+      results = list(
+        type = "array",
+        items = list(
+          type = "object",
+          properties = list(
+            record_id = list(type = "string"),
+            decision = list(type = "string", enum = c("retain", "exclude", "uncertain")),
+            reason = list(type = "string")
+          ),
+          required = c("record_id", "decision", "reason"),
+          additionalProperties = FALSE
+        )
+      )
+    ),
+    required = c("results"),
+    additionalProperties = FALSE
+  )
+}
+
 extract_openai_output_text <- function(response) {
   message_items <- response$output[vapply(response$output, function(item) identical(item$type,"message"), logical(1))]
   content_items <- unlist(lapply(message_items, function(item) item$content), recursive=FALSE)
@@ -39,4 +62,82 @@ screen_salmon_record <- function(llm_record_key, record_id, title, abstract, api
   }, error=function(e) structure(list(message=conditionMessage(e)),class="screening_error"))
   if (inherits(parsed,"screening_error")) return(tibble::tibble(llm_record_key=llm_record_key,record_id=record_id,llm_decision="uncertain",llm_reason=NA_character_,llm_failed=TRUE,llm_error=parsed$message))
   tibble::tibble(llm_record_key=llm_record_key,record_id=record_id,llm_decision=parsed$decision,llm_reason=parsed$reason,llm_failed=FALSE,llm_error=NA_character_)
+}
+
+screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5-mini") {
+  if (!nzchar(api_key)) stop("OPENAI_API_KEY was not found.")
+  if (!nrow(records)) return(tibble::tibble())
+
+  record_blocks <- vapply(seq_len(nrow(records)), function(i) {
+    paste0(
+      "RECORD_ID: ", records$record_id[[i]], "\n",
+      "TITLE\n", dplyr::coalesce(as.character(records$title[[i]]), ""), "\n\n",
+      "ABSTRACT\n", dplyr::coalesce(as.character(records$abstract[[i]]), ""), "\n"
+    )
+  }, character(1))
+
+  user_prompt <- paste0(
+    "Screen every record below independently. Return exactly one result for every supplied RECORD_ID. ",
+    "Do not omit records, merge records, or invent RECORD_IDs. Base each decision only on its supplied title and abstract.\n\n",
+    paste(record_blocks, collapse = "\n---\n")
+  )
+
+  body <- list(
+    model = model,
+    store = FALSE,
+    reasoning = list(effort = "low"),
+    input = list(
+      list(role="system", content=list(list(type="input_text", text=salmon_llm_system_prompt()))),
+      list(role="user", content=list(list(type="input_text", text=user_prompt)))
+    ),
+    text = list(
+      verbosity = "low",
+      format = list(
+        type = "json_schema",
+        name = "salmon_farming_relevance_batch",
+        strict = TRUE,
+        schema = salmon_llm_batch_response_schema()
+      )
+    )
+  )
+
+  tryCatch({
+    response <- httr2::request("https://api.openai.com/v1/responses") |>
+      httr2::req_auth_bearer_token(api_key) |>
+      httr2::req_body_json(body, auto_unbox=TRUE) |>
+      httr2::req_timeout(180) |>
+      httr2::req_retry(max_tries=4, backoff=~ 2^.x) |>
+      httr2::req_perform() |>
+      httr2::resp_body_json()
+
+    parsed <- jsonlite::fromJSON(extract_openai_output_text(response), simplifyVector=TRUE)
+    results <- parsed$results
+    if (is.null(results) || !nrow(results)) stop("Batch response contained no results.")
+
+    expected_ids <- as.character(records$record_id)
+    returned_ids <- as.character(results$record_id)
+    if (length(returned_ids) != length(expected_ids) || anyDuplicated(returned_ids) || !setequal(returned_ids, expected_ids)) {
+      stop(sprintf("Batch response record IDs did not match input IDs (expected %d, returned %d).", length(expected_ids), length(returned_ids)))
+    }
+
+    results |>
+      dplyr::transmute(
+        record_id = as.character(record_id),
+        llm_decision = as.character(decision),
+        llm_reason = as.character(reason),
+        llm_failed = FALSE,
+        llm_error = NA_character_
+      ) |>
+      dplyr::left_join(records |> dplyr::select(record_id, llm_record_key), by="record_id") |>
+      dplyr::select(llm_record_key, record_id, llm_decision, llm_reason, llm_failed, llm_error)
+  }, error=function(e) {
+    tibble::tibble(
+      llm_record_key = records$llm_record_key,
+      record_id = records$record_id,
+      llm_decision = "uncertain",
+      llm_reason = NA_character_,
+      llm_failed = TRUE,
+      llm_error = conditionMessage(e)
+    )
+  })
 }
