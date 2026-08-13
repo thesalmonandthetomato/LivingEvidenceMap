@@ -60,10 +60,11 @@ if (!length(ris_files)) {
 # -----------------------------------------------------------------------------
 # 1. Import
 # -----------------------------------------------------------------------------
-incoming <- dplyr::bind_rows(lapply(ris_files, read_corpus)) |>
-  dplyr::mutate(
-    source_file = rep(basename(ris_files), lengths(lapply(ris_files, function(x) read_corpus(x)$record_id)))
-  )
+incoming <- purrr::map_dfr(ris_files, function(path) {
+  read_corpus(path) |>
+    dplyr::mutate(source_file = basename(path))
+}) |>
+  dplyr::mutate(record_sequence = dplyr::row_number())
 
 historical <- dplyr::bind_rows(
   read_corpus(include_file) |>
