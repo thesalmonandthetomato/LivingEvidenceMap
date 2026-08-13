@@ -1,0 +1,27 @@
+name: Lens input validation
+
+on:
+  push:
+    paths:
+      - 'data/updates/**/lens-export.ris'
+      - 'scripts/validate_lens_update.R'
+      - '.github/workflows/lens-input-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-lens-input:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::fs
+            any::here
+            any::readr
+            any::tibble
+      - name: Validate Lens RIS input
+        run: Rscript -e 'source("scripts/validate_lens_update.R"); validate_lens_update("data/updates/2026-08-13_lens/lens-export.ris")'
