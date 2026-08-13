@@ -37,8 +37,6 @@ adjudicate_duplicate <- function(incoming, historical, model = Sys.getenv("OPENA
     req_perform() |>
     resp_body_json()
 
-  # Responses API may contain several output items. Extract the first message's
-  # output_text explicitly rather than relying on positional indexing.
   message_items <- Filter(function(x) is.list(x) && identical(x$type, "message"), response$output)
   if (!length(message_items)) stop("No message output returned by Responses API")
   text_items <- unlist(lapply(message_items, function(x) {
@@ -57,26 +55,25 @@ adjudicate_duplicate <- function(incoming, historical, model = Sys.getenv("OPENA
     stop("Duplicate adjudication returned unexpected JSON keys")
   }
 
-  decision <- parsed[["decision"]][[1]]
-  confidence <- suppressWarnings(as.numeric(parsed[["confidence"]][[1]]))
-  rationale <- parsed[["rationale"]][[1]]
+  decision <- parsed[["decision"]]
+  confidence <- parsed[["confidence"]]
+  rationale <- parsed[["rationale"]]
 
+  # jsonlite returns scalar JSON values as length-one atomic vectors when
+  # simplifyVector=FALSE; do not index them a second time.
   if (!is.character(decision) || length(decision) != 1L ||
       !decision %in% c("duplicate", "not_duplicate", "uncertain")) {
     stop("Invalid duplicate adjudication decision")
   }
-  if (is.na(confidence) || length(confidence) != 1L || confidence < 0 || confidence > 1) {
+  confidence <- suppressWarnings(as.numeric(confidence))
+  if (length(confidence) != 1L || is.na(confidence) || confidence < 0 || confidence > 1) {
     stop("Invalid duplicate adjudication confidence")
   }
   if (!is.character(rationale) || length(rationale) != 1L || is.na(rationale) || !nzchar(rationale)) {
     stop("Duplicate adjudication rationale is empty")
   }
 
-  list(
-  decision = decision,
-  confidence = confidence,
-  rationale = rationale
-)
+  list(decision = decision, confidence = confidence, rationale = rationale)
 }
 
 run_duplicate_adjudication <- function(candidate_file, incoming_file, historical_file, output_file) {
@@ -97,9 +94,9 @@ run_duplicate_adjudication <- function(candidate_file, incoming_file, historical
       matched_master_record_id = candidate$matched_master_record_id,
       duplicate_basis = candidate$duplicate_basis,
       title_similarity = candidate$title_similarity,
-      decision = as.character(decision[["decision"]]),
-      confidence = as.numeric(decision[["confidence"]]),
-      rationale = as.character(decision[["rationale"]])
+      decision = as.character(decision$decision),
+      confidence = as.numeric(decision$confidence),
+      rationale = as.character(decision$rationale)
     )
   }) |> bind_rows()
 
