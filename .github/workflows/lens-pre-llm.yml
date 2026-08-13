@@ -35,3 +35,13 @@ jobs:
             any::tidyr
       - name: Run Lens import and deduplication
         run: Rscript scripts/run_lens_pre_llm.R
+      - name: Upload pre-LLM audit outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-pre-llm-audit
+          path: |
+            data/updates/2026-08-13_lens/deduplication_audit.csv
+            data/updates/2026-08-13_lens/records_after_deduplication.csv
+            data/updates/2026-08-13_lens/pre_llm_summary.csv
+            data/updates/2026-08-13_lens/input_validation.csv
+          if-no-files-found: error
