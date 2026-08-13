@@ -3,7 +3,7 @@
 # Purpose: Run the established salmon scoping-review Lens update workflow.
 # =============================================================================
 
-source("scripts/00_setup.R")
+source("scripts/setup_pipeline.R")
 source("scripts/validate_lens_update.R")
 source("R/read_corpus.R")
 source("R/deduplication.R")
@@ -26,17 +26,17 @@ fs::dir_create(output_dir)
 # processing or API calls.
 validate_lens_update(incoming_file)
 
-# Reference assets must exist before processing starts.
+# 1. Reference assets
 stopifnot(file.exists(existing_corpus_file), file.exists(model_file))
 
-# 1. Import
+# 2. Import
 incoming <- read_corpus(incoming_file) |>
   dplyr::mutate(source_file = basename(incoming_file), record_sequence = dplyr::row_number(), .source = "incoming")
 
 historical <- readr::read_csv(existing_corpus_file, show_col_types = FALSE, progress = FALSE) |>
   dplyr::mutate(.source = "existing")
 
-# 2. Deduplication
+# 3. Deduplication
 
 dedup <- deduplicate_records(records = incoming, existing_records = historical)
 combined <- dedup$records
@@ -50,17 +50,17 @@ new_records <- combined[setdiff(incoming_indices, removed_incoming_indices), , d
 readr::write_csv(dplyr::bind_rows(dedup$automatic_duplicates, dedup$review_candidates), fs::path(output_dir, "deduplication_audit.csv"), na = "")
 readr::write_csv(new_records, fs::path(output_dir, "records_after_deduplication.csv"), na = "")
 
-# 3. Publication status / retractions
+# 4. Publication status / retractions
 publication <- check_publication_status(new_records)
 readr::write_csv(publication$audit, fs::path(output_dir, "publication_status_audit.csv"), na = "")
 readr::write_csv(publication$removed, fs::path(output_dir, "removed_retractions_and_notices.csv"), na = "")
 readr::write_csv(publication$cleared, fs::path(output_dir, "records_after_publication_status.csv"), na = "")
 
-# 4. Statistical relevance screening
+# 5. Statistical relevance screening
 relevance <- screen_with_saved_relevance_model(publication$cleared, model_path = model_file)
 readr::write_csv(relevance, fs::path(output_dir, "relevance_screening.csv"), na = "")
 
-# 5. LLM adjudication of statistical uncertainty
+# 6. LLM adjudication of statistical uncertainty
 llm_input <- relevance |>
   dplyr::filter(relevance_decision == "review") |>
   dplyr::mutate(llm_record_key = dplyr::row_number())
@@ -99,23 +99,10 @@ readr::write_csv(retained, fs::path(output_dir, "records_retained_for_annotation
 readr::write_csv(final_screened |> dplyr::filter(final_screening_decision == "uncertain"),
                 fs::path(output_dir, "screening_uncertain.csv"), na = "")
 
-summary <- tibble::tibble(
-  stage = c("Lens RIS records", "Removed as definitive duplicates", "Remaining after deduplication",
-            "Removed as retractions/notices", "Remaining after publication status", "Automatic retain",
-            "Automatic exclude", "LLM retain", "LLM exclude", "Still uncertain"),
-  n = c(nrow(incoming), length(removed_incoming_indices), nrow(new_records), nrow(publication$removed),
-        nrow(publication$cleared), sum(relevance$relevance_decision == "automatic_retain"),
-        sum(relevance$relevance_decision == "automatic_exclude"),
-        sum(final_screened$final_screening_decision == "retain" & relevance$relevance_decision == "review"),
-        sum(final_screened$final_screening_decision == "exclude" & relevance$relevance_decision == "review"),
-        sum(final_screened$final_screening_decision == "uncertain"))
-)
-readr::write_csv(summary, fs::path(output_dir, "screening_summary.csv"), na = "")
-
-# 6-8. Species, geography, and annotation adjudication
+# 7-9. Species, geography, and annotation adjudication
 source("scripts/annotate_lens_update.R")
 
-# 9. Topics are always last. For this refresh, run only the controlled API smoke test.
+# 10. Topics remain last. This refresh runs only the controlled topic API smoke test.
 source("scripts/topic_smoke_test.R")
 
 message("Lens update completed through species/geography adjudication and topic smoke test.")
