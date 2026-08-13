@@ -4,7 +4,7 @@
 # =============================================================================
 
 required_packages <- c(
-  "dplyr", "fs", "glmnet", "here", "Matrix", "purrr", "quanteda",
+  "digest", "dplyr", "fs", "glmnet", "here", "Matrix", "purrr", "quanteda",
   "readr", "stringdist", "stringi", "stringr", "tibble", "tidyr", "yaml"
 )
 
