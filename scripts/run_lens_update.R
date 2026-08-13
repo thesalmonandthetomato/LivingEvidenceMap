@@ -2,13 +2,16 @@
 # File: scripts/run_lens_update.R
 # Purpose: Run the Lens update with deterministic deduplication followed by
 #          API adjudication of residual duplicate candidates.
+#
+# Retraction/publication-status surveillance is deliberately NOT part of this
+# critical update path. Existing-corpus surveillance is handled asynchronously
+# by the rolling retraction sweep; Lens ingestion must not block on OpenAlex.
 # =============================================================================
 
 source("scripts/setup_pipeline.R")
 source("scripts/validate_lens_update.R")
 source("R/read_corpus.R")
 source("R/relevance_screening.R")
-source("R/publication_status.R")
 source("R/load_relevance_model.R")
 source("R/llm_screening.R")
 source("scripts/duplicate_adjudication.R")
@@ -107,14 +110,11 @@ summary <- tibble::tibble(
 readr::write_csv(summary, fs::path(output_dir, "pre_llm_summary.csv"), na = "")
 print(summary)
 
-# Publication-status checks here are limited to NEW records only. The
-# established corpus is monitored separately by the rolling retraction sweep.
-publication <- check_publication_status(new_records)
-readr::write_csv(publication$audit, fs::path(output_dir, "publication_status_audit.csv"), na = "")
-readr::write_csv(publication$removed, fs::path(output_dir, "removed_retractions_and_notices.csv"), na = "")
-readr::write_csv(publication$cleared, fs::path(output_dir, "records_after_publication_status.csv"), na = "")
-
-relevance <- screen_with_saved_relevance_model(publication$cleared, model_path = model_file)
+# No OpenAlex/publication-status call here. Retraction and publication-status
+# surveillance is asynchronous and handled by the rolling retraction sweep.
+# New records proceed directly to relevance screening; this keeps the Lens
+# ingestion path deterministic and prevents external API latency from blocking it.
+relevance <- screen_with_saved_relevance_model(new_records, model_path = model_file)
 readr::write_csv(relevance, fs::path(output_dir, "relevance_screening.csv"), na = "")
 
 llm_input <- relevance |> dplyr::filter(relevance_decision == "review") |> dplyr::mutate(llm_record_key = dplyr::row_number())
