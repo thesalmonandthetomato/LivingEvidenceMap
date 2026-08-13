@@ -37,28 +37,38 @@ adjudicate_duplicate <- function(incoming, historical, model = Sys.getenv("OPENA
     req_perform() |>
     resp_body_json()
 
-  message_items <- response$output[vapply(response$output, function(x) identical(x$type, "message"), logical(1))]
-  content_items <- unlist(lapply(message_items, function(x) x$content), recursive = FALSE)
-  text_items <- content_items[vapply(content_items, function(x) identical(x$type, "output_text") && !is.null(x$text), logical(1))]
-  if (!length(text_items)) stop("No output_text returned")
+  # Responses API may contain several output items. Extract the first message's
+  # output_text explicitly rather than relying on positional indexing.
+  message_items <- Filter(function(x) is.list(x) && identical(x$type, "message"), response$output)
+  if (!length(message_items)) stop("No message output returned by Responses API")
+  text_items <- unlist(lapply(message_items, function(x) {
+    Filter(function(y) is.list(y) && identical(y$type, "output_text") && !is.null(y$text), x$content)
+  }), recursive = FALSE)
+  if (!length(text_items)) stop("No output_text returned by Responses API")
 
-  parsed <- jsonlite::fromJSON(text_items[[1]]$text, simplifyVector = TRUE)
+  raw_text <- text_items[[1]]$text
+  if (is.null(raw_text) || !is.character(raw_text) || length(raw_text) != 1L || !nzchar(raw_text)) {
+    stop("Responses API returned empty output_text")
+  }
+
+  parsed <- jsonlite::fromJSON(raw_text, simplifyVector = FALSE)
   required <- c("decision", "confidence", "rationale")
   if (!is.list(parsed) || !all(required %in% names(parsed))) {
     stop("Duplicate adjudication returned unexpected JSON keys")
   }
 
-  decision <- as.character(parsed$decision)[1]
-  confidence <- suppressWarnings(as.numeric(parsed$confidence)[1])
-  rationale <- as.character(parsed$rationale)[1]
+  decision <- parsed[["decision"]][[1]]
+  confidence <- suppressWarnings(as.numeric(parsed[["confidence"]][[1]]))
+  rationale <- parsed[["rationale"]][[1]]
 
-  if (!decision %in% c("duplicate", "not_duplicate", "uncertain")) {
-    stop(sprintf("Invalid duplicate adjudication decision: %s", decision))
+  if (!is.character(decision) || length(decision) != 1L ||
+      !decision %in% c("duplicate", "not_duplicate", "uncertain")) {
+    stop("Invalid duplicate adjudication decision")
   }
-  if (is.na(confidence) || confidence < 0 || confidence > 1) {
+  if (is.na(confidence) || length(confidence) != 1L || confidence < 0 || confidence > 1) {
     stop("Invalid duplicate adjudication confidence")
   }
-  if (is.na(rationale) || !nzchar(rationale)) {
+  if (!is.character(rationale) || length(rationale) != 1L || is.na(rationale) || !nzchar(rationale)) {
     stop("Duplicate adjudication rationale is empty")
   }
 
@@ -83,9 +93,9 @@ run_duplicate_adjudication <- function(candidate_file, incoming_file, historical
       matched_master_record_id = candidate$matched_master_record_id,
       duplicate_basis = candidate$duplicate_basis,
       title_similarity = candidate$title_similarity,
-      decision = decision$decision,
-      confidence = decision$confidence,
-      rationale = decision$rationale
+      decision = decision[["decision"]][[1]],
+      confidence = decision[["confidence"]][[1]],
+      rationale = decision[["rationale"]][[1]]
     )
   }) |> bind_rows()
 
