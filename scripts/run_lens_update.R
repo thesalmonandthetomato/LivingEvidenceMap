@@ -1,26 +1,10 @@
 # =============================================================================
 # File: scripts/run_lens_update.R
 # Purpose: Run the established salmon scoping-review Lens update workflow.
-#
-# Order:
-#   1. Import Lens RIS
-#   2. Deduplicate against the existing evidence-map corpus and within batch
-#   3. Remove publication notices/retractions
-#   4. Statistical relevance screening
-#   5. LLM adjudication of statistically uncertain screening records
-#   6. Species annotation
-#   7. Geography annotation
-#   8. Species/geography LLM adjudication
-#   9. Topic classification (small API smoke test only for this refresh)
-#
-# The topic methods remain part of the production pipeline and are always last.
-# This refresh does not reclassify the full corpus for topics.
-#
-# All inputs are read from LivingEvidenceMap. There is no runtime dependency on
-# the historical salmonscopingreview repository.
 # =============================================================================
 
 source("scripts/00_setup.R")
+source("scripts/validate_lens_update.R")
 source("R/read_corpus.R")
 source("R/deduplication.R")
 source("R/publication_status.R")
@@ -38,7 +22,12 @@ output_dir <- update_dir
 
 fs::dir_create(output_dir)
 
-stopifnot(file.exists(incoming_file), file.exists(existing_corpus_file), file.exists(model_file))
+# PRE-FLIGHT GATE: validate the uploaded Lens file before any downstream
+# processing or API calls.
+validate_lens_update(incoming_file)
+
+# Reference assets must exist before processing starts.
+stopifnot(file.exists(existing_corpus_file), file.exists(model_file))
 
 # 1. Import
 incoming <- read_corpus(incoming_file) |>
