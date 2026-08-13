@@ -1,7 +1,7 @@
 # Continue a screened Lens update through species/geography annotation and LLM adjudication.
 # Topic classification is the final pipeline stage and is handled separately.
 
-source("scripts/00_setup.R")
+source("scripts/setup_pipeline.R")
 source("R/species_detect.R")
 source("R/species_filter.R")
 source("R/species_assign.R")
@@ -15,13 +15,11 @@ records <- readr::read_csv(fs::path(out, "records_retained_for_annotation.csv"),
 species_dictionary <- readr::read_csv(here::here("config", "species_dictionary.csv"), show_col_types = FALSE)
 gazetteer <- readr::read_csv(here::here("config", "global_country_gazetteer_v3.csv"), show_col_types = FALSE)
 
-# Species annotation
 species <- annotate_species(records, species_dictionary)
 readr::write_csv(species$species_mentions, fs::path(out, "species_mentions.csv"), na = "")
 readr::write_csv(species$species_assignments, fs::path(out, "species_assignments.csv"), na = "")
 readr::write_csv(species$failures, fs::path(out, "species_annotation_failures.csv"), na = "")
 
-# Geography annotation
 geo_mentions <- detect_geography_mentions(records, gazetteer)
 geo <- assign_primary_country(geo_mentions)
 readr::write_csv(geo_mentions, fs::path(out, "geography_mentions.csv"), na = "")
@@ -44,14 +42,15 @@ openai_annotation_model <- function(system_prompt, user_prompt, schema,
                ),
                text = list(verbosity = "low", format = list(type = "json_schema",
                  name = "salmon_annotation_adjudication", strict = TRUE, schema = schema)))
-  response <- httr2::request("https://api.openai.com/v1/responses") |>
+  httr2::request("https://api.openai.com/v1/responses") |>
     httr2::req_auth_bearer_token(api_key) |>
     httr2::req_body_json(body, auto_unbox = TRUE) |>
     httr2::req_timeout(120) |>
     httr2::req_retry(max_tries = 4, backoff = ~ 2^.x) |>
     httr2::req_perform() |>
-    httr2::resp_body_json()
-  jsonlite::fromJSON(extract_openai_output_text(response), simplifyVector = TRUE)
+    httr2::resp_body_json() |>
+    extract_openai_output_text() |>
+    jsonlite::fromJSON(simplifyVector = TRUE)
 }
 
 if (nrow(queue)) {
@@ -69,13 +68,11 @@ final <- records |>
                      dplyr::summarise(
                        deterministic_species = paste(sort(unique(stats::na.omit(farmed_species))), collapse = "; "),
                        deterministic_species_ids = paste(sort(unique(stats::na.omit(farmed_species_id))), collapse = "; "),
-                       species_review_required = any(review_required), .groups = "drop"),
-                   by = "record_id") |>
+                       species_review_required = any(review_required), .groups = "drop"), by = "record_id") |>
   dplyr::left_join(geo$summary |>
                      dplyr::select(record_id, deterministic_primary_countries = primary_countries,
                                    deterministic_primary_iso3c = primary_iso3c,
-                                   geography_review_required = review_required),
-                   by = "record_id") |>
+                                   geography_review_required = review_required), by = "record_id") |>
   dplyr::left_join(adjudication, by = "record_id")
 
 readr::write_csv(final, fs::path(out, "records_after_species_geography_adjudication.csv"), na = "")
