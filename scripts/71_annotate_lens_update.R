@@ -10,7 +10,7 @@ source("R/geography_detect.R")
 source("R/geography_primary_country.R")
 source("R/llm_adjudication.R")
 
-out <- here::here("outputs", "lens_update")
+out <- here::here("data", "updates", "2026-08-13_lens")
 records <- readr::read_csv(fs::path(out, "records_retained_for_annotation.csv"), show_col_types=FALSE)
 species_dictionary <- readr::read_csv(here::here("config", "species_dictionary.csv"), show_col_types=FALSE)
 gazetteer <- readr::read_csv(here::here("config", "global_country_gazetteer_v3.csv"), show_col_types=FALSE)
