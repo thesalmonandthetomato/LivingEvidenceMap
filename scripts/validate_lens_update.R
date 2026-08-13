@@ -6,8 +6,6 @@
 # annotation, or LLM/API calls.
 # =============================================================================
 
-source("scripts/00_setup.R")
-
 validate_lens_update <- function(path, min_records = 1L) {
   if (!fs::file_exists(path)) {
     stop("Lens update file does not exist: ", path, call. = FALSE)
@@ -18,27 +16,19 @@ validate_lens_update <- function(path, min_records = 1L) {
     stop("Lens update file is empty: ", path, call. = FALSE)
   }
 
-  ext <- tolower(tools::file_ext(path))
-  if (ext != "ris") {
-    stop("Expected a Lens RIS file (.ris); received: .", ext, call. = FALSE)
+  if (tolower(tools::file_ext(path)) != "ris") {
+    stop("Expected a Lens RIS file (.ris).", call. = FALSE)
   }
 
   raw <- readLines(path, warn = FALSE, encoding = "UTF-8")
-  if (!length(raw)) stop("Lens RIS contains no text: ", path, call. = FALSE)
+  if (!length(raw)) stop("Lens RIS contains no text.", call. = FALSE)
 
-  # RIS records conventionally terminate with ER  -; accept whitespace around it.
   er_lines <- grep("^ER[[:space:]]*-[[:space:]]*$", raw, ignore.case = TRUE)
-  if (!length(er_lines)) {
-    stop("Lens RIS contains no recognisable RIS record terminators (ER  -).", call. = FALSE)
-  }
+  record_starts <- grep("^TY[[:space:]]*-[[:space:]]*", raw, ignore.case = TRUE)
+  titles <- grep("^TI[[:space:]]*-[[:space:]]*", raw, ignore.case = TRUE)
 
-  # Basic RIS structure: records should contain at least a type (TY) and title (TI).
-  record_starts <- grep("^TY[[:space:]]*-", raw, ignore.case = TRUE)
-  titles <- grep("^TI[[:space:]]*-", raw, ignore.case = TRUE)
-  if (length(record_starts) < min_records) {
-    stop("Lens RIS contains fewer records than expected (found ",
-         length(record_starts), ").", call. = FALSE)
-  }
+  if (!length(er_lines)) stop("Lens RIS contains no recognisable ER record terminators.", call. = FALSE)
+  if (length(record_starts) < min_records) stop("Lens RIS contains too few records.", call. = FALSE)
   if (!length(titles)) stop("Lens RIS contains no title fields.", call. = FALSE)
 
   report <- tibble::tibble(
