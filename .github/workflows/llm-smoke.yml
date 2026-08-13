@@ -1,6 +1,8 @@
 name: LLM smoke tests
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -13,7 +15,7 @@ jobs:
           r-version: 'release'
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          dependencies: any::testthat
+          dependencies: any::httr2 any::jsonlite any::tibble any::dplyr
       - name: Run one-record LLM smoke tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
