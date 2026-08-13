@@ -35,7 +35,25 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          Rscript -e 'source("R/read_corpus.R"); source("scripts/duplicate_adjudication.R"); run_duplicate_adjudication("data/updates/2026-08-13_lens/deduplication_audit.csv", "data/updates/2026-08-13_lens/lens-export.ris", "data/reference/salmon_evidence_map.csv", "data/updates/2026-08-13_lens/duplicate_adjudication.csv")'
+          Rscript - <<'RSCRIPT'
+          source("R/read_corpus.R")
+          source("scripts/duplicate_adjudication.R")
+          audit <- readr::read_csv("data/updates/2026-08-13_lens/deduplication_audit.csv", show_col_types = FALSE)
+          candidates <- audit |>
+            dplyr::filter(duplicate_status %in% c("probable_duplicate", "possible_duplicate", "doi_conflict_review"))
+          if (nrow(candidates) != 7) stop(sprintf("Expected 7 residual candidates, found %d", nrow(candidates)))
+          tmp <- tempfile(fileext = ".csv")
+          readr::write_csv(candidates, tmp)
+          run_duplicate_adjudication(
+            tmp,
+            "data/updates/2026-08-13_lens/lens-export.ris",
+            "data/reference/salmon_evidence_map.csv",
+            "data/updates/2026-08-13_lens/duplicate_adjudication.csv"
+          )
+          result <- readr::read_csv("data/updates/2026-08-13_lens/duplicate_adjudication.csv", show_col_types = FALSE)
+          if (nrow(result) != 7) stop(sprintf("Expected 7 adjudications, found %d", nrow(result)))
+          if (any(!result$decision %in% c("duplicate", "not_duplicate", "uncertain"))) stop("Invalid adjudication decision")
+          RSCRIPT
       - name: Upload adjudication output
         uses: actions/upload-artifact@v4
         with:
