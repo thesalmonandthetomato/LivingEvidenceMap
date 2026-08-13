@@ -1,0 +1,32 @@
+name: Duplicate adjudication
+
+on:
+  workflow_dispatch:
+
+jobs:
+  adjudicate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::readr
+            any::tibble
+      - name: Run duplicate adjudication
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          Rscript -e 'source("scripts/duplicate_adjudication.R"); run_duplicate_adjudication("data/updates/current/deduplication_audit.csv", "data/updates/current/records_after_deduplication.csv", "data/reference/historical_records.csv", "data/updates/current/duplicate_adjudication.csv")'
+      - name: Upload adjudication output
+        uses: actions/upload-artifact@v4
+        with:
+          name: duplicate-adjudication
+          path: data/updates/current/duplicate_adjudication.csv
+          if-no-files-found: error
