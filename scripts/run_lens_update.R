@@ -138,21 +138,48 @@ readr::write_csv(
 
 message("Lens update: relevance audit written.")
 
-llm_input <- relevance |> dplyr::filter(relevance_decision == "review") |> dplyr::mutate(llm_record_key = dplyr::row_number())
+message("LLM screening: constructing review set.")
+
+llm_input <- relevance |>
+  dplyr::filter(relevance_decision == "review") |>
+  dplyr::mutate(llm_record_key = dplyr::row_number())
+
+message(sprintf(
+  "LLM screening: %d of %d records require API review.",
+  nrow(llm_input),
+  nrow(relevance)
+))
+
 if (nrow(llm_input)) {
   api_key <- Sys.getenv("OPENAI_API_KEY")
-  if (!nzchar(api_key)) stop("OPENAI_API_KEY is required because statistically uncertain records remain.")
+  if (!nzchar(api_key)) {
+    stop("OPENAI_API_KEY is required because statistically uncertain records remain.")
+  }
+
   llm_results <- purrr::map_dfr(seq_len(nrow(llm_input)), function(i) {
     row <- llm_input[i, ]
+
+    message(sprintf(
+      "LLM screening: record %d/%d.",
+      i, nrow(llm_input)
+    ))
+
     screen_salmon_record(
-      llm_record_key = row$llm_record_key, record_id = row$record_id,
-      title = row$title, abstract = row$abstract, api_key = api_key
+      llm_record_key = row$llm_record_key,
+      record_id = row$record_id,
+      title = row$title,
+      abstract = row$abstract,
+      api_key = api_key
     )
   })
 } else {
   llm_results <- tibble::tibble(
-    llm_record_key = integer(), record_id = character(), llm_decision = character(),
-    llm_reason = character(), llm_failed = logical(), llm_error = character()
+    llm_record_key = integer(),
+    record_id = character(),
+    llm_decision = character(),
+    llm_reason = character(),
+    llm_failed = logical(),
+    llm_error = character()
   )
 }
 readr::write_csv(llm_results, fs::path(output_dir, "llm_screening.csv"), na = "")
