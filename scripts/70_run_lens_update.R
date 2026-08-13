@@ -1,23 +1,22 @@
 # =============================================================================
 # File: scripts/70_run_lens_update.R
 # Purpose: Run a new Lens.org RIS update through the established salmon evidence
-#          map workflow, in the required order.
+#          map workflow in a fully self-contained repository.
 #
 # Order:
 #   1. Import RIS
-#   2. Bramer-style deduplication against the existing corpus and within the
-#      incoming batch
+#   2. Bramer-style deduplication against the existing evidence-map corpus and
+#      within the incoming batch
 #   3. Publication-status screening (notices + OpenAlex retractions)
 #   4. Statistical relevance screening with the saved validated model
-#   5. LLM adjudication of statistically uncertain records
+#   5. LLM adjudication of statistically uncertain screening records
 #   6. Species annotation
 #   7. Geography annotation
-#   8. Topics (deliberately NOT run by this update script)
+#   8. Species/geography LLM adjudication
+#   9. Topics are implemented elsewhere but deliberately NOT run by this update
 #
-# The species/geography functions are deliberately kept as separate annotation
-# stages so that their existing deterministic rules and LLM adjudication remain
-# unchanged. This script establishes the correct ordering and produces the
-# retained corpus that those stages consume.
+# All inputs are read from LivingEvidenceMap. This script has no dependency on
+# the historical salmonscopingreview repository.
 # =============================================================================
 
 source("scripts/00_setup.R")
@@ -30,48 +29,38 @@ source("R/llm_screening.R")
 
 ensure_relevance_packages()
 
-incoming_dir <- here::here("data_updates", "incoming")
-include_file <- here::here("data_raw", "INCLUDES fixed abstracts.txt")
-exclude_file <- here::here("data_raw", "EXCLUDES.ris")
+update_dir <- here::here("data", "updates", "2026-08-13_lens")
+incoming_file <- fs::path(update_dir, "lens-export.ris")
+existing_corpus_file <- here::here("data", "reference", "salmon_evidence_map.csv")
 model_file <- here::here(
   "models", "relevance", "salmon_farming_relevance_model.rds"
 )
-output_dir <- here::here("outputs", "lens_update")
+output_dir <- update_dir
 
 fs::dir_create(output_dir)
 
 stopifnot(
-  file.exists(include_file),
-  file.exists(exclude_file),
+  file.exists(incoming_file),
+  file.exists(existing_corpus_file),
   file.exists(model_file)
 )
-
-ris_files <- fs::dir_ls(
-  incoming_dir,
-  regexp = "\\.ris$",
-  type = "file",
-  recurse = FALSE
-)
-
-if (!length(ris_files)) {
-  stop("No Lens.org RIS files found in: ", incoming_dir, call. = FALSE)
-}
 
 # -----------------------------------------------------------------------------
 # 1. Import
 # -----------------------------------------------------------------------------
-incoming <- purrr::map_dfr(ris_files, function(path) {
-  read_corpus(path) |>
-    dplyr::mutate(source_file = basename(path))
-}) |>
-  dplyr::mutate(record_sequence = dplyr::row_number())
+incoming <- read_corpus(incoming_file) |>
+  dplyr::mutate(
+    source_file = basename(incoming_file),
+    record_sequence = dplyr::row_number(),
+    .source = "incoming"
+  )
 
-historical <- dplyr::bind_rows(
-  read_corpus(include_file) |>
-    dplyr::mutate(historical_decision = "include"),
-  read_corpus(exclude_file) |>
-    dplyr::mutate(historical_decision = "exclude")
-)
+historical <- readr::read_csv(
+  existing_corpus_file,
+  show_col_types = FALSE,
+  progress = FALSE
+) |>
+  dplyr::mutate(.source = "existing")
 
 # -----------------------------------------------------------------------------
 # 2. Bramer-style deduplication
@@ -92,14 +81,11 @@ new_records <- combined[
 ] |>
   dplyr::select(-.source)
 
-dplyr::bind_rows(
-  dedup$automatic_duplicates,
-  dedup$review_candidates
-) |>
-  readr::write_csv(
-    fs::path(output_dir, "deduplication_audit.csv"),
-    na = ""
-  )
+readr::write_csv(
+  dplyr::bind_rows(dedup$automatic_duplicates, dedup$review_candidates),
+  fs::path(output_dir, "deduplication_audit.csv"),
+  na = ""
+)
 
 readr::write_csv(
   new_records,
@@ -165,24 +151,15 @@ if (nrow(llm_input)) {
       api_key = api_key
     )
   })
-
-  readr::write_csv(
-    llm_results,
-    fs::path(output_dir, "llm_screening.csv"),
-    na = ""
-  )
 } else {
   llm_results <- tibble::tibble(
     llm_record_key = integer(), record_id = character(),
     llm_decision = character(), llm_reason = character(),
     llm_failed = logical(), llm_error = character()
   )
-  readr::write_csv(
-    llm_results,
-    fs::path(output_dir, "llm_screening.csv"),
-    na = ""
-  )
 }
+
+readr::write_csv(llm_results, fs::path(output_dir, "llm_screening.csv"), na = "")
 
 final_screened <- relevance |>
   dplyr::left_join(
@@ -200,15 +177,13 @@ final_screened <- relevance |>
     )
   )
 
-readr::write_csv(
-  final_screened,
-  fs::path(output_dir, "screening_final.csv"),
-  na = ""
-)
+readr::write_csv(final_screened, fs::path(output_dir, "screening_final.csv"), na = "")
+
+retained <- final_screened |>
+  dplyr::filter(final_screening_decision == "retain")
 
 readr::write_csv(
-  final_screened |>
-    dplyr::filter(final_screening_decision == "retain"),
+  retained,
   fs::path(output_dir, "records_retained_for_annotation.csv"),
   na = ""
 )
@@ -249,7 +224,10 @@ summary <- tibble::tibble(
 
 readr::write_csv(summary, fs::path(output_dir, "screening_summary.csv"), na = "")
 
-message("Lens update completed through relevance/LLM screening.")
-message("Retained records for species/geography annotation: ",
-        fs::path(output_dir, "records_retained_for_annotation.csv"))
+# -----------------------------------------------------------------------------
+# 6-8. Species, geography, and annotation adjudication
+# -----------------------------------------------------------------------------
+source("scripts/71_annotate_lens_update.R")
+
+message("Lens update completed through species/geography adjudication.")
 message("Topics are deliberately not run by this update.")
