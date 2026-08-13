@@ -115,7 +115,28 @@ print(summary)
 # New records proceed directly to relevance screening; this keeps the Lens
 # ingestion path deterministic and prevents external API latency from blocking it.
 relevance <- screen_with_saved_relevance_model(new_records, model_path = model_file)
-readr::write_csv(relevance, fs::path(output_dir, "relevance_screening.csv"), na = "")
+message("Lens update: relevance model complete; preparing compact relevance audit.")
+
+relevance_audit <- relevance |>
+  dplyr::select(
+    dplyr::any_of(c(
+      "record_id", "doi", "title",
+      "relevance_probability", "relevance_decision"
+    ))
+  )
+
+message(sprintf(
+  "Lens update: writing relevance audit for %d records.",
+  nrow(relevance_audit)
+))
+
+readr::write_csv(
+  relevance_audit,
+  fs::path(output_dir, "relevance_screening.csv"),
+  na = ""
+)
+
+message("Lens update: relevance audit written.")
 
 llm_input <- relevance |> dplyr::filter(relevance_decision == "review") |> dplyr::mutate(llm_record_key = dplyr::row_number())
 if (nrow(llm_input)) {
