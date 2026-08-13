@@ -11,7 +11,7 @@ detect_geography_mentions <- function(records, gazetteer) {
     stop("Records are missing: ", paste(missing_records, collapse = ", "), call. = FALSE)
   }
 
-  required_gazetteer <- c("matched_place", "normalised_match", "country_name", "region_name")
+  required_gazetteer <- c("matched_place", "normalised_match", "country_name", "iso3c", "region_name")
   missing_gazetteer <- setdiff(required_gazetteer, names(gazetteer))
   if (length(missing_gazetteer) > 0L) {
     stop("Gazetteer is missing: ", paste(missing_gazetteer, collapse = ", "), call. = FALSE)
@@ -26,7 +26,7 @@ detect_geography_mentions <- function(records, gazetteer) {
   empty <- data.frame(
     record_sequence = integer(), record_id = character(), source = character(),
     matched_text = character(), matched_place = character(), normalised_match = character(),
-    country_name = character(), region_name = character(), match_start = integer(),
+    country_name = character(), iso3c = character(), region_name = character(), match_start = integer(),
     match_end = integer(), stringsAsFactors = FALSE
   )
 
@@ -46,9 +46,9 @@ detect_geography_mentions <- function(records, gazetteer) {
         hits[[k]] <- data.frame(
           record_sequence = record_sequence, record_id = record_id,
           source = source, matched_text = substr(text, start, start + len - 1L),
-          matched_place = term,
-          normalised_match = tolower(trimws(term)),
+          matched_place = term, normalised_match = tolower(trimws(term)),
           country_name = as.character(gazetteer$country_name[[i]]),
+          iso3c = as.character(gazetteer$iso3c[[i]]),
           region_name = as.character(gazetteer$region_name[[i]]),
           match_start = start, match_end = start + len - 1L,
           stringsAsFactors = FALSE
@@ -60,17 +60,14 @@ detect_geography_mentions <- function(records, gazetteer) {
     out <- do.call(rbind, hits)
     out$term_length <- nchar(out$matched_text)
     out <- out[order(out$match_start, -out$term_length, out$matched_place), , drop = FALSE]
-
     keep <- rep(TRUE, nrow(out))
     for (i in seq_len(nrow(out))) {
       if (!keep[[i]]) next
       overlap <- which(seq_len(nrow(out)) != i &
-        out$match_start <= out$match_end[[i]] &
-        out$match_end >= out$match_start[[i]] &
+        out$match_start <= out$match_end[[i]] & out$match_end >= out$match_start[[i]] &
         out$term_length <= out$term_length[[i]])
       keep[overlap] <- FALSE
     }
-
     out <- out[keep, setdiff(names(out), "term_length"), drop = FALSE]
     rownames(out) <- NULL
     out
