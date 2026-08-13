@@ -1,0 +1,49 @@
+species_id,preferred_name,scientific_name,synonym,synonym_type,is_farmed_candidate,default_group,notes
+SAL_SALAR,Atlantic salmon,Salmo salar,Atlantic salmon,common,TRUE,salmon,
+SAL_SALAR,Atlantic salmon,Salmo salar,Salmo salar,scientific,TRUE,salmon,
+SAL_SALAR,Atlantic salmon,Salmo salar,S. salar,abbreviation,TRUE,salmon,
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Rainbow trout,common,TRUE,trout,
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Oncorhynchus mykiss,scientific,TRUE,trout,
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,O. mykiss,abbreviation,TRUE,trout,
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Steelhead,common,TRUE,trout,North American common name
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Steelhead trout,common,TRUE,trout,North American common name
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Salmo gairdneri,scientific,TRUE,trout,Historical scientific name
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Salmo gardineri,scientific,TRUE,trout,Observed misspelling of Salmo gairdneri
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Salmo gairdnerii,scientific,TRUE,trout,Observed spelling variant of Salmo gairdneri
+ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,Chinook salmon,common,TRUE,salmon,
+ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,Oncorhynchus tshawytscha,scientific,TRUE,salmon,
+ONC_KISUTCH,Coho salmon,Oncorhynchus kisutch,Coho salmon,common,TRUE,salmon,
+ONC_KISUTCH,Coho salmon,Oncorhynchus kisutch,Oncorhynchus kisutch,scientific,TRUE,salmon,
+ONC_NERKA,Sockeye salmon,Oncorhynchus nerka,Sockeye salmon,common,TRUE,salmon,
+ONC_NERKA,Sockeye salmon,Oncorhynchus nerka,Oncorhynchus nerka,scientific,TRUE,salmon,
+ONC_KETA,Chum salmon,Oncorhynchus keta,Chum salmon,common,TRUE,salmon,
+ONC_KETA,Chum salmon,Oncorhynchus keta,Oncorhynchus keta,scientific,TRUE,salmon,
+ONC_GORBUSCHA,Pink salmon,Oncorhynchus gorbuscha,Pink salmon,common,TRUE,salmon,
+ONC_GORBUSCHA,Pink salmon,Oncorhynchus gorbuscha,Oncorhynchus gorbuscha,scientific,TRUE,salmon,
+ONC_MASOU,Masu salmon,Oncorhynchus masou,Masu salmon,common,TRUE,salmon,
+ONC_MASOU,Masu salmon,Oncorhynchus masou,scientific,TRUE,salmon,
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmon,generic,TRUE,salmon,Use only when species is not specified
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmon farm,generic,TRUE,salmon,Explicit generic salmon farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmon farms,generic,TRUE,salmon,Explicit generic salmon farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Farmed salmon,generic,TRUE,salmon,Explicit generic salmon farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmon aquaculture,generic,TRUE,salmon,Explicit generic salmon farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmon cage,generic,TRUE,salmon,Explicit generic salmon farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmon cages,generic,TRUE,salmon,Explicit generic salmon farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmon pen,generic,TRUE,salmon,Explicit generic salmon farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmon pens,generic,TRUE,salmon,Explicit generic salmon farming context
+SAL_TRUTTA,Brown trout,Salmo trutta,Brown trout,common,FALSE,trout,
+SAL_TRUTTA,Brown trout,Salmo trutta,Salmo trutta,scientific,FALSE,trout,
+SALVELINUS_ALPINUS,Arctic char,Salvelinus alpinus,Arctic char,common,FALSE,char,
+SALVELINUS_ALPINUS,Arctic char,Salvelinus alpinus,Salvelinus alpinus,scientific,FALSE,char,
+LEP_SALMONIS,Sea louse,Lepeophtheirus salmonis,Lepeophtheirus salmonis,scientific,FALSE,parasite,
+LEP_SALMONIS,Sea louse,Lepeophtheirus salmonis,Sea louse,common,FALSE,parasite,
+CAL_ELONGATUS,Sea louse,Caligus elongatus,Caligus elongatus,scientific,FALSE,parasite,
+GYR_SALARIS,Gyrodactylus salaris,Gyrodactylus salaris,Gyrodactylus salaris,scientific,FALSE,parasite,
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmonid aquaculture,generic,TRUE,salmon,Explicit generic salmonid farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmonid farm,generic,TRUE,salmon,Explicit generic salmonid farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmonid farms,generic,TRUE,salmon,Explicit generic salmonid farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Farmed salmonids,generic,TRUE,salmon,Explicit generic salmonid farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Cultured salmonids,generic,TRUE,salmon,Explicit generic salmonid farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Salmonid industry,generic,TRUE,salmon,Explicit generic salmonid farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Caged salmonids,generic,TRUE,salmon,Explicit generic salmonid farming context
+UNSPEC_SALMON,Unspecified farmed salmon,,Sea pen cultured salmonids,generic,TRUE,salmon,Explicit generic salmonid farming context
