@@ -36,6 +36,7 @@ jobs:
       - name: Run Lens update
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
         run: Rscript scripts/run_lens_update.R
 
       - name: Upload Lens update outputs
