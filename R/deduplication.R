@@ -25,11 +25,27 @@ normalise_authors <- function(x) {
   stringr::str_squish(x)
 }
 
+# The RIS parser and the historical CSV can infer the same bibliographic
+# fields differently (e.g. year_raw as character vs numeric).  These fields
+# are semantically text at the corpus boundary, so normalise them explicitly
+# before any cross-source bind_rows().  Do not coerce analytical fields such
+# as year: those are derived later in prepare_dedup_fields().
+normalise_corpus_schema <- function(records) {
+  character_fields <- intersect(
+    c("type", "record_id", "title", "short_title", "abstract_raw", "abstract",
+      "authors", "doi_raw", "year_raw", "journal", "volume", "issue", "pages",
+      "url_raw", "title_normalised"),
+    names(records)
+  )
+  records |> dplyr::mutate(dplyr::across(dplyr::all_of(character_fields), as.character))
+}
+
 prepare_dedup_fields <- function(records) {
   required <- c("record_id", "title", "authors", "year", "journal", "volume", "issue", "pages")
   missing <- setdiff(required, names(records))
   if (length(missing) > 0) stop("Records are missing required deduplication columns: ", paste(missing, collapse = ", "))
   records |>
+    normalise_corpus_schema() |>
     dplyr::mutate(
       record_id = as.character(record_id),
       .dedup_title = normalise_bibliographic_text(title),
@@ -87,11 +103,9 @@ find_duplicate_candidates <- function(records) {
 }
 
 deduplicate_records <- function(records, existing_records = NULL) {
-  # Normalise identifier types before combining sources: Lens RIS IDs are
-  # character strings, while readr may infer historical CSV IDs as numeric.
-  records <- records |> dplyr::mutate(record_id = as.character(record_id))
+  records <- normalise_corpus_schema(records) |> dplyr::mutate(record_id = as.character(record_id))
   if (!is.null(existing_records)) {
-    existing_records <- existing_records |> dplyr::mutate(record_id = as.character(record_id))
+    existing_records <- normalise_corpus_schema(existing_records) |> dplyr::mutate(record_id = as.character(record_id))
     combined <- dplyr::bind_rows(records |> dplyr::mutate(.source = "incoming"), existing_records |> dplyr::mutate(.source = "existing"))
   } else {
     combined <- records |> dplyr::mutate(.source = "incoming")
