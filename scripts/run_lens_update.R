@@ -23,18 +23,11 @@ output_dir <- update_dir
 
 fs::dir_create(output_dir)
 
-# 1. Validate the uploaded Lens file before downstream processing or API calls.
 validate_lens_update(incoming_file)
-
-# 2. Reference assets.
 stopifnot(file.exists(existing_corpus_file), file.exists(model_file))
 
-# 3. Import.
 incoming <- read_corpus(incoming_file) |>
-  dplyr::mutate(
-    source_file = basename(incoming_file),
-    .source = "incoming"
-  )
+  dplyr::mutate(source_file = basename(incoming_file), .source = "incoming")
 
 historical <- readr::read_csv(
   existing_corpus_file,
@@ -43,100 +36,33 @@ historical <- readr::read_csv(
 ) |>
   dplyr::mutate(.source = "existing")
 
-# 4. Established deduplication mechanism.
-# This is the conservative mechanism migrated from the original project and
-# used by the pre-LLM workflow. Residual candidates are adjudicated by the API.
-dedup <- deduplicate_new_records(
-  new_records = incoming,
-  master_records = historical
-)
-
-# The deterministic output contains one row per incoming record.
+dedup <- deduplicate_new_records(new_records = incoming, master_records = historical)
 audit <- dedup
 
 residual <- audit |>
-  dplyr::filter(
-    duplicate_status %in% c(
-      "probable_duplicate",
-      "possible_duplicate",
-      "doi_conflict_review"
-    )
-  )
+  dplyr::filter(duplicate_status %in% c("probable_duplicate", "possible_duplicate", "doi_conflict_review"))
 
-# 5. API adjudication of every residual duplicate candidate.
-adjudication_file <- fs::path(
-  output_dir,
-  "duplicate_adjudication.csv"
-)
+adjudication_file <- fs::path(output_dir, "duplicate_adjudication.csv")
 
 if (nrow(residual)) {
-  if (!nzchar(Sys.getenv("OPENAI_API_KEY"))) {
-    stop(
-      "OPENAI_API_KEY is required because residual duplicate candidates remain."
-    )
-  }
-
+  if (!nzchar(Sys.getenv("OPENAI_API_KEY"))) stop("OPENAI_API_KEY is required because residual duplicate candidates remain.")
   candidate_file <- tempfile(fileext = ".csv")
   readr::write_csv(residual, candidate_file, na = "")
-
   run_duplicate_adjudication(
     candidate_file = candidate_file,
     incoming_file = incoming_file,
     historical_file = existing_corpus_file,
     output_file = adjudication_file
   )
-
-  adjudication <- readr::read_csv(
-    adjudication_file,
-    show_col_types = FALSE
-  )
-
-  if (nrow(adjudication) != nrow(residual)) {
-    stop(
-      sprintf(
-        "Expected %d duplicate adjudications, found %d.",
-        nrow(residual),
-        nrow(adjudication)
-      )
-    )
-  }
-
-  if (anyDuplicated(adjudication$incoming_row)) {
-    stop("Duplicate adjudication returned duplicate incoming_row values.")
-  }
-
-  invalid_decisions <- setdiff(
-    unique(adjudication$decision),
-    c("duplicate", "not_duplicate", "uncertain")
-  )
-
-  if (length(invalid_decisions)) {
-    stop(
-      paste(
-        "Invalid duplicate adjudication decision(s):",
-        paste(invalid_decisions, collapse = ", ")
-      )
-    )
-  }
-
-  # Human review is deliberately not the normal path. An uncertain API
-  # decision fails the production update rather than silently retaining or
-  # removing the record.
-  if (any(adjudication$decision == "uncertain")) {
-    stop(
-      "Duplicate adjudication returned uncertain decision(s); update halted for review."
-    )
-  }
-
+  adjudication <- readr::read_csv(adjudication_file, show_col_types = FALSE)
+  if (nrow(adjudication) != nrow(residual)) stop(sprintf("Expected %d duplicate adjudications, found %d.", nrow(residual), nrow(adjudication)))
+  if (anyDuplicated(adjudication$incoming_row)) stop("Duplicate adjudication returned duplicate incoming_row values.")
+  invalid_decisions <- setdiff(unique(adjudication$decision), c("duplicate", "not_duplicate", "uncertain"))
+  if (length(invalid_decisions)) stop(paste("Invalid duplicate adjudication decision(s):", paste(invalid_decisions, collapse = ", ")))
+  if (any(adjudication$decision == "uncertain")) stop("Duplicate adjudication returned uncertain decision(s); update halted for review.")
   audit <- audit |>
     dplyr::left_join(
-      adjudication |>
-        dplyr::select(
-          incoming_row,
-          api_decision = decision,
-          api_confidence = confidence,
-          api_rationale = rationale
-        ),
+      adjudication |> dplyr::select(incoming_row, api_decision = decision, api_confidence = confidence, api_rationale = rationale),
       by = "incoming_row"
     ) |>
     dplyr::mutate(
@@ -150,48 +76,22 @@ if (nrow(residual)) {
     )
 } else {
   adjudication <- tibble::tibble(
-    incoming_row = integer(),
-    matched_master_record_id = character(),
-    duplicate_basis = character(),
-    title_similarity = double(),
-    decision = character(),
-    confidence = double(),
-    rationale = character()
+    incoming_row = integer(), matched_master_record_id = character(), duplicate_basis = character(),
+    title_similarity = double(), decision = character(), confidence = double(), rationale = character()
   )
-
-  readr::write_csv(
-    adjudication,
-    adjudication_file,
-    na = ""
-  )
-
-  audit <- audit |>
-    dplyr::mutate(
-      final_duplicate_status = duplicate_status
-    )
+  readr::write_csv(adjudication, adjudication_file, na = "")
+  audit <- audit |> dplyr::mutate(final_duplicate_status = duplicate_status)
 }
 
-readr::write_csv(
-  audit,
-  fs::path(output_dir, "deduplication_audit.csv"),
-  na = ""
-)
+readr::write_csv(audit, fs::path(output_dir, "deduplication_audit.csv"), na = "")
 
 new_records <- audit |>
   dplyr::filter(final_duplicate_status == "new") |>
   dplyr::select(incoming_row) |>
-  dplyr::inner_join(
-    incoming |>
-      dplyr::mutate(incoming_row = dplyr::row_number()),
-    by = "incoming_row"
-  ) |>
+  dplyr::inner_join(incoming |> dplyr::mutate(incoming_row = dplyr::row_number()), by = "incoming_row") |>
   dplyr::select(-incoming_row, -.source)
 
-readr::write_csv(
-  new_records,
-  fs::path(output_dir, "records_after_deduplication.csv"),
-  na = ""
-)
+readr::write_csv(new_records, fs::path(output_dir, "records_after_deduplication.csv"), na = "")
 
 summary <- tibble::tibble(
   incoming_records = nrow(incoming),
@@ -204,136 +104,55 @@ summary <- tibble::tibble(
   new_records_after_deduplication = nrow(new_records),
   status = "PASS"
 )
-
-readr::write_csv(
-  summary,
-  fs::path(output_dir, "pre_llm_summary.csv"),
-  na = ""
-)
+readr::write_csv(summary, fs::path(output_dir, "pre_llm_summary.csv"), na = "")
 print(summary)
 
-# 6. Publication status / retractions.
+# Publication-status checks here are limited to NEW records only. The
+# established corpus is monitored separately by the rolling retraction sweep.
 publication <- check_publication_status(new_records)
-readr::write_csv(
-  publication$audit,
-  fs::path(output_dir, "publication_status_audit.csv"),
-  na = ""
-)
-readr::write_csv(
-  publication$removed,
-  fs::path(output_dir, "removed_retractions_and_notices.csv"),
-  na = ""
-)
-readr::write_csv(
-  publication$cleared,
-  fs::path(output_dir, "records_after_publication_status.csv"),
-  na = ""
-)
+readr::write_csv(publication$audit, fs::path(output_dir, "publication_status_audit.csv"), na = "")
+readr::write_csv(publication$removed, fs::path(output_dir, "removed_retractions_and_notices.csv"), na = "")
+readr::write_csv(publication$cleared, fs::path(output_dir, "records_after_publication_status.csv"), na = "")
 
-# 7. Statistical relevance screening.
-relevance <- screen_with_saved_relevance_model(
-  publication$cleared,
-  model_path = model_file
-)
-readr::write_csv(
-  relevance,
-  fs::path(output_dir, "relevance_screening.csv"),
-  na = ""
-)
+relevance <- screen_with_saved_relevance_model(publication$cleared, model_path = model_file)
+readr::write_csv(relevance, fs::path(output_dir, "relevance_screening.csv"), na = "")
 
-# 8. LLM adjudication of statistical uncertainty.
-llm_input <- relevance |>
-  dplyr::filter(relevance_decision == "review") |>
-  dplyr::mutate(llm_record_key = dplyr::row_number())
-
+llm_input <- relevance |> dplyr::filter(relevance_decision == "review") |> dplyr::mutate(llm_record_key = dplyr::row_number())
 if (nrow(llm_input)) {
   api_key <- Sys.getenv("OPENAI_API_KEY")
-  if (!nzchar(api_key)) {
-    stop("OPENAI_API_KEY is required because statistically uncertain records remain.")
-  }
-
-  llm_results <- purrr::map_dfr(
-    seq_len(nrow(llm_input)),
-    function(i) {
-      row <- llm_input[i, ]
-      screen_salmon_record(
-        llm_record_key = row$llm_record_key,
-        record_id = row$record_id,
-        title = row$title,
-        abstract = row$abstract,
-        api_key = api_key
-      )
-    }
-  )
+  if (!nzchar(api_key)) stop("OPENAI_API_KEY is required because statistically uncertain records remain.")
+  llm_results <- purrr::map_dfr(seq_len(nrow(llm_input)), function(i) {
+    row <- llm_input[i, ]
+    screen_salmon_record(
+      llm_record_key = row$llm_record_key, record_id = row$record_id,
+      title = row$title, abstract = row$abstract, api_key = api_key
+    )
+  })
 } else {
   llm_results <- tibble::tibble(
-    llm_record_key = integer(),
-    record_id = character(),
-    llm_decision = character(),
-    llm_reason = character(),
-    llm_failed = logical(),
-    llm_error = character()
+    llm_record_key = integer(), record_id = character(), llm_decision = character(),
+    llm_reason = character(), llm_failed = logical(), llm_error = character()
   )
 }
-
-readr::write_csv(
-  llm_results,
-  fs::path(output_dir, "llm_screening.csv"),
-  na = ""
-)
+readr::write_csv(llm_results, fs::path(output_dir, "llm_screening.csv"), na = "")
 
 final_screened <- relevance |>
-  dplyr::left_join(
-    llm_results |>
-      dplyr::select(
-        record_id,
-        llm_decision,
-        llm_reason,
-        llm_failed,
-        llm_error
-      ),
-    by = "record_id"
-  ) |>
+  dplyr::left_join(llm_results |> dplyr::select(record_id, llm_decision, llm_reason, llm_failed, llm_error), by = "record_id") |>
   dplyr::mutate(
     final_screening_decision = dplyr::case_when(
       relevance_decision == "automatic_retain" ~ "retain",
       relevance_decision == "automatic_exclude" ~ "exclude",
-      relevance_decision == "review" &
-        llm_decision == "retain" & !llm_failed ~ "retain",
-      relevance_decision == "review" &
-        llm_decision == "exclude" & !llm_failed ~ "exclude",
+      relevance_decision == "review" & llm_decision == "retain" & !llm_failed ~ "retain",
+      relevance_decision == "review" & llm_decision == "exclude" & !llm_failed ~ "exclude",
       TRUE ~ "uncertain"
     )
   )
 
-readr::write_csv(
-  final_screened,
-  fs::path(output_dir, "screening_final.csv"),
-  na = ""
-)
+readr::write_csv(final_screened, fs::path(output_dir, "screening_final.csv"), na = "")
+retained <- final_screened |> dplyr::filter(final_screening_decision == "retain")
+readr::write_csv(retained, fs::path(output_dir, "records_retained_for_annotation.csv"), na = "")
+readr::write_csv(final_screened |> dplyr::filter(final_screening_decision == "uncertain"), fs::path(output_dir, "screening_uncertain.csv"), na = "")
 
-retained <- final_screened |>
-  dplyr::filter(final_screening_decision == "retain")
-
-readr::write_csv(
-  retained,
-  fs::path(output_dir, "records_retained_for_annotation.csv"),
-  na = ""
-)
-
-readr::write_csv(
-  final_screened |>
-    dplyr::filter(final_screening_decision == "uncertain"),
-  fs::path(output_dir, "screening_uncertain.csv"),
-  na = ""
-)
-
-# 9-11. Species, geography, and annotation adjudication.
 source("scripts/annotate_lens_update.R")
-
-# 12. Topics remain last. This refresh runs only the controlled topic API smoke test.
 source("scripts/topic_smoke_test.R")
-
-message(
-  "Lens update completed through species/geography adjudication and topic smoke test."
-)
+message("Lens update completed through species/geography adjudication and topic smoke test.")
