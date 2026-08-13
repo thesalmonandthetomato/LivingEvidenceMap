@@ -35,12 +35,22 @@ adjudicate_duplicate <- function(incoming, historical, model = Sys.getenv("OPENA
     req_retry(max_tries = 3, backoff = ~ 2^.x) |>
     req_perform() |>
     resp_body_json()
+
   message_items <- response$output[vapply(response$output, function(x) identical(x$type, "message"), logical(1))]
   content_items <- unlist(lapply(message_items, function(x) x$content), recursive = FALSE)
   text_items <- content_items[vapply(content_items, function(x) identical(x$type, "output_text") && !is.null(x$text), logical(1))]
   if (!length(text_items)) stop("No output_text returned")
-  parsed <- fromJSON(text_items[[1]]$text, simplifyVector = TRUE)
-  tibble(decision = parsed$decision, confidence = as.numeric(parsed$confidence), rationale = parsed$rationale)
+
+  parsed <- fromJSON(text_items[[1]]$text, simplifyVector = FALSE)
+  if (!is.list(parsed) || !all(c("decision", "confidence", "rationale") %in% names(parsed))) {
+    stop("Duplicate adjudication returned an unexpected JSON structure")
+  }
+
+  list(
+    decision = as.character(parsed$decision[[1]]),
+    confidence = as.numeric(parsed$confidence[[1]]),
+    rationale = as.character(parsed$rationale[[1]])
+  )
 }
 
 run_duplicate_adjudication <- function(candidate_file, incoming_file, historical_file, output_file) {
@@ -48,20 +58,25 @@ run_duplicate_adjudication <- function(candidate_file, incoming_file, historical
   incoming <- read_corpus(incoming_file)
   historical <- read_csv(historical_file, show_col_types = FALSE)
   if (!"incoming_row" %in% names(candidates)) stop("Candidate file lacks incoming_row")
+
   results <- lapply(seq_len(nrow(candidates)), function(i) {
-    c <- candidates[i, ]
-    inc <- incoming[c$incoming_row, , drop = FALSE]
-    hist <- historical[historical$record_id == c$matched_master_record_id, , drop = FALSE]
+    candidate <- candidates[i, ]
+    inc <- incoming[candidate$incoming_row, , drop = FALSE]
+    hist <- historical[historical$record_id == candidate$matched_master_record_id, , drop = FALSE]
     if (nrow(hist) != 1) stop("Historical match not found uniquely")
+
     decision <- adjudicate_duplicate(inc, hist)
-    tibble(incoming_row = c$incoming_row,
-      matched_master_record_id = c$matched_master_record_id,
-      duplicate_basis = c$duplicate_basis,
-      title_similarity = c$title_similarity,
-      decision = decision$decision,
-      confidence = decision$confidence,
-      rationale = decision$rationale)
+    tibble(
+      incoming_row = candidate$incoming_row,
+      matched_master_record_id = candidate$matched_master_record_id,
+      duplicate_basis = candidate$duplicate_basis,
+      title_similarity = candidate$title_similarity,
+      decision = decision[["decision"]],
+      confidence = decision[["confidence"]],
+      rationale = decision[["rationale"]]
+    )
   }) |> bind_rows()
+
   write_csv(results, output_file)
   results
 }
