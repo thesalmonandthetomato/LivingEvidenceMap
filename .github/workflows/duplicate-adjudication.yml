@@ -15,18 +15,30 @@ jobs:
         with:
           packages: |
             any::dplyr
+            any::fs
+            any::here
             any::httr2
             any::jsonlite
             any::readr
+            any::stringdist
+            any::stringi
+            any::stringr
             any::tibble
-      - name: Run duplicate adjudication
+            any::tidyr
+            any::yaml
+            any::quanteda
+            any::glmnet
+            any::Matrix
+      - name: Rebuild deterministic duplicate audit
+        run: Rscript scripts/run_lens_pre_llm.R
+      - name: Run API duplicate adjudication
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          Rscript -e 'source("scripts/duplicate_adjudication.R"); run_duplicate_adjudication("data/updates/current/deduplication_audit.csv", "data/updates/current/records_after_deduplication.csv", "data/reference/historical_records.csv", "data/updates/current/duplicate_adjudication.csv")'
+          Rscript -e 'source("R/read_corpus.R"); source("scripts/duplicate_adjudication.R"); run_duplicate_adjudication("data/updates/2026-08-13_lens/deduplication_audit.csv", "data/updates/2026-08-13_lens/lens-export.ris", "data/reference/salmon_evidence_map.csv", "data/updates/2026-08-13_lens/duplicate_adjudication.csv")'
       - name: Upload adjudication output
         uses: actions/upload-artifact@v4
         with:
           name: duplicate-adjudication
-          path: data/updates/current/duplicate_adjudication.csv
+          path: data/updates/2026-08-13_lens/duplicate_adjudication.csv
           if-no-files-found: error
