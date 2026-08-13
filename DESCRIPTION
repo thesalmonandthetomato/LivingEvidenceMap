@@ -1,17 +1,18 @@
 Package: LivingEvidenceMap
-Title: Reproducible Pipeline for a Living Evidence Map
+Title: Reproducible Pipeline for the Salmon Scoping Review Evidence Map
 Version: 0.1.0
 Authors@R:
     person("The Salmon and the Tomato", role = c("aut", "cre"))
 Description:
-    Reproducible R pipeline for corpus preparation, screening, species and
-    geography annotation, adjudication, validation, and construction of a
-    living evidence map.
+    Reproducible R pipeline for the salmon scoping review evidence map,
+    including corpus preparation, screening, species and geography annotation,
+    adjudication, validation, and update processing.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.0
 Imports:
+    digest,
     dplyr,
     fs,
     glmnet,
