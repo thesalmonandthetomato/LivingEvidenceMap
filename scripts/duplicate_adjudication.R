@@ -72,7 +72,11 @@ adjudicate_duplicate <- function(incoming, historical, model = Sys.getenv("OPENA
     stop("Duplicate adjudication rationale is empty")
   }
 
-  tibble(decision = decision, confidence = confidence, rationale = rationale)
+  list(
+  decision = decision,
+  confidence = confidence,
+  rationale = rationale
+)
 }
 
 run_duplicate_adjudication <- function(candidate_file, incoming_file, historical_file, output_file) {
@@ -93,9 +97,9 @@ run_duplicate_adjudication <- function(candidate_file, incoming_file, historical
       matched_master_record_id = candidate$matched_master_record_id,
       duplicate_basis = candidate$duplicate_basis,
       title_similarity = candidate$title_similarity,
-      decision = decision[["decision"]][[1]],
-      confidence = decision[["confidence"]][[1]],
-      rationale = decision[["rationale"]][[1]]
+      decision = as.character(decision[["decision"]]),
+      confidence = as.numeric(decision[["confidence"]]),
+      rationale = as.character(decision[["rationale"]])
     )
   }) |> bind_rows()
 
