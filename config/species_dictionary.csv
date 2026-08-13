@@ -21,7 +21,7 @@ ONC_KETA,Chum salmon,Oncorhynchus keta,Oncorhynchus keta,scientific,TRUE,salmon,
 ONC_GORBUSCHA,Pink salmon,Oncorhynchus gorbuscha,Pink salmon,common,TRUE,salmon,
 ONC_GORBUSCHA,Pink salmon,Oncorhynchus gorbuscha,Oncorhynchus gorbuscha,scientific,TRUE,salmon,
 ONC_MASOU,Masu salmon,Oncorhynchus masou,Masu salmon,common,TRUE,salmon,
-ONC_MASOU,Masu salmon,Oncorhynchus masou,scientific,TRUE,salmon,
+ONC_MASOU,Masu salmon,Oncorhynchus masou,Oncorhynchus masou,scientific,TRUE,salmon,
 UNSPEC_SALMON,Unspecified farmed salmon,,Salmon,generic,TRUE,salmon,Use only when species is not specified
 UNSPEC_SALMON,Unspecified farmed salmon,,Salmon farm,generic,TRUE,salmon,Explicit generic salmon farming context
 UNSPEC_SALMON,Unspecified farmed salmon,,Salmon farms,generic,TRUE,salmon,Explicit generic salmon farming context
