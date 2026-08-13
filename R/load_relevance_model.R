@@ -79,19 +79,37 @@ screen_with_saved_relevance_model <- function(
 ) {
   message(sprintf("Relevance screening: preparing %d new records.", nrow(records)))
   bundle <- load_relevance_model(model_path)
-  message(sprintf("Relevance screening: loaded model with %d features.", length(bundle$model$features)))
+  message(sprintf(
+    "Relevance screening: loaded model with %d features.",
+    length(bundle$model$features)
+  ))
 
   records <- add_screening_keys(records)
   message("Relevance screening: screening keys prepared.")
 
   probability <- predict_relevance_probability(bundle$model, records)
+  message("Relevance screening: probability vector returned; assigning decisions.")
 
-  records |>
-    dplyr::mutate(
-      relevance_probability = probability,
-      relevance_decision = assign_screening_decision(
-        relevance_probability,
-        bundle$thresholds
-      )
-    )
+  out <- records
+  out$relevance_probability <- probability
+  out$relevance_decision <- assign_screening_decision(
+    out$relevance_probability,
+    bundle$thresholds
+  )
+
+  message(sprintf(
+    "Relevance screening: decisions assigned (%d records).",
+    nrow(out)
+  ))
+
+  out <- out |>
+    dplyr::select(-dplyr::any_of(c(
+      "screening_text",
+      "title_token_key",
+      "title_prefix",
+      "has_abstract"
+    )))
+
+  message("Relevance screening: output prepared.")
+  out
 }
