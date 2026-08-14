@@ -119,20 +119,14 @@ message("LLM screening: all batches returned.")
 message(sprintf("LLM screening: validating %d results against %d input records.", nrow(llm_results), nrow(llm_input)))
 if (nrow(llm_results) != nrow(llm_input)) stop(sprintf("LLM screening returned %d results for %d input records.", nrow(llm_results), nrow(llm_input)))
 message("LLM screening: result count validation passed.")
-
 expected_keys <- sort(llm_input$llm_record_key)
 returned_keys <- sort(llm_results$llm_record_key)
-if (!identical(expected_keys, returned_keys)) {
-  stop(sprintf("LLM screening key mismatch: %d missing, %d unexpected.", length(setdiff(expected_keys, returned_keys)), length(setdiff(returned_keys, expected_keys))))
-}
+if (!identical(expected_keys, returned_keys)) stop(sprintf("LLM screening key mismatch: %d missing, %d unexpected.", length(setdiff(expected_keys, returned_keys)), length(setdiff(returned_keys, expected_keys))))
 message("LLM screening: key validation passed.")
 message("LLM screening: writing llm_screening.csv.")
 readr::write_csv(llm_results, fs::path(output_dir, "llm_screening.csv"), na = "")
 message("LLM screening: llm_screening.csv written.")
 
-# Avoid a dplyr join here. The LLM input has an explicit one-to-one
-# llm_record_key assigned from the review subset, so direct positional
-# assignment is deterministic and avoids join/type/method overhead.
 message("Lens update: constructing final screening table by direct key assignment.")
 final_screened <- relevance
 final_screened$llm_decision <- NA_character_
@@ -161,11 +155,27 @@ final_screened$final_screening_decision <- dplyr::case_when(
 )
 message("Lens update: final screening table constructed.")
 
-readr::write_csv(final_screened, fs::path(output_dir, "screening_final.csv"), na = "")
-retained <- final_screened |> dplyr::filter(final_screening_decision == "retain")
-readr::write_csv(retained, fs::path(output_dir, "records_retained_for_annotation.csv"), na = "")
-readr::write_csv(final_screened |> dplyr::filter(final_screening_decision == "uncertain"), fs::path(output_dir, "screening_uncertain.csv"), na = "")
+# The full relevance object contains all Lens metadata. Writing it with
+# readr/vroom can become unexpectedly expensive on CI after the LLM columns
+# are added. Write the three required deliverables with base R's streaming CSV
+# writer instead; this keeps the post-screening stage bounded and avoids the
+# second apparent hang observed after final_screened construction.
+message("Lens update: writing screening_final.csv.")
+utils::write.csv(final_screened, fs::path(output_dir, "screening_final.csv"), row.names = FALSE, na = "")
+message("Lens update: screening_final.csv written.")
 
+retained <- final_screened |> dplyr::filter(final_screening_decision == "retain")
+message(sprintf("Lens update: writing retained records (%d).", nrow(retained)))
+utils::write.csv(retained, fs::path(output_dir, "records_retained_for_annotation.csv"), row.names = FALSE, na = "")
+message("Lens update: retained records written.")
+
+uncertain <- final_screened |> dplyr::filter(final_screening_decision == "uncertain")
+message(sprintf("Lens update: writing uncertain records (%d).", nrow(uncertain)))
+utils::write.csv(uncertain, fs::path(output_dir, "screening_uncertain.csv"), row.names = FALSE, na = "")
+message("Lens update: uncertain records written.")
+
+message("Lens update: starting annotation stage.")
 source("scripts/annotate_lens_update.R")
+message("Lens update: annotation stage complete; starting topic smoke test.")
 source("scripts/topic_smoke_test.R")
 message("Lens update completed through species/geography adjudication and topic smoke test.")
