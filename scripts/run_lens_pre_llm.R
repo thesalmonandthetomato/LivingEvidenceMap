@@ -25,9 +25,30 @@ historical <- readr::read_csv(
 ) |>
   dplyr::mutate(.source = "existing")
 
-# Use the established salmon scoping-review deduplication mechanism.
+# First remove duplicates occurring within the incoming Lens update itself.
+incoming_keyed <- incoming |>
+  add_screening_keys()
+
+internal_duplicate_title <- duplicated(incoming_keyed$title_key) & nzchar(incoming_keyed$title_key)
+internal_duplicate_doi <- duplicated(incoming_keyed$doi_key) & !is.na(incoming_keyed$doi_key) & nzchar(incoming_keyed$doi_key)
+internal_duplicate <- internal_duplicate_title | internal_duplicate_doi
+
+message(sprintf(
+  "Internal update deduplication: %d records before; %d duplicate records removed; %d records remain.",
+  nrow(incoming_keyed),
+  sum(internal_duplicate),
+  sum(!internal_duplicate)
+))
+
+incoming_unique <- incoming_keyed[!internal_duplicate, , drop = FALSE] |>
+  dplyr::select(-dplyr::any_of(c(
+    "title_key", "doi_key", "first_author_key", "screening_text",
+    "has_abstract", "title_prefix", "title_token_key"
+  )))
+
+# Then compare the internally unique update against the existing master.
 dedup <- deduplicate_new_records(
-  new_records = incoming,
+  new_records = incoming_unique,
   master_records = historical
 )
 
@@ -54,6 +75,8 @@ readr::write_csv(
 
 summary <- tibble::tibble(
   incoming_records = nrow(incoming),
+  internal_duplicates_removed = sum(internal_duplicate),
+  unique_update_records = nrow(incoming_unique),
   existing_records = nrow(historical),
   automatic_duplicates = sum(dedup$duplicate_status == "duplicate"),
   probable_duplicate_candidates = sum(dedup$duplicate_status == "probable_duplicate"),
@@ -64,4 +87,4 @@ summary <- tibble::tibble(
 
 readr::write_csv(summary, fs::path(update_dir, "pre_llm_summary.csv"), na = "")
 print(summary)
-message("Lens pre-LLM import and established deduplication completed. No LLM/API calls were made.")
+message("Lens pre-LLM import and two-stage deduplication completed. No LLM/API calls were made.")
