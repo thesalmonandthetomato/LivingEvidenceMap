@@ -7,6 +7,9 @@ annotate_species <- function(records, species_dictionary, progress = TRUE) {
   if (length(missing) > 0L) stop("Records are missing: ", paste(missing, collapse = ", "), call. = FALSE)
   if (!is.data.frame(species_dictionary)) stop("species_dictionary must be a data frame.", call. = FALSE)
 
+  n <- nrow(records)
+  if (isTRUE(progress)) message(sprintf("Species annotation: preparing %d records.", n))
+
   annotate_one <- function(i) {
     mentions <- detect_species_mentions(records$title[[i]], records$abstract[[i]], species_dictionary)
     mentions <- filter_species_mentions(mentions, records$title[[i]], records$abstract[[i]])
@@ -17,7 +20,16 @@ annotate_species <- function(records, species_dictionary, progress = TRUE) {
     list(mentions = mentions, assignment = assignment)
   }
 
-  results <- lapply(seq_len(nrow(records)), function(i) tryCatch(annotate_one(i), error = function(e) e))
+  progress_step <- max(1L, min(100L, floor(max(1L, n) / 20L)))
+  results <- lapply(seq_len(n), function(i) {
+    result <- tryCatch(annotate_one(i), error = function(e) e)
+    if (isTRUE(progress) && (i == 1L || i %% progress_step == 0L || i == n)) {
+      message(sprintf("Species annotation: record %d/%d (%.0f%%).", i, n, 100 * i / max(1, n)))
+    }
+    result
+  })
+
+  if (isTRUE(progress)) message("Species annotation: record-level annotation complete; assembling outputs.")
   failed <- vapply(results, inherits, logical(1), what = "error")
   ok <- results[!failed]
   mentions <- if (length(ok)) do.call(rbind, lapply(ok, `[[`, "mentions")) else data.frame()
@@ -27,5 +39,6 @@ annotate_species <- function(records, species_dictionary, progress = TRUE) {
   } else {
     data.frame(record_sequence = integer(), record_id = character(), title = character(), error = character(), stringsAsFactors = FALSE)
   }
+  if (isTRUE(progress)) message(sprintf("Species annotation: complete (%d mentions, %d assignments, %d failures).", nrow(mentions), nrow(assignments), nrow(failures)))
   list(species_mentions = mentions, species_assignments = assignments, failures = failures)
 }
