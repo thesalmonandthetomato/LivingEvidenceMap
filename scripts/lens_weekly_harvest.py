@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import csv, json, os, re, sys
+import copy, csv, json, os, re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -17,9 +17,9 @@ if not TOKEN:
 with CONFIG.open(encoding="utf-8") as f:
     cfg = json.load(f)
 
-base_query = cfg["api_query"]["query"] if isinstance(cfg.get("api_query"), dict) else None
-if not base_query:
-    raise SystemExit("config/lens_search.json does not contain api_query.query")
+api_query = cfg.get("api_query")
+if not isinstance(api_query, dict) or not isinstance(api_query.get("query"), dict):
+    raise SystemExit("config/lens_search.json does not contain api_query.query as a JSON query object")
 
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -43,15 +43,37 @@ else:
 start_s = start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 end_s = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-# Lens query-string range syntax; retain the base search exactly and constrain created.
-query = f"({base_query}) AND created:[{start_s} TO {end_s}]"
+# Lens accepts a JSON Query DSL range query. Preserve the validated base query exactly
+# and add created as an additional boolean filter rather than converting the whole
+# JSON query object into a query-string expression.
+query = copy.deepcopy(api_query["query"])
+if not isinstance(query, dict) or not query:
+    raise SystemExit("api_query.query must be a non-empty JSON query object")
+
+if "bool" in query and isinstance(query["bool"], dict):
+    bool_query = query["bool"]
+    filters = bool_query.setdefault("filter", [])
+    if isinstance(filters, dict):
+        filters = [filters]
+        bool_query["filter"] = filters
+    if not isinstance(filters, list):
+        raise SystemExit("api_query.query.bool.filter must be a list when present")
+    filters.append({"range": {"created": {"gte": start_s, "lte": end_s}}})
+else:
+    query = {
+        "bool": {
+            "must": [query],
+            "filter": [{"range": {"created": {"gte": start_s, "lte": end_s}}}]
+        }
+    }
 
 page_size = 100
 from_value = 0
 all_records = []
 
+audit_query = copy.deepcopy(query)
 while True:
-    payload_cfg = dict(cfg["api_query"])
+    payload_cfg = copy.deepcopy(api_query)
     payload_cfg["query"] = query
     payload_cfg["size"] = page_size
     payload_cfg["from"] = from_value
@@ -61,15 +83,19 @@ while True:
         "Content-Type": "application/json",
         "Accept": "application/json",
     })
-    with urlopen(req, timeout=120) as response:
-        body = json.load(response)
-        if response.status != 200:
-            raise RuntimeError(f"Lens API HTTP {response.status}")
+    try:
+        with urlopen(req, timeout=120) as response:
+            body = json.load(response)
+            if response.status != 200:
+                raise RuntimeError(f"Lens API HTTP {response.status}")
+    except Exception as exc:
+        print(f"Lens API request failed for window {start_s} to {end_s}", flush=True)
+        raise
 
     records = body.get("data", [])
     total = int(body.get("total", 0))
     all_records.extend(records)
-    print(f"Fetched {len(all_records)}/{total} records from Lens")
+    print(f"Fetched {len(all_records)}/{total} records from Lens", flush=True)
     if not records or len(all_records) >= total:
         break
     from_value += len(records)
@@ -79,7 +105,7 @@ while True:
 def norm(value):
     if value is None:
         return ""
-    return re.sub(r"\\s+", " ", str(value).strip().lower())
+    return re.sub(r"\s+", " ", str(value).strip().lower())
 
 def key(rec):
     lens_id = norm(rec.get("lens_id"))
@@ -117,7 +143,8 @@ manifest = {
     "window_start": start_s,
     "window_end": end_s,
     "previous_last_successful_created": previous,
-    "base_query": base_query,
+    "base_query": cfg.get("lens_ui_query"),
+    "incremental_query": audit_query,
     "total_matching_window": total,
     "raw_records_retrieved": len(all_records),
     "within_update_duplicates_removed": dup_count,
