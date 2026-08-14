@@ -1,8 +1,6 @@
 name: Build final master
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -28,57 +26,9 @@ jobs:
         run: |
           set -euo pipefail
           test -f topic_artifact/topic_assignments.csv
-          echo "Topic artifact found: topic_artifact/topic_assignments.csv"
 
       - name: Build and validate candidate master
-        run: |
-          set +e
-          python3 scripts/merge_master_update.py
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            python3 - <<'PY'
-          import csv
-          from collections import defaultdict
-          from pathlib import Path
-
-          paths = [
-              Path('data/reference/salmon_evidence_map.csv'),
-              Path('data/updates/2026-08-13_lens/records_after_species_geography_adjudication.csv'),
-          ]
-
-          def rows(path):
-              with path.open(newline='', encoding='utf-8-sig') as f:
-                  return list(csv.DictReader(f))
-
-          def value(row, names):
-              for name in names:
-                  if row.get(name, '').strip():
-                      return row[name].strip()
-              return ''
-
-          def key(row):
-              lens = value(row, ['lens_id', 'Lens ID', 'LensID'])
-              doi = value(row, ['doi', 'DOI', 'doi_id'])
-              title = value(row, ['title', 'Title', 'document_title', 'Document Title']).lower()
-              if lens: return ('lens', lens.lower())
-              if doi: return ('doi', doi.lower())
-              if title: return ('title', title)
-              return None
-
-          master = rows(paths[0]); update = rows(paths[1])
-          for label, data in [('MASTER', master), ('UPDATE', update), ('COMBINED', master + update)]:
-              seen = defaultdict(list)
-              for i, row in enumerate(data, 2):
-                  k = key(row)
-                  if k is not None:
-                      seen[k].append((i, value(row, ['lens_id', 'Lens ID', 'LensID']), value(row, ['title', 'Title', 'document_title', 'Document Title'])))
-              dup = [(k, v) for k, v in seen.items() if len(v) > 1]
-              print(f'{label}: rows={len(data)} duplicate_identity_keys={len(dup)}')
-              for k, vals in dup[:20]:
-                  print(f'  {k}: {vals}')
-          PY
-          fi
-          exit "$status"
+        run: python3 scripts/merge_master_update.py
 
       - name: Archive current master and promote candidate
         run: |
