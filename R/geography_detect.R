@@ -1,10 +1,9 @@
 # Detect geography mentions in a declared corpus.
 # The detector is target-independent: callers provide records and gazetteer.
 #
-# Performance note: the gazetteer matcher is compiled once as a single regex,
-# rather than recompiling and scanning once per gazetteer term for every field.
-# This preserves the term-level output while avoiding O(records x terms)
-# individual regex calls.
+# Performance note: use moderately sized compiled regex chunks. A single
+# 15k-term PCRE pattern exceeds PCRE's pattern-size limit; the old one-regex-
+# per-term implementation is also prohibitively slow.
 
 detect_geography_mentions <- function(records, gazetteer, progress = TRUE) {
   required_records <- c("record_sequence", "record_id", "title", "abstract")
@@ -25,8 +24,6 @@ detect_geography_mentions <- function(records, gazetteer, progress = TRUE) {
   }
   empty <- data.frame(record_sequence=integer(), record_id=character(), source=character(), matched_text=character(), matched_place=character(), normalised_match=character(), country_name=character(), iso3c=character(), region_name=character(), match_start=integer(), match_end=integer(), context=character(), stringsAsFactors=FALSE)
 
-  # Normalise and deduplicate matcher terms once. Terms are sorted longest-first
-  # so that alternatives such as "United States" are preferred to "United".
   gazetteer_work <- gazetteer
   gazetteer_work$matched_place <- trimws(as.character(gazetteer_work$matched_place))
   gazetteer_work <- gazetteer_work[!is.na(gazetteer_work$matched_place) & nzchar(gazetteer_work$matched_place), , drop = FALSE]
@@ -34,65 +31,58 @@ detect_geography_mentions <- function(records, gazetteer, progress = TRUE) {
   matcher_terms <- unique(gazetteer_work$matched_place)
   matcher_terms <- matcher_terms[order(nchar(matcher_terms), matcher_terms, decreasing = TRUE)]
 
-  message(sprintf("Geography detection: compiling one matcher for %d unique terms.", length(matcher_terms)))
-  combined_pattern <- if (length(matcher_terms)) {
-    paste0("(?<![[:alnum:]_])(?:", paste(vapply(matcher_terms, escape_regex, character(1)), collapse = "|"), ")(?![[:alnum:]_])")
-  } else {
-    NULL
-  }
-  message("Geography detection: matcher compiled; beginning record scan.")
+  # Keep each PCRE pattern comfortably below the engine's pattern-size limit.
+  # 500 alternatives gives ~32 compiled matchers for the current 15,877-term
+  # gazetteer: vastly fewer scans than the original one-regex-per-term design,
+  # without risking another oversized-pattern failure.
+  chunk_size <- 500L
+  term_chunks <- split(matcher_terms, ceiling(seq_along(matcher_terms) / chunk_size))
+  message(sprintf("Geography detection: compiling %d matcher chunks of up to %d terms.", length(term_chunks), chunk_size))
+  compiled_patterns <- lapply(term_chunks, function(terms) {
+    paste0("(?<![[:alnum:]_])(?:", paste(vapply(terms, escape_regex, character(1L)), collapse = "|"), ")(?![[:alnum:]_])")
+  })
+  message("Geography detection: matcher chunks compiled; beginning record scan.")
+
+  mappings <- split(gazetteer_work, gazetteer_work$normalised_match_key)
 
   detect_field <- function(text, record_sequence, record_id, source) {
-    if (is.na(text) || !nzchar(trimws(text)) || is.null(combined_pattern)) return(empty)
+    if (is.na(text) || !nzchar(trimws(text))) return(empty)
+    hits <- list(); k <- 0L
 
-    starts <- gregexpr(combined_pattern, text, ignore.case = TRUE, perl = TRUE)[[1L]]
-    if (starts[[1L]] == -1L) return(empty)
+    for (chunk_i in seq_along(compiled_patterns)) {
+      starts <- gregexpr(compiled_patterns[[chunk_i]], text, ignore.case = TRUE, perl = TRUE)[[1L]]
+      if (starts[[1L]] == -1L) next
+      lengths <- attr(starts, "match.length")
+      matched_texts <- mapply(substr, list(text), starts, starts + lengths - 1L, USE.NAMES = FALSE)
 
-    lengths <- attr(starts, "match.length")
-    matched_texts <- mapply(substr, list(text), starts, starts + lengths - 1L, USE.NAMES = FALSE)
-    keys <- tolower(matched_texts)
-
-    # A gazetteer term can legitimately map to multiple countries/regions.
-    # Expand each textual match against all matching gazetteer rows so the
-    # output retains the same term-level semantics as the old detector.
-    mappings <- split(gazetteer_work, gazetteer_work$normalised_match_key)
-    hits <- vector("list", length(matched_texts))
-    k <- 0L
-    for (j in seq_along(matched_texts)) {
-      mapping <- mappings[[keys[[j]]]]
-      if (is.null(mapping) || !nrow(mapping)) next
-      start <- starts[[j]]
-      len <- lengths[[j]]
-      end <- start + len - 1L
-      context <- extract_context(text, start, end)
-      for (m in seq_len(nrow(mapping))) {
-        k <- k + 1L
-        hits[[k]] <- data.frame(
-          record_sequence=record_sequence,
-          record_id=record_id,
-          source=source,
-          matched_text=matched_texts[[j]],
-          matched_place=as.character(mapping$matched_place[[m]]),
-          normalised_match=as.character(mapping$normalised_match[[m]]),
-          country_name=as.character(mapping$country_name[[m]]),
-          iso3c=as.character(mapping$iso3c[[m]]),
-          region_name=as.character(mapping$region_name[[m]]),
-          match_start=start,
-          match_end=end,
-          context=context,
-          stringsAsFactors=FALSE
-        )
+      for (j in seq_along(matched_texts)) {
+        matched <- matched_texts[[j]]
+        mapping <- mappings[[tolower(matched)]]
+        if (is.null(mapping) || !nrow(mapping)) next
+        start <- starts[[j]]
+        len <- lengths[[j]]
+        end <- start + len - 1L
+        context <- extract_context(text, start, end)
+        for (m in seq_len(nrow(mapping))) {
+          k <- k + 1L
+          hits[[k]] <- data.frame(
+            record_sequence=record_sequence, record_id=record_id, source=source,
+            matched_text=matched, matched_place=as.character(mapping$matched_place[[m]]),
+            normalised_match=as.character(mapping$normalised_match[[m]]),
+            country_name=as.character(mapping$country_name[[m]]),
+            iso3c=as.character(mapping$iso3c[[m]]),
+            region_name=as.character(mapping$region_name[[m]]),
+            match_start=start, match_end=end, context=context,
+            stringsAsFactors=FALSE
+          )
+        }
       }
     }
-    if (!k) return(empty)
 
+    if (!k) return(empty)
     out <- do.call(rbind, hits[seq_len(k)])
     out$term_length <- nchar(out$matched_text)
     out <- out[order(out$match_start, -out$term_length, out$matched_place),,drop=FALSE]
-
-    # Retain the longest match when matches overlap, as in the previous
-    # detector. The combined regex already prefers longer alternatives, but
-    # keep this safeguard for repeated/mapped terms.
     keep <- rep(TRUE,nrow(out))
     for (i in seq_len(nrow(out))) {
       if (!keep[[i]]) next
