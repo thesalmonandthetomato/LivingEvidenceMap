@@ -1,0 +1,16 @@
+metric,value
+master_records_original,12043
+master_records_after_known_duplicate_resolution,12041
+master_duplicate_decisions,2
+update_records,1381
+final_records,13422
+topic_assignment_rows,8682
+topic_records_with_output,1381
+within_update_duplicates_detected,0
+update_vs_master_duplicates_detected,0
+candidate_duplicate_identity_keys,0
+source_master,data/reference/salmon_evidence_map.csv
+source_update,data/updates/2026-08-13_lens/records_after_species_geography_adjudication.csv
+source_topics,topic_artifact/topic_assignments.csv
+master_duplicate_resolution,"('doi', '10.1098/rstb.2011.0423') | retained output row 1460 | duplicate records merged; retained richer bibliographic row and combined URL provenance"
+master_duplicate_resolution,"('doi', '10.1136/vr.138.7.161') | retained output row 9645 | duplicate record removed; retained 1996 Veterinary Record bibliographic row"
