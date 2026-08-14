@@ -1,0 +1,43 @@
+name: Update topics
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  topic_update:
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Run topic classification for 2026-08-13 update'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::readr
+            any::stringr
+            any::tibble
+
+      - name: Run update topic classification
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: Rscript R/run_update_topic_classification.R
+
+      - name: Upload topic outputs and checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: topics-2026-08-13-lens-update
+          path: data/updates/2026-08-13_lens/topic_classification_v3/
+          if-no-files-found: warn
