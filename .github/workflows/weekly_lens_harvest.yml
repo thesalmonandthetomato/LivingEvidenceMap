@@ -1,4 +1,4 @@
-name: Weekly Lens harvest
+name: Weekly Lens update
 
 on:
   workflow_dispatch:
@@ -21,7 +21,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/lens_weekly_harvest_v2.py
+          python3 scripts/lens_weekly_harvest.py
+
+      - name: Validate harvest outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find outputs/lens_harvest -maxdepth 1 -name '*.csv' -print -quit)"
+          test -n "$(find outputs/lens_harvest -maxdepth 1 -name '*.json' -print -quit)"
 
       - name: Upload harvest artifacts
         uses: actions/upload-artifact@v4
