@@ -194,6 +194,12 @@ if (nrow(llm_input)) {
   )
 }
 
+message("LLM screening: all batches returned.")
+message(sprintf(
+  "LLM screening: validating %d results against %d input records.",
+  nrow(llm_results), nrow(llm_input)
+))
+
 if (nrow(llm_results) != nrow(llm_input)) {
   stop(sprintf(
     "LLM screening returned %d results for %d input records.",
@@ -201,7 +207,13 @@ if (nrow(llm_results) != nrow(llm_input)) {
   ))
 }
 
+message("LLM screening: result count validation passed.")
+message("LLM screening: writing llm_screening.csv.")
+
 readr::write_csv(llm_results, fs::path(output_dir, "llm_screening.csv"), na = "")
+
+message("LLM screening: llm_screening.csv written.")
+message("Lens update: constructing final screening table.")
 
 final_screened <- relevance |>
   dplyr::left_join(llm_results |> dplyr::select(record_id, llm_decision, llm_reason, llm_failed, llm_error), by = "record_id") |>
