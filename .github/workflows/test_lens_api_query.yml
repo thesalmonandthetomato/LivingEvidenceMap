@@ -1,0 +1,56 @@
+name: Test Lens API query
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Test Lens Scholarly API query
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys, urllib.request
+
+          token = os.environ.get("LENS_API_TOKEN")
+          if not token:
+              raise SystemExit("LENS_API_TOKEN secret is not set")
+
+          with open("config/lens_search.json", encoding="utf-8") as f:
+              cfg = json.load(f)
+
+          payload = json.dumps(cfg["api_query"]).encode("utf-8")
+          req = urllib.request.Request(
+              "https://api.lens.org/scholarly/search",
+              data=payload,
+              method="POST",
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+              },
+          )
+
+          with urllib.request.urlopen(req, timeout=120) as response:
+              body = json.load(response)
+              print(f"HTTP status: {response.status}")
+              for key in (
+                  "total",
+                  "total_hits",
+                  "total_count",
+                  "max_score",
+              ):
+                  if key in body:
+                      print(f"{key}: {body[key]}")
+              print("Top-level response keys:", sorted(body.keys()))
+              if "data" in body and isinstance(body["data"], list):
+                  print(f"Returned records: {len(body['data'])}")
+                  if body["data"]:
+                      print("First Lens ID:", body["data"][0].get("lens_id"))
+                      print("First title:", body["data"][0].get("title"))
+          PY
