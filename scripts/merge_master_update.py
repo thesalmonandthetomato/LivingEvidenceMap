@@ -26,32 +26,44 @@ def duplicate_count(rows):
             if k in seen: dup += 1
             seen.add(k)
     return dup
-def collapse_exact_master_duplicates(rows):
+
+def resolve_known_master_duplicates(rows):
     groups=defaultdict(list)
     for i,r in enumerate(rows):
         k=identity_key(r)
         if k is not None: groups[k].append((i,r))
-    remove=set(); collapsed=0; conflicts=[]
+    remove=set(); decisions=[]
+    allowed={
+        ('doi','10.1098/rstb.2011.0423'),
+        ('doi','10.1136/vr.138.7.161'),
+    }
     for k,items in groups.items():
-        if len(items) <= 1: continue
-        base=items[0][1]; differing=set()
-        for _,r in items[1:]:
-            for c in set(base) | set(r):
-                if n(base.get(c)) != n(r.get(c)): differing.add(c)
-        if differing:
-            conflicts.append((k,items,sorted(differing)))
-        else:
-            for i,_ in items[1:]: remove.add(i)
-            collapsed += len(items)-1
-    if conflicts:
-        print('Conflicting master duplicate identity keys:')
-        for k,items,diff in conflicts[:20]:
-            print(f'KEY={k} ROWS={[i+2 for i,_ in items]} DIFFERING={diff}')
-            for field in diff:
-                print(f'  FIELD {field}:')
-                for i,r in items: print(f'    row {i+2}: {r.get(field,"")}')
-        raise SystemExit(f'Master contains {len(conflicts)} non-identical duplicate identity keys; refusing to discard data')
-    return [r for i,r in enumerate(rows) if i not in remove],collapsed
+        if len(items)<=1: continue
+        if k not in allowed:
+            raise SystemExit(f'Unexpected master duplicate identity key {k}; refusing automatic resolution')
+        if k==('doi','10.1098/rstb.2011.0423'):
+            # Same publication; retain the richer row with pagination and merge its URL provenance.
+            keep=max(items,key=lambda x: (bool(n(x[1].get('pages'))), len(n(x[1].get('url_raw')))))
+            merged=keep[1]
+            urls=[]
+            for _,r in items:
+                u=n(r.get('url_raw'))
+                if u and u not in urls: urls.append(u)
+            merged['url_raw']=''.join(urls)
+            for i,_ in items:
+                if i!=keep[0]: remove.add(i)
+            decisions.append((k,keep[0]+2,'duplicate records merged; retained richer bibliographic row and combined URL provenance'))
+        elif k==('doi','10.1136/vr.138.7.161'):
+            # PubMed confirms this DOI is the 1996 Veterinary Record paper, 138(7):161-162.
+            candidates=[x for x in items if n(x[1].get('year'))=='1996' and n(x[1].get('pages'))=='161-162']
+            if len(candidates)!=1:
+                raise SystemExit('Could not uniquely identify the authoritative 1996 row for DOI 10.1136/vr.138.7.161')
+            keep=candidates[0]
+            for i,_ in items:
+                if i!=keep[0]: remove.add(i)
+            decisions.append((k,keep[0]+2,'duplicate record removed; retained 1996 Veterinary Record bibliographic row'))
+    return [r for i,r in enumerate(rows) if i not in remove],decisions
+
 def topic_map(p):
     rows,cols=read_csv(p)
     if 'record_id' not in cols: raise SystemExit(f'Topic output has no record_id column: {cols}')
@@ -66,7 +78,7 @@ def topic_map(p):
     return d,len(rows),len(d)
 master,mcols=read_csv(MASTER); update,ucols=read_csv(UPDATE); topics,trows,trecs=topic_map(TOPICS)
 if not update: raise SystemExit('Update is empty')
-master_original=len(master); master,master_collapsed=collapse_exact_master_duplicates(master)
+master_original=len(master); master,master_decisions=resolve_known_master_duplicates(master)
 if duplicate_count(update): raise SystemExit(f'Update contains {duplicate_count(update)} duplicate identity keys')
 master_keys={identity_key(r) for r in master if identity_key(r) is not None}
 update_cross=sum(1 for r in update if identity_key(r) is not None and identity_key(r) in master_keys)
@@ -86,5 +98,6 @@ final,_=read_csv(OUT)
 if len(final)!=len(master)+len(update): raise SystemExit('Candidate row count does not equal cleaned master + update')
 if duplicate_count(final): raise SystemExit('Candidate master contains duplicate identity keys')
 with MANIFEST.open('w',newline='',encoding='utf-8') as f:
-    w=csv.writer(f); w.writerows([['metric','value'],['master_records_original',master_original],['master_exact_duplicate_rows_removed',master_collapsed],['master_records_after_exact_duplicate_cleanup',len(master)],['update_records',len(update)],['final_records',len(final)],['topic_assignment_rows',trows],['topic_records_with_output',trecs],['within_update_duplicates_detected',0],['update_vs_master_duplicates_detected',0],['candidate_duplicate_identity_keys',0],['source_master',str(MASTER)],['source_update',str(UPDATE)],['source_topics',str(TOPICS)]])
-print(f'Master records original: {master_original}'); print(f'Exact duplicate master rows removed: {master_collapsed}'); print(f'Master records after cleanup: {len(master)}'); print(f'Update records: {len(update)}'); print(f'Final candidate records: {len(final)}'); print(f'Topic assignment rows: {trows}'); print(f'Topic records with output: {trecs}'); print('Within-update duplicates: 0'); print('Update-vs-master duplicates: 0'); print('Candidate duplicate identity keys: 0')
+    w=csv.writer(f); w.writerow(['metric','value']); w.writerows([['master_records_original',master_original],['master_records_after_known_duplicate_resolution',len(master)],['master_duplicate_decisions',len(master_decisions)],['update_records',len(update)],['final_records',len(final)],['topic_assignment_rows',trows],['topic_records_with_output',trecs],['within_update_duplicates_detected',0],['update_vs_master_duplicates_detected',0],['candidate_duplicate_identity_keys',0],['source_master',str(MASTER)],['source_update',str(UPDATE)],['source_topics',str(TOPICS)]])
+    for k,row,reason in master_decisions: w.writerow(['master_duplicate_resolution',f'{k} | retained output row {row} | {reason}'])
+print(f'Master records original: {master_original}'); print(f'Known master duplicate decisions: {len(master_decisions)}'); print(f'Master records after cleanup: {len(master)}'); print(f'Update records: {len(update)}'); print(f'Final candidate records: {len(final)}'); print(f'Topic assignment rows: {trows}'); print(f'Topic records with output: {trecs}'); print('Within-update duplicates: 0'); print('Update-vs-master duplicates: 0'); print('Candidate duplicate identity keys: 0')
