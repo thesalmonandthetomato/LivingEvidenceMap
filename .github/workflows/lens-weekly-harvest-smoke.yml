@@ -1,0 +1,21 @@
+name: Lens weekly harvest smoke test
+on:
+  push:
+    branches: [main]
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+      OVERLAP_DAYS: '7'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run corrected weekly harvester
+        run: python3 scripts/lens_weekly_harvest_v2.py
+      - name: Upload smoke-test harvest
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-weekly-harvest-smoke-${{ github.run_id }}
+          path: outputs/lens_harvest/*
+          if-no-files-found: error
+          retention-days: 7
