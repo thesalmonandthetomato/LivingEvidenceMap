@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# One-off 2026-08-14 construction of the next validated master from the current master + completed update.
 import csv
 from collections import defaultdict
 from pathlib import Path
