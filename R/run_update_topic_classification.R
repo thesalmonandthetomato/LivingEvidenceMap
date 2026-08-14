@@ -21,16 +21,11 @@ if (!nzchar(api_key)) stop("OPENAI_API_KEY not found")
 records <- readr::read_csv(input_path, show_col_types = FALSE)
 ontology <- readr::read_csv(ontology_path, show_col_types = FALSE)
 
-# Resolve columns across the historical Lens export/output schema. The processed
-# update does not carry a dedicated lens_id field: its primary Lens identifier is
-# the Lens URL in url_raw (e.g. https://lens.org/000-266-222-636-10X).
 resolve_col <- function(candidates, pattern = NULL, cols = names(records)) {
   hit <- candidates[candidates %in% cols]
   if (length(hit)) return(hit[[1]])
   norm <- function(x) gsub("[^a-z0-9]", "", tolower(x))
-  ncols <- norm(cols)
-  ncand <- norm(candidates)
-  idx <- match(ncand, ncols)
+  idx <- match(norm(candidates), norm(cols))
   idx <- idx[!is.na(idx)]
   if (length(idx)) return(cols[[idx[[1]]]])
   if (!is.null(pattern)) {
@@ -40,24 +35,16 @@ resolve_col <- function(candidates, pattern = NULL, cols = names(records)) {
   NA_character_
 }
 
-lens_col <- resolve_col(c("lens_id", "Lens ID", "lensId", "LensID", "lens_record_id", "Lens Record ID", "lens_record_identifier"), pattern = "lens.*(id|identifier)|(^|[_ .-])id([_ .-]|$).*lens")
-lens_url_col <- resolve_col(c("url_raw", "URL", "url", "Lens URL", "lens_url"), pattern = "(^|[_ .-])(lens[_ .-])?url([_ .-]|$)|url_raw")
 title_col <- resolve_col(c("title", "Title", "document_title", "Document Title"), pattern = "(^|[_ .-])(document[_ .-])?title([_ .-]|$)")
 abstract_col <- resolve_col(c("abstract", "Abstract", "abstract_text", "Abstract Text"), pattern = "abstract")
-record_col <- resolve_col(c("record_id", "Record ID", "id", "ID"), pattern = "(^|[_ .-])record[_ .-]?id([_ .-]|$)|^id$")
+record_col <- resolve_col(c("record_id", "Record ID", "id", "ID"), pattern = "(^|[_ .-])record[_ .]?id([_ .-]|$)|^id$")
 
-if (is.na(lens_col)) {
-  if (is.na(lens_url_col)) stop("No Lens ID or Lens URL column found in update. Available columns: ", paste(names(records), collapse = ", "))
-  records$lens_id <- stringr::str_match(as.character(records[[lens_url_col]]), "lens\\.org/([^/?#]+)")[,2]
-  lens_col <- "lens_id"
-}
 if (is.na(title_col) || is.na(abstract_col)) stop("Could not identify title/abstract columns. Available columns: ", paste(names(records), collapse = ", "))
 if (is.na(record_col)) {
   records$record_id <- seq_len(nrow(records))
   record_col <- "record_id"
 }
-if (any(is.na(records[[lens_col]]) | records[[lens_col]] == "")) stop("Some update records have no resolvable Lens ID from the Lens ID/URL field")
-message("Using Lens ID column: ", lens_col, "; title: ", title_col, "; abstract: ", abstract_col, "; record ID: ", record_col)
+message("Using title: ", title_col, "; abstract: ", abstract_col, "; record ID: ", record_col)
 
 required_ontology <- c("path_id", "level_1", "level_2", "level_3", "hierarchy_path", "supporting_terms_from_old_ontology")
 missing <- setdiff(required_ontology, names(ontology))
@@ -86,16 +73,15 @@ classify_one <- function(title, abstract) {
   list(assignments = parsed$assignments, review_required = isTRUE(parsed$review_required), review_reason = if (is.null(parsed$review_reason)) NA_character_ else parsed$review_reason)
 }
 
-if (file.exists(checkpoint_path)) checkpoint <- readr::read_csv(checkpoint_path, show_col_types = FALSE) else checkpoint <- tibble(record_id = character(), lens_id = character(), path_id = character(), hierarchy_path = character(), review_required = logical(), review_reason = character(), status = character(), error = character())
+if (file.exists(checkpoint_path)) checkpoint <- readr::read_csv(checkpoint_path, show_col_types = FALSE) else checkpoint <- tibble(record_id = character(), path_id = character(), hierarchy_path = character(), review_required = logical(), review_reason = character(), status = character(), error = character())
 done_keys <- unique(checkpoint$record_id[checkpoint$status == "completed"])
 message("Records: ", nrow(records), "; completed checkpoint records: ", length(done_keys))
 
 for (i in seq_len(nrow(records))) {
   rid <- as.character(records[[record_col]][i])
   if (rid %in% done_keys) next
-  lens_id <- as.character(records[[lens_col]][i])
   result <- tryCatch(classify_one(records[[title_col]][i], records[[abstract_col]][i]), error = function(e) list(error = conditionMessage(e)))
-  if (!is.null(result$error)) rows <- tibble(record_id = rid, lens_id = lens_id, path_id = NA_character_, hierarchy_path = NA_character_, review_required = NA, review_reason = NA_character_, status = "failed", error = result$error) else if (!length(result$assignments)) rows <- tibble(record_id = rid, lens_id = lens_id, path_id = NA_character_, hierarchy_path = NA_character_, review_required = result$review_required, review_reason = result$review_reason, status = "completed", error = NA_character_) else rows <- ontology %>% filter(hierarchy_path %in% result$assignments) %>% transmute(record_id = rid, lens_id = lens_id, path_id, hierarchy_path, review_required = result$review_required, review_reason = result$review_reason, status = "completed", error = NA_character_)
+  if (!is.null(result$error)) rows <- tibble(record_id = rid, path_id = NA_character_, hierarchy_path = NA_character_, review_required = NA, review_reason = NA_character_, status = "failed", error = result$error) else if (!length(result$assignments)) rows <- tibble(record_id = rid, path_id = NA_character_, hierarchy_path = NA_character_, review_required = result$review_required, review_reason = result$review_reason, status = "completed", error = NA_character_) else rows <- ontology %>% filter(hierarchy_path %in% result$assignments) %>% transmute(record_id = rid, path_id, hierarchy_path, review_required = result$review_required, review_reason = result$review_reason, status = "completed", error = NA_character_)
   checkpoint <- bind_rows(checkpoint, rows)
   readr::write_csv(checkpoint, checkpoint_path)
   if (i %% 25 == 0) message("Processed ", i, "/", nrow(records))
