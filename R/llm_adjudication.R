@@ -8,12 +8,13 @@ build_annotation_adjudication_queue <- function(records, species_review, geograp
   missing <- setdiff(required, names(records))
   if (length(missing)) stop("Records are missing: ", paste(missing, collapse = ", "), call. = FALSE)
 
+  message(sprintf("Annotation queue: preparing %d records.", nrow(records)))
   records <- records |>
     dplyr::mutate(record_id = as.character(record_id), title = dplyr::coalesce(as.character(title), ""), abstract = dplyr::coalesce(as.character(abstract), ""))
 
   required <- c("record_id", "farmed_species", "farmed_species_id", "assignment_reason", "non_target_species")
   missing <- setdiff(required, names(species_review))
-  if (length(missing)) stop("Species review data are missing: ", paste(missing, collapse = ", "), call. = FALSE)
+  if (length(missing)) stop("Species review data are missing: ", paste(missing, collapse = ", "))
 
   sp <- species_review |>
     dplyr::mutate(record_id = as.character(record_id)) |>
@@ -25,27 +26,30 @@ build_annotation_adjudication_queue <- function(records, species_review, geograp
       species_reasons = paste(sort(unique(stats::na.omit(assignment_reason))), collapse = " | "),
       non_target_species = paste(sort(unique(stats::na.omit(non_target_species))), collapse = "; "), .groups = "drop"
     )
+  message(sprintf("Annotation queue: species review candidates summarised for %d records.", nrow(sp)))
 
   required <- c("record_id", "review_required", "review_reason", "primary_countries", "primary_iso3c")
   missing <- setdiff(required, names(geography_summary))
-  if (length(missing)) stop("Geography summary is missing: ", paste(missing, collapse = ", "), call. = FALSE)
+  if (length(missing)) stop("Geography summary is missing: ", paste(missing, collapse = ", "))
 
   geo <- geography_summary |>
     dplyr::mutate(record_id = as.character(record_id)) |>
     dplyr::filter(review_required) |>
     dplyr::select(record_id, geography_review_required = review_required, geography_review_reason = review_reason,
                   deterministic_primary_countries = primary_countries, deterministic_primary_iso3c = primary_iso3c)
+  message(sprintf("Annotation queue: geography review candidates retained for %d records.", nrow(geo)))
 
   required <- c("record_id", "country_name", "iso3c", "best_tier")
   missing <- setdiff(required, names(geography_ranking))
-  if (length(missing)) stop("Geography ranking is missing: ", paste(missing, collapse = ", "), call. = FALSE)
+  if (length(missing)) stop("Geography ranking is missing: ", paste(missing, collapse = ", "))
 
   candidates <- geography_ranking |>
     dplyr::mutate(record_id = as.character(record_id)) |>
     dplyr::group_by(record_id) |>
     dplyr::summarise(geography_candidates = paste(unique(paste0(country_name, " [", iso3c, "]; tier ", best_tier)), collapse = "; "), .groups = "drop")
+  message(sprintf("Annotation queue: geography candidates summarised for %d records.", nrow(candidates)))
 
-  records |>
+  result <- records |>
     dplyr::select(record_sequence, record_id, title, abstract) |>
     dplyr::left_join(sp, by = "record_id") |>
     dplyr::left_join(geo, by = "record_id") |>
@@ -53,6 +57,8 @@ build_annotation_adjudication_queue <- function(records, species_review, geograp
     dplyr::mutate(species_review_required = dplyr::coalesce(species_review_required, FALSE),
                   geography_review_required = dplyr::coalesce(geography_review_required, FALSE)) |>
     dplyr::filter(species_review_required | geography_review_required)
+  message(sprintf("Annotation queue: complete; %d records require adjudication.", nrow(result)))
+  result
 }
 
 annotation_adjudication_system_prompt <- function() {
@@ -110,16 +116,20 @@ make_annotation_adjudication_prompt <- function(row) {
 
 # Execute adjudication with a supplied model function. The production API
 # wrapper belongs outside this core function; tests can supply a mock.
-adjudicate_annotation_queue <- function(queue, model_function) {
+adjudicate_annotation_queue <- function(queue, model_function, progress = TRUE) {
   if (!is.function(model_function)) stop("model_function must be a function.", call. = FALSE)
   if (!nrow(queue)) return(tibble::tibble())
   required <- c("record_id", "species_review_required", "geography_review_required", "title", "abstract")
   missing <- setdiff(required, names(queue))
   if (length(missing)) stop("Adjudication queue is missing: ", paste(missing, collapse = ", "), call. = FALSE)
 
-  purrr::map_dfr(seq_len(nrow(queue)), function(i) {
+  n <- nrow(queue)
+  if (isTRUE(progress)) message(sprintf("Annotation LLM: processing %d records sequentially.", n))
+  progress_step <- max(1L, min(25L, floor(max(1L, n) / 20L)))
+
+  purrr::map_dfr(seq_len(n), function(i) {
     row <- queue[i, , drop = FALSE]
-    tryCatch({
+    result <- tryCatch({
       answer <- model_function(annotation_adjudication_system_prompt(), make_annotation_adjudication_prompt(row), annotation_adjudication_schema())
       tibble::tibble(record_id = row$record_id, species_decision = answer$species_decision,
         llm_species = answer$species, species_reason = answer$species_reason,
@@ -130,5 +140,10 @@ adjudicate_annotation_queue <- function(queue, model_function) {
         species_reason = NA_character_, geography_decision = "UNRESOLVED", llm_primary_country_iso3c = NA_character_,
         geography_reason = NA_character_, llm_failed = TRUE, llm_error = conditionMessage(e))
     })
+
+    if (isTRUE(progress) && (i == 1L || i %% progress_step == 0L || i == n)) {
+      message(sprintf("Annotation LLM: record %d/%d (%.0f%%); failures so far: %d.", i, n, 100 * i / max(1, n), sum(vapply(list(result), function(x) isTRUE(x$llm_failed[[1]]), logical(1)))))
+    }
+    result
   })
 }
