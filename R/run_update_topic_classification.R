@@ -1,3 +1,4 @@
+# Update-topic classification for the 2026-08-13 Lens update; Lens ID is intentionally not required.
 suppressPackageStartupMessages({
   library(dplyr)
   library(readr)
