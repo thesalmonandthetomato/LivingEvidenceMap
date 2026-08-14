@@ -1,7 +1,7 @@
 # Detect geography mentions in a declared corpus.
 # The detector is target-independent: callers provide records and gazetteer.
 
-detect_geography_mentions <- function(records, gazetteer) {
+detect_geography_mentions <- function(records, gazetteer, progress = TRUE) {
   required_records <- c("record_sequence", "record_id", "title", "abstract")
   missing_records <- setdiff(required_records, names(records))
   if (length(missing_records) > 0L) stop("Records are missing: ", paste(missing_records, collapse = ", "), call. = FALSE)
@@ -10,6 +10,9 @@ detect_geography_mentions <- function(records, gazetteer) {
   missing_gazetteer <- setdiff(required_gazetteer, names(gazetteer))
   if (length(missing_gazetteer) > 0L) stop("Gazetteer is missing: ", paste(missing_gazetteer, collapse = ", "), call. = FALSE)
   if (anyDuplicated(records$record_id) || anyDuplicated(records$record_sequence)) stop("Records must contain unique record_id and record_sequence values.", call. = FALSE)
+
+  n <- nrow(records)
+  message(sprintf("Geography detection: preparing %d records against %d gazetteer terms.", n, nrow(gazetteer)))
 
   escape_regex <- function(x) gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", x, perl = TRUE)
   extract_context <- function(text, start, end, window = 100L) {
@@ -44,10 +47,24 @@ detect_geography_mentions <- function(records, gazetteer) {
     out <- out[keep,setdiff(names(out),"term_length"),drop=FALSE]; rownames(out) <- NULL; out
   }
 
-  result <- do.call(rbind,lapply(seq_len(nrow(records)),function(i) rbind(
-    detect_field(records$title[[i]],records$record_sequence[[i]],records$record_id[[i]],"title"),
-    detect_field(records$abstract[[i]],records$record_sequence[[i]],records$record_id[[i]],"abstract")
-  )))
-  if (is.null(result) || !nrow(result)) return(empty)
-  rownames(result) <- NULL; result
+  progress_step <- max(1L, min(100L, floor(max(1L, n) / 20L)))
+  result <- lapply(seq_len(n), function(i) {
+    out <- rbind(
+      detect_field(records$title[[i]],records$record_sequence[[i]],records$record_id[[i]],"title"),
+      detect_field(records$abstract[[i]],records$record_sequence[[i]],records$record_id[[i]],"abstract")
+    )
+    if (isTRUE(progress) && (i == 1L || i %% progress_step == 0L || i == n)) {
+      message(sprintf("Geography detection: record %d/%d (%.0f%%).", i, n, 100 * i / max(1, n)))
+    }
+    out
+  })
+  message("Geography detection: record-level detection complete; assembling mentions.")
+  result <- do.call(rbind, result)
+  if (is.null(result) || !nrow(result)) {
+    message("Geography detection: complete; no mentions found.")
+    return(empty)
+  }
+  rownames(result) <- NULL
+  message(sprintf("Geography detection: complete (%d mentions).", nrow(result)))
+  result
 }
