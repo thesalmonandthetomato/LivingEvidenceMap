@@ -1,0 +1,19 @@
+{
+  "name": "LivingEvidenceMap salmon aquaculture scholarly search",
+  "source": "Lens Scholarly API",
+  "lens_ui_query": "(((title:(salmon OR salmonid* OR Salmo OR Oncorhynchus)) OR (abstract:(salmon OR salmonid* OR Salmo OR Oncorhynchus)) OR (keyword:(salmon OR salmonid* OR Salmo OR Oncorhynchus)))) AND ((((title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))))",
+  "api_query": {
+    "query": {
+      "query_string": {
+        "query": "((title:(salmon OR salmonid* OR Salmo OR Oncorhynchus) OR abstract:(salmon OR salmonid* OR Salmo OR Oncorhynchus) OR keyword:(salmon OR salmonid* OR Salmo OR Oncorhynchus)) AND (title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))"
+      }
+    },
+    "size": 100,
+    "include": ["lens_id", "title", "abstract", "created", "date_published", "year_published", "external_ids", "keywords"]
+  },
+  "incremental": {
+    "cadence": "weekly",
+    "field": "created",
+    "overlap_days": 7
+  }
+}
