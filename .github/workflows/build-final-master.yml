@@ -1,0 +1,28 @@
+name: Build final master
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download completed topic artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p topic_artifact
+          gh api /repos/${{ github.repository }}/actions/artifacts/9227492553/zip > /tmp/topics.zip
+          unzip -o /tmp/topics.zip -d topic_artifact
+      - name: Build and validate candidate master
+        run: python3 scripts/merge_master_update.py
+      - name: Upload candidate master
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-master-2026-08-14
+          path: |
+            data/reference/salmon_evidence_map_2026-08-14.csv
+            data/reference/salmon_evidence_map_2026-08-14_manifest.csv
