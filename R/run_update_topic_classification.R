@@ -21,16 +21,38 @@ if (!nzchar(api_key)) stop("OPENAI_API_KEY not found")
 records <- readr::read_csv(input_path, show_col_types = FALSE)
 ontology <- readr::read_csv(ontology_path, show_col_types = FALSE)
 
-lens_col <- intersect(c("lens_id", "Lens ID", "lensId", "LensID", "lens_record_id"), names(records))[1]
-if (is.na(lens_col)) stop("No Lens ID column found in update")
-title_col <- intersect(c("title", "Title", "document_title", "Document Title"), names(records))[1]
-abstract_col <- intersect(c("abstract", "Abstract", "abstract_text", "Abstract Text"), names(records))[1]
-record_col <- intersect(c("record_id", "Record ID", "id", "ID"), names(records))[1]
-if (is.na(title_col) || is.na(abstract_col)) stop("Could not identify title/abstract columns")
+# Resolve columns robustly across historical Lens export/output naming conventions.
+# Lens ID is the primary provenance key and must be retained verbatim.
+resolve_col <- function(candidates, pattern = NULL, cols = names(records)) {
+  hit <- candidates[candidates %in% cols]
+  if (length(hit)) return(hit[[1]])
+  norm <- function(x) gsub("[^a-z0-9]", "", tolower(x))
+  ncols <- norm(cols)
+  ncand <- norm(candidates)
+  idx <- match(ncand, ncols)
+  idx <- idx[!is.na(idx)]
+  if (length(idx)) return(cols[[idx[[1]]]])
+  if (!is.null(pattern)) {
+    idx <- grep(pattern, cols, ignore.case = TRUE, perl = TRUE)
+    if (length(idx)) return(cols[[idx[[1]]]])
+  }
+  NA_character_
+}
+
+lens_col <- resolve_col(
+  c("lens_id", "Lens ID", "lensId", "LensID", "lens_record_id", "Lens Record ID", "lens_record_identifier"),
+  pattern = "lens.*(id|identifier)|(^|[_ .-])id([_ .-]|$).*lens"
+)
+title_col <- resolve_col(c("title", "Title", "document_title", "Document Title"), pattern = "(^|[_ .-])(document[_ .-])?title([_ .-]|$)")
+abstract_col <- resolve_col(c("abstract", "Abstract", "abstract_text", "Abstract Text"), pattern = "abstract")
+record_col <- resolve_col(c("record_id", "Record ID", "id", "ID"), pattern = "(^|[_ .-])record[_ .-]?id([_ .-]|$)|^id$")
+if (is.na(lens_col)) stop("No Lens ID column found in update. Available columns: ", paste(names(records), collapse = ", "))
+if (is.na(title_col) || is.na(abstract_col)) stop("Could not identify title/abstract columns. Available columns: ", paste(names(records), collapse = ", "))
 if (is.na(record_col)) {
   records$record_id <- seq_len(nrow(records))
   record_col <- "record_id"
 }
+message("Using Lens ID column: ", lens_col, "; title: ", title_col, "; abstract: ", abstract_col, "; record ID: ", record_col)
 
 required_ontology <- c("path_id", "level_1", "level_2", "level_3", "hierarchy_path", "supporting_terms_from_old_ontology")
 missing <- setdiff(required_ontology, names(ontology))
