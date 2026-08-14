@@ -1,28 +1,60 @@
 name: Build final master
+
 on:
-  pull_request:
+  push:
     branches: [main]
   workflow_dispatch:
+
 permissions:
-  contents: read
+  contents: write
+  actions: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Download completed topic artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
+        uses: actions/download-artifact@v4
+        with:
+          name: topics-2026-08-13-lens-update
+          path: topic_artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31796411644
+
+      - name: Verify topic artifact
         run: |
-          mkdir -p topic_artifact
-          gh api /repos/${{ github.repository }}/actions/artifacts/9227492553/zip > /tmp/topics.zip
-          unzip -o /tmp/topics.zip -d topic_artifact
+          set -euo pipefail
+          test -f topic_artifact/topic_assignments.csv
+          echo "Topic artifact found: topic_artifact/topic_assignments.csv"
+
       - name: Build and validate candidate master
         run: python3 scripts/merge_master_update.py
-      - name: Upload candidate master
+
+      - name: Archive current master and promote candidate
+        run: |
+          set -euo pipefail
+          mkdir -p data/reference/archive
+          cp data/reference/salmon_evidence_map.csv data/reference/archive/salmon_evidence_map_2026-08-14_premerge.csv
+          cp data/reference/salmon_evidence_map_2026-08-14.csv data/reference/salmon_evidence_map.csv
+          cp data/reference/salmon_evidence_map_2026-08-14_manifest.csv data/reference/salmon_evidence_map_2026-08-14_manifest.csv
+
+      - name: Commit final master
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add data/reference/salmon_evidence_map.csv data/reference/salmon_evidence_map_2026-08-14_manifest.csv data/reference/archive/salmon_evidence_map_2026-08-14_premerge.csv
+          git commit -m "Promote validated master 2026-08-14"
+          git push
+
+      - name: Upload final master audit artifact
         uses: actions/upload-artifact@v4
         with:
           name: final-master-2026-08-14
           path: |
-            data/reference/salmon_evidence_map_2026-08-14.csv
+            data/reference/salmon_evidence_map.csv
             data/reference/salmon_evidence_map_2026-08-14_manifest.csv
+            data/reference/archive/salmon_evidence_map_2026-08-14_premerge.csv
