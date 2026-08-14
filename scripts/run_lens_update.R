@@ -215,6 +215,22 @@ readr::write_csv(llm_results, fs::path(output_dir, "llm_screening.csv"), na = ""
 message("LLM screening: llm_screening.csv written.")
 message("Lens update: constructing final screening table.")
 
+message(sprintf(
+  "Final screening: relevance rows = %d; LLM rows = %d.",
+  nrow(relevance), nrow(llm_results)
+))
+
+message(sprintf(
+  "Final screening: unique relevance IDs = %d; unique LLM IDs = %d.",
+  dplyr::n_distinct(relevance$record_id),
+  dplyr::n_distinct(llm_results$record_id)
+))
+
+message(sprintf(
+  "Final screening: duplicate LLM IDs = %d.",
+  sum(duplicated(llm_results$record_id))
+))
+
 final_screened <- relevance |>
   dplyr::left_join(llm_results |> dplyr::select(record_id, llm_decision, llm_reason, llm_failed, llm_error), by = "record_id") |>
   dplyr::mutate(
