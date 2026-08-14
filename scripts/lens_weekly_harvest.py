@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-import csv, json, os, re, sys
+import csv, json, os, re
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 API_URL = "https://api.lens.org/scholarly/search"
@@ -17,9 +19,10 @@ if not TOKEN:
 with CONFIG.open(encoding="utf-8") as f:
     cfg = json.load(f)
 
-base_query = cfg["api_query"]["query"] if isinstance(cfg.get("api_query"), dict) else None
-if not base_query:
-    raise SystemExit("config/lens_search.json does not contain api_query.query")
+api_cfg = cfg.get("api_query")
+base_query = api_cfg.get("query") if isinstance(api_cfg, dict) else None
+if not isinstance(base_query, dict):
+    raise SystemExit("config/lens_search.json api_query.query must be a JSON query object")
 
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -37,35 +40,48 @@ if previous:
     except ValueError:
         start = now - timedelta(days=OVERLAP_DAYS)
 else:
-    # First run is a bounded seven-day test window, not a full 21k-record download.
+    # First run is a bounded seven-day test window, not a full corpus download.
     start = now - timedelta(days=OVERLAP_DAYS)
 
 start_s = start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 end_s = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-# Lens query-string range syntax; retain the base search exactly and constrain created.
-query = f"({base_query}) AND created:[{start_s} TO {end_s}]"
+# Lens supports date ranges as a JSON range query. Keep the validated base
+# search unchanged and add created as a second MUST clause.
+query_obj = deepcopy(base_query)
+query_obj.setdefault("bool", {})
+query_obj["bool"].setdefault("must", []).append({
+    "range": {"created": {"gte": start_s, "lte": end_s}}
+})
 
-page_size = 100
+page_size = min(int(api_cfg.get("size", 100)), 1000)
 from_value = 0
 all_records = []
 
-while True:
-    payload_cfg = dict(cfg["api_query"])
-    payload_cfg["query"] = query
-    payload_cfg["size"] = page_size
-    payload_cfg["from"] = from_value
-    payload = json.dumps(payload_cfg).encode("utf-8")
-    req = Request(API_URL, data=payload, method="POST", headers={
-        "Authorization": TOKEN,
+def request_page(payload):
+    req = Request(API_URL, data=json.dumps(payload).encode("utf-8"), method="POST", headers={
+        "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     })
-    with urlopen(req, timeout=120) as response:
-        body = json.load(response)
-        if response.status != 200:
-            raise RuntimeError(f"Lens API HTTP {response.status}")
+    try:
+        with urlopen(req, timeout=120) as response:
+            body = json.load(response)
+            if response.status != 200:
+                raise RuntimeError(f"Lens API HTTP {response.status}")
+            return body
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Lens API HTTP {exc.code}: {detail}") from exc
 
+while True:
+    payload = {
+        "query": query_obj,
+        "size": page_size,
+        "from": from_value,
+        "include": api_cfg.get("include", [])
+    }
+    body = request_page(payload)
     records = body.get("data", [])
     total = int(body.get("total", 0))
     all_records.extend(records)
@@ -79,12 +95,19 @@ while True:
 def norm(value):
     if value is None:
         return ""
-    return re.sub(r"\\s+", " ", str(value).strip().lower())
+    return re.sub(r"\s+", " ", str(value).strip().lower())
 
 def key(rec):
     lens_id = norm(rec.get("lens_id"))
     doi = norm(rec.get("doi"))
     title = norm(rec.get("title"))
+    external_ids = rec.get("external_ids") or []
+    if not doi:
+        for item in external_ids:
+            if isinstance(item, dict) and str(item.get("type", "")).lower() == "doi":
+                doi = norm(item.get("value") or item.get("id"))
+                if doi:
+                    break
     return ("lens:" + lens_id) if lens_id else (("doi:" + doi) if doi else ("title:" + title) if title else "")
 
 seen = set()
@@ -126,7 +149,7 @@ manifest = {
 }
 manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-# Only advance checkpoint after the complete API retrieval and artifact writes succeeded.
+# Only advance checkpoint after complete retrieval and artifact writes succeed.
 STATE.write_text(json.dumps({
     "last_successful_created": end_s,
     "updated_at": now.isoformat()
