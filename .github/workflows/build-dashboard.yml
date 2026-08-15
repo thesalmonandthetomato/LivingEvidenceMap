@@ -6,6 +6,8 @@ on:
     paths:
       - 'scripts/build_dashboard.py'
       - 'scripts/build_dashboard_html_v2.py'
+      - 'scripts/augment_dashboard_citations.py'
+      - 'scripts/patch_dashboard_citations.py'
       - 'scripts/augment_dashboard_data.py'
       - 'scripts/normalise_dashboard_data.py'
       - 'scripts/validate_dashboard_data.py'
@@ -34,6 +36,8 @@ jobs:
           fetch-depth: 1
       - name: Build dashboard data
         run: python scripts/build_dashboard.py
+      - name: Add bibliographic citation metadata
+        run: python scripts/augment_dashboard_citations.py
       - name: Normalise species and finest-topic metrics
         run: python scripts/normalise_dashboard_data.py
       - name: Build hierarchical dashboard data
@@ -46,6 +50,8 @@ jobs:
         run: python scripts/repair_dashboard_builder.py
       - name: Build production dashboard HTML
         run: python scripts/build_dashboard_html_v2.py
+      - name: Render citation details and scholarly links
+        run: python scripts/patch_dashboard_citations.py
       - name: Stamp dashboard HTML and bust dashboard-data cache
         run: |
           python - <<'PY'
@@ -70,12 +76,9 @@ jobs:
           PY
           node --check /tmp/dashboard.js
       - name: Package dashboard for Pages deployment
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: dashboard-pages
           path: docs
-          if-no-files-found: error
-          retention-days: 7
       - name: Commit generated dashboard files
         run: |
           git config user.name 'github-actions[bot]'
