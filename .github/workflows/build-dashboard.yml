@@ -55,6 +55,13 @@ jobs:
           Path('/tmp/dashboard.js').write_text(js,encoding='utf-8')
           PY
           node --check /tmp/dashboard.js
+      - name: Package dashboard for Pages deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-pages
+          path: docs
+          if-no-files-found: error
+          retention-days: 7
       - name: Commit generated dashboard files
         run: |
           git config user.name 'github-actions[bot]'
