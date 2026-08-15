@@ -92,5 +92,9 @@ readr::write_csv(checkpoint, final_path)
 review <- checkpoint %>% filter(review_required %in% TRUE | status == "failed")
 readr::write_csv(review, review_path)
 failed_ids <- checkpoint %>% filter(status == "failed") %>% distinct(record_id)
-if (nrow(failed_ids)) stop("Topic classification has ", nrow(failed_ids), " failed records; see ", review_path)
-message("Completed topic classification for ", n_distinct(checkpoint$record_id), " records; assignments: ", sum(!is.na(checkpoint$path_id)))
+if (nrow(failed_ids)) {
+  warning("Topic classification completed with ", nrow(failed_ids), " failed records; see ", review_path)
+  message("Successful records: ", n_distinct(checkpoint$record_id[checkpoint$status == "completed"]), "; failed records: ", nrow(failed_ids), "; assignments: ", sum(!is.na(checkpoint$path_id)))
+} else {
+  message("Completed topic classification for ", n_distinct(checkpoint$record_id), " records; assignments: ", sum(!is.na(checkpoint$path_id)))
+}
