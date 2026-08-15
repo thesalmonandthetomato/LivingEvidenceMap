@@ -57,9 +57,6 @@ def search_total():
         except Exception:pass
     return total if found else None
 def iso_numeric_map():
-    # Use the checked-in ISO3→numeric mapping first. The previous implementation
-    # depended on gazetteer column names and silently returned {} when those
-    # columns differed, leaving the choropleth with no numeric country IDs.
     try:
         if ISO_MAP.exists():
             obj=json.loads(ISO_MAP.read_text(encoding='utf-8'))
@@ -114,5 +111,5 @@ for row in rows:
     for level,vals in levels.items():rec['topic_level_'+level]=vals
     records.append(rec)
 map_iso=iso_numeric_map(); country_map={map_iso[k]:v for k,v in iso.items() if k in map_iso}; map_id_to_iso3={v:k for k,v in map_iso.items()}
-payload={'generated_at':datetime.now(timezone.utc).isoformat(),'metrics':{'last_update':latest,'total_records':len(rows),'total_countries':len(countries),'total_species':len([s for s in species if s!='Unspecified species']),'total_topics':0,'candidate_search_results_screened':search_total(),'records_without_topics':len(missing_topic_records)},'species_counts':dict((s,n) for s,n in species.most_common() if s!='Unspecified species'),'country_counts':dict(countries.most_common()),'country_iso3_counts':dict(country_map),'map_id_to_iso3':map_id_to_iso3,'topic_counts':dict(topics.most_common()),'topic_level_counts':{k:dict(v.most_common()) for k,v in sorted(by_level.items(),key=lambda x:int(x[0]))},'species_topic_level_counts':{level:{f'{s}|||{t}':n for (s,t),n in counts.items()} for level,counts in sorted(species_topic_level.items(),key=lambda x:int(x[0]))},'topic_level_fields':topic_fields,'records':records,'missing_topic_record_ids':missing_topic_records}
+payload={'generated_at':datetime.now(timezone.utc).isoformat(),'metrics':{'last_update':latest,'total_records':len(rows),'total_countries':len(countries),'total_species':len(species),'total_topics':0,'candidate_search_results_screened':search_total(),'records_without_topics':len(missing_topic_records)},'species_counts':dict((s,n) for s,n in species.most_common() if s!='Unspecified species'),'country_counts':dict(countries.most_common()),'country_iso3_counts':dict(country_map),'map_id_to_iso3':map_id_to_iso3,'topic_counts':dict(topics.most_common()),'topic_level_counts':{k:dict(v.most_common()) for k,v in sorted(by_level.items(),key=lambda x:int(x[0]))},'species_topic_level_counts':{level:{f'{s}|||{t}':n for (s,t),n in counts.items()} for level,counts in sorted(species_topic_level.items(),key=lambda x:int(x[0]))},'topic_level_fields':topic_fields,'records':records,'missing_topic_record_ids':missing_topic_records}
 OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(json.dumps(payload,ensure_ascii=False,separators=(',',':')),encoding='utf-8'); print(f'Built dashboard data: {len(records):,} records; countries={len(countries):,}; mapped ISO3 countries={len(country_map):,}; species={len(payload["species_counts"]):,}; topics={len(topics):,}; records_without_topics={len(missing_topic_records):,}')
