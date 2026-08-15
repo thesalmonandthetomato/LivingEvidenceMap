@@ -12,6 +12,7 @@ on:
       - 'scripts/force_dashboard_rebuild.py'
       - 'scripts/repair_dashboard_builder.py'
       - 'scripts/audit_topic_hierarchy.py'
+      - 'config/iso3_numeric_map.json'
       - 'data/reference/salmon_evidence_map.csv'
       - 'data/reference/topic_ontology_v3.csv'
   workflow_run:
@@ -57,7 +58,7 @@ jobs:
       - name: Commit generated dashboard files
         run: |
           git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.email '41898282+github-actions[bot].noreply.github.com'
           git add docs/dashboard.json docs/index.html state/dashboard_missing_topics.txt state/topic_hierarchy_audit.csv state/topic_hierarchy_audit_summary.txt scripts/build_dashboard_html_v2.py
           if git diff --cached --quiet; then
             echo 'Dashboard files unchanged.'
