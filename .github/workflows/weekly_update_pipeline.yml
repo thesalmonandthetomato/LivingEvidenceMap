@@ -1,0 +1,146 @@
+name: Weekly evidence-map update
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      ris_path:
+        description: 'Optional committed RIS file for a manual update; leave blank for Lens'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set update date
+        id: dates
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "update_date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+          echo "next_date=$(date -u -d '+1 day' +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Harvest Lens weekly increment
+        if: ${{ github.event.inputs.ris_path == '' || github.event.inputs.ris_path == null }}
+        env:
+          OVERLAP_DAYS: '7'
+        run: python3 scripts/lens_weekly_harvest.py
+
+      - name: Prepare update input
+        shell: bash
+        env:
+          RIS_PATH: ${{ github.event.inputs.ris_path }}
+        run: |
+          set -euo pipefail
+          UPDATE_DIR="data/updates/${{ steps.dates.outputs.update_date }}_lens"
+          mkdir -p "$UPDATE_DIR"
+          if [ -n "${RIS_PATH:-}" ]; then
+            test -f "$RIS_PATH"
+            cp "$RIS_PATH" "$UPDATE_DIR/lens-export.ris"
+            echo "Manual RIS supplied: $RIS_PATH"
+            exit 0
+          fi
+          MANIFEST=$(ls -1t outputs/lens_harvest/*_manifest.json | head -1)
+          STATUS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$MANIFEST")
+          if [ "$STATUS" = "no_records" ]; then
+            echo "No new Lens records. Master will remain unchanged."
+            echo "no_records=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          JSON=$(ls -1t outputs/lens_harvest/lens_increment_*.json | head -1)
+          python3 scripts/lens_json_to_ris.py "$JSON" "$UPDATE_DIR/lens-export.ris"
+          test -s "$UPDATE_DIR/lens-export.ris"
+
+      - name: Stop cleanly after zero-record harvest
+        if: env.no_records == 'true'
+        run: echo 'Zero-record weekly harvest completed successfully; downstream pipeline skipped.'
+
+      - name: Install R and dependencies
+        if: env.no_records != 'true'
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - name: Install R dependencies
+        if: env.no_records != 'true'
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::fs
+            any::here
+            any::httr2
+            any::jsonlite
+            any::readr
+            any::stringdist
+            any::stringi
+            any::stringr
+            any::tibble
+            any::tidyr
+            any::yaml
+            any::quanteda
+            any::glmnet
+            any::Matrix
+            any::purrr
+
+      - name: Make existing date-specific scripts dynamic for this run
+        if: env.no_records != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          d='${{ steps.dates.outputs.update_date }}'
+          n='${{ steps.dates.outputs.next_date }}'
+          sed -i "s/2026-08-13/${d}/g; s/2026-08-14/${n}/g" scripts/run_lens_update.R R/run_update_topic_classification.R scripts/merge_master_update.py
+
+      - name: Run deduplication, relevance, screening, species and geography
+        if: env.no_records != 'true'
+        run: Rscript scripts/run_lens_update.R
+        env:
+          LENS_UPDATE_DATE: ${{ steps.dates.outputs.update_date }}
+
+      - name: Run topic classification
+        if: env.no_records != 'true'
+        run: Rscript R/run_update_topic_classification.R
+
+      - name: Build and validate candidate master
+        if: env.no_records != 'true'
+        run: python3 scripts/merge_master_update.py
+
+      - name: Promote validated candidate master
+        if: env.no_records != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          d='${{ steps.dates.outputs.next_date }}'
+          mkdir -p data/reference/archive
+          cp data/reference/salmon_evidence_map.csv "data/reference/archive/salmon_evidence_map_${d}_premerge.csv"
+          cp "data/reference/salmon_evidence_map_${d}.csv" data/reference/salmon_evidence_map.csv
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/reference/salmon_evidence_map.csv "data/reference/salmon_evidence_map_${d}_manifest.csv" "data/reference/archive/salmon_evidence_map_${d}_premerge.csv"
+          git commit -m "Promote validated weekly master ${d}"
+          git push
+
+      - name: Upload weekly update audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-update-${{ steps.dates.outputs.update_date }}
+          path: |
+            data/updates/${{ steps.dates.outputs.update_date }}_lens/
+            outputs/lens_harvest/
+          if-no-files-found: warn
+          retention-days: 90
