@@ -1,0 +1,36 @@
+name: Repair dashboard builder source
+
+on:
+  push:
+    paths:
+      - 'scripts/repair_dashboard_builder.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair builder syntax
+        run: python scripts/repair_dashboard_builder.py
+      - name: Validate generated JavaScript source after rendering
+        run: |
+          python scripts/build_dashboard_html_v2.py
+          python - <<'PY'
+          from pathlib import Path
+          html=Path('docs/index.html').read_text(encoding='utf-8')
+          js=html.split('<script>',1)[1].split('</script>',1)[0]
+          Path('/tmp/dashboard.js').write_text(js,encoding='utf-8')
+          PY
+          node --check /tmp/dashboard.js
+      - name: Commit repaired builder
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/build_dashboard_html_v2.py docs/index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Fix dashboard builder JavaScript syntax'
+          git push
