@@ -4,7 +4,7 @@ import csv,json,re
 from pathlib import Path
 from collections import Counter
 from datetime import datetime,timezone
-ROOT=Path('.'); MASTER=ROOT/'data/reference/salmon_evidence_map.csv'; OUT=ROOT/'docs/dashboard.json'; STATE=ROOT/'state'; GAZ=ROOT/'config/global_country_gazetteer_v3.csv'
+ROOT=Path('.'); MASTER=ROOT/'data/reference/salmon_evidence_map.csv'; OUT=ROOT/'docs/dashboard.json'; STATE=ROOT/'state'; GAZ=ROOT/'config/global_country_gazetteer_v3.csv'; ISO_MAP=ROOT/'config/iso3_numeric_map.json'
 ALIASES={'id':['record_id','id','lens_id','study_id'],'title':['title','article_title','document_title'],'doi':['doi','doi_url','digital_object_identifier'],'abstract':['abstract','abstract_text'],'year':['year','publication_year','date_year'],'species':['final_species','species','farmed_species','deterministic_species','species_assigned','species_assignment','species_name'],'country':['final_primary_country_iso3c','primary_country','primary_countries','country','countries','country_name','country_names','deterministic_primary_countries','geography_primary_country','geography_country'],'iso3':['final_primary_country_iso3c','iso3','iso3c','primary_iso3c','primary_iso3c_codes','deterministic_primary_iso3c','country_iso3c','deterministic_primary_iso3c_codes'],'topics':['topic_hierarchy','topic_hierarchy_paths','hierarchy_path','topics','topic','topic_path'],'updated':['updated_at','update_date','ingested_at','date_added','last_updated']}
 TOPIC_EXPLICIT=['broad_topic','subtopic','feature','component']
 BAD_TOPIC={'na','n/a','nan','null','none','unknown','unspecified','not applicable',''}
@@ -13,7 +13,7 @@ def pick(fields,names):
     low={f.lower():f for f in fields}; return next((low[n.lower()] for n in names if n.lower() in low),None)
 def canon_species(s):
     s=' '.join(str(s or '').strip().split()); k=s.lower()
-    if not s or k in BAD_TOPIC or 'unspecified' in k and ('salmon' in k or 'salmonid' in k or 'species' in k): return 'Unspecified species'
+    if not s or k in BAD_TOPIC or ('unspecified' in k and ('salmon' in k or 'salmonid' in k or 'species' in k)): return 'Unspecified species'
     if k in {'rainbow salmon','rainbow_trout','rainbow trout'}: return 'Rainbow trout'
     return s
 def clean_topic(s):
@@ -57,11 +57,19 @@ def search_total():
         except Exception:pass
     return total if found else None
 def iso_numeric_map():
+    # Use the checked-in ISO3→numeric mapping first. The previous implementation
+    # depended on gazetteer column names and silently returned {} when those
+    # columns differed, leaving the choropleth with no numeric country IDs.
+    try:
+        if ISO_MAP.exists():
+            obj=json.loads(ISO_MAP.read_text(encoding='utf-8'))
+            if isinstance(obj,dict): return {str(k).upper():str(v).zfill(3) for k,v in obj.items() if v is not None and str(v).strip()}
+    except Exception: pass
     if not GAZ.exists():return {}
     try:
         with GAZ.open(newline='',encoding='utf-8-sig') as f:
             rows=csv.DictReader(f); fields=rows.fieldnames or []
-            a=pick(fields,['iso3','iso_3','alpha3','iso_alpha3','iso3c']); b=pick(fields,['iso_numeric','iso_num','numeric','numeric_code','m49','country_code_numeric','iso_numeric_code'])
+            a=pick(fields,['iso3','iso_3','alpha3','iso_alpha3','iso3c','iso_a3','iso_a3c','alpha_3']); b=pick(fields,['iso_numeric','iso_num','numeric','numeric_code','m49','country_code_numeric','iso_numeric_code','iso_n3','iso_n'])
             if not a or not b:return {}
             return {str(r[a]).strip().upper():str(r[b]).strip().zfill(3) for r in rows if r.get(a) and r.get(b)}
     except Exception:return {}
@@ -105,6 +113,6 @@ for row in rows:
     rec={'record_id':row.get(f['id'],'') if f['id'] else '','title':row.get(f['title'],'') if f['title'] else '','doi':row.get(f['doi'],'') if f['doi'] else '','abstract':row.get(f['abstract'],'') if f['abstract'] else '','year':row.get(f['year'],'') if f['year'] else '','species':sp,'countries':co,'iso3':ix,'topics':alltopics,'topic_paths':paths}
     for level,vals in levels.items():rec['topic_level_'+level]=vals
     records.append(rec)
-map_iso=iso_numeric_map(); country_map={map_iso.get(k,k):v for k,v in iso.items()}; map_id_to_iso3={v:k for k,v in map_iso.items()}
+map_iso=iso_numeric_map(); country_map={map_iso[k]:v for k,v in iso.items() if k in map_iso}; map_id_to_iso3={v:k for k,v in map_iso.items()}
 payload={'generated_at':datetime.now(timezone.utc).isoformat(),'metrics':{'last_update':latest,'total_records':len(rows),'total_countries':len(countries),'total_species':len([s for s in species if s!='Unspecified species']),'total_topics':0,'candidate_search_results_screened':search_total(),'records_without_topics':len(missing_topic_records)},'species_counts':dict((s,n) for s,n in species.most_common() if s!='Unspecified species'),'country_counts':dict(countries.most_common()),'country_iso3_counts':dict(country_map),'map_id_to_iso3':map_id_to_iso3,'topic_counts':dict(topics.most_common()),'topic_level_counts':{k:dict(v.most_common()) for k,v in sorted(by_level.items(),key=lambda x:int(x[0]))},'species_topic_level_counts':{level:{f'{s}|||{t}':n for (s,t),n in counts.items()} for level,counts in sorted(species_topic_level.items(),key=lambda x:int(x[0]))},'topic_level_fields':topic_fields,'records':records,'missing_topic_record_ids':missing_topic_records}
-OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(json.dumps(payload,ensure_ascii=False,separators=(',',':')),encoding='utf-8'); print(f'Built dashboard data: {len(records):,} records; countries={len(countries):,}; species={len(payload["species_counts"]):,}; topics={len(topics):,}; records_without_topics={len(missing_topic_records):,}')
+OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(json.dumps(payload,ensure_ascii=False,separators=(',',':')),encoding='utf-8'); print(f'Built dashboard data: {len(records):,} records; countries={len(countries):,}; mapped ISO3 countries={len(country_map):,}; species={len(payload["species_counts"]):,}; topics={len(topics):,}; records_without_topics={len(missing_topic_records):,}')
