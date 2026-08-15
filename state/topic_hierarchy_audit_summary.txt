@@ -1,60 +1,13 @@
 Master records: 13,389
 Canonical ontology paths: 133
 Canonical ontology depth distribution: {3: 133}
+Master topic-path depth distribution: {1: 1, 3: 8681}
 Master records with each number of paths: {1: 12, 2: 64, 3: 123, 4: 219, 5: 216, 6: 205, 7: 161, 8: 123, 9: 82, 10: 56, 11: 47, 12: 24, 13: 17, 14: 8, 15: 5, 16: 3, 17: 3, 18: 4, 19: 1, 20: 3, 21: 2, 22: 2, 29: 1}
 Unique master paths: 134
-Unique unmapped master paths: 132
-Record-level findings: 17,065
-Records with findings: 13,183
+Unique master paths NOT in canonical ontology: 1
+Records with at least one unmapped/missing path: 12,009
+Path-ID/text mismatches: 5,056
+Records with path-ID/text mismatches: 1,174
 
-Most common unmapped paths:
-436	path_id_text_mismatch	Production > Fish performance and biology > Physiology, metabolism and biological responses
-235	path_id_text_mismatch	Production > Fish performance and biology > Growth and development
-233	path_id_text_mismatch	Production > Fish performance and biology > Anatomy and tissues
-194	path_id_text_mismatch	Environment > Environmental stressors > Water and ocean conditions
-184	path_id_text_mismatch	Production > Fish health > Other diseases - Diagnosis and detection
-179	path_id_text_mismatch	Environment > Environmental management > Monitoring and assessment
-166	path_id_text_mismatch	Production > Fish health > Other diseases - Prevention and treatment
-117	path_id_text_mismatch	Production > Fish health > Other diseases - General
-104	path_id_text_mismatch	Production > Fish health > Other diseases - Epidemiology
-99	path_id_text_mismatch	Production > Feed and nutrition > Nutrient requirements and feed formulation
-95	path_id_text_mismatch	Production > Production systems and technology > Marine cage systems
-84	path_id_text_mismatch	Production > Production systems and technology > Recirculating aquaculture systems
-84	path_id_text_mismatch	Industry and governance > Governance and policy > Policy and regulation
-81	path_id_text_mismatch	Production > Husbandry and farm management > Environmental control
-79	path_id_text_mismatch	Methods > Methodological research > Monitoring and sampling methods
-74	path_id_text_mismatch	Environment > Waste and emissions > Nutrients and organic waste
-73	path_id_text_mismatch	Production > Stress and mortality > Stress
-73	path_id_text_mismatch	Production > Fish performance and biology > Behaviour
-73	path_id_text_mismatch	Environment > Wild populations and ecosystems > Parasite and pathogen transmission
-71	path_id_text_mismatch	Production > Feed and nutrition > Feed efficiency and conversion
-70	path_id_text_mismatch	Production > Breeding and reproduction > Selective breeding and genetic improvement
-70	path_id_text_mismatch	Production > Fish health > Non-infectious disease and disorders
-66	path_id_text_mismatch	Methods > Methodological research > Statistical and modelling methods
-65	path_id_text_mismatch	Environment > Wild populations and ecosystems > Biodiversity and ecosystem effects
-62	path_id_text_mismatch	Production > Fish health > Sea lice control and treatment
-61	path_id_text_mismatch	Environment > General environmental issues > Multiple or general environmental impacts
-60	path_id_text_mismatch	Production > Fish welfare > Welfare assessment
-59	path_id_text_mismatch	Industry and governance > Sector development > Innovation and technological transition
-55	path_id_text_mismatch	Production > Feed and nutrition > Digestibility and nutrient utilisation
-54	path_id_text_mismatch	Production > Fish welfare > Welfare risks and consequences
-52	path_id_text_mismatch	Production > Production systems and technology > Land-based and flow-through systems
-50	path_id_text_mismatch	Production > Stress and mortality > Mortality and survival
-50	path_id_text_mismatch	Environment > Physical environment > Water quality
-48	path_id_text_mismatch	Production > Fish health > Sea lice epidemiology
-48	path_id_text_mismatch	Production > Production systems and technology > Automation and precision aquaculture
-47	path_id_text_mismatch	Environment > Environmental management > Mitigation and remediation
-42	path_id_text_mismatch	Industry and governance > Sector development > History and regional development
-42	path_id_text_mismatch	Environment > Environmental stressors > Climate change
-39	path_id_text_mismatch	Production > Feed and nutrition > Feeding strategies and appetite
-37	path_id_text_mismatch	Inputs and resources > Circularity > By-products and waste as inputs
-37	path_id_text_mismatch	Environment > Physical environment > Hydrodynamics and water flow
-36	path_id_text_mismatch	Production > Feed and nutrition > Feed additives and supplements
-35	path_id_text_mismatch	Methods > Methodological research > Diagnostic and laboratory methods
-35	path_id_text_mismatch	Environment > Climate change > Adaptation and mitigation
-34	path_id_text_mismatch	Production > Fish health > General fish health
-33	path_id_text_mismatch	Production > Husbandry and farm management > Stocking density and crowding
-33	path_id_text_mismatch	Methods > Methodological research > Evidence-synthesis and classification methods
-31	path_id_text_mismatch	Production > Fish health > Fish response to sea lice
-31	path_id_text_mismatch	Production > Fish welfare > Welfare improvement
-31	path_id_text_mismatch	Industry and governance > Economics and performance > Costs and profitability
+Most common genuinely unmapped paths:
+1	unmapped_depth_1	NA
