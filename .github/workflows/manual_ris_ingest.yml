@@ -1,0 +1,65 @@
+name: Manual RIS ingestion
+
+on:
+  workflow_dispatch:
+    inputs:
+      ris_path:
+        description: 'Path to RIS file committed/uploaded to the repository'
+        required: true
+        default: 'data/manual_input/incoming.ris'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate RIS input
+        shell: bash
+        env:
+          RIS_PATH: ${{ inputs.ris_path }}
+        run: |
+          set -euo pipefail
+          test -f "$RIS_PATH"
+          case "$RIS_PATH" in
+            *.ris|*.RIS) ;;
+            *) echo "Input must be an RIS file: $RIS_PATH"; exit 1 ;;
+          esac
+          echo "Using RIS input: $RIS_PATH"
+
+      - name: Normalize RIS into update artifacts
+        shell: bash
+        env:
+          RIS_PATH: ${{ inputs.ris_path }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ingest_manual_ris.py "$RIS_PATH"
+
+      - name: Inspect record count
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=$(find outputs/manual_ris_ingest -name '*_manifest.json' -print -quit)
+          test -n "$manifest"
+          python3 - "$manifest" <<'PY'
+          import json, sys
+          m = json.load(open(sys.argv[1], encoding='utf-8'))
+          n = int(m.get('records_written', 0))
+          print(f"Manual RIS records: {n}")
+          if n == 0:
+              print("NO RECORDS: downstream must leave master unchanged.")
+          else:
+              print("RECORDS FOUND: normalized update is ready for downstream processing.")
+          PY
+
+      - name: Upload manual RIS update
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-ris-ingest-${{ github.run_id }}
+          path: outputs/manual_ris_ingest/*
+          if-no-files-found: error
+          retention-days: 90
