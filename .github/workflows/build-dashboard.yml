@@ -2,6 +2,13 @@ name: Build evidence-map dashboard
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/build_dashboard.py'
+      - 'scripts/build_dashboard_html_v2.py'
+      - 'scripts/augment_dashboard_data.py'
+      - 'scripts/normalise_dashboard_data.py'
+      - 'scripts/validate_dashboard_data.py'
   workflow_run:
     workflows: ["Build final master"]
     types: [completed]
@@ -11,7 +18,7 @@ permissions:
 
 jobs:
   build-dashboard:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout current main
