@@ -13,37 +13,44 @@ def clean_topic(s):
  s=' '.join(str(s or '').strip().split()); return '' if s.lower() in {'na','n/a','nan','null','none','unknown','unspecified','not applicable',''} else s
 
 for r in records:
- r['species']=list(dict.fromkeys(canon(x) for x in r.get('species',[]) if canon(x))) or ['Unspecified species']
- r['topics']=list(dict.fromkeys(clean_topic(x) for x in r.get('topics',[]) if clean_topic(x)))
- r['topic_paths']=[[clean_topic(x) for x in path if clean_topic(x)] for path in r.get('topic_paths',[]) if any(clean_topic(x) for x in path)]
+    r['species']=list(dict.fromkeys(canon(x) for x in r.get('species',[]) if canon(x))) or ['Unspecified species']
+    r['topics']=list(dict.fromkeys(clean_topic(x) for x in r.get('topics',[]) if clean_topic(x)))
+    r['topic_paths']=[[clean_topic(x) for x in path if clean_topic(x)] for path in r.get('topic_paths',[]) if any(clean_topic(x) for x in path)]
 
 cs=defaultdict(Counter); sc=Counter(); terminal=Counter(); level_counts=defaultdict(Counter); species_level=defaultdict(Counter); tree={}
 for r in records:
-    # Species/country metrics count records, not topic assignments.
     for s in r['species']:
         sc[s]+=1
         for c in r.get('iso3',[]): cs[s][str(c).upper()]+=1
     paths=r.get('topic_paths',[])
     if paths:
-        # Each record contributes at most once to each topic node, even when it
-        # has several hierarchical paths containing that node.
-        unique_nodes_by_level=defaultdict(set)
         unique_paths={tuple(path) for path in paths}
+        unique_nodes_by_level=defaultdict(set)
+        unique_prefixes=set()
         for path in unique_paths:
-            parent=tree
             for depth,name in enumerate(path,1):
-                node=parent.setdefault(name,{'name':name,'count':0,'children':{}}); node['count']+=1; parent=node['children']
                 unique_nodes_by_level[depth].add(name)
-        deepest=max(len(x) for x in unique_paths)
-        for path in unique_paths:
-            if len(path)==deepest:
-                terminal[path[-1]]+=1
+                unique_prefixes.add(tuple(path[:depth]))
+        # Count each hierarchy node once per record, even if several assigned paths share it.
+        for prefix in unique_prefixes:
+            parent=tree
+            for name in prefix:
+                node=parent.setdefault(name,{'name':name,'count':0,'children':{}})
+                parent=node['children']
         for depth,names in unique_nodes_by_level.items():
             for name in names:
+                node=tree.get(name) if depth==1 else None
                 level_counts[str(depth)][name]+=1
             for s in r['species']:
-                for name in names:
-                    species_level[str(depth)][(s,name)]+=1
+                for name in names: species_level[str(depth)][(s,name)]+=1
+        # Increment tree counts by traversing each unique prefix once.
+        for prefix in unique_prefixes:
+            parent=tree
+            for name in prefix:
+                parent[name]['count']+=1
+                parent=parent[name]['children']
+        deepest=max(len(x) for x in unique_paths)
+        terminal.update({path[-1] for path in unique_paths if len(path)==deepest})
     else:
         levels={}
         for k,v in r.items():
@@ -65,4 +72,4 @@ d['topic_level_counts']={k:dict(v.most_common()) for k,v in sorted(level_counts.
 d['species_topic_level_counts']={lev:{f'{s}|||{t}':n for (s,t),n in c.items()} for lev,c in sorted(species_level.items(),key=lambda x:int(x[0]))}
 d['topic_tree']=tree; d['topic_level_labels']={str(i):('Top-level topic' if i==1 else 'Topic level '+str(i)) for i in range(1,max([int(x) for x in level_counts] or [1])+1)}
 p.write_text(json.dumps(d,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
-print('Augmented dashboard data:',len(records),'records;',len(d['species_counts']),'species;',sum(terminal.values()),'unique finest-topic record assignments;',sum(1 for r in records if not r.get('topic_paths') and not any(k.startswith('topic_level_') and v for k,v in r.items())))
+print('Augmented dashboard data:',len(records),'records;',len(d['species_counts']),'species;',sum(terminal.values()),'unique finest-topic record assignments')
