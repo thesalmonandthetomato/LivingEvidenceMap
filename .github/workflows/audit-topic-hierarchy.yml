@@ -1,0 +1,27 @@
+name: Audit master topic hierarchy
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/audit_topic_hierarchy.py'
+      - 'data/reference/salmon_evidence_map.csv'
+      - 'data/reference/topic_ontology_v3.csv'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit topic paths against canonical ontology
+        run: python scripts/audit_topic_hierarchy.py
+      - name: Upload audit outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-hierarchy-audit
+          path: |
+            state/topic_hierarchy_audit.csv
+            state/topic_hierarchy_audit_summary.txt
