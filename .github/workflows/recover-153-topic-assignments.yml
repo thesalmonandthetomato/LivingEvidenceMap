@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install R
         uses: r-lib/actions/setup-r@v2
@@ -57,20 +59,13 @@ jobs:
         run: |
           Rscript - <<'RSCRIPT'
           suppressPackageStartupMessages({library(dplyr); library(readr); library(stringr); library(tibble); library(jsonlite); library(httr2)})
-          input_path <- Sys.getenv('INPUT_PATH')
-          output_dir <- Sys.getenv('OUTPUT_DIR')
-          ontology_path <- Sys.getenv('ONTOLOGY_PATH')
+          input_path <- Sys.getenv('INPUT_PATH'); output_dir <- Sys.getenv('OUTPUT_DIR'); ontology_path <- Sys.getenv('ONTOLOGY_PATH')
           dir.create(output_dir, recursive=TRUE, showWarnings=FALSE)
-          records <- read_csv(input_path, show_col_types=FALSE)
-          ontology <- read_csv(ontology_path, show_col_types=FALSE)
-          valid_paths <- ontology$hierarchy_path
-          api_key <- Sys.getenv('OPENAI_API_KEY')
-          if (!nzchar(api_key)) stop('OPENAI_API_KEY not found')
-
+          records <- read_csv(input_path, show_col_types=FALSE); ontology <- read_csv(ontology_path, show_col_types=FALSE); valid_paths <- ontology$hierarchy_path
+          api_key <- Sys.getenv('OPENAI_API_KEY'); if (!nzchar(api_key)) stop('OPENAI_API_KEY not found')
           checkpoint_path <- file.path(output_dir,'topic_assignments_checkpoint.csv')
           if (file.exists(checkpoint_path)) checkpoint <- read_csv(checkpoint_path, show_col_types=FALSE) else checkpoint <- tibble(record_id=character(),path_id=character(),hierarchy_path=character(),review_required=logical(),review_reason=character(),status=character(),error=character())
           done <- unique(checkpoint$record_id[checkpoint$status=='completed'])
-
           classify_one <- function(title, abstract) {
             system_prompt <- paste('You are classifying scientific abstracts for a systematic evidence map of farmed salmon and rainbow trout research. Select every valid three-level hierarchy path below that represents a substantive objective, intervention, exposure, measured outcome, interpretation or application. A path need not be primary to be substantive. Do not assign from isolated words, background mentions or motivation alone. Use only listed paths. Multiple paths are allowed. Return an empty assignments array only when no listed path applies.', sep='\n')
             ontology_lines <- paste0(ontology$hierarchy_path,' [',ontology$path_id,'] | Semantic cues: ',coalesce(ontology$supporting_terms_from_old_ontology,''))
@@ -79,28 +74,13 @@ jobs:
             body <- list(model='gpt-5-mini',store=FALSE,input=list(list(role='system',content=list(list(type='input_text',text=system_prompt))),list(role='user',content=list(list(type='input_text',text=user_prompt)))),text=list(format=list(type='json_schema',name='topic_hierarchy_classification_recovery',strict=TRUE,schema=schema)))
             response <- request('https://api.openai.com/v1/responses') |> req_auth_bearer_token(api_key) |> req_body_json(body,auto_unbox=TRUE) |> req_timeout(180) |> req_retry(max_tries=3,backoff=~2^.x) |> req_error(is_error=function(resp) FALSE) |> req_perform()
             if (resp_status(response)>=400) stop('OpenAI HTTP ',resp_status(response),': ',resp_body_string(response))
-            x<-resp_body_json(response)
-            if (!identical(x$status,'completed')) stop('OpenAI response status: ',x$status)
-            messages<-x$output[vapply(x$output,function(z) identical(z$type,'message'),logical(1))]
-            content<-unlist(lapply(messages,function(z) z$content),recursive=FALSE)
-            text_items<-content[vapply(content,function(z) identical(z$type,'output_text')&&!is.null(z$text),logical(1))]
-            if(!length(text_items)) stop('No output_text')
-            p<-fromJSON(text_items[[1]]$text)
-            bad<-setdiff(p$assignments,valid_paths); if(length(bad)) stop('Invalid paths: ',paste(bad,collapse='; '))
+            x<-resp_body_json(response); if (!identical(x$status,'completed')) stop('OpenAI response status: ',x$status)
+            messages<-x$output[vapply(x$output,function(z) identical(z$type,'message'),logical(1))]; content<-unlist(lapply(messages,function(z) z$content),recursive=FALSE); text_items<-content[vapply(content,function(z) identical(z$type,'output_text')&&!is.null(z$text),logical(1))]
+            if(!length(text_items)) stop('No output_text'); p<-fromJSON(text_items[[1]]$text); bad<-setdiff(p$assignments,valid_paths); if(length(bad)) stop('Invalid paths: ',paste(bad,collapse='; '))
             list(assignments=p$assignments,review_required=isTRUE(p$review_required),review_reason=if(is.null(p$review_reason)) NA_character_ else p$review_reason)
           }
-
-          for(i in seq_len(nrow(records))){
-            rid<-as.character(records$record_id[i]); if(rid %in% done) next
-            res<-tryCatch(classify_one(records$title[i],records$abstract[i]),error=function(e) list(error=conditionMessage(e)))
-            if(!is.null(res$error)) rows<-tibble(record_id=rid,path_id=NA_character_,hierarchy_path=NA_character_,review_required=NA,review_reason=NA_character_,status='failed',error=res$error)
-            else if(!length(res$assignments)) rows<-tibble(record_id=rid,path_id=NA_character_,hierarchy_path=NA_character_,review_required=res$review_required,review_reason=res$review_reason,status='completed',error=NA_character_)
-            else rows<-ontology |> filter(hierarchy_path %in% res$assignments) |> transmute(record_id=rid,path_id,hierarchy_path,review_required=res$review_required,review_reason=res$review_reason,status='completed',error=NA_character_)
-            checkpoint<-bind_rows(checkpoint,rows); write_csv(checkpoint,checkpoint_path)
-            if(i %% 10 == 0) message('Processed ',i,'/',nrow(records))
-          }
-          write_csv(checkpoint,file.path(output_dir,'topic_assignments.csv'))
-          review<-checkpoint |> filter(review_required %in% TRUE | status=='failed'); write_csv(review,file.path(output_dir,'topic_review_queue.csv'))
+          for(i in seq_len(nrow(records))){ rid<-as.character(records$record_id[i]); if(rid %in% done) next; res<-tryCatch(classify_one(records$title[i],records$abstract[i]),error=function(e) list(error=conditionMessage(e))); if(!is.null(res$error)) rows<-tibble(record_id=rid,path_id=NA_character_,hierarchy_path=NA_character_,review_required=NA,review_reason=NA_character_,status='failed',error=res$error) else if(!length(res$assignments)) rows<-tibble(record_id=rid,path_id=NA_character_,hierarchy_path=NA_character_,review_required=res$review_required,review_reason=res$review_reason,status='completed',error=NA_character_) else rows<-ontology |> filter(hierarchy_path %in% res$assignments) |> transmute(record_id=rid,path_id,hierarchy_path,review_required=res$review_required,review_reason=res$review_reason,status='completed',error=NA_character_); checkpoint<-bind_rows(checkpoint,rows); write_csv(checkpoint,checkpoint_path); if(i %% 10 == 0) message('Processed ',i,'/',nrow(records)) }
+          write_csv(checkpoint,file.path(output_dir,'topic_assignments.csv')); review<-checkpoint |> filter(review_required %in% TRUE | status=='failed'); write_csv(review,file.path(output_dir,'topic_review_queue.csv'))
           if(any(checkpoint$status=='failed')) stop('Failed records remain')
           RSCRIPT
 
@@ -108,8 +88,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import csv
-          src='data/assignments/recovery/topic_llm_results/topic_assignments.csv'
-          q='data/assignments/recovery/topic_llm_queue_153_reviewed.csv'
+          src='data/assignments/recovery/topic_llm_results/topic_assignments.csv'; q='data/assignments/recovery/topic_llm_queue_153_reviewed.csv'
           with open(q,encoding='utf-8-sig') as f: ids={r['record_id'] for r in csv.DictReader(f)}
           with open(src,encoding='utf-8-sig') as f: rows=list(csv.DictReader(f))
           got={r['record_id'] for r in rows}
@@ -119,10 +98,22 @@ jobs:
           print('Recovery validation passed')
           PY
 
+      - name: Upload recovery outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-recovery-153-results
+          path: data/assignments/recovery/topic_llm_results/
+          if-no-files-found: warn
+
       - name: Commit persistent recovery outputs
+        if: success()
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/assignments/recovery/topic_llm_input.csv data/assignments/recovery/topic_llm_results/
-          git commit -m 'Recover 153 missing topic assignments' || echo 'No changes to commit'
-          git push
+          git diff --cached --quiet && exit 0
+          git commit -m 'Recover 153 missing topic assignments'
+          git push origin HEAD:main
