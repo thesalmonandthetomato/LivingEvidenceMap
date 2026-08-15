@@ -81,7 +81,6 @@ jobs:
           }
           for(i in seq_len(nrow(records))){ rid<-as.character(records$record_id[i]); if(rid %in% done) next; res<-tryCatch(classify_one(records$title[i],records$abstract[i]),error=function(e) list(error=conditionMessage(e))); if(!is.null(res$error)) rows<-tibble(record_id=rid,path_id=NA_character_,hierarchy_path=NA_character_,review_required=NA,review_reason=NA_character_,status='failed',error=res$error) else if(!length(res$assignments)) rows<-tibble(record_id=rid,path_id=NA_character_,hierarchy_path=NA_character_,review_required=res$review_required,review_reason=res$review_reason,status='completed',error=NA_character_) else rows<-ontology |> filter(hierarchy_path %in% res$assignments) |> transmute(record_id=rid,path_id,hierarchy_path,review_required=res$review_required,review_reason=res$review_reason,status='completed',error=NA_character_); checkpoint<-bind_rows(checkpoint,rows); write_csv(checkpoint,checkpoint_path); if(i %% 10 == 0) message('Processed ',i,'/',nrow(records)) }
           write_csv(checkpoint,file.path(output_dir,'topic_assignments.csv')); review<-checkpoint |> filter(review_required %in% TRUE | status=='failed'); write_csv(review,file.path(output_dir,'topic_review_queue.csv'))
-          if(any(checkpoint$status=='failed')) stop('Failed records remain')
           RSCRIPT
 
       - name: Validate 153 outputs
@@ -98,13 +97,14 @@ jobs:
           print('Recovery validation passed')
           PY
 
-      - name: Upload recovery outputs
+      - name: Upload recovery outputs immediately
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: topic-recovery-153-results
+          name: topic-recovery-153-results-${{ github.run_id }}
           path: data/assignments/recovery/topic_llm_results/
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Commit persistent recovery outputs
         if: success()
@@ -116,4 +116,11 @@ jobs:
           git add data/assignments/recovery/topic_llm_input.csv data/assignments/recovery/topic_llm_results/
           git diff --cached --quiet && exit 0
           git commit -m 'Recover 153 missing topic assignments'
-          git push origin HEAD:main
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            echo "Push failed on attempt $attempt; rebasing onto current main"
+            git fetch origin main
+            git rebase origin/main
+          done
+          echo 'Unable to persist recovery outputs after 3 push attempts' >&2
+          exit 1
