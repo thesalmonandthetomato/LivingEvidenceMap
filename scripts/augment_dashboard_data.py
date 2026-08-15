@@ -32,7 +32,7 @@ for r in records:
    for path in paths:
     if len(path)>=depth: level_counts[str(depth)][path[depth-1]]+=1
     for s in r['species']:
-     if s!='Unspecified species' and len(path)>=depth: species_level[str(depth)][(s,path[depth-1])]+=1
+     if len(path)>=depth: species_level[str(depth)][(s,path[depth-1])]+=1
  else:
   levels=[]
   for k,v in r.items():
@@ -43,10 +43,9 @@ for r in records:
    for i,v in levels:
     for x in v: level_counts[str(i)][x]+=1
     for s in r['species']:
-     if s!='Unspecified species':
-      for x in v: species_level[str(i)][(s,x)]+=1
-d['species_counts']={k:v for k,v in sc.most_common() if k!='Unspecified species'}
-d['country_iso3_species_counts']={s:dict(c) for s,c in cs.items() if s!='Unspecified species'}
+     for x in v: species_level[str(i)][(s,x)]+=1
+d['species_counts']=dict(sc.most_common())
+d['country_iso3_species_counts']={s:dict(c) for s,c in cs.items()}
 d['topic_counts']=dict(terminal.most_common()); d['metrics']['total_topics']=sum(terminal.values()); d['metrics']['total_species']=len(d['species_counts'])
 d['topic_level_counts']={k:dict(v.most_common()) for k,v in sorted(level_counts.items(),key=lambda x:int(x[0]))}
 d['species_topic_level_counts']={lev:{f'{s}|||{t}':n for (s,t),n in c.items()} for lev,c in sorted(species_level.items(),key=lambda x:int(x[0]))}
