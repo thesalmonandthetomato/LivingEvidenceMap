@@ -1,26 +1,17 @@
 name: Build evidence-map dashboard
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'data/reference/salmon_evidence_map.csv'
-      - 'state/**'
-      - 'scripts/build_dashboard.py'
-      - 'scripts/normalise_dashboard_data.py'
-      - 'scripts/patch_dashboard.py'
-      - 'scripts/patch_dashboard_text.py'
-      - 'scripts/augment_dashboard_data.py'
-      - 'scripts/build_dashboard_html.py'
-      - 'scripts/patch_database_features.py'
-      - 'docs/index.html'
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Build final master"]
+    types: [completed]
 
 permissions:
   contents: write
 
 jobs:
   build-dashboard:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout current main
@@ -51,5 +42,14 @@ jobs:
             echo 'Dashboard files unchanged.'
           else
             git commit -m 'Update interactive evidence-map dashboard'
-            git push origin main
+            for attempt in 1 2 3; do
+              git fetch origin main
+              if git rebase origin/main; then
+                git push origin main && exit 0
+              fi
+              git rebase --abort || true
+              sleep 3
+            done
+            echo 'Could not push dashboard update after retries.'
+            exit 1
           fi
