@@ -10,7 +10,10 @@ on:
       - 'scripts/normalise_dashboard_data.py'
       - 'scripts/validate_dashboard_data.py'
       - 'scripts/force_dashboard_rebuild.py'
+      - 'scripts/repair_dashboard_builder.py'
+      - 'scripts/audit_topic_hierarchy.py'
       - 'data/reference/salmon_evidence_map.csv'
+      - 'data/reference/topic_ontology_v3.csv'
   workflow_run:
     workflows: ["Build final master"]
     types: [completed]
@@ -36,13 +39,26 @@ jobs:
         run: python scripts/augment_dashboard_data.py
       - name: Validate dashboard data quality
         run: python scripts/validate_dashboard_data.py
+      - name: Audit master topic hierarchy
+        run: python scripts/audit_topic_hierarchy.py
+      - name: Repair dashboard builder syntax before rendering
+        run: python scripts/repair_dashboard_builder.py
       - name: Build production dashboard HTML
         run: python scripts/build_dashboard_html_v2.py
+      - name: Validate generated dashboard JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html=Path('docs/index.html').read_text(encoding='utf-8')
+          js=html.split('<script>',1)[1].split('</script>',1)[0]
+          Path('/tmp/dashboard.js').write_text(js,encoding='utf-8')
+          PY
+          node --check /tmp/dashboard.js
       - name: Commit generated dashboard files
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/dashboard.json docs/index.html state/dashboard_missing_topics.txt
+          git add docs/dashboard.json docs/index.html state/dashboard_missing_topics.txt state/topic_hierarchy_audit.csv state/topic_hierarchy_audit_summary.txt scripts/build_dashboard_html_v2.py
           if git diff --cached --quiet; then
             echo 'Dashboard files unchanged.'
           else
