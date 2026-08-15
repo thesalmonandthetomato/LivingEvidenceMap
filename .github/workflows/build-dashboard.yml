@@ -9,6 +9,7 @@ on:
       - 'scripts/augment_dashboard_data.py'
       - 'scripts/normalise_dashboard_data.py'
       - 'scripts/validate_dashboard_data.py'
+      - 'scripts/force_dashboard_rebuild.py'
   workflow_run:
     workflows: ["Build final master"]
     types: [completed]
