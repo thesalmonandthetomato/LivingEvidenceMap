@@ -7,6 +7,7 @@ on:
       - 'data/reference/salmon_evidence_map.csv'
       - 'state/**'
       - 'scripts/build_dashboard.py'
+      - 'scripts/patch_dashboard.py'
       - 'docs/index.html'
   workflow_dispatch:
 
@@ -26,14 +27,17 @@ jobs:
       - name: Build dashboard data
         run: python scripts/build_dashboard.py
 
-      - name: Commit generated dashboard data
+      - name: Patch dashboard interactions and layout
+        run: python scripts/patch_dashboard.py
+
+      - name: Commit generated dashboard files
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/dashboard.json
+          git add docs/dashboard.json docs/index.html
           if git diff --cached --quiet; then
-            echo 'Dashboard data unchanged.'
+            echo 'Dashboard files unchanged.'
           else
-            git commit -m 'Update evidence-map dashboard data'
+            git commit -m 'Update evidence-map dashboard'
             git push origin main
           fi
