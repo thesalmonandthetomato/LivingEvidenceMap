@@ -25,4 +25,6 @@ else:
     s = s.replace(bad_map, good_map, 1)
     print('Repaired dashboard choropleth ISO3/M49 join.')
 
+# This file is also a build trigger: keep the repair step in the dashboard
+# build dependency graph so changes to the builder cannot bypass the fix.
 p.write_text(s, encoding='utf-8')
