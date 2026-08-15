@@ -122,9 +122,11 @@ fields = sorted({k for r in unique for k in r.keys()})
 with csv_path.open("w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
     w.writeheader()
-    w.writerows(unique)
+    if fields:
+        w.writerows(unique)
 manifest = {
     "retrieved_at": now.isoformat(),
+    "status": "no_records" if not unique else "records_found",
     "window_start": start_s,
     "window_end": end_s,
     "previous_last_successful_created": previous,
@@ -135,13 +137,17 @@ manifest = {
     "within_update_duplicates_removed": dup_count,
     "unique_records_written": len(unique),
     "pagination": "cursor",
+    "downstream_action": "do_not_modify_master" if not unique else "process_update",
 }
 manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-# Checkpoint is updated only after complete retrieval and all harvest outputs are written.
-STATE.write_text(json.dumps({"last_successful_created": end_s, "updated_at": now.isoformat()}, indent=2) + "\n", encoding="utf-8")
+# A successful zero-result query is still a successful harvest. The checkpoint
+# advances so the same empty window is not repeatedly re-queried; the manifest
+# explicitly tells downstream workflows not to modify the master.
+STATE.write_text(json.dumps({"last_successful_created": end_s, "updated_at": now.isoformat(), "last_status": "no_records" if not unique else "records_found"}, indent=2) + "\n", encoding="utf-8")
 print(f"Raw records: {len(all_records)}")
 print(f"Within-update duplicates removed: {dup_count}")
 print(f"Unique records: {len(unique)}")
 print(f"Window: {start_s} to {end_s}")
+print(f"Status: {'NO RECORDS — master must remain unchanged' if not unique else 'RECORDS FOUND — downstream update may proceed'}")
 print(f"Checkpoint advanced to: {end_s}")
