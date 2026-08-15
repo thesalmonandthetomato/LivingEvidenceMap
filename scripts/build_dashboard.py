@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Build the static JSON consumed by the GitHub Pages evidence-map dashboard."""
+"""Build dashboard JSON from the validated master."""
 import csv,json,re
 from pathlib import Path
 from collections import Counter
 from datetime import datetime,timezone
-ROOT=Path('.');MASTER=ROOT/'data/reference/salmon_evidence_map.csv';OUT=ROOT/'docs/dashboard.json';STATE=ROOT/'state';GAZ=ROOT/'config/global_country_gazetteer_v3.csv'
-ALIASES={'id':['record_id','id','lens_id','study_id'],'title':['title','article_title'],'abstract':['abstract','abstract_text'],'year':['year','publication_year','date_year'],'species':['species','farmed_species','deterministic_species','species_assigned','species_assignment'],'country':['country','countries','primary_country','primary_countries','deterministic_primary_countries','geography','geography_country'],'iso3':['iso3','iso3c','primary_iso3c','deterministic_primary_iso3c','country_iso3c'],'topics':['topics','topic','topic_hierarchy','topic_path'],'updated':['updated_at','update_date','ingested_at','date_added','last_updated']}
+ROOT=Path('.'); MASTER=ROOT/'data/reference/salmon_evidence_map.csv'; OUT=ROOT/'docs/dashboard.json'; STATE=ROOT/'state'; GAZ=ROOT/'config/global_country_gazetteer_v3.csv'
+ALIASES={'id':['record_id','id','lens_id','study_id'],'title':['title','article_title','document_title'],'abstract':['abstract','abstract_text'],'year':['year','publication_year','date_year'],'species':['species','farmed_species','deterministic_species','species_assigned','species_assignment','species_name'],'country':['country','countries','primary_country','primary_countries','country_name','country_names','deterministic_primary_countries','geography_primary_country','geography_country'],'iso3':['iso3','iso3c','primary_iso3c','primary_iso3c_codes','deterministic_primary_iso3c','country_iso3c'],'topics':['topics','topic','topic_hierarchy','topic_path','topic_hierarchy_paths','hierarchy_path'],'updated':['updated_at','update_date','ingested_at','date_added','last_updated']}
 def pick(fields,names):
-    low={f.lower():f for f in fields};return next((low[n.lower()] for n in names if n.lower() in low),None)
+    low={f.lower():f for f in fields}; return next((low[n.lower()] for n in names if n.lower() in low),None)
 def splitvals(value):
     if value is None:return []
     s=str(value).strip()
@@ -15,23 +15,36 @@ def splitvals(value):
     if s.startswith('[') and s.endswith(']'):
         try:return [str(i).strip() for i in json.loads(s) if str(i).strip()]
         except Exception:pass
-    return [x.strip() for x in re.split(r'\s*;\s*|\s*\|\s*|\s*→\s*',s) if x.strip()]
+    return [x.strip() for x in re.split(r'\s*;\s*|\s*\|\s*|\s*→\s*|\s*>>\s*',s) if x.strip()]
+def hierarchy_paths(value):
+    if not value:return []
+    raw=str(value).strip()
+    if raw.startswith('[') and raw.endswith(']'):
+        try:raw='; '.join(str(x) for x in json.loads(raw))
+        except Exception:pass
+    out=[]
+    for p in re.split(r'\s*;\s*',raw):
+        parts=[x.strip() for x in re.split(r'\s*(?:→|>>|/|>)\s*',p) if x.strip()]
+        if parts:out.append(parts)
+    return out
 def topic_level_fields(fields):
     found=[f for f in fields if 'topic' in f.lower() and re.search(r'(?:level|lvl|l)[ _-]?\d+',f.lower())]
-    return sorted(set(found),key=lambda f:(int(re.search(r'(?:level|lvl|l)[ _-]?(\d+)',f.lower()).group(1)),f.lower()))
+    return sorted(set(found),key=lambda f:int(re.search(r'(?:level|lvl|l)[ _-]?(\d+)',f.lower()).group(1)))
 def number(v):
     try:return int(float(str(v)))
     except Exception:return None
 def search_total():
-    total=0;found=False;baseline=STATE/'search_baseline.json';history=STATE/'search_history.json'
-    if baseline.exists():
+    total=0; found=False
+    p=STATE/'search_baseline.json'
+    if p.exists():
         try:
-            n=number(json.loads(baseline.read_text(encoding='utf-8')).get('original_search_results'))
+            n=number(json.loads(p.read_text()).get('original_search_results'))
             if n is not None:total+=n;found=True
         except Exception:pass
-    if history.exists():
+    p=STATE/'search_history.json'
+    if p.exists():
         try:
-            obj=json.loads(history.read_text(encoding='utf-8'));items=obj if isinstance(obj,list) else obj.get('runs',[])
+            obj=json.loads(p.read_text()); items=obj if isinstance(obj,list) else obj.get('runs',[])
             for item in items:
                 n=number(item.get('candidate_results')) if isinstance(item,dict) else None
                 if n is not None:total+=n;found=True
@@ -41,32 +54,45 @@ def iso_numeric_map():
     if not GAZ.exists():return {}
     try:
         with GAZ.open(newline='',encoding='utf-8-sig') as f:
-            rows=csv.DictReader(f);fields=rows.fieldnames or []
-            iso=pick(fields,['iso3','iso_3','alpha3','iso_alpha3','iso3c']);num=pick(fields,['iso_numeric','iso_num','numeric','numeric_code','m49','country_code_numeric','iso_numeric_code'])
-            if not iso or not num:return {}
-            return {str(r.get(iso,'')).strip().upper():str(r.get(num,'')).strip().zfill(3) for r in rows if r.get(iso) and r.get(num)}
+            rows=csv.DictReader(f); fields=rows.fieldnames or []
+            a=pick(fields,['iso3','iso_3','alpha3','iso_alpha3','iso3c']); b=pick(fields,['iso_numeric','iso_num','numeric','numeric_code','m49','country_code_numeric','iso_numeric_code'])
+            if not a or not b:return {}
+            return {str(r[a]).strip().upper():str(r[b]).strip().zfill(3) for r in rows if r.get(a) and r.get(b)}
     except Exception:return {}
 if not MASTER.exists():raise SystemExit(f'Master not found: {MASTER}')
 with MASTER.open(newline='',encoding='utf-8-sig') as f:
-    reader=csv.DictReader(f);fields=reader.fieldnames or [];rows=list(reader)
-f={k:pick(fields,v) for k,v in ALIASES.items()};topic_fields=topic_level_fields(fields);records=[];species=Counter();countries=Counter();iso=Counter();topics=Counter();by_level={str(i):Counter() for i in range(1,len(topic_fields)+1)};species_topic_level={str(i):Counter() for i in range(1,len(topic_fields)+1)};latest=None
+    reader=csv.DictReader(f); fields=reader.fieldnames or []; rows=list(reader)
+f={k:pick(fields,v) for k,v in ALIASES.items()}; topic_fields=topic_level_fields(fields)
+records=[]; species=Counter(); countries=Counter(); iso=Counter(); topics=Counter(); by_level={}; species_topic_level={}; latest=None
 for row in rows:
-    sp=splitvals(row.get(f['species'],'')) if f['species'] else ['Unspecified'];sp=sp or ['Unspecified'];co=splitvals(row.get(f['country'],'')) if f['country'] else [];ix=splitvals(row.get(f['iso3'],'')) if f['iso3'] else []
-    lv={str(i):splitvals(row.get(field,'')) for i,field in enumerate(topic_fields,1)};alltopics=splitvals(row.get(f['topics'],'')) if f['topics'] else []
-    if not alltopics:
-        for vals in lv.values():alltopics.extend(vals)
+    sp=splitvals(row.get(f['species'],'')) if f['species'] else [] or ['Unspecified']
+    co=splitvals(row.get(f['country'],'')) if f['country'] else []
+    ix=splitvals(row.get(f['iso3'],'')) if f['iso3'] else []
+    levels={str(i):splitvals(row.get(field,'')) for i,field in enumerate(topic_fields,1)}
+    paths=hierarchy_paths(row.get(f['topics'],'')) if f['topics'] else []
+    for i in range(1,max((len(p) for p in paths),default=0)+1):
+        vals=[]
+        for p in paths:
+            if len(p)>=i and p[i-1] not in vals:vals.append(p[i-1])
+        if vals and not levels.get(str(i)):levels[str(i)]=vals
+    alltopics=[]
+    for vals in levels.values():
+        for x in vals:
+            if x not in alltopics:alltopics.append(x)
+    if not alltopics and f['topics']:alltopics=splitvals(row.get(f['topics'],''))
     for x in sp:species[x]+=1
     for x in co:countries[x]+=1
     for x in ix:iso[x]+=1
     for x in alltopics:topics[x]+=1
-    for level,vals in lv.items():
+    for level,vals in levels.items():
+        by_level.setdefault(level,Counter()); species_topic_level.setdefault(level,Counter())
         for x in vals:by_level[level][x]+=1
         for s in sp:
             for x in vals:species_topic_level[level][(s,x)]+=1
     if f['updated'] and row.get(f['updated']):latest=max(latest or '',str(row[f['updated']]))
     rec={'record_id':row.get(f['id'],'') if f['id'] else '','title':row.get(f['title'],'') if f['title'] else '','abstract':row.get(f['abstract'],'') if f['abstract'] else '','year':row.get(f['year'],'') if f['year'] else '','species':sp,'countries':co,'iso3':ix,'topics':alltopics}
-    for level,vals in lv.items():rec['topic_level_'+level]=vals
+    for level,vals in levels.items():rec['topic_level_'+level]=vals
     records.append(rec)
-map_iso=iso_numeric_map();country_map={map_iso.get(k,k):v for k,v in iso.items()}
-payload={'generated_at':datetime.now(timezone.utc).isoformat(),'metrics':{'last_update':latest,'total_records':len(rows),'total_countries':len(countries),'total_species':len(species),'total_topics':len(topics),'candidate_search_results_screened':search_total(),'topics_by_level':{k:dict(v.most_common()) for k,v in by_level.items()}},'species_counts':dict(species.most_common()),'country_counts':dict(countries.most_common()),'country_iso3_counts':dict(country_map),'topic_counts':dict(topics.most_common()),'topic_level_counts':{k:dict(v.most_common()) for k,v in by_level.items()},'species_topic_level_counts':{level:{f'{s}|||{t}':n for (s,t),n in counts.items()} for level,counts in species_topic_level.items()},'topic_level_fields':topic_fields,'records':records}
-OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(payload,ensure_ascii=False,separators=(',',':')),encoding='utf-8');print(f'Built dashboard data: {len(records):,} records')
+map_iso=iso_numeric_map(); country_map={map_iso.get(k,k):v for k,v in iso.items()}
+payload={'generated_at':datetime.now(timezone.utc).isoformat(),'metrics':{'last_update':latest,'total_records':len(rows),'total_countries':len(countries),'total_species':len(species),'total_topics':len(topics),'candidate_search_results_screened':search_total(),'topics_by_level':{k:dict(v.most_common()) for k,v in sorted(by_level.items(),key=lambda x:int(x[0]))}},'species_counts':dict(species.most_common()),'country_counts':dict(countries.most_common()),'country_iso3_counts':dict(country_map),'topic_counts':dict(topics.most_common()),'topic_level_counts':{k:dict(v.most_common()) for k,v in sorted(by_level.items(),key=lambda x:int(x[0]))},'species_topic_level_counts':{level:{f'{s}|||{t}':n for (s,t),n in counts.items()} for level,counts in sorted(species_topic_level.items(),key=lambda x:int(x[0]))},'topic_level_fields':topic_fields,'records':records}
+OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(json.dumps(payload,ensure_ascii=False,separators=(',',':')),encoding='utf-8'); print(f'Built dashboard data: {len(records):,} records; countries={len(countries):,}; topics={len(topics):,}; species={len(species):,}')
