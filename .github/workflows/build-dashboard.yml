@@ -56,11 +56,11 @@ jobs:
       - name: Render compact hierarchical topics and heatmap zero colour
         run: python scripts/patch_dashboard_topics_and_heat.py
       - name: Enforce near-white zero heatmap colour
-        run: python - <<'PY'
+        run: |
+          python - <<'PY'
           from pathlib import Path
           p=Path('docs/index.html')
           html=p.read_text(encoding='utf-8')
-          html=html.replace("?\'#f0f2f1\':color", "?'#f8f9f8':color")
           html=html.replace("?'#f0f2f1':color", "?'#f8f9f8':color")
           p.write_text(html,encoding='utf-8')
           print('Enforced near-white heatmap zero colour')
