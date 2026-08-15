@@ -1,0 +1,55 @@
+name: Compare historical annotations
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compare
+        run: |
+          python - <<'PY'
+          import csv,json,os
+          from collections import Counter
+          hist='data/reference/historical_master_12043.csv'
+          master='data/reference/salmon_evidence_map.csv'
+          out='comparison_historical_annotations'; os.makedirs(out,exist_ok=True)
+          with open(hist,encoding='utf-8-sig',newline='') as f: h=list(csv.DictReader(f))
+          mids={};
+          with open(master,encoding='utf-8-sig',newline='') as f:
+              for r in csv.DictReader(f):
+                  rid=(r.get('record_id') or '').strip()
+                  if rid: mids[rid]=r
+          hids={(r.get('record_id') or '').strip() for r in h}
+          species=['final_species','species','species_annotation']
+          country=['final_primary_country_iso3c','primary_country_iso3c','country_iso3c']
+          topics=['broad_topic','subtopic','feature','component','topic_level_1','topic_level_2','topic_level_3','topic_level_4']
+          def has(r,fs): return any((r.get(x) or '').strip() for x in fs if x in r)
+          gaps=[]; missing=[]; c=Counter()
+          for r in h:
+              rid=(r.get('record_id') or '').strip()
+              if rid not in mids: missing.append(rid); continue
+              m=mids[rid]; gs=not has(m,species); gg=not has(m,country); gt=not has(m,topics)
+              if gs:c['species']+=1
+              if gg:c['geography']+=1
+              if gt:c['topics']+=1
+              if gs or gg or gt: gaps.append([rid,gs,gg,gt])
+          with open(out+'/missing_from_current_master.csv','w',newline='') as f:
+              w=csv.writer(f);w.writerow(['record_id']);w.writerows([[x] for x in missing])
+          with open(out+'/annotation_gaps.csv','w',newline='') as f:
+              w=csv.writer(f);w.writerow(['record_id','missing_species','missing_geography','missing_topics']);w.writerows(gaps)
+          s={'historical_records':len(h),'current_master_records':len(mids),'matched_records':len(h)-len(missing),'historical_missing_from_current_master':len(missing),'current_records_not_in_historical':len(mids-hids),'matched_missing_species':c['species'],'matched_missing_geography':c['geography'],'matched_missing_topics':c['topics']}
+          with open(out+'/summary.json','w') as f: json.dump(s,f,indent=2)
+          print(json.dumps(s,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: historical-annotation-comparison
+          path: comparison_historical_annotations/
