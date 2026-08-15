@@ -2,7 +2,7 @@ name: Deploy dashboard to GitHub Pages
 
 on:
   workflow_run:
-    workflows: ["Build interactive evidence-map dashboard"]
+    workflows: ["Build evidence-map dashboard"]
     types: [completed]
 
 permissions:
