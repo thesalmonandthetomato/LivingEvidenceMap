@@ -1,4 +1,168 @@
 record_id,field,finding,path,path_id
+72656,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feed efficiency and conversion,V3_098
+72656,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Nutrient requirements and feed formulation,V3_101
+72781,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > International trade",V3_021
+72781,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Value chains and supply chains",V3_029
+72781,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_030
+82513,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_122
+82513,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_123
+72841,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Digestibility and nutrient utilisation,V3_097
+72841,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feed additives and supplements,V3_098
+72841,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Nutrient requirements and feed formulation,V3_100
+82526,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > International trade",V3_021
+82526,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_029
+82352,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Natural biological hazards,V3_005
+82352,topic_path_ids,path_id_text_mismatch,Environment > Waste and emissions > Nutrients and organic waste,V3_133
+72897,topic_path_ids,path_id_text_mismatch,Industry and governance > Economics and performance > Costs and profitability,V3_021
+72897,topic_path_ids,path_id_text_mismatch,"Industry and governance > Economics and performance > Economic risk, valuation and impact",V3_024
+72897,topic_path_ids,path_id_text_mismatch,Industry and governance > Economics and performance > Productivity and economic efficiency,V3_025
+72897,topic_path_ids,path_id_text_mismatch,Industry and governance > Firms and industry structure > Business strategy and investment,V3_026
+72897,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > International trade",V3_027
+72897,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Value chains and supply chains",V3_029
+72897,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_030
+72962,topic_path_ids,path_id_text_mismatch,Production > Fish health > Non-infectious disease and disorders,V3_114
+72962,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Anatomy and tissues,V3_124
+73048,topic_path_ids,path_id_text_mismatch,Environment > Environmental management > Monitoring and assessment,V3_016
+73048,topic_path_ids,path_id_text_mismatch,Environment > Wild populations and ecosystems > Biodiversity and ecosystem effects,V3_019
+73164,topic_path_ids,path_id_text_mismatch,People and society > Communities and livelihoods > Conflict and social licence,V3_052
+73164,topic_path_ids,path_id_text_mismatch,People and society > Culture and knowledge > Public discourse and representation,V3_059
+73164,topic_path_ids,path_id_text_mismatch,People and society > General social issues > Multiple or general social impacts,V3_068
+82656,topic_path_ids,path_id_text_mismatch,"Product > Consumers and consumption > Labels, origin and certification",V3_086
+82656,topic_path_ids,path_id_text_mismatch,"Product > Consumers and consumption > Perceptions, knowledge and trust",V3_087
+73425,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Water and ocean conditions,V3_098
+73425,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Nutrient requirements and feed formulation,V3_113
+73425,topic_path_ids,path_id_text_mismatch,Production > Fish health > Non-infectious disease and disorders,V3_114
+73425,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Anatomy and tissues,V3_124
+73425,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_132
+73426,topic_path_ids,path_id_text_mismatch,Production > Fish health > Non-infectious disease and disorders,V3_112
+73426,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Growth and development,V3_124
+73579,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Natural biological hazards,V3_068
+73579,topic_path_ids,path_id_text_mismatch,People and society > Culture and knowledge > Public discourse and representation,V3_133
+82419,topic_path_ids,path_id_text_mismatch,"Industry and governance > Economics and performance > Economic risk, valuation and impact",V3_021
+82419,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Supply, demand and prices",V3_027
+82419,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_028
+82856,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_114
+82856,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Anatomy and tissues,V3_121
+74446,topic_path_ids,path_id_text_mismatch,"Industry and governance > Governance and policy > Compliance, enforcement and participation",V3_021
+74446,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Licensing and spatial governance,V3_032
+74446,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_033
+74446,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_035
+74467,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Anatomy and tissues,V3_113
+74467,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_114
+74928,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_105
+74928,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_121
+74928,topic_path_ids,path_id_text_mismatch,Production > Husbandry and farm management > Biosecurity and farm hygiene,V3_122
+75114,topic_path_ids,path_id_text_mismatch,Production > Breeding and reproduction > Broodstock and reproductive performance,V3_089
+75114,topic_path_ids,path_id_text_mismatch,Production > Breeding and reproduction > Selective breeding and genetic improvement,V3_090
+75303,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Retail, branding and marketing",V3_021
+75303,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_031
+75896,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_121
+75896,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_123
+83233,topic_path_ids,path_id_text_mismatch,Industry and governance > Economics and performance > Costs and profitability,V3_021
+83233,topic_path_ids,path_id_text_mismatch,Industry and governance > Economics and performance > Productivity and economic efficiency,V3_022
+83233,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_025
+83233,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Supply, demand and prices",V3_026
+83233,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Value chains and supply chains",V3_028
+83233,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_030
+83233,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > Innovation and technological transition,V3_032
+76068,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - General,V3_116
+76068,topic_path_ids,path_id_text_mismatch,Production > Fish health > Sea lice epidemiology,V3_120
+76070,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - General,V3_117
+76070,topic_path_ids,path_id_text_mismatch,Production > Fish health > Sea lice control and treatment,V3_120
+76074,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Digestibility and nutrient utilisation,V3_097
+76074,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feed additives and supplements,V3_098
+76074,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feed efficiency and conversion,V3_099
+76074,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feeding strategies and appetite,V3_100
+76074,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Nutrient requirements and feed formulation,V3_101
+82402,topic_path_ids,path_id_text_mismatch,"Industry and governance > Governance and policy > Compliance, enforcement and participation",V3_021
+82402,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_035
+83425,topic_path_ids,path_id_text_mismatch,"Industry and governance > Governance and policy > Compliance, enforcement and participation",V3_032
+83425,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_035
+83439,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Natural biological hazards,V3_124
+83439,topic_path_ids,path_id_text_mismatch,Production > Fish health > Non-infectious disease and disorders,V3_126
+83439,topic_path_ids,path_id_text_mismatch,Production > Fish welfare > Welfare risks and consequences,V3_129
+83439,topic_path_ids,path_id_text_mismatch,Production > Stress and mortality > Mortality and survival,V3_133
+77140,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_105
+77140,topic_path_ids,path_id_text_mismatch,Production > Husbandry and farm management > Biosecurity and farm hygiene,V3_122
+77296,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_120
+77296,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - General,V3_121
+77623,topic_path_ids,path_id_text_mismatch,Product > Composition and nutritional value > Contaminants and residues,V3_071
+77623,topic_path_ids,path_id_text_mismatch,"Product > Consumers and consumption > Perceptions, knowledge and trust",V3_073
+77623,topic_path_ids,path_id_text_mismatch,"Product > Consumers and consumption > Preferences, choice and willingness to pay",V3_074
+77623,topic_path_ids,path_id_text_mismatch,Product > Fillet and carcass quality > Physical and visual quality,V3_075
+77623,topic_path_ids,path_id_text_mismatch,Product > Fillet and carcass quality > Yield and body composition,V3_076
+77623,topic_path_ids,path_id_text_mismatch,Product > Food safety > Chemical food safety,V3_077
+77623,topic_path_ids,path_id_text_mismatch,Product > Food safety > Microbial food safety,V3_079
+77623,topic_path_ids,path_id_text_mismatch,Product > General product issues > Multiple or general product attributes,V3_080
+77623,topic_path_ids,path_id_text_mismatch,Product > Human nutrition and health > Nutritional benefits and risks,V3_081
+77623,topic_path_ids,path_id_text_mismatch,Product > Processing and preservation > Primary processing,V3_082
+77623,topic_path_ids,path_id_text_mismatch,"Product > Processing and preservation > Storage, packaging and shelf life",V3_085
+77623,topic_path_ids,path_id_text_mismatch,Product > Sensory quality > Sensory properties,V3_086
+83511,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Certification and standards,V3_021
+83511,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_022
+83511,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_032
+83511,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > Innovation and technological transition,V3_034
+83518,topic_path_ids,path_id_text_mismatch,Inputs and resources > Feed-resource supply > Crop-based feed resources,V3_036
+83518,topic_path_ids,path_id_text_mismatch,Inputs and resources > Feed-resource supply > Marine feed resources,V3_037
+83518,topic_path_ids,path_id_text_mismatch,Product > Consumers and consumption > Consumption patterns,V3_082
+83518,topic_path_ids,path_id_text_mismatch,Product > Human nutrition and health > Nutritional benefits and risks,V3_084
+83518,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Alternative feed ingredients,V3_095
+83518,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Conventional feed ingredients,V3_096
+77864,topic_path_ids,path_id_text_mismatch,"Product > Consumers and consumption > Perceptions, knowledge and trust",V3_080
+77864,topic_path_ids,path_id_text_mismatch,Product > Food safety > Microbial food safety,V3_086
+78140,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_110
+78140,topic_path_ids,path_id_text_mismatch,Production > Production systems and technology > Integrated multi-trophic aquaculture,V3_121
+83636,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Licensing and spatial governance,V3_021
+83636,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_033
+83636,topic_path_ids,path_id_text_mismatch,Inputs and resources > Farm inputs > Infrastructure and equipment,V3_039
+83636,topic_path_ids,path_id_text_mismatch,Inputs and resources > Farm inputs > Water supply,V3_042
+83643,topic_path_ids,path_id_text_mismatch,"Environment > Resource use and footprint > Energy, greenhouse gases and life-cycle footprint",V3_002
+83643,topic_path_ids,path_id_text_mismatch,Environment > Resource use and footprint > Marine-resource use,V3_004
+78575,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_120
+78575,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - General,V3_123
+83702,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_022
+83702,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > Innovation and technological transition,V3_032
+72513,topic_path_ids,path_id_text_mismatch,Production > Fish health > Non-infectious disease and disorders,V3_108
+72513,topic_path_ids,path_id_text_mismatch,Production > Production systems and technology > Recirculating aquaculture systems,V3_124
+83719,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - General,V3_112
+83719,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Growth and development,V3_120
+83779,topic_path_ids,path_id_text_mismatch,"Industry and governance > Governance and policy > Compliance, enforcement and participation",V3_032
+83779,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_035
+83904,topic_path_ids,path_id_text_mismatch,Product > Composition and nutritional value > Nutritional composition,V3_071
+83904,topic_path_ids,path_id_text_mismatch,Product > Fillet and carcass quality > Physical and visual quality,V3_072
+83904,topic_path_ids,path_id_text_mismatch,Product > Fillet and carcass quality > Yield and body composition,V3_074
+83904,topic_path_ids,path_id_text_mismatch,Product > General product issues > Multiple or general product attributes,V3_075
+82410,topic_path_ids,path_id_text_mismatch,Environment > Environmental management > Mitigation and remediation,V3_001
+82410,topic_path_ids,path_id_text_mismatch,Environment > General environmental issues > Multiple or general environmental impacts,V3_020
+82410,topic_path_ids,path_id_text_mismatch,Industry and governance > Firms and industry structure > Business strategy and investment,V3_021
+82410,topic_path_ids,path_id_text_mismatch,"Industry and governance > Governance and policy > Compliance, enforcement and participation",V3_024
+82410,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Licensing and spatial governance,V3_029
+82410,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_030
+82410,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > International trade",V3_032
+82410,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Value chains and supply chains",V3_033
+82410,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_035
+82410,topic_path_ids,path_id_text_mismatch,People and society > Communities and livelihoods > Conflict and social licence,V3_053
+82410,topic_path_ids,path_id_text_mismatch,People and society > Culture and knowledge > Public discourse and representation,V3_059
+82410,topic_path_ids,path_id_text_mismatch,People and society > Labour and employment > Employment and job creation,V3_068
+83924,topic_path_ids,path_id_text_mismatch,Inputs and resources > Feed-resource supply > Crop-based feed resources,V3_036
+83924,topic_path_ids,path_id_text_mismatch,Inputs and resources > Feed-resource supply > Marine feed resources,V3_037
+83924,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Alternative feed ingredients,V3_095
+83924,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Conventional feed ingredients,V3_096
+83924,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feed efficiency and conversion,V3_098
+83924,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Nutrient requirements and feed formulation,V3_101
+79902,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_121
+79902,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_123
+82368,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_021
+82368,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_032
+84167,topic_path_ids,path_id_text_mismatch,Environment > Environmental management > Mitigation and remediation,V3_001
+84167,topic_path_ids,path_id_text_mismatch,Environment > Environmental management > Monitoring and assessment,V3_016
+84167,topic_path_ids,path_id_text_mismatch,Environment > General environmental issues > Multiple or general environmental impacts,V3_019
+84167,topic_path_ids,path_id_text_mismatch,Environment > Wild populations and ecosystems > Biodiversity and ecosystem effects,V3_020
+84167,topic_path_ids,path_id_text_mismatch,"Industry and governance > Governance and policy > Compliance, enforcement and participation",V3_032
+84167,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_035
+84330,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > International trade",V3_021
+84330,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Value chains and supply chains",V3_029
+84330,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_030
 000-266-222-636-10X,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feed efficiency and conversion,V3_099
 000-266-222-636-10X,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feeding strategies and appetite,V3_101
 000-266-222-636-10X,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Growth and development,V3_106
