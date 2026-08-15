@@ -10,6 +10,7 @@ on:
       - 'scripts/normalise_dashboard_data.py'
       - 'scripts/validate_dashboard_data.py'
       - 'scripts/force_dashboard_rebuild.py'
+      - 'data/reference/salmon_evidence_map.csv'
   workflow_run:
     workflows: ["Build final master"]
     types: [completed]
