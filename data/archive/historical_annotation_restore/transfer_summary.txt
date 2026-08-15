@@ -1,0 +1,5 @@
+Historical rows: 12043
+Current master rows: 13389
+Missing historical records: 35
+Fields transferred: 0
+Only non-empty historical source values were copied. Blank historical annotation was NOT inferred or recreated.
