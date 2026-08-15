@@ -10,6 +10,8 @@ on:
       - 'scripts/normalise_dashboard_data.py'
       - 'scripts/patch_dashboard.py'
       - 'scripts/patch_dashboard_text.py'
+      - 'scripts/augment_dashboard_data.py'
+      - 'scripts/build_dashboard_html.py'
       - 'docs/index.html'
   workflow_dispatch:
 
@@ -25,19 +27,18 @@ jobs:
         with:
           ref: main
           fetch-depth: 1
-
       - name: Build dashboard data
         run: python scripts/build_dashboard.py
-
       - name: Normalise species and finest-topic metrics
         run: python scripts/normalise_dashboard_data.py
-
-      - name: Patch dashboard interactions and layout
+      - name: Patch dashboard data for interactive views
+        run: python scripts/augment_dashboard_data.py
+      - name: Patch legacy dashboard interactions and layout
         run: python scripts/patch_dashboard.py
-
       - name: Set dashboard title and subtitle
         run: python scripts/patch_dashboard_text.py
-
+      - name: Build final dashboard HTML
+        run: python scripts/build_dashboard_html.py
       - name: Commit generated dashboard files
         run: |
           git config user.name 'github-actions[bot]'
@@ -46,6 +47,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'Dashboard files unchanged.'
           else
-            git commit -m 'Update evidence-map dashboard'
+            git commit -m 'Update interactive evidence-map dashboard'
             git push origin main
           fi
