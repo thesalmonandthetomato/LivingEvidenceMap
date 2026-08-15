@@ -1,0 +1,49 @@
+name: Normalise species labels in master
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Canonicalise species labels
+        run: python scripts/normalize_species_master.py
+
+      - name: Replace master after validation
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+          src=Path('data/reference/salmon_evidence_map_species_normalized.csv')
+          dst=Path('data/reference/salmon_evidence_map.csv')
+          with src.open(newline='',encoding='utf-8-sig') as f: new=list(csv.DictReader(f))
+          with dst.open(newline='',encoding='utf-8-sig') as f: old=list(csv.DictReader(f))
+          if len(new) != len(old): raise SystemExit(f'Row count changed: {len(old)} -> {len(new)}')
+          if [r.get('record_id') for r in new] != [r.get('record_id') for r in old]: raise SystemExit('record_id order/content changed')
+          dst.write_text(src.read_text(encoding='utf-8'),encoding='utf-8')
+          src.unlink()
+          print(f'Validated and replaced master: {len(new):,} records')
+          PY
+
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/reference/salmon_evidence_map.csv
+          git commit -m 'Canonicalise species labels in master' || echo 'No species changes needed.'
+          git push origin main
