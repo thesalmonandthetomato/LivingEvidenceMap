@@ -4,8 +4,7 @@ p = Path('docs/index.html')
 html = p.read_text(encoding='utf-8')
 
 # Topic display: use adjacent hierarchy levels rather than the mixed flat topic list.
-# The first level is represented by a colour class; paths are deduplicated and capped
-# to keep the database readable when a record has many assignments.
+# The first-level ancestor controls the colour; paths are deduplicated and capped.
 needle = "function scholarUrl(t){return 'https://scholar.google.co.uk/scholar?hl=en&as_sdt=0%2C5&q='+String(t||'').replace(/[^\\p{L}\\p{N}\\s]/gu,'').trim().replace(/\\s+/g,'+')}"
 insert = r'''function scholarUrl(t){return 'https://scholar.google.co.uk/scholar?hl=en&as_sdt=0%2C5&q='+String(t||'').replace(/[^\p{L}\p{N}\s]/gu,'').trim().replace(/\s+/g,'+')}
 function topicPairs(r){
@@ -27,7 +26,7 @@ function topicPairs(r){
 function topicHtml(r){
   const pairs=topicPairs(r);
   if(!pairs.length) return r.topics.map(t=>`<span class="topic-chip topic-l1">${esc(t)}</span>`).join('');
-  return pairs.map(p=>`<span class="topic-chip topic-l${Math.min(p.level,4)}"><span class="topic-root">${esc(p.root)}</span> <span class="topic-sep">›</span> ${esc(p.b)}${p.a!==p.root?`<span class="topic-parent"> (${esc(p.a)})</span>`:''}</span>`).join('');
+  return pairs.map(p=>`<span class="topic-chip topic-l${Math.min(p.level,4)}"><span class="topic-level">${esc(p.a)} <span class="topic-sep">›</span> ${esc(p.b)}</span></span>`).join('');
 }'''
 if needle not in html:
     raise SystemExit('Could not find scholarUrl insertion point')
@@ -38,7 +37,7 @@ if old_topics not in html:
     raise SystemExit('Could not find database topic rendering')
 html = html.replace(old_topics, "${topicHtml(r)}", 1)
 
-# Heatmap: zero is a neutral light grey; only positive values enter the colour scale.
+# Heatmap: zero is neutral light grey; only positive values enter the colour scale.
 old_heat = ".attr('fill',color(counts[`${s}|||${t}`]||0))"
 if old_heat not in html:
     raise SystemExit('Could not find heatmap fill expression')
@@ -46,7 +45,6 @@ html = html.replace(old_heat, ".attr('fill',((counts[`${s}|||${t}`]||0)===0)?'#f
 old_domain = ".domain([0,max])"
 if old_domain not in html:
     raise SystemExit('Could not find heatmap colour domain')
-# There are two sequential colour domains; the second occurrence is the heatmap.
 pos = html.find(old_domain)
 pos2 = html.find(old_domain, pos + 1)
 if pos2 < 0:
@@ -54,7 +52,7 @@ if pos2 < 0:
 html = html[:pos2] + html[pos2:].replace(old_domain, ".domain([1,max])", 1)
 
 css_needle = ".pill{display:inline-block;background:#eaf0ef;border-radius:99px;padding:3px 7px;margin:2px;font-size:11px;border:0}.muted"
-css_insert = ".pill{display:inline-block;background:#eaf0ef;border-radius:99px;padding:3px 7px;margin:2px;font-size:11px;border:0}.topic-chip{display:inline-block;border-radius:7px;padding:4px 7px;margin:2px 3px 2px 0;font-size:11px;line-height:1.25;border-left:4px solid var(--mid);background:#eef3f2}.topic-l1{border-left-color:#2c454a}.topic-l2{border-left-color:#577c84}.topic-l3{border-left-color:#a8bdbe}.topic-l4{border-left-color:#e2b8a2}.topic-root{font-weight:700}.topic-sep{color:var(--mid);padding:0 2px}.topic-parent{color:var(--mid);font-style:italic}.muted"
+css_insert = ".pill{display:inline-block;background:#eaf0ef;border-radius:99px;padding:3px 7px;margin:2px;font-size:11px;border:0}.topic-chip{display:inline-block;border-radius:7px;padding:4px 7px;margin:2px 3px 2px 0;font-size:11px;line-height:1.25;border-left:4px solid var(--mid);background:#eef3f2}.topic-l1{border-left-color:#2c454a}.topic-l2{border-left-color:#577c84}.topic-l3{border-left-color:#a8bdbe}.topic-l4{border-left-color:#e2b8a2}.topic-level{font-weight:550}.topic-sep{color:var(--mid);padding:0 2px}.muted"
 if css_needle not in html:
     raise SystemExit('Could not find CSS insertion point')
 html = html.replace(css_needle, css_insert, 1)
