@@ -1,6 +1,11 @@
 name: Restore historical annotations
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'data/reference/historical_master_12043.csv'
+      - '.github/workflows/restore_historical_annotations.yml'
 permissions:
   contents: write
 jobs:
@@ -30,7 +35,6 @@ jobs:
           hb={(r.get('record_id') or '').strip():r for r in h if (r.get('record_id') or '').strip()}
           mids={(r.get('record_id') or '').strip() for r in rows if (r.get('record_id') or '').strip()}
           canonical=['final_species','final_primary_country_iso3c','broad_topic','subtopic','feature','component']
-          # Add canonical historical annotation columns if the current master does not yet carry them.
           for col in canonical:
               if col not in mf:
                   mf.append(col)
