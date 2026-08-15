@@ -1,0 +1,44 @@
+name: Repair missing topic assignments
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install HTTP client
+        run: pip install requests
+      - name: Run targeted LLM topic repair
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python scripts/rerun_missing_topics.py
+      - name: Validate repaired master
+        run: |
+          python scripts/build_dashboard.py
+          test "$(python -c 'import json; print(json.load(open("docs/dashboard.json"))["metrics"]["records_without_topics"])')" = "0"
+      - name: Commit repaired master and audit outputs
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/reference/salmon_evidence_map.csv state/missing_topic_assignments.csv state/missing_topic_assignments_checkpoint.csv
+          git commit -m 'Repair missing topic assignments in master'
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main; then
+              git push origin main && exit 0
+            fi
+            git rebase --abort || true
+            sleep 3
+          done
+          exit 1
