@@ -8,6 +8,7 @@ on:
       - 'scripts/build_dashboard_html_v2.py'
       - 'scripts/augment_dashboard_citations.py'
       - 'scripts/patch_dashboard_citations.py'
+      - 'scripts/patch_dashboard_topics_and_heat.py'
       - 'scripts/augment_dashboard_data.py'
       - 'scripts/normalise_dashboard_data.py'
       - 'scripts/validate_dashboard_data.py'
@@ -52,6 +53,8 @@ jobs:
         run: python scripts/build_dashboard_html_v2.py
       - name: Render citation details and scholarly links
         run: python scripts/patch_dashboard_citations.py
+      - name: Render compact hierarchical topics and heatmap zero colour
+        run: python scripts/patch_dashboard_topics_and_heat.py
       - name: Stamp dashboard HTML and bust dashboard-data cache
         run: |
           python - <<'PY'
@@ -83,7 +86,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/dashboard.json docs/index.html state/dashboard_missing_topics.txt state/topic_hierarchy_audit.csv state/topic_hierarchy_audit_summary.txt scripts/build_dashboard_html_v2.py
+          git add docs/dashboard.json docs/index.html state/dashboard_missing_topics.txt state/topic_hierarchy_audit.csv state/topic_hierarchy_audit_summary.txt scripts/build_dashboard_html_v2.py scripts/patch_dashboard_topics_and_heat.py
           if git diff --cached --quiet; then
             echo 'Dashboard files unchanged.'
           else
