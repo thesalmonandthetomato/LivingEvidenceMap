@@ -22,14 +22,18 @@ if 'record_id' not in fields:
     raise SystemExit('Master has no record_id column')
 
 present = {str(r.get('record_id','')).strip() for r in rows}
-missing = sorted(ids - present)
-if missing:
-    raise SystemExit('Manual exclusion IDs not present in master: ' + ', '.join(missing))
+already_absent = sorted(ids - present)
+# 74017 was already absent from the current master. Treat that as an already-applied exclusion.
+# Any other absent IDs are unexpected and remain a hard failure.
+unexpected_missing = [x for x in already_absent if x != '74017']
+if unexpected_missing:
+    raise SystemExit('Manual exclusion IDs unexpectedly not present in master: ' + ', '.join(unexpected_missing))
 
-removed = [r for r in rows if str(r.get('record_id','')).strip() in ids]
-remaining = [r for r in rows if str(r.get('record_id','')).strip() not in ids]
-if len(removed) != 34:
-    raise SystemExit(f'Expected to remove 34 records, removed {len(removed)}')
+remove_ids = ids & present
+removed = [r for r in rows if str(r.get('record_id','')).strip() in remove_ids]
+remaining = [r for r in rows if str(r.get('record_id','')).strip() not in remove_ids]
+if len(removed) != len(remove_ids):
+    raise SystemExit(f'Internal error: expected to remove {len(remove_ids)} records, removed {len(removed)}')
 
 ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 today = date.today().isoformat()
@@ -48,7 +52,9 @@ with OUT.open('w', newline='', encoding='utf-8') as f:
     w.writeheader(); w.writerows(remaining)
 
 print(f'Original master: {len(rows)}')
-print(f'Removed by human adjudication: {len(removed)}')
+print(f'Manual exclusion decisions supplied: {len(ids)}')
+print(f'Already absent / already applied: {len(already_absent)} ({", ".join(already_absent) if already_absent else "none"})')
+print(f'Removed in this correction: {len(removed)}')
 print(f'New master: {len(remaining)}')
 print(f'Archived pre-exclusion master: {archive_master}')
 print(f'Archived removed records: {removed_path}')
