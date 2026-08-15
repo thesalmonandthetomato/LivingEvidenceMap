@@ -13,6 +13,12 @@ on:
 permissions:
   contents: write
   actions: read
+  issues: write
+
+env:
+  LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
 
 env:
   LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
@@ -103,7 +109,7 @@ jobs:
           set -euo pipefail
           d='${{ steps.dates.outputs.update_date }}'
           n='${{ steps.dates.outputs.next_date }}'
-          sed -i "s/2026-08-13/${d}/g; s/2026-08-14/${n}/g" scripts/run_lens_update.R R/run_update_topic_classification.R scripts/merge_master_update.py
+          sed -i "s/2026-08-13/${d}/g; s/2026-08-14/${n}/g" scripts/run_lens_update.R R/run_update_topic_classification.R scripts/merge_master_update.py scripts/annotate_lens_update.R
 
       - name: Run deduplication, relevance, screening, species and geography
         if: env.no_records != 'true'
@@ -111,16 +117,55 @@ jobs:
         env:
           LENS_UPDATE_DATE: ${{ steps.dates.outputs.update_date }}
 
+      - name: Reject technical LLM failures
+        if: env.no_records != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          d="data/updates/${{ steps.dates.outputs.update_date }}_lens"
+          for f in "$d/llm_screening.csv" "$d/annotation_adjudication.csv"; do
+            if [ -f "$f" ] && grep -q ',TRUE,' "$f"; then
+              echo "Technical LLM failure detected in $f; this is not a substantive uncertainty." >&2
+              exit 1
+            fi
+          done
+
       - name: Run topic classification
         if: env.no_records != 'true'
         run: Rscript R/run_update_topic_classification.R
 
-      - name: Build and validate candidate master
+      - name: Create human-review queue and hold promotion
         if: env.no_records != 'true'
+        id: review_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          d="data/updates/${{ steps.dates.outputs.update_date }}_lens"
+          review=0
+          if [ -f "$d/screening_uncertain.csv" ]; then
+            n=$(tail -n +2 "$d/screening_uncertain.csv" | wc -l)
+            review=$((review+n))
+          fi
+          if [ -f "$d/geography_review_queue.csv" ]; then
+            n=$(tail -n +2 "$d/geography_review_queue.csv" | wc -l)
+            review=$((review+n))
+          fi
+          if [ -f "$d/annotation_adjudication.csv" ]; then
+            n=$(tail -n +2 "$d/annotation_adjudication.csv" | grep -E ',(UNRESOLVED|TRUE),' | wc -l || true)
+            review=$((review+n))
+          fi
+          echo "review_count=$review" >> "$GITHUB_OUTPUT"
+          if [ "$review" -gt 0 ]; then
+            echo "Human review required for $review exception rows; master promotion is held."
+            exit 2
+          fi
+
+      - name: Build and validate candidate master
+        if: env.no_records != 'true' && steps.review_gate.outcome == 'success'
         run: python3 scripts/merge_master_update.py
 
       - name: Promote validated candidate master
-        if: env.no_records != 'true'
+        if: env.no_records != 'true' && steps.review_gate.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -133,6 +178,33 @@ jobs:
           git add data/reference/salmon_evidence_map.csv "data/reference/salmon_evidence_map_${d}_manifest.csv" "data/reference/archive/salmon_evidence_map_${d}_premerge.csv"
           git commit -m "Promote validated weekly master ${d}"
           git push
+
+      - name: Open GitHub human-review issue
+        if: failure() && steps.review_gate.outcome == 'failure'
+        uses: actions/github-script@v7
+        env:
+          REVIEW_DATE: ${{ steps.dates.outputs.update_date }}
+          REVIEW_COUNT: ${{ steps.review_gate.outputs.review_count }}
+        with:
+          script: |
+            const title = `Living Evidence Map: human review required — ${process.env.REVIEW_DATE}`;
+            const body = [
+              `The weekly update has completed automated processing but requires human adjudication before the master can be promoted.`,
+              ``,
+              `**Review items:** ${process.env.REVIEW_COUNT}`,
+              ``,
+              `**Master:** unchanged`,
+              ``,
+              `**Workflow:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ``,
+              `Review the candidate update in ChatGPT/GitHub, record the structured judgements, then resume the promotion step.`,
+              ``,
+              `Technical/API failures must not be treated as substantive uncertainty.`
+            ].join('\n');
+            const existing = await github.rest.issues.listForRepo({owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100});
+            if (!existing.data.some(i => i.title === title)) {
+              await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body, labels: []});
+            }
 
       - name: Upload weekly update audit
         if: always()
