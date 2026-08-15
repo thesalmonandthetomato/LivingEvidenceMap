@@ -9,6 +9,7 @@ on:
       - 'scripts/build_dashboard.py'
       - 'scripts/normalise_dashboard_data.py'
       - 'scripts/patch_dashboard.py'
+      - 'scripts/patch_dashboard_text.py'
       - 'docs/index.html'
   workflow_dispatch:
 
@@ -33,6 +34,9 @@ jobs:
 
       - name: Patch dashboard interactions and layout
         run: python scripts/patch_dashboard.py
+
+      - name: Set dashboard title and subtitle
+        run: python scripts/patch_dashboard_text.py
 
       - name: Commit generated dashboard files
         run: |
