@@ -2,4 +2,5 @@ Historical rows: 12043
 Current master rows: 13389
 Missing historical records: 35
 Fields transferred: 0
+Canonical annotation columns present: final_species, final_primary_country_iso3c, broad_topic, subtopic, feature, component
 Only non-empty historical source values were copied. Blank historical annotation was NOT inferred or recreated.
