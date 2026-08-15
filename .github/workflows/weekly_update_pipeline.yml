@@ -20,11 +20,6 @@ env:
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
 
-env:
-  LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-  OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
-
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -110,6 +105,9 @@ jobs:
           d='${{ steps.dates.outputs.update_date }}'
           n='${{ steps.dates.outputs.next_date }}'
           sed -i "s/2026-08-13/${d}/g; s/2026-08-14/${n}/g" scripts/run_lens_update.R R/run_update_topic_classification.R scripts/merge_master_update.py scripts/annotate_lens_update.R
+          # Uncertain relevance records are enriched before human adjudication;
+          # they are held from master promotion by the review gate below.
+          sed -i 's/final_screening_decision == "retain"/final_screening_decision %in% c("retain", "uncertain")/' scripts/run_lens_update.R
 
       - name: Run deduplication, relevance, screening, species and geography
         if: env.no_records != 'true'
@@ -152,6 +150,10 @@ jobs:
           fi
           if [ -f "$d/annotation_adjudication.csv" ]; then
             n=$(tail -n +2 "$d/annotation_adjudication.csv" | grep -E ',(UNRESOLVED|TRUE),' | wc -l || true)
+            review=$((review+n))
+          fi
+          if [ -f "$d/topic_classification.csv" ]; then
+            n=$(tail -n +2 "$d/topic_classification.csv" | grep -E ',(TRUE|UNCERTAIN|UNRESOLVED),' | wc -l || true)
             review=$((review+n))
           fi
           echo "review_count=$review" >> "$GITHUB_OUTPUT"
