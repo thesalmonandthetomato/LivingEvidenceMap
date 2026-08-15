@@ -2,6 +2,8 @@
 """Patch the generated dashboard HTML to display bibliographic citation details."""
 from pathlib import Path
 
+# Citation display is intentionally applied after HTML generation so the production
+# builder remains compact; the workflow validates the patched HTML before publishing.
 P = Path('docs/index.html')
 html = P.read_text(encoding='utf-8')
 
