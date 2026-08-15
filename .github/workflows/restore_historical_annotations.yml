@@ -29,21 +29,27 @@ jobs:
           if 'record_id' not in hf or 'record_id' not in mf: raise SystemExit('record_id missing')
           hb={(r.get('record_id') or '').strip():r for r in h if (r.get('record_id') or '').strip()}
           mids={(r.get('record_id') or '').strip() for r in rows if (r.get('record_id') or '').strip()}
-          mapping={x:x for x in ['final_species','final_primary_country_iso3c','broad_topic','subtopic','feature','component']}
+          canonical=['final_species','final_primary_country_iso3c','broad_topic','subtopic','feature','component']
+          # Add canonical historical annotation columns if the current master does not yet carry them.
+          for col in canonical:
+              if col not in mf:
+                  mf.append(col)
+                  for r in rows: r[col]=''
           changed=[]
           for r in rows:
               s=hb.get((r.get('record_id') or '').strip())
               if not s: continue
-              for dst,src in mapping.items():
-                  if dst in mf and src in hf and not (r.get(dst) or '').strip() and (s.get(src) or '').strip():
-                      r[dst]=s[src]; changed.append((r['record_id'],dst))
+              for col in canonical:
+                  src=(s.get(col) or '').strip()
+                  if src and not (r.get(col) or '').strip():
+                      r[col]=src; changed.append((r['record_id'],col))
           missing=sorted(set(hb)-mids)
           ts=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
           shutil.copy2(master,f'{archive}/master_before_{ts}.csv')
           with open(f'{archive}/historical_records_missing_from_master.csv','w',newline='',encoding='utf-8') as f:
               w=csv.writer(f); w.writerow(['record_id']); w.writerows([[x] for x in missing])
           with open(f'{archive}/transfer_summary.txt','w',encoding='utf-8') as f:
-              f.write(f'Historical rows: {len(h)}\nCurrent master rows: {len(rows)}\nMissing historical records: {len(missing)}\nFields transferred: {len(changed)}\nOnly non-empty historical source values were copied. Blank historical annotation was NOT inferred or recreated.\n')
+              f.write(f'Historical rows: {len(h)}\nCurrent master rows: {len(rows)}\nMissing historical records: {len(missing)}\nFields transferred: {len(changed)}\nCanonical annotation columns present: {", ".join(canonical)}\nOnly non-empty historical source values were copied. Blank historical annotation was NOT inferred or recreated.\n')
           with open(master,'w',newline='',encoding='utf-8') as f:
               w=csv.DictWriter(f,fieldnames=mf); w.writeheader(); w.writerows(rows)
           print(f'Historical rows: {len(h)}'); print(f'Master rows: {len(rows)}'); print(f'Missing historical records: {len(missing)}'); print(f'Fields transferred: {len(changed)}')
@@ -53,15 +59,16 @@ jobs:
           python - <<'PY'
           import csv
           p='data/reference/salmon_evidence_map.csv'
-          with open(p,encoding='utf-8',newline='') as f: rows=list(csv.DictReader(f))
-          ids=[r.get('record_id','').strip() for r in rows]
+          with open(p,encoding='utf-8',newline='') as f: r=csv.DictReader(f); fields=r.fieldnames or []; rows=list(r)
+          ids=[x.get('record_id','').strip() for x in rows]
+          required=['final_species','final_primary_country_iso3c','broad_topic','subtopic','feature','component']
           if len(rows)!=13389 or not all(ids) or len(ids)!=len(set(ids)): raise SystemExit(f'Validation failed: {len(rows)} rows')
-          print(f'Validated {len(rows)} unique records')
+          if any(x not in fields for x in required): raise SystemExit('Canonical annotation columns missing')
+          print(f'Validated {len(rows)} unique records with canonical annotation columns')
           PY
       - name: Commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/reference/salmon_evidence_map.csv data/archive/historical_annotation_restore
-          git commit -m 'Restore populated historical annotations'
-          git push origin main
+          if git diff --cached --quiet; then echo 'No changes to commit.'; else git commit -m 'Restore populated historical annotations'; git push origin main; fi
