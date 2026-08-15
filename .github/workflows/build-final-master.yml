@@ -36,32 +36,32 @@ jobs:
           set -euo pipefail
           test -f topic_artifact/topic_assignments.csv
 
-      - name: Build and validate candidate master
-        run: python3 scripts/merge_master_update.py
+      - name: Apply 153 recovered topics to authoritative master
+        run: python3 scripts/apply_topic_recovery_to_master.py
 
-      - name: Archive current master and promote candidate
+      - name: Archive current master and promote topic-repaired master
         run: |
           set -euo pipefail
           mkdir -p data/reference/archive
-          cp data/reference/salmon_evidence_map.csv data/reference/archive/salmon_evidence_map_2026-08-15_premerge.csv
-          cp data/reference/salmon_evidence_map_2026-08-14.csv data/reference/salmon_evidence_map.csv
+          cp data/reference/salmon_evidence_map.csv data/reference/archive/salmon_evidence_map_2026-08-15_pre_topic_repair.csv
+          cp data/reference/salmon_evidence_map_topic_repaired.csv data/reference/salmon_evidence_map.csv
 
       - name: Commit final master
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add data/reference/salmon_evidence_map.csv data/reference/salmon_evidence_map_2026-08-14_manifest.csv data/reference/archive/salmon_evidence_map_2026-08-15_premerge.csv
-          git commit -m "Promote validated master with recovered topics"
+          git add data/reference/salmon_evidence_map.csv data/reference/archive/salmon_evidence_map_2026-08-15_pre_topic_repair.csv
+          git commit -m "Apply recovered topics to authoritative master"
           git push
 
       - name: Upload final master audit artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: final-master-2026-08-15-${{ github.run_id }}
+          name: final-master-topic-repair-2026-08-15-${{ github.run_id }}
           path: |
             data/reference/salmon_evidence_map.csv
-            data/reference/salmon_evidence_map_2026-08-14_manifest.csv
-            data/reference/archive/salmon_evidence_map_2026-08-15_premerge.csv
+            data/reference/salmon_evidence_map_topic_repaired.csv
+            data/reference/archive/salmon_evidence_map_2026-08-15_pre_topic_repair.csv
           if-no-files-found: warn
