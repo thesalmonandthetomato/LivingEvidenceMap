@@ -12,6 +12,7 @@ on:
       - 'scripts/patch_dashboard_text.py'
       - 'scripts/augment_dashboard_data.py'
       - 'scripts/build_dashboard_html.py'
+      - 'scripts/patch_database_features.py'
       - 'docs/index.html'
   workflow_dispatch:
 
@@ -39,6 +40,8 @@ jobs:
         run: python scripts/patch_dashboard_text.py
       - name: Build final dashboard HTML
         run: python scripts/build_dashboard_html.py
+      - name: Add database links, filters and sorting
+        run: python scripts/patch_database_features.py
       - name: Commit generated dashboard files
         run: |
           git config user.name 'github-actions[bot]'
