@@ -28,10 +28,13 @@ for r in d.get('records',[]):
     for k,v in list(r.items()):
         if k.startswith('species') and isinstance(v,list): r[k]=norm_list(v)
 
+# Rebuild all species-derived metrics from the canonicalised record values.
+# Unspecified species is deliberately INCLUDED. It is a legitimate species category
+# for dashboard filtering and for the unfiltered/species-filtered choropleth.
 species=Counter()
 for r in d.get('records',[]):
     for s in r.get('species',[]):
-        if s != 'Unspecified species': species[s]+=1
+        species[s]+=1
 
 d['species_counts']=dict(species.most_common())
 cs={}; all_iso=Counter()
@@ -39,7 +42,6 @@ for r in d.get('records',[]):
     countries=[str(x).upper() for x in (r.get('iso3') or []) if str(x).strip()]
     for c in countries: all_iso[c]+=1
     for s in r.get('species',[]):
-        if s == 'Unspecified species': continue
         b=cs.setdefault(s,Counter())
         for c in countries: b[c]+=1
 
@@ -59,7 +61,8 @@ for r in d.get('records',[]):
 
 d['topic_counts']=dict(finest.most_common())
 d['metrics']['total_topics']=finest_assignments
+d['metrics']['total_species']=len(species)
 d['metrics']['last_update']='2026-08-13'
 with DASH.open('w',encoding='utf-8') as f:
     json.dump(d,f,ensure_ascii=False,separators=(',',':'))
-print(f"Normalised dashboard: species={len(species):,}; finest_topic_assignments={finest_assignments:,}; countries={len(all_iso):,}")
+print(f"Normalised dashboard: species={len(species):,}; unspecified species count={species.get('Unspecified species',0):,}; finest_topic_assignments={finest_assignments:,}; countries={len(all_iso):,}")
