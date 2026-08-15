@@ -4,7 +4,7 @@ import csv,json,re
 from pathlib import Path
 from collections import Counter
 from datetime import datetime,timezone
-ROOT=Path('.'); MASTER=ROOT/'data/reference/salmon_evidence_map.csv'; OUT=ROOT/'docs/dashboard.json'; STATE=ROOT/'state'; GAZ=ROOT/'config/global_country_gazetteer_v3.csv'; ISO_MAP=ROOT/'config/iso3_numeric_map.json'
+ROOT=Path('.'); MASTER=ROOT/'data/reference/salmon_evidence_map.csv'; OUT=ROOT/'docs/dashboard.json'; STATE=ROOT/'state'; GAZ=ROOT/'config/global_country_gazetteer_v3.csv'; ISO_MAP=ROOT/'config/iso3_numeric_map.json'; ONTOLOGY=ROOT/'data/reference/topic_ontology_v3.csv'
 ALIASES={'id':['record_id','id','lens_id','study_id'],'title':['title','article_title','document_title'],'doi':['doi','doi_url','digital_object_identifier'],'abstract':['abstract','abstract_text'],'year':['year','publication_year','date_year'],'species':['final_species','species','farmed_species','deterministic_species','species_assigned','species_assignment','species_name'],'country':['final_primary_country_iso3c','primary_country','primary_countries','country','countries','country_name','country_names','deterministic_primary_countries','geography_primary_country','geography_country'],'iso3':['final_primary_country_iso3c','iso3','iso3c','primary_iso3c','primary_iso3c_codes','deterministic_primary_iso3c','country_iso3c','deterministic_primary_iso3c_codes'],'topics':['topic_hierarchy','topic_hierarchy_paths','hierarchy_path','topics','topic','topic_path'],'updated':['updated_at','update_date','ingested_at','date_added','last_updated']}
 TOPIC_EXPLICIT=['broad_topic','subtopic','feature','component']
 BAD_TOPIC={'na','n/a','nan','null','none','unknown','unspecified','not applicable',''}
@@ -42,6 +42,30 @@ def hierarchy_paths(value):
 def topic_level_fields(fields):
     found=[f for f in fields if 'topic' in f.lower() and re.search(r'(?:level|lvl|l)[ _-]?\d+',f.lower())]
     return sorted(set(found),key=lambda f:int(re.search(r'(?:level|lvl|l)[ _-]?(\d+)',f.lower()).group(1)))
+def load_ontology():
+    valid_paths=set(); valid_names=set(); valid_prefixes=set()
+    if not ONTOLOGY.exists(): return valid_paths,valid_names,valid_prefixes
+    try:
+        with ONTOLOGY.open(newline='',encoding='utf-8-sig') as f:
+            for row in csv.DictReader(f):
+                raw=row.get('hierarchy_path','')
+                parts=tuple(clean_topic(x) for x in re.split(r'\s*>\s*',raw) if clean_topic(x))
+                if parts:
+                    valid_paths.add(parts)
+                    for i in range(1,len(parts)+1): valid_prefixes.add(parts[:i])
+                    valid_names.update(parts)
+    except Exception: pass
+    return valid_paths,valid_names,valid_prefixes
+VALID_PATHS,VALID_NAMES,VALID_PREFIXES=load_ontology()
+def filter_paths(paths):
+    if not VALID_PREFIXES: return paths
+    out=[]
+    for p in paths:
+        t=tuple(p)
+        # Retain only paths that correspond to a prefix of a current V3 ontology path.
+        # This removes legacy pseudo-topics such as the old standalone "Species" tag.
+        if t in VALID_PREFIXES: out.append(list(t))
+    return list(dict.fromkeys(tuple(x) for x in out))
 def number(v):
     try:return int(float(str(v)))
     except Exception:return None
@@ -81,7 +105,7 @@ for row in rows:
     if f['country'] and f['country'] != f['iso3']:
         named=splitvals(row.get(f['country'],''));
         if named: co=named
-    paths=hierarchy_paths(row.get(f['topics'],'')) if f['topics'] else []
+    paths=filter_paths(hierarchy_paths(row.get(f['topics'],'')) if f['topics'] else [])
     levels={}
     if paths:
         for i in range(1,max(len(p) for p in paths)+1):
@@ -89,10 +113,10 @@ for row in rows:
             if vals: levels[str(i)]=vals
     else:
         for i,field in enumerate(explicit_topics,1):
-            vals=splitvals(row.get(field,''));
+            vals=[x for x in splitvals(row.get(field,'')) if x in VALID_NAMES or not VALID_NAMES]
             if vals: levels[str(i)]=vals
         for i,field in enumerate(topic_fields,1):
-            vals=splitvals(row.get(field,''));
+            vals=[x for x in splitvals(row.get(field,'')) if x in VALID_NAMES or not VALID_NAMES]
             if vals and str(i) not in levels: levels[str(i)]=vals
     alltopics=list(dict.fromkeys(x for vals in levels.values() for x in vals if x))
     if not alltopics: missing_topic_records.append(row.get(f['id'],'') if f['id'] else '')
@@ -100,16 +124,10 @@ for row in rows:
     for x in co:countries[x]+=1
     for x in ix:iso[x]+=1
     for x in alltopics:topics[x]+=1
-    for level,vals in levels.items():
-        by_level.setdefault(level,Counter()); species_topic_level.setdefault(level,Counter())
-        for x in vals:by_level[level][x]+=1
-        for s in sp:
-            if s!='Unspecified species':
-                for x in vals: species_topic_level[level][(s,x)]+=1
     if f['updated'] and row.get(f['updated']):latest=max(latest or '',str(row[f['updated']]))
     rec={'record_id':row.get(f['id'],'') if f['id'] else '','title':row.get(f['title'],'') if f['title'] else '','doi':row.get(f['doi'],'') if f['doi'] else '','abstract':row.get(f['abstract'],'') if f['abstract'] else '','year':row.get(f['year'],'') if f['year'] else '','species':sp,'countries':co,'iso3':ix,'topics':alltopics,'topic_paths':paths}
     for level,vals in levels.items():rec['topic_level_'+level]=vals
     records.append(rec)
 map_iso=iso_numeric_map(); country_map={map_iso[k]:v for k,v in iso.items() if k in map_iso}; map_id_to_iso3={v:k for k,v in map_iso.items()}
-payload={'generated_at':datetime.now(timezone.utc).isoformat(),'metrics':{'last_update':latest,'total_records':len(rows),'total_countries':len(countries),'total_species':len(species),'total_topics':0,'candidate_search_results_screened':search_total(),'records_without_topics':len(missing_topic_records)},'species_counts':dict((s,n) for s,n in species.most_common() if s!='Unspecified species'),'country_counts':dict(countries.most_common()),'country_iso3_counts':dict(country_map),'map_id_to_iso3':map_id_to_iso3,'topic_counts':dict(topics.most_common()),'topic_level_counts':{k:dict(v.most_common()) for k,v in sorted(by_level.items(),key=lambda x:int(x[0]))},'species_topic_level_counts':{level:{f'{s}|||{t}':n for (s,t),n in counts.items()} for level,counts in sorted(species_topic_level.items(),key=lambda x:int(x[0]))},'topic_level_fields':topic_fields,'records':records,'missing_topic_record_ids':missing_topic_records}
+payload={'generated_at':datetime.now(timezone.utc).isoformat(),'metrics':{'last_update':latest,'total_records':len(rows),'total_countries':len(countries),'total_species':len(species),'total_topics':0,'candidate_search_results_screened':search_total(),'records_without_topics':len(missing_topic_records)},'species_counts':dict(species.most_common()),'country_counts':dict(countries.most_common()),'country_iso3_counts':dict(country_map),'map_id_to_iso3':map_id_to_iso3,'topic_counts':dict(topics.most_common()),'topic_level_counts':{k:dict(v.most_common()) for k,v in sorted(by_level.items(),key=lambda x:int(x[0]))},'species_topic_level_counts':{},'topic_level_fields':topic_fields,'records':records,'missing_topic_record_ids':missing_topic_records}
 OUT.parent.mkdir(parents=True,exist_ok=True); OUT.write_text(json.dumps(payload,ensure_ascii=False,separators=(',',':')),encoding='utf-8'); print(f'Built dashboard data: {len(records):,} records; countries={len(countries):,}; mapped ISO3 countries={len(country_map):,}; species={len(payload["species_counts"]):,}; topics={len(topics):,}; records_without_topics={len(missing_topic_records):,}')
