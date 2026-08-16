@@ -46,7 +46,8 @@ if GAZ.exists():
     except Exception: pass
 d['country_name_by_iso3']=country_names
 
-# Eight named species are represented. The UI groups Pacific salmon as Other salmon.
+# Eight named species are displayed individually. Unspecified salmon is a separate
+# final category for filtering/presentation, but is not counted as a ninth species.
 preferred_named=['Atlantic salmon','Rainbow trout','Chinook salmon','Coho salmon','Sockeye salmon','Chum salmon','Pink salmon','Masu salmon']
 sc=d.get('species_counts',{}); ordered=OrderedDict((n,sc[n]) for n in preferred_named if n in sc)
 for n,c in sc.items():
@@ -56,29 +57,27 @@ d['species_display_order']=preferred_named+(['Unspecified species'] if 'Unspecif
 d['species_display_labels']={'Unspecified species':'Unspecified salmon'}
 d['metrics']['total_species']=sum(1 for n in d['species_counts'] if n!='Unspecified species')
 
-def group_for(s):
-    s=norm_unspecified(s)
-    if s=='Atlantic salmon': return 'Atlantic salmon'
-    if s=='Rainbow trout': return 'Rainbow trout'
-    if s=='Unspecified species': return 'Unspecified salmon'
-    return 'Other salmon'
-groups=['Atlantic salmon','Rainbow trout','Other salmon','Unspecified salmon']
-gc=Counter(); gcc=defaultdict(Counter)
+# Do not collapse Pacific salmon into an "Other salmon" group. The dashboard's
+# species-level visualisations use the individual species labels, with unspecified
+# salmon last.
+d['species_group_display_order']=d['species_display_order']
+d['species_group_counts']={n:sc[n] for n in d['species_display_order'] if n in sc}
+d['country_iso3_species_group_counts']={}
+sgc=defaultdict(Counter)
 for r in d.get('records',[]):
     for s in r.get('species',[]):
-        g=group_for(s); gc[g]+=1
-        for c in r.get('iso3',[]): gcc[g][str(c).upper()]+=1
-d['species_group_display_order']=groups
-d['species_group_counts']={g:gc[g] for g in groups if gc[g]}
-d['country_iso3_species_group_counts']={g:dict(gcc[g]) for g in groups if g in gcc}
+        s=norm_unspecified(s)
+        for c in r.get('iso3',[]): sgc[s][str(c).upper()]+=1
+d['country_iso3_species_group_counts']={s:dict(sgc[s]) for s in d['species_display_order'] if s in sgc}
+
 gtc=defaultdict(Counter)
 for r in d.get('records',[]):
     paths={tuple(p) for p in r.get('topic_paths',[])}
     for s in r.get('species',[]):
-        g=group_for(s)
+        s=norm_unspecified(s)
         for path in paths:
-            for level in range(1,len(path)+1): gtc[str(level)][(g,' > '.join(path[:level]))]+=1
-d['species_group_topic_level_counts']={lev:{f'{g}|||{t}':n for (g,t),n in vals.items()} for lev,vals in gtc.items()}
+            for level in range(1,len(path)+1): gtc[str(level)][(s,' > '.join(path[:level]))]+=1
+d['species_group_topic_level_counts']={lev:{f'{s}|||{t}':n for (s,t),n in vals.items()} for lev,vals in gtc.items()}
 d['metrics']['records_without_topics']=sum(1 for r in d.get('records',[]) if not r.get('topic_paths'))
 DASH.write_text(json.dumps(d,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
-print(f"Dashboard presentation data fixed: records={len(d.get('records',[])):,}; named species={d['metrics']['total_species']}; UI groups={len(groups)}; database topics use ' > ' hierarchy paths; country names={len(country_names):,}")
+print(f"Dashboard presentation data fixed: records={len(d.get('records',[])):,}; named species={d['metrics']['total_species']}; species displayed individually={len(d['species_display_order'])}; database topics use ' > ' hierarchy paths; country names={len(country_names):,}")
