@@ -1,55 +1,62 @@
 #!/usr/bin/env python3
-"""Final dashboard presentation patch: project text, database, species ordering and topic descriptions."""
+"""Final dashboard presentation patch."""
 from pathlib import Path
 P=Path('docs/index.html'); html=P.read_text(encoding='utf-8')
 INTRO='''<p class="project-description">The Living Evidence Map is a scoping review of research articles on aquaculture of all salmon species, including Atlantic and Pacific salmon and rainbow trout, across all production stages. The map was originally populated by manual screening of &gt;19,000 records and is now maintained using validated machine screening and content annotation, supported by LLMs (OpenAI GPT-5-mini). For further information on the wider project, see <a href="https://www.thesalmonandthetomato.org" style="color:#fff">The Salmon and the Tomato [www.thesalmonandthetomato.org]</a>. This project was coordinated by Dr Neal Haddaway.</p>'''
 old_intro='<p>An interactive view of the living evidence map. The map is updated automatically, with human oversight on a weekly basis. Data are sourced from <a href="https://www.lens.org" style="color:#fff">www.lens.org</a>.</p>'
 if old_intro in html: html=html.replace(old_intro,INTRO,1)
 html=html.replace('<h2>Master database</h2>','<h2>Database</h2>',1).replace('Search title, abstract or record ID…','Search title or abstract…',1)
+# Database: title/summary+DOI, year, authors, journal/volume/pages, topics. No record ID/species/country columns.
 old_head='<th data-sort="record_id">Record ↕</th><th data-sort="title">Title ↕</th><th data-sort="year">Year ↕</th><th data-sort="species">Species ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th><th>Citation</th>'
-new_head='<th data-sort="title">Title ↕</th><th data-sort="year">Year ↕</th><th data-sort="species">Species ↕</th><th data-sort="countries">Country ↕</th><th>Author</th><th>Journal</th><th>Volume</th><th>Pages</th><th>DOI</th><th>Topics</th>'
+new_head='<th data-sort="title">Title &amp; summary ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="topics">Topics ↕</th>'
 if old_head in html: html=html.replace(old_head,new_head,1)
-
-# Grouped species filter: Atlantic salmon, rainbow trout, other salmon, unspecified salmon.
-rs='function recordsFor()'
-if rs in html:
-    s=html.index(rs); e=html.index('\nfunction ',s+10)
-    fn=r'''function speciesGroup(s){
-  if(s==='Atlantic salmon'||s==='Rainbow trout')return s;
-  if(s==='Unspecified species')return 'Unspecified salmon';
-  return 'Other salmon';
-}
-function recordMatchesSpecies(r,selected){return selected==='__all__'||r.species.some(s=>speciesGroup(s)===selected)}
-function recordsFor(){return D.records.filter(r=>recordMatchesSpecies(r,state.species)&&(state.country==='__all__'||r.iso3.includes(state.country))&&topicMatches(r)&&(!state.q||[r.title,r.abstract,r.year,...r.species,...r.countries,...r.topics].join(' ').toLowerCase().includes(state.q.toLowerCase())))}'''
-    html=html[:s]+fn+html[e:]
-
-# Database table and requested metadata.
-s='function table(){'; e='function showTip('; start=html.index(s); end=html.index(e,start)
-table_fn=r'''function truncateAbstract(s,n=180){const text=String(s??'').trim();if(text.length<=n)return text;const cut=text.slice(0,n+1).replace(/\s+\S*$/,'').trim();return cut+'…'}
+# Species remain individual; unspecified is a final filter category but not part of the KPI count.
+start=html.index('function recordsFor()'); end=html.index('\nfunction ',start+10)
+html=html[:start]+'''function recordsFor(){return D.records.filter(r=>(state.species==='__all__'||r.species.includes(state.species))&&(state.country==='__all__'||r.iso3.includes(state.country))&&topicMatches(r)&&(!state.q||[r.title,r.abstract,r.year,...r.species,...r.countries,...r.topics].join(' ').toLowerCase().includes(state.q.toLowerCase())))}'''+html[end:]
+# Replace the current table renderer, including metadata formatting and unique full-path topics.
+start=html.index('function table(){'); end=html.index('function showTip(',start)
+table_fn=r'''function truncateAbstract(s,n=220){const text=String(s??'').trim();if(text.length<=n)return text;return text.slice(0,n+1).replace(/\s+\S*$/,'').trim()+'…'}
 function countryLabel(c){return (D.country_name_by_iso3||{})[String(c).toUpperCase()]||c}
-function topicDescription(path){return (D.topic_definitions||{})[path]||''}
-function table(){
- let a=recordsFor(),k=state.sort,d=state.dir==='desc'?-1:1;
- a.sort((x,y)=>{const xt=!String(x.title||'').trim()||String(x.title).trim().toLowerCase()==='untitled',yt=!String(y.title||'').trim()||String(y.title).trim().toLowerCase()==='untitled';if(xt!==yt)return xt?1:-1;const vx=k==='species'?x.species.map(speciesGroup).join('; '):k==='countries'?x.countries.join('; '):k==='topics'?x.topics.join('; '):(x[k]??''),vy=k==='species'?y.species.map(speciesGroup).join('; '):k==='countries'?y.countries.join('; '):k==='topics'?y.topics.join('; '):(y[k]??'');return String(vx).localeCompare(String(vy),undefined,{numeric:true,sensitivity:'base'})*d});
- const pages=Math.max(1,Math.ceil(a.length/state.size));state.page=Math.min(state.page,pages);const z=a.slice((state.page-1)*state.size,state.page*state.size);
- tbody.innerHTML=z.map(r=>{const title=r.title||'Untitled',paths=(r.topic_paths||[]).map(p=>p.join(' > ')),topicHtml=paths.map(path=>`<span class="pill topic-pill" title="${esc(topicDescription(path))}">${esc(path)}</span>`).join(''),countries=(r.countries||[]).map(c=>`<span class="country-label" title="${esc(countryLabel(c))}">${esc(c)}</span>`).join(', '),doi=r.doi?`<a href="${esc('https://doi.org/'+String(r.doi).replace(/^https?:\/\/(doi\.org\/)?/i,''))}" target="_blank" rel="noopener">${esc(r.doi)}</a>`:'';return `<tr><td><a href="${esc(recordUrl(r))}" target="_blank" rel="noopener"><b>${esc(title)}</b></a><div class="muted">${esc(truncateAbstract(r.abstract))}</div></td><td>${esc(r.year)}</td><td>${r.species.map(s=>`<span class="pill">${esc(s==='Unspecified species'?'Unspecified salmon':s)}</span>`).join('')}</td><td>${countries}</td><td>${esc(r.authors||'')}</td><td>${esc(r.journal||'')}</td><td>${esc(r.volume||'')}</td><td>${esc(r.pages||'')}</td><td class="citation-doi">${doi}</td><td>${topicHtml}</td></tr>`}).join('');
- const first=a.length?(state.page-1)*state.size+1:0,last=Math.min(state.page*state.size,a.length);dbCount.textContent=`${fmt(a.length)} matching records${a.length?` · showing ${fmt(first)}–${fmt(last)}`:''}`;page.textContent=`${state.page} / ${pages}`;prev.disabled=state.page<=1;next.disabled=state.page>=pages;
-}'''
+function formatAuthors(s){const raw=String(s||'').trim();if(!raw)return '';const a=raw.split(/\s*;\s*|\s*\|\s*|\s+and\s+|\s*,\s*(?=[A-Z][^,;|]*\b(?:[A-Z]\.\s*)?[A-Za-z'’-]+)/).map(x=>x.trim()).filter(Boolean);if(a.length<=2)return a.join(' and ');return a[0]+' et al.'}
+function publication(r){return [r.journal,r.volume,r.pages?`pp. ${r.pages}`:''].filter(Boolean).join(' · ')}
+function topicPathHtml(r){const paths=(r.topic_paths||[]).map(p=>p.join(' > '));return paths.map(path=>`<span class="pill topic-pill" title="${esc((D.topic_definitions||{})[path]||'')}">${esc(path)}</span>`).join('')}
+function table(){let a=recordsFor(),k=state.sort,d=state.dir==='desc'?-1:1;a.sort((x,y)=>{const xt=!String(x.title||'').trim()||String(x.title).trim().toLowerCase()==='untitled',yt=!String(y.title||'').trim()||String(y.title).trim().toLowerCase()==='untitled';if(xt!==yt)return xt?1:-1;const vx=k==='authors'?formatAuthors(x.authors):k==='publication'?publication(x):k==='topics'?(x.topic_paths||[]).map(p=>p.join(' > ')).join('; '):(x[k]??''),vy=k==='authors'?formatAuthors(y.authors):k==='publication'?publication(y):k==='topics'?(y.topic_paths||[]).map(p=>p.join(' > ')).join('; '):(y[k]??'');return String(vx).localeCompare(String(vy),undefined,{numeric:true,sensitivity:'base'})*d});const pages=Math.max(1,Math.ceil(a.length/state.size));state.page=Math.min(state.page,pages);const z=a.slice((state.page-1)*state.size,state.page*state.size);tbody.innerHTML=z.map(r=>{const doi=r.doi?`<div class="record-doi"><a href="${esc('https://doi.org/'+String(r.doi).replace(/^https?:\/\/(doi\.org\/)?/i,''))}" target="_blank" rel="noopener">DOI: ${esc(r.doi)}</a></div>`:'';const countries=(r.countries||[]).map(c=>countryLabel(c)).join(', ');return `<tr><td><a href="${esc(recordUrl(r))}" target="_blank" rel="noopener"><b>${esc(r.title||'Untitled')}</b></a><div class="muted summary">${esc(truncateAbstract(r.abstract))}</div>${doi}</td><td>${r.year===''?'':esc(String(parseInt(r.year,10)))}</td><td>${esc(formatAuthors(r.authors))}</td><td>${esc(publication(r))}</td><td>${topicPathHtml(r)}</td></tr>`}).join('');const first=a.length?(state.page-1)*state.size+1:0,last=Math.min(state.page*state.size,a.length);dbCount.textContent=`${fmt(a.length)} matching records${a.length?` · showing ${fmt(first)}–${fmt(last)}`:''}`;page.textContent=`${state.page} / ${pages}`;prev.disabled=state.page<=1;next.disabled=state.page>=pages}'''
 html=html[:start]+table_fn+'\n'+html[end:]
-
-# Map/heatmap and controls use grouped species data.
-html=html.replace("const sp=state.species,vals=sp==='__all__'?D.country_iso3_counts:(D.country_iso3_species_counts?.[sp]||{})", "const sp=state.species,vals=sp==='__all__'?D.country_iso3_counts:(D.country_iso3_species_group_counts?.[sp]||{})",1)
-html=html.replace("const species=sp==='__all__'?Object.keys(D.species_counts):[sp]", "const species=sp==='__all__'?(D.species_group_display_order||Object.keys(D.species_group_counts)):[sp]",1)
-html=html.replace("counts=D.species_topic_level_counts?.[lev]||{}", "counts=D.species_group_topic_level_counts?.[lev]||{}",1)
-html=html.replace("Object.keys(D.species_counts).forEach(s=>{mapSpecies.add(new Option(s,s));heatSpecies.add(new Option(s,s));tableSpecies.add(new Option(s,s))})", "(D.species_group_display_order||Object.keys(D.species_group_counts)).forEach(s=>{const label=s==='Unspecified salmon'?'Unspecified salmon':s;mapSpecies.add(new Option(label,s));heatSpecies.add(new Option(label,s));tableSpecies.add(new Option(label,s))})",1)
-
-# Topic descriptions: exact hierarchy-path definitions are shown on database topic pills;
-# tree nodes also expose matching definitions in their tooltip/description.
-old_tree="const label=document.createElement('span');label.className='tree-name';label.textContent=name;"
-new_tree="const label=document.createElement('span');label.className='tree-name';label.textContent=name;const desc=document.createElement('span');desc.className='tree-description';const defs=Object.entries(D.topic_definitions||{}).filter(([p])=>p===name||p.endsWith(' > '+name)).map(([,v])=>v).filter(Boolean);desc.textContent=defs[0]||'';if(desc.textContent)desc.title=desc.textContent;"
-if old_tree in html: html=html.replace(old_tree,new_tree,1)
-if 'row.append(toggle,label,count,jumpBtn);' in html: html=html.replace('row.append(toggle,label,count,jumpBtn);','row.append(toggle,label,count,jumpBtn);if(desc.textContent)row.append(desc);',1)
-css_marker='.table td{padding:9px;border-top:1px solid #e8eeee;vertical-align:top}'
-css_add='.project-description{max-width:1050px;margin:14px 0 0;color:#dce7e7;line-height:1.55}.country-label{cursor:help;border-bottom:1px dotted currentColor}.topic-pill{white-space:normal;line-height:1.35}.tree-description{color:var(--mid);font-size:12px;max-width:700px}.citation-doi{word-break:break-all}'
-if css_marker in html and '.project-description' not in html: html=html.replace(css_marker,css_marker+css_add,1)
-P.write_text(html,encoding='utf-8'); print('Applied dashboard feedback HTML patch')
+# CSS: cleaner database and hierarchy descriptions.
+marker='.table td{padding:9px;border-top:1px solid #e8eeee;vertical-align:top}'
+css='.project-description{max-width:1050px;margin:14px 0 0;color:#dce7e7;line-height:1.55}.table{min-width:1200px}.summary{max-width:620px;line-height:1.4;margin-top:5px}.record-doi{font-size:11px;margin-top:5px}.record-doi a{color:var(--mid)}.topic-pill{white-space:normal;line-height:1.35}.tree-row{align-items:flex-start}.tree-description{display:block;color:var(--mid);font-size:12px;line-height:1.4;margin:2px 0 8px 31px;max-width:820px}.tree-name{font-weight:700}'
+if marker in html and '.record-doi' not in html: html=html.replace(marker,marker+css,1)
+# Country dropdown uses real country names, while values remain ISO3 for filtering.
+old_countries="Object.keys(D.country_iso3_counts||{}).forEach(c=>tableCountry.add(new Option(c,c)));"
+new_countries="Object.keys(D.country_iso3_counts||{}).sort((a,b)=>countryLabel(a).localeCompare(countryLabel(b))).forEach(c=>tableCountry.add(new Option(countryLabel(c),c)));"
+if old_countries in html: html=html.replace(old_countries,new_countries,1)
+# All nine filter categories: eight named species plus unspecified salmon at the end.
+old_species="Object.keys(D.species_counts||{}).forEach(s=>{mapSpecies.add(new Option(s,s));heatSpecies.add(new Option(s,s));tableSpecies.add(new Option(s,s))});"
+new_species="const speciesOrder=D.species_display_order||Object.keys(D.species_counts||{});speciesOrder.forEach(s=>{const label=s==='Unspecified species'?'Unspecified salmon':s;mapSpecies.add(new Option(label,s));heatSpecies.add(new Option(label,s));tableSpecies.add(new Option(label,s))});"
+if old_species in html: html=html.replace(old_species,new_species,1)
+# Full hierarchy topic dropdown, grouped by top-level topic.
+old_topics="Object.keys(D.topic_counts||{}).forEach(t=>tableTopic.add(new Option(t,t)));"
+new_topics="const topicSelect=tableTopic;Object.keys(D.topic_tree||{}).sort((a,b)=>a.localeCompare(b)).forEach(root=>{const group=document.createElement('optgroup');group.label=root;function addPaths(node,prefix){Object.entries(node||{}).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([name,n])=>{const path=prefix.concat(name).join(' > ');if(path!==root)group.appendChild(new Option(path,path));addPaths(n.children,prefix.concat(name))})}const n=D.topic_tree[root];if(n.children&&Object.keys(n.children).length)addPaths(n.children,[root]);topicSelect.appendChild(group)});"
+if old_topics in html: html=html.replace(old_topics,new_topics,1)
+# Records-per-screen selector.
+needle='<label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select><button id="clear">Clear filters</button>'
+replacement='<label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button>'
+if needle in html: html=html.replace(needle,replacement,1)
+# Ensure page size is wired and persisted in the current state.
+html=html.replace("tableTopic.value=state.topic||'__all__';q.value=state.q", "tableTopic.value=state.topic||'__all__';q.value=state.q;pageSize.value=String(state.size)",1)
+old_bind="tableTopic.onchange=()=>setFilter({topic:tableTopic.value==='__all__'?null:tableTopic.value});q.oninput=()=>setFilter({q:q.value},false);"
+new_bind="tableTopic.onchange=()=>setFilter({topic:tableTopic.value==='__all__'?null:tableTopic.value});pageSize.onchange=()=>{state.size=Number(pageSize.value);state.page=1;table()};q.oninput=()=>setFilter({q:q.value},false);"
+if old_bind in html: html=html.replace(old_bind,new_bind,1)
+# Override heatmap with individual species and unique-article counts.
+start=html.index('function heat(){'); end=html.index('function tree(){',start)
+heat_fn=r'''function heat(){const el=d3.select('#heatmap');el.selectAll('*').remove();const lev=heatLevel.value||'1',top=heatTop.value,sp=heatSpecies.value,limit=+heatLimit.value;let topics=Object.entries(D.topic_level_counts?.[lev]||{}).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);if(top!=='__all__'){const allowed=new Set();function walk(obj,on){Object.entries(obj||{}).forEach(([k,n])=>{const active=on||k===top;if(active)allowed.add(k);walk(n.children,active)})}walk(D.topic_tree,false);topics=topics.filter(t=>allowed.has(t))}topics=topics.slice(0,limit);const species=sp==='__all__'?(D.species_display_order||Object.keys(D.species_counts)):[sp],cw=90,ch=34,left=190,bottom=250,w=Math.max(1000,left+topics.length*cw+20),h=50+species.length*ch+bottom,svg=el.append('svg').attr('width',w).attr('height',h),counts=D.species_topic_level_counts?.[lev]||{},max=d3.max(species.flatMap(s=>topics.map(t=>counts[`${s}|||${t}`]||0)))||1,color=d3.scaleSequential(d3.interpolateRgbBasis([palette[2],palette[1],palette[0],palette[5]])).domain([1,max]);species.forEach((s,i)=>topics.forEach((t,j)=>{const n=counts[`${s}|||${t}`]||0;svg.append('rect').attr('x',left+j*cw).attr('y',40+i*ch).attr('width',cw).attr('height',ch).attr('fill',n===0?'#f8f9f8':color(n)).attr('class','heat-cell').on('click',()=>setFilter({species:s,topic:t})).on('mousemove',e=>showTip(e,`<b>${esc(s==='Unspecified species'?'Unspecified salmon':s)}</b><br>${esc(t)}<br>${fmt(n)} unique articles`)).on('mouseleave',hideTip)}));svg.selectAll('.slabel').data(species).join('text').attr('x',left-8).attr('y',(s,i)=>40+i*ch+22).attr('text-anchor','end').attr('class','axis').text(s=>s==='Unspecified species'?'Unspecified salmon':s);svg.selectAll('.tlabel').data(topics).join('text').attr('transform',(t,i)=>`translate(${left+i*cw+cw/2},${40+species.length*ch+22}) rotate(-55)`).attr('text-anchor','end').attr('class','axis').text(t=>t.length>38?t.slice(0,36)+'…':t)}'''
+html=html[:start]+heat_fn+'\n'+html[end:]
+# Replace tree with descriptions underneath each bold node label.
+start=html.index('function tree(){'); end=html.index('async function start(){',start)
+tree_fn=r'''function tree(){const root=document.getElementById('tree');root.innerHTML='';function branch(obj,prefix=[]){const ul=document.createElement('ul');Object.entries(obj||{}).sort((a,b)=>b[1].count-a[1].count).forEach(([name,n])=>{const li=document.createElement('li'),row=document.createElement('div');row.className='tree-row';const toggle=document.createElement('button');toggle.className='tree-toggle';toggle.textContent=Object.keys(n.children||{}).length?'▸':'•';const label=document.createElement('span');label.className='tree-name';label.textContent=name;const count=document.createElement('span');count.className='tree-count';count.textContent=fmt(n.count);const jumpBtn=document.createElement('button');jumpBtn.className='tree-jump';jumpBtn.textContent='Jump to filtered database';jumpBtn.onclick=()=>setFilter({topic:prefix.concat(name).join(' > ')});row.append(toggle,label,count,jumpBtn);li.append(row);const path=prefix.concat(name).join(' > '),descText=(D.topic_definitions||{})[path]||'';if(descText){const desc=document.createElement('div');desc.className='tree-description';desc.textContent=descText;li.append(desc)}if(Object.keys(n.children||{}).length){const sub=branch(n.children,prefix.concat(name));sub.style.display='none';toggle.onclick=()=>{const open=sub.style.display!=='none';sub.style.display=open?'none':'block';toggle.textContent=open?'▸':'▾'};li.append(sub)}ul.append(li)});return ul}root.append(branch(D.topic_tree||{}))}'''
+html=html[:start]+tree_fn+'\n'+html[end:]
+# Keep KPI species count at eight even though the filter list has nine categories.
+html=html.replace("['Species',D.metrics.total_species]", "['Species',8]",1)
+# Start function: retain existing handlers, add page size, grouped topics, and all species.
+html=html.replace("const current=heatLevel.value;", "const current=heatLevel.value;",1)
+P.write_text(html,encoding='utf-8'); print('Applied dashboard feedback HTML patch v2')
