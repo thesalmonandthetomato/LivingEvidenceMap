@@ -5,7 +5,7 @@ Read-only: never repair or reinterpret assignments silently.
 import csv,json,re
 from collections import Counter
 from pathlib import Path
-MASTER=Path('data/reference/salmon_evidence_map.csv'); ONTOLOGY=Path('data/reference/topic_ontology_v3.csv'); OUT=Path('state/topic_hierarchy_audit.csv'); SUMMARY=Path('state/topic_hierarchy_audit_summary.txt')
+MASTER=Path('data/master/current/living_evidence_map_master.csv'); ONTOLOGY=Path('data/reference/topic_ontology_v3.csv'); OUT=Path('state/topic_hierarchy_audit.csv'); SUMMARY=Path('state/topic_hierarchy_audit_summary.txt')
 def split_paths(value):
     s=str(value or '').strip()
     if not s or s.lower() in {'na','n/a','nan','null','none'}: return []
