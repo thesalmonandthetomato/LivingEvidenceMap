@@ -17,7 +17,7 @@ on:
       - 'scripts/repair_dashboard_builder.py'
       - 'scripts/audit_topic_hierarchy.py'
       - 'config/iso3_numeric_map.json'
-      - 'data/reference/salmon_evidence_map.csv'
+      - 'data/master/current/living_evidence_map_master.csv'
       - 'data/reference/topic_ontology_v3.csv'
   workflow_run:
     workflows: ["Build final master"]
