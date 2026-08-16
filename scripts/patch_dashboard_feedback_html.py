@@ -36,9 +36,12 @@ if old_species in html: html=html.replace(old_species,new_species,1)
 old_topics="Object.keys(D.topic_counts||{}).forEach(t=>tableTopic.add(new Option(t,t)));"
 new_topics="const topicSelect=tableTopic;Object.keys(D.topic_tree||{}).sort((a,b)=>a.localeCompare(b)).forEach(root=>{const group=document.createElement('optgroup');group.label=root;function addPaths(node,prefix){Object.entries(node||{}).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([name,n])=>{const path=prefix.concat(name).join(' > ');if(path!==root)group.appendChild(new Option(path,path));addPaths(n.children,prefix.concat(name))})}const n=D.topic_tree[root];if(n.children&&Object.keys(n.children).length)addPaths(n.children,[root]);topicSelect.appendChild(group)});"
 if old_topics in html: html=html.replace(old_topics,new_topics,1)
-needle='<label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select><button id="clear">Clear filters</button>'
+# Insert the records-per-screen selector against both known database-control layouts.
+needle1='<label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select><button id="clear">Clear filters</button>'
+needle2='<label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><button id="clear">Clear filters</button>'
 replacement='<label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button>'
-if needle in html: html=html.replace(needle,replacement,1)
+if needle1 in html: html=html.replace(needle1,replacement,1)
+elif needle2 in html: html=html.replace(needle2,replacement,1)
 html=html.replace("tableTopic.value=state.topic||'__all__';q.value=state.q", "tableTopic.value=state.topic||'__all__';q.value=state.q;pageSize.value=String(state.size)",1)
 old_bind="tableTopic.onchange=()=>setFilter({topic:tableTopic.value==='__all__'?null:tableTopic.value});q.oninput=()=>setFilter({q:q.value},false);"
 new_bind="tableTopic.onchange=()=>setFilter({topic:tableTopic.value==='__all__'?null:tableTopic.value});pageSize.onchange=()=>{state.size=Number(pageSize.value);state.page=1;table()};q.oninput=()=>setFilter({q:q.value},false);"
@@ -49,5 +52,8 @@ html=html[:start]+heat_fn+'\n'+html[end:]
 start=html.index('function tree(){'); end=html.index('async function start(){',start)
 tree_fn=r'''function tree(){const root=document.getElementById('tree');root.innerHTML='';function branch(obj,prefix=[]){const ul=document.createElement('ul');Object.entries(obj||{}).sort((a,b)=>b[1].count-a[1].count).forEach(([name,n])=>{const li=document.createElement('li'),row=document.createElement('div');row.className='tree-row';const toggle=document.createElement('button');toggle.className='tree-toggle';toggle.textContent=Object.keys(n.children||{}).length?'▸':'•';const label=document.createElement('span');label.className='tree-name';label.textContent=name;const count=document.createElement('span');count.className='tree-count';count.textContent=fmt(n.count);const jumpBtn=document.createElement('button');jumpBtn.className='tree-jump';jumpBtn.textContent='Jump to filtered database';jumpBtn.onclick=()=>setFilter({topic:prefix.concat(name).join(' > ')});row.append(toggle,label,count,jumpBtn);li.append(row);const path=prefix.concat(name).join(' > '),descText=(D.topic_definitions||{})[path]||'';if(descText){const desc=document.createElement('div');desc.className='tree-description';desc.textContent=descText;li.append(desc)}if(Object.keys(n.children||{}).length){const sub=branch(n.children,prefix.concat(name));sub.style.display='none';toggle.onclick=()=>{const open=sub.style.display!=='none';sub.style.display=open?'none':'block';toggle.textContent=open?'▸':'▾'};li.append(sub)}ul.append(li)});return ul}root.append(branch(D.topic_tree||{}))}'''
 html=html[:start]+tree_fn+'\n'+html[end:]
-html=html.replace("kpis.innerHTML=[['Last update','13/08/2026'],['Records',D.metrics.total_records],['Countries',D.metrics.total_countries],['Species',8],['Topics',D.metrics.total_topics],['Search results screened',D.metrics.candidate_search_results_screened??'—']].map", "kpis.innerHTML=[['Last update','13/08/2026'],['Search results screened',D.metrics.candidate_search_results_screened??'—'],['Records included',D.metrics.total_records],['Topics',D.metrics.total_topics],['Countries',D.metrics.total_countries],['Species',8]].map",1)
-P.write_text(html,encoding='utf-8'); print('Applied dashboard feedback HTML v3')
+# KPI order: LAST UPDATE, Search results screened, Records included, Topics, Countries, Species.
+import re
+kpi_line="kpis.innerHTML=[['Last update','13/08/2026'],['Search results screened',D.metrics.candidate_search_results_screened??'—'],['Records included',D.metrics.total_records],['Topics',D.metrics.total_topics],['Countries',D.metrics.total_countries],['Species',8]].map"
+html=re.sub(r"kpis\.innerHTML=\[\[.*?\]\]\.map",kpi_line,html,count=1,flags=re.S)
+P.write_text(html,encoding='utf-8'); print('Applied dashboard feedback HTML v4')
