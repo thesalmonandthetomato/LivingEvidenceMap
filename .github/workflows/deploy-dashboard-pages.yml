@@ -25,7 +25,7 @@ jobs:
       - name: Download dashboard artifact
         uses: actions/download-artifact@v4
         with:
-          name: github-pages
+          name: dashboard-pages
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ github.event.workflow_run.id }}
