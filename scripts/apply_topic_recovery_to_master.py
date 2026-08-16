@@ -5,9 +5,9 @@ import csv
 from collections import defaultdict
 from pathlib import Path
 
-MASTER = Path('data/reference/salmon_evidence_map.csv')
+MASTER = Path('data/master/current/living_evidence_map_master.csv')
 TOPICS = Path('topic_artifact/topic_assignments.csv')
-OUT = Path('data/reference/salmon_evidence_map_topic_repaired.csv')
+OUT = Path('data/master/candidates/living_evidence_map_master_topic_repaired.csv')
 
 
 def read_csv(path):
@@ -48,21 +48,15 @@ def main():
     if 'record_id' not in cols:
         raise SystemExit('Master has no record_id column')
 
-    # Never add records. Never use the 1381-record update here.
     master_ids = {norm(r.get('record_id')) for r in master if norm(r.get('record_id'))}
     topic_ids = set(topics)
     absent = sorted(topic_ids - master_ids)
     if absent:
         raise SystemExit(f'{len(absent)} topic-recovery IDs are not present in the authoritative master; refusing to add records. First IDs: {", ".join(absent[:20])}')
 
-    if 'topic_path_ids' not in cols:
-        cols.append('topic_path_ids')
-    if 'topic_hierarchy_paths' not in cols:
-        cols.append('topic_hierarchy_paths')
-    if 'topic_review_required' not in cols:
-        cols.append('topic_review_required')
-    if 'topic_review_reason' not in cols:
-        cols.append('topic_review_reason')
+    for col in ['topic_path_ids', 'topic_hierarchy_paths', 'topic_review_required', 'topic_review_reason']:
+        if col not in cols:
+            cols.append(col)
 
     repaired = 0
     already_complete = 0
@@ -77,7 +71,6 @@ def main():
             continue
         existing = norm(r.get('topic_hierarchy_paths'))
         existing_ids = norm(r.get('topic_path_ids'))
-        # Recovery is intended to fill gaps. Do not overwrite an existing non-empty hierarchy.
         if existing and existing_ids:
             already_complete += 1
             continue
@@ -90,6 +83,7 @@ def main():
     if missing_topic_output:
         raise SystemExit(f'{len(missing_topic_output)} topic-recovery records have no completed hierarchy output: {", ".join(missing_topic_output[:20])}')
 
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     with OUT.open('w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=cols, extrasaction='ignore')
         w.writeheader()
@@ -99,7 +93,7 @@ def main():
     print(f'Authoritative master records: {len(master)}')
     print(f'Topic artifact rows: {topic_rows}')
     print(f'Topic records: {topic_records}')
-    print(f'Topic IDs absent from master: 0')
+    print('Topic IDs absent from master: 0')
     print(f'Records repaired with 153-topic set: {repaired}')
     print(f'Records already complete and preserved: {already_complete}')
     print(f'Output records: {len(master)}')
