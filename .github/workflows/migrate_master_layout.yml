@@ -1,0 +1,95 @@
+name: Migrate master data to canonical layout
+
+on:
+  push:
+    paths:
+      - '.github/workflows/migrate_master_layout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Move authoritative master and legacy master files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p data/master/current data/master/archive/legacy_reference data/archive/topic_recovery_2026-08-16
+
+          test -f data/reference/salmon_evidence_map.csv
+          git mv data/reference/salmon_evidence_map.csv data/master/current/living_evidence_map_master.csv
+
+          # Preserve all dated master snapshots/manifests in a clearly named archive.
+          for f in data/reference/salmon_evidence_map_*.csv; do
+            [ -e "$f" ] || continue
+            git mv "$f" data/master/archive/legacy_reference/
+          done
+
+          if [ -d data/reference/archive ]; then
+            for f in data/reference/archive/salmon_evidence_map_*.csv; do
+              [ -e "$f" ] || continue
+              git mv "$f" data/master/archive/legacy_reference/
+            done
+          fi
+
+          # The completed 153-record topic-recovery working set is historical audit material,
+          # not a production input. Preserve it, but remove it from the active assignments area.
+          if [ -d data/assignments/recovery ]; then
+            git mv data/assignments/recovery data/archive/topic_recovery_2026-08-16/recovery
+          fi
+
+          cat > data/master/archive/README.md <<'EOF'
+          # Master archive
+
+          This directory contains previous versions of the authoritative master and provenance snapshots.
+          Files here are archival only and must not be used as the production master.
+
+          The current production master is always:
+
+          `data/master/current/living_evidence_map_master.csv`
+          EOF
+
+          cat > data/archive/topic_recovery_2026-08-16/README.md <<'EOF'
+          # Topic recovery archive — 2026-08-16
+
+          Historical working files from the completed 153-record topic reconstruction.
+          Retained for provenance and audit. These files are not production master inputs.
+          EOF
+
+      - name: Verify canonical master
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f data/master/current/living_evidence_map_master.csv
+          test ! -f data/reference/salmon_evidence_map.csv
+          python3 - <<'PY'
+          import csv
+          p='data/master/current/living_evidence_map_master.csv'
+          with open(p, newline='', encoding='utf-8-sig') as f:
+              r=csv.reader(f)
+              header=next(r)
+              rows=sum(1 for _ in r)
+          assert rows > 0, 'Canonical master is empty'
+          print(f'Canonical master rows: {rows:,}')
+          print('Canonical master header fields:', len(header))
+          PY
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/master data/reference data/archive
+          if git diff --cached --quiet; then
+            echo 'No migration changes required.'
+            exit 0
+          fi
+          git commit -m 'Reorganize master data and archive legacy working files'
+          git push
