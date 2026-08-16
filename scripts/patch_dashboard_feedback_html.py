@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Final dashboard presentation patch."""
 from pathlib import Path
+import re
 P=Path('docs/index.html'); html=P.read_text(encoding='utf-8')
 INTRO='''<p class="project-description">The Living Evidence Map is a scoping review of research articles on aquaculture of all salmon species, including Atlantic and Pacific salmon and rainbow trout, across all production stages. The map was originally populated by manual screening of &gt;19,000 records and is now maintained using validated machine screening and content annotation, supported by LLMs (OpenAI GPT-5-mini). For further information on the wider project, see <a href="https://www.thesalmonandthetomato.org" style="color:#fff">The Salmon and the Tomato</a>. This project was coordinated by Dr Neal Haddaway.</p>'''
 old_intro='<p>An interactive view of the living evidence map. The map is updated automatically, with human oversight on a weekly basis. Data are sourced from <a href="https://www.lens.org" style="color:#fff">www.lens.org</a>.</p>'
 if old_intro in html: html=html.replace(old_intro,INTRO,1)
-else:
-    import re
-    html=re.sub(r'<p class="project-description">.*?</p>',INTRO,html,count=1,flags=re.S)
+else: html=re.sub(r'<p class="project-description">.*?</p>',INTRO,html,count=1,flags=re.S)
 html=html.replace('<h2>Master database</h2>','<h2>Database</h2>',1).replace('Search title, abstract or record ID…','Search title or abstract…',1)
 old_head='<th data-sort="record_id">Record ↕</th><th data-sort="title">Title ↕</th><th data-sort="year">Year ↕</th><th data-sort="species">Species ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th><th>Citation</th>'
 new_head='<th data-sort="title">Title &amp; summary ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="topics">Topics ↕</th>'
@@ -24,7 +23,6 @@ function table(){let a=recordsFor(),k=state.sort,d=state.dir==='desc'?-1:1;a.sor
 html=html[:start]+table_fn+'\n'+html[end:]
 marker='.table td{padding:9px;border-top:1px solid #e8eeee;vertical-align:top}'
 css='.project-description{max-width:1050px;margin:14px 0 10px;color:#dce7e7;line-height:1.55}.table{min-width:1200px}.summary{max-width:620px;line-height:1.4;margin-top:5px}.record-doi{font-size:11px;margin-top:5px}.record-doi a{color:var(--mid)}.topic-pill{white-space:normal;line-height:1.35}.tree-row{align-items:flex-start}.tree-description{display:block;color:var(--mid);font-size:12px;line-height:1.4;margin:2px 0 8px 31px;max-width:820px}.tree-name{font-weight:700}.kpis{margin:-10px auto 26px}'
-import re
 html=re.sub(r'\.project-description\{[^}]*\}',css.split('.table')[0].rstrip(),html,count=1)
 if '.kpis{margin:-10px auto 26px}' not in html: html=html.replace('</style>','.kpis{margin:-10px auto 26px}</style>',1)
 old_countries="Object.keys(D.country_iso3_counts||{}).forEach(c=>tableCountry.add(new Option(c,c)));"
@@ -53,4 +51,7 @@ tree_fn=r'''function tree(){const root=document.getElementById('tree');root.inne
 html=html[:start]+tree_fn+'\n'+html[end:]
 kpi_line="kpis.innerHTML=[['Last update','13/08/2026'],['Search results screened',D.metrics.candidate_search_results_screened??'—'],['Records included',D.metrics.total_records],['Topics',D.metrics.total_topics],['Countries',D.metrics.total_countries],['Species',8]].map"
 html=re.sub(r"kpis\.innerHTML=\[\[.*?\]\]\.map",kpi_line,html,count=1,flags=re.S)
-P.write_text(html,encoding='utf-8'); print('Applied dashboard feedback HTML v5: hierarchical topic filtering and heatmap levels fixed')
+# Topic hierarchy visual redesign: top-level topics are cards; child levels are inset rows; descriptions are distinct callout boxes.
+tree_css='''.topic-hierarchy-intro{max-width:900px}.tree{padding:4px 2px 8px}.tree>ul{padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px}.tree>ul>li{margin:0;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px 12px;box-shadow:0 3px 12px #2c454a10;border-left:5px solid var(--pale)}.tree>ul>li:nth-child(4n+1){border-left-color:var(--mid)}.tree>ul>li:nth-child(4n+2){border-left-color:var(--sand)}.tree>ul>li:nth-child(4n+3){border-left-color:var(--coral)}.tree>ul>li:nth-child(4n+4){border-left-color:var(--pale)}.tree>ul>li>.tree-row{min-height:34px}.tree-row{padding:2px 0}.tree-name{font-weight:750;font-size:15px;color:var(--ink)}.tree-count{background:#eef3f2;color:var(--ink);font-weight:700;border-radius:999px;padding:3px 9px;font-size:11px;min-width:34px;text-align:center}.tree-toggle{width:28px;height:28px;border-radius:8px;background:#f2f6f5!important;color:var(--ink);font-size:16px!important}.tree-toggle:hover{background:#e5edeb!important}.tree-jump{margin-left:auto;border:1px solid #cbd8d7;background:#fff;border-radius:999px;color:var(--mid);font-size:11px;padding:5px 10px}.tree-jump:hover{background:#eef3f2}.tree-description{margin:7px 0 10px 36px!important;padding:9px 11px;background:#f5f8f7;border:1px solid #e2e9e8;border-radius:9px;color:#526d72!important;font-size:12px!important;line-height:1.5!important;max-width:none!important}.tree-description:before{content:'Description';display:block;text-transform:uppercase;letter-spacing:.08em;font-size:9px;font-weight:800;color:var(--mid);margin-bottom:3px}.tree>ul>li>ul{margin:8px 0 0 13px;padding:4px 0 0 16px;border-left:2px solid #e8eeee}.tree>ul>li>ul>li{margin:7px 0;padding:7px 9px;background:#fafcfc;border:1px solid #edf2f1;border-radius:10px}.tree>ul>li>ul>li .tree-name{font-size:14px}.tree>ul>li>ul>li>ul{margin:6px 0 0 16px;padding-left:13px;border-left:1px dashed #d7e2e0}.tree>ul>li>ul>li>ul>li{margin:5px 0;padding:5px 8px;background:#fff;border-radius:8px}.tree>ul>li>ul>li>ul .tree-description{margin-left:0!important;background:#fff;border-left:3px solid #e2b8a2}.tree>ul>li>ul>li>ul .tree-jump{display:none}@media(max-width:700px){.tree>ul{grid-template-columns:1fr}.tree-jump{width:100%;margin:4px 0 0 36px}}'''
+html=html.replace('</style>',tree_css+'</style>',1)
+P.write_text(html,encoding='utf-8'); print('Applied dashboard hierarchy visual redesign')
