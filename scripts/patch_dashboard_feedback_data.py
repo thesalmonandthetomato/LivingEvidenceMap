@@ -42,15 +42,40 @@ for r in d.get('records',[]):
     for s in r.get('species',[]):
         for c in r.get('iso3',[]): sgc[norm_unspecified(s)][str(c).upper()]+=1
 d['country_iso3_species_group_counts']={s:dict(sgc[s]) for s in d['species_display_order'] if s in sgc}
-# Use record IDs as the unit of analysis: each article contributes at most once to each species x topic-level cell.
-gtc=defaultdict(lambda:defaultdict(set))
+# Rebuild the hierarchy from scratch. A record ID is the unit of analysis: one article can contribute only once to each node.
+node_ids=defaultdict(set); level_ids=defaultdict(lambda:defaultdict(set)); species_level_ids=defaultdict(lambda:defaultdict(set)); terminal_ids=defaultdict(set)
 for r in d.get('records',[]):
-    rid=str(r.get('record_id','')); paths={tuple(p) for p in r.get('topic_paths',[])}
-    for s in r.get('species',[]):
-        s=norm_unspecified(s)
-        for path in paths:
-            for level in range(1,len(path)+1): gtc[str(level)][(s,' > '.join(path[:level]))].add(rid)
-d['species_group_topic_level_counts']={lev:{f'{s}|||{t}':len(ids) for (s,t),ids in vals.items()} for lev,vals in gtc.items()}
-d['metrics']['records_without_topics']=sum(1 for r in d.get('records',[]) if not r.get('topic_paths'))
+    rid=str(r.get('record_id','')).strip()
+    if not rid: continue
+    unique_paths={tuple(clean(x) for x in p if clean(x)) for p in r.get('topic_paths',[]) if any(clean(x) for x in p)}
+    for path in unique_paths:
+        for depth in range(1,len(path)+1):
+            prefix=path[:depth]; full=' > '.join(prefix); node_ids[full].add(rid); level_ids[depth][full].add(rid)
+            for s in r.get('species',[]): species_level_ids[depth][(norm_unspecified(s),full)].add(rid)
+        terminal_ids[path[-1]].add(rid)
+# Build a tree whose node counts are exactly the unique-record cardinality for that full path.
+tree={}
+for full,ids in node_ids.items():
+    parts=full.split(' > '); parent=tree
+    for name in parts:
+        node=parent.setdefault(name,{'name':name,'count':0,'children':{}}); parent=node['children']
+    # Assign below after the tree structure exists.
+for full,ids in node_ids.items():
+    parts=full.split(' > '); parent=tree
+    for name in parts:
+        parent[name]['count']=len(node_ids[' > '.join(parts[:parts.index(name)+1])]) if parts.index(name)==0 else len(node_ids[' > '.join(parts[:parts.index(name)+1])])
+        parent=parent[name]['children']
+# The loop above is safe for unique names only within a path; set counts again directly to avoid any ambiguity from repeated labels.
+def assign_counts(obj,prefix=[]):
+    for name,node in obj.items():
+        full=' > '.join(prefix+[name]); node['count']=len(node_ids.get(full,set())); assign_counts(node['children'],prefix+[name])
+assign_counts(tree)
+d['topic_tree']=tree
+d['topic_level_counts']={str(level):{topic:len(ids) for topic,ids in sorted(vals.items())} for level,vals in sorted(level_ids.items())}
+d['species_topic_level_counts']={str(level):{f'{s}|||{topic}':len(ids) for (s,topic),ids in vals.items()} for level,vals in sorted(species_level_ids.items())}
+d['species_group_topic_level_counts']=dict(d['species_topic_level_counts'])
+d['topic_counts']={topic:len(ids) for topic,ids in terminal_ids.items()}
+d['metrics']['total_topics']=len(node_ids); d['metrics']['records_without_topics']=sum(1 for r in d.get('records',[]) if not r.get('topic_paths'))
+d['topic_level_labels']={str(i):('Top-level topic' if i==1 else 'Topic level '+str(i)) for i in sorted(level_ids)}
 DASH.write_text(json.dumps(d,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
-print(f"Dashboard presentation data fixed: records={len(d.get('records',[])):,}; named species={d['metrics']['total_species']}; species displayed individually={len(d['species_display_order'])}; database topics use ' > ' hierarchy paths; country names={len(country_names):,}; heatmap cells use unique record IDs")
+print(f"Dashboard data fixed: {len(d.get('records',[])):,} records; hierarchy nodes={len(node_ids):,}; unique-record topic counts rebuilt; heatmap counts rebuilt")
