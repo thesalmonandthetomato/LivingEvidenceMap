@@ -3,11 +3,11 @@ Canonical ontology paths: 133
 Canonical ontology depth distribution: {3: 133}
 
 FIELD topic_hierarchy_paths:
-  total parsed paths: 9,024
+  total parsed paths: 42,513
   unique paths: 133
-  depth distribution: {3: 9024}
+  depth distribution: {3: 42513}
   unique paths NOT in ontology: 0
   records with unmapped paths: 0
 
-Path-ID/text mismatch findings: 5,220
+Path-ID/text mismatch findings: 0
 Most common unmapped paths by field:
