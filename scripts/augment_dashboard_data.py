@@ -25,37 +25,28 @@ for r in records:
     paths=r.get('topic_paths',[])
     if paths:
         unique_paths={tuple(path) for path in paths}
-        unique_nodes_by_level=defaultdict(set)
+        # Each article contributes at most once to each distinct hierarchy prefix.
         unique_prefixes=set()
         for path in unique_paths:
-            for depth,name in enumerate(path,1):
-                unique_nodes_by_level[depth].add(name)
-                unique_prefixes.add(tuple(path[:depth]))
-        # Count each hierarchy node once per record, even if several assigned paths share it.
+            for depth in range(1,len(path)+1): unique_prefixes.add(tuple(path[:depth]))
         for prefix in unique_prefixes:
             parent=tree
             for name in prefix:
                 node=parent.setdefault(name,{'name':name,'count':0,'children':{}})
                 parent=node['children']
-        for depth,names in unique_nodes_by_level.items():
-            for name in names:
-                node=tree.get(name) if depth==1 else None
-                level_counts[str(depth)][name]+=1
-            for s in r['species']:
-                for name in names: species_level[str(depth)][(s,name)]+=1
-        # Increment tree counts by traversing each unique prefix once.
-        for prefix in unique_prefixes:
-            parent=tree
-            for name in prefix:
-                parent[name]['count']+=1
-                parent=parent[name]['children']
+            # Increment only the node represented by this prefix, never its ancestors.
+            parent_node=tree
+            for name in prefix[:-1]: parent_node=parent_node[name]['children']
+            parent_node[prefix[-1]]['count']+=1
+            level=str(len(prefix)); full_path=' > '.join(prefix)
+            level_counts[level][full_path]+=1
+            for s in r['species']: species_level[level][(s,full_path)]+=1
         deepest=max(len(x) for x in unique_paths)
         terminal.update({path[-1] for path in unique_paths if len(path)==deepest})
     else:
         levels={}
         for k,v in r.items():
-            if k.startswith('topic_level_') and isinstance(v,list) and v:
-                levels.setdefault(k.rsplit('_',1)[1],[]).extend(v)
+            if k.startswith('topic_level_') and isinstance(v,list) and v: levels.setdefault(k.rsplit('_',1)[1],[]).extend(v)
         if levels:
             deepest=max(int(i) for i in levels)
             for i,vals in levels.items():
@@ -67,9 +58,12 @@ for r in records:
 
 d['species_counts']=dict(sc.most_common())
 d['country_iso3_species_counts']={s:dict(c) for s,c in cs.items()}
-d['topic_counts']=dict(terminal.most_common()); d['metrics']['total_topics']=sum(terminal.values()); d['metrics']['total_species']=len(d['species_counts'])
+d['topic_counts']=dict(terminal.most_common())
+d['metrics']['total_topics']=sum(terminal.values())
+d['metrics']['total_species']=len(d['species_counts'])
 d['topic_level_counts']={k:dict(v.most_common()) for k,v in sorted(level_counts.items(),key=lambda x:int(x[0]))}
 d['species_topic_level_counts']={lev:{f'{s}|||{t}':n for (s,t),n in c.items()} for lev,c in sorted(species_level.items(),key=lambda x:int(x[0]))}
-d['topic_tree']=tree; d['topic_level_labels']={str(i):('Top-level topic' if i==1 else 'Topic level '+str(i)) for i in range(1,max([int(x) for x in level_counts] or [1])+1)}
+d['topic_tree']=tree
+d['topic_level_labels']={str(i):('Top-level topic' if i==1 else 'Topic level '+str(i)) for i in range(1,max([int(x) for x in level_counts] or [1])+1)}
 p.write_text(json.dumps(d,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
-print('Augmented dashboard data:',len(records),'records;',len(d['species_counts']),'species;',sum(terminal.values()),'unique finest-topic record assignments')
+print('Augmented dashboard data:',len(records),'records;',len(d['species_counts']),'species; hierarchy counts are unique articles per node')
