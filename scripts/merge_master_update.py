@@ -3,7 +3,13 @@
 import csv
 from collections import defaultdict
 from pathlib import Path
-MASTER=Path('data/reference/salmon_evidence_map.csv'); UPDATE=Path('data/updates/2026-08-13_lens/records_after_species_geography_adjudication.csv'); TOPICS=Path('topic_artifact/topic_assignments.csv'); OUT=Path('data/reference/salmon_evidence_map_2026-08-14.csv'); MANIFEST=Path('data/reference/salmon_evidence_map_2026-08-14_manifest.csv')
+
+MASTER=Path('data/master/current/living_evidence_map_master.csv')
+UPDATE=Path('data/updates/2026-08-13_lens/records_after_species_geography_adjudication.csv')
+TOPICS=Path('topic_artifact/topic_assignments.csv')
+OUT=Path('data/master/candidates/living_evidence_map_master_2026-08-14.csv')
+MANIFEST=Path('data/master/candidates/living_evidence_map_master_2026-08-14_manifest.csv')
+
 def read_csv(p):
     with p.open(newline='',encoding='utf-8-sig') as f:
         r=csv.DictReader(f); return list(r),list(r.fieldnames or [])
@@ -65,6 +71,8 @@ def topic_map(p):
         if n(r.get('review_required')).lower() in {'true','1','yes'}: d[k]['review']=True
         if n(r.get('review_reason')): d[k]['reasons'].add(n(r['review_reason']))
     return d,len(rows),len(d)
+
+OUT.parent.mkdir(parents=True, exist_ok=True)
 master,mcols=read_csv(MASTER); update,ucols=read_csv(UPDATE); topics,trows,trecs=topic_map(TOPICS)
 if not update: raise SystemExit('Update is empty')
 master_original=len(master); master,master_decisions=resolve_known_master_duplicates(master)
@@ -92,4 +100,14 @@ if duplicate_count(final): raise SystemExit('Candidate master contains duplicate
 with MANIFEST.open('w',newline='',encoding='utf-8') as f:
     w=csv.writer(f); w.writerow(['metric','value']); w.writerows([['master_records_original',master_original],['master_records_after_known_duplicate_resolution',len(master)],['master_duplicate_decisions',len(master_decisions)],['update_records',len(update)],['final_records',len(final)],['topic_assignment_rows',trows],['topic_records_with_output',trecs],['records_missing_topic_assignment',0],['within_update_duplicates_detected',0],['update_vs_master_duplicates_detected',0],['candidate_duplicate_identity_keys',0],['source_master',str(MASTER)],['source_update',str(UPDATE)],['source_topics',str(TOPICS)]])
     for k,row,reason in master_decisions: w.writerow(['master_duplicate_resolution',f'{k} | retained output row {row} | {reason}'])
-print(f'Master records original: {master_original}'); print(f'Known master duplicate decisions: {len(master_decisions)}'); print(f'Master records after cleanup: {len(master)}'); print(f'Update records: {len(update)}'); print(f'Final candidate records: {len(final)}'); print(f'Topic assignment rows: {trows}'); print(f'Topic records with output: {trecs}'); print('Records missing topic assignment: 0'); print('Within-update duplicates: 0'); print('Update-vs-master duplicates: 0'); print('Candidate duplicate identity keys: 0')
+print(f'Master records original: {master_original}')
+print(f'Known master duplicate decisions: {len(master_decisions)}')
+print(f'Master records after cleanup: {len(master)}')
+print(f'Update records: {len(update)}')
+print(f'Final candidate records: {len(final)}')
+print(f'Topic assignment rows: {trows}')
+print(f'Topic records with output: {trecs}')
+print('Records missing topic assignment: 0')
+print('Within-update duplicates: 0')
+print('Update-vs-master duplicates: 0')
+print('Candidate duplicate identity keys: 0')
