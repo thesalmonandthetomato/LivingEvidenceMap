@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
-"""Dashboard presentation patch: keep database intact; improve hierarchy and heatmap."""
+"""Dashboard presentation patch.
+
+The database presentation is kept at the approved working baseline. This patch
+only changes topic-hierarchy presentation and heatmap navigation.
+"""
 from pathlib import Path
 import re
-P=Path('docs/index.html'); html=P.read_text(encoding='utf-8')
-# IMPORTANT: this patch intentionally does not replace or alter database rendering/filtering.
-# Single-column topic cards.
+P=Path('docs/index.html')
+html=P.read_text(encoding='utf-8')
+# Keep the existing database rendering/filtering code intact.
+# Topic hierarchy: one card per line and visually distinct descriptions.
 html=re.sub(r'\.tree>ul\{[^}]*\}', '.tree>ul{padding:0;display:block}', html, count=1)
 if '.tree>ul>li{margin:' not in html:
     html=html.replace('</style>', '.tree>ul>li{display:block;margin:0 0 14px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px 12px;box-shadow:0 3px 12px #2c454a10;border-left:5px solid var(--mid)}.tree>ul>li:nth-child(4n+2){border-left-color:var(--sand)}.tree>ul>li:nth-child(4n+3){border-left-color:var(--coral)}.tree>ul>li:nth-child(4n+4){border-left-color:var(--pale)}</style>',1)
-# Distinct topic-description callout.
 if '.tree-description{' not in html:
     html=html.replace('</style>', '.tree-description{display:block;margin:7px 0 10px 34px;padding:8px 12px;background:#f4f7f6;border-left:3px solid var(--mid);border-radius:8px;color:#53676b;font-size:12px;line-height:1.5;max-width:900px}.tree-description::before{content:"DESCRIPTION";display:block;font-size:9px;font-weight:800;letter-spacing:.08em;color:var(--mid);margin-bottom:3px}</style>',1)
-# Heatmap: explicit, clickable branch buttons; the database remains untouched.
+# Heatmap branch navigation.
 start=html.index('function heat(){'); end=html.index('function tree(){',start)
 heat_fn=r'''function heat(){const el=document.getElementById('heatmap');el.innerHTML='';const lev=heatLevel.value||'1',sp=heatSpecies.value,limit=+heatLimit.value,counts=D.species_group_topic_level_counts?.[lev]||D.species_topic_level_counts?.[lev]||{};const allPaths=[...new Set(Object.keys(counts).map(k=>k.split('|||').slice(1).join('|||')))];const branch=heatTop.value==='__all__'?'':heatTop.value;const topics=(branch?allPaths.filter(p=>p.startsWith(branch+' > ')).map(p=>p.slice(branch.length+3).split(' > ')[0]).filter((x,i,a)=>a.indexOf(x)===i).map(x=>branch+' > '+x):allPaths.map(p=>p.split(' > ')[0]).filter((x,i,a)=>a.indexOf(x)===i)).sort((a,b)=>a.localeCompare(b)).slice(0,limit);const nav=document.createElement('div');nav.className='heat-nav';nav.innerHTML='<span class="heat-path">'+(branch?esc(branch):'Top-level topics')+'</span>'+(branch?'<button class="heat-nav-btn" id="heatBack">← Back</button>':'')+'<span class="heat-help">Click a topic button to drill down.</span>';el.appendChild(nav);const buttons=document.createElement('div');buttons.className='heat-topic-buttons';topics.forEach(t=>{const b=document.createElement('button');b.className='heat-topic-button';b.textContent=t.split(' > ').slice(-1)[0];b.title=t;b.onclick=()=>{heatTop.value=t;heat()};buttons.appendChild(b)});el.appendChild(buttons);if(branch){document.getElementById('heatBack').onclick=()=>{const p=branch.split(' > ');heatTop.value=p.length>1?p.slice(0,-1).join(' > '):'__all__';heat()}}const species=sp==='__all__'?(D.species_display_order||Object.keys(D.species_counts)):[sp],cw=110,ch=34,left=190,bottom=180,w=Math.max(1000,left+topics.length*cw+20),h=70+species.length*ch+bottom,svg=d3.select(el).append('svg').attr('width',w).attr('height',h);const max=d3.max(species.flatMap(s=>topics.map(t=>counts[`${s}|||${t}`]||0)))||1,color=d3.scaleSequential(d3.interpolateRgbBasis([palette[2],palette[1],palette[0],palette[5]])).domain([1,max]);species.forEach((s,i)=>topics.forEach((t,j)=>{const n=counts[`${s}|||${t}`]||0;svg.append('rect').attr('x',left+j*cw).attr('y',40+i*ch).attr('width',cw).attr('height',ch).attr('fill',n===0?'#f8f9f8':color(n)).attr('class','heat-cell').on('click',()=>setFilter({species:s,topic:t})).on('mousemove',e=>showTip(e,`<b>${esc(s==='Unspecified species'?'Unspecified salmon':s)}</b><br>${esc(t)}<br>${fmt(n)} unique articles`)).on('mouseleave',hideTip)}));svg.selectAll('.slabel').data(species).join('text').attr('x',left-8).attr('y',(s,i)=>40+i*ch+22).attr('text-anchor','end').attr('class','axis').text(s=>s==='Unspecified species'?'Unspecified salmon':s);svg.selectAll('.tlabel').data(topics).join('text').attr('x',(t,i)=>left+i*cw+cw/2).attr('y',40+species.length*ch+20).attr('text-anchor','middle').attr('class','axis').text(t=>t.split(' > ').slice(-1)[0].length>32?t.split(' > ').slice(-1)[0].slice(0,30)+'…':t.split(' > ').slice(-1)[0])}'''
 html=html[:start]+heat_fn+'\n'+html[end:]
 if '.heat-topic-buttons{' not in html:
     html=html.replace('</style>', '.heat-topic-buttons{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}.heat-topic-button{border:1px solid var(--line);border-radius:999px;background:#fff;padding:6px 11px;cursor:pointer;font-size:12px}.heat-topic-button:hover{background:#f0f5f3}.heat-nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 9px;padding:8px 12px;background:#f5f8f7;border:1px solid var(--line);border-radius:10px}.heat-nav-btn{border:1px solid var(--line);border-radius:999px;background:#fff;padding:5px 12px;cursor:pointer}.heat-path{font-weight:700}.heat-help{font-size:12px;color:var(--mid);margin-left:auto}</style>',1)
 P.write_text(html,encoding='utf-8')
-print('Database preserved; topic hierarchy restored with descriptions; heatmap drill-down controls added')
+print('Approved database baseline preserved; hierarchy and heatmap remain separately patched')
