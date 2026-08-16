@@ -1,6 +1,5 @@
 name: Build evidence-map dashboard
 
-# Rebuild trigger: ensure the current GitHub Pages configuration is republished.
 on:
   workflow_dispatch:
   push:
@@ -74,7 +73,6 @@ jobs:
           html=p.read_text(encoding='utf-8')
           html=html.replace("?'#f0f2f1':color", "?'#f8f9f8':color")
           p.write_text(html,encoding='utf-8')
-          print('Enforced near-white heatmap zero colour')
           PY
       - name: Stamp dashboard HTML and bust dashboard-data cache
         run: |
@@ -85,10 +83,8 @@ jobs:
           html = p.read_text(encoding='utf-8')
           build_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
           html = html.replace("d3.json('dashboard.json')", f"d3.json('dashboard.json?v={build_id}')")
-          marker = f'<!-- dashboard-build: {build_id} -->'
-          html = marker + '\n' + html
+          html = f'<!-- dashboard-build: {build_id} -->\n' + html
           p.write_text(html, encoding='utf-8')
-          print(f'Stamped dashboard HTML: {build_id}')
           PY
       - name: Validate generated dashboard JavaScript
         run: |
@@ -100,9 +96,12 @@ jobs:
           PY
           node --check /tmp/dashboard.js
       - name: Package dashboard for Pages deployment
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
+          name: dashboard-pages
           path: docs
+          if-no-files-found: error
+          retention-days: 7
       - name: Commit generated dashboard files
         run: |
           git config user.name 'github-actions[bot]'
@@ -120,6 +119,5 @@ jobs:
               git rebase --abort || true
               sleep 3
             done
-            echo 'Could not push dashboard update after retries.'
             exit 1
           fi
