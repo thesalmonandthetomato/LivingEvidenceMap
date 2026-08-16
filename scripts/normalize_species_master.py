@@ -3,28 +3,24 @@
 import csv, re
 from pathlib import Path
 
-MASTER = Path('data/reference/salmon_evidence_map.csv')
-OUT = Path('data/reference/salmon_evidence_map_species_normalized.csv')
+MASTER = Path('data/master/current/living_evidence_map_master.csv')
+OUT = Path('data/master/candidates/living_evidence_map_master_species_normalized.csv')
 
 SPECIES_COLUMNS = [
     'final_species', 'deterministic_species', 'farmed_species',
     'species', 'species_name', 'species_assignment'
 ]
 
-
 def canonical(value: str) -> str:
     s = str(value or '').strip()
     if not s:
         return ''
     key = re.sub(r'\s+', ' ', s).strip().lower()
-    # Collapse all historical/LLM variants to one generic code.
     if 'unspecified' in key and any(x in key for x in ('salmon', 'salmonid', 'species')):
         return 'Unspecified species'
-    # Preserve the requested canonical spelling/capitalisation.
     if key == 'rainbow salmon':
         return 'Rainbow salmon'
     return s
-
 
 def normalise_cell(value: str) -> str:
     parts = [p.strip() for p in re.split(r'\s*;\s*', str(value or '')) if p.strip()]
@@ -55,13 +51,16 @@ for row in rows:
             row[col] = new
             changed += 1
 
+OUT.parent.mkdir(parents=True, exist_ok=True)
 with OUT.open('w', newline='', encoding='utf-8') as f:
     w = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
     w.writeheader()
     for row in rows:
         w.writerow(row)
 
-if len(rows) != sum(1 for _ in csv.DictReader(OUT.open(newline='', encoding='utf-8-sig'))):
+with OUT.open(newline='', encoding='utf-8-sig') as f:
+    out_rows = sum(1 for _ in csv.DictReader(f))
+if len(rows) != out_rows:
     raise SystemExit('Row-count validation failed')
 
 print(f'Rows: {len(rows):,}')
