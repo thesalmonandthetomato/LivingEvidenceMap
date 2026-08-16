@@ -1,5 +1,6 @@
 name: Build evidence-map dashboard
 
+# Rebuild trigger: ensure the current GitHub Pages configuration is republished.
 on:
   workflow_dispatch:
   push:
