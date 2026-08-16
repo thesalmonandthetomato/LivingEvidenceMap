@@ -13,6 +13,7 @@ on:
       - 'scripts/patch_dashboard_topics_and_heat.py'
       - 'scripts/patch_dashboard_feedback_data.py'
       - 'scripts/patch_dashboard_feedback_html.py'
+      - 'scripts/patch_dashboard_heatmap_ux.py'
       - 'scripts/augment_dashboard_data.py'
       - 'scripts/normalise_dashboard_data.py'
       - 'scripts/validate_dashboard_data.py'
@@ -65,6 +66,8 @@ jobs:
         run: python scripts/patch_dashboard_topics_and_heat.py
       - name: Apply final dashboard presentation feedback
         run: python scripts/patch_dashboard_feedback_html.py
+      - name: Apply hierarchical heatmap drill-down UX
+        run: python scripts/patch_dashboard_heatmap_ux.py
       - name: Enforce near-white zero heatmap colour
         run: |
           python - <<'PY'
@@ -84,8 +87,7 @@ jobs:
           build_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
           html = html.replace("d3.json('dashboard.json')", f"d3.json('dashboard.json?v={build_id}')")
           html = f'<!-- dashboard-build: {build_id} -->\n' + html
-          p.write_text(html, encoding='utf-8')
-          PY
+          p.write_text(html,encoding='utf-8')
       - name: Validate generated dashboard JavaScript
         run: |
           python - <<'PY'
@@ -106,7 +108,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/dashboard.json docs/index.html state/dashboard_missing_topics.txt state/topic_hierarchy_audit.csv state/topic_hierarchy_audit_summary.txt scripts/build_dashboard_html_v2.py scripts/patch_dashboard_topics_and_heat.py scripts/patch_dashboard_feedback_data.py scripts/patch_dashboard_feedback_html.py
+          git add docs/dashboard.json docs/index.html state/dashboard_missing_topics.txt state/topic_hierarchy_audit.csv state/topic_hierarchy_audit_summary.txt scripts/build_dashboard_html_v2.py scripts/patch_dashboard_topics_and_heat.py scripts/patch_dashboard_feedback_data.py scripts/patch_dashboard_feedback_html.py scripts/patch_dashboard_heatmap_ux.py
           if git diff --cached --quiet; then
             echo 'Dashboard files unchanged.'
           else
