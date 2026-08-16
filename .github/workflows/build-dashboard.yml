@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'scripts/build_dashboard.py'
+      - 'scripts/enforce_v3_dashboard_topics.py'
       - 'scripts/build_dashboard_html_v2.py'
       - 'scripts/augment_dashboard_citations.py'
       - 'scripts/patch_dashboard_citations.py'
@@ -37,6 +38,8 @@ jobs:
           fetch-depth: 1
       - name: Build dashboard data
         run: python scripts/build_dashboard.py
+      - name: Enforce authoritative V3 topic paths
+        run: python scripts/enforce_v3_dashboard_topics.py
       - name: Add bibliographic citation metadata
         run: python scripts/augment_dashboard_citations.py
       - name: Normalise species and finest-topic metrics
