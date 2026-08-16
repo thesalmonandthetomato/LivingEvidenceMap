@@ -105,8 +105,6 @@ jobs:
           d='${{ steps.dates.outputs.update_date }}'
           n='${{ steps.dates.outputs.next_date }}'
           sed -i "s/2026-08-13/${d}/g; s/2026-08-14/${n}/g" scripts/run_lens_update.R R/run_update_topic_classification.R scripts/merge_master_update.py scripts/annotate_lens_update.R
-          # Uncertain relevance records are enriched before human adjudication;
-          # they are held from master promotion by the review gate below.
           sed -i 's/final_screening_decision == "retain"/final_screening_decision %in% c("retain", "uncertain")/' scripts/run_lens_update.R
 
       - name: Run deduplication, relevance, screening, species and geography
@@ -140,22 +138,10 @@ jobs:
           set -euo pipefail
           d="data/updates/${{ steps.dates.outputs.update_date }}_lens"
           review=0
-          if [ -f "$d/screening_uncertain.csv" ]; then
-            n=$(tail -n +2 "$d/screening_uncertain.csv" | wc -l)
-            review=$((review+n))
-          fi
-          if [ -f "$d/geography_review_queue.csv" ]; then
-            n=$(tail -n +2 "$d/geography_review_queue.csv" | wc -l)
-            review=$((review+n))
-          fi
-          if [ -f "$d/annotation_adjudication.csv" ]; then
-            n=$(tail -n +2 "$d/annotation_adjudication.csv" | grep -E ',(UNRESOLVED|TRUE),' | wc -l || true)
-            review=$((review+n))
-          fi
-          if [ -f "$d/topic_classification.csv" ]; then
-            n=$(tail -n +2 "$d/topic_classification.csv" | grep -E ',(TRUE|UNCERTAIN|UNRESOLVED),' | wc -l || true)
-            review=$((review+n))
-          fi
+          if [ -f "$d/screening_uncertain.csv" ]; then review=$((review+$(tail -n +2 "$d/screening_uncertain.csv" | wc -l))); fi
+          if [ -f "$d/geography_review_queue.csv" ]; then review=$((review+$(tail -n +2 "$d/geography_review_queue.csv" | wc -l))); fi
+          if [ -f "$d/annotation_adjudication.csv" ]; then review=$((review+$(tail -n +2 "$d/annotation_adjudication.csv" | grep -E ',(UNRESOLVED|TRUE),' | wc -l || true))); fi
+          if [ -f "$d/topic_classification.csv" ]; then review=$((review+$(tail -n +2 "$d/topic_classification.csv" | grep -E ',(TRUE|UNCERTAIN|UNRESOLVED),' | wc -l || true))); fi
           echo "review_count=$review" >> "$GITHUB_OUTPUT"
           if [ "$review" -gt 0 ]; then
             echo "Human review required for $review exception rows; master promotion is held."
@@ -172,12 +158,13 @@ jobs:
         run: |
           set -euo pipefail
           d='${{ steps.dates.outputs.next_date }}'
-          mkdir -p data/reference/archive
-          cp data/reference/salmon_evidence_map.csv "data/reference/archive/salmon_evidence_map_${d}_premerge.csv"
-          cp "data/reference/salmon_evidence_map_${d}.csv" data/reference/salmon_evidence_map.csv
+          mkdir -p data/master/archive data/master/current
+          cp data/master/current/living_evidence_map_master.csv "data/master/archive/living_evidence_map_master_${d}_premerge.csv"
+          cp "data/master/candidates/living_evidence_map_master_${d}.csv" data/master/current/living_evidence_map_master.csv
+          cp "data/master/candidates/living_evidence_map_master_${d}_manifest.csv" "data/master/archive/living_evidence_map_master_${d}_manifest.csv"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/reference/salmon_evidence_map.csv "data/reference/salmon_evidence_map_${d}_manifest.csv" "data/reference/archive/salmon_evidence_map_${d}_premerge.csv"
+          git add data/master
           git commit -m "Promote validated weekly master ${d}"
           git push
 
@@ -216,5 +203,6 @@ jobs:
           path: |
             data/updates/${{ steps.dates.outputs.update_date }}_lens/
             outputs/lens_harvest/
+            data/master/candidates/
           if-no-files-found: warn
           retention-days: 90
