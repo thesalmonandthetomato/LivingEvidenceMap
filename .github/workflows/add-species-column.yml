@@ -1,0 +1,55 @@
+name: Add species column to dashboard database
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  add-species:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: add-species-dashboard-column
+          fetch-depth: 1
+
+      - name: Snapshot database and presentation
+        run: |
+          cp docs/dashboard.json /tmp/dashboard-before-species.json
+          sha256sum data/master/current/living_evidence_map_master.csv docs/index.html docs/topic-radial.js > /tmp/protected.sha256
+
+      - name: Add species field
+        run: python scripts/add_species_to_dashboard_json.py
+
+      - name: Validate species-only change
+        run: |
+          python scripts/validate_dashboard_species_only.py
+          sha256sum -c /tmp/protected.sha256
+
+      - name: Verify exact database scope
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          before=json.loads(Path('/tmp/dashboard-before-species.json').read_text())
+          after=json.loads(Path('docs/dashboard.json').read_text())
+          assert before.keys()==after.keys()
+          assert len(before['records'])==len(after['records'])
+          for b,a in zip(before['records'],after['records']):
+              assert set(a)==set(b)|{'species'}
+              for k in b: assert a[k]==b[k]
+          print('All existing dashboard fields unchanged; species added only.')
+          PY
+
+      - name: Commit dashboard JSON only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/dashboard.json
+          git diff --cached --stat
+          git diff --cached --name-only
+          git commit -m 'Add species to dashboard database records'
+          git push origin add-species-dashboard-column
