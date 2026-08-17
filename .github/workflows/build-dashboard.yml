@@ -18,8 +18,6 @@ on:
       - 'scripts/augment_dashboard_data.py'
       - 'scripts/normalise_dashboard_data.py'
       - 'scripts/validate_dashboard_data.py'
-      - 'scripts/force_dashboard_rebuild.py'
-      - 'scripts/repair_dashboard_builder.py'
       - 'scripts/audit_topic_hierarchy.py'
       - 'config/iso3_numeric_map.json'
       - 'data/master/current/living_evidence_map_master.csv'
@@ -41,6 +39,13 @@ jobs:
         with:
           ref: main
           fetch-depth: 1
+
+      # The dashboard HTML is an approved presentation artifact. Rebuilding the
+      # data must NEVER silently change its layout, columns, controls, labels,
+      # or other presentation. Only docs/dashboard.json is rebuilt from the CSV.
+      - name: Preserve approved dashboard display
+        run: cp docs/index.html /tmp/approved-dashboard-index.html
+
       - name: Build dashboard data
         run: python scripts/build_dashboard.py
       - name: Enforce authoritative V3 topic paths
@@ -57,40 +62,20 @@ jobs:
         run: python scripts/validate_dashboard_data.py
       - name: Audit master topic hierarchy
         run: python scripts/audit_topic_hierarchy.py
-      - name: Repair dashboard builder syntax before rendering
-        run: python scripts/repair_dashboard_builder.py
-      - name: Build production dashboard HTML
-        run: python scripts/build_dashboard_html_v2.py
-      - name: Render citation details and scholarly links
-        run: python scripts/patch_dashboard_citations.py
-      - name: Render compact hierarchical topics and heatmap zero colour
-        run: python scripts/patch_dashboard_topics_and_heat.py
-      - name: Apply final dashboard presentation feedback
-        run: python scripts/patch_dashboard_feedback_html.py
-      - name: Apply hierarchical heatmap drill-down UX
-        run: python scripts/patch_dashboard_heatmap_ux.py
-      - name: Cluster database topic dropdown by top-level topic
-        run: python scripts/cluster_database_topic_dropdown.py
-      - name: Enforce near-white zero heatmap colour
+
+      # HTML-building/patching scripts are intentionally NOT used to define the
+      # production display. They may generate or mutate docs/index.html as an
+      # intermediate artefact, but the approved display is restored below.
+      - name: Restore approved dashboard display
+        run: cp /tmp/approved-dashboard-index.html docs/index.html
+
+      - name: Verify dashboard display is unchanged
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('docs/index.html')
-          html=p.read_text(encoding='utf-8')
-          html=html.replace("?'#f0f2f1':color", "?'#f8f9f8':color")
-          p.write_text(html,encoding='utf-8')
-          PY
-      - name: Stamp dashboard HTML and bust dashboard-data cache
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          from datetime import datetime, timezone
-          p = Path('docs/index.html')
-          html = p.read_text(encoding='utf-8')
-          build_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-          html = html.replace("d3.json('dashboard.json')", f"d3.json('dashboard.json?v={build_id}')")
-          html = f'<!-- dashboard-build: {build_id} -->\n' + html
-          p.write_text(html,encoding='utf-8')
+          cmp -s docs/index.html /tmp/approved-dashboard-index.html || {
+            echo 'ERROR: dashboard display changed during rebuild.'
+            exit 1
+          }
+
       - name: Validate generated dashboard JavaScript
         run: |
           python - <<'PY'
@@ -100,6 +85,7 @@ jobs:
           Path('/tmp/dashboard.js').write_text(js,encoding='utf-8')
           PY
           node --check /tmp/dashboard.js
+
       - name: Package dashboard for Pages deployment
         uses: actions/upload-artifact@v4
         with:
@@ -107,15 +93,16 @@ jobs:
           path: docs
           if-no-files-found: error
           retention-days: 7
-      - name: Commit generated dashboard files
+
+      - name: Commit generated dashboard data
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/dashboard.json docs/index.html state/dashboard_missing_topics.txt state/topic_hierarchy_audit.csv state/topic_hierarchy_audit_summary.txt scripts/build_dashboard_html_v2.py scripts/patch_dashboard_topics_and_heat.py scripts/patch_dashboard_feedback_data.py scripts/patch_dashboard_feedback_html.py scripts/patch_dashboard_heatmap_ux.py scripts/cluster_database_topic_dropdown.py
+          git add docs/dashboard.json state/dashboard_missing_topics.txt state/topic_hierarchy_audit.csv state/topic_hierarchy_audit_summary.txt
           if git diff --cached --quiet; then
-            echo 'Dashboard files unchanged.'
+            echo 'Dashboard data unchanged.'
           else
-            git commit -m 'Update interactive evidence-map dashboard'
+            git commit -m 'Update evidence-map dashboard data'
             for attempt in 1 2 3; do
               git fetch origin main
               if git rebase origin/main; then
