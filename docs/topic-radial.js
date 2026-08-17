@@ -3,7 +3,8 @@
 
   function init() {
     const host = document.getElementById('topicRadial');
-    if (!host || typeof d3 === 'undefined' || !window.D || !Array.isArray(D.records)) return false;
+    // D is a top-level lexical binding in index.html, not window.D.
+    if (!host || typeof d3 === 'undefined' || typeof D === 'undefined' || !Array.isArray(D.records)) return false;
 
     host.innerHTML = '';
     host.style.setProperty('width', '480px', 'important');
@@ -83,10 +84,6 @@
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('role', 'img')
       .attr('aria-label', 'Interactive radial topic hierarchy showing unique article counts')
-      .style('setProperty', 'width', width + 'px', 'important')
-      .style('setProperty', 'height', height + 'px', 'important')
-      .style('setProperty', 'max-width', width + 'px')
-      .style('setProperty', 'max-height', height + 'px')
       .append('g')
       .attr('transform', `translate(${width / 2},${height / 2})`);
 
@@ -162,9 +159,7 @@
     }
 
     function selectTopic(d) {
-      if (typeof window.setFilter === 'function') {
-        window.setFilter({ topic: d.data.key });
-      }
+      if (typeof window.setFilter === 'function') window.setFilter({ topic: pathLabel(d) });
       center.select('.topic-radial-center-title').text(d.data.name);
       center.select('.topic-radial-center-count').text(d3.format(',')(d.data.count));
       center.select('.topic-radial-center-sub').text('unique articles');
