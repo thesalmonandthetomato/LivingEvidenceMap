@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Remove false AIA/ATG country annotations caused by the Anguilla taxon."""
+"""Remove false country annotations caused by taxon/place-name confusion."""
 from __future__ import annotations
 
 import csv
@@ -13,6 +13,8 @@ AUDIT = Path("data/master/archive/country_annotation_correction_2026-08-17.csv")
 BAD = {"", "na", "n/a", "nan", "null", "none"}
 TARGET_ISO = {"AIA", "ATG"}
 TARGET_NAMES = {"anguilla", "antigua and barbuda", "antigua"}
+MANUAL_ISO = {"JE", "IM"}
+MANUAL_NAMES = {"jersey", "isle of man"}
 
 
 def split_values(value):
@@ -86,27 +88,61 @@ id_field = id_fields[0] if id_fields else None
 if not iso_fields and not country_fields:
     raise SystemExit("No country fields found in authoritative master")
 
+# The user has identified exactly two false territorial annotations. Fail closed
+# rather than silently changing any additional Jersey/Isle of Man records.
+manual_indices = set()
+for i, row in enumerate(rows):
+    values = []
+    for f in iso_fields + country_fields:
+        values.extend(split_values(row.get(f, "")))
+    lowered = {v.lower() for v in values}
+    if lowered & ({x.lower() for x in MANUAL_ISO} | MANUAL_NAMES):
+        manual_indices.add(i)
+
+if len(manual_indices) != 2:
+    raise SystemExit(
+        f"Expected exactly 2 false Jersey/Isle of Man records, found {len(manual_indices)}; no changes made."
+    )
+
 changes = []
-for row in rows:
+for i, row in enumerate(rows):
     is_taxon, species_context = taxon_context(row, fields)
-    if not is_taxon:
+    is_manual = i in manual_indices
+    if not is_taxon and not is_manual:
         continue
 
     old_iso = {f: row.get(f, "") for f in iso_fields}
     old_country = {f: row.get(f, "") for f in country_fields}
     changed = False
+    reasons = []
 
-    for f in iso_fields:
-        new, did = remove_targets(row.get(f, ""), TARGET_ISO)
-        if did:
-            row[f] = new
-            changed = True
+    if is_taxon:
+        for f in iso_fields:
+            new, did = remove_targets(row.get(f, ""), TARGET_ISO)
+            if did:
+                row[f] = new
+                changed = True
+        for f in country_fields:
+            new, did = remove_targets(row.get(f, ""), TARGET_NAMES)
+            if did:
+                row[f] = new
+                changed = True
+        if changed:
+            reasons.append("Removed AIA/ATG country annotation where the record contains the Anguilla taxon")
 
-    for f in country_fields:
-        new, did = remove_targets(row.get(f, ""), TARGET_NAMES)
-        if did:
-            row[f] = new
-            changed = True
+    if is_manual:
+        for f in iso_fields:
+            new, did = remove_targets(row.get(f, ""), MANUAL_ISO)
+            if did:
+                row[f] = new
+                changed = True
+        for f in country_fields:
+            new, did = remove_targets(row.get(f, ""), MANUAL_NAMES)
+            if did:
+                row[f] = new
+                changed = True
+        if changed:
+            reasons.append("Removed user-confirmed false Jersey/Isle of Man country annotation; no GBR reassignment made")
 
     if changed:
         changes.append({
@@ -116,11 +152,11 @@ for row in rows:
             "new_iso3": json.dumps({f: row.get(f, "") for f in iso_fields}, ensure_ascii=False, sort_keys=True),
             "old_country": json.dumps(old_country, ensure_ascii=False, sort_keys=True),
             "new_country": json.dumps({f: row.get(f, "") for f in country_fields}, ensure_ascii=False, sort_keys=True),
-            "reason": "Removed AIA/ATG country annotation where the record contains the Anguilla taxon",
+            "reason": "; ".join(reasons),
         })
 
 if not changes:
-    print("No Anguilla/AIA/ATG country confusions found; master unchanged.")
+    print("No country corrections required; master unchanged.")
     raise SystemExit(0)
 
 AUDIT.parent.mkdir(parents=True, exist_ok=True)
