@@ -45,7 +45,6 @@
     const data = toHierarchy(root);
     const width = 576;
     const height = 576;
-    // Keep the working 576px container, but enlarge the actual donut geometry by 20%.
     const radius = Math.min(width, height) / 2 - 18;
     const hierarchy = d3.hierarchy(data);
     hierarchy.sum(d => d.children && d.children.length ? 0 : d.count);
@@ -95,6 +94,12 @@
     function hideTip() { const tip = document.getElementById('tip'); if (tip) tip.style.display = 'none'; }
     const resetButton = document.getElementById('topicRadialReset');
     if (resetButton) resetButton.onclick = clearHighlight;
+
+    // The main dashboard declares D with `let`, so it is not on window.D.
+    // The hierarchical heatmap initialiser expects window.D; expose the same
+    // in-memory object here and initialise the heatmap once D is available.
+    window.D = D;
+    if (typeof window.configureHeat === 'function') window.configureHeat();
     return true;
   }
 
