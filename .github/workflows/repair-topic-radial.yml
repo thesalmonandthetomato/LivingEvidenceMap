@@ -1,0 +1,65 @@
+name: Deploy radial topic hierarchy
+
+on:
+  push:
+    paths:
+      - 'docs/topic-radial.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Snapshot database files
+        run: |
+          sha256sum data/master/current/living_evidence_map_master.csv > /tmp/master.before
+          if [ -f docs/dashboard.json ]; then sha256sum docs/dashboard.json > /tmp/dashboard.before; else : > /tmp/dashboard.before; fi
+
+      - name: Inject radial renderer into existing dashboard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('docs/index.html')
+          s = p.read_text(encoding='utf-8')
+          tag = '<script src="./topic-radial.js"></script>'
+          if tag not in s:
+              marker = '</body>'
+              if marker not in s:
+                  raise SystemExit('Could not find </body> in docs/index.html')
+              s = s.replace(marker, tag + marker, 1)
+              p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Verify database files are unchanged
+        run: |
+          sha256sum -c /tmp/master.before
+          if [ -s /tmp/dashboard.before ]; then sha256sum -c /tmp/dashboard.before; fi
+
+      - name: Verify only the dashboard HTML was patched
+        run: |
+          git diff -- docs/index.html
+          changed=$(git status --porcelain | awk '{print $2}')
+          echo "$changed"
+          if [ "$(printf '%s\n' "$changed" | grep -v '^docs/index.html$' | grep -v '^docs/topic-radial.js$' | grep -v '^.github/workflows/repair-topic-radial.yml$' | sed '/^$/d' | wc -l)" -ne 0 ]; then
+            echo 'Unexpected files changed'; exit 1
+          fi
+
+      - name: Commit patched dashboard
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/index.html
+          if git diff --cached --quiet; then
+            echo 'No dashboard patch required.'
+          else
+            git commit -m 'Fix radial topic hierarchy renderer'
+            git push
+          fi
