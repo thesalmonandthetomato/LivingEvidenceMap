@@ -53,12 +53,27 @@ assign_primary_country <- function(mentions) {
     stringr::str_detect(context, stringr::regex(pattern, ignore_case = TRUE))
   }
 
+  # Anguilla is both a country name and a biological genus (e.g.
+  # Anguilla anguilla). When the context is taxonomic, neither Anguilla nor
+  # Antigua and Barbuda should be retained as a study-country inference.
+  anguilla_taxon_context <- function(context) {
+    if (!nzchar(context)) return(FALSE)
+    stringr::str_detect(
+      context,
+      stringr::regex("\\banguilla\\s+[a-z][a-z-]+\\b", ignore_case = TRUE)
+    )
+  }
+
   country_mentions <- country_mentions |>
     dplyr::mutate(
       publication_or_vendor_artefact = stringr::str_detect(context_lower, artefact_pattern),
-      species_adjective = mapply(species_adjective, context_lower, matched_text_lower)
+      species_adjective = mapply(species_adjective, context_lower, matched_text_lower),
+      anguilla_taxon = mapply(anguilla_taxon_context, context_lower),
+      anguilla_country_confusion = anguilla_taxon &
+        stringr::str_to_lower(country_name) %in% c("anguilla", "antigua and barbuda")
     ) |>
-    dplyr::filter(!publication_or_vendor_artefact, !species_adjective)
+    dplyr::filter(!publication_or_vendor_artefact, !species_adjective,
+                  !anguilla_country_confusion)
 
   strong_location_pattern <- paste(
     c("conducted in", "conducted at", "study was carried out in",
