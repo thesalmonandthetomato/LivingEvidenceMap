@@ -100,7 +100,64 @@
     // in-memory object here and initialise the heatmap once D is available.
     window.D = D;
     if (typeof window.configureHeat === 'function') window.configureHeat();
+
+    // The species values already exist in D.records. This presentation-only
+    // patch adds that existing field to the database table; it does not modify
+    // D, dashboard.json, the master CSV, or any filters/data.
+    installSpeciesColumn();
     return true;
+  }
+
+  function installSpeciesColumn() {
+    const styleId = 'species-column-style';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = '.database-species-cell{white-space:normal;min-width:150px}.database-species-cell .pill{margin:2px 2px 2px 0}';
+      document.head.appendChild(style);
+    }
+
+    const normalise = value => String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const findRecord = row => {
+      const cells = row.querySelectorAll('td');
+      if (!cells.length) return null;
+      const first = normalise(cells[0].textContent);
+      if (!first) return null;
+      return D.records.find(r => {
+        const title = normalise(r.title);
+        return title && (first.startsWith(title) || first.includes(title));
+      }) || null;
+    };
+
+    const apply = () => {
+      const table = document.querySelector('#database table.table');
+      const theadRow = table && table.querySelector('thead tr');
+      const tbody = table && table.querySelector('tbody');
+      if (!theadRow || !tbody) return;
+
+      if (!theadRow.querySelector('th[data-species-column="true"]')) {
+        const th = document.createElement('th');
+        th.textContent = 'Species';
+        th.setAttribute('data-species-column', 'true');
+        theadRow.insertBefore(th, theadRow.children[1] || null);
+      }
+
+      tbody.querySelectorAll('tr').forEach(row => {
+        if (row.querySelector('td[data-species-column="true"]')) return;
+        const record = findRecord(row);
+        const td = document.createElement('td');
+        td.className = 'database-species-cell';
+        td.setAttribute('data-species-column', 'true');
+        const species = record && Array.isArray(record.species) ? record.species : (record && record.species ? [record.species] : []);
+        td.innerHTML = species.map(s => `<span class="pill">${escapeHtml(s)}</span>`).join('');
+        row.insertBefore(td, row.children[1] || null);
+      });
+    };
+
+    apply();
+    const observer = new MutationObserver(apply);
+    const target = document.getElementById('database');
+    if (target) observer.observe(target, { childList: true, subtree: true });
   }
 
   function escapeHtml(value) { return String(value ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
