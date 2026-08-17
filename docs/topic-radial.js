@@ -57,9 +57,9 @@
     }
 
     const data = toHierarchy(root);
-    const width = 720;
-    const height = 720;
-    const radius = Math.min(width, height) / 2 - 28;
+    const width = 560;
+    const height = 560;
+    const radius = Math.min(width, height) / 2 - 22;
 
     const hierarchy = d3.hierarchy(data);
     // Give angular space according to the number of unique articles represented by each branch.
