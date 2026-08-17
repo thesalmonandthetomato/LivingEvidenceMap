@@ -1,0 +1,37 @@
+name: Fix country taxon confusions
+
+on:
+  push:
+    paths:
+      - 'scripts/fix_country_taxon_confusions.py'
+      - '.github/workflows/fix-country-taxon-confusions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Correct false country annotations
+        run: python3 scripts/fix_country_taxon_confusions.py
+
+      - name: Commit corrected master
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          if git diff --quiet -- data/master/current/living_evidence_map_master.csv data/master/archive/country_annotation_correction_2026-08-17.csv; then
+            echo 'No country corrections required.'
+            exit 0
+          fi
+          git add data/master/current/living_evidence_map_master.csv data/master/archive/country_annotation_correction_2026-08-17.csv
+          git commit -m 'Remove false Anguilla country annotations from master'
+          git push origin HEAD:main
