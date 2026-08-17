@@ -40,11 +40,13 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      # The dashboard HTML is an approved presentation artifact. Rebuilding the
-      # data must NEVER silently change its layout, columns, controls, labels,
-      # or other presentation. Only docs/dashboard.json is rebuilt from the CSV.
-      - name: Preserve approved dashboard display
-        run: cp docs/index.html /tmp/approved-dashboard-index.html
+      # These are approved presentation artifacts. Database/data rebuilds may
+      # update docs/dashboard.json, but must never overwrite the presentation.
+      - name: Snapshot protected dashboard presentation
+        run: |
+          cp docs/index.html /tmp/approved-dashboard-index.html
+          cp docs/topic-radial.js /tmp/approved-topic-radial.js
+          sha256sum docs/index.html docs/topic-radial.js > /tmp/protected-dashboard.sha256
 
       - name: Build dashboard data
         run: python scripts/build_dashboard.py
@@ -66,13 +68,20 @@ jobs:
       # HTML-building/patching scripts are intentionally NOT used to define the
       # production display. They may generate or mutate docs/index.html as an
       # intermediate artefact, but the approved display is restored below.
-      - name: Restore approved dashboard display
-        run: cp /tmp/approved-dashboard-index.html docs/index.html
-
-      - name: Verify dashboard display is unchanged
+      - name: Restore protected dashboard presentation
         run: |
+          cp /tmp/approved-dashboard-index.html docs/index.html
+          cp /tmp/approved-topic-radial.js docs/topic-radial.js
+
+      - name: Verify protected dashboard presentation is unchanged
+        run: |
+          sha256sum -c /tmp/protected-dashboard.sha256
           cmp -s docs/index.html /tmp/approved-dashboard-index.html || {
-            echo 'ERROR: dashboard display changed during rebuild.'
+            echo 'ERROR: docs/index.html changed during rebuild.'
+            exit 1
+          }
+          cmp -s docs/topic-radial.js /tmp/approved-topic-radial.js || {
+            echo 'ERROR: docs/topic-radial.js changed during rebuild.'
             exit 1
           }
 
