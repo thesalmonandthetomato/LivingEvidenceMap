@@ -43,7 +43,8 @@ js = r'''function tree(){
   const data=toHierarchy(root),W=760,H=760,R=Math.min(W,H)/2-28;
   const svg=el.append('svg').attr('viewBox',`0 0 ${W} ${H}`).attr('aria-label','Interactive radial topic hierarchy');
   const g=svg.append('g').attr('transform',`translate(${W/2},${H/2})`);
-  const h=d3.hierarchy(data).sort((a,b)=>b.data.count-a.data.count);
+  const h=d3.hierarchy(data);
+  h.sum(d=>d.children&&d.children.length?0:d.count).sort((a,b)=>b.data.count-a.data.count);
   d3.partition().size([2*Math.PI,R])(h);
   const maxCount=d3.max(h.descendants().filter(d=>d.depth>0),d=>d.data.count)||1;
   const color=d3.scaleSequential(d3.interpolateRgbBasis(['#eef2f1','#a8bdbe','#577c84','#2c454a'])).domain([0,maxCount]);
