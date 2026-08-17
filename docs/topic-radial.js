@@ -62,7 +62,6 @@
     const radius = Math.min(width, height) / 2 - 22;
 
     const hierarchy = d3.hierarchy(data);
-    // Give angular space according to the number of unique articles represented by each branch.
     hierarchy.sum(d => d.children && d.children.length ? 0 : d.count);
     d3.partition().size([2 * Math.PI, radius])(hierarchy);
 
@@ -72,9 +71,15 @@
       .interpolator(d3.interpolateRgb('#eef2f2', '#2c454a'));
 
     const svg = d3.select(host).append('svg')
+      .attr('width', width)
+      .attr('height', height)
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('role', 'img')
       .attr('aria-label', 'Interactive radial topic hierarchy showing unique article counts')
+      .style('width', width + 'px')
+      .style('height', height + 'px')
+      .style('max-width', width + 'px')
+      .style('max-height', height + 'px')
       .append('g')
       .attr('transform', `translate(${width / 2},${height / 2})`);
 
