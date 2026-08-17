@@ -2,6 +2,9 @@ name: Add species column to dashboard database
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/add-species-column.yml'
 
 permissions:
   contents: write
