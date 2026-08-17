@@ -6,6 +6,13 @@
     if (!host || typeof d3 === 'undefined' || !window.D || !Array.isArray(D.records)) return false;
 
     host.innerHTML = '';
+    host.style.setProperty('width', '480px', 'important');
+    host.style.setProperty('height', '480px', 'important');
+    host.style.setProperty('min-height', '480px', 'important');
+    host.style.setProperty('max-width', '480px', 'important');
+    host.style.setProperty('max-height', '480px', 'important');
+    host.style.setProperty('overflow', 'hidden', 'important');
+    host.style.setProperty('flex', '0 0 480px', 'important');
 
     const records = D.records;
     const root = { name: 'All topics', key: '', level: -1, articleIds: new Set(), children: new Map() };
@@ -57,9 +64,9 @@
     }
 
     const data = toHierarchy(root);
-    const width = 560;
-    const height = 560;
-    const radius = Math.min(width, height) / 2 - 22;
+    const width = 480;
+    const height = 480;
+    const radius = Math.min(width, height) / 2 - 18;
 
     const hierarchy = d3.hierarchy(data);
     hierarchy.sum(d => d.children && d.children.length ? 0 : d.count);
@@ -76,12 +83,22 @@
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('role', 'img')
       .attr('aria-label', 'Interactive radial topic hierarchy showing unique article counts')
-      .style('width', width + 'px')
-      .style('height', height + 'px')
-      .style('max-width', width + 'px')
-      .style('max-height', height + 'px')
+      .style('setProperty', 'width', width + 'px', 'important')
+      .style('setProperty', 'height', height + 'px', 'important')
+      .style('setProperty', 'max-width', width + 'px')
+      .style('setProperty', 'max-height', height + 'px')
       .append('g')
       .attr('transform', `translate(${width / 2},${height / 2})`);
+
+    const svgNode = host.querySelector('svg');
+    if (svgNode) {
+      svgNode.style.setProperty('width', width + 'px', 'important');
+      svgNode.style.setProperty('height', height + 'px', 'important');
+      svgNode.style.setProperty('max-width', width + 'px', 'important');
+      svgNode.style.setProperty('max-height', height + 'px', 'important');
+      svgNode.style.setProperty('display', 'block', 'important');
+      svgNode.style.setProperty('flex', '0 0 ' + width + 'px', 'important');
+    }
 
     const arc = d3.arc()
       .startAngle(d => d.x0)
