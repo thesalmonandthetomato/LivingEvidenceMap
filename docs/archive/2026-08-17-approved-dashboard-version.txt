@@ -1,0 +1,16 @@
+Living Evidence Map — archived approved dashboard version
+
+Date: 2026-08-17
+
+This archive records the approved dashboard state restored on 2026-08-17.
+
+Authoritative dashboard file at the time of archiving:
+docs/index.html
+
+Immutable Git commit containing this approved version:
+215f19b6a3702bfb7d81d40f202c20464a17464c
+
+Important instruction:
+Do not modify the database presentation/code unless explicitly instructed by the project owner.
+
+This file is an archive pointer to the immutable Git version rather than a second generated copy of index.html, to avoid maintaining two divergent dashboard files.
