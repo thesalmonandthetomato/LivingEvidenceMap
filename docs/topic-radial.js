@@ -7,13 +7,13 @@
     if (!host || typeof d3 === 'undefined' || typeof D === 'undefined' || !Array.isArray(D.records)) return false;
 
     host.innerHTML = '';
-    host.style.setProperty('width', '480px', 'important');
-    host.style.setProperty('height', '480px', 'important');
-    host.style.setProperty('min-height', '480px', 'important');
-    host.style.setProperty('max-width', '480px', 'important');
-    host.style.setProperty('max-height', '480px', 'important');
+    host.style.setProperty('width', '576px', 'important');
+    host.style.setProperty('height', '576px', 'important');
+    host.style.setProperty('min-height', '576px', 'important');
+    host.style.setProperty('max-width', '576px', 'important');
+    host.style.setProperty('max-height', '576px', 'important');
     host.style.setProperty('overflow', 'hidden', 'important');
-    host.style.setProperty('flex', '0 0 480px', 'important');
+    host.style.setProperty('flex', '0 0 576px', 'important');
 
     const records = D.records;
     const root = { name: 'All topics', key: '', level: -1, articleIds: new Set(), children: new Map() };
@@ -65,8 +65,8 @@
     }
 
     const data = toHierarchy(root);
-    const width = 480;
-    const height = 480;
+    const width = 576;
+    const height = 576;
     const radius = Math.min(width, height) / 2 - 18;
 
     const hierarchy = d3.hierarchy(data);
@@ -118,14 +118,9 @@
       .on('mousemove', function (event, d) { showTip(event, d); })
       .on('mouseleave', function () { clearHighlight(); hideTip(); })
       .on('focus', function (event, d) { highlight(d); showTip(event, d); })
-      .on('blur', function () { clearHighlight(); hideTip(); })
-      .on('click', function (event, d) {
-        event.stopPropagation();
-        selectTopic(d);
-      });
+      .on('blur', function () { clearHighlight(); hideTip(); });
 
-    const center = svg.append('g').attr('class', 'topic-radial-center')
-      .on('click', () => reset());
+    const center = svg.append('g').attr('class', 'topic-radial-center');
     center.append('circle').attr('r', radius / 3.02);
     center.append('text').attr('class', 'topic-radial-center-title').attr('y', -18).text('All topics');
     center.append('text').attr('class', 'topic-radial-center-count').attr('y', 17).text(d3.format(',')(data.count));
@@ -158,24 +153,8 @@
       if (tip) tip.style.display = 'none';
     }
 
-    function selectTopic(d) {
-      if (typeof window.setFilter === 'function') window.setFilter({ topic: pathLabel(d) });
-      center.select('.topic-radial-center-title').text(d.data.name);
-      center.select('.topic-radial-center-count').text(d3.format(',')(d.data.count));
-      center.select('.topic-radial-center-sub').text('unique articles');
-      highlight(d);
-    }
-
-    function reset() {
-      if (typeof window.setFilter === 'function') window.setFilter({ topic: null }, false);
-      clearHighlight();
-      center.select('.topic-radial-center-title').text('All topics');
-      center.select('.topic-radial-center-count').text(d3.format(',')(data.count));
-      center.select('.topic-radial-center-sub').text('unique articles');
-    }
-
     const resetButton = document.getElementById('topicRadialReset');
-    if (resetButton) resetButton.onclick = reset;
+    if (resetButton) resetButton.onclick = clearHighlight;
     return true;
   }
 
