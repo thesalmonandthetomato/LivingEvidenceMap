@@ -42,8 +42,11 @@ for (i in seq_len(max_depth)) {
   raw_paths[[paste0("level", i)]] <- vapply(parts, function(x) if (length(x) >= i) str_squish(x[i]) else NA_character_, character(1))
 }
 
-# ---- High-level overview -------------------------------------------------
+# ---- High-level overview: UNIQUE RECORDS ---------------------------------
+# A record is counted once per top-level topic, regardless of how many
+# lower-level topic paths it has beneath that topic.
 top_counts <- raw_paths %>%
+  distinct(record_id, level1) %>%
   count(level1, name = "records") %>%
   arrange(records)
 
@@ -52,8 +55,8 @@ overview <- ggplot(top_counts, aes(x = records, y = reorder(level1, records))) +
   geom_text(aes(label = comma(records)), hjust = -0.12, size = 3.4, colour = palette[1]) +
   scale_x_continuous(labels = comma, expand = expansion(mult = c(0, .10))) +
   labs(title = "LivingEvidenceMap: topic distribution",
-       subtitle = "Records assigned to each top-level topic", x = "Records", y = NULL,
-       caption = "Records may be assigned to multiple topics.") +
+       subtitle = "Unique records assigned to each top-level topic", x = "Unique records", y = NULL,
+       caption = "Each record is counted once within each top-level topic; records may be assigned to multiple topics.") +
   theme_minimal(base_size = 11) +
   theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
         axis.text.y = element_text(colour = palette[1], face = "bold"),
@@ -65,7 +68,10 @@ overview <- ggplot(top_counts, aes(x = records, y = reorder(level1, records))) +
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.pdf"), overview, width = 190, height = 125, units = "mm")
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.png"), overview, width = 190, height = 125, units = "mm", dpi = 600)
 
-# ---- Radial hierarchy -----------------------------------------------------
+# ---- Radial hierarchy: TAXONOMY LABELS, NOT RECORD COUNTS ---------------
+# The radial figures are intended to show the topic hierarchy itself.
+# Angular allocation is therefore based on the number of distinct terminal
+# taxonomy labels, not on unique-record counts, and labels contain no n values.
 make_radial <- function(root, dat, file_stub) {
   d <- dat %>% filter(level1 == root)
   if (nrow(d) == 0) return(invisible(NULL))
@@ -76,33 +82,44 @@ make_radial <- function(root, dat, file_stub) {
       !is.na(level2) & level2 != "" ~ level2,
       TRUE ~ level1
     )) %>%
-    count(level2, level3, terminal, name = "records") %>%
-    arrange(level2, desc(records))
+    distinct(terminal, level2, level3)
 
-  total <- sum(d$records)
+  total <- nrow(d)
   if (total == 0) return(invisible(NULL))
 
-  parents <- d %>% group_by(level2) %>% summarise(parent_records = sum(records), .groups = "drop") %>% arrange(desc(parent_records))
-  d <- d %>% left_join(parents %>% mutate(parent_index = row_number()), by = "level2") %>% arrange(parent_index, desc(records))
-  d$start <- cumsum(c(0, head(d$records, -1))) / total * 2 * pi
-  d$end <- cumsum(d$records) / total * 2 * pi
+  parents <- d %>%
+    count(level2, name = "n_terminal") %>%
+    arrange(desc(n_terminal))
+
+  d <- d %>%
+    left_join(parents %>% mutate(parent_index = row_number()), by = "level2") %>%
+    arrange(parent_index, terminal)
+
+  d$start <- cumsum(c(0, head(rep(1, nrow(d)), -1))) / total * 2 * pi
+  d$end <- cumsum(rep(1, nrow(d))) / total * 2 * pi
   d$mid <- (d$start + d$end) / 2
 
   p <- ggplot(d) +
-    geom_rect(aes(xmin = start, xmax = end, ymin = 0.32, ymax = 0.68, fill = factor(parent_index)), colour = "white", linewidth = 0.7) +
-    geom_rect(aes(xmin = start, xmax = end, ymin = 0.68, ymax = 1.02, fill = factor(parent_index)), colour = "white", linewidth = 0.45, alpha = 0.58) +
+    geom_rect(aes(xmin = start, xmax = end, ymin = 0.32, ymax = 0.68, fill = factor(parent_index)),
+              colour = "white", linewidth = 0.7) +
+    geom_rect(aes(xmin = start, xmax = end, ymin = 0.68, ymax = 1.02, fill = factor(parent_index)),
+              colour = "white", linewidth = 0.45, alpha = 0.58) +
     coord_polar(theta = "x", clip = "off", start = pi / 2, direction = -1) +
     scale_fill_manual(values = rep(palette, length.out = nrow(parents)), guide = "none") +
-    xlim(0, 2*pi) + ylim(-0.20, 1.45) + theme_void() + theme(plot.margin = margin(18, 90, 18, 90)) +
+    xlim(0, 2*pi) + ylim(-0.20, 1.45) + theme_void() +
+    theme(plot.margin = margin(18, 90, 18, 90)) +
     annotate("text", x = 0, y = 0.16, label = root, colour = palette[1], fontface = "bold", size = 6) +
-    annotate("text", x = 0, y = 0.08, label = comma(total), colour = palette[2], size = 3.2) +
-    annotate("text", x = 0, y = 0.00, label = "topic assignments", colour = palette[2], size = 2.8)
+    annotate("text", x = 0, y = 0.08, label = "topic hierarchy", colour = palette[2], size = 3.2)
 
-  label_df <- d %>% mutate(label = paste0(terminal, " (", comma(records), ")"))
-  p <- p + geom_text(data = label_df, aes(x = mid, y = 1.18, label = label), size = 2.55, colour = palette[1], inherit.aes = FALSE)
+  # Every terminal category is labelled exactly as requested: level 2 > level 3.
+  label_df <- d %>% mutate(label = terminal)
+  p <- p + geom_text(data = label_df, aes(x = mid, y = 1.18, label = label),
+                     size = 2.55, colour = palette[1], inherit.aes = FALSE)
 
-  ggsave(file.path(out_dir, paste0(file_stub, ".pdf")), p, width = 230, height = 230, units = "mm", device = cairo_pdf)
-  ggsave(file.path(out_dir, paste0(file_stub, ".png")), p, width = 230, height = 230, units = "mm", dpi = 600)
+  ggsave(file.path(out_dir, paste0(file_stub, ".pdf")), p,
+         width = 230, height = 230, units = "mm", device = cairo_pdf)
+  ggsave(file.path(out_dir, paste0(file_stub, ".png")), p,
+         width = 230, height = 230, units = "mm", dpi = 600)
   invisible(p)
 }
 
@@ -115,5 +132,5 @@ for (i in seq_along(roots)) {
   make_radial(root, raw_paths, stub)
 }
 
-write_csv(top_counts, file.path(out_dir, "topic_top_level_counts.csv"))
+write_csv(top_counts, file.path(out_dir, "topic_top_level_unique_record_counts.csv"))
 message("Topic visualisations written to: ", out_dir)
