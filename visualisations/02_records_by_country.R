@@ -7,44 +7,22 @@
 # normalised to the nine canonical farmed-salmon categories.
 # Source: validated master evidence-map database.
 
-if (!requireNamespace("ggplot2", quietly = TRUE)) {
-  stop("Package 'ggplot2' is required. Install it before running this script.")
-}
-if (!requireNamespace("taylor", quietly = TRUE)) {
-  stop("Package 'taylor' is required for color_palette(). Install it before running this script.")
-}
+if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Package 'ggplot2' is required.")
+if (!requireNamespace("taylor", quietly = TRUE)) stop("Package 'taylor' is required for color_palette().")
 
-library(dplyr)
-library(ggplot2)
-library(readr)
-library(tidyr)
-library(here)
+library(dplyr); library(ggplot2); library(readr); library(tidyr); library(here)
 
 master_path <- here::here("data", "master", "current", "living_evidence_map_master.csv")
 gazetteer_path <- here::here("config", "global_country_gazetteer_v3.csv")
 out_dir <- here::here("visualisations")
-
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-project_palette <- taylor::color_palette(c(
-  "#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634"
-))
+project_palette <- taylor::color_palette(c("#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634"))
 
-canonical_species <- c(
-  "Atlantic salmon",
-  "Chinook salmon",
-  "Chum salmon",
-  "Coho salmon",
-  "Masu salmon",
-  "Pink salmon",
-  "Rainbow trout",
-  "Sockeye salmon",
-  "Unspecified species"
-)
+canonical_species <- c("Atlantic salmon", "Chinook salmon", "Chum salmon", "Coho salmon", "Masu salmon", "Pink salmon", "Rainbow trout", "Sockeye salmon", "Unspecified species")
 
 normalise_species <- function(x) {
-  x <- trimws(x)
-  x_lower <- tolower(x)
+  x <- trimws(x); x_lower <- tolower(x)
   dplyr::case_when(
     x_lower == "atlantic salmon" ~ "Atlantic salmon",
     x_lower == "chinook salmon" ~ "Chinook salmon",
@@ -59,77 +37,35 @@ normalise_species <- function(x) {
   )
 }
 
-master <- readr::read_csv(
-  master_path,
-  show_col_types = FALSE,
-  progress = FALSE
-)
-
-gazetteer <- readr::read_csv(
-  gazetteer_path,
-  show_col_types = FALSE,
-  progress = FALSE
-)
+master <- readr::read_csv(master_path, show_col_types = FALSE, progress = FALSE)
+gazetteer <- readr::read_csv(gazetteer_path, show_col_types = FALSE, progress = FALSE)
 
 required_master <- c("final_primary_country_iso3c", "final_species")
 missing_master <- setdiff(required_master, names(master))
-if (length(missing_master) > 0) {
-  stop("Required columns missing from master: ", paste(missing_master, collapse = ", "))
-}
-
+if (length(missing_master) > 0) stop("Required columns missing from master: ", paste(missing_master, collapse = ", "))
 required_gazetteer <- c("iso3c", "country_name")
 missing_gazetteer <- setdiff(required_gazetteer, names(gazetteer))
-if (length(missing_gazetteer) > 0) {
-  stop("Required columns missing from gazetteer: ", paste(missing_gazetteer, collapse = ", "))
-}
+if (length(missing_gazetteer) > 0) stop("Required columns missing from gazetteer: ", paste(missing_gazetteer, collapse = ", "))
 
 country_lookup <- gazetteer %>%
-  transmute(
-    iso3c = toupper(trimws(as.character(iso3c))),
-    country_name = trimws(as.character(country_name)),
-    match_type = tolower(trimws(as.character(match_type))),
-    priority = suppressWarnings(as.numeric(priority))
-  ) %>%
-  filter(
-    !is.na(iso3c), iso3c != "",
-    !is.na(country_name), country_name != "",
-    match_type %in% c("country", "country name")
-  ) %>%
+  transmute(iso3c = toupper(trimws(as.character(iso3c))), country_name = trimws(as.character(country_name)), match_type = tolower(trimws(as.character(match_type))), priority = suppressWarnings(as.numeric(priority))) %>%
+  filter(!is.na(iso3c), iso3c != "", !is.na(country_name), country_name != "", match_type %in% c("country", "country name")) %>%
   arrange(iso3c, desc(priority), country_name) %>%
   distinct(iso3c, .keep_all = TRUE) %>%
   select(iso3c, country_name)
 
 plot_data <- master %>%
-  transmute(
-    record_id = row_number(),
-    iso3c = toupper(trimws(as.character(final_primary_country_iso3c))),
-    species = trimws(as.character(final_species))
-  ) %>%
+  transmute(record_id = row_number(), iso3c = toupper(trimws(as.character(final_primary_country_iso3c))), species = trimws(as.character(final_species))) %>%
   filter(!is.na(iso3c), iso3c != "") %>%
   separate_rows(species, sep = ";") %>%
-  mutate(
-    species = normalise_species(species),
-    species = if_else(is.na(species) | species == "", "Unspecified species", species)
-  ) %>%
+  mutate(species = normalise_species(species), species = if_else(is.na(species) | species == "", "Unspecified species", species)) %>%
   distinct(record_id, species, .keep_all = TRUE) %>%
   left_join(country_lookup, by = "iso3c") %>%
-  mutate(country_name = if_else(
-    is.na(country_name) | country_name == "",
-    iso3c,
-    country_name
-  ))
+  mutate(country_name = if_else(is.na(country_name) | country_name == "", iso3c, country_name))
 
 unexpected_species <- setdiff(unique(plot_data$species), canonical_species)
-if (length(unexpected_species) > 0L) {
-  stop(
-    "Unexpected species categories after normalisation: ",
-    paste(sort(unexpected_species), collapse = ", ")
-  )
-}
+if (length(unexpected_species) > 0L) stop("Unexpected species categories after normalisation: ", paste(sort(unexpected_species), collapse = ", "))
 
-# Select the top 20 countries using record-level counts before species
-# stratification. A record assigned to multiple species contributes to each
-# corresponding species stratum, but is counted only once when ranking countries.
 top_countries <- plot_data %>%
   distinct(record_id, iso3c, country_name) %>%
   count(iso3c, country_name, name = "records", sort = TRUE) %>%
@@ -139,64 +75,20 @@ plot_data <- plot_data %>%
   semi_join(top_countries, by = c("iso3c", "country_name")) %>%
   count(country_name, species, name = "records")
 
-country_levels <- top_countries %>%
-  arrange(records, country_name) %>%
-  pull(country_name)
+country_levels <- top_countries %>% arrange(records, country_name) %>% pull(country_name)
+plot_data <- plot_data %>% mutate(country_name = factor(country_name, levels = country_levels), species = factor(species, levels = canonical_species))
 
-plot_data <- plot_data %>%
-  mutate(
-    country_name = factor(country_name, levels = country_levels),
-    species = factor(species, levels = canonical_species)
-  )
-
-# Species palette: Atlantic salmon is dark coral/pink; the seven Pacific
-# salmon categories use graduated blue-grey tones; unspecified species is
-# light pink. The supplied six-colour palette provides the anchor colours.
 pacific_values <- grDevices::colorRampPalette(as.character(project_palette[1:3]))(7L)
-fill_values <- c(
-  "Atlantic salmon" = "#e55634",
-  setNames(pacific_values, canonical_species[2:8]),
-  "Unspecified species" = "#e2b8a2"
-)
+fill_values <- c("Atlantic salmon" = "#e55634", setNames(pacific_values, canonical_species[2:8]), "Unspecified species" = "#e2b8a2")
 
 p <- ggplot(plot_data, aes(x = country_name, y = records, fill = species)) +
-  geom_col(width = 0.78, colour = "white", linewidth = 0.15) +
-  coord_flip() +
+  geom_col(width = 0.78, colour = "white", linewidth = 0.15) + coord_flip() +
   scale_fill_manual(values = fill_values, drop = FALSE) +
-  scale_y_continuous(
-    labels = scales::label_comma(),
-    expand = expansion(mult = c(0, 0.04))
-  ) +
-  labs(
-    x = NULL,
-    y = "Number of records",
-    fill = "Species"
-  ) +
+  scale_y_continuous(labels = scales::label_comma(), expand = expansion(mult = c(0, 0.04))) +
+  labs(x = NULL, y = "Number of records", fill = "Species") +
   theme_classic(base_size = 11) +
-  theme(
-    legend.position = "right",
-    legend.title = element_text(face = "bold"),
-    axis.title = element_text(face = "bold"),
-    axis.text = element_text(colour = "black"),
-    panel.grid = element_blank()
-  )
+  theme(legend.position = "right", legend.title = element_text(face = "bold"), axis.title = element_text(face = "bold"), axis.text = element_text(colour = "black"), panel.grid = element_blank())
 
-ggsave(
-  filename = file.path(out_dir, "figure_02_records_by_country.pdf"),
-  plot = p,
-  width = 190,
-  height = 135,
-  units = "mm",
-  device = cairo_pdf
-)
-
-ggsave(
-  filename = file.path(out_dir, "figure_02_records_by_country.png"),
-  plot = p,
-  width = 190,
-  height = 135,
-  units = "mm",
-  dpi = 600
-)
-
+ggsave(file.path(out_dir, "figure_02_records_by_country.pdf"), p, width = 190, height = 135, units = "mm", device = cairo_pdf)
+ggsave(file.path(out_dir, "figure_02_records_by_country.png"), p, width = 190, height = 135, units = "mm", dpi = 600)
 message("Figure 2 written to: ", out_dir)
