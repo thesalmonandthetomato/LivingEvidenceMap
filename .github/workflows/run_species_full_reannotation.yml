@@ -27,10 +27,10 @@ jobs:
         with:
           packages: any::digest,any::dplyr,any::fs,any::glmnet,any::here,any::Matrix,any::purrr,any::quanteda,any::readr,any::stringdist,any::stringi,any::stringr,any::tibble,any::tidyr,any::yaml
 
-      - name: Run deterministic species annotation from scratch
+      - name: Run species annotation in resumable checkpoints
         shell: bash
         run: |
-          mkdir -p rerun_species
+          mkdir -p rerun_species/checkpoints
           Rscript --vanilla - <<'RS'
           source('scripts/setup_pipeline.R')
           source('R/species_detect.R')
@@ -39,15 +39,63 @@ jobs:
           source('R/species_annotation.R')
           records <- readr::read_csv('data/master/current/living_evidence_map_master.csv', show_col_types = FALSE)
           species_dictionary <- readr::read_csv('config/species_dictionary.csv', show_col_types = FALSE)
-          message(sprintf('Loaded %d master records and %d species dictionary rows.', nrow(records), nrow(species_dictionary)))
           if (nrow(records) != 13389) stop(sprintf('Expected 13,389 records; found %d.', nrow(records)))
-          out <- annotate_species(records, species_dictionary, progress = TRUE)
-          readr::write_csv(out$species_mentions, 'rerun_species/species_mentions.csv', na = '')
-          readr::write_csv(out$species_assignments, 'rerun_species/species_assignments.csv', na = '')
-          readr::write_csv(out$failures, 'rerun_species/species_annotation_failures.csv', na = '')
+          chunk_size <- 250L
+          starts <- seq.int(1L, nrow(records), by = chunk_size)
+          for (start in starts) {
+            end <- min(start + chunk_size - 1L, nrow(records))
+            checkpoint <- file.path('rerun_species/checkpoints', sprintf('chunk_%05d_%05d', start, end))
+            dir.create(checkpoint, recursive = TRUE, showWarnings = FALSE)
+            marker <- file.path(checkpoint, '_COMPLETE')
+            if (file.exists(marker)) {
+              message(sprintf('Skipping completed checkpoint %d-%d', start, end))
+              next
+            }
+            message(sprintf('Annotating checkpoint %d-%d (%d records)', start, end, end-start+1L))
+            chunk <- records[start:end, , drop = FALSE]
+            out <- annotate_species(chunk, species_dictionary, progress = TRUE)
+            readr::write_csv(out$species_mentions, file.path(checkpoint, 'species_mentions.csv'), na = '')
+            readr::write_csv(out$species_assignments, file.path(checkpoint, 'species_assignments.csv'), na = '')
+            readr::write_csv(out$failures, file.path(checkpoint, 'species_annotation_failures.csv'), na = '')
+            writeLines(sprintf('completed records %d-%d', start, end), marker)
+            message(sprintf('CHECKPOINT COMPLETE: %d-%d', start, end))
+          }
           RS
 
-      - name: Compare rerun with current and historical annotations
+      - name: Assemble checkpoint outputs
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+          root=Path('rerun_species'); cp=root/'checkpoints'
+          def rows(path):
+              if not path.exists(): return []
+              with path.open(encoding='utf-8-sig',newline='') as f: return list(csv.DictReader(f))
+          def append_csv(outpath, files):
+              allrows=[]; fields=None
+              for p in files:
+                  rr=rows(p)
+                  if rr:
+                      if fields is None: fields=list(rr[0].keys())
+                      allrows.extend(rr)
+              if fields is None: return 0
+              with outpath.open('w',encoding='utf-8',newline='') as f:
+                  w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(allrows)
+              return len(allrows)
+          dirs=sorted([p for p in cp.iterdir() if p.is_dir()]) if cp.exists() else []
+          complete=[p for p in dirs if (p/'_COMPLETE').exists()]
+          mentions=append_csv(root/'species_mentions.csv',[p/'species_mentions.csv' for p in complete])
+          assignments=append_csv(root/'species_assignments.csv',[p/'species_assignments.csv' for p in complete])
+          failures=append_csv(root/'species_annotation_failures.csv',[p/'species_annotation_failures.csv' for p in complete])
+          summary={'expected_records':13389,'chunk_size':250,'completed_checkpoints':len(complete),'total_checkpoints':(13389+249)//250,'records_checkpointed':sum(min(250,13389-(i-1)*250) for i in range(1,1+len(complete))),'species_mention_rows':mentions,'species_assignment_rows':assignments,'failure_rows':failures,'complete':len(complete)==(13389+249)//250}
+          (root/'checkpoint_summary.json').write_text(json.dumps(summary,indent=2),encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Compare completed rerun with historical annotations
+        if: always()
         shell: bash
         run: |
           python - <<'PY'
@@ -55,6 +103,7 @@ jobs:
           from pathlib import Path
           out=Path('rerun_species')
           def read(p):
+              if not Path(p).exists(): return []
               with open(p,encoding='utf-8-sig',newline='') as f: return list(csv.DictReader(f))
           master=read('data/master/current/living_evidence_map_master.csv')
           assignments=read(out/'species_assignments.csv')
@@ -64,8 +113,7 @@ jobs:
           for r in assignments:
               rid=(r.get('record_id') or '').strip()
               if rid: new.setdefault(rid,[]).append(r)
-          def norm_rows(rows):
-              return tuple(sorted(set((r.get('farmed_species_id','').strip(),r.get('farmed_species','').strip()) for r in rows if r.get('farmed_species_id','').strip() or r.get('farmed_species','').strip()))))
+          def norm_rows(rows): return tuple(sorted(set((r.get('farmed_species_id','').strip(),r.get('farmed_species','').strip()) for r in rows if r.get('farmed_species_id','').strip() or r.get('farmed_species','').strip())))
           def hist_species(r):
               for k in ('final_species','species','species_annotation'):
                   if k in r and (r.get(k) or '').strip(): return (r.get(k) or '').strip()
@@ -73,17 +121,18 @@ jobs:
           discrepancies=[]
           for r in master:
               rid=(r.get('record_id') or '').strip(); nr=norm_rows(new.get(rid,[])); old=hist_species(hist.get(rid,{}))
-              discrepancies.append({'record_id':rid,'title':r.get('title',''),'new_species_ids':'; '.join(x[0] for x in nr if x[0]),'new_species':'; '.join(x[1] for x in nr if x[1]),'new_review_required':'true' if any((x.get('review_required') or '').lower()=='true' for x in new.get(rid,[])) else 'false','new_assignment_reason':'; '.join(sorted(set((x.get('assignment_reason') or '').strip() for x in new.get(rid,[]) if (x.get('assignment_reason') or '').strip()))),'historical_species':old,'historical_present':'true' if old else 'false','discrepancy_candidate':'true' if (bool(nr) != bool(old)) else 'false'})
-          with open(out/'species_comparison.csv','w',encoding='utf-8',newline='') as f:
-              w=csv.DictWriter(f,fieldnames=list(discrepancies[0])); w.writeheader(); w.writerows(discrepancies)
-          summary={'master_records':len(master),'rerun_assignment_rows':len(assignments),'rerun_failures':len(read(out/'species_annotation_failures.csv')),'records_with_new_species_assignment':sum(bool(norm_rows(new.get((r.get('record_id') or '').strip(),[]))) for r in master),'records_requiring_deterministic_review':sum(any((x.get('review_required') or '').lower()=='true' for x in new.get((r.get('record_id') or '').strip(),[])) for r in master),'historical_records_matched':sum((r.get('record_id') or '').strip() in hist for r in master),'discrepancy_candidates_presence_only':sum(x['discrepancy_candidate']=='true' for x in discrepancies)}
-          (out/'summary.json').write_text(json.dumps(summary,indent=2),encoding='utf-8')
-          print(json.dumps(summary,indent=2))
+              if rid in new or old:
+                  discrepancies.append({'record_id':rid,'title':r.get('title',''),'new_species_ids':'; '.join(x[0] for x in nr if x[0]),'new_species':'; '.join(x[1] for x in nr if x[1]),'new_review_required':'true' if any((x.get('review_required') or '').lower()=='true' for x in new.get(rid,[])) else 'false','new_assignment_reason':'; '.join(sorted(set((x.get('assignment_reason') or '').strip() for x in new.get(rid,[]) if (x.get('assignment_reason') or '').strip()))),'historical_species':old,'historical_present':'true' if old else 'false','discrepancy_candidate':'true' if (bool(nr) != bool(old)) else 'false'})
+          if discrepancies:
+              with open(out/'species_comparison.csv','w',encoding='utf-8',newline='') as f:
+                  w=csv.DictWriter(f,fieldnames=list(discrepancies[0])); w.writeheader(); w.writerows(discrepancies)
           PY
 
-      - name: Upload full rerun outputs
+      - name: Upload all available outputs and checkpoints
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: species-full-rerun-2026-08-18
           path: rerun_species/
+          if-no-files-found: warn
           retention-days: 14
