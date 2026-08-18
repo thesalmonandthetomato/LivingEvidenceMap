@@ -6,7 +6,7 @@ Authors@R:
 Description:
     Reproducible R pipeline for the salmon scoping review evidence map,
     including corpus preparation, screening, species and geography annotation,
-    adjudication, validation, and update processing.
+    adjudication, validation, update processing, and evidence visualisation.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -28,5 +28,8 @@ Imports:
     tidyr,
     yaml
 Suggests:
+    ggplot2,
+    scales,
+    taylor,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
