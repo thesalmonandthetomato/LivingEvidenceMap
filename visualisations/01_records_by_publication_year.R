@@ -6,43 +6,21 @@
 # normalised to the nine canonical farmed-salmon categories.
 # Source: validated master evidence-map database.
 
-if (!requireNamespace("ggplot2", quietly = TRUE)) {
-  stop("Package 'ggplot2' is required. Install it before running this script.")
-}
-if (!requireNamespace("taylor", quietly = TRUE)) {
-  stop("Package 'taylor' is required for color_palette(). Install it before running this script.")
-}
+if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Package 'ggplot2' is required.")
+if (!requireNamespace("taylor", quietly = TRUE)) stop("Package 'taylor' is required for color_palette().")
 
-library(dplyr)
-library(ggplot2)
-library(readr)
-library(tidyr)
-library(here)
+library(dplyr); library(ggplot2); library(readr); library(tidyr); library(here)
 
 master_path <- here::here("data", "master", "current", "living_evidence_map_master.csv")
 out_dir <- here::here("visualisations")
-
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-project_palette <- taylor::color_palette(c(
-  "#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634"
-))
+project_palette <- taylor::color_palette(c("#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634"))
 
-canonical_species <- c(
-  "Atlantic salmon",
-  "Chinook salmon",
-  "Chum salmon",
-  "Coho salmon",
-  "Masu salmon",
-  "Pink salmon",
-  "Rainbow trout",
-  "Sockeye salmon",
-  "Unspecified species"
-)
+canonical_species <- c("Atlantic salmon", "Chinook salmon", "Chum salmon", "Coho salmon", "Masu salmon", "Pink salmon", "Rainbow trout", "Sockeye salmon", "Unspecified species")
 
 normalise_species <- function(x) {
-  x <- trimws(x)
-  x_lower <- tolower(x)
+  x <- trimws(x); x_lower <- tolower(x)
   dplyr::case_when(
     x_lower == "atlantic salmon" ~ "Atlantic salmon",
     x_lower == "chinook salmon" ~ "Chinook salmon",
@@ -57,95 +35,35 @@ normalise_species <- function(x) {
   )
 }
 
-master <- readr::read_csv(
-  master_path,
-  show_col_types = FALSE,
-  progress = FALSE
-)
-
+master <- readr::read_csv(master_path, show_col_types = FALSE, progress = FALSE)
 required <- c("year", "final_species")
 missing <- setdiff(required, names(master))
-if (length(missing) > 0) {
-  stop("Required columns missing from master: ", paste(missing, collapse = ", "))
-}
+if (length(missing) > 0) stop("Required columns missing from master: ", paste(missing, collapse = ", "))
 
 plot_data <- master %>%
-  transmute(
-    record_id = row_number(),
-    publication_year = suppressWarnings(as.integer(year)),
-    species = trimws(as.character(final_species))
-  ) %>%
+  transmute(record_id = row_number(), publication_year = suppressWarnings(as.integer(year)), species = trimws(as.character(final_species))) %>%
   filter(!is.na(publication_year)) %>%
   separate_rows(species, sep = ";") %>%
-  mutate(
-    species = normalise_species(species),
-    species = if_else(is.na(species) | species == "", "Unspecified species", species)
-  ) %>%
+  mutate(species = normalise_species(species), species = if_else(is.na(species) | species == "", "Unspecified species", species)) %>%
   distinct(record_id, species, .keep_all = TRUE)
 
 unexpected_species <- setdiff(unique(plot_data$species), canonical_species)
-if (length(unexpected_species) > 0L) {
-  stop(
-    "Unexpected species categories after normalisation: ",
-    paste(sort(unexpected_species), collapse = ", ")
-  )
-}
+if (length(unexpected_species) > 0L) stop("Unexpected species categories after normalisation: ", paste(sort(unexpected_species), collapse = ", "))
 
-plot_data <- plot_data %>%
-  count(publication_year, species, name = "records") %>%
-  mutate(species = factor(species, levels = canonical_species))
+plot_data <- plot_data %>% count(publication_year, species, name = "records") %>% mutate(species = factor(species, levels = canonical_species))
 
-# Species palette: Atlantic salmon is dark coral/pink; the seven Pacific
-# salmon categories use graduated blue-grey tones; unspecified species is
-# light pink. The supplied six-colour palette provides the anchor colours.
 pacific_values <- grDevices::colorRampPalette(as.character(project_palette[1:3]))(7L)
-fill_values <- c(
-  "Atlantic salmon" = "#e55634",
-  setNames(pacific_values, canonical_species[2:8]),
-  "Unspecified species" = "#e2b8a2"
-)
+fill_values <- c("Atlantic salmon" = "#e55634", setNames(pacific_values, canonical_species[2:8]), "Unspecified species" = "#e2b8a2")
 
 p <- ggplot(plot_data, aes(x = publication_year, y = records, fill = species)) +
   geom_col(width = 0.85, colour = "white", linewidth = 0.15) +
   scale_fill_manual(values = fill_values, drop = FALSE) +
-  scale_x_continuous(
-    breaks = scales::breaks_pretty(n = 12),
-    expand = expansion(mult = c(0.005, 0.02))
-  ) +
-  scale_y_continuous(
-    labels = scales::label_comma(),
-    expand = expansion(mult = c(0, 0.04))
-  ) +
-  labs(
-    x = "Publication year",
-    y = "Number of records",
-    fill = "Species"
-  ) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 12), expand = expansion(mult = c(0.005, 0.02))) +
+  scale_y_continuous(labels = scales::label_comma(), expand = expansion(mult = c(0, 0.04))) +
+  labs(x = "Publication year", y = "Number of records", fill = "Species") +
   theme_classic(base_size = 11) +
-  theme(
-    legend.position = "right",
-    legend.title = element_text(face = "bold"),
-    axis.title = element_text(face = "bold"),
-    axis.text = element_text(colour = "black"),
-    panel.grid = element_blank()
-  )
+  theme(legend.position = "right", legend.title = element_text(face = "bold"), axis.title = element_text(face = "bold"), axis.text = element_text(colour = "black"), panel.grid = element_blank())
 
-ggsave(
-  filename = file.path(out_dir, "figure_01_records_by_publication_year.pdf"),
-  plot = p,
-  width = 190,
-  height = 120,
-  units = "mm",
-  device = cairo_pdf
-)
-
-ggsave(
-  filename = file.path(out_dir, "figure_01_records_by_publication_year.png"),
-  plot = p,
-  width = 190,
-  height = 120,
-  units = "mm",
-  dpi = 600
-)
-
+ggsave(file.path(out_dir, "figure_01_records_by_publication_year.pdf"), p, width = 190, height = 120, units = "mm", device = cairo_pdf)
+ggsave(file.path(out_dir, "figure_01_records_by_publication_year.png"), p, width = 190, height = 120, units = "mm", dpi = 600)
 message("Figure 1 written to: ", out_dir)
