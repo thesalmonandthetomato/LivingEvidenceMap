@@ -1,18 +1,16 @@
 #!/usr/bin/env Rscript
 
 # Figure 2: Number of records by the 20 most frequent study countries,
-# stacked by species.
-# Species is a semicolon-separated multi-value field; records are expanded
-# to one record-species observation before counting. Species labels are then
-# normalised to the nine canonical farmed-salmon categories.
-# Source: validated master evidence-map database.
+# stacked by species. Species and geography are taken exclusively from the
+# canonical final_species and final_primary_country_iso3c fields in the
+# corrected master.
 
 if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Package 'ggplot2' is required.")
 if (!requireNamespace("taylor", quietly = TRUE)) stop("Package 'taylor' is required for color_palette().")
 
 library(dplyr); library(ggplot2); library(readr); library(tidyr); library(here)
 
-master_path <- here::here("data", "master", "current", "living_evidence_map_master.csv")
+master_path <- here::here("data", "master", "current", "living_evidence_map_master CORRECTED.csv")
 gazetteer_path <- here::here("config", "global_country_gazetteer_v3.csv")
 out_dir <- here::here("visualisations")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -45,7 +43,7 @@ missing_master <- setdiff(required_master, names(master))
 if (length(missing_master) > 0) stop("Required columns missing from master: ", paste(missing_master, collapse = ", "))
 required_gazetteer <- c("iso3c", "country_name")
 missing_gazetteer <- setdiff(required_gazetteer, names(gazetteer))
-if (length(missing_gazetteer) > 0) stop("Required columns missing from gazetteer: ", paste(missing_gazetteer, collapse = ", "))
+if (length(missing_gazetteer) > 0) stop("Required gazetteer columns missing: ", paste(missing_gazetteer, collapse = ", "))
 
 country_lookup <- gazetteer %>%
   transmute(iso3c = toupper(trimws(as.character(iso3c))), country_name = trimws(as.character(country_name)), match_type = tolower(trimws(as.character(match_type))), priority = suppressWarnings(as.numeric(priority))) %>%
@@ -78,8 +76,6 @@ plot_data <- plot_data %>%
 country_levels <- top_countries %>% arrange(records, country_name) %>% pull(country_name)
 plot_data <- plot_data %>% mutate(country_name = factor(country_name, levels = country_levels), species = factor(species, levels = canonical_species))
 
-# Palette: Atlantic salmon dark pink; Pacific salmon species blue-grey;
-# unspecified species light pink. The requested order is Sockeye before Rainbow trout.
 pacific_values <- grDevices::colorRampPalette(as.character(project_palette[1:3]))(7L)
 fill_values <- c("Atlantic salmon" = "#e55634", setNames(pacific_values, canonical_species[2:8]), "Unspecified species" = "#e2b8a2")
 
