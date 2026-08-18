@@ -17,7 +17,7 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 project_palette <- taylor::color_palette(c("#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634"))
 
-canonical_species <- c("Atlantic salmon", "Chinook salmon", "Chum salmon", "Coho salmon", "Masu salmon", "Pink salmon", "Rainbow trout", "Sockeye salmon", "Unspecified species")
+canonical_species <- c("Atlantic salmon", "Chinook salmon", "Chum salmon", "Coho salmon", "Masu salmon", "Pink salmon", "Sockeye salmon", "Rainbow trout", "Unspecified species")
 
 normalise_species <- function(x) {
   x <- trimws(x); x_lower <- tolower(x)
@@ -28,8 +28,8 @@ normalise_species <- function(x) {
     x_lower == "coho salmon" ~ "Coho salmon",
     x_lower == "masu salmon" ~ "Masu salmon",
     x_lower == "pink salmon" ~ "Pink salmon",
-    x_lower %in% c("rainbow salmon", "rainbow trout", "steelhead", "steelhead trout") ~ "Rainbow trout",
     x_lower == "sockeye salmon" ~ "Sockeye salmon",
+    x_lower %in% c("rainbow salmon", "rainbow trout", "steelhead", "steelhead trout") ~ "Rainbow trout",
     x_lower %in% c("unspecified species", "unspecified farmed salmon", "unspecified salmon", "farmed salmon") ~ "Unspecified species",
     TRUE ~ x
   )
@@ -52,6 +52,8 @@ if (length(unexpected_species) > 0L) stop("Unexpected species categories after n
 
 plot_data <- plot_data %>% count(publication_year, species, name = "records") %>% mutate(species = factor(species, levels = canonical_species))
 
+# Palette: Atlantic salmon dark pink; Pacific salmon species blue-grey;
+# unspecified species light pink. The requested order is Sockeye before Rainbow trout.
 pacific_values <- grDevices::colorRampPalette(as.character(project_palette[1:3]))(7L)
 fill_values <- c("Atlantic salmon" = "#e55634", setNames(pacific_values, canonical_species[2:8]), "Unspecified species" = "#e2b8a2")
 
