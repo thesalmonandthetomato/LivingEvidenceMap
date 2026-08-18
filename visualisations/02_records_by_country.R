@@ -3,7 +3,8 @@
 # Figure 2: Number of records by the 20 most frequent study countries,
 # stacked by species.
 # Species is a semicolon-separated multi-value field; records are expanded
-# to one record-species observation before counting.
+# to one record-species observation before counting. Species labels are then
+# normalised to the nine canonical farmed-salmon categories.
 # Source: validated master evidence-map database.
 
 if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -28,6 +29,35 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 project_palette <- taylor::color_palette(c(
   "#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634"
 ))
+
+canonical_species <- c(
+  "Atlantic salmon",
+  "Chinook salmon",
+  "Chum salmon",
+  "Coho salmon",
+  "Masu salmon",
+  "Pink salmon",
+  "Rainbow salmon",
+  "Sockeye salmon",
+  "Unspecified species"
+)
+
+normalise_species <- function(x) {
+  x <- trimws(x)
+  x_lower <- tolower(x)
+  dplyr::case_when(
+    x_lower == "atlantic salmon" ~ "Atlantic salmon",
+    x_lower == "chinook salmon" ~ "Chinook salmon",
+    x_lower == "chum salmon" ~ "Chum salmon",
+    x_lower == "coho salmon" ~ "Coho salmon",
+    x_lower == "masu salmon" ~ "Masu salmon",
+    x_lower == "pink salmon" ~ "Pink salmon",
+    x_lower %in% c("rainbow salmon", "rainbow trout", "steelhead", "steelhead trout") ~ "Rainbow salmon",
+    x_lower == "sockeye salmon" ~ "Sockeye salmon",
+    x_lower %in% c("unspecified species", "unspecified farmed salmon", "unspecified salmon", "farmed salmon") ~ "Unspecified species",
+    TRUE ~ x
+  )
+}
 
 master <- readr::read_csv(
   master_path,
@@ -71,20 +101,17 @@ country_lookup <- gazetteer %>%
 
 plot_data <- master %>%
   transmute(
+    record_id = row_number(),
     iso3c = toupper(trimws(as.character(final_primary_country_iso3c))),
     species = trimws(as.character(final_species))
   ) %>%
   filter(!is.na(iso3c), iso3c != "") %>%
   separate_rows(species, sep = ";") %>%
   mutate(
-    species = trimws(species),
-    species = if_else(
-      is.na(species) | species == "",
-      "Unspecified species",
-      species
-    )
+    species = normalise_species(species),
+    species = if_else(is.na(species) | species == "", "Unspecified species", species)
   ) %>%
-  distinct(iso3c, species, .keep_all = TRUE) %>%
+  distinct(record_id, species, .keep_all = TRUE) %>%
   left_join(country_lookup, by = "iso3c") %>%
   mutate(country_name = if_else(
     is.na(country_name) | country_name == "",
@@ -92,19 +119,19 @@ plot_data <- master %>%
     country_name
   ))
 
-species_levels <- sort(unique(plot_data$species))
-if (length(species_levels) != 9L) {
+unexpected_species <- setdiff(unique(plot_data$species), canonical_species)
+if (length(unexpected_species) > 0L) {
   stop(
-    "Expected exactly 9 species levels after splitting final_species on ';'; found ",
-    length(species_levels), ": ", paste(species_levels, collapse = ", ")
+    "Unexpected species categories after normalisation: ",
+    paste(sort(unexpected_species), collapse = ", ")
   )
 }
 
 # Select the top 20 countries using record-level counts before species
 # stratification. A record assigned to multiple species contributes to each
-# corresponding species stratum, but is counted only once within a species.
+# corresponding species stratum, but is counted only once when ranking countries.
 top_countries <- plot_data %>%
-  distinct(iso3c, country_name) %>%
+  distinct(record_id, iso3c, country_name) %>%
   count(iso3c, country_name, name = "records", sort = TRUE) %>%
   slice_head(n = 20)
 
@@ -119,11 +146,11 @@ country_levels <- top_countries %>%
 plot_data <- plot_data %>%
   mutate(
     country_name = factor(country_name, levels = country_levels),
-    species = factor(species, levels = species_levels)
+    species = factor(species, levels = canonical_species)
   )
 
 fill_values <- grDevices::colorRampPalette(as.character(project_palette))(9L)
-fill_values <- setNames(fill_values, species_levels)
+fill_values <- setNames(fill_values, canonical_species)
 
 p <- ggplot(plot_data, aes(x = country_name, y = records, fill = species)) +
   geom_col(width = 0.78, colour = "white", linewidth = 0.15) +
