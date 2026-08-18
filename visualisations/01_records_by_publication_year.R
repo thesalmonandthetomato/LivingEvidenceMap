@@ -1,17 +1,17 @@
 #!/usr/bin/env Rscript
 
 # Figure 1: Number of records by publication year, stacked by species.
-# Species is a semicolon-separated multi-value field; records are expanded
-# to one record-species observation before counting. Species labels are then
-# normalised to the nine canonical farmed-salmon categories.
-# Source: validated master evidence-map database.
+# Species is taken exclusively from the canonical final_species field in the
+# corrected master. It is a semicolon-separated multi-value field; records are
+# expanded to one record-species observation before counting.
+# Source: corrected master evidence-map database.
 
 if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Package 'ggplot2' is required.")
 if (!requireNamespace("taylor", quietly = TRUE)) stop("Package 'taylor' is required for color_palette().")
 
 library(dplyr); library(ggplot2); library(readr); library(tidyr); library(here)
 
-master_path <- here::here("data", "master", "current", "living_evidence_map_master.csv")
+master_path <- here::here("data", "master", "current", "living_evidence_map_master CORRECTED.csv")
 out_dir <- here::here("visualisations")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -52,8 +52,6 @@ if (length(unexpected_species) > 0L) stop("Unexpected species categories after n
 
 plot_data <- plot_data %>% count(publication_year, species, name = "records") %>% mutate(species = factor(species, levels = canonical_species))
 
-# Palette: Atlantic salmon dark pink; Pacific salmon species blue-grey;
-# unspecified species light pink. The requested order is Sockeye before Rainbow trout.
 pacific_values <- grDevices::colorRampPalette(as.character(project_palette[1:3]))(7L)
 fill_values <- c("Atlantic salmon" = "#e55634", setNames(pacific_values, canonical_species[2:8]), "Unspecified species" = "#e2b8a2")
 
