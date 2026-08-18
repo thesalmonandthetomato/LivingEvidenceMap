@@ -95,8 +95,15 @@ plot_data <- plot_data %>%
   count(publication_year, species, name = "records") %>%
   mutate(species = factor(species, levels = canonical_species))
 
-fill_values <- grDevices::colorRampPalette(as.character(project_palette))(9L)
-fill_values <- setNames(fill_values, canonical_species)
+# Species palette: Atlantic salmon is dark coral/pink; the seven Pacific
+# salmon categories use graduated blue-grey tones; unspecified species is
+# light pink. The supplied six-colour palette provides the anchor colours.
+pacific_values <- grDevices::colorRampPalette(as.character(project_palette[1:3]))(7L)
+fill_values <- c(
+  "Atlantic salmon" = "#e55634",
+  setNames(pacific_values, canonical_species[2:8]),
+  "Unspecified species" = "#e2b8a2"
+)
 
 p <- ggplot(plot_data, aes(x = publication_year, y = records, fill = species)) +
   geom_col(width = 0.85, colour = "white", linewidth = 0.15) +
