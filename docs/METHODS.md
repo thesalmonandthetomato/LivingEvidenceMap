@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Living Evidence Map is maintained as a reproducible, staged pipeline for identifying, screening and annotating literature relevant to farmed salmon. The pipeline combines deterministic reference-data methods, constrained large language model (LLM) processing, automated validation and human review. Deterministic annotation is kept separate from LLM adjudication so that model-assisted decisions can be distinguished from rule-based assignments.
+The Living Evidence Map is maintained as a reproducible, staged pipeline for identifying, screening and annotating literature relevant to farmed salmon. The pipeline combines deterministic reference-data methods, constrained large language model (LLM) processing, automated validation and regular human quality assurance. Deterministic annotation is kept separate from LLM adjudication so that model-assisted decisions can be distinguished from rule-based assignments.
 
 ## Species annotation
 
@@ -28,9 +28,9 @@ Topic classification uses **GPT-5 mini (OpenAI)** accessed through the **OpenAI 
 
 Relevance screening uses the established salmon screening workflow and associated validated model resources. Screening is performed before species and geographic annotation, thereby limiting downstream annotation to the relevant target corpus. Existing validated screening decisions are retained where appropriate rather than regenerated unnecessarily during incremental updates.
 
-## Human validation
+## Human validation and quality assurance
 
-Human validation provides a quality-control layer over the automated pipeline. Manual review is targeted to records for which the deterministic rules and LLM processing do not produce a sufficiently supported decision, as well as records identified through automated validation or technical checks. Reviewers assess the underlying title and abstract together with the annotation evidence and model rationale, and the resulting decision is retained as an auditable output. Candidate update datasets are not promoted while required review items remain unresolved. This process provides oversight of model-assisted decisions while avoiding routine manual reannotation of records for which the automated workflow produces a validated result.
+Human validation was an integral component of both the development and ongoing maintenance of the evidence map, rather than being restricted to records that remained unresolved by automated methods. Regular manual data checking was undertaken at both the individual-record and dataset levels to identify erroneous, inconsistent, unexpected or missing screening and annotation assignments, and to assess the plausibility and consistency of outputs across records and successive updates. In addition to reviewing records flagged by deterministic rules, automated validation or LLM processing, manual checking was used to identify systematic patterns of error that might not be captured by record-level uncertainty flags. Findings from these checks informed refinement of the species dictionary, geographic gazetteer, assignment rules, topic ontology and model-assisted workflows where necessary. Human review therefore served two complementary functions: case-level adjudication of uncertain records and broader dataset- and pipeline-level quality assurance. This iterative process of automated processing, regular manual checking and methodological refinement provided an additional safeguard against unsupported model inference and helped maintain consistency and accuracy as the evidence map evolved.
 
 ## Incremental updating
 
