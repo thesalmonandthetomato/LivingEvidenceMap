@@ -2,6 +2,8 @@
 
 # Figure 2: Number of records by the 20 most frequent study countries,
 # stacked by species.
+# Species is a semicolon-separated multi-value field; records are expanded
+# to one record-species observation before counting.
 # Source: validated master evidence-map database.
 
 if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -14,6 +16,7 @@ if (!requireNamespace("taylor", quietly = TRUE)) {
 library(dplyr)
 library(ggplot2)
 library(readr)
+library(tidyr)
 library(here)
 
 master_path <- here::here("data", "master", "current", "living_evidence_map_master.csv")
@@ -22,7 +25,6 @@ out_dir <- here::here("visualisations")
 
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-# User-specified project palette.
 project_palette <- taylor::color_palette(c(
   "#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634"
 ))
@@ -51,8 +53,6 @@ if (length(missing_gazetteer) > 0) {
   stop("Required columns missing from gazetteer: ", paste(missing_gazetteer, collapse = ", "))
 }
 
-# Build a single ISO3-to-country-name lookup. The gazetteer contains multiple
-# geographic aliases, so retain one country-level label per ISO3 code.
 country_lookup <- gazetteer %>%
   transmute(
     iso3c = toupper(trimws(as.character(iso3c))),
@@ -74,14 +74,17 @@ plot_data <- master %>%
     iso3c = toupper(trimws(as.character(final_primary_country_iso3c))),
     species = trimws(as.character(final_species))
   ) %>%
+  filter(!is.na(iso3c), iso3c != "") %>%
+  separate_rows(species, sep = ";") %>%
   mutate(
+    species = trimws(species),
     species = if_else(
       is.na(species) | species == "",
       "Unspecified species",
       species
     )
   ) %>%
-  filter(!is.na(iso3c), iso3c != "") %>%
+  distinct(iso3c, species, .keep_all = TRUE) %>%
   left_join(country_lookup, by = "iso3c") %>%
   mutate(country_name = if_else(
     is.na(country_name) | country_name == "",
@@ -89,8 +92,19 @@ plot_data <- master %>%
     country_name
   ))
 
-# Select the top 20 countries using total record counts before species stratification.
+species_levels <- sort(unique(plot_data$species))
+if (length(species_levels) != 9L) {
+  stop(
+    "Expected exactly 9 species levels after splitting final_species on ';'; found ",
+    length(species_levels), ": ", paste(species_levels, collapse = ", ")
+  )
+}
+
+# Select the top 20 countries using record-level counts before species
+# stratification. A record assigned to multiple species contributes to each
+# corresponding species stratum, but is counted only once within a species.
 top_countries <- plot_data %>%
+  distinct(iso3c, country_name) %>%
   count(iso3c, country_name, name = "records", sort = TRUE) %>%
   slice_head(n = 20)
 
@@ -98,30 +112,18 @@ plot_data <- plot_data %>%
   semi_join(top_countries, by = c("iso3c", "country_name")) %>%
   count(country_name, species, name = "records")
 
-# Order countries by total number of records, from highest to lowest.
 country_levels <- top_countries %>%
   arrange(records, country_name) %>%
   pull(country_name)
 
 plot_data <- plot_data %>%
-  mutate(country_name = factor(country_name, levels = country_levels))
+  mutate(
+    country_name = factor(country_name, levels = country_levels),
+    species = factor(species, levels = species_levels)
+  )
 
-# Order species by overall frequency so the stack and legend remain stable.
-species_levels <- plot_data %>%
-  group_by(species) %>%
-  summarise(records = sum(records), .groups = "drop") %>%
-  arrange(desc(records), species) %>%
-  pull(species)
-
-plot_data <- plot_data %>%
-  mutate(species = factor(species, levels = species_levels))
-
-# Extend the supplied palette only if the master contains more than six species.
-fill_values <- as.character(taylor::color_palette(
-  project_palette,
-  n = max(6L, length(species_levels))
-))
-fill_values <- setNames(fill_values[seq_along(species_levels)], species_levels)
+fill_values <- grDevices::colorRampPalette(as.character(project_palette))(9L)
+fill_values <- setNames(fill_values, species_levels)
 
 p <- ggplot(plot_data, aes(x = country_name, y = records, fill = species)) +
   geom_col(width = 0.78, colour = "white", linewidth = 0.15) +
