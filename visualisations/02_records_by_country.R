@@ -37,7 +37,7 @@ canonical_species <- c(
   "Coho salmon",
   "Masu salmon",
   "Pink salmon",
-  "Rainbow salmon",
+  "Rainbow trout",
   "Sockeye salmon",
   "Unspecified species"
 )
@@ -52,7 +52,7 @@ normalise_species <- function(x) {
     x_lower == "coho salmon" ~ "Coho salmon",
     x_lower == "masu salmon" ~ "Masu salmon",
     x_lower == "pink salmon" ~ "Pink salmon",
-    x_lower %in% c("rainbow salmon", "rainbow trout", "steelhead", "steelhead trout") ~ "Rainbow salmon",
+    x_lower %in% c("rainbow salmon", "rainbow trout", "steelhead", "steelhead trout") ~ "Rainbow trout",
     x_lower == "sockeye salmon" ~ "Sockeye salmon",
     x_lower %in% c("unspecified species", "unspecified farmed salmon", "unspecified salmon", "farmed salmon") ~ "Unspecified species",
     TRUE ~ x
