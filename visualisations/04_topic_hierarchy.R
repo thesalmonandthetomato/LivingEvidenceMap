@@ -1,10 +1,10 @@
 #!/usr/bin/env Rscript
 
 # LivingEvidenceMap topic hierarchy visualisations
-# Creates one high-level topic bar chart and one labelled radial hierarchy
-# plot for each top-level topic. Uses the corrected master only.
+# Creates one unique-record high-level bar chart and one data-driven radial
+# hierarchy plot for each top-level topic.
 
-required <- c("dplyr", "ggplot2", "readr", "tidyr", "stringr", "scales", "svglite")
+required <- c("dplyr", "ggplot2", "readr", "tidyr", "stringr", "scales")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing) > 0) stop("Install required packages: ", paste(missing, collapse = ", "))
 
@@ -14,21 +14,18 @@ library(readr)
 library(tidyr)
 library(stringr)
 library(scales)
-library(svglite)
 library(here)
 
 master_path <- here::here("data", "master", "current", "living_evidence_map_master CORRECTED.csv")
 out_dir <- here::here("visualisations", "topic_hierarchy")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-
 palette <- c("#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634")
 
 master <- readr::read_csv(master_path, show_col_types = FALSE, progress = FALSE)
-required_col <- "topic_hierarchy_paths"
-if (!required_col %in% names(master)) stop("Required column missing from master: ", required_col)
+if (!"topic_hierarchy_paths" %in% names(master)) stop("Required column missing from master: topic_hierarchy_paths")
 
 raw_paths <- master %>%
-  transmute(record_id = row_number(), raw_path = as.character(.data[[required_col]])) %>%
+  transmute(record_id = row_number(), raw_path = as.character(topic_hierarchy_paths)) %>%
   filter(!is.na(raw_path), str_trim(raw_path) != "") %>%
   mutate(path = str_split(raw_path, "\\s*;\\s*")) %>%
   unnest(path) %>%
@@ -42,17 +39,15 @@ for (i in seq_len(max_depth)) {
   raw_paths[[paste0("level", i)]] <- vapply(parts, function(x) if (length(x) >= i) str_squish(x[i]) else NA_character_, character(1))
 }
 
-# ---- High-level overview: UNIQUE RECORDS ---------------------------------
-# A record is counted once per top-level topic, regardless of how many
-# lower-level topic paths it has beneath that topic.
+# ---- High-level overview: UNIQUE RECORDS -------------------------------
 top_counts <- raw_paths %>%
   distinct(record_id, level1) %>%
-  count(level1, name = "records") %>%
-  arrange(records)
+  count(level1, name = "unique_records") %>%
+  arrange(unique_records)
 
-overview <- ggplot(top_counts, aes(x = records, y = reorder(level1, records))) +
+overview <- ggplot(top_counts, aes(x = unique_records, y = reorder(level1, unique_records))) +
   geom_col(fill = palette[1], width = 0.72) +
-  geom_text(aes(label = comma(records)), hjust = -0.12, size = 3.4, colour = palette[1]) +
+  geom_text(aes(label = comma(unique_records)), hjust = -0.12, size = 3.4, colour = palette[1]) +
   scale_x_continuous(labels = comma, expand = expansion(mult = c(0, .10))) +
   labs(title = "LivingEvidenceMap: topic distribution",
        subtitle = "Unique records assigned to each top-level topic", x = "Unique records", y = NULL,
@@ -67,70 +62,88 @@ overview <- ggplot(top_counts, aes(x = records, y = reorder(level1, records))) +
 
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.pdf"), overview, width = 190, height = 125, units = "mm")
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.png"), overview, width = 190, height = 125, units = "mm", dpi = 600)
+write_csv(top_counts, file.path(out_dir, "topic_top_level_unique_record_counts.csv"))
 
-# ---- Radial hierarchy: TAXONOMY LABELS, NOT RECORD COUNTS ---------------
-# The radial figures are intended to show the topic hierarchy itself.
-# Angular allocation is therefore based on the number of distinct terminal
-# taxonomy labels, not on unique-record counts, and labels contain no n values.
+# ---- Radial hierarchy: topic-assignment frequency ------------------------
+# Every spoke is a terminal Level-2 > Level-3 category. Its radial length is
+# proportional to the number of record-topic assignments to that category.
+# Labels contain the taxonomy only (no counts).
 make_radial <- function(root, dat, file_stub) {
-  d <- dat %>% filter(level1 == root)
-  if (nrow(d) == 0) return(invisible(NULL))
-
-  d <- d %>%
+  d <- dat %>%
+    filter(level1 == root) %>%
     mutate(terminal = case_when(
       !is.na(level3) & level3 != "" ~ paste(level2, level3, sep = " > "),
       !is.na(level2) & level2 != "" ~ level2,
       TRUE ~ level1
     )) %>%
-    distinct(terminal, level2, level3)
+    count(level2, level3, terminal, name = "assignments") %>%
+    arrange(level2, desc(assignments), terminal)
 
-  total <- nrow(d)
-  if (total == 0) return(invisible(NULL))
+  if (nrow(d) == 0) return(invisible(NULL))
 
   parents <- d %>%
-    count(level2, name = "n_terminal") %>%
-    arrange(desc(n_terminal))
+    distinct(level2) %>%
+    arrange(level2) %>%
+    mutate(parent_index = row_number())
+  d <- d %>% left_join(parents, by = "level2") %>% arrange(parent_index, desc(assignments), terminal)
 
-  d <- d %>%
-    left_join(parents %>% mutate(parent_index = row_number()), by = "level2") %>%
-    arrange(parent_index, terminal)
+  # Equal angular slots keep every taxonomy label readable. Radial length is
+  # the quantitative encoding. Square-root scaling is used to preserve small
+  # categories without allowing the largest category to dominate the figure.
+  d <- d %>% mutate(value = sqrt(assignments), index = row_number(), n = n())
+  d$angle <- 2 * pi * (d$index - 0.5) / d$n
+  max_value <- max(d$value)
 
-  d$start <- cumsum(c(0, head(rep(1, nrow(d)), -1))) / total * 2 * pi
-  d$end <- cumsum(rep(1, nrow(d))) / total * 2 * pi
-  d$mid <- (d$start + d$end) / 2
+  label_df <- d %>%
+    mutate(
+      label = terminal,
+      label_radius = max_value * 1.18,
+      angle_deg = (90 - angle * 180 / pi) %% 360,
+      hjust = if_else(angle_deg > 90 & angle_deg < 270, 1, 0),
+      rotation = if_else(hjust == 1, angle_deg + 180, angle_deg)
+    )
 
-  p <- ggplot(d) +
-    geom_rect(aes(xmin = start, xmax = end, ymin = 0.32, ymax = 0.68, fill = factor(parent_index)),
-              colour = "white", linewidth = 0.7) +
-    geom_rect(aes(xmin = start, xmax = end, ymin = 0.68, ymax = 1.02, fill = factor(parent_index)),
-              colour = "white", linewidth = 0.45, alpha = 0.58) +
-    coord_polar(theta = "x", clip = "off", start = pi / 2, direction = -1) +
-    scale_fill_manual(values = rep(palette, length.out = nrow(parents)), guide = "none") +
-    xlim(0, 2*pi) + ylim(-0.20, 1.45) + theme_void() +
-    theme(plot.margin = margin(18, 90, 18, 90)) +
-    annotate("text", x = 0, y = 0.16, label = root, colour = palette[1], fontface = "bold", size = 6) +
-    annotate("text", x = 0, y = 0.08, label = "topic hierarchy", colour = palette[2], size = 3.2)
-
-  # Every terminal category is labelled exactly as requested: level 2 > level 3.
-  label_df <- d %>% mutate(label = terminal)
-  p <- p + geom_text(data = label_df, aes(x = mid, y = 1.18, label = label),
-                     size = 2.55, colour = palette[1], inherit.aes = FALSE)
+  p <- ggplot(d, aes(x = angle, y = value)) +
+    geom_col(aes(fill = factor(parent_index)),
+             width = 2 * pi / d$n * 0.84,
+             colour = "white", linewidth = 0.35) +
+    scale_fill_manual(values = setNames(rep(palette, length.out = nrow(parents)), seq_len(nrow(parents))), guide = "none") +
+    coord_polar(theta = "x", start = pi / 2, direction = -1, clip = "off") +
+    scale_y_continuous(
+      limits = c(0, max_value * 1.34), expand = c(0, 0),
+      breaks = pretty(c(0, max_value), n = 4),
+      labels = function(x) comma(round(x^2))
+    ) +
+    labs(title = root,
+         subtitle = "Radial length represents topic-assignment frequency; labels show the taxonomy.") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.title = element_blank(), axis.text.x = element_blank(), axis.ticks = element_blank(),
+      panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+      panel.grid.major.y = element_line(colour = "grey85", linewidth = 0.3),
+      plot.title = element_text(face = "bold", size = 16, colour = palette[1]),
+      plot.subtitle = element_text(size = 9.5, colour = palette[2]),
+      plot.margin = margin(30, 125, 30, 125)
+    ) +
+    geom_text(data = label_df,
+              aes(x = angle, y = label_radius, label = label, angle = rotation, hjust = hjust),
+              inherit.aes = FALSE, size = 2.55, colour = palette[1])
 
   ggsave(file.path(out_dir, paste0(file_stub, ".pdf")), p,
-         width = 230, height = 230, units = "mm", device = cairo_pdf)
+         width = 250, height = 250, units = "mm", device = cairo_pdf)
   ggsave(file.path(out_dir, paste0(file_stub, ".png")), p,
-         width = 230, height = 230, units = "mm", dpi = 600)
+         width = 250, height = 250, units = "mm", dpi = 600)
+  write_csv(d %>% select(level2, level3, terminal, assignments),
+            file.path(out_dir, paste0(file_stub, "_assignments.csv")))
   invisible(p)
 }
 
-roots <- top_counts$level1
+roots <- top_counts %>% arrange(desc(unique_records)) %>% pull(level1)
 for (i in seq_along(roots)) {
   root <- roots[i]
   safe_root <- str_replace_all(str_to_lower(root), "[^a-z0-9]+", "_")
-  suffix <- letters[i]
-  stub <- paste0("figure_04", suffix, "_radial_", safe_root)
+  stub <- paste0("figure_04", letters[i], "_radial_", safe_root)
   make_radial(root, raw_paths, stub)
 }
 
-write_csv(top_counts, file.path(out_dir, "topic_top_level_unique_record_counts.csv"))
 message("Topic visualisations written to: ", out_dir)
