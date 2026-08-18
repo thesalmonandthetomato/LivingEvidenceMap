@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
 # LivingEvidenceMap topic hierarchy visualisations
-# Creates one unique-record high-level bar chart and one data-driven radial
-# hierarchy plot for each top-level topic.
+# Creates one unique-record high-level bar chart and one readable, data-driven
+# radial hierarchy plot for each top-level topic.
 
 required <- c("dplyr", "ggplot2", "readr", "tidyr", "stringr", "scales")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
@@ -64,10 +64,13 @@ ggsave(file.path(out_dir, "figure_04a_top_level_topics.pdf"), overview, width = 
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.png"), overview, width = 190, height = 125, units = "mm", dpi = 600)
 write_csv(top_counts, file.path(out_dir, "topic_top_level_unique_record_counts.csv"))
 
-# ---- Radial hierarchy: topic-assignment frequency ------------------------
-# Every spoke is a terminal Level-2 > Level-3 category. Its radial length is
-# proportional to the number of record-topic assignments to that category.
-# Labels contain the taxonomy only (no counts).
+# ---- Radial hierarchy: assignment frequency + fully external labels ------
+# Every terminal Level-2 > Level-3 category is a spoke. Angular position is
+# categorical; radial length encodes assignment frequency. A square-root
+# transform prevents the largest categories from overwhelming small ones.
+# Labels are deliberately placed in two external columns with leader lines:
+# this avoids the severe collision produced by placing long taxonomy strings
+# around the circumference.
 make_radial <- function(root, dat, file_stub) {
   d <- dat %>%
     filter(level1 == root) %>%
@@ -81,58 +84,92 @@ make_radial <- function(root, dat, file_stub) {
 
   if (nrow(d) == 0) return(invisible(NULL))
 
-  parents <- d %>%
-    distinct(level2) %>%
-    arrange(level2) %>%
-    mutate(parent_index = row_number())
+  parents <- d %>% distinct(level2) %>% arrange(level2) %>% mutate(parent_index = row_number())
   d <- d %>% left_join(parents, by = "level2") %>% arrange(parent_index, desc(assignments), terminal)
 
-  # Equal angular slots keep every taxonomy label readable. Radial length is
-  # the quantitative encoding. Square-root scaling is used to preserve small
-  # categories without allowing the largest category to dominate the figure.
+  # Equal angular positions make the taxonomy legible; length is the data.
   d <- d %>% mutate(value = sqrt(assignments), index = row_number(), n = n())
   d$angle <- 2 * pi * (d$index - 0.5) / d$n
   max_value <- max(d$value)
+  d$x_end <- d$value * sin(d$angle)
+  d$y_end <- d$value * cos(d$angle)
 
-  label_df <- d %>%
-    mutate(
-      label = terminal,
-      label_radius = max_value * 1.18,
-      angle_deg = (90 - angle * 180 / pi) %% 360,
-      hjust = if_else(angle_deg > 90 & angle_deg < 270, 1, 0),
-      rotation = if_else(hjust == 1, angle_deg + 180, angle_deg)
-    )
+  # Put labels in two vertical columns. Within each side, preserve the angular
+  # ordering so the leader lines remain easy to follow.
+  left <- d %>% filter(x_end < 0) %>% arrange(desc(y_end))
+  right <- d %>% filter(x_end >= 0) %>% arrange(desc(y_end))
 
-  p <- ggplot(d, aes(x = angle, y = value)) +
-    geom_col(aes(fill = factor(parent_index)),
-             width = 2 * pi / d$n * 0.84,
-             colour = "white", linewidth = 0.35) +
+  assign_label_y <- function(x, min_gap) {
+    if (!length(x)) return(numeric())
+    y <- x
+    if (length(y) > 1) {
+      for (i in 2:length(y)) y[i] <- min(y[i], y[i - 1] - min_gap)
+      if (min(y) < -max_value) y <- y + (-max_value - min(y))
+      if (max(y) > max_value) y <- y - (max(y) - max_value)
+    }
+    y
+  }
+
+  min_gap <- max(max_value * 0.085, 0.55)
+  left$label_y <- assign_label_y(left$y_end, min_gap)
+  right$label_y <- assign_label_y(right$y_end, min_gap)
+  left$label_x <- -max_value * 1.20
+  right$label_x <- max_value * 1.20
+  left$hjust <- 1
+  right$hjust <- 0
+  labels <- bind_rows(left, right) %>% mutate(label = terminal)
+
+  # Leader lines terminate at the appropriate label column.
+  leaders <- labels %>%
+    mutate(x_knee = if_else(x_end < 0, -max_value * 0.98, max_value * 0.98))
+
+  # Radial grid rings labelled in the original count scale.
+  grid_values <- pretty(c(0, max_value), n = 5)
+  grid_values <- grid_values[grid_values >= 0 & grid_values <= max_value]
+  if (length(grid_values) < 2) grid_values <- c(0, max_value)
+
+  p <- ggplot() +
+    # concentric reference circles
+    geom_hline(yintercept = 0, colour = "transparent") +
+    geom_path(data = tidyr::expand_grid(r = grid_values, theta = seq(0, 2*pi, length.out = 361)) %>%
+                mutate(x = r * sin(theta), y = r * cos(theta), r = factor(r)),
+              aes(x = x, y = y, group = r), colour = "grey85", linewidth = 0.35) +
+    # data spokes
+    geom_segment(data = d,
+                 aes(x = 0, y = 0, xend = x_end, yend = y_end, colour = factor(parent_index)),
+                 linewidth = 2.2, lineend = "round") +
+    geom_point(data = d,
+               aes(x = x_end, y = y_end, fill = factor(parent_index)),
+               shape = 21, size = 2.7, stroke = 0.45, colour = "white") +
+    # leader lines and labels
+    geom_segment(data = leaders,
+                 aes(x = x_end, y = y_end, xend = x_knee, yend = label_y),
+                 colour = "grey65", linewidth = 0.35) +
+    geom_segment(data = leaders,
+                 aes(x = x_knee, y = label_y, xend = label_x, yend = label_y),
+                 colour = "grey65", linewidth = 0.35) +
+    geom_text(data = labels,
+              aes(x = label_x, y = label_y, label = label, hjust = hjust),
+              colour = palette[1], size = 2.55, lineheight = 0.95) +
+    scale_colour_manual(values = setNames(rep(palette, length.out = nrow(parents)), seq_len(nrow(parents))), guide = "none") +
     scale_fill_manual(values = setNames(rep(palette, length.out = nrow(parents)), seq_len(nrow(parents))), guide = "none") +
-    coord_polar(theta = "x", start = pi / 2, direction = -1, clip = "off") +
-    scale_y_continuous(
-      limits = c(0, max_value * 1.34), expand = c(0, 0),
-      breaks = pretty(c(0, max_value), n = 4),
-      labels = function(x) comma(round(x^2))
-    ) +
+    coord_equal(xlim = c(-max_value * 1.55, max_value * 1.55),
+                ylim = c(-max_value * 1.22, max_value * 1.22), clip = "off") +
     labs(title = root,
-         subtitle = "Radial length represents topic-assignment frequency; labels show the taxonomy.") +
-    theme_minimal(base_size = 10) +
-    theme(
-      axis.title = element_blank(), axis.text.x = element_blank(), axis.ticks = element_blank(),
-      panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
-      panel.grid.major.y = element_line(colour = "grey85", linewidth = 0.3),
-      plot.title = element_text(face = "bold", size = 16, colour = palette[1]),
-      plot.subtitle = element_text(size = 9.5, colour = palette[2]),
-      plot.margin = margin(30, 125, 30, 125)
-    ) +
-    geom_text(data = label_df,
-              aes(x = angle, y = label_radius, label = label, angle = rotation, hjust = hjust),
-              inherit.aes = FALSE, size = 2.55, colour = palette[1])
+         subtitle = "Each spoke is a Level 2 > Level 3 topic; radial length represents assignment frequency.") +
+    theme_void(base_size = 10) +
+    theme(plot.title = element_text(face = "bold", size = 17, colour = palette[1], hjust = 0.5),
+          plot.subtitle = element_text(size = 9.5, colour = palette[2], hjust = 0.5),
+          plot.margin = margin(20, 25, 20, 25))
+
+  # Add count labels to the radial grid without cluttering the spokes.
+  p <- p + annotate("text", x = 0, y = grid_values, label = comma(round(grid_values^2)),
+                    colour = "grey55", size = 2.4, vjust = -0.45)
 
   ggsave(file.path(out_dir, paste0(file_stub, ".pdf")), p,
-         width = 250, height = 250, units = "mm", device = cairo_pdf)
+         width = 320, height = 250, units = "mm", device = cairo_pdf)
   ggsave(file.path(out_dir, paste0(file_stub, ".png")), p,
-         width = 250, height = 250, units = "mm", dpi = 600)
+         width = 320, height = 250, units = "mm", dpi = 600)
   write_csv(d %>% select(level2, level3, terminal, assignments),
             file.path(out_dir, paste0(file_stub, "_assignments.csv")))
   invisible(p)
