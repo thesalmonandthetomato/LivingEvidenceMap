@@ -3,7 +3,7 @@
 # Figure 3: Global choropleth of records by primary study country.
 # Canonical geography field: final_primary_country_iso3c.
 
-required <- c("dplyr", "ggplot2", "readr", "sf", "rnaturalearth", "rnaturalearthdata", "scales", "tidyr")
+required <- c("dplyr", "ggplot2", "readr", "sf", "rnaturalearth", "rnaturalearthdata", "tidyr")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing) > 0) stop("Install required packages: ", paste(missing, collapse = ", "))
 
@@ -11,7 +11,6 @@ library(dplyr)
 library(ggplot2)
 library(readr)
 library(sf)
-library(scales)
 library(tidyr)
 library(here)
 
@@ -23,28 +22,30 @@ palette <- c("#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634")
 master <- readr::read_csv(master_path, show_col_types = FALSE, progress = FALSE)
 if (!"final_primary_country_iso3c" %in% names(master)) stop("Required column missing from master: final_primary_country_iso3c")
 
+# A record may legitimately have multiple primary countries. Split the
+# semicolon-delimited ISO3 values so every represented country receives one
+# count for that record.
 country_counts <- master %>%
-  transmute(iso3c = toupper(trimws(as.character(final_primary_country_iso3c)))) %>%
-  filter(!is.na(iso3c), iso3c != "") %>%
+  transmute(final_primary_country_iso3c = as.character(final_primary_country_iso3c)) %>%
+  filter(!is.na(final_primary_country_iso3c), trimws(final_primary_country_iso3c) != "") %>%
+  mutate(iso3c = strsplit(final_primary_country_iso3c, "\\s*;\\s*")) %>%
+  unnest(iso3c) %>%
+  mutate(iso3c = toupper(trimws(iso3c))) %>%
+  filter(iso3c != "") %>%
+  distinct(row_number = row_number(), iso3c) %>%
   count(iso3c, name = "records")
 
-# Use Natural Earth's ISO-3 field that is intended for country matching.
 world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf") %>%
   transmute(iso3c = toupper(trimws(iso_a3_eh)), geometry)
 
-# Never silently lose project countries at the map join.
 unmatched <- anti_join(country_counts, st_drop_geometry(world), by = "iso3c")
 if (nrow(unmatched) > 0) {
-  stop("Unmatched project ISO3 codes: ", paste(unmatched$iso3c, collapse = ", "))
+  stop("Unmatched project ISO3 codes after splitting: ", paste(unmatched$iso3c, collapse = ", "))
 }
 
 plot_data <- world %>%
   left_join(country_counts, by = "iso3c") %>%
-  mutate(records = replace_na(records, 0L))
-
-# Fixed bins make moderate-count countries legible instead of flattening them
-# against countries with exceptionally high counts.
-plot_data <- plot_data %>%
+  mutate(records = replace_na(records, 0L)) %>%
   mutate(records_bin = cut(
     records,
     breaks = c(-Inf, 0, 5, 25, 100, 500, Inf),
@@ -74,7 +75,7 @@ p <- ggplot(plot_data) +
   labs(
     title = "LivingEvidenceMap: records by primary study country",
     subtitle = "Number of records in the corrected master database",
-    caption = "Country classification uses final_primary_country_iso3c."
+    caption = "Country classification uses final_primary_country_iso3c; multi-country records count once for each represented country."
   ) +
   theme_void(base_size = 11) +
   theme(
@@ -92,7 +93,6 @@ ggsave(file.path(out_dir, "figure_03_choropleth_records_by_country.pdf"), p,
 ggsave(file.path(out_dir, "figure_03_choropleth_records_by_country.png"), p,
        width = 210, height = 135, units = "mm", dpi = 600)
 
-# Independent diagnostic output, including Norway, so map errors are visible.
 write_csv(country_counts, file.path(out_dir, "figure_03_country_counts.csv"))
 if ("NOR" %in% country_counts$iso3c) {
   message("NOR records: ", country_counts$records[country_counts$iso3c == "NOR"])
