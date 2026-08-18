@@ -1,0 +1,117 @@
+name: Full species reannotation (temporary)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reannotate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: species-rerun-2026-08-18
+          fetch-depth: 1
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4'
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: any::digest,any::dplyr,any::fs,any::glmnet,any::here,any::Matrix,any::purrr,any::quanteda,any::readr,any::stringdist,any::stringi,any::stringr,any::tibble,any::tidyr,any::yaml
+
+      - name: Run deterministic species annotation from scratch
+        shell: bash
+        run: |
+          mkdir -p rerun_species
+          Rscript --vanilla - <<'RS'
+          source('scripts/setup_pipeline.R')
+          source('R/species_detect.R')
+          source('R/species_filter.R')
+          source('R/species_assign.R')
+          source('R/species_annotation.R')
+          records <- readr::read_csv('data/master/current/living_evidence_map_master.csv', show_col_types = FALSE)
+          species_dictionary <- readr::read_csv('config/species_dictionary.csv', show_col_types = FALSE)
+          message(sprintf('Loaded %d master records and %d species dictionary rows.', nrow(records), nrow(species_dictionary)))
+          if (nrow(records) != 13389) stop(sprintf('Expected 13,389 records; found %d.', nrow(records)))
+          out <- annotate_species(records, species_dictionary, progress = TRUE)
+          readr::write_csv(out$species_mentions, 'rerun_species/species_mentions.csv', na = '')
+          readr::write_csv(out$species_assignments, 'rerun_species/species_assignments.csv', na = '')
+          readr::write_csv(out$failures, 'rerun_species/species_annotation_failures.csv', na = '')
+          RS
+
+      - name: Compare rerun with current and historical annotations
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+          from collections import Counter
+          out=Path('rerun_species')
+          def read(p):
+              with open(p,encoding='utf-8-sig',newline='') as f: return list(csv.DictReader(f))
+          master=read('data/master/current/living_evidence_map_master.csv')
+          assignments=read(out/'species_assignments.csv')
+          historical=read('data/reference/historical_master_12043.csv')
+          hist={r.get('record_id','').strip():r for r in historical}
+          new={}
+          for r in assignments:
+              rid=(r.get('record_id') or '').strip()
+              if not rid: continue
+              new.setdefault(rid,[]).append(r)
+          def norm_rows(rows):
+              vals=[]
+              for r in rows:
+                  sid=(r.get('farmed_species_id') or '').strip()
+                  sp=(r.get('farmed_species') or '').strip()
+                  if sid or sp: vals.append((sid,sp))
+              return tuple(sorted(set(vals)))
+          def hist_species(r):
+              for k in ('final_species','species','species_annotation'):
+                  if k in r and (r.get(k) or '').strip(): return (r.get(k) or '').strip()
+              return ''
+          discrepancies=[]
+          for r in master:
+              rid=(r.get('record_id') or '').strip()
+              nr=norm_rows(new.get(rid,[]))
+              old=hist_species(hist.get(rid,{}))
+              # Preserve the raw historical value; exact semantic reconciliation can follow in review.
+              discrepancies.append({
+                  'record_id':rid,
+                  'title':r.get('title',''),
+                  'new_species_ids':'; '.join(x[0] for x in nr if x[0]),
+                  'new_species':'; '.join(x[1] for x in nr if x[1]),
+                  'new_review_required':'true' if any((x.get('review_required') or '').lower()=='true' for x in new.get(rid,[])) else 'false',
+                  'new_assignment_reason':'; '.join(sorted(set((x.get('assignment_reason') or '').strip() for x in new.get(rid,[]) if (x.get('assignment_reason') or '').strip()))),
+                  'historical_species':old,
+                  'historical_present':'true' if old else 'false',
+                  'discrepancy_candidate':'true' if (bool(nr) != bool(old)) else 'false'
+              })
+          with open(out/'species_comparison.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=list(discrepancies[0])); w.writeheader(); w.writerows(discrepancies)
+          summary={
+              'master_records':len(master),
+              'rerun_assignment_rows':len(assignments),
+              'rerun_failures':len(read(out/'species_annotation_failures.csv')),
+              'records_with_new_species_assignment':sum(bool(norm_rows(new.get((r.get('record_id') or '').strip(),[]))) for r in master),
+              'records_requiring_deterministic_review':sum(any((x.get('review_required') or '').lower()=='true' for x in new.get((r.get('record_id') or '').strip(),[])) for r in master),
+              'historical_records_matched':sum((r.get('record_id') or '').strip() in hist for r in master),
+              'discrepancy_candidates_presence_only':sum(x['discrepancy_candidate']=='true' for x in discrepancies)
+          }
+          (out/'summary.json').write_text(json.dumps(summary,indent=2),encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload full rerun outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: species-full-rerun-2026-08-18
+          path: rerun_species/
+          retention-days: 14
