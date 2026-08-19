@@ -23,7 +23,9 @@ master_path <- here::here("data", "master", "current", "living_evidence_map_mast
 out_dir <- here::here("visualisations")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Seven distinct, medium-to-dark blue-grey shades for improved readability.
+# Reuse the original salmon-pink to blue palette from the topic hierarchy
+# figures, interpolated to seven colours for the seven high-level topics.
+base_palette <- c("#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634")
 topic_order <- c(
   "Production",
   "Environment",
@@ -33,15 +35,9 @@ topic_order <- c(
   "People and society",
   "Inputs and resources"
 )
-
-topic_fill_values <- c(
-  "Production" = "#233F47",
-  "Environment" = "#2F5963",
-  "Methods" = "#3E6B75",
-  "Industry and governance" = "#4F7C86",
-  "Product" = "#638D96",
-  "People and society" = "#769DA5",
-  "Inputs and resources" = "#89ADB3"
+topic_fill_values <- setNames(
+  grDevices::colorRampPalette(base_palette)(length(topic_order)),
+  topic_order
 )
 
 master <- readr::read_csv(master_path, show_col_types = FALSE, progress = FALSE)
