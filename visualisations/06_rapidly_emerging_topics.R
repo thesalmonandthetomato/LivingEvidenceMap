@@ -68,6 +68,23 @@ topic_order <- c(
   "By-products and waste as inputs", "Plastics and solid waste"
 )
 
+# Explicit labels. These contain literal newline characters and are assigned as
+# factor levels below, rather than relying on ggplot2's automatic label wrapper.
+topic_labels <- c(
+  "Monitoring and sampling methods" = "Monitoring and\nsampling methods",
+  "Automation and precision aquaculture" = "Automation and\nprecision aquaculture",
+  "Smoltification and smolt quality" = "Smoltification and\nsmolt quality",
+  "Novel feed resources" = "Novel feed\nresources",
+  "Welfare assessment and risks" = "Welfare assessment\nand risks",
+  "Climate change" = "Climate change",
+  "Sensors, imaging and measurement" = "Sensors, imaging\nand measurement",
+  "Statistical and modelling methods" = "Statistical and\nmodelling methods",
+  "Antimicrobial resistance and One Health" = "Antimicrobial resistance\nand One Health",
+  "Energy, greenhouse gases and life-cycle footprint" = "Energy, greenhouse gases\nand life-cycle footprint",
+  "By-products and waste as inputs" = "By-products and waste\nas inputs",
+  "Plastics and solid waste" = "Plastics and solid waste"
+)
+
 expanded <- master %>%
   mutate(path = str_split(topic_hierarchy_paths, "\\s*;\\s*")) %>%
   unnest(path) %>%
@@ -182,16 +199,12 @@ summary_data <- plot_data %>%
 write_csv(plot_data %>% arrange(topic, publication_year), file.path(out_dir, "figure_06_rapidly_emerging_topics_data.csv"))
 write_csv(summary_data, file.path(out_dir, "figure_06_rapidly_emerging_topics_summary.csv"))
 
-# Wrap facet labels explicitly with stringr::str_wrap. Using as_labeller() here
-# rather than label_wrap_gen() ensures the wrapped strings are passed directly
-# to the strip grob and cannot overflow horizontally. A narrow width plus a
-# smaller font keeps every label inside the grey strip.
-wrapped_topic_labels <- setNames(
-  stringr::str_wrap(topic_order, width = 16),
-  topic_order
-)
-
-topic_labeller <- ggplot2::as_labeller(wrapped_topic_labels)
+# Convert the topic variable to a factor whose actual display levels contain
+# explicit line breaks. This is deliberately done before facet_wrap(): ggplot2
+# then treats the line breaks as part of the strip text itself, guaranteeing
+# that long labels cannot run horizontally outside the grey strip.
+plot_data <- plot_data %>%
+  mutate(topic_plot = factor(topic, levels = topic_order, labels = unname(topic_labels[topic_order])))
 
 p <- ggplot(plot_data, aes(x = publication_year)) +
   geom_hline(yintercept = 100, colour = "#D9DEDF", linewidth = 0.35) +
@@ -199,10 +212,9 @@ p <- ggplot(plot_data, aes(x = publication_year)) +
   geom_line(aes(y = topic_growth_index), colour = "#E55634", linewidth = 0.95, na.rm = TRUE) +
   geom_point(aes(y = topic_growth_index), colour = "#E55634", size = 0.85, na.rm = TRUE) +
   facet_wrap(
-    ~ factor(topic, levels = topic_order),
+    ~ topic_plot,
     ncol = 3,
-    scales = "free_y",
-    labeller = labeller(topic = topic_labeller)
+    scales = "free_y"
   ) +
   scale_x_continuous(
     limits = c(2010, max(all_years)),
@@ -227,7 +239,7 @@ p <- ggplot(plot_data, aes(x = publication_year)) +
     panel.grid.minor = element_blank(),
     panel.grid.major.x = element_blank(),
     strip.background = element_rect(fill = "#EEF2F2", colour = NA),
-    strip.text = element_text(face = "bold", colour = "#29434A", size = 7.8, lineheight = 0.92, hjust = 0.5),
+    strip.text = element_text(face = "bold", colour = "#29434A", size = 8.0, lineheight = 0.9, hjust = 0.5),
     strip.placement = "inside",
     strip.clip = "on",
     axis.title = element_text(face = "bold", colour = "#45616A"),
