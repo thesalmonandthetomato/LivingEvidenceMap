@@ -3,8 +3,7 @@
 # Figure 6: Rapidly emerging topics relative to background evidence-base growth.
 # Uses the corrected master database and the repository's canonical topic-path
 # representation. Topic clusters are matched by explicit keyword patterns
-# against the complete Level 2/Level 3 path, rather than assuming that the
-# display labels are exact taxonomy labels.
+# against the complete Level 2/Level 3 path.
 
 required <- c("dplyr", "ggplot2", "readr", "tidyr", "stringr", "scales")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
@@ -68,10 +67,6 @@ raw_paths <- raw_paths %>%
 
 # -------------------------------------------------------------------------
 # Rapid-emergence clusters.
-#
-# These are deliberately defined as transparent keyword rules over the
-# canonical taxonomy. This avoids fragile exact-label joins and makes the
-# classification auditable in the exported mapping file.
 # -------------------------------------------------------------------------
 rapid_rules <- tibble::tribble(
   ~topic, ~pattern,
@@ -91,8 +86,6 @@ rapid_rules <- tibble::tribble(
 
 topic_order <- rapid_rules$topic
 
-# A record can legitimately contribute to several emerging clusters, but is
-# counted only once within any one cluster.
 topic_matches <- tidyr::crossing(
   raw_paths %>% distinct(record_id, publication_year, path, taxonomy),
   rapid_rules
@@ -100,8 +93,6 @@ topic_matches <- tidyr::crossing(
   filter(str_detect(taxonomy, regex(pattern, ignore_case = TRUE))) %>%
   distinct(record_id, publication_year, topic, path)
 
-# Audit trail: exactly which canonical taxonomy paths contributed to each
-# emerging cluster.
 write_csv(
   topic_matches %>% count(topic, path, sort = TRUE),
   file.path(out_dir, "figure_06_rapidly_emerging_topics_taxonomy_mapping.csv")
@@ -145,13 +136,6 @@ plot_data <- tidyr::expand_grid(
 
 # -------------------------------------------------------------------------
 # Growth-rate comparison.
-#
-# Rather than forcing a baseline window on sparse emerging topics, fit a
-# log-linear trend to annual counts after the first non-zero observation.
-# The slope is an estimated proportional annual growth rate. The background
-# evidence-base slope is fitted independently and shown as a dashed reference
-# trajectory. This is robust to topics that genuinely emerge late in the
-# database (e.g. plastics/solid waste).
 # -------------------------------------------------------------------------
 fit_growth <- function(df, value_col) {
   d <- df %>% filter(.data[[value_col]] > 0, is.finite(.data[[value_col]]))
@@ -165,42 +149,50 @@ fit_growth <- function(df, value_col) {
 
 background_fit <- fit_growth(background, "background_records")
 
-# Calculate a fitted background trajectory on the same absolute scale as each
-# topic. This makes the dashed line a genuine background growth-rate trend,
-# rather than a separate arbitrarily indexed series.
-background_model <- lm(log(background_records) ~ publication_year, data = filter(background, background_records > 0))
+background_model <- lm(
+  log(background_records) ~ publication_year,
+  data = background %>% filter(background_records > 0)
+)
+
 background_pred <- background %>%
   mutate(background_trend = exp(predict(background_model, newdata = background)))
 
-trend_rows <- lapply(topic_order, function(tp) {
-  d <- plot_data %>% filter(topic == tp)
-  f <- fit_growth(d, "topic_records")
-  tibble(topic = tp, slope = f$slope, annual_growth_percent = f$annual_growth)
-}) %>% bind_rows()
+# Fit each topic separately in a normal function/data context. This avoids
+# using cur_data()/across-style data-mask evaluation inside mutate(), which
+# causes errors with newer dplyr releases.
+fit_topic_trend <- function(tp, dat, years) {
+  d <- dat %>% filter(topic == tp, topic_records > 0)
+  if (nrow(d) < 3 || n_distinct(d$publication_year) < 3) {
+    return(tibble(
+      topic = tp,
+      publication_year = years,
+      topic_trend = NA_real_,
+      slope = NA_real_,
+      annual_growth_percent = NA_real_
+    ))
+  }
+  fit <- lm(log(topic_records) ~ publication_year, data = d)
+  slope <- unname(coef(fit)[["publication_year"]])
+  tibble(
+    topic = tp,
+    publication_year = years,
+    topic_trend = exp(predict(fit, newdata = tibble(publication_year = years))),
+    slope = slope,
+    annual_growth_percent = 100 * (exp(slope) - 1)
+  )
+}
+
+topic_trends <- lapply(topic_order, fit_topic_trend, dat = plot_data, years = all_years) %>%
+  bind_rows()
+
+trend_rows <- topic_trends %>%
+  distinct(topic, slope, annual_growth_percent)
 
 plot_data <- plot_data %>%
   left_join(background_pred %>% select(publication_year, background_trend), by = "publication_year") %>%
-  left_join(trend_rows %>% select(topic, slope), by = "topic") %>%
-  mutate(
-    topic_trend = exp(predict(lm(log(topic_records) ~ publication_year,
-                                 data = cur_data() %>% filter(topic_records > 0)),
-                              newdata = cur_data()))
-  )
+  left_join(topic_trends %>% select(topic, publication_year, topic_trend),
+            by = c("topic", "publication_year"))
 
-# The expression above cannot safely fit separate models inside mutate for
-# sparse topics, so construct fitted topic trends explicitly.
-topic_trends <- lapply(topic_order, function(tp) {
-  d <- plot_data %>% filter(topic == tp, topic_records > 0)
-  fit <- lm(log(topic_records) ~ publication_year, data = d)
-  tibble(topic = tp, publication_year = all_years,
-         topic_trend = exp(predict(fit, newdata = tibble(publication_year = all_years))))
-}) %>% bind_rows()
-
-plot_data <- plot_data %>%
-  select(-topic_trend) %>%
-  left_join(topic_trends, by = c("topic", "publication_year"))
-
-# Growth-rate summary and relative acceleration against the background.
 summary_data <- trend_rows %>%
   mutate(
     background_annual_growth_percent = background_fit$annual_growth,
@@ -217,18 +209,16 @@ write_csv(summary_data, file.path(out_dir, "figure_06_rapidly_emerging_topics_su
 # -------------------------------------------------------------------------
 # Figure
 # -------------------------------------------------------------------------
-# Each panel uses the same y-axis type (record count) and shows the observed
-# annual topic counts together with its fitted growth trajectory. The grey
-# dashed trajectory is the fitted growth of the complete evidence base,
-# rescaled to the topic's first observed count so that relative acceleration
-# is visually interpretable.
+# Each panel uses annual record counts. The red line is the fitted topic
+# trajectory. The dashed grey trajectory is the fitted growth of the complete
+# evidence base, rescaled to the topic's first observed count.
 
 plot_data <- plot_data %>%
   group_by(topic) %>%
   mutate(
     first_year = min(publication_year[topic_records > 0], na.rm = TRUE),
-    first_topic_count = first(topic_records[publication_year == first_year & topic_records > 0]),
-    first_background_trend = first(background_trend[publication_year == first_year]),
+    first_topic_count = topic_records[match(first_year, publication_year)],
+    first_background_trend = background_trend[match(first_year, publication_year)],
     background_rescaled = background_trend * first_topic_count / first_background_trend
   ) %>%
   ungroup()
