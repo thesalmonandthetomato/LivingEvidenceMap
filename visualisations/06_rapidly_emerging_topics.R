@@ -1,14 +1,10 @@
 #!/usr/bin/env Rscript
 
 # Figure 6: Rapidly emerging topics relative to background evidence-base growth.
-# The 12 topic clusters were identified from the corrected master evidence-map
-# database as rapidly growing themes. Each panel shows the annual number of
-# records for the topic as an index (100 = the mean annual topic count in the
-# earliest five-year baseline with >=3 non-zero years). A dashed line shows the
-# corresponding background database-growth index, normalised to the same
-# baseline period. Values above the background line indicate growth faster than
-# the evidence base as a whole.
-# Source: corrected master evidence-map database.
+# Uses the corrected master database and the repository's canonical topic-path
+# representation. Topic clusters are matched by explicit keyword patterns
+# against the complete Level 2/Level 3 path, rather than assuming that the
+# display labels are exact taxonomy labels.
 
 required <- c("dplyr", "ggplot2", "readr", "tidyr", "stringr", "scales")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
@@ -21,13 +17,6 @@ library(tidyr)
 library(stringr)
 library(scales)
 
-project_root <- tryCatch(
-  here::here(),
-  error = function(e) normalizePath(file.path(dirname(sys.frame(1)$ofile %||% ""), ".."), mustWork = FALSE)
-)
-
-# Keep the same repository-relative paths used by the other visualisation
-# scripts. The script is intended to be run from the repository root.
 master_path <- file.path("data", "master", "current", "living_evidence_map_master CORRECTED.csv")
 out_dir <- "visualisations"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -37,239 +26,251 @@ if (!file.exists(master_path)) {
        ". Run this script from the repository root.")
 }
 
-# Rapidly emerging topic clusters (n = 12). Welfare assessment and welfare
-# risks/consequences are combined because they represent the same emerging
-# welfare evidence cluster for this figure.
-rapid_topics <- tibble::tribble(
-  ~topic, ~leaf_topic,
-  "Monitoring and sampling methods", "Monitoring and sampling methods",
-  "Automation and precision aquaculture", "Automation and precision aquaculture",
-  "Smoltification and smolt quality", "Smoltification and smolt quality",
-  "Novel feed resources", "Novel feed resources",
-  "Welfare assessment and risks", "Welfare assessment",
-  "Welfare assessment and risks", "Welfare risks and consequences",
-  "Climate change", "Climate change",
-  "Sensors, imaging and measurement", "Sensors, imaging and measurement methods",
-  "Statistical and modelling methods", "Statistical and modelling methods",
-  "Antimicrobial resistance and One Health", "Antimicrobial resistance and One Health",
-  "Energy, greenhouse gases and life-cycle footprint", "Energy, greenhouse gases and life-cycle footprint",
-  "By-products and waste as inputs", "By-products and waste as inputs",
-  "Plastics and solid waste", "Plastics and solid waste"
-) %>%
-  distinct()
-
-topic_order <- c(
-  "Monitoring and sampling methods",
-  "Automation and precision aquaculture",
-  "Smoltification and smolt quality",
-  "Novel feed resources",
-  "Welfare assessment and risks",
-  "Climate change",
-  "Sensors, imaging and measurement",
-  "Statistical and modelling methods",
-  "Antimicrobial resistance and One Health",
-  "Energy, greenhouse gases and life-cycle footprint",
-  "By-products and waste as inputs",
-  "Plastics and solid waste"
-)
-
 master <- readr::read_csv(master_path, show_col_types = FALSE, progress = FALSE)
-required_master <- c("record_id", "year", "topic_hierarchy_paths")
+required_master <- c("topic_hierarchy_paths", "year")
 missing_master <- setdiff(required_master, names(master))
 if (length(missing_master) > 0) {
   stop("Required columns missing from master: ", paste(missing_master, collapse = ", "))
 }
 
-# Expand canonical topic paths to leaf topics, retaining one record-topic
-# observation per record. This mirrors the record-level deduplication logic in
-# the other topic visualisations.
-expanded <- master %>%
+# -------------------------------------------------------------------------
+# Canonical topic-path expansion -- identical parsing logic to Figure 04.
+# -------------------------------------------------------------------------
+raw_paths <- master %>%
   transmute(
-    record_id = as.character(record_id),
+    record_id = row_number(),
     publication_year = suppressWarnings(as.integer(year)),
-    raw_paths = as.character(topic_hierarchy_paths)
+    raw_path = as.character(topic_hierarchy_paths)
   ) %>%
-  filter(!is.na(publication_year), !is.na(raw_paths), str_trim(raw_paths) != "") %>%
-  mutate(path = str_split(raw_paths, "\\s*;\\s*")) %>%
+  filter(!is.na(publication_year), !is.na(raw_path), str_trim(raw_path) != "") %>%
+  mutate(path = str_split(raw_path, "\\s*;\\s*")) %>%
   unnest(path) %>%
   mutate(path = str_squish(path)) %>%
   filter(path != "") %>%
-  mutate(
-    leaf_topic = str_squish(str_split_fixed(path, "\\s*>\\s*", 2)[, 2])
-  ) %>%
-  filter(leaf_topic != "") %>%
-  distinct(record_id, publication_year, leaf_topic)
+  distinct(record_id, publication_year, path)
 
-# Background is the annual number of unique records in the master database.
+parts <- str_split(raw_paths$path, "\\s*>\\s*")
+max_depth <- max(lengths(parts))
+for (i in seq_len(max_depth)) {
+  raw_paths[[paste0("level", i)]] <- vapply(
+    parts,
+    function(x) if (length(x) >= i) str_squish(x[i]) else NA_character_,
+    character(1)
+  )
+}
+
+raw_paths <- raw_paths %>%
+  mutate(
+    taxonomy = str_to_lower(str_squish(path)),
+    taxonomy = str_replace_all(taxonomy, "[[:punct:]]+", " "),
+    taxonomy = str_squish(taxonomy)
+  )
+
+# -------------------------------------------------------------------------
+# Rapid-emergence clusters.
+#
+# These are deliberately defined as transparent keyword rules over the
+# canonical taxonomy. This avoids fragile exact-label joins and makes the
+# classification auditable in the exported mapping file.
+# -------------------------------------------------------------------------
+rapid_rules <- tibble::tribble(
+  ~topic, ~pattern,
+  "Monitoring and sampling methods", "monitoring|sampling|surveillance|assessment methods",
+  "Automation and precision aquaculture", "automation|precision aquaculture|precision farming|robotic|robotics",
+  "Smoltification and smolt quality", "smoltification|smolt quality|smolt development|smolt performance",
+  "Novel feed resources", "novel feed|alternative feed|alternative ingredient|novel ingredient|insect|algae|single cell|microbial protein|plant based feed",
+  "Welfare assessment and risks", "welfare assessment|welfare risk|welfare risks|welfare consequence|welfare indicator",
+  "Climate change", "climate change|climate warming|global warming|climate adaptation|climate mitigation",
+  "Sensors, imaging and measurement", "sensor|imaging|machine vision|computer vision|image analysis|measurement technology",
+  "Statistical and modelling methods", "statistical model|modelling|modeling|simulation|forecasting|predictive model|mathematical model",
+  "Antimicrobial resistance and One Health", "antimicrobial resistance|antibiotic resistance|one health|antimicrobial stewardship",
+  "Energy, greenhouse gases and life-cycle footprint", "greenhouse gas|ghg|carbon footprint|life cycle|life-cycle|energy use|energy consumption|carbon emission",
+  "By-products and waste as inputs", "by-product|waste as input|waste valorisation|waste valorization|circular|nutrient recovery|resource recovery",
+  "Plastics and solid waste", "plastic|microplastic|solid waste|plastic waste|packaging waste"
+)
+
+topic_order <- rapid_rules$topic
+
+# A record can legitimately contribute to several emerging clusters, but is
+# counted only once within any one cluster.
+topic_matches <- tidyr::crossing(
+  raw_paths %>% distinct(record_id, publication_year, path, taxonomy),
+  rapid_rules
+) %>%
+  filter(str_detect(taxonomy, regex(pattern, ignore_case = TRUE))) %>%
+  distinct(record_id, publication_year, topic, path)
+
+# Audit trail: exactly which canonical taxonomy paths contributed to each
+# emerging cluster.
+write_csv(
+  topic_matches %>% count(topic, path, sort = TRUE),
+  file.path(out_dir, "figure_06_rapidly_emerging_topics_taxonomy_mapping.csv")
+)
+
+match_counts <- topic_matches %>% count(topic, name = "matched_records")
+missing_topics <- setdiff(topic_order, match_counts$topic)
+if (length(missing_topics) > 0) {
+  stop(
+    "No database records matched these emerging-topic rules: ",
+    paste(missing_topics, collapse = ", "),
+    ". Inspect figure_06_rapidly_emerging_topics_taxonomy_mapping.csv and update the corresponding keyword rule."
+  )
+}
+
+# Background = all unique records per publication year.
 background <- master %>%
   transmute(
-    record_id = as.character(record_id),
+    record_id = row_number(),
     publication_year = suppressWarnings(as.integer(year))
   ) %>%
   filter(!is.na(publication_year)) %>%
   distinct(record_id, publication_year) %>%
   count(publication_year, name = "background_records")
 
-all_years <- seq(
-  min(background$publication_year, na.rm = TRUE),
-  max(background$publication_year, na.rm = TRUE),
-  by = 1
-)
-
+all_years <- seq(min(background$publication_year), max(background$publication_year), by = 1)
 background <- tibble(publication_year = all_years) %>%
   left_join(background, by = "publication_year") %>%
   mutate(background_records = replace_na(background_records, 0L))
 
-# Count records in each rapid topic cluster. A record assigned to both welfare
-# leaf topics is counted only once in the combined welfare cluster.
-topic_records <- expanded %>%
-  inner_join(rapid_topics, by = "leaf_topic") %>%
-  distinct(record_id, publication_year, topic) %>%
+topic_counts <- topic_matches %>%
   count(topic, publication_year, name = "topic_records")
 
 plot_data <- tidyr::expand_grid(
   topic = topic_order,
   publication_year = all_years
 ) %>%
-  left_join(topic_records, by = c("topic", "publication_year")) %>%
+  left_join(topic_counts, by = c("topic", "publication_year")) %>%
   mutate(topic_records = replace_na(topic_records, 0L)) %>%
   left_join(background, by = "publication_year")
 
-# Determine a topic-specific baseline: the earliest five-year period from
-# 2000 onward containing at least three non-zero topic years. This avoids
-# making the index dependent on a single unusually small publication year and
-# allows very recent themes (e.g. plastics and solid waste) to be included.
-baselines <- plot_data %>%
-  group_by(topic) %>%
-  group_modify(~ {
-    d <- .x %>% filter(publication_year >= 2000)
-    candidate_starts <- seq(2000, max(d$publication_year) - 4, by = 1)
-    candidates <- lapply(candidate_starts, function(start_year) {
-      w <- d %>% filter(publication_year >= start_year,
-                        publication_year <= start_year + 4)
-      if (sum(w$topic_records > 0) >= 3) {
-        tibble(
-          baseline_start = start_year,
-          baseline_end = start_year + 4,
-          topic_baseline = mean(w$topic_records),
-          background_baseline = mean(w$background_records)
-        )
-      } else {
-        NULL
-      }
-    })
-    bind_rows(candidates) %>% slice_head(n = 1)
-  }) %>%
-  ungroup()
-
-if (nrow(baselines) != length(topic_order)) {
-  missing_baselines <- setdiff(topic_order, baselines$topic)
-  stop("Could not establish a baseline for: ", paste(missing_baselines, collapse = ", "))
+# -------------------------------------------------------------------------
+# Growth-rate comparison.
+#
+# Rather than forcing a baseline window on sparse emerging topics, fit a
+# log-linear trend to annual counts after the first non-zero observation.
+# The slope is an estimated proportional annual growth rate. The background
+# evidence-base slope is fitted independently and shown as a dashed reference
+# trajectory. This is robust to topics that genuinely emerge late in the
+# database (e.g. plastics/solid waste).
+# -------------------------------------------------------------------------
+fit_growth <- function(df, value_col) {
+  d <- df %>% filter(.data[[value_col]] > 0, is.finite(.data[[value_col]]))
+  if (nrow(d) < 3 || n_distinct(d$publication_year) < 3) {
+    return(tibble(slope = NA_real_, annual_growth = NA_real_))
+  }
+  fit <- lm(log(.data[[value_col]]) ~ publication_year, data = d)
+  slope <- unname(coef(fit)[["publication_year"]])
+  tibble(slope = slope, annual_growth = 100 * (exp(slope) - 1))
 }
 
+background_fit <- fit_growth(background, "background_records")
+
+# Calculate a fitted background trajectory on the same absolute scale as each
+# topic. This makes the dashed line a genuine background growth-rate trend,
+# rather than a separate arbitrarily indexed series.
+background_model <- lm(log(background_records) ~ publication_year, data = filter(background, background_records > 0))
+background_pred <- background %>%
+  mutate(background_trend = exp(predict(background_model, newdata = background)))
+
+trend_rows <- lapply(topic_order, function(tp) {
+  d <- plot_data %>% filter(topic == tp)
+  f <- fit_growth(d, "topic_records")
+  tibble(topic = tp, slope = f$slope, annual_growth_percent = f$annual_growth)
+}) %>% bind_rows()
+
 plot_data <- plot_data %>%
-  left_join(baselines, by = "topic") %>%
+  left_join(background_pred %>% select(publication_year, background_trend), by = "publication_year") %>%
+  left_join(trend_rows %>% select(topic, slope), by = "topic") %>%
   mutate(
-    topic_index = 100 * topic_records / topic_baseline,
-    background_index = 100 * background_records / background_baseline
+    topic_trend = exp(predict(lm(log(topic_records) ~ publication_year,
+                                 data = cur_data() %>% filter(topic_records > 0)),
+                              newdata = cur_data()))
   )
 
-# Summarise the end-period acceleration relative to background. This is saved
-# with the plotting data so the thresholding and interpretation can be audited.
-summary_data <- plot_data %>%
-  group_by(topic) %>%
-  summarise(
-    baseline_start = first(baseline_start),
-    baseline_end = first(baseline_end),
-    baseline_topic_mean = first(topic_baseline),
-    baseline_background_mean = first(background_baseline),
-    mean_topic_2021_2025 = mean(topic_records[publication_year >= 2021 & publication_year <= 2025]),
-    mean_background_2021_2025 = mean(background_records[publication_year >= 2021 & publication_year <= 2025]),
-    topic_growth_ratio_2021_2025 = mean_topic_2021_2025 / baseline_topic_mean,
-    background_growth_ratio_2021_2025 = mean_background_2021_2025 / baseline_background_mean,
-    relative_growth_vs_background = topic_growth_ratio_2021_2025 / background_growth_ratio_2021_2025,
-    .groups = "drop"
+# The expression above cannot safely fit separate models inside mutate for
+# sparse topics, so construct fitted topic trends explicitly.
+topic_trends <- lapply(topic_order, function(tp) {
+  d <- plot_data %>% filter(topic == tp, topic_records > 0)
+  fit <- lm(log(topic_records) ~ publication_year, data = d)
+  tibble(topic = tp, publication_year = all_years,
+         topic_trend = exp(predict(fit, newdata = tibble(publication_year = all_years))))
+}) %>% bind_rows()
+
+plot_data <- plot_data %>%
+  select(-topic_trend) %>%
+  left_join(topic_trends, by = c("topic", "publication_year"))
+
+# Growth-rate summary and relative acceleration against the background.
+summary_data <- trend_rows %>%
+  mutate(
+    background_annual_growth_percent = background_fit$annual_growth,
+    relative_growth_rate = annual_growth_percent - background_annual_growth_percent
   ) %>%
-  arrange(desc(relative_growth_vs_background))
-
-# Keep all 12 panels readable while using the repository's established visual
-# language. The solid line is observed topic output; the dashed line is the
-# background evidence-base growth rate, both indexed to 100 at the topic's
-# baseline period.
-p <- ggplot(plot_data, aes(x = publication_year)) +
-  geom_line(
-    aes(y = background_index),
-    colour = "#B8B8B8",
-    linewidth = 0.65,
-    linetype = "dashed"
-  ) +
-  geom_line(
-    aes(y = topic_index),
-    colour = "#E55634",
-    linewidth = 0.85
-  ) +
-  geom_point(
-    aes(y = topic_index),
-    colour = "#E55634",
-    size = 0.9
-  ) +
-  facet_wrap(~ factor(topic, levels = topic_order), ncol = 3, scales = "free_y") +
-  scale_x_continuous(
-    breaks = scales::breaks_pretty(n = 7),
-    expand = expansion(mult = c(0.01, 0.02))
-  ) +
-  scale_y_continuous(
-    labels = function(x) paste0(x, "%"),
-    expand = expansion(mult = c(0, 0.08))
-  ) +
-  labs(
-    title = "Rapidly emerging topics in the evidence base",
-    subtitle = "Observed topic growth relative to background database growth",
-    x = "Publication year",
-    y = "Growth index",
-    caption = "Solid line = topic output; dashed line = background evidence-base growth. Each panel is indexed to the topic's earliest eligible five-year baseline (100)."
-  ) +
-  theme_classic(base_size = 10.5) +
-  theme(
-    strip.background = element_rect(fill = "#EEF2F2", colour = NA),
-    strip.text = element_text(face = "bold", colour = "#29434A", size = 9.5),
-    axis.title = element_text(face = "bold", colour = "#45616A"),
-    axis.text = element_text(colour = "#29434A", size = 8.5),
-    plot.title = element_text(face = "bold", size = 17, colour = "#29434A"),
-    plot.subtitle = element_text(colour = "#45616A", size = 10.5),
-    plot.caption = element_text(colour = "#5B6D72", size = 8.5, hjust = 0),
-    panel.grid = element_blank(),
-    panel.spacing = grid::unit(1.1, "lines"),
-    plot.background = element_rect(fill = "white", colour = NA),
-    panel.background = element_rect(fill = "white", colour = NA)
-  )
-
-ggsave(
-  file.path(out_dir, "figure_06_rapidly_emerging_topics.pdf"),
-  p,
-  width = 190,
-  height = 235,
-  units = "mm",
-  device = cairo_pdf
-)
-
-ggsave(
-  file.path(out_dir, "figure_06_rapidly_emerging_topics.png"),
-  p,
-  width = 190,
-  height = 235,
-  units = "mm",
-  dpi = 600
-)
+  arrange(desc(relative_growth_rate))
 
 write_csv(
   plot_data %>% arrange(topic, publication_year),
   file.path(out_dir, "figure_06_rapidly_emerging_topics_data.csv")
 )
+write_csv(summary_data, file.path(out_dir, "figure_06_rapidly_emerging_topics_summary.csv"))
 
-write_csv(
-  summary_data,
-  file.path(out_dir, "figure_06_rapidly_emerging_topics_summary.csv")
-)
+# -------------------------------------------------------------------------
+# Figure
+# -------------------------------------------------------------------------
+# Each panel uses the same y-axis type (record count) and shows the observed
+# annual topic counts together with its fitted growth trajectory. The grey
+# dashed trajectory is the fitted growth of the complete evidence base,
+# rescaled to the topic's first observed count so that relative acceleration
+# is visually interpretable.
+
+plot_data <- plot_data %>%
+  group_by(topic) %>%
+  mutate(
+    first_year = min(publication_year[topic_records > 0], na.rm = TRUE),
+    first_topic_count = first(topic_records[publication_year == first_year & topic_records > 0]),
+    first_background_trend = first(background_trend[publication_year == first_year]),
+    background_rescaled = background_trend * first_topic_count / first_background_trend
+  ) %>%
+  ungroup()
+
+p <- ggplot(plot_data, aes(x = publication_year)) +
+  geom_line(aes(y = background_rescaled), colour = "#B8B8B8", linewidth = 0.7, linetype = "dashed") +
+  geom_line(aes(y = topic_trend), colour = "#E55634", linewidth = 0.85) +
+  geom_point(aes(y = topic_records), colour = "#E55634", size = 1.0) +
+  facet_wrap(~ factor(topic, levels = topic_order), ncol = 3, scales = "free_y") +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 7), expand = expansion(mult = c(0.01, 0.02))) +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.10))) +
+  labs(
+    title = "Rapidly emerging topics in the evidence base",
+    subtitle = paste0(
+      "Observed annual output and fitted topic growth; dashed line = background database growth rate (",
+      number(background_fit$annual_growth, accuracy = 0.1), "% per year)"
+    ),
+    x = "Publication year",
+    y = "Records per year",
+    caption = "Red points = observed topic records; red line = fitted log-linear topic trend; dashed grey line = fitted background trend, rescaled to the topic's first observed count."
+  ) +
+  theme_minimal(base_size = 10.5) +
+  theme(
+    panel.grid.major.y = element_line(colour = "#E5E8E9", linewidth = 0.3),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    strip.background = element_rect(fill = "#EEF2F2", colour = NA),
+    strip.text = element_text(face = "bold", colour = "#29434A", size = 9.2),
+    axis.title = element_text(face = "bold", colour = "#45616A"),
+    axis.text = element_text(colour = "#29434A", size = 8.2),
+    plot.title = element_text(face = "bold", size = 17, colour = "#29434A"),
+    plot.subtitle = element_text(colour = "#45616A", size = 10.5),
+    plot.caption = element_text(colour = "#5B6D72", size = 8.2, hjust = 0),
+    panel.spacing = grid::unit(1.1, "lines"),
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA),
+    plot.margin = margin(12, 16, 12, 12)
+  )
+
+ggsave(file.path(out_dir, "figure_06_rapidly_emerging_topics.pdf"), p,
+       width = 190, height = 235, units = "mm", device = cairo_pdf)
+ggsave(file.path(out_dir, "figure_06_rapidly_emerging_topics.png"), p,
+       width = 190, height = 235, units = "mm", dpi = 600)
 
 message("Figure 6 written to: ", out_dir)
