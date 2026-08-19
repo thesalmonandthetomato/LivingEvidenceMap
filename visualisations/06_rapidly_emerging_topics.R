@@ -1,10 +1,10 @@
 #!/usr/bin/env Rscript
 
 # Figure 6: Rapidly emerging topics relative to background evidence-base growth.
-# Each topic is plotted as a growth index (100 = its first observed year).
-# The background database is independently indexed to 100 at the same year.
-# Thus, a topic above the dashed background trajectory is growing faster than
-# the evidence base overall, irrespective of its absolute publication volume.
+# The 12 candidate emerging themes are retained. Each topic is shown as a
+# proportional growth trajectory, while the dashed grey line shows the fitted
+# proportional growth of the complete evidence base, indexed to 100 at the
+# topic's first observed year.
 
 required <- c("dplyr", "ggplot2", "readr", "tidyr", "stringr", "scales")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
@@ -27,7 +27,8 @@ required_master <- c("topic_hierarchy_paths", "year")
 missing_master <- setdiff(required_master, names(master))
 if (length(missing_master) > 0) stop("Required columns missing from master: ", paste(missing_master, collapse = ", "))
 
-# Parse topic paths using the same path representation as the hierarchy figures.
+# Parse topic paths using the same semicolon-separated hierarchy representation
+# used by the other visualisations.
 raw_paths <- master %>%
   transmute(record_id = row_number(), publication_year = suppressWarnings(as.integer(year)), raw_path = as.character(topic_hierarchy_paths)) %>%
   filter(!is.na(publication_year), !is.na(raw_path), str_trim(raw_path) != "") %>%
@@ -42,6 +43,9 @@ raw_paths <- master %>%
     taxonomy = str_squish(taxonomy)
   )
 
+# Keep the 12 themes agreed from the database analysis. Plastics and solid
+# waste is retained as a newly emerging theme even though it lacks a usable
+# pre-2015 rate comparison.
 rapid_rules <- tibble::tribble(
   ~topic, ~pattern,
   "Monitoring and sampling methods", "monitoring|sampling|surveillance|assessment methods",
@@ -85,7 +89,8 @@ plot_data <- tidyr::expand_grid(topic = topic_order, publication_year = all_year
   mutate(topic_records = replace_na(topic_records, 0L)) %>%
   left_join(background, by = "publication_year")
 
-# Fit log-linear growth rates without .data pronouns inside model formulas.
+# Fit log-linear growth rates. Zeros are excluded from the regression because
+# log(0) is undefined. This is appropriate for the 11 established themes.
 fit_growth <- function(df, value_col) {
   y <- df[[value_col]]
   keep <- is.finite(y) & y > 0 & is.finite(df$publication_year)
@@ -102,7 +107,6 @@ fit_growth <- function(df, value_col) {
 background_fit <- fit_growth(background, "background_records")
 if (is.null(background_fit$fit)) stop("Could not fit background growth trend.")
 
-# Background fitted growth, indexed to 100 at each topic's first observed year.
 background_pred <- background %>%
   mutate(background_trend_raw = exp(as.numeric(stats::predict(
     background_fit$fit,
@@ -110,76 +114,105 @@ background_pred <- background %>%
   )))
   )
 
-# Fit each topic separately and generate fitted growth trajectories.
+# Fit each topic independently. Plastics is a special case: it is a genuinely
+# new theme with no pre-2015 observations, so no defensible historical growth
+# rate exists. It is plotted from its first observed year using the observed
+# proportional trajectory, with the background trend shown for comparison.
 topic_fit_list <- lapply(topic_order, function(tp) {
   d <- plot_data[plot_data$topic == tp & plot_data$topic_records > 0, c("publication_year", "topic_records")]
-  fit_info <- fit_growth(d, "topic_records")
-  if (is.null(fit_info$fit)) stop("Could not fit growth trend for topic: ", tp)
   first_year <- min(d$publication_year)
-  topic_pred <- exp(as.numeric(stats::predict(
-    fit_info$fit,
-    newdata = data.frame(publication_year = all_years)
-  )))
+  fit_info <- fit_growth(d, "topic_records")
+
+  if (!is.null(fit_info$fit)) {
+    pred <- exp(as.numeric(stats::predict(
+      fit_info$fit,
+      newdata = data.frame(publication_year = all_years)
+    )))
+    fit_type <- "log-linear fitted trend"
+    annual_growth <- fit_info$annual_growth
+  } else {
+    pred <- rep(NA_real_, length(all_years))
+    fit_type <- "new theme; insufficient history for fitted rate"
+    annual_growth <- NA_real_
+  }
+
   tibble(
     topic = tp,
     publication_year = all_years,
-    topic_trend_raw = topic_pred,
-    topic_annual_growth_percent = fit_info$annual_growth,
-    topic_first_year = first_year
+    topic_trend_raw = pred,
+    topic_annual_growth_percent = annual_growth,
+    topic_first_year = first_year,
+    fit_type = fit_type
   )
 })
 topic_trends <- bind_rows(topic_fit_list)
 
+# For the 11 established themes, compare fitted proportional growth rates.
+# For plastics, use the observed proportional series rather than inventing a
+# growth rate from a zero baseline.
 plot_data <- plot_data %>%
   left_join(background_pred %>% select(publication_year, background_trend_raw), by = "publication_year") %>%
   left_join(topic_trends, by = c("topic", "publication_year")) %>%
   group_by(topic) %>%
+  arrange(publication_year, .by_group = TRUE) %>%
   mutate(
-    # Relative-growth index: each series starts at 100 in the topic's first
-    # observed year. This removes the absolute-size effect that made the
-    # previous grey background line dominate the figure.
     first_year = first(topic_first_year),
-    topic_anchor = topic_trend_raw[publication_year == first_year][1],
     background_anchor = background_trend_raw[publication_year == first_year][1],
-    topic_growth_index = 100 * topic_trend_raw / topic_anchor,
     background_growth_index = 100 * background_trend_raw / background_anchor,
-    relative_growth_index = 100 * topic_growth_index / background_growth_index
+    topic_first_observed = if_else(publication_year == first_year, topic_records, NA_integer_),
+    topic_growth_index_observed = if_else(!is.na(topic_first_observed) & topic_first_observed > 0,
+                                          100,
+                                          NA_real_),
+    topic_growth_index = if_else(
+      topic == "Plastics and solid waste",
+      if_else(topic_records > 0, 100 * topic_records / first(topic_records[topic_records > 0]), NA_real_),
+      100 * topic_trend_raw / topic_trend_raw[publication_year == first_year][1]
+    )
   ) %>%
   ungroup()
 
+# Summary table explicitly identifies whether fitted topic growth exceeds the
+# background growth rate. Plastics is marked as 'new theme' rather than forced
+# into an invalid rate comparison.
 summary_data <- topic_trends %>%
-  distinct(topic, topic_annual_growth_percent) %>%
+  distinct(topic, topic_annual_growth_percent, fit_type) %>%
   mutate(
     background_annual_growth_percent = background_fit$annual_growth,
     excess_annual_growth_percentage_points = topic_annual_growth_percent - background_annual_growth_percent,
     relative_annual_growth_ratio = (1 + topic_annual_growth_percent / 100) /
-      (1 + background_annual_growth_percent / 100)
+      (1 + background_annual_growth_percent / 100),
+    classification = case_when(
+      topic == "Plastics and solid waste" ~ "New theme; no pre-2015 rate",
+      topic_annual_growth_percent > background_annual_growth_percent ~ "Faster than background",
+      TRUE ~ "Not faster than background"
+    )
   ) %>%
   arrange(desc(relative_annual_growth_ratio))
 
 write_csv(plot_data %>% arrange(topic, publication_year), file.path(out_dir, "figure_06_rapidly_emerging_topics_data.csv"))
 write_csv(summary_data, file.path(out_dir, "figure_06_rapidly_emerging_topics_summary.csv"))
 
-# Plot growth indices rather than absolute record counts. A topic is visually
-# emerging faster than the background when its red trajectory rises above the
-# dashed grey background trajectory.
+# Plot proportional growth. The dashed grey line is the fitted background
+# evidence-base growth rate, indexed to 100 at the first year in which each
+# topic appears. The red line is the topic trajectory. Thus, the visual gap
+# between red and grey directly represents above/below-background growth.
 p <- ggplot(plot_data, aes(x = publication_year)) +
   geom_hline(yintercept = 100, colour = "#D9DEDF", linewidth = 0.35) +
-  geom_line(aes(y = background_growth_index), colour = "#8E989B", linewidth = 0.75, linetype = "dashed") +
-  geom_line(aes(y = topic_growth_index), colour = "#E55634", linewidth = 0.9) +
-  geom_point(aes(y = topic_growth_index), colour = "#E55634", size = 0.9) +
+  geom_line(aes(y = background_growth_index), colour = "#8E989B", linewidth = 0.8, linetype = "dashed") +
+  geom_line(aes(y = topic_growth_index), colour = "#E55634", linewidth = 0.95, na.rm = TRUE) +
+  geom_point(aes(y = topic_growth_index), colour = "#E55634", size = 0.9, na.rm = TRUE) +
   facet_wrap(~ factor(topic, levels = topic_order), ncol = 3, scales = "free_y") +
   scale_x_continuous(breaks = scales::breaks_pretty(n = 7), expand = expansion(mult = c(0.01, 0.02))) +
   scale_y_continuous(labels = function(x) paste0(comma(x), "%"), expand = expansion(mult = c(0, 0.10))) +
   labs(
     title = "Rapidly emerging topics in the evidence base",
     subtitle = paste0(
-      "Relative growth trajectories; each topic and the background database are indexed to 100 at the topic's first observed year. Background annual growth = ",
+      "Proportional growth relative to the background evidence base; background annual growth = ",
       number(background_fit$annual_growth, accuracy = 0.1), "%"
     ),
     x = "Publication year",
-    y = "Growth index",
-    caption = "Red = topic growth; dashed grey = background database growth. Values above the grey trajectory indicate faster growth than the background evidence base."
+    y = "Growth index (first observed year = 100)",
+    caption = "Red = topic growth; dashed grey = fitted background database growth. Red above grey indicates growth faster than the background. Plastics and solid waste is shown as a new theme because no pre-2015 baseline exists."
   ) +
   theme_minimal(base_size = 10.5) +
   theme(
