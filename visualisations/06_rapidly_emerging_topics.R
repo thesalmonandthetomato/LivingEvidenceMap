@@ -197,9 +197,22 @@ p <- ggplot(plot_data, aes(x = publication_year)) +
   geom_line(aes(y = background_growth_index), colour = "#8E989B", linewidth = 0.85, linetype = "dashed") +
   geom_line(aes(y = topic_growth_index), colour = "#E55634", linewidth = 0.95, na.rm = TRUE) +
   geom_point(aes(y = topic_growth_index), colour = "#E55634", size = 0.85, na.rm = TRUE) +
-  facet_wrap(~ factor(topic, levels = topic_order), ncol = 3, scales = "free_y") +
-  scale_x_continuous(breaks = seq(2010, max(all_years), by = 5), expand = expansion(mult = c(0.01, 0.02))) +
-  scale_y_continuous(labels = function(x) paste0(comma(x), "%"), expand = expansion(mult = c(0, 0.10))) +
+  facet_wrap(
+    ~ factor(topic, levels = topic_order),
+    ncol = 3,
+    scales = "free_y",
+    labeller = labeller(topic = label_wrap_gen(width = 24))
+  ) +
+  scale_x_continuous(
+    limits = c(2010, max(all_years)),
+    breaks = c(2010, 2015, 2020, 2025),
+    labels = c("2010", "2015", "2020", "2025"),
+    expand = expansion(mult = c(0.01, 0.02))
+  ) +
+  scale_y_continuous(
+    labels = comma_format(accuracy = 1),
+    expand = expansion(mult = c(0, 0.10))
+  ) +
   labs(
     title = "Rapidly emerging topics in the evidence base",
     subtitle = paste0("Growth indexed to 2010–2014; dashed grey = fitted background database growth (", number(background_growth_ratio, accuracy = 0.01), "× by 2021–2025)"),
@@ -210,18 +223,21 @@ p <- ggplot(plot_data, aes(x = publication_year)) +
   theme_minimal(base_size = 10.5) +
   theme(
     panel.grid.major.y = element_line(colour = "#E5E8E9", linewidth = 0.3),
-    panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
     strip.background = element_rect(fill = "#EEF2F2", colour = NA),
-    strip.text = element_text(face = "bold", colour = "#29434A", size = 9.2),
+    strip.text = element_text(face = "bold", colour = "#29434A", size = 9.2, lineheight = 0.95),
+    strip.clip = "off",
     axis.title = element_text(face = "bold", colour = "#45616A"),
     axis.text = element_text(colour = "#29434A", size = 8.2),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 8),
     plot.title = element_text(face = "bold", size = 17, colour = "#29434A"),
     plot.subtitle = element_text(colour = "#45616A", size = 10.5),
     plot.caption = element_text(colour = "#5B6D72", size = 8.2, hjust = 0),
-    panel.spacing = grid::unit(1.1, "lines"),
+    panel.spacing = grid::unit(1.25, "lines"),
     plot.background = element_rect(fill = "white", colour = NA),
     panel.background = element_rect(fill = "white", colour = NA),
-    plot.margin = margin(12, 16, 12, 12)
+    plot.margin = margin(16, 20, 18, 16)
   )
 
 ggsave(file.path(out_dir, "figure_06_rapidly_emerging_topics.pdf"), p, width = 190, height = 235, units = "mm", device = cairo_pdf)
