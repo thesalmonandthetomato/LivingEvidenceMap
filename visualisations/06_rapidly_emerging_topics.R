@@ -1,8 +1,10 @@
 #!/usr/bin/env Rscript
 
 # Figure 6: Rapidly emerging topics relative to background evidence-base growth.
-# Uses the corrected master database and the repository's canonical topic-path
-# representation.
+# Each topic is plotted as a growth index (100 = its first observed year).
+# The background database is independently indexed to 100 at the same year.
+# Thus, a topic above the dashed background trajectory is growing faster than
+# the evidence base overall, irrespective of its absolute publication volume.
 
 required <- c("dplyr", "ggplot2", "readr", "tidyr", "stringr", "scales")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
@@ -83,87 +85,118 @@ plot_data <- tidyr::expand_grid(topic = topic_order, publication_year = all_year
   mutate(topic_records = replace_na(topic_records, 0L)) %>%
   left_join(background, by = "publication_year")
 
-# Fit log-linear growth without using .data inside a formula. The previous
-# version used .data[[value_col]] in lm(), which evaluates outside a dplyr data
-# mask in some recent dplyr/R combinations and triggers the reported error.
+# Fit log-linear growth rates without .data pronouns inside model formulas.
 fit_growth <- function(df, value_col) {
   y <- df[[value_col]]
-  d <- df[is.finite(y) & y > 0 & is.finite(df$publication_year), c("publication_year", value_col), drop = FALSE]
-  if (nrow(d) < 3 || length(unique(d$publication_year)) < 3) return(tibble(slope = NA_real_, annual_growth = NA_real_))
+  keep <- is.finite(y) & y > 0 & is.finite(df$publication_year)
+  d <- df[keep, c("publication_year", value_col), drop = FALSE]
+  if (nrow(d) < 3 || length(unique(d$publication_year)) < 3) {
+    return(list(slope = NA_real_, annual_growth = NA_real_, fit = NULL))
+  }
   d$log_y <- log(d[[value_col]])
   fit <- stats::lm(log_y ~ publication_year, data = d)
   slope <- unname(stats::coef(fit)[["publication_year"]])
-  tibble(slope = slope, annual_growth = 100 * (exp(slope) - 1))
+  list(slope = slope, annual_growth = 100 * (exp(slope) - 1), fit = fit)
 }
 
 background_fit <- fit_growth(background, "background_records")
-background_model_data <- background %>% filter(background_records > 0) %>% mutate(log_y = log(background_records))
-background_model <- stats::lm(log_y ~ publication_year, data = background_model_data)
-background_pred <- background %>% mutate(background_trend = exp(stats::predict(background_model, newdata = data.frame(publication_year = publication_year))))
+if (is.null(background_fit$fit)) stop("Could not fit background growth trend.")
 
-# Fit each topic separately; no dplyr data-mask pronouns are used here.
+# Background fitted growth, indexed to 100 at each topic's first observed year.
+background_pred <- background %>%
+  mutate(background_trend_raw = exp(as.numeric(stats::predict(
+    background_fit$fit,
+    newdata = data.frame(publication_year = publication_year)
+  )))
+  )
+
+# Fit each topic separately and generate fitted growth trajectories.
 topic_fit_list <- lapply(topic_order, function(tp) {
   d <- plot_data[plot_data$topic == tp & plot_data$topic_records > 0, c("publication_year", "topic_records")]
-  d$log_y <- log(d$topic_records)
-  fit <- stats::lm(log_y ~ publication_year, data = d)
-  slope <- unname(stats::coef(fit)[["publication_year"]])
-  tibble(topic = tp, slope = slope, annual_growth_percent = 100 * (exp(slope) - 1))
+  fit_info <- fit_growth(d, "topic_records")
+  if (is.null(fit_info$fit)) stop("Could not fit growth trend for topic: ", tp)
+  first_year <- min(d$publication_year)
+  topic_pred <- exp(as.numeric(stats::predict(
+    fit_info$fit,
+    newdata = data.frame(publication_year = all_years)
+  )))
+  tibble(
+    topic = tp,
+    publication_year = all_years,
+    topic_trend_raw = topic_pred,
+    topic_annual_growth_percent = fit_info$annual_growth,
+    topic_first_year = first_year
+  )
 })
-trend_rows <- bind_rows(topic_fit_list)
-
-# Generate fitted topic trajectories explicitly.
-topic_trends <- bind_rows(lapply(topic_order, function(tp) {
-  d <- plot_data[plot_data$topic == tp & plot_data$topic_records > 0, c("publication_year", "topic_records")]
-  d$log_y <- log(d$topic_records)
-  fit <- stats::lm(log_y ~ publication_year, data = d)
-  pred <- stats::predict(fit, newdata = data.frame(publication_year = all_years))
-  tibble(topic = tp, publication_year = all_years, topic_trend = exp(as.numeric(pred)))
-}))
+topic_trends <- bind_rows(topic_fit_list)
 
 plot_data <- plot_data %>%
-  left_join(background_pred %>% select(publication_year, background_trend), by = "publication_year") %>%
-  left_join(topic_trends, by = c("topic", "publication_year"))
+  left_join(background_pred %>% select(publication_year, background_trend_raw), by = "publication_year") %>%
+  left_join(topic_trends, by = c("topic", "publication_year")) %>%
+  group_by(topic) %>%
+  mutate(
+    # Relative-growth index: each series starts at 100 in the topic's first
+    # observed year. This removes the absolute-size effect that made the
+    # previous grey background line dominate the figure.
+    first_year = first(topic_first_year),
+    topic_anchor = topic_trend_raw[publication_year == first_year][1],
+    background_anchor = background_trend_raw[publication_year == first_year][1],
+    topic_growth_index = 100 * topic_trend_raw / topic_anchor,
+    background_growth_index = 100 * background_trend_raw / background_anchor,
+    relative_growth_index = 100 * topic_growth_index / background_growth_index
+  ) %>%
+  ungroup()
 
-summary_data <- trend_rows %>%
-  mutate(background_annual_growth_percent = background_fit$annual_growth,
-         relative_growth_rate = annual_growth_percent - background_annual_growth_percent) %>%
-  arrange(desc(relative_growth_rate))
+summary_data <- topic_trends %>%
+  distinct(topic, topic_annual_growth_percent) %>%
+  mutate(
+    background_annual_growth_percent = background_fit$annual_growth,
+    excess_annual_growth_percentage_points = topic_annual_growth_percent - background_annual_growth_percent,
+    relative_annual_growth_ratio = (1 + topic_annual_growth_percent / 100) /
+      (1 + background_annual_growth_percent / 100)
+  ) %>%
+  arrange(desc(relative_annual_growth_ratio))
 
 write_csv(plot_data %>% arrange(topic, publication_year), file.path(out_dir, "figure_06_rapidly_emerging_topics_data.csv"))
 write_csv(summary_data, file.path(out_dir, "figure_06_rapidly_emerging_topics_summary.csv"))
 
-# Rescale the fitted background trajectory to each topic's first observed count.
-plot_data <- plot_data %>%
-  group_by(topic) %>%
-  mutate(
-    first_year = min(publication_year[topic_records > 0]),
-    first_topic_count = topic_records[publication_year == first_year][1],
-    first_background_trend = background_trend[publication_year == first_year][1],
-    background_rescaled = background_trend * first_topic_count / first_background_trend
-  ) %>%
-  ungroup()
-
+# Plot growth indices rather than absolute record counts. A topic is visually
+# emerging faster than the background when its red trajectory rises above the
+# dashed grey background trajectory.
 p <- ggplot(plot_data, aes(x = publication_year)) +
-  geom_line(aes(y = background_rescaled), colour = "#B8B8B8", linewidth = 0.7, linetype = "dashed") +
-  geom_line(aes(y = topic_trend), colour = "#E55634", linewidth = 0.85) +
-  geom_point(aes(y = topic_records), colour = "#E55634", size = 1.0) +
+  geom_hline(yintercept = 100, colour = "#D9DEDF", linewidth = 0.35) +
+  geom_line(aes(y = background_growth_index), colour = "#8E989B", linewidth = 0.75, linetype = "dashed") +
+  geom_line(aes(y = topic_growth_index), colour = "#E55634", linewidth = 0.9) +
+  geom_point(aes(y = topic_growth_index), colour = "#E55634", size = 0.9) +
   facet_wrap(~ factor(topic, levels = topic_order), ncol = 3, scales = "free_y") +
   scale_x_continuous(breaks = scales::breaks_pretty(n = 7), expand = expansion(mult = c(0.01, 0.02))) +
-  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.10))) +
+  scale_y_continuous(labels = function(x) paste0(comma(x), "%"), expand = expansion(mult = c(0, 0.10))) +
   labs(
     title = "Rapidly emerging topics in the evidence base",
-    subtitle = paste0("Observed annual output and fitted topic growth; dashed line = background database growth rate (", number(background_fit$annual_growth, accuracy = 0.1), "% per year)"),
-    x = "Publication year", y = "Records per year",
-    caption = "Red points = observed topic records; red line = fitted log-linear topic trend; dashed grey line = fitted background trend, rescaled to the topic's first observed count."
+    subtitle = paste0(
+      "Relative growth trajectories; each topic and the background database are indexed to 100 at the topic's first observed year. Background annual growth = ",
+      number(background_fit$annual_growth, accuracy = 0.1), "%"
+    ),
+    x = "Publication year",
+    y = "Growth index",
+    caption = "Red = topic growth; dashed grey = background database growth. Values above the grey trajectory indicate faster growth than the background evidence base."
   ) +
   theme_minimal(base_size = 10.5) +
   theme(
-    panel.grid.major.y = element_line(colour = "#E5E8E9", linewidth = 0.3), panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
-    strip.background = element_rect(fill = "#EEF2F2", colour = NA), strip.text = element_text(face = "bold", colour = "#29434A", size = 9.2),
-    axis.title = element_text(face = "bold", colour = "#45616A"), axis.text = element_text(colour = "#29434A", size = 8.2),
-    plot.title = element_text(face = "bold", size = 17, colour = "#29434A"), plot.subtitle = element_text(colour = "#45616A", size = 10.5),
-    plot.caption = element_text(colour = "#5B6D72", size = 8.2, hjust = 0), panel.spacing = grid::unit(1.1, "lines"),
-    plot.background = element_rect(fill = "white", colour = NA), panel.background = element_rect(fill = "white", colour = NA), plot.margin = margin(12, 16, 12, 12)
+    panel.grid.major.y = element_line(colour = "#E5E8E9", linewidth = 0.3),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    strip.background = element_rect(fill = "#EEF2F2", colour = NA),
+    strip.text = element_text(face = "bold", colour = "#29434A", size = 9.2),
+    axis.title = element_text(face = "bold", colour = "#45616A"),
+    axis.text = element_text(colour = "#29434A", size = 8.2),
+    plot.title = element_text(face = "bold", size = 17, colour = "#29434A"),
+    plot.subtitle = element_text(colour = "#45616A", size = 10.5),
+    plot.caption = element_text(colour = "#5B6D72", size = 8.2, hjust = 0),
+    panel.spacing = grid::unit(1.1, "lines"),
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA),
+    plot.margin = margin(12, 16, 12, 12)
   )
 
 ggsave(file.path(out_dir, "figure_06_rapidly_emerging_topics.pdf"), p, width = 190, height = 235, units = "mm", device = cairo_pdf)
