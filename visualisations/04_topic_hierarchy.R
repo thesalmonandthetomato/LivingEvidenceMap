@@ -122,8 +122,6 @@ label_data <- top_counts %>%
   left_join(bar_end, by = "level1") %>%
   mutate(label_x = bar_end + label_gap)
 
-x_max <- max(bar_end$bar_end, na.rm = TRUE) + label_gap * 7
-
 overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill = species)) +
   geom_col(width = 0.68, colour = "white", linewidth = 0.2) +
   geom_text(
@@ -135,7 +133,7 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill
     colour = palette[1]
   ) +
   scale_fill_manual(values = species_fill_values, breaks = canonical_species, drop = FALSE) +
-  scale_x_continuous(labels = comma, limits = c(0, x_max), expand = expansion(mult = c(0, 0))) +
+  scale_x_continuous(labels = comma, limits = c(0, 12000), expand = expansion(mult = c(0, 0))) +
   labs(
     title = "LivingEvidenceMap: topic distribution",
     subtitle = "Unique records assigned to each top-level topic; colour shows species composition",
