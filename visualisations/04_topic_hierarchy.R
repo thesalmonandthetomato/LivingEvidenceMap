@@ -3,7 +3,8 @@
 # LivingEvidenceMap topic hierarchy visualisations
 #
 # Creates:
-#   1. One high-level bar chart using UNIQUE RECORD counts.
+#   1. One high-level bar chart using UNIQUE RECORD counts, with species
+#      composition shown by stacked colour segments.
 #   2. One hierarchical horizontal bar plot for each top-level topic.
 #
 # The secondary figures deliberately use horizontal bars rather than forcing
@@ -29,8 +30,29 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 palette <- c("#2c454a", "#577c84", "#a8bdbe", "#e2b8a2", "#ff9d78", "#e55634")
 
+# Keep species colouring and ordering exactly aligned with Figures 1 and 2.
+canonical_species <- c("Atlantic salmon", "Chinook salmon", "Chum salmon", "Coho salmon", "Masu salmon", "Pink salmon", "Sockeye salmon", "Rainbow trout", "Unspecified species")
+
+normalise_species <- function(x) {
+  x <- trimws(x); x_lower <- tolower(x)
+  dplyr::case_when(
+    x_lower == "atlantic salmon" ~ "Atlantic salmon",
+    x_lower == "chinook salmon" ~ "Chinook salmon",
+    x_lower == "chum salmon" ~ "Chum salmon",
+    x_lower == "coho salmon" ~ "Coho salmon",
+    x_lower == "masu salmon" ~ "Masu salmon",
+    x_lower == "pink salmon" ~ "Pink salmon",
+    x_lower == "sockeye salmon" ~ "Sockeye salmon",
+    x_lower %in% c("rainbow salmon", "rainbow trout", "steelhead", "steelhead trout") ~ "Rainbow trout",
+    x_lower %in% c("unspecified species", "unspecified farmed salmon", "unspecified salmon", "farmed salmon") ~ "Unspecified species",
+    TRUE ~ x
+  )
+}
+
 master <- readr::read_csv(master_path, show_col_types = FALSE, progress = FALSE)
-if (!"topic_hierarchy_paths" %in% names(master)) stop("Required column missing from master: topic_hierarchy_paths")
+required_master <- c("topic_hierarchy_paths", "final_species")
+missing_master <- setdiff(required_master, names(master))
+if (length(missing_master) > 0) stop("Required columns missing from master: ", paste(missing_master, collapse = ", "))
 
 raw_paths <- master %>%
   transmute(record_id = row_number(), raw_path = as.character(topic_hierarchy_paths)) %>%
@@ -47,8 +69,26 @@ for (i in seq_len(max_depth)) {
   raw_paths[[paste0("level", i)]] <- vapply(parts, function(x) if (length(x) >= i) str_squish(x[i]) else NA_character_, character(1))
 }
 
+# Canonical record-species observations, following the same multi-species
+# expansion used in Figures 1 and 2.
+record_species <- master %>%
+  transmute(record_id = row_number(), species = trimws(as.character(final_species))) %>%
+  separate_rows(species, sep = ";") %>%
+  mutate(species = normalise_species(species),
+         species = if_else(is.na(species) | species == "", "Unspecified species", species)) %>%
+  distinct(record_id, species)
+
+unexpected_species <- setdiff(unique(record_species$species), canonical_species)
+if (length(unexpected_species) > 0L) stop("Unexpected species categories after normalisation: ", paste(sort(unexpected_species), collapse = ", "))
+
+record_species <- record_species %>%
+  mutate(species = factor(species, levels = canonical_species))
+
+pacific_values <- grDevices::colorRampPalette(palette[1:3])(7L)
+species_fill_values <- c("Atlantic salmon" = "#e55634", setNames(pacific_values, canonical_species[2:8]), "Unspecified species" = "#e2b8a2")
+
 # -------------------------------------------------------------------------
-# 1. HIGH-LEVEL OVERVIEW: UNIQUE RECORDS
+# 1. HIGH-LEVEL OVERVIEW: UNIQUE RECORDS + SPECIES
 # -------------------------------------------------------------------------
 
 top_counts <- raw_paths %>%
@@ -56,24 +96,49 @@ top_counts <- raw_paths %>%
   count(level1, name = "unique_records") %>%
   arrange(unique_records)
 
-overview <- ggplot(top_counts, aes(x = unique_records, y = reorder(level1, unique_records))) +
-  geom_col(fill = palette[1], width = 0.68) +
-  geom_text(aes(label = comma(unique_records)), hjust = -0.12, size = 3.5, colour = palette[1]) +
-  scale_x_continuous(labels = comma, expand = expansion(mult = c(0, .10))) +
-  labs(title = "LivingEvidenceMap: topic distribution", subtitle = "Unique records assigned to each top-level topic", x = "Unique records", y = NULL,
-       caption = "Each record is counted once within each top-level topic; records may be assigned to multiple topics.") +
+top_species_counts <- raw_paths %>%
+  distinct(record_id, level1) %>%
+  left_join(record_species, by = "record_id") %>%
+  count(level1, species, name = "species_records") %>%
+  mutate(species = factor(species, levels = canonical_species))
+
+overview <- ggplot(top_species_counts, aes(x = species_records, y = reorder(level1, top_counts$unique_records), fill = species)) +
+  geom_col(width = 0.68, colour = "white", linewidth = 0.2) +
+  geom_text(
+    data = top_counts,
+    aes(x = unique_records, y = reorder(level1, unique_records), label = comma(unique_records)),
+    inherit.aes = FALSE,
+    hjust = -0.12,
+    size = 3.5,
+    colour = palette[1]
+  ) +
+  scale_fill_manual(values = species_fill_values, breaks = canonical_species, drop = FALSE) +
+  scale_x_continuous(labels = comma, expand = expansion(mult = c(0, .12))) +
+  labs(
+    title = "LivingEvidenceMap: topic distribution",
+    subtitle = "Unique records assigned to each top-level topic; colour shows species composition",
+    x = "Unique records / species-record observations",
+    y = NULL,
+    fill = "Species",
+    caption = "Numbers at bar ends are unique records. Species segments follow the Figure 1/2 ordering and may sum above the unique-record total where a record has multiple species assignments."
+  ) +
   theme_minimal(base_size = 11) +
-  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
-        axis.text.y = element_text(colour = palette[1], face = "bold"),
-        axis.text.x = element_text(colour = palette[2]), axis.title.x = element_text(colour = palette[2]),
-        plot.title = element_text(face = "bold", size = 16, colour = palette[1]),
-        plot.subtitle = element_text(colour = palette[2]), plot.caption = element_text(colour = palette[2], hjust = 0),
-        plot.background = element_rect(fill = "white", colour = NA), panel.background = element_rect(fill = "white", colour = NA),
-        plot.margin = margin(12, 30, 12, 12))
+  theme(
+    panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+    axis.text.y = element_text(colour = palette[1], face = "bold"),
+    axis.text.x = element_text(colour = palette[2]), axis.title.x = element_text(colour = palette[2]),
+    plot.title = element_text(face = "bold", size = 16, colour = palette[1]),
+    plot.subtitle = element_text(colour = palette[2]), plot.caption = element_text(colour = palette[2], hjust = 0),
+    legend.title = element_text(face = "bold", colour = palette[1]),
+    legend.text = element_text(colour = palette[1]),
+    plot.background = element_rect(fill = "white", colour = NA), panel.background = element_rect(fill = "white", colour = NA),
+    plot.margin = margin(12, 30, 12, 12)
+  )
 
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.pdf"), overview, width = 190, height = 125, units = "mm")
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.png"), overview, width = 190, height = 125, units = "mm", dpi = 600)
 write_csv(top_counts, file.path(out_dir, "topic_top_level_unique_record_counts.csv"))
+write_csv(top_species_counts %>% mutate(species = as.character(species)), file.path(out_dir, "topic_top_level_species_counts.csv"))
 
 # -------------------------------------------------------------------------
 # 2. HIERARCHICAL HORIZONTAL BAR PLOTS
