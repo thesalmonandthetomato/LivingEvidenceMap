@@ -1,14 +1,11 @@
 #!/usr/bin/env Rscript
 
 # Figure 6: Rapidly emerging topics relative to background evidence-base growth.
-#
-# The 12 agreed themes are matched to the CANONICAL taxonomy paths in the
-# master database (rather than by broad keywords). For the 11 established
-# themes, growth is indexed to the mean annual number of records in 2010-2014.
-# The dashed grey line is the fitted background evidence-base growth trajectory,
-# indexed to the same baseline. Thus, red above grey means that the topic is
-# growing faster than the database overall.
-#
+# The 12 agreed themes are matched to canonical taxonomy paths in the master
+# database. For the 11 established themes, growth is indexed to the mean annual
+# number of records in 2010-2014. The dashed grey line is the fitted background
+# evidence-base growth trajectory, indexed to the same baseline. Thus, red
+# above grey means that the topic is growing faster than the database overall.
 # Plastics and solid waste is retained as a genuinely new theme: it has no
 # records in 2010-2014, so it is plotted from its first observed year and is
 # explicitly not assigned a historical growth rate.
@@ -42,9 +39,7 @@ master <- master %>%
   ) %>%
   filter(!is.na(publication_year))
 
-# Canonical taxonomy paths verified against the master database. Do not replace
-# these with keyword matching: broad terms such as 'monitoring', 'waste',
-# 'model', 'sensor', etc. occur in multiple unrelated taxonomy branches.
+# Canonical taxonomy paths. Broad keyword matching is deliberately avoided.
 rapid_topics <- tibble::tribble(
   ~topic, ~canonical_path,
   "Monitoring and sampling methods", "Methods > Methodological research > Monitoring and sampling methods",
@@ -61,25 +56,18 @@ rapid_topics <- tibble::tribble(
   "Energy, greenhouse gases and life-cycle footprint", "Environment > Resource use and footprint > Energy, greenhouse gases and life-cycle footprint",
   "By-products and waste as inputs", "Inputs and resources > Circularity > By-products and waste as inputs",
   "Plastics and solid waste", "Environment > Waste and emissions > Plastics and solid waste"
-) %>%
-  distinct()
+) %>% distinct()
 
 topic_order <- c(
-  "Monitoring and sampling methods",
-  "Automation and precision aquaculture",
-  "Smoltification and smolt quality",
-  "Novel feed resources",
-  "Welfare assessment and risks",
-  "Climate change",
-  "Sensors, imaging and measurement",
-  "Statistical and modelling methods",
+  "Monitoring and sampling methods", "Automation and precision aquaculture",
+  "Smoltification and smolt quality", "Novel feed resources",
+  "Welfare assessment and risks", "Climate change",
+  "Sensors, imaging and measurement", "Statistical and modelling methods",
   "Antimicrobial resistance and One Health",
   "Energy, greenhouse gases and life-cycle footprint",
-  "By-products and waste as inputs",
-  "Plastics and solid waste"
+  "By-products and waste as inputs", "Plastics and solid waste"
 )
 
-# Expand the semicolon-separated canonical topic paths and match exact paths.
 expanded <- master %>%
   mutate(path = str_split(topic_hierarchy_paths, "\\s*;\\s*")) %>%
   unnest(path) %>%
@@ -91,22 +79,15 @@ topic_matches <- expanded %>%
   inner_join(rapid_topics, by = c("path" = "canonical_path")) %>%
   distinct(record_id, publication_year, topic, path)
 
-# Audit the exact taxonomy mapping used by the figure.
 write_csv(
   topic_matches %>% count(topic, path, sort = TRUE),
   file.path(out_dir, "figure_06_rapidly_emerging_topics_taxonomy_mapping.csv")
 )
 
-match_counts <- topic_matches %>%
-  distinct(topic, record_id) %>%
-  count(topic, name = "matched_records")
-
+match_counts <- topic_matches %>% distinct(topic, record_id) %>% count(topic, name = "matched_records")
 missing_topics <- setdiff(topic_order, match_counts$topic)
-if (length(missing_topics) > 0) {
-  stop("No database records matched: ", paste(missing_topics, collapse = ", "))
-}
+if (length(missing_topics) > 0) stop("No database records matched: ", paste(missing_topics, collapse = ", "))
 
-# Background evidence-base counts: unique records per publication year.
 background <- master %>%
   distinct(record_id, publication_year) %>%
   count(publication_year, name = "background_records")
@@ -116,67 +97,41 @@ background <- tibble(publication_year = all_years) %>%
   left_join(background, by = "publication_year") %>%
   mutate(background_records = replace_na(background_records, 0L))
 
-# Topic counts: a record assigned to both welfare leaf topics is counted once in
-# the combined welfare theme.
 topic_counts <- topic_matches %>%
   distinct(topic, record_id, publication_year) %>%
   count(topic, publication_year, name = "topic_records")
 
-plot_data <- tidyr::expand_grid(
-  topic = topic_order,
-  publication_year = all_years
-) %>%
+plot_data <- tidyr::expand_grid(topic = topic_order, publication_year = all_years) %>%
   left_join(topic_counts, by = c("topic", "publication_year")) %>%
   mutate(topic_records = replace_na(topic_records, 0L)) %>%
   left_join(background, by = "publication_year")
 
-# -------------------------------------------------------------------------
-# Baseline and growth calculations
-# -------------------------------------------------------------------------
-# The established-topic baseline is the mean annual output during 2010-2014.
-# This is exactly the comparison used in the database analysis that identified
-# the 11 above-background themes. The background baseline is the corresponding
-# mean annual output for the entire database.
+# Background baseline and recent growth ratio.
 background_baseline <- background %>%
   filter(publication_year >= 2010, publication_year <= 2014) %>%
-  summarise(x = mean(background_records)) %>%
-  pull(x)
-
+  summarise(x = mean(background_records)) %>% pull(x)
 background_recent <- background %>%
   filter(publication_year >= 2021, publication_year <= 2025) %>%
-  summarise(x = mean(background_records)) %>%
-  pull(x)
-
-if (is.na(background_baseline) || background_baseline <= 0) {
-  stop("Could not calculate the 2010-2014 background baseline.")
-}
-
+  summarise(x = mean(background_records)) %>% pull(x)
+if (is.na(background_baseline) || background_baseline <= 0) stop("Could not calculate the 2010-2014 background baseline.")
 background_growth_ratio <- background_recent / background_baseline
 
-# Fit a log-linear background trend from 2010 onward. The fitted trend is
-# normalised to the observed 2010-2014 background mean, not to an arbitrary
-# topic-specific first year. This makes the grey trajectory comparable across
-# all established-topic panels.
+# Fit background log-linear trend and index it to the observed 2010-2014 mean.
 background_fit_data <- background %>%
   filter(publication_year >= 2010, background_records > 0) %>%
   mutate(log_records = log(background_records))
 background_fit <- lm(log_records ~ publication_year, data = background_fit_data)
 background_fit_raw <- tibble(
   publication_year = all_years,
-  background_trend_raw = exp(as.numeric(predict(
-    background_fit,
-    newdata = data.frame(publication_year = all_years)
-  )))
+  background_trend_raw = exp(as.numeric(predict(background_fit, newdata = data.frame(publication_year = all_years))))
 )
 background_fit_baseline <- mean(background_fit_raw$background_trend_raw[background_fit_raw$publication_year >= 2010 & background_fit_raw$publication_year <= 2014])
-
 plot_data <- plot_data %>%
   left_join(background_fit_raw, by = "publication_year") %>%
   mutate(background_growth_index = 100 * background_trend_raw / background_fit_baseline)
 
-# Topic growth index. Established topics use the observed 2010-2014 mean. The
-# plastics theme has a zero historical baseline and is therefore indexed to its
-# first observed year instead.
+# Topic baselines. Plastics has no 2010-2014 baseline and is therefore treated
+# as a new theme rather than assigned an artificial growth rate.
 topic_baselines <- plot_data %>%
   group_by(topic) %>%
   summarise(
@@ -200,94 +155,62 @@ plot_data <- plot_data %>%
     )
   )
 
-# Calculate the 2010-2014 -> 2021-2025 growth ratios used to identify rapid
-# emergence. These should reproduce the database-level analysis directly.
+# First summarise to one row per topic. Classification is deliberately applied
+# in a separate mutate() after summarise(), avoiding dplyr's data-mask issue
+# when a newly created summary variable is referenced inside case_when().
 summary_data <- plot_data %>%
   group_by(topic) %>%
   summarise(
     baseline_2010_2014 = first(baseline_2010_2014),
     first_observed_year = first(first_observed_year),
     mean_2021_2025 = mean(topic_records[publication_year >= 2021 & publication_year <= 2025]),
+    .groups = "drop"
+  ) %>%
+  mutate(
     growth_ratio_2010_14_to_2021_25 = if_else(
-      first(baseline_2010_2014) > 0,
-      mean_2021_2025 / first(baseline_2010_2014),
+      baseline_2010_2014 > 0,
+      mean_2021_2025 / baseline_2010_2014,
       NA_real_
     ),
     background_growth_ratio = background_growth_ratio,
     relative_to_background = growth_ratio_2010_14_to_2021_25 / background_growth_ratio,
-    classification = case_when(
-      topic == "Plastics and solid waste" ~ "New theme; no 2010-2014 baseline",
-      growth_ratio_2010_14_to_2021_25 > background_growth_ratio ~ "Faster than background",
-      TRUE ~ "Not faster than background"
-    ),
-    .groups = "drop"
+    classification = ifelse(
+      topic == "Plastics and solid waste",
+      "New theme; no 2010-2014 baseline",
+      ifelse(
+        growth_ratio_2010_14_to_2021_25 > background_growth_ratio,
+        "Faster than background",
+        "Not faster than background"
+      )
+    )
   ) %>%
   arrange(desc(relative_to_background))
 
-write_csv(
-  plot_data %>% arrange(topic, publication_year),
-  file.path(out_dir, "figure_06_rapidly_emerging_topics_data.csv")
-)
-write_csv(
-  summary_data,
-  file.path(out_dir, "figure_06_rapidly_emerging_topics_summary.csv")
-)
+write_csv(plot_data %>% arrange(topic, publication_year), file.path(out_dir, "figure_06_rapidly_emerging_topics_data.csv"))
+write_csv(summary_data, file.path(out_dir, "figure_06_rapidly_emerging_topics_summary.csv"))
 
-# -------------------------------------------------------------------------
-# Figure
-# -------------------------------------------------------------------------
-# For the 11 established topics, both red and grey are on the same 2010-2014
-# baseline (100). The grey dashed trend therefore represents the expected
-# database-wide growth. A red trajectory that rises above it is unambiguously
-# growing faster than background. Plastics is shown separately from its first
-# observation because it has no valid historical baseline.
+# Figure: all established topics and the background share the same 2010-2014
+# index of 100. Red above grey therefore directly means faster growth than the
+# background evidence base. Plastics is shown from its first observation.
 p <- ggplot(plot_data, aes(x = publication_year)) +
   geom_hline(yintercept = 100, colour = "#D9DEDF", linewidth = 0.35) +
-  geom_line(
-    aes(y = background_growth_index),
-    colour = "#8E989B",
-    linewidth = 0.85,
-    linetype = "dashed"
-  ) +
-  geom_line(
-    aes(y = topic_growth_index),
-    colour = "#E55634",
-    linewidth = 0.95,
-    na.rm = TRUE
-  ) +
-  geom_point(
-    aes(y = topic_growth_index),
-    colour = "#E55634",
-    size = 0.85,
-    na.rm = TRUE
-  ) +
+  geom_line(aes(y = background_growth_index), colour = "#8E989B", linewidth = 0.85, linetype = "dashed") +
+  geom_line(aes(y = topic_growth_index), colour = "#E55634", linewidth = 0.95, na.rm = TRUE) +
+  geom_point(aes(y = topic_growth_index), colour = "#E55634", size = 0.85, na.rm = TRUE) +
   facet_wrap(~ factor(topic, levels = topic_order), ncol = 3, scales = "free_y") +
-  scale_x_continuous(
-    breaks = seq(2010, max(all_years), by = 5),
-    expand = expansion(mult = c(0.01, 0.02))
-  ) +
-  scale_y_continuous(
-    labels = function(x) paste0(comma(x), "%"),
-    expand = expansion(mult = c(0, 0.10))
-  ) +
+  scale_x_continuous(breaks = seq(2010, max(all_years), by = 5), expand = expansion(mult = c(0.01, 0.02))) +
+  scale_y_continuous(labels = function(x) paste0(comma(x), "%"), expand = expansion(mult = c(0, 0.10))) +
   labs(
     title = "Rapidly emerging topics in the evidence base",
-    subtitle = paste0(
-      "Growth indexed to 2010–2014; dashed grey = fitted background database growth (",
-      number(background_growth_ratio, accuracy = 0.01), "× by 2021–2025)"
-    ),
+    subtitle = paste0("Growth indexed to 2010–2014; dashed grey = fitted background database growth (", number(background_growth_ratio, accuracy = 0.01), "× by 2021–2025)"),
     x = "Publication year",
     y = "Growth index (2010–2014 mean = 100)",
-    caption = paste0(
-      "Red = topic output; dashed grey = background evidence-base trend. Red above grey indicates faster-than-background growth. ",
-      "Plastics and solid waste is indexed to its first observed year because it has no 2010–2014 records."
-    )
+    caption = "Red = topic output; dashed grey = background evidence-base trend. Red above grey indicates faster-than-background growth. Plastics and solid waste is indexed to its first observed year because it has no 2010–2014 records."
   ) +
   theme_minimal(base_size = 10.5) +
   theme(
     panel.grid.major.y = element_line(colour = "#E5E8E9", linewidth = 0.3),
-    panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
     strip.background = element_rect(fill = "#EEF2F2", colour = NA),
     strip.text = element_text(face = "bold", colour = "#29434A", size = 9.2),
     axis.title = element_text(face = "bold", colour = "#45616A"),
@@ -301,14 +224,6 @@ p <- ggplot(plot_data, aes(x = publication_year)) +
     plot.margin = margin(12, 16, 12, 12)
   )
 
-ggsave(
-  file.path(out_dir, "figure_06_rapidly_emerging_topics.pdf"),
-  p, width = 190, height = 235, units = "mm", device = cairo_pdf
-)
-
-ggsave(
-  file.path(out_dir, "figure_06_rapidly_emerging_topics.png"),
-  p, width = 190, height = 235, units = "mm", dpi = 600
-)
-
+ggsave(file.path(out_dir, "figure_06_rapidly_emerging_topics.pdf"), p, width = 190, height = 235, units = "mm", device = cairo_pdf)
+ggsave(file.path(out_dir, "figure_06_rapidly_emerging_topics.png"), p, width = 190, height = 235, units = "mm", dpi = 600)
 message("Figure 6 written to: ", out_dir)
