@@ -110,18 +110,32 @@ top_species_counts <- raw_paths %>%
 top_counts <- top_counts %>%
   mutate(level1 = factor(level1, levels = top_levels))
 
+# Position the unique-record labels just beyond the actual end of each
+# stacked bar. This keeps the visual gap constant across bars, while avoiding
+# the large variable gap created by anchoring every label to the unique-record
+# count itself when species-record observations exceed that count.
+bar_end <- top_species_counts %>%
+  group_by(level1) %>%
+  summarise(bar_end = sum(species_records), .groups = "drop")
+label_gap <- max(bar_end$bar_end, na.rm = TRUE) * 0.012
+label_data <- top_counts %>%
+  left_join(bar_end, by = "level1") %>%
+  mutate(label_x = bar_end + label_gap)
+
+x_max <- max(bar_end$bar_end, na.rm = TRUE) + label_gap * 7
+
 overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill = species)) +
   geom_col(width = 0.68, colour = "white", linewidth = 0.2) +
   geom_text(
-    data = top_counts,
-    aes(x = unique_records, y = level1, label = comma(unique_records)),
+    data = label_data,
+    aes(x = label_x, y = level1, label = comma(unique_records)),
     inherit.aes = FALSE,
-    hjust = -0.12,
+    hjust = 0,
     size = 3.5,
     colour = palette[1]
   ) +
   scale_fill_manual(values = species_fill_values, breaks = canonical_species, drop = FALSE) +
-  scale_x_continuous(labels = comma, expand = expansion(mult = c(0, .12))) +
+  scale_x_continuous(labels = comma, limits = c(0, x_max), expand = expansion(mult = c(0, 0))) +
   labs(
     title = "LivingEvidenceMap: topic distribution",
     subtitle = "Unique records assigned to each top-level topic; colour shows species composition",
