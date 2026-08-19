@@ -201,7 +201,7 @@ p <- ggplot(plot_data, aes(x = publication_year)) +
     ~ factor(topic, levels = topic_order),
     ncol = 3,
     scales = "free_y",
-    labeller = labeller(topic = label_wrap_gen(width = 24))
+    labeller = labeller(topic = label_wrap_gen(width = 18))
   ) +
   scale_x_continuous(
     limits = c(2010, max(all_years)),
@@ -226,8 +226,9 @@ p <- ggplot(plot_data, aes(x = publication_year)) +
     panel.grid.minor = element_blank(),
     panel.grid.major.x = element_blank(),
     strip.background = element_rect(fill = "#EEF2F2", colour = NA),
-    strip.text = element_text(face = "bold", colour = "#29434A", size = 9.2, lineheight = 0.95),
-    strip.clip = "off",
+    strip.text = element_text(face = "bold", colour = "#29434A", size = 9.0, lineheight = 0.95),
+    strip.placement = "inside",
+    strip.clip = "on",
     axis.title = element_text(face = "bold", colour = "#45616A"),
     axis.text = element_text(colour = "#29434A", size = 8.2),
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 8),
