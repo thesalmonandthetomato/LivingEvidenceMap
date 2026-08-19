@@ -106,7 +106,6 @@ plot_data <- tidyr::expand_grid(topic = topic_order, publication_year = all_year
   mutate(topic_records = replace_na(topic_records, 0L)) %>%
   left_join(background, by = "publication_year")
 
-# Background baseline and recent growth ratio.
 background_baseline <- background %>%
   filter(publication_year >= 2010, publication_year <= 2014) %>%
   summarise(x = mean(background_records)) %>% pull(x)
@@ -116,7 +115,6 @@ background_recent <- background %>%
 if (is.na(background_baseline) || background_baseline <= 0) stop("Could not calculate the 2010-2014 background baseline.")
 background_growth_ratio <- background_recent / background_baseline
 
-# Fit background log-linear trend and index it to the observed 2010-2014 mean.
 background_fit_data <- background %>%
   filter(publication_year >= 2010, background_records > 0) %>%
   mutate(log_records = log(background_records))
@@ -130,8 +128,6 @@ plot_data <- plot_data %>%
   left_join(background_fit_raw, by = "publication_year") %>%
   mutate(background_growth_index = 100 * background_trend_raw / background_fit_baseline)
 
-# Topic baselines. Plastics has no 2010-2014 baseline and is therefore treated
-# as a new theme rather than assigned an artificial growth rate.
 topic_baselines <- plot_data %>%
   group_by(topic) %>%
   summarise(
@@ -155,9 +151,6 @@ plot_data <- plot_data %>%
     )
   )
 
-# First summarise to one row per topic. Classification is deliberately applied
-# in a separate mutate() after summarise(), avoiding dplyr's data-mask issue
-# when a newly created summary variable is referenced inside case_when().
 summary_data <- plot_data %>%
   group_by(topic) %>%
   summarise(
@@ -189,9 +182,17 @@ summary_data <- plot_data %>%
 write_csv(plot_data %>% arrange(topic, publication_year), file.path(out_dir, "figure_06_rapidly_emerging_topics_data.csv"))
 write_csv(summary_data, file.path(out_dir, "figure_06_rapidly_emerging_topics_summary.csv"))
 
-# Figure: all established topics and the background share the same 2010-2014
-# index of 100. Red above grey therefore directly means faster growth than the
-# background evidence base. Plastics is shown from its first observation.
+# Wrap facet labels explicitly with stringr::str_wrap. Using as_labeller() here
+# rather than label_wrap_gen() ensures the wrapped strings are passed directly
+# to the strip grob and cannot overflow horizontally. A narrow width plus a
+# smaller font keeps every label inside the grey strip.
+wrapped_topic_labels <- setNames(
+  stringr::str_wrap(topic_order, width = 16),
+  topic_order
+)
+
+topic_labeller <- ggplot2::as_labeller(wrapped_topic_labels)
+
 p <- ggplot(plot_data, aes(x = publication_year)) +
   geom_hline(yintercept = 100, colour = "#D9DEDF", linewidth = 0.35) +
   geom_line(aes(y = background_growth_index), colour = "#8E989B", linewidth = 0.85, linetype = "dashed") +
@@ -201,7 +202,7 @@ p <- ggplot(plot_data, aes(x = publication_year)) +
     ~ factor(topic, levels = topic_order),
     ncol = 3,
     scales = "free_y",
-    labeller = labeller(topic = label_wrap_gen(width = 18))
+    labeller = labeller(topic = topic_labeller)
   ) +
   scale_x_continuous(
     limits = c(2010, max(all_years)),
@@ -226,7 +227,7 @@ p <- ggplot(plot_data, aes(x = publication_year)) +
     panel.grid.minor = element_blank(),
     panel.grid.major.x = element_blank(),
     strip.background = element_rect(fill = "#EEF2F2", colour = NA),
-    strip.text = element_text(face = "bold", colour = "#29434A", size = 9.0, lineheight = 0.95),
+    strip.text = element_text(face = "bold", colour = "#29434A", size = 7.8, lineheight = 0.92, hjust = 0.5),
     strip.placement = "inside",
     strip.clip = "on",
     axis.title = element_text(face = "bold", colour = "#45616A"),
