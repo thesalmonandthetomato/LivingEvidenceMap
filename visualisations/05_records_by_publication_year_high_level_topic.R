@@ -23,7 +23,7 @@ master_path <- here::here("data", "master", "current", "living_evidence_map_mast
 out_dir <- here::here("visualisations")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Seven evenly distributed blue-grey shades, ordered from darkest to lightest.
+# Seven distinct, medium-to-dark blue-grey shades for improved readability.
 topic_order <- c(
   "Production",
   "Environment",
@@ -35,13 +35,13 @@ topic_order <- c(
 )
 
 topic_fill_values <- c(
-  "Production" = "#29434A",
-  "Environment" = "#45616A",
-  "Methods" = "#5E7A82",
-  "Industry and governance" = "#78929A",
-  "Product" = "#91A8AE",
-  "People and society" = "#A9BCC1",
-  "Inputs and resources" = "#C2CFD3"
+  "Production" = "#233F47",
+  "Environment" = "#2F5963",
+  "Methods" = "#3E6B75",
+  "Industry and governance" = "#4F7C86",
+  "Product" = "#638D96",
+  "People and society" = "#769DA5",
+  "Inputs and resources" = "#89ADB3"
 )
 
 master <- readr::read_csv(master_path, show_col_types = FALSE, progress = FALSE)
