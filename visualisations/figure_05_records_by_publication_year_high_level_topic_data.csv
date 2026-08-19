@@ -1,0 +1,363 @@
+publication_year,high_level_topic,records
+1928,Production,1
+1953,Production,1
+1955,Environment,1
+1955,Industry and governance,1
+1955,People and society,1
+1967,Environment,1
+1969,Production,1
+1970,Environment,1
+1970,Production,2
+1972,Environment,1
+1972,Industry and governance,1
+1972,Production,2
+1973,Production,5
+1974,Industry and governance,1
+1974,Inputs and resources,1
+1974,Product,1
+1974,Production,4
+1975,Environment,3
+1975,Industry and governance,4
+1975,Inputs and resources,1
+1975,Methods,1
+1975,Product,1
+1975,Production,12
+1976,Environment,6
+1976,Industry and governance,3
+1976,Inputs and resources,1
+1976,Methods,1
+1976,Product,2
+1976,Production,12
+1977,Environment,1
+1977,Industry and governance,5
+1977,Inputs and resources,3
+1977,Product,2
+1977,Production,21
+1978,Environment,4
+1978,Industry and governance,2
+1978,Inputs and resources,3
+1978,Product,2
+1978,Production,17
+1979,Environment,2
+1979,Industry and governance,1
+1979,Inputs and resources,1
+1979,Methods,2
+1979,Product,3
+1979,Production,16
+1980,Environment,4
+1980,Industry and governance,4
+1980,Inputs and resources,2
+1980,People and society,1
+1980,Product,1
+1980,Production,16
+1981,Environment,1
+1981,Industry and governance,2
+1981,Inputs and resources,1
+1981,People and society,1
+1981,Production,12
+1982,Environment,4
+1982,Industry and governance,1
+1982,Methods,2
+1982,Product,1
+1982,Production,16
+1983,Environment,1
+1983,Industry and governance,1
+1983,Methods,2
+1983,Product,1
+1983,Production,15
+1984,Environment,3
+1984,Industry and governance,3
+1984,People and society,1
+1984,Production,23
+1985,Environment,7
+1985,Industry and governance,3
+1985,Inputs and resources,2
+1985,Methods,1
+1985,People and society,1
+1985,Production,24
+1986,Environment,9
+1986,Industry and governance,7
+1986,Inputs and resources,2
+1986,Methods,2
+1986,People and society,1
+1986,Product,8
+1986,Production,31
+1987,Environment,13
+1987,Industry and governance,10
+1987,Inputs and resources,1
+1987,Methods,6
+1987,Product,9
+1987,Production,31
+1988,Environment,16
+1988,Industry and governance,8
+1988,Inputs and resources,1
+1988,Methods,2
+1988,People and society,1
+1988,Product,4
+1988,Production,38
+1989,Environment,13
+1989,Industry and governance,12
+1989,Inputs and resources,1
+1989,Methods,1
+1989,People and society,3
+1989,Product,4
+1989,Production,45
+1990,Environment,23
+1990,Industry and governance,14
+1990,Inputs and resources,5
+1990,Methods,7
+1990,People and society,4
+1990,Product,11
+1990,Production,62
+1991,Environment,41
+1991,Industry and governance,14
+1991,Inputs and resources,6
+1991,Methods,10
+1991,People and society,3
+1991,Product,8
+1991,Production,71
+1992,Environment,20
+1992,Industry and governance,9
+1992,Inputs and resources,5
+1992,Methods,8
+1992,People and society,2
+1992,Product,10
+1992,Production,68
+1993,Environment,41
+1993,Industry and governance,14
+1993,Inputs and resources,7
+1993,Methods,9
+1993,People and society,4
+1993,Product,11
+1993,Production,75
+1994,Environment,29
+1994,Industry and governance,15
+1994,Inputs and resources,5
+1994,Methods,14
+1994,People and society,6
+1994,Product,20
+1994,Production,83
+1995,Environment,35
+1995,Industry and governance,12
+1995,Inputs and resources,1
+1995,Methods,14
+1995,People and society,3
+1995,Product,21
+1995,Production,99
+1996,Environment,37
+1996,Industry and governance,20
+1996,Inputs and resources,4
+1996,Methods,12
+1996,People and society,10
+1996,Product,23
+1996,Production,91
+1997,Environment,47
+1997,Industry and governance,18
+1997,Inputs and resources,2
+1997,Methods,16
+1997,People and society,6
+1997,Product,19
+1997,Production,101
+1998,Environment,37
+1998,Industry and governance,15
+1998,Inputs and resources,7
+1998,Methods,10
+1998,People and society,4
+1998,Product,23
+1998,Production,98
+1999,Environment,23
+1999,Industry and governance,20
+1999,Inputs and resources,4
+1999,Methods,13
+1999,People and society,1
+1999,Product,8
+1999,Production,84
+2000,Environment,42
+2000,Industry and governance,17
+2000,Inputs and resources,10
+2000,Methods,16
+2000,People and society,3
+2000,Product,29
+2000,Production,103
+2001,Environment,51
+2001,Industry and governance,16
+2001,Inputs and resources,4
+2001,Methods,12
+2001,People and society,2
+2001,Product,23
+2001,Production,107
+2002,Environment,51
+2002,Industry and governance,39
+2002,Inputs and resources,7
+2002,Methods,12
+2002,People and society,16
+2002,Product,28
+2002,Production,129
+2003,Environment,63
+2003,Industry and governance,25
+2003,Inputs and resources,3
+2003,Methods,23
+2003,People and society,16
+2003,Product,26
+2003,Production,141
+2004,Environment,85
+2004,Industry and governance,27
+2004,Inputs and resources,10
+2004,Methods,22
+2004,People and society,8
+2004,Product,62
+2004,Production,155
+2005,Environment,63
+2005,Industry and governance,36
+2005,Inputs and resources,5
+2005,Methods,35
+2005,People and society,12
+2005,Product,43
+2005,Production,157
+2006,Environment,94
+2006,Industry and governance,47
+2006,Inputs and resources,9
+2006,Methods,20
+2006,People and society,27
+2006,Product,48
+2006,Production,164
+2007,Environment,69
+2007,Industry and governance,30
+2007,Inputs and resources,12
+2007,Methods,27
+2007,People and society,21
+2007,Product,44
+2007,Production,172
+2008,Environment,84
+2008,Industry and governance,34
+2008,Inputs and resources,11
+2008,Methods,37
+2008,People and society,15
+2008,Product,46
+2008,Production,189
+2009,Environment,95
+2009,Industry and governance,48
+2009,Inputs and resources,6
+2009,Methods,43
+2009,People and society,20
+2009,Product,43
+2009,Production,221
+2010,Environment,108
+2010,Industry and governance,47
+2010,Inputs and resources,16
+2010,Methods,30
+2010,People and society,22
+2010,Product,62
+2010,Production,227
+2011,Environment,125
+2011,Industry and governance,58
+2011,Inputs and resources,10
+2011,Methods,42
+2011,People and society,22
+2011,Product,63
+2011,Production,268
+2012,Environment,100
+2012,Industry and governance,39
+2012,Inputs and resources,18
+2012,Methods,50
+2012,People and society,16
+2012,Product,67
+2012,Production,281
+2013,Environment,121
+2013,Industry and governance,47
+2013,Inputs and resources,19
+2013,Methods,44
+2013,People and society,25
+2013,Product,50
+2013,Production,326
+2014,Environment,124
+2014,Industry and governance,52
+2014,Inputs and resources,20
+2014,Methods,57
+2014,People and society,35
+2014,Product,59
+2014,Production,328
+2015,Environment,125
+2015,Industry and governance,73
+2015,Inputs and resources,17
+2015,Methods,40
+2015,People and society,31
+2015,Product,54
+2015,Production,325
+2016,Environment,141
+2016,Industry and governance,90
+2016,Inputs and resources,23
+2016,Methods,54
+2016,People and society,32
+2016,Product,81
+2016,Production,440
+2017,Environment,127
+2017,Industry and governance,68
+2017,Inputs and resources,18
+2017,Methods,58
+2017,People and society,31
+2017,Product,82
+2017,Production,365
+2018,Environment,148
+2018,Industry and governance,61
+2018,Inputs and resources,17
+2018,Methods,60
+2018,People and society,46
+2018,Product,64
+2018,Production,367
+2019,Environment,149
+2019,Industry and governance,87
+2019,Inputs and resources,29
+2019,Methods,61
+2019,People and society,52
+2019,Product,82
+2019,Production,412
+2020,Environment,184
+2020,Industry and governance,75
+2020,Inputs and resources,21
+2020,Methods,75
+2020,People and society,35
+2020,Product,74
+2020,Production,515
+2021,Environment,184
+2021,Industry and governance,74
+2021,Inputs and resources,31
+2021,Methods,76
+2021,People and society,53
+2021,Product,69
+2021,Production,489
+2022,Environment,189
+2022,Industry and governance,65
+2022,Inputs and resources,35
+2022,Methods,85
+2022,People and society,46
+2022,Product,75
+2022,Production,482
+2023,Environment,188
+2023,Industry and governance,78
+2023,Inputs and resources,45
+2023,Methods,74
+2023,People and society,44
+2023,Product,92
+2023,Production,493
+2024,Environment,243
+2024,Industry and governance,106
+2024,Inputs and resources,42
+2024,Methods,198
+2024,People and society,67
+2024,Product,89
+2024,Production,577
+2025,Environment,303
+2025,Industry and governance,168
+2025,Inputs and resources,93
+2025,Methods,364
+2025,People and society,92
+2025,Product,101
+2025,Production,636
+2026,Environment,215
+2026,Industry and governance,117
+2026,Inputs and resources,71
+2026,Methods,277
+2026,People and society,53
+2026,Product,78
+2026,Production,421
