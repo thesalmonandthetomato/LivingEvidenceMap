@@ -96,17 +96,25 @@ top_counts <- raw_paths %>%
   count(level1, name = "unique_records") %>%
   arrange(unique_records)
 
+top_levels <- top_counts %>% pull(level1)
+
 top_species_counts <- raw_paths %>%
   distinct(record_id, level1) %>%
   left_join(record_species, by = "record_id") %>%
   count(level1, species, name = "species_records") %>%
-  mutate(species = factor(species, levels = canonical_species))
+  mutate(
+    level1 = factor(level1, levels = top_levels),
+    species = factor(species, levels = canonical_species)
+  )
 
-overview <- ggplot(top_species_counts, aes(x = species_records, y = reorder(level1, top_counts$unique_records), fill = species)) +
+top_counts <- top_counts %>%
+  mutate(level1 = factor(level1, levels = top_levels))
+
+overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill = species)) +
   geom_col(width = 0.68, colour = "white", linewidth = 0.2) +
   geom_text(
     data = top_counts,
-    aes(x = unique_records, y = reorder(level1, unique_records), label = comma(unique_records)),
+    aes(x = unique_records, y = level1, label = comma(unique_records)),
     inherit.aes = FALSE,
     hjust = -0.12,
     size = 3.5,
@@ -117,7 +125,7 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = reorder(leve
   labs(
     title = "LivingEvidenceMap: topic distribution",
     subtitle = "Unique records assigned to each top-level topic; colour shows species composition",
-    x = "Unique records / species-record observations",
+    x = "Records / species-record observations",
     y = NULL,
     fill = "Species",
     caption = "Numbers at bar ends are unique records. Species segments follow the Figure 1/2 ordering and may sum above the unique-record total where a record has multiple species assignments."
@@ -137,8 +145,8 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = reorder(leve
 
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.pdf"), overview, width = 190, height = 125, units = "mm")
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.png"), overview, width = 190, height = 125, units = "mm", dpi = 600)
-write_csv(top_counts, file.path(out_dir, "topic_top_level_unique_record_counts.csv"))
-write_csv(top_species_counts %>% mutate(species = as.character(species)), file.path(out_dir, "topic_top_level_species_counts.csv"))
+write_csv(top_counts %>% mutate(level1 = as.character(level1)), file.path(out_dir, "topic_top_level_unique_record_counts.csv"))
+write_csv(top_species_counts %>% mutate(level1 = as.character(level1), species = as.character(species)), file.path(out_dir, "topic_top_level_species_counts.csv"))
 
 # -------------------------------------------------------------------------
 # 2. HIERARCHICAL HORIZONTAL BAR PLOTS
@@ -212,7 +220,7 @@ make_hierarchy <- function(root, dat, file_stub) {
   invisible(p)
 }
 
-roots <- top_counts %>% arrange(desc(unique_records)) %>% pull(level1)
+roots <- top_counts %>% arrange(desc(unique_records)) %>% pull(level1) %>% as.character()
 for (i in seq_along(roots)) {
   root <- roots[i]
   safe_root <- str_replace_all(str_to_lower(root), "[^a-z0-9]+", "_")
