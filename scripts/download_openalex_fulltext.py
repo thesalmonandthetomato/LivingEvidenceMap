@@ -22,7 +22,7 @@ BATCH_SIZE = 100
 BATCHES_PER_ZENODO_DEPOSITION = 10
 MAX_RETRIES = 5
 TIMEOUT = 120
-USER_AGENT = "LivingEvidenceMap/OpenAlex-fulltext/2.3"
+USER_AGENT = "LivingEvidenceMap/OpenAlex-fulltext/2.4"
 ZENODO_API = "https://zenodo.org/api"
 ZENODO_TITLE_PREFIX = "LivingEvidenceMap OpenAlex Full Text"
 
@@ -91,9 +91,6 @@ def download_openalex(url: str, api_key: str, destination: Path, fmt: str) -> No
                 content_type = response.headers.get("Content-Type", "")
                 content_encoding = response.headers.get("Content-Encoding", "").lower()
                 body = response.read()
-            # urllib does not automatically decompress gzip when used this way.
-            # OpenAlex may return GROBID TEI as application/gzip even when the
-            # HTTP status is 200. Decompress before writing/validating the file.
             if content_encoding == "gzip" or body[:2] == b"\x1f\x8b" or content_type.lower().startswith("application/gzip"):
                 try:
                     body = gzip.decompress(body)
@@ -211,7 +208,9 @@ def upload_batch_to_zenodo(token: str, deposition: dict, zip_path: Path) -> str:
         raise RuntimeError("Zenodo deposition has no upload bucket URL")
     target = bucket.rstrip("/") + "/" + quote(filename)
     with zip_path.open("rb") as fh:
-        status, response = zenodo_request("PUT", target, token, data=fh, content_type="application/zip", timeout=1800)
+        # Zenodo's deposition bucket requires application/octet-stream for
+        # binary file uploads. application/zip returns HTTP 415.
+        status, response = zenodo_request("PUT", target, token, data=fh, content_type="application/octet-stream", timeout=1800)
     if status not in (200, 201):
         raise RuntimeError(f"Unexpected Zenodo upload status: {status}")
     remote_size = int((response or {}).get("size", 0) or 0)
@@ -281,7 +280,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        raise SystemExit(main())
+        sys.exit(main())
     except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        raise
+        print(f"ERROR: {exc}", file=sys.stderr, flush=True)
+        sys.exit(1)
