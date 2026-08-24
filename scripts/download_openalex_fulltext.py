@@ -4,17 +4,10 @@
 Strategy
 --------
 * GROBID TEI XML is preferred whenever OpenAlex has it.
-* PDF is downloaded only for the 230 PDF-only records.
+* PDF is downloaded only for records that have PDF but no GROBID XML.
 * At most 100 OpenAlex content files are requested per workflow run.
-* The downloaded files are retained in a GitHub Actions cache/artifact and
-  packaged into one ZIP for durable Zenodo storage.
-* Zenodo uploads are idempotent: a completed batch ZIP already present in the
-  corresponding private draft is not uploaded again.
-
-Zenodo storage is split into four private draft depositions (10 batches each).
-This stays well inside Zenodo's per-record 100-file limit and reduces the risk
-that a single large deposition becomes a bottleneck. The drafts are never
-published by this workflow.
+* Each successful batch is packaged into one ZIP and stored in a private Zenodo draft.
+* GitHub Actions cache/artifacts provide secondary recovery.
 """
 
 from __future__ import annotations
@@ -29,18 +22,17 @@ import time
 import zipfile
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 GROBID_CSV = ROOT / "data" / "openalex_grobid_candidates.csv"
 PDF_CSV = ROOT / "data" / "openalex_pdf_candidates.csv"
-
 BATCH_SIZE = 100
 BATCHES_PER_ZENODO_DEPOSITION = 10
 MAX_RETRIES = 5
-TIMEOUT = 120
-USER_AGENT = "LivingEvidenceMap/OpenAlex-fulltext/2.0"
+TIMEOUT = 180
+USER_AGENT = "LivingEvidenceMap/OpenAlex-fulltext/2.1"
 ZENODO_API = "https://zenodo.org/api"
 ZENODO_TITLE_PREFIX = "LivingEvidenceMap OpenAlex Full Text"
 
@@ -53,7 +45,6 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 def build_plan() -> list[dict[str, str]]:
     grobid = read_csv(GROBID_CSV)
     pdf = read_csv(PDF_CSV)
-
     grobid_rows = []
     for row in grobid:
         if row.get("doi_exact_match") != "TRUE" or row.get("has_grobid_xml") != "TRUE":
@@ -69,11 +60,9 @@ def build_plan() -> list[dict[str, str]]:
     pdf_only_rows = []
     for row in pdf:
         doi = row.get("input_doi", "")
-        if (
-            row.get("doi_exact_match") == "TRUE"
-            and row.get("has_pdf") == "TRUE"
-            and doi.lower() not in grobid_dois
-        ):
+        if (row.get("doi_exact_match") == "TRUE"
+                and row.get("has_pdf") == "TRUE"
+                and doi.lower() not in grobid_dois):
             pdf_only_rows.append({
                 "doi": doi,
                 "openalex_id": row["openalex_id"].rstrip("/").split("/")[-1],
@@ -83,9 +72,8 @@ def build_plan() -> list[dict[str, str]]:
 
     if not grobid_rows:
         raise RuntimeError("No GROBID candidates were found.")
-
     plan = grobid_rows + pdf_only_rows
-    if len(plan) != len(set(r["doi"].lower() for r in plan)):
+    if len(plan) != len({r["doi"].lower() for r in plan}):
         raise RuntimeError("The download plan contains duplicate DOIs.")
     return plan
 
@@ -109,17 +97,28 @@ def valid_file(path: Path, fmt: str) -> bool:
     return "<tei" in text or "<tei:" in text or "<teiheader" in text
 
 
+def add_api_key(url: str, api_key: str) -> str:
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}api_key={quote(api_key, safe='')}"
+
+
 def download_openalex(url: str, api_key: str, destination: Path) -> None:
     if not url:
         raise RuntimeError("Candidate has no OpenAlex content URL")
-    request_url = url + ("&" if "?" in url else "?") + urlencode({"api_key": api_key})
+
+    request_url = add_api_key(url, api_key)
     tmp = destination.with_suffix(destination.suffix + ".part")
 
-    last_error: Exception | None = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            req = Request(request_url, headers={"User-Agent": USER_AGENT})
+            req = Request(request_url, headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/octet-stream",
+            })
             with urlopen(req, timeout=TIMEOUT) as response, tmp.open("wb") as out:
+                status = getattr(response, "status", 200)
+                if status != 200:
+                    raise RuntimeError(f"Unexpected HTTP status {status}")
                 while True:
                     chunk = response.read(1024 * 1024)
                     if not chunk:
@@ -127,19 +126,42 @@ def download_openalex(url: str, api_key: str, destination: Path) -> None:
                     out.write(chunk)
             tmp.replace(destination)
             return
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
-            last_error = exc
+        except HTTPError as exc:
+            try:
+                tmp.unlink()
+            except FileNotFoundError:
+                pass
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+            if exc.code in (401, 403):
+                raise RuntimeError(
+                    f"OpenAlex authentication/access error HTTP {exc.code}: {detail}"
+                ) from exc
+            if exc.code == 429 or exc.code >= 500:
+                if attempt < MAX_RETRIES:
+                    delay = min(120, 2 ** (attempt - 1) * 5)
+                    print(
+                        f"  OpenAlex HTTP {exc.code}; retrying in {delay}s",
+                        flush=True,
+                    )
+                    time.sleep(delay)
+                    continue
+            raise RuntimeError(
+                f"OpenAlex HTTP {exc.code}: {detail}"
+            ) from exc
+        except (URLError, TimeoutError, OSError) as exc:
             try:
                 tmp.unlink()
             except FileNotFoundError:
                 pass
             if attempt == MAX_RETRIES:
-                break
-            delay = min(60, 2 ** (attempt - 1) * 2)
-            print(f"  OpenAlex download failed ({exc}); retrying in {delay}s", flush=True)
+                raise RuntimeError(
+                    f"OpenAlex request failed after {MAX_RETRIES} attempts: {exc}"
+                ) from exc
+            delay = min(120, 2 ** (attempt - 1) * 5)
+            print(f"  OpenAlex network error ({exc}); retrying in {delay}s", flush=True)
             time.sleep(delay)
 
-    raise RuntimeError(f"OpenAlex download failed after {MAX_RETRIES} attempts: {url}; {last_error}")
+    raise RuntimeError("OpenAlex download failed unexpectedly")
 
 
 def zenodo_request(method: str, path: str, token: str, *, body=None, data=None,
@@ -148,7 +170,6 @@ def zenodo_request(method: str, path: str, token: str, *, body=None, data=None,
     headers = {"Authorization": f"Bearer {token}", "User-Agent": USER_AGENT}
     if content_type:
         headers["Content-Type"] = content_type
-
     payload = None
     if body is not None:
         payload = json.dumps(body).encode("utf-8")
@@ -156,7 +177,7 @@ def zenodo_request(method: str, path: str, token: str, *, body=None, data=None,
     elif data is not None:
         payload = data
 
-    last_error: Exception | None = None
+    last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             req = Request(url, data=payload, headers=headers, method=method)
@@ -183,8 +204,7 @@ def zenodo_request(method: str, path: str, token: str, *, body=None, data=None,
 
 def get_or_create_zenodo_draft(token: str, part: int, total_batches: int) -> dict:
     title = f"{ZENODO_TITLE_PREFIX} — Part {part:02d} (batches {(part-1)*10+1:02d}–{min(part*10,total_batches):02d})"
-    query = urlencode({"q": title, "status": "draft", "size": 100})
-    _, data = zenodo_request("GET", f"/deposit/depositions?{query}", token)
+    _, data = zenodo_request("GET", f"/deposit/depositions?status=draft&size=100", token)
     for dep in data or []:
         if dep.get("title") == title and not dep.get("submitted", False):
             return dep
@@ -196,8 +216,7 @@ def get_or_create_zenodo_draft(token: str, part: int, total_batches: int) -> dic
             "publication_date": time.strftime("%Y-%m-%d", time.gmtime()),
             "description": (
                 "Private draft storage for OpenAlex full-text files collected by "
-                "the LivingEvidenceMap reproducible download pathway. Files are "
-                "stored as per-batch ZIP archives and are not published by the workflow."
+                "the LivingEvidenceMap reproducible download pathway."
             ),
             "creators": [{"name": "LivingEvidenceMap"}],
             "access_right": "closed",
@@ -212,7 +231,10 @@ def get_or_create_zenodo_draft(token: str, part: int, total_batches: int) -> dic
 
 def zenodo_existing_files(token: str, deposition_id: int) -> dict[str, dict]:
     _, dep = zenodo_request("GET", f"/deposit/depositions/{deposition_id}", token)
-    return {f.get("key", f.get("filename", f.get("name", ""))): f for f in dep.get("files", [])}
+    return {
+        f.get("key", f.get("filename", f.get("name", ""))): f
+        for f in dep.get("files", [])
+    }
 
 
 def make_batch_zip(batch_dir: Path, batch_number: int) -> tuple[Path, str, int]:
@@ -221,7 +243,7 @@ def make_batch_zip(batch_dir: Path, batch_number: int) -> tuple[Path, str, int]:
         tmp = zip_path.with_suffix(".zip.part")
         files = sorted(
             p for p in batch_dir.iterdir()
-            if p.is_file() and p.name != zip_path.name and not p.name.endswith(".part")
+            if p.is_file() and not p.name.endswith(".part")
         )
         with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
             for path in files:
@@ -240,24 +262,18 @@ def upload_batch_to_zenodo(token: str, deposition: dict, zip_path: Path) -> str:
             print(f"Zenodo already contains {filename}; skipping upload.", flush=True)
             return "already_present"
         raise RuntimeError(
-            f"Zenodo already contains {filename} but its size ({remote_size}) differs from local "
-            f"({zip_path.stat().st_size}). Refusing to overwrite automatically."
+            f"Zenodo already contains {filename} with a different size; refusing to overwrite."
         )
 
     bucket = deposition.get("links", {}).get("bucket")
     if not bucket:
         raise RuntimeError("Zenodo deposition has no upload bucket URL")
-
     target = bucket.rstrip("/") + "/" + quote(filename)
-    # urllib requires the request body to be bytes. The ZIP is bounded by one
-    # 100-file OpenAlex batch and is therefore safe to stage in memory for the
-    # upload; the on-disk ZIP remains the durable local checkpoint.
     with zip_path.open("rb") as fh:
-        payload = fh.read()
-
-    status, response = zenodo_request(
-        "PUT", target, token, data=payload, content_type="application/zip", timeout=1800
-    )
+        status, response = zenodo_request(
+            "PUT", target, token, data=fh,
+            content_type="application/zip", timeout=1800
+        )
     if status not in (200, 201):
         raise RuntimeError(f"Unexpected Zenodo upload status: {status}")
     remote_size = int((response or {}).get("size", 0) or 0)
@@ -344,10 +360,8 @@ def main() -> int:
 
     zip_path, zip_sha256, zip_bytes = make_batch_zip(batch_dir, args.batch)
     print(f"Batch ZIP: {zip_path.name} ({zip_bytes:,} bytes; SHA-256 {zip_sha256})", flush=True)
-
     deposition = get_or_create_zenodo_draft(zenodo_token, part, total_batches)
     upload_status = upload_batch_to_zenodo(zenodo_token, deposition, zip_path)
-
     receipt = batch_dir / "zenodo_receipt.json"
     receipt.write_text(json.dumps({
         "deposition_id": deposition["id"],
@@ -360,7 +374,6 @@ def main() -> int:
         "uploaded_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "published": False,
     }, indent=2) + "\n", encoding="utf-8")
-
     print("Batch completed and durably staged in private Zenodo storage.", flush=True)
     return 0
 
