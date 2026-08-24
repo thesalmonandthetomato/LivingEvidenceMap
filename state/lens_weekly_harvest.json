@@ -1,5 +1,5 @@
 {
-  "last_successful_created": null,
-  "updated_at": null,
-  "note": "Checkpoint is persisted by the weekly workflow after a successful harvest/update."
+  "last_successful_created": "2026-08-24T11:34:39Z",
+  "updated_at": "2026-08-24T11:34:39.115630+00:00",
+  "last_status": "no_records"
 }
