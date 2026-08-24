@@ -2,18 +2,12 @@ name: Retraction sweep
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '17 3 * * 0'
-  workflow_run:
-    workflows: ["Lens update"]
-    types: [completed]
 
 permissions:
   contents: write
 
 jobs:
   sweep:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,10 +17,10 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           packages: any::dplyr any::here any::httr2 any::lubridate any::purrr any::readr any::tibble any::stringr
-      - name: Run rolling retraction sweep
+      - name: Run full retraction sweep
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
-          OPENALEX_SWEEP_MAX_DOIS: '500'
+          OPENALEX_SWEEP_MAX_DOIS: '13389'
         run: Rscript scripts/run_retraction_sweep.R
       - name: Upload retraction sweep outputs
         uses: actions/upload-artifact@v4
@@ -42,4 +36,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/reference/openalex_retraction_status.csv data/reference/retraction_sweep_audit.csv data/reference/new_retractions_detected.csv
-          git diff --cached --quiet || (git commit -m "Update rolling retraction surveillance cache" && git push)
+          git diff --cached --quiet || (git commit -m "Update full retraction surveillance cache" && git push)
