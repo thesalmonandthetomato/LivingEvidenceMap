@@ -45,14 +45,11 @@ jobs:
             exit 1
           fi
 
-      # Stable key is intentional: rerunning the same batch restores the
-      # files already downloaded in an earlier run, so they are not purchased
-      # from OpenAlex again. The save step is allowed to no-op if the key exists.
       - name: Restore batch checkpoint
         uses: actions/cache/restore@v4
         with:
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v4-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+          key: openalex-fulltext-v5-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
       - name: Download OpenAlex full text
         id: download
@@ -65,16 +62,16 @@ jobs:
             --batch "${{ inputs.batch_number }}" \
             --output openalex_fulltext
 
-      # CRITICAL: this runs BEFORE any final job failure and BEFORE relying on
-      # Zenodo. A Zenodo failure therefore cannot destroy already-paid-for
-      # OpenAlex downloads.
+      # Runs regardless of whether the download/Zenodo step failed. The stable
+      # key deliberately allows a future rerun of the same batch to restore the
+      # already-downloaded files and avoid purchasing them again from OpenAlex.
       - name: Save batch checkpoint
         if: always()
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v4-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+          key: openalex-fulltext-v5-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
       - name: Upload batch checkpoint artifact
         if: always()
