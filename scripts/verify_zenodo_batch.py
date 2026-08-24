@@ -9,8 +9,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 import xml.etree.ElementTree as ET
-
-import requests
+from urllib.request import Request, urlopen
 
 ZENODO_API = "https://zenodo.org/api"
 
@@ -21,6 +20,22 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def request_json(url: str, token: str) -> dict:
+    req = Request(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
+    with urlopen(req, timeout=60) as response:
+        return json.load(response)
+
+
+def download(url: str, token: str, destination: Path) -> None:
+    req = Request(url, headers={"Authorization": f"Bearer {token}"})
+    with urlopen(req, timeout=120) as response, destination.open("wb") as fh:
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            fh.write(chunk)
 
 
 def main() -> int:
@@ -41,13 +56,7 @@ def main() -> int:
     expected_zip_bytes = int(receipt["zip_bytes"])
     expected_files = int(receipt["successful_files"])
 
-    headers = {"Authorization": f"Bearer {token}"}
-    session = requests.Session()
-    meta_url = f"{ZENODO_API}/deposit/depositions/{deposition_id}"
-    response = session.get(meta_url, headers=headers, timeout=60)
-    response.raise_for_status()
-    deposition = response.json()
-
+    deposition = request_json(f"{ZENODO_API}/deposit/depositions/{deposition_id}", token)
     files = deposition.get("files", [])
     if len(files) != 1:
         raise RuntimeError(f"Expected exactly one Zenodo batch ZIP, found {len(files)} files")
@@ -64,14 +73,13 @@ def main() -> int:
     if not download_url:
         raise RuntimeError("Zenodo file has no download URL")
 
+    actual_size = None
+    actual_sha256 = None
+    nonempty_xml = 0
+    manifest_count = 0
     with tempfile.TemporaryDirectory(prefix="zenodo_verify_") as tmp:
         zip_path = Path(tmp) / remote_name
-        with session.get(download_url, headers=headers, stream=True, timeout=120) as r:
-            r.raise_for_status()
-            with zip_path.open("wb") as fh:
-                for chunk in r.iter_content(chunk_size=1024 * 1024):
-                    if chunk:
-                        fh.write(chunk)
+        download(download_url, token, zip_path)
 
         actual_size = zip_path.stat().st_size
         actual_sha256 = sha256_file(zip_path)
@@ -87,13 +95,13 @@ def main() -> int:
             names = zf.namelist()
             xml_names = [n for n in names if n.lower().endswith(".tei.xml")]
             manifest_names = [n for n in names if n.endswith("download_manifest.csv")]
+            manifest_count = len(manifest_names)
             if len(xml_names) != expected_files:
                 raise RuntimeError(f"Zenodo XML count mismatch: expected {expected_files}, got {len(xml_names)}")
-            if len(manifest_names) != 1:
-                raise RuntimeError(f"Expected one manifest in Zenodo ZIP, found {len(manifest_names)}")
+            if manifest_count != 1:
+                raise RuntimeError(f"Expected one manifest in Zenodo ZIP, found {manifest_count} manifests")
 
             invalid_xml = []
-            nonempty_xml = 0
             for name in xml_names:
                 data = zf.read(name)
                 if not data.strip():
@@ -118,7 +126,7 @@ def main() -> int:
         "sha256": actual_sha256,
         "sha256_matches_local": actual_sha256 == expected_zip_sha256,
         "xml_files_verified": nonempty_xml,
-        "manifest_files_found": len(manifest_names),
+        "manifest_files_found": manifest_count,
         "round_trip_verified": True,
     }
     out = batch_dir / "zenodo_verification.json"
