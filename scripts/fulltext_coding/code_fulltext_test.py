@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Code prepared full texts with the OpenAI Responses API.
 
-HARD RULE: every successful model response is checkpointed to durable output
-before any validation or subsequent processing. Existing checkpoints are never
-re-submitted to the model. A validation failure must never cause paid work to
-be repeated.
+Every successful model response is checkpointed to per-paper output before
+validation or downstream processing. Existing checkpoints are never
+re-submitted to the model.
 """
 from __future__ import annotations
 
@@ -12,16 +11,16 @@ import argparse
 import json
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 DEFAULT_MODEL = os.getenv("FULLTEXT_CODING_MODEL", "gpt-5.6-luna")
 CHECKPOINT_RULE = (
-    "PAID CONTENT CHECKPOINT RULE: After every successful model response, "
-    "write the raw model response and annotation to the per-paper output "
-    "directory immediately, before validation, merging, or any other step. "
-    "Never re-call the model when a checkpoint exists."
+    "After every successful model response, checkpoint the raw response and "
+    "annotation before validation, aggregation, merging, or downstream processing. "
+    "Never re-call the model when a complete checkpoint exists."
 )
 
 
@@ -81,6 +80,7 @@ def main() -> int:
     system = args.prompt.read_text(encoding="utf-8") + "\n\n" + CHECKPOINT_RULE
     ontology = args.ontology.read_text(encoding="utf-8")
     schema = load(args.schema)
+    ontology_version = "ontology_v3"
 
     files = sorted(args.input_dir.glob("*.json"))[: args.max_papers]
     if not files:
@@ -104,7 +104,6 @@ def main() -> int:
             + "\n\nPREPARED ARTICLE:\n" + json.dumps(prepared, ensure_ascii=False)
         )
         print(f"[{i}/{len(files)}] CODING {path.name}", flush=True)
-        last = None
         for attempt in range(4):
             try:
                 data = call_api(base, key, args.model, system, user)
@@ -112,14 +111,16 @@ def main() -> int:
                 if not text:
                     raise RuntimeError("OpenAI API returned no output text")
 
-                # HARD CHECKPOINT: durable writes happen BEFORE validation.
+                # Checkpoint immediately after successful API response.
                 raw_out.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                 annotation = json.loads(text)
+                timestamp = datetime.now(timezone.utc).isoformat()
                 annotation["run_metadata"] = {
+                    "schema_version": schema.get("schema_version", "fulltext_coding_v1"),
+                    "ontology_version": ontology_version,
                     "model": args.model,
-                    "schema": str(args.schema),
-                    "ontology": str(args.ontology),
-                    "prompt": str(args.prompt),
+                    "provider": "openai",
+                    "timestamp_utc": timestamp,
                     "source_prepared_file": path.name,
                     "checkpoint_status": "generated",
                 }
@@ -130,21 +131,17 @@ def main() -> int:
                     "raw_response_file": raw_out.name,
                     "status": "generated",
                     "checkpoint_rule": "checkpoint_before_validation",
+                    "timestamp_utc": timestamp,
                 }, indent=2) + "\n", encoding="utf-8")
                 print(f"  CHECKPOINTED {out.name} before validation", flush=True)
                 break
             except json.JSONDecodeError as exc:
-                # A successful API response is still checkpointed above before parsing;
-                # do not retry it merely because downstream JSON parsing/validation fails.
-                raise RuntimeError(f"Model response checkpointed but was not valid JSON: {exc}") from exc
+                raise RuntimeError(f"Model response was received but was not valid JSON: {exc}") from exc
             except Exception as exc:
-                last = exc
                 print(f"  attempt {attempt + 1}/4 failed before successful response: {exc}", flush=True)
                 if attempt == 3:
                     raise
                 time.sleep(2 ** attempt)
-        else:
-            raise last
     return 0
 
 
