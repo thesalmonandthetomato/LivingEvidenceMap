@@ -45,8 +45,9 @@ jobs:
             exit 1
           fi
 
-      # The cache is a convenience/resume layer. The 90-day artifact below is
-      # the explicit checkpoint guarantee and is uploaded BEFORE Zenodo is tried.
+      # The cache is a convenience/resume layer. The 90-day artifacts below
+      # are the explicit checkpoint guarantee and are uploaded independently
+      # of Zenodo processing.
       - name: Restore batch checkpoint cache
         uses: actions/cache/restore@v4
         with:
@@ -64,8 +65,8 @@ jobs:
             --output openalex_fulltext \
             --mode download
 
-      # HARD CHECKPOINT: this happens before any ZIP creation or Zenodo call.
-      # The original downloaded files remain untouched in the batch directory.
+      # HARD CHECKPOINT: before ZIP creation or any Zenodo call. The original
+      # downloaded files remain untouched in the batch directory.
       - name: Upload raw batch checkpoint (90 days)
         if: always()
         uses: actions/upload-artifact@v4
@@ -84,9 +85,7 @@ jobs:
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
           key: openalex-fulltext-v6-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
-      # IMPORTANT: a partial batch is still deposited. Successfully retrieved
-      # files are valuable work product; failed records remain in the manifest
-      # for a later recovery workflow. This stage never downloads from OpenAlex.
+      # Partial batches are deposited. This stage never downloads from OpenAlex.
       - name: Stage available files in private Zenodo
         id: zenodo
         if: always()
@@ -98,8 +97,22 @@ jobs:
             --batch "${{ inputs.batch_number }}" \
             --output openalex_fulltext
 
-      # Upload the post-Zenodo state as a second 90-day checkpoint so the
-      # receipt is preserved too. The first artifact remains the raw checkpoint.
+      # Independent round-trip test: retrieve the ZIP from the private Zenodo
+      # draft, verify size and SHA-256, test ZIP integrity, and parse every TEI XML.
+      # This is deliberately before the final 90-day artifact so the verification
+      # report is itself checkpointed.
+      - name: Verify Zenodo round trip
+        id: verify_zenodo
+        if: steps.zenodo.outcome == 'success'
+        continue-on-error: true
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          python scripts/verify_zenodo_batch.py \
+            --batch "${{ inputs.batch_number }}" \
+            --output openalex_fulltext
+
+      # Final 90-day checkpoint includes the Zenodo receipt and round-trip report.
       - name: Upload final batch state (90 days)
         if: always()
         uses: actions/upload-artifact@v4
@@ -110,22 +123,21 @@ jobs:
           retention-days: 90
           compression-level: 0
 
-      - name: Show manifest and Zenodo receipt
+      - name: Show manifest, Zenodo receipt and verification
         if: always()
         run: |
           BATCH_DIR="openalex_fulltext/batch_${{ inputs.batch_number }}"
           echo "--- download_manifest.csv ---"
           cat "$BATCH_DIR/download_manifest.csv"
-          if [ -f "$BATCH_DIR/zenodo_receipt.json" ]; then
-            echo "--- zenodo_receipt.json ---"
-            cat "$BATCH_DIR/zenodo_receipt.json"
-          else
-            echo "No Zenodo receipt was created."
-          fi
+          for f in zenodo_receipt.json zenodo_verification.json; do
+            if [ -f "$BATCH_DIR/$f" ]; then
+              echo "--- $f ---"
+              cat "$BATCH_DIR/$f"
+            fi
+          done
 
       # A download failure is not a batch failure: it is recorded for recovery.
-      # A Zenodo failure IS a workflow failure because it means the checkpoint
-      # could not be durably staged in the requested private storage.
-      - name: Fail only if Zenodo staging failed
-        if: steps.zenodo.outcome == 'failure'
+      # Zenodo upload and its round-trip verification must both succeed.
+      - name: Fail if Zenodo staging or verification failed
+        if: steps.zenodo.outcome == 'failure' || steps.verify_zenodo.outcome == 'failure' || steps.zenodo.outcome == 'skipped'
         run: exit 1
