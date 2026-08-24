@@ -2,22 +2,17 @@
   "schema_version": "fulltext_coding_v1",
   "description": "Lightweight reproducible full-text corpus annotation schema for the LivingEvidenceMap.",
   "document_type": [
-    "journal_article",
+    "study",
+    "review",
+    "systematic_review",
+    "perspective",
+    "commentary",
+    "editorial",
     "book",
     "book_chapter",
     "report",
     "thesis",
-    "conference_paper",
-    "other"
-  ],
-  "contribution_type": [
-    "primary_research",
-    "review",
-    "perspective",
-    "commentary",
-    "editorial",
     "protocol",
-    "methods",
     "other"
   ],
   "review_type": [
@@ -28,6 +23,9 @@
   "study_design": [
     "experimental",
     "observational",
+    "laboratory",
+    "in_vitro",
+    "in_silico",
     "modelling",
     "other",
     "not_applicable"
@@ -63,7 +61,6 @@
     "title": "string|null",
     "year": "integer|null",
     "document_type": "enum",
-    "contribution_type": "enum",
     "review_type": "enum",
     "study_design": "enum",
     "research_approach": "enum",
