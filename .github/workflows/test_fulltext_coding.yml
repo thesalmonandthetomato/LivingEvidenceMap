@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   code:
@@ -55,6 +56,41 @@ jobs:
             work_id="$(basename "$file" .tei.xml)"
             python scripts/fulltext_coding/prepare_fulltext_for_coding.py --input "$file" --output "test_corpus/prepared/${work_id}.json"
           done < test_corpus/grobid_test_files.txt
+      - name: RESTORE durable coding checkpoint from this run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/coding_checkpoint
+          python - <<'PY'
+          import json, os, urllib.request, zipfile, io
+          from pathlib import Path
+          repo=os.environ['GITHUB_REPOSITORY']; run_id=os.environ['GITHUB_RUN_ID']; token=os.environ['GH_TOKEN']
+          req=urllib.request.Request(
+              f'https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100',
+              headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+          with urllib.request.urlopen(req, timeout=60) as r: data=json.load(r)
+          candidates=[a for a in data.get('artifacts',[]) if a['name'].startswith('fulltext-coding-checkpoint-') and not a.get('expired')]
+          if not candidates:
+              print('No prior checkpoint artifact for this workflow run; starting with no restored annotations.')
+              raise SystemExit(0)
+          artifact=max(candidates, key=lambda a:a.get('created_at',''))
+          print(f"Restoring checkpoint artifact {artifact['id']} ({artifact['name']})")
+          req=urllib.request.Request(
+              artifact['archive_download_url'],
+              headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+          with urllib.request.urlopen(req, timeout=120) as r: blob=r.read()
+          with zipfile.ZipFile(io.BytesIO(blob)) as z:
+              z.extractall('/tmp/coding_checkpoint')
+          restored=0
+          for p in Path('/tmp/coding_checkpoint').rglob('*'):
+              if p.is_file():
+                  dest=Path('test_corpus/annotations')/p.name
+                  if not dest.exists():
+                      dest.write_bytes(p.read_bytes()); restored += 1
+          print(f'Restored {restored} checkpoint files.')
+          PY
       - name: Run AI coding
         run: |
           set -euo pipefail
