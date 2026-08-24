@@ -95,6 +95,8 @@ jobs:
           path: openalex_fulltext/batch_${{ steps.batch.outputs.batch_number }}
           key: openalex-fulltext-v6-batch-${{ steps.batch.outputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
+      # OpenAlex harvesting is deliberately isolated from Zenodo credentials.
+      # A Zenodo outage/token problem must never prevent paid OpenAlex retrieval.
       - name: Download OpenAlex full text only
         id: download
         if: steps.batch.outputs.run == 'true'
@@ -102,10 +104,9 @@ jobs:
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
         run: |
-          python scripts/download_openalex_fulltext.py \
+          python scripts/download_openalex_only.py \
             --batch "${{ steps.batch.outputs.batch_number }}" \
-            --output openalex_fulltext \
-            --mode download
+            --output openalex_fulltext
 
       # HARD CHECKPOINT: before ZIP creation or any Zenodo call. The original
       # downloaded files remain untouched in the batch directory.
