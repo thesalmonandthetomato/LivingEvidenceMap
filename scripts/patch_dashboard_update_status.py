@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Patch the approved dashboard presentation with search/update status."""
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -43,8 +44,7 @@ status = (
 
 html = HTML.read_text(encoding='utf-8')
 if MARKER in html:
-    import re
-    html = re.sub(r'<div id="lem-update-status".*?</div>\n?', status, html, count=1, flags=re.DOTALL)
+    html = re.sub(r'<div id="lem-update-status".*?</div>\s*</div>', status, html, count=1, flags=re.DOTALL)
 elif INSERT_AFTER in html:
     html = html.replace(INSERT_AFTER, INSERT_AFTER + '\n' + status, 1)
 else:
