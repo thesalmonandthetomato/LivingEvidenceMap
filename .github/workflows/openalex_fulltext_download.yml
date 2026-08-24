@@ -45,11 +45,14 @@ jobs:
             exit 1
           fi
 
-      - name: Restore batch cache
+      # Stable key is intentional: rerunning the same batch restores the
+      # files already downloaded in an earlier run, so they are not purchased
+      # from OpenAlex again. The save step is allowed to no-op if the key exists.
+      - name: Restore batch checkpoint
         uses: actions/cache/restore@v4
         with:
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v3-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+          key: openalex-fulltext-v4-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
       - name: Download OpenAlex full text
         id: download
@@ -62,15 +65,18 @@ jobs:
             --batch "${{ inputs.batch_number }}" \
             --output openalex_fulltext
 
-      - name: Save partial/full batch cache
+      # CRITICAL: this runs BEFORE any final job failure and BEFORE relying on
+      # Zenodo. A Zenodo failure therefore cannot destroy already-paid-for
+      # OpenAlex downloads.
+      - name: Save batch checkpoint
         if: always()
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v3-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}-${{ github.run_id }}
+          key: openalex-fulltext-v4-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
-      - name: Upload partial/full batch artifact
+      - name: Upload batch checkpoint artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -92,6 +98,6 @@ jobs:
             cat "$BATCH_DIR/zenodo_receipt.json"
           fi
 
-      - name: Fail if download job failed
+      - name: Fail if download or Zenodo staging failed
         if: steps.download.outcome == 'failure'
         run: exit 1
