@@ -22,6 +22,12 @@ corpus_dois <- corpus |>
 if (file.exists(cache_file)) {
   cache <- readr::read_csv(cache_file, show_col_types = FALSE) |>
     mutate(
+      doi_for_lookup = as.character(doi_for_lookup),
+      openalex_id = as.character(openalex_id),
+      openalex_title = as.character(openalex_title),
+      openalex_is_retracted = as.logical(openalex_is_retracted),
+      openalex_lookup_status = as.character(openalex_lookup_status),
+      openalex_error = as.character(openalex_error),
       last_checked_at = as.POSIXct(last_checked_at, tz = "UTC"),
       next_check_at = as.POSIXct(next_check_at, tz = "UTC")
     )
@@ -50,9 +56,6 @@ message(sprintf(
   nrow(corpus_dois), nrow(due)
 ))
 
-# Do not build one large result object for the whole corpus. Process and
-# persist each OpenAlex batch independently so a large/awkward batch cannot
-# discard the results already obtained from earlier batches.
 if (nrow(due)) {
   batches <- split(due$doi_for_lookup, ceiling(seq_along(due$doi_for_lookup) / 25L))
   total_batches <- length(batches)
@@ -65,18 +68,16 @@ if (nrow(due)) {
       i, total_batches, length(batch)
     ))
 
-    result <- tryCatch(
-      lookup_openalex_dois(batch, api_key = api_key, batch_size = length(batch)),
-      error = function(e) {
-        stop(sprintf(
-          "OpenAlex retraction sweep failed in batch %d/%d: %s",
-          i, total_batches, conditionMessage(e)
-        ), call. = FALSE)
-      }
-    )
-
-    batch_results[[i]] <- result |>
-      mutate(last_checked_at = now) |>
+    result <- lookup_openalex_dois(batch, api_key = api_key, batch_size = length(batch)) |>
+      mutate(
+        doi_for_lookup = as.character(doi_for_lookup),
+        openalex_id = as.character(openalex_id),
+        openalex_title = as.character(openalex_title),
+        openalex_is_retracted = as.logical(openalex_is_retracted),
+        openalex_lookup_status = as.character(openalex_lookup_status),
+        openalex_error = as.character(openalex_error),
+        last_checked_at = now
+      ) |>
       mutate(
         next_check_at = case_when(
           openalex_is_retracted ~ as.POSIXct(NA, tz = "UTC"),
@@ -89,15 +90,34 @@ if (nrow(due)) {
         openalex_is_retracted, openalex_lookup_status,
         openalex_error, last_checked_at, next_check_at
       )
+
+    batch_results[[i]] <- result
   }
 
-  r <- bind_rows(batch_results)
+  r <- bind_rows(batch_results) |>
+    mutate(
+      doi_for_lookup = as.character(doi_for_lookup),
+      openalex_id = as.character(openalex_id),
+      openalex_title = as.character(openalex_title),
+      openalex_is_retracted = as.logical(openalex_is_retracted),
+      openalex_lookup_status = as.character(openalex_lookup_status),
+      openalex_error = as.character(openalex_error)
+    )
+
   cache <- cache |>
     filter(!doi_for_lookup %in% due$doi_for_lookup) |>
     bind_rows(r)
 }
 
 cache <- cache |>
+  mutate(
+    doi_for_lookup = as.character(doi_for_lookup),
+    openalex_id = as.character(openalex_id),
+    openalex_title = as.character(openalex_title),
+    openalex_is_retracted = as.logical(openalex_is_retracted),
+    openalex_lookup_status = as.character(openalex_lookup_status),
+    openalex_error = as.character(openalex_error)
+  ) |>
   semi_join(corpus_dois, by = "doi_for_lookup") |>
   arrange(doi_for_lookup)
 
