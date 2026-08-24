@@ -1,0 +1,8 @@
+metric,count,percent_of_doi_records
+DOI records checked,11291,100
+Exact OpenAlex DOI matches,11265,99.77
+OpenAlex OA records,6199,54.9
+PDF available,3935,34.85
+GROBID XML available,3705,32.81
+PDF OR GROBID available,3935,34.85
+PDF AND GROBID available,3705,32.81
