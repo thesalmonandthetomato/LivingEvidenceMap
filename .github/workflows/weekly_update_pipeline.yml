@@ -25,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set update date
         id: dates
@@ -39,6 +41,21 @@ jobs:
         env:
           OVERLAP_DAYS: '7'
         run: python3 scripts/lens_weekly_harvest.py
+
+      - name: Persist successful Lens search state
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add state/lens_weekly_harvest.json state/search_history.json outputs/lens_harvest
+          if git diff --cached --quiet; then
+            echo 'No new harvest state to commit.'
+          else
+            git commit -m "chore: persist weekly Lens search state"
+            git push origin HEAD:main
+          fi
 
       - name: Prepare update input
         shell: bash
