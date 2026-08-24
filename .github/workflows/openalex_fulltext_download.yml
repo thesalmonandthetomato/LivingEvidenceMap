@@ -8,14 +8,21 @@ on:
         required: true
         type: number
         default: 1
+  schedule:
+    # Batch 5 starts tomorrow (25 August 2026) at 09:00 UTC / 10:00 UK time.
+    - cron: "0 9 * * *"
 
-# Manual only. Never scheduled, never triggered by push/PR.
 concurrency:
   group: openalex-fulltext-zenodo
   cancel-in-progress: false
 
 permissions:
   contents: read
+
+env:
+  SCHEDULE_START_DATE: "2026-08-25"
+  SCHEDULE_START_BATCH: "5"
+  LAST_BATCH: "40"
 
 jobs:
   download:
@@ -31,15 +38,48 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate batch number
+      - name: Determine batch
+        id: batch
         shell: bash
         run: |
           set -euo pipefail
-          BATCH="${{ inputs.batch_number }}"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            TODAY="$(date -u +%F)"
+            START_EPOCH="$(date -u -d "$SCHEDULE_START_DATE" +%s)"
+            TODAY_EPOCH="$(date -u -d "$TODAY" +%s)"
+            DAYS=$(( (TODAY_EPOCH - START_EPOCH) / 86400 ))
+            BATCH=$(( SCHEDULE_START_BATCH + DAYS ))
+          else
+            BATCH="${{ inputs.batch_number }}"
+          fi
+
           if ! [[ "$BATCH" =~ ^[0-9]+$ ]]; then
             echo "Batch number must be an integer."
             exit 1
           fi
+
+          if (( BATCH < 1 )); then
+            echo "Batch number must be at least 1."
+            exit 1
+          fi
+
+          if (( BATCH > LAST_BATCH )); then
+            echo "All scheduled batches (5-40) are complete; nothing to run today."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "batch_number=$BATCH" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Scheduled/manual batch: $BATCH"
+          echo "run=true" >> "$GITHUB_OUTPUT"
+          echo "batch_number=$BATCH" >> "$GITHUB_OUTPUT"
+
+      - name: Validate batch number
+        if: steps.batch.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BATCH="${{ steps.batch.outputs.batch_number }}"
           if (( BATCH < 1 || BATCH > 40 )); then
             echo "Batch number must be between 1 and 40."
             exit 1
@@ -49,52 +89,54 @@ jobs:
       # are the explicit checkpoint guarantee and are uploaded independently
       # of Zenodo processing.
       - name: Restore batch checkpoint cache
+        if: steps.batch.outputs.run == 'true'
         uses: actions/cache/restore@v4
         with:
-          path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v6-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+          path: openalex_fulltext/batch_${{ steps.batch.outputs.batch_number }}
+          key: openalex-fulltext-v6-batch-${{ steps.batch.outputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
       - name: Download OpenAlex full text only
         id: download
+        if: steps.batch.outputs.run == 'true'
         continue-on-error: true
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
         run: |
           python scripts/download_openalex_fulltext.py \
-            --batch "${{ inputs.batch_number }}" \
+            --batch "${{ steps.batch.outputs.batch_number }}" \
             --output openalex_fulltext \
             --mode download
 
       # HARD CHECKPOINT: before ZIP creation or any Zenodo call. The original
       # downloaded files remain untouched in the batch directory.
       - name: Upload raw batch checkpoint (90 days)
-        if: always()
+        if: steps.batch.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: openalex-fulltext-batch-${{ inputs.batch_number }}-run-${{ github.run_id }}
-          path: openalex_fulltext/batch_${{ inputs.batch_number }}
+          name: openalex-fulltext-batch-${{ steps.batch.outputs.batch_number }}-run-${{ github.run_id }}
+          path: openalex_fulltext/batch_${{ steps.batch.outputs.batch_number }}
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
 
       - name: Save batch checkpoint cache
-        if: always()
+        if: steps.batch.outputs.run == 'true'
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
-          path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v6-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+          path: openalex_fulltext/batch_${{ steps.batch.outputs.batch_number }}
+          key: openalex-fulltext-v6-batch-${{ steps.batch.outputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
       # Partial batches are deposited. This stage never downloads from OpenAlex.
       - name: Stage available files in private Zenodo
         id: zenodo
-        if: always()
+        if: steps.batch.outputs.run == 'true'
         continue-on-error: true
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           python scripts/zenodo_partial_batch.py \
-            --batch "${{ inputs.batch_number }}" \
+            --batch "${{ steps.batch.outputs.batch_number }}" \
             --output openalex_fulltext
 
       # Independent round-trip test: retrieve the ZIP from the private Zenodo
@@ -103,30 +145,30 @@ jobs:
       # report is itself checkpointed.
       - name: Verify Zenodo round trip
         id: verify_zenodo
-        if: steps.zenodo.outcome == 'success'
+        if: steps.batch.outputs.run == 'true' && steps.zenodo.outcome == 'success'
         continue-on-error: true
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           python scripts/verify_zenodo_batch.py \
-            --batch "${{ inputs.batch_number }}" \
+            --batch "${{ steps.batch.outputs.batch_number }}" \
             --output openalex_fulltext
 
       # Final 90-day checkpoint includes the Zenodo receipt and round-trip report.
       - name: Upload final batch state (90 days)
-        if: always()
+        if: steps.batch.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: openalex-fulltext-batch-${{ inputs.batch_number }}-final-${{ github.run_id }}
-          path: openalex_fulltext/batch_${{ inputs.batch_number }}
+          name: openalex-fulltext-batch-${{ steps.batch.outputs.batch_number }}-final-${{ github.run_id }}
+          path: openalex_fulltext/batch_${{ steps.batch.outputs.batch_number }}
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
 
       - name: Show manifest, Zenodo receipt and verification
-        if: always()
+        if: steps.batch.outputs.run == 'true'
         run: |
-          BATCH_DIR="openalex_fulltext/batch_${{ inputs.batch_number }}"
+          BATCH_DIR="openalex_fulltext/batch_${{ steps.batch.outputs.batch_number }}"
           echo "--- download_manifest.csv ---"
           cat "$BATCH_DIR/download_manifest.csv"
           for f in zenodo_receipt.json zenodo_verification.json; do
@@ -139,5 +181,5 @@ jobs:
       # A download failure is not a batch failure: it is recorded for recovery.
       # Zenodo upload and its round-trip verification must both succeed.
       - name: Fail if Zenodo staging or verification failed
-        if: steps.zenodo.outcome == 'failure' || steps.verify_zenodo.outcome == 'failure' || steps.zenodo.outcome == 'skipped'
+        if: steps.batch.outputs.run == 'true' && (steps.zenodo.outcome == 'failure' || steps.verify_zenodo.outcome == 'failure' || steps.zenodo.outcome == 'skipped')
         run: exit 1
