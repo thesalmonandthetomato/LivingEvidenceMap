@@ -21,12 +21,12 @@ normalise_doi_for_openalex <- function(doi) {
 
 empty_openalex_result <- function(doi, status = "not_found", error = NA_character_) {
   tibble::tibble(
-    doi_for_lookup = doi,
+    doi_for_lookup = as.character(doi),
     openalex_id = NA_character_,
     openalex_title = NA_character_,
     openalex_is_retracted = FALSE,
-    openalex_lookup_status = status,
-    openalex_error = error
+    openalex_lookup_status = as.character(status),
+    openalex_error = as.character(error)
   )
 }
 
