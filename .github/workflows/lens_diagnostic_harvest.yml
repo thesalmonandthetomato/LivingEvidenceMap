@@ -29,6 +29,7 @@ jobs:
       - name: Upload diagnostic results
         uses: actions/upload-artifact@v4
         with:
-          name: lens-diagnostic-${{ inputs.lens_from }}-${{ inputs.lens_to }}
+          name: lens-diagnostic-window
           path: outputs/lens_diagnostic/
           retention-days: 30
+          if-no-files-found: error
