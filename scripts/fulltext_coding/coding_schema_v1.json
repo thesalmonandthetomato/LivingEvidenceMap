@@ -1,0 +1,102 @@
+{
+  "schema_version": "fulltext_coding_v1",
+  "description": "Lightweight reproducible full-text corpus annotation schema for the LivingEvidenceMap.",
+  "document_type": [
+    "journal_article",
+    "book",
+    "book_chapter",
+    "report",
+    "thesis",
+    "conference_paper",
+    "other"
+  ],
+  "contribution_type": [
+    "primary_research",
+    "review",
+    "perspective",
+    "commentary",
+    "editorial",
+    "protocol",
+    "methods",
+    "other"
+  ],
+  "review_type": [
+    "systematic",
+    "non_systematic",
+    "not_applicable"
+  ],
+  "study_design": [
+    "experimental",
+    "observational",
+    "modelling",
+    "other",
+    "not_applicable"
+  ],
+  "research_approach": [
+    "quantitative",
+    "qualitative",
+    "mixed",
+    "not_applicable"
+  ],
+  "setting": [
+    "field",
+    "laboratory",
+    "in_vitro",
+    "in_silico",
+    "mixed",
+    "not_applicable"
+  ],
+  "population": [
+    "sea_pen",
+    "hatchery",
+    "river",
+    "land_based",
+    "wild",
+    "mixed",
+    "other",
+    "not_applicable"
+  ],
+  "fields": {
+    "source_id": "string",
+    "doi": "string|null",
+    "openalex_id": "string|null",
+    "title": "string|null",
+    "year": "integer|null",
+    "document_type": "enum",
+    "contribution_type": "enum",
+    "review_type": "enum",
+    "study_design": "enum",
+    "research_approach": "enum",
+    "setting": "enum",
+    "sample_size": "number|string|null",
+    "sample_unit": "string|null",
+    "study_period": "string|null",
+    "location_region": "string|null",
+    "location_country": "string|null",
+    "species": "array[string]",
+    "population": "array[enum]",
+    "outcome_measured": "array[string]",
+    "intervention": "string|null",
+    "comparator": "string|null",
+    "research_question": "string|null",
+    "objectives_summary": "string|null",
+    "ontology_codes": "array[string]"
+  },
+  "evidence": {
+    "description": "Evidence supporting substantive coding decisions. Prefer Methods and Results; use only the final two Introduction/Objectives paragraphs when needed.",
+    "item_schema": {
+      "field": "string",
+      "value": "any",
+      "text": "string",
+      "section": "string",
+      "page": "integer|null"
+    }
+  },
+  "run_metadata": {
+    "schema_version": "string",
+    "ontology_version": "string",
+    "model": "string",
+    "provider": "string",
+    "timestamp_utc": "string"
+  }
+}
