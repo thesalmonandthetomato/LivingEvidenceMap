@@ -1,63 +1,16 @@
 {
   "schema_version": "fulltext_coding_v1",
   "description": "Lightweight reproducible full-text corpus annotation schema for the LivingEvidenceMap.",
-  "document_type": [
-    "study",
-    "review",
-    "systematic_review",
-    "perspective",
-    "commentary",
-    "editorial",
-    "book",
-    "book_chapter",
-    "report",
-    "thesis",
-    "protocol",
-    "other"
-  ],
-  "review_type": [
-    "systematic",
-    "non_systematic",
-    "not_applicable"
-  ],
-  "study_design": [
-    "experimental",
-    "observational",
-    "laboratory",
-    "in_vitro",
-    "in_silico",
-    "modelling",
-    "other",
-    "not_applicable"
-  ],
-  "research_approach": [
-    "quantitative",
-    "qualitative",
-    "mixed",
-    "not_applicable"
-  ],
-  "setting": [
-    "field",
-    "laboratory",
-    "in_vitro",
-    "in_silico",
-    "mixed",
-    "not_applicable"
-  ],
-  "population": [
-    "sea_pen",
-    "hatchery",
-    "river",
-    "land_based",
-    "wild",
-    "mixed",
-    "other",
-    "not_applicable"
-  ],
+  "document_type": ["study", "review", "systematic_review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"],
+  "review_type": ["systematic", "non_systematic", "not_applicable"],
+  "study_design": ["experimental", "observational", "laboratory", "in_vitro", "in_silico", "modelling", "other", "not_applicable"],
+  "research_approach": ["quantitative", "qualitative", "mixed", "not_applicable"],
+  "setting": ["field", "laboratory", "in_vitro", "in_silico", "mixed", "not_applicable"],
+  "population": ["sea_pen", "hatchery", "river", "land_based", "wild", "mixed", "other", "not_applicable"],
   "fields": {
     "source_id": "string",
     "doi": "string|null",
-    "openalex_id": "string|null",
+    "openalex_id": "string",
     "title": "string|null",
     "year": "integer|null",
     "document_type": "enum",
@@ -81,19 +34,15 @@
   },
   "evidence": {
     "description": "Evidence supporting substantive coding decisions. Prefer Methods and Results; use only the final two Introduction/Objectives paragraphs when needed.",
-    "item_schema": {
-      "field": "string",
-      "value": "any",
-      "text": "string",
-      "section": "string",
-      "page": "integer|null"
-    }
+    "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
   },
   "run_metadata": {
     "schema_version": "string",
     "ontology_version": "string",
     "model": "string",
     "provider": "string",
-    "timestamp_utc": "string"
+    "timestamp_utc": "string",
+    "source_prepared_file": "string",
+    "coding_status": "string"
   }
 }
