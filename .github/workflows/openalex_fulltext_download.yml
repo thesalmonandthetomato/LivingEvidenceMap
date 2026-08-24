@@ -9,7 +9,7 @@ on:
         type: number
         default: 1
   schedule:
-    # Batch 5 starts tomorrow (25 August 2026) at 09:00 UTC / 10:00 UK time.
+    # Batch 6 starts tomorrow (26 August 2026) at 09:00 UTC / 10:00 UK time.
     - cron: "0 9 * * *"
 
 concurrency:
@@ -20,8 +20,8 @@ permissions:
   contents: read
 
 env:
-  SCHEDULE_START_DATE: "2026-08-25"
-  SCHEDULE_START_BATCH: "5"
+  SCHEDULE_START_DATE: "2026-08-26"
+  SCHEDULE_START_BATCH: "6"
   LAST_BATCH: "40"
 
 jobs:
@@ -64,7 +64,7 @@ jobs:
           fi
 
           if (( BATCH > LAST_BATCH )); then
-            echo "All scheduled batches (5-40) are complete; nothing to run today."
+            echo "All scheduled batches (6-40) are complete; nothing to run today."
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "batch_number=$BATCH" >> "$GITHUB_OUTPUT"
             exit 0
