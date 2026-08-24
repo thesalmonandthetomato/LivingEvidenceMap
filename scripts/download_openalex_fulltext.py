@@ -5,7 +5,6 @@ import argparse
 import csv
 import gzip
 import hashlib
-import io
 import json
 import os
 import sys
@@ -23,7 +22,7 @@ BATCH_SIZE = 100
 BATCHES_PER_ZENODO_DEPOSITION = 10
 MAX_RETRIES = 5
 TIMEOUT = 120
-USER_AGENT = "LivingEvidenceMap/OpenAlex-fulltext/2.4"
+USER_AGENT = "LivingEvidenceMap/OpenAlex-fulltext/2.5"
 ZENODO_API = "https://zenodo.org/api"
 ZENODO_TITLE_PREFIX = "LivingEvidenceMap OpenAlex Full Text"
 
@@ -96,14 +95,11 @@ def download_openalex(url: str, api_key: str, destination: Path, fmt: str) -> No
     last_error: Exception | None = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            req = Request(
-                request_url,
-                headers={
-                    "User-Agent": USER_AGENT,
-                    "Accept": "application/xml,text/xml,application/pdf,*/*",
-                    "Accept-Encoding": "gzip",
-                },
-            )
+            req = Request(request_url, headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/xml,text/xml,application/pdf,*/*",
+                "Accept-Encoding": "gzip",
+            })
             with urlopen(req, timeout=TIMEOUT) as response:
                 status = getattr(response, "status", None)
                 content_type = response.headers.get("Content-Type", "")
@@ -116,8 +112,7 @@ def download_openalex(url: str, api_key: str, destination: Path, fmt: str) -> No
             ok, reason = validate_content(destination, fmt)
             if not ok:
                 raise RuntimeError(
-                    f"Downloaded content failed {fmt} validation; HTTP {status}; "
-                    f"Content-Type={content_type!r}; {reason}"
+                    f"Downloaded content failed {fmt} validation; HTTP {status}; Content-Type={content_type!r}; {reason}"
                 )
             return
         except HTTPError as exc:
@@ -202,15 +197,10 @@ def zenodo_existing_files(token: str, deposition_id: int) -> dict[str, dict]:
 
 def make_batch_zip(batch_dir: Path, batch_number: int) -> tuple[Path, str, int]:
     zip_path = batch_dir / f"openalex_fulltext_batch_{batch_number:03d}.zip"
-    if zip_path.exists() and zip_path.stat().st_size >= 512:
-        return zip_path, sha256_file(zip_path), zip_path.stat().st_size
     tmp = zip_path.with_suffix(".zip.part")
     files = [
         p for p in batch_dir.iterdir()
-        if p.is_file()
-        and p.name != zip_path.name
-        and not p.name.endswith(".part")
-        and not p.name.endswith(".zip")
+        if p.is_file() and p.name != zip_path.name and not p.name.endswith(".part") and not p.name.endswith(".zip")
     ]
     if not files:
         raise RuntimeError("Cannot create batch ZIP: no downloaded files are present.")
@@ -241,14 +231,7 @@ def upload_batch_to_zenodo(token: str, deposition: dict, zip_path: Path) -> str:
     payload = zip_path.read_bytes()
     if not payload:
         raise RuntimeError("Refusing to upload empty batch ZIP.")
-    status, response = zenodo_request(
-        "PUT",
-        target,
-        token,
-        data=payload,
-        content_type="application/octet-stream",
-        timeout=1800,
-    )
+    status, response = zenodo_request("PUT", target, token, data=payload, content_type="application/octet-stream", timeout=1800)
     if status not in (200, 201):
         raise RuntimeError(f"Unexpected Zenodo upload status: {status}")
     remote_size = int((response or {}).get("size", 0) or 0)
@@ -257,40 +240,28 @@ def upload_batch_to_zenodo(token: str, deposition: dict, zip_path: Path) -> str:
     return "uploaded"
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--batch", type=int, required=True)
-    parser.add_argument("--output", type=Path, default=ROOT / "openalex_fulltext")
-    args = parser.parse_args()
-
-    openalex_key = os.environ.get("OPENALEX_API_KEY", "").strip()
-    zenodo_token = os.environ.get("ZENODO_ACCESS_TOKEN", "").strip()
-    if not openalex_key:
-        raise RuntimeError("OPENALEX_API_KEY is not set")
-    if not zenodo_token:
-        raise RuntimeError("ZENODO_ACCESS_TOKEN is not set")
-
-    plan = build_plan()
-    total_batches = (len(plan) + BATCH_SIZE - 1) // BATCH_SIZE
-    if args.batch < 1 or args.batch > total_batches:
-        raise RuntimeError(f"Batch must be between 1 and {total_batches}; got {args.batch}")
-
-    start = (args.batch - 1) * BATCH_SIZE
-    end = min(start + BATCH_SIZE, len(plan))
-    batch = plan[start:end]
-    part = (args.batch - 1) // BATCHES_PER_ZENODO_DEPOSITION + 1
-
-    print(f"OpenAlex full-text plan: {len(plan)} files in {total_batches} batches", flush=True)
-    print(f"Batch {args.batch}/{total_batches}: files {start + 1}-{end}", flush=True)
-    print("GROBID-first; PDF-only fallback; maximum 100 OpenAlex content downloads", flush=True)
-    print(f"Zenodo storage: private draft part {part}", flush=True)
-
-    batch_dir = args.output / f"batch_{args.batch}"
-    batch_dir.mkdir(parents=True, exist_ok=True)
+def write_manifest(batch_dir: Path, rows: list[dict]) -> None:
     manifest_path = batch_dir / "download_manifest.csv"
+    fields = ["batch", "batch_position", "doi", "openalex_id", "format", "url", "status", "bytes", "sha256", "file"]
+    with manifest_path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def batch_context(plan: list[dict[str, str]], batch_number: int):
+    total_batches = (len(plan) + BATCH_SIZE - 1) // BATCH_SIZE
+    if batch_number < 1 or batch_number > total_batches:
+        raise RuntimeError(f"Batch must be between 1 and {total_batches}; got {batch_number}")
+    start = (batch_number - 1) * BATCH_SIZE
+    end = min(start + BATCH_SIZE, len(plan))
+    return total_batches, start, end, plan[start:end], (batch_number - 1) // BATCHES_PER_ZENODO_DEPOSITION + 1
+
+
+def download_batch(plan, batch_number: int, batch_dir: Path) -> int:
+    _, start, _, batch, _ = batch_context(plan, batch_number)
     manifest_rows = []
     failures = []
-
     for i, row in enumerate(batch, start=start + 1):
         ext = ".tei.xml" if row["format"] == "grobid_xml" else ".pdf"
         destination = batch_dir / f"{row['openalex_id']}{ext}"
@@ -301,59 +272,61 @@ def main() -> int:
         else:
             print(f"[{i}/{len(plan)}] DOWNLOAD {row['openalex_id']} ({row['format']})", flush=True)
             try:
-                download_openalex(row["url"], openalex_key, destination, row["format"])
+                download_openalex(row["url"], os.environ["OPENALEX_API_KEY"], destination, row["format"])
                 status = "downloaded"
             except Exception as exc:
                 status = "failed"
                 failures.append((row, str(exc)))
                 print(f"  FAILED: {exc}", flush=True)
-
         size = destination.stat().st_size if destination.exists() else 0
         checksum = sha256_file(destination) if status != "failed" and destination.exists() else ""
-        manifest_rows.append({
-            "batch": args.batch,
-            "batch_position": i,
-            "doi": row["doi"],
-            "openalex_id": row["openalex_id"],
-            "format": row["format"],
-            "url": row["url"],
-            "status": status,
-            "bytes": size,
-            "sha256": checksum,
-            "file": destination.name if destination.exists() else "",
-        })
-        with manifest_path.open("w", encoding="utf-8", newline="") as fh:
-            writer = csv.DictWriter(fh, fieldnames=manifest_rows[0].keys())
-            writer.writeheader()
-            writer.writerows(manifest_rows)
-
-    # Do not create/upload a batch ZIP if any OpenAlex download failed.
+        manifest_rows.append({"batch": batch_number, "batch_position": i, "doi": row["doi"], "openalex_id": row["openalex_id"], "format": row["format"], "url": row["url"], "status": status, "bytes": size, "sha256": checksum, "file": destination.name if destination.exists() else ""})
+        write_manifest(batch_dir, manifest_rows)
     if failures:
-        print(f"{len(failures)} OpenAlex downloads failed; batch is incomplete and will not be sent to Zenodo.", flush=True)
+        print(f"{len(failures)} OpenAlex downloads failed; checkpoint this partial batch and do not contact Zenodo.", flush=True)
         return 1
+    return 0
 
-    # Make sure the batch directory contains the completed source files BEFORE
-    # any Zenodo operation. The workflow always preserves this directory.
-    zip_path, zip_sha256, zip_bytes = make_batch_zip(batch_dir, args.batch)
+
+def zenodo_batch(plan, batch_number: int, batch_dir: Path) -> int:
+    total_batches, _, _, batch, part = batch_context(plan, batch_number)
+    for row in batch:
+        ext = ".tei.xml" if row["format"] == "grobid_xml" else ".pdf"
+        destination = batch_dir / f"{row['openalex_id']}{ext}"
+        ok, reason = validate_content(destination, row["format"])
+        if not ok:
+            raise RuntimeError(f"Checkpoint incomplete: {destination.name}: {reason}")
+    zip_path, zip_sha256, zip_bytes = make_batch_zip(batch_dir, batch_number)
     print(f"Batch ZIP created: {zip_path.name} ({zip_bytes:,} bytes; SHA-256 {zip_sha256})", flush=True)
-
-    deposition = get_or_create_zenodo_draft(zenodo_token, part, total_batches)
-    upload_status = upload_batch_to_zenodo(zenodo_token, deposition, zip_path)
-
-    receipt = {
-        "deposition_id": deposition["id"],
-        "deposition_title": deposition.get("title"),
-        "batch": args.batch,
-        "zip": zip_path.name,
-        "zip_bytes": zip_bytes,
-        "zip_sha256": zip_sha256,
-        "upload_status": upload_status,
-        "uploaded_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "published": False,
-    }
+    deposition = get_or_create_zenodo_draft(os.environ["ZENODO_ACCESS_TOKEN"], part, total_batches)
+    upload_status = upload_batch_to_zenodo(os.environ["ZENODO_ACCESS_TOKEN"], deposition, zip_path)
+    receipt = {"deposition_id": deposition["id"], "deposition_title": deposition.get("title"), "batch": batch_number, "zip": zip_path.name, "zip_bytes": zip_bytes, "zip_sha256": zip_sha256, "upload_status": upload_status, "uploaded_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "published": False}
     (batch_dir / "zenodo_receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print("Batch completed and durably staged in private Zenodo storage.", flush=True)
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch", type=int, required=True)
+    parser.add_argument("--output", type=Path, default=ROOT / "openalex_fulltext")
+    parser.add_argument("--mode", choices=["download", "zenodo"], default="download")
+    args = parser.parse_args()
+    if not os.environ.get("OPENALEX_API_KEY", "").strip():
+        raise RuntimeError("OPENALEX_API_KEY is not set")
+    if not os.environ.get("ZENODO_ACCESS_TOKEN", "").strip():
+        raise RuntimeError("ZENODO_ACCESS_TOKEN is not set")
+    plan = build_plan()
+    total_batches, start, end, _, part = batch_context(plan, args.batch)
+    batch_dir = args.output / f"batch_{args.batch}"
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    print(f"OpenAlex full-text plan: {len(plan)} files in {total_batches} batches", flush=True)
+    print(f"Batch {args.batch}/{total_batches}: files {start + 1}-{end}", flush=True)
+    print("GROBID-first; PDF-only fallback; maximum 100 OpenAlex content downloads", flush=True)
+    print(f"Zenodo storage: private draft part {part}", flush=True)
+    if args.mode == "download":
+        return download_batch(plan, args.batch, batch_dir)
+    return zenodo_batch(plan, args.batch, batch_dir)
 
 
 if __name__ == "__main__":
