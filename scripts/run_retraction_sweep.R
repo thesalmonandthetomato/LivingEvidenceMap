@@ -2,6 +2,7 @@ source("R/publication_status.R")
 library(dplyr)
 library(readr)
 library(lubridate)
+library(purrr)
 
 corpus_file <- here::here("data", "master", "current", "living_evidence_map_master.csv")
 cache_file <- here::here("data", "reference", "openalex_retraction_status.csv")
@@ -42,11 +43,6 @@ old_retracted <- cache |>
   pull(doi_for_lookup)
 
 now <- Sys.time()
-
-# This workflow is intentionally a one-off/manual full-corpus sweep.
-# Check every DOI in the current master, regardless of the rolling cache's
-# next_check_at value. The workflow is manual-only; this is not the normal
-# future surveillance cadence.
 due <- corpus_dois
 
 message(sprintf(
@@ -54,31 +50,48 @@ message(sprintf(
   nrow(corpus_dois), nrow(due)
 ))
 
+# Do not build one large result object for the whole corpus. Process and
+# persist each OpenAlex batch independently so a large/awkward batch cannot
+# discard the results already obtained from earlier batches.
 if (nrow(due)) {
-  r <- lookup_openalex_dois(
-    due$doi_for_lookup,
-    api_key = api_key,
-    batch_size = 50L
-  ) |>
-    mutate(last_checked_at = now)
+  batches <- split(due$doi_for_lookup, ceiling(seq_along(due$doi_for_lookup) / 25L))
+  total_batches <- length(batches)
+  batch_results <- vector("list", total_batches)
 
-  r <- r |>
-    mutate(
-      next_check_at = case_when(
-        openalex_is_retracted ~ as.POSIXct(NA, tz = "UTC"),
-        openalex_lookup_status == "failed" ~ now + days(1),
-        TRUE ~ now + days(90)
-      )
-    ) |>
-    select(
-      doi_for_lookup, openalex_id, openalex_title,
-      openalex_is_retracted, openalex_lookup_status,
-      openalex_error, last_checked_at, next_check_at
+  for (i in seq_along(batches)) {
+    batch <- batches[[i]]
+    message(sprintf(
+      "OpenAlex retraction sweep: batch %d/%d (%d DOIs)",
+      i, total_batches, length(batch)
+    ))
+
+    result <- tryCatch(
+      lookup_openalex_dois(batch, api_key = api_key, batch_size = length(batch)),
+      error = function(e) {
+        stop(sprintf(
+          "OpenAlex retraction sweep failed in batch %d/%d: %s",
+          i, total_batches, conditionMessage(e)
+        ), call. = FALSE)
+      }
     )
 
-  # Replace the records checked in this full sweep while retaining any
-  # cached records that are no longer present in the current DOI corpus only
-  # until the final corpus restriction below.
+    batch_results[[i]] <- result |>
+      mutate(last_checked_at = now) |>
+      mutate(
+        next_check_at = case_when(
+          openalex_is_retracted ~ as.POSIXct(NA, tz = "UTC"),
+          openalex_lookup_status == "failed" ~ now + days(1),
+          TRUE ~ now + days(90)
+        )
+      ) |>
+      select(
+        doi_for_lookup, openalex_id, openalex_title,
+        openalex_is_retracted, openalex_lookup_status,
+        openalex_error, last_checked_at, next_check_at
+      )
+  }
+
+  r <- bind_rows(batch_results)
   cache <- cache |>
     filter(!doi_for_lookup %in% due$doi_for_lookup) |>
     bind_rows(r)
