@@ -3,10 +3,10 @@
   "description": "Lightweight reproducible full-text corpus annotation schema for the LivingEvidenceMap.",
   "document_type": ["study", "review", "systematic_review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"],
   "review_type": ["systematic", "non_systematic", "not_applicable"],
-  "study_design": ["experimental", "observational", "laboratory", "in_vitro", "in_silico", "modelling", "other", "not_applicable"],
-  "research_approach": ["quantitative", "qualitative", "mixed", "not_applicable"],
-  "setting": "comma-separated array of applicable values such as field, laboratory, in_vitro, in_silico",
-  "aquaculture_facility": ["salmon_farming_region", "hatchery", "sea_pen", "land_based", "river", "genetic_variety", "wild", "mixed", "other", "not_applicable"],
+  "study_design": ["experimental", "observational", "laboratory", "in_vitro", "in_silico", "modelling", "not_applicable"],
+  "research_approach": ["quantitative", "qualitative", "not_applicable"],
+  "setting": "array of applicable values; never use 'mixed'. Multiple applicable values must be listed separately.",
+  "aquaculture_facility": ["salmon_farming_region", "hatchery", "sea_pen", "land_based", "river", "genetic_variety", "not_applicable"],
   "fields": {
     "source_id": "string",
     "doi": "string|null",
@@ -36,7 +36,7 @@
     "ontology_codes": "array[string]"
   },
   "evidence": {
-    "description": "Evidence supporting substantive coding decisions. Prefer Methods and Results for study characteristics, system, exposure/intervention, comparator and outcomes. Use Introduction material as needed for research question and objectives, preferring explicit aims and the latter part of the Introduction.",
+    "description": "Evidence supporting substantive coding decisions. Prefer Methods and Results for study characteristics, system, exposure/intervention, comparator and outcomes. Use Introduction material as needed for research question and objectives, preferring explicit aims and the latter part of the Introduction. Use the Abstract only as an extreme fallback when the relevant information cannot be found elsewhere in the full text.",
     "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
   },
   "run_metadata": {
