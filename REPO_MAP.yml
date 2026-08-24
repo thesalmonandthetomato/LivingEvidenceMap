@@ -1,0 +1,191 @@
+schema_version: 1
+purpose: >-
+  Machine-readable map of the production automated-update infrastructure for the
+  salmon Living Evidence Map. This file documents only dependencies that are
+  evidenced by the repository's active update workflows and their referenced files.
+
+source_of_truth_for_this_map:
+  - .github/workflows/weekly_update_pipeline.yml
+  - .github/workflows/build-dashboard.yml
+  - .github/workflows/deploy-dashboard-pages.yml
+  - README.md
+  - scripts/lens_weekly_harvest.py
+  - scripts/build_dashboard.py
+
+production_update:
+  workflow: .github/workflows/weekly_update_pipeline.yml
+  name: Weekly evidence-map update
+  triggers:
+    scheduled:
+      cron: "0 3 * * 1"
+    manual:
+      workflow_dispatch: true
+      input:
+        ris_path: "Optional committed RIS file for a manual update; blank uses Lens"
+  permissions:
+    contents: write
+    actions: read
+    issues: write
+  secrets_used:
+    - LENS_API_TOKEN
+    - OPENAI_API_KEY
+    - OPENALEX_API_KEY
+
+  stages:
+    - id: harvest
+      step: Harvest Lens weekly increment
+      entrypoint: scripts/lens_weekly_harvest.py
+      config:
+        - config/lens_search.json
+      state_inputs:
+        - state/lens_weekly_harvest.json
+      outputs:
+        - outputs/lens_harvest/lens_increment_*.json
+        - outputs/lens_harvest/lens_increment_*.csv
+        - outputs/lens_harvest/*_manifest.json
+        - state/lens_weekly_harvest.json
+        - state/search_history.json
+      retrieval_rule:
+        field: created
+        overlap_days: 7
+      success_semantics:
+        zero_records_is_success: true
+        checkpoint_is_advanced_on_success: true
+
+    - id: persist_search_state
+      step: Persist successful Lens search state
+      depends_on:
+        - harvest
+      inputs:
+        - state/lens_weekly_harvest.json
+        - state/search_history.json
+      action: commit_and_push_to_main
+      failure_semantics: workflow_fails_if_persistence_fails
+
+    - id: prepare_update_input
+      step: Prepare update input
+      depends_on:
+        - persist_search_state
+      inputs:
+        - outputs/lens_harvest/*_manifest.json
+        - outputs/lens_harvest/lens_increment_*.json
+      outputs:
+        - data/updates/<update_date>_lens/lens-export.ris
+      zero_record_path:
+        action: set_no_records_and_skip_downstream
+        master_change: false
+
+    - id: screen_and_annotate
+      step: Run deduplication, relevance, screening, species and geography
+      entrypoint: scripts/run_lens_update.R
+      depends_on:
+        - prepare_update_input
+      outputs:
+        - data/updates/<update_date>_lens/*
+      methods_order:
+        - deduplication
+        - relevance_screening
+        - species_annotation
+        - geography_annotation
+
+    - id: technical_check
+      step: Reject technical LLM failures
+      depends_on:
+        - screen_and_annotate
+      master_change: false_on_failure
+
+    - id: topics
+      step: Run topic classification
+      entrypoint: R/run_update_topic_classification.R
+      depends_on:
+        - technical_check
+      outputs:
+        - data/updates/<update_date>_lens/topic_classification.csv
+
+    - id: human_review_gate
+      step: Create human-review queue and hold promotion
+      depends_on:
+        - topics
+      gate_behavior:
+        unresolved_review_items_hold_master_promotion: true
+        review_issue_created_on_failure: true
+
+    - id: candidate_master
+      step: Build and validate candidate master
+      entrypoint: scripts/merge_master_update.py
+      depends_on:
+        - human_review_gate
+      runs_only_when_review_gate_succeeds: true
+
+    - id: promote_master
+      step: Promote validated candidate master
+      depends_on:
+        - candidate_master
+      inputs:
+        - data/master/current/living_evidence_map_master.csv
+        - data/master/candidates/living_evidence_map_master_<next_date>.csv
+      outputs:
+        - data/master/current/living_evidence_map_master.csv
+        - data/master/archive/*
+      action: commit_and_push_to_main
+
+state:
+  search_checkpoint:
+    file: state/lens_weekly_harvest.json
+    fields:
+      - last_successful_created
+      - updated_at
+      - last_status
+  search_history:
+    file: state/search_history.json
+    role: cumulative_auditable_candidate_result_history
+  rule: >-
+    Search state is updated after a successful Lens harvest, including a
+    successful zero-record harvest. It is persisted by the weekly workflow.
+
+master_data:
+  authoritative_file: data/master/current/living_evidence_map_master.csv
+  candidate_location: data/master/candidates/
+  archive_location: data/master/archive/
+  promotion_rule: >-
+    Candidate master is promoted only after the automated review gate succeeds.
+    The zero-record path explicitly leaves the master unchanged.
+
+dashboard:
+  build_workflow: .github/workflows/build-dashboard.yml
+  deploy_workflow: .github/workflows/deploy-dashboard-pages.yml
+  build_trigger:
+    - workflow_dispatch
+    - push_to_listed_dashboard_paths
+    - successful_completion_of: Build final master
+  authoritative_dashboard_data:
+    generated_file: docs/dashboard.json
+    builder: scripts/build_dashboard.py
+    master_input: data/master/current/living_evidence_map_master.csv
+  dashboard_build_steps:
+    - scripts/build_dashboard.py
+    - scripts/enforce_v3_dashboard_topics.py
+    - scripts/augment_dashboard_citations.py
+    - scripts/normalise_dashboard_data.py
+    - scripts/augment_dashboard_data.py
+    - scripts/patch_dashboard_feedback_data.py
+    - scripts/validate_dashboard_data.py
+    - scripts/audit_topic_hierarchy.py
+  protected_presentation:
+    - docs/index.html
+    - docs/topic-radial.js
+  deployment:
+    artifact: dashboard-pages
+    destination: GitHub Pages
+  important_observation: >-
+    scripts/build_dashboard.py currently derives the dashboard JSON metric
+    last_update from an update-like field in the authoritative master rows.
+    The weekly search checkpoint is stored separately in state/lens_weekly_harvest.json.
+    The repository evidence reviewed for this map does not establish that the
+    dashboard's displayed "last search" label is driven by the search checkpoint.
+
+not_claimed_by_this_map:
+  - Any dependency not referenced by the active production update/dashboard workflows above.
+  - Any undocumented relationship between the dashboard presentation and search state.
+  - Any historical workflow that is not part of the active weekly update/dashboard pathway.
+  - Any runtime dependency on the legacy salmonscopingreview repository.
