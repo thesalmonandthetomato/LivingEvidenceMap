@@ -1,0 +1,89 @@
+name: Test full-text AI coding
+
+on:
+  workflow_dispatch:
+    inputs:
+      n_papers:
+        description: "Number of prepared papers to code"
+        required: false
+        default: "5"
+      model:
+        description: "OpenAI model for the test"
+        required: false
+        default: "gpt-5.6-mini"
+
+permissions:
+  contents: read
+
+jobs:
+  code:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+      ZENODO_DEPOSITION_ID: "22085902"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      FULLTEXT_CODING_MODEL: ${{ github.event.inputs.model || 'gpt-5.6-mini' }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Download existing Zenodo test corpus
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          token=os.environ['ZENODO_ACCESS_TOKEN']; dep=os.environ['ZENODO_DEPOSITION_ID']
+          req=urllib.request.Request(f'https://zenodo.org/api/deposit/depositions/{dep}', headers={'Authorization':f'Bearer {token}','Accept':'application/json'})
+          with urllib.request.urlopen(req, timeout=60) as r: data=json.load(r)
+          remote=data['files'][0]; url=remote['links']['download']
+          with urllib.request.urlopen(urllib.request.Request(url, headers={'Authorization':f'Bearer {token}'}), timeout=180) as r:
+              Path('test_corpus.zip').write_bytes(r.read())
+          print(remote['filename'])
+          PY
+      - name: Prepare five papers
+        run: |
+          rm -rf test_corpus/raw test_corpus/prepared test_corpus/annotations
+          mkdir -p test_corpus/raw test_corpus/prepared test_corpus/annotations
+          unzip -q test_corpus.zip -d test_corpus/raw
+          find test_corpus/raw -type f -name '*.tei.xml' | sort | head -n "${{ github.event.inputs.n_papers || 5 }}" > test_corpus/grobid_test_files.txt
+          while IFS= read -r file; do
+            work_id="$(basename "$file" .tei.xml)"
+            python scripts/fulltext_coding/prepare_fulltext_for_coding.py --input "$file" --output "test_corpus/prepared/${work_id}.json"
+          done < test_corpus/grobid_test_files.txt
+      - name: Run AI coding
+        run: |
+          python scripts/fulltext_coding/code_fulltext_test.py \
+            --input-dir test_corpus/prepared \
+            --output-dir test_corpus/annotations \
+            --ontology data/reference/topic_ontology_v3.csv \
+            --schema scripts/fulltext_coding/coding_schema_v1.json \
+            --prompt scripts/fulltext_coding/fulltext_coding_prompt_v1.txt \
+            --model "$FULLTEXT_CODING_MODEL" \
+            --max-papers "${{ github.event.inputs.n_papers || 5 }}"
+      - name: Validate annotations
+        run: |
+          for file in test_corpus/annotations/*.json; do
+            python scripts/fulltext_coding/validate_coding_output.py --input "$file"
+          done
+      - name: Write coding test manifest
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          files=sorted(Path('test_corpus/annotations').glob('*.json'))
+          Path('test_corpus/annotations/test_manifest.json').write_text(json.dumps({
+            'workflow':'test_fulltext_coding','model':__import__('os').environ['FULLTEXT_CODING_MODEL'],
+            'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v1.json',
+            'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v1.txt','zenodo_deposition':22085902,
+            'annotation_files':[p.name for p in files]}, indent=2)+'\n')
+          PY
+      - name: Upload coding test artifact (90 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fulltext-coding-test-${{ github.run_id }}
+          path: test_corpus/annotations/
+          retention-days: 90
+          if-no-files-found: error
