@@ -2,8 +2,7 @@
 """Code prepared full texts with the OpenAI Responses API.
 
 Every successful model response is checkpointed to per-paper output before
-validation or downstream processing. Existing checkpoints are never
-re-submitted to the model.
+validation or downstream processing. Existing checkpoints are never re-submitted to the model.
 """
 from __future__ import annotations
 
@@ -18,8 +17,7 @@ from urllib.request import Request, urlopen
 
 DEFAULT_MODEL = os.getenv("FULLTEXT_CODING_MODEL", "gpt-5.6-luna")
 CHECKPOINT_RULE = (
-    "After every successful model response, checkpoint the raw response and "
-    "annotation before validation, aggregation, merging, or downstream processing. "
+    "After every successful model response, checkpoint the raw response and annotation before validation, aggregation, merging, or downstream processing. "
     "Never re-call the model when a complete checkpoint exists."
 )
 
@@ -63,6 +61,23 @@ def response_text(data: dict) -> str:
     return "\n".join(parts).strip()
 
 
+def normalise_annotation(annotation: dict) -> dict:
+    """Accept either direct schema output or a {fields: {...}, evidence: [...]} wrapper.
+
+    The model occasionally mirrors the schema's documentation structure and
+    nests substantive fields under `fields`. The persisted checkpoint should
+    always use the flat top-level annotation schema consumed by the validator.
+    """
+    if isinstance(annotation.get("fields"), dict):
+        fields = annotation["fields"]
+        merged = dict(fields)
+        for key in ("schema_version", "evidence", "run_metadata"):
+            if key in annotation:
+                merged[key] = annotation[key]
+        annotation = merged
+    return annotation
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input-dir", type=Path, required=True)
@@ -97,7 +112,9 @@ def main() -> int:
         prepared = load(path)
         user = (
             "Code this article according to the supplied schema and ontology. "
-            "Return a single valid JSON object only. Do not wrap it in markdown. "
+            "Return a single valid JSON object only. The substantive annotation fields "
+            "must be at the TOP LEVEL of the object, not nested under a `fields` key. "
+            "The top-level keys must match the example output structure. "
             "Cite concise evidence for substantive extracted fields.\n\n"
             "CODING SCHEMA:\n" + json.dumps(schema, ensure_ascii=False, indent=2)
             + "\n\nONTOLOGY CSV:\n" + ontology
@@ -113,10 +130,11 @@ def main() -> int:
 
                 # Checkpoint immediately after successful API response.
                 raw_out.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-                annotation = json.loads(text)
+                annotation = normalise_annotation(json.loads(text))
                 timestamp = datetime.now(timezone.utc).isoformat()
+                annotation["schema_version"] = "fulltext_coding_v1"
                 annotation["run_metadata"] = {
-                    "schema_version": schema.get("schema_version", "fulltext_coding_v1"),
+                    "schema_version": "fulltext_coding_v1",
                     "ontology_version": ontology_version,
                     "model": args.model,
                     "provider": "openai",
