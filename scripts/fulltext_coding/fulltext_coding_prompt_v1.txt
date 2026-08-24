@@ -4,53 +4,42 @@ Ontology: data/reference/topic_ontology_v3.csv
 
 TASK
 
-Code one document using the supplied structured schema and the supplied LivingEvidenceMap ontology.
-Return valid JSON only. Do not add fields that are not in the schema.
+Code one document using the supplied structured schema and the supplied LivingEvidenceMap ontology. Return valid JSON only.
+
+DOCUMENT TYPE — USE ONLY THIS SINGLE TAXONOMY
+
+Choose exactly one document_type:
+study, review, systematic_review, perspective, commentary, editorial, book, book_chapter, report, thesis, protocol, other
+
+Do not use journal_article, conference_paper, primary_research, or contribution_type. A thesis and dissertation are both coded as thesis.
+
+For document_type = review, review_type must be systematic or non_systematic. For all other document types, review_type = not_applicable.
 
 GENERAL PRINCIPLES
 
 - Code what the document actually investigates, measures, compares, models, evaluates, or reports.
 - Do not infer substantive topics from background discussion alone.
-- Multiple ontology codes are allowed when distinct research questions, outcomes, pathways, or substantive topics are genuinely addressed.
-- Prefer the most specific applicable ontology node supported by the evidence.
-- Respect the ontology CSV's definition, include_when, exclude_when, and prompt_logic_note fields.
-- Lexical cues in the ontology are aids, not sufficient evidence by themselves.
 - If evidence is insufficient, use null, an empty array, or not_applicable rather than inventing information.
+- Return the exact top-level schema. Do not wrap fields inside a `fields` object.
 
 EVIDENCE PRIORITY
 
-Use evidence in this order:
+1. Methods and Materials
+2. Results / Findings
+3. If the research focus remains unclear, inspect only the final two paragraphs of the Introduction/Objectives.
 
-1. Methods
-2. Results
-3. If the research focus is still unclear, inspect only the final two paragraphs of the Introduction/Objectives.
-
-Do not use the rest of the Introduction/background to infer ontology assignments when Methods or Results provide no supporting evidence.
-
-DOCUMENT CLASSIFICATION
-
-1. document_type must be one of:
-   journal_article, book, book_chapter, report, thesis, conference_paper, other
-
-2. contribution_type must be one of:
-   primary_research, review, perspective, commentary, editorial, protocol, methods, other
-
-3. review_type is only substantive when contribution_type = review:
-   systematic, non_systematic, not_applicable
-
-Treat thesis/dissertation as one document_type: thesis.
+Do not use the rest of the Introduction/background to infer substantive coding when Methods or Results provide no support.
 
 STUDY CHARACTERISTICS
 
-For primary research and research-bearing theses/reports, code where applicable:
-
-- study_design: experimental, observational, modelling, other, not_applicable
+For studies and research-bearing reviews/theses/reports where applicable:
+- study_design: experimental, observational, laboratory, in_vitro, in_silico, modelling, other, not_applicable
 - research_approach: quantitative, qualitative, mixed, not_applicable
 - setting: field, laboratory, in_vitro, in_silico, mixed, not_applicable
 - sample_size and sample_unit
 - study_period
 - location_region and location_country
-- species: use the supplied salmon/species controlled vocabulary when available
+- species: use the supplied salmon species controlled vocabulary when available
 - population: sea_pen, hatchery, river, land_based, wild, mixed, other, not_applicable
 - outcome_measured
 - intervention
@@ -60,50 +49,29 @@ Do not force inapplicable fields.
 
 RESEARCH QUESTION
 
-Provide one concise, consistently phrased research question that captures what the document actually investigates.
-
-Prefer forms such as:
-- What is the effect of [intervention/exposure] on [outcome] in [population/setting]?
-- What is the relationship between [exposure] and [outcome] in [population/setting]?
-- How does [process/intervention] affect [outcome] in [population/setting]?
-- For descriptive studies: What is the occurrence, distribution, composition, or pattern of [phenomenon] in [population/setting]?
-- For modelling or methodological research: How accurately/effectively does [method/model] estimate or predict [target]?
-
-Do not invent a causal framing where the study is descriptive or observational.
-Do not reproduce the authors' wording unless necessary. Paraphrase into a consistent question.
-Return null if a defensible question cannot be reconstructed.
+Provide one concise, consistently phrased research question capturing what the document actually investigates.
+Use causal language only when justified. For descriptive work, use a descriptive question; for modelling/methods, ask about estimation, prediction, performance, or validation.
 
 OBJECTIVES SUMMARY
 
-Provide a brief 1–2 sentence paraphrase of the study's objective(s).
-Do not copy long passages. Base it primarily on Methods/Results and only use the final two Introduction/Objectives paragraphs when necessary.
+Provide a brief 1–2 sentence paraphrase of the objective(s). Use Methods/Results primarily and the final two Introduction/Objectives paragraphs only when necessary.
 
 ONTOLOGY CODING
 
 For each selected ontology code:
 - use the exact path_id from data/reference/topic_ontology_v3.csv;
-- ensure the substantive focus is supported by Methods/Results where possible;
-- apply the ontology's include_when/exclude_when logic;
-- do not code a topic merely because it is mentioned in the background, limitations, or general discussion;
-- do not add every parent category automatically when a specific child node captures the substantive focus;
-- use a broad node only where the broader topic itself is the substantive focus or the ontology specifically instructs that use.
+- apply include_when/exclude_when and prompt_logic_note;
+- do not code topics merely mentioned in background, limitations, or discussion;
+- prefer the most specific supported node.
 
 METHODS
 
-Only code the ontology Methods branch when methodological development, validation, comparison, or evaluation is itself a substantive research contribution. Do not code Methods simply because the paper contains a methods section.
+Only code the ontology Methods branch when methodological development, validation, comparison, or evaluation is itself a substantive contribution. Do not code Methods simply because the paper has a Methods section.
 
 EVIDENCE
 
-For every substantive coded field, provide a short evidence passage from the preferred evidence sections.
-Each evidence item must contain:
-- field
-- value
-- text
-- section
-- page if available
-
-Evidence should be concise enough for human QA and should preserve the meaning of the source passage.
+For every substantive coded field, provide concise supporting evidence from Methods/Results where possible. Each evidence item must contain field, value, text, section, and page (null if unavailable).
 
 OUTPUT
 
-Return a single JSON object matching coding_schema_v1.
+Return one JSON object matching coding_schema_v1 exactly, with all substantive fields at the top level.
