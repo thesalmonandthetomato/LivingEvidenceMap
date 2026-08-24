@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Code prepared full texts with the OpenAI Responses API.
 
-Small, auditable test runner for five papers. Writes one JSON annotation per
-paper, preserves reproducibility metadata, and captures API error responses.
-No source files are modified.
+HARD RULE: every successful model response is checkpointed to durable output
+before any validation or subsequent processing. Existing checkpoints are never
+re-submitted to the model. A validation failure must never cause paid work to
+be repeated.
 """
 from __future__ import annotations
 
@@ -15,7 +16,13 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-DEFAULT_MODEL = os.getenv("FULLTEXT_CODING_MODEL", "gpt-5.6-mini")
+DEFAULT_MODEL = os.getenv("FULLTEXT_CODING_MODEL", "gpt-5.6-luna")
+CHECKPOINT_RULE = (
+    "PAID CONTENT CHECKPOINT RULE: After every successful model response, "
+    "write the raw model response and annotation to the per-paper output "
+    "directory immediately, before validation, merging, or any other step. "
+    "Never re-call the model when a checkpoint exists."
+)
 
 
 def load(path: Path):
@@ -33,11 +40,7 @@ def call_api(base_url: str, api_key: str, model: str, system: str, user: str) ->
     req = Request(
         base_url.rstrip("/") + "/responses",
         data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "Accept": "application/json"},
         method="POST",
     )
     try:
@@ -75,7 +78,7 @@ def main() -> int:
     key = os.environ["OPENAI_API_KEY"]
     base = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    system = args.prompt.read_text(encoding="utf-8")
+    system = args.prompt.read_text(encoding="utf-8") + "\n\n" + CHECKPOINT_RULE
     ontology = args.ontology.read_text(encoding="utf-8")
     schema = load(args.schema)
 
@@ -85,9 +88,12 @@ def main() -> int:
 
     for i, path in enumerate(files, 1):
         out = args.output_dir / path.name
-        if out.exists():
-            print(f"[{i}/{len(files)}] EXISTS {out.name}", flush=True)
+        raw_out = args.output_dir / (path.stem + ".raw_response.json")
+        status_out = args.output_dir / (path.stem + ".checkpoint.json")
+        if out.exists() and raw_out.exists() and status_out.exists():
+            print(f"[{i}/{len(files)}] CHECKPOINT EXISTS {out.name}; skipping model call", flush=True)
             continue
+
         prepared = load(path)
         user = (
             "Code this article according to the supplied schema and ontology. "
@@ -105,6 +111,9 @@ def main() -> int:
                 text = response_text(data)
                 if not text:
                     raise RuntimeError("OpenAI API returned no output text")
+
+                # HARD CHECKPOINT: durable writes happen BEFORE validation.
+                raw_out.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                 annotation = json.loads(text)
                 annotation["run_metadata"] = {
                     "model": args.model,
@@ -112,12 +121,25 @@ def main() -> int:
                     "ontology": str(args.ontology),
                     "prompt": str(args.prompt),
                     "source_prepared_file": path.name,
+                    "checkpoint_status": "generated",
                 }
                 out.write_text(json.dumps(annotation, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                status_out.write_text(json.dumps({
+                    "source_prepared_file": path.name,
+                    "annotation_file": out.name,
+                    "raw_response_file": raw_out.name,
+                    "status": "generated",
+                    "checkpoint_rule": "checkpoint_before_validation",
+                }, indent=2) + "\n", encoding="utf-8")
+                print(f"  CHECKPOINTED {out.name} before validation", flush=True)
                 break
+            except json.JSONDecodeError as exc:
+                # A successful API response is still checkpointed above before parsing;
+                # do not retry it merely because downstream JSON parsing/validation fails.
+                raise RuntimeError(f"Model response checkpointed but was not valid JSON: {exc}") from exc
             except Exception as exc:
                 last = exc
-                print(f"  attempt {attempt + 1}/4 failed: {exc}", flush=True)
+                print(f"  attempt {attempt + 1}/4 failed before successful response: {exc}", flush=True)
                 if attempt == 3:
                     raise
                 time.sleep(2 ** attempt)
