@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
-import io
 import json
 import os
 import sys
@@ -216,11 +215,14 @@ def zenodo_existing_files(token: str, deposition_id: int) -> dict[str, dict]:
     return {f.get("key", f.get("filename", f.get("name", ""))): f for f in dep.get("files", [])}
 
 
-def make_batch_zip(batch_dir: Path, batch_number: int, manifest_path: Path) -> tuple[Path, str, int]:
+def make_batch_zip(batch_dir: Path, batch_number: int) -> tuple[Path, str, int]:
     zip_path = batch_dir / f"openalex_fulltext_batch_{batch_number:03d}.zip"
     if not zip_path.exists() or zip_path.stat().st_size < 512:
         tmp = zip_path.with_suffix(".zip.part")
-        files = sorted(p for p in batch_dir.iterdir() if p.is_file() and p.name != zip_path.name and not p.name.endswith(".part"))
+        files = sorted(
+            p for p in batch_dir.iterdir()
+            if p.is_file() and p.name != zip_path.name and not p.name.endswith(".part")
+        )
         with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
             for path in files:
                 zf.write(path, arcname=path.name)
@@ -246,13 +248,16 @@ def upload_batch_to_zenodo(token: str, deposition: dict, zip_path: Path) -> str:
     if not bucket:
         raise RuntimeError("Zenodo deposition has no upload bucket URL")
 
-    # Zenodo's current bucket API streams large files with PUT and supports files
-    # far larger than the legacy 100 MB endpoint.
     target = bucket.rstrip("/") + "/" + quote(filename)
+    # urllib requires the request body to be bytes. The ZIP is bounded by one
+    # 100-file OpenAlex batch and is therefore safe to stage in memory for the
+    # upload; the on-disk ZIP remains the durable local checkpoint.
     with zip_path.open("rb") as fh:
-        status, response = zenodo_request(
-            "PUT", target, token, data=fh, content_type="application/zip", timeout=1800
-        )
+        payload = fh.read()
+
+    status, response = zenodo_request(
+        "PUT", target, token, data=payload, content_type="application/zip", timeout=1800
+    )
     if status not in (200, 201):
         raise RuntimeError(f"Unexpected Zenodo upload status: {status}")
     remote_size = int((response or {}).get("size", 0) or 0)
@@ -337,14 +342,12 @@ def main() -> int:
         print(f"{len(failures)} OpenAlex downloads failed; NOT uploading an incomplete batch to Zenodo.", flush=True)
         return 1
 
-    zip_path, zip_sha256, zip_bytes = make_batch_zip(batch_dir, args.batch, manifest_path)
+    zip_path, zip_sha256, zip_bytes = make_batch_zip(batch_dir, args.batch)
     print(f"Batch ZIP: {zip_path.name} ({zip_bytes:,} bytes; SHA-256 {zip_sha256})", flush=True)
 
     deposition = get_or_create_zenodo_draft(zenodo_token, part, total_batches)
     upload_status = upload_batch_to_zenodo(zenodo_token, deposition, zip_path)
 
-    # Write a small local Zenodo receipt so the GitHub artifact also records the
-    # durable-storage destination even if the workflow log later expires.
     receipt = batch_dir / "zenodo_receipt.json"
     receipt.write_text(json.dumps({
         "deposition_id": deposition["id"],
