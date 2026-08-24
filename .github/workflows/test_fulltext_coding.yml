@@ -10,7 +10,7 @@ on:
       model:
         description: "OpenAI model for the test"
         required: false
-        default: "gpt-5.6-mini"
+        default: "gpt-5.6-luna"
 
 permissions:
   contents: read
@@ -23,7 +23,7 @@ jobs:
       ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
       ZENODO_DEPOSITION_ID: "22085902"
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      FULLTEXT_CODING_MODEL: ${{ github.event.inputs.model || 'gpt-5.6-mini' }}
+      FULLTEXT_CODING_MODEL: ${{ github.event.inputs.model || 'gpt-5.6-luna' }}
       PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +32,7 @@ jobs:
           python-version: "3.11"
       - name: Download existing Zenodo test corpus
         run: |
+          set -euo pipefail
           python - <<'PY'
           import json, os, urllib.request
           from pathlib import Path
@@ -45,6 +46,7 @@ jobs:
           PY
       - name: Prepare five papers
         run: |
+          set -euo pipefail
           rm -rf test_corpus/raw test_corpus/prepared test_corpus/annotations
           mkdir -p test_corpus/raw test_corpus/prepared test_corpus/annotations
           unzip -q test_corpus.zip -d test_corpus/raw
@@ -55,6 +57,7 @@ jobs:
           done < test_corpus/grobid_test_files.txt
       - name: Run AI coding
         run: |
+          set -euo pipefail
           python scripts/fulltext_coding/code_fulltext_test.py \
             --input-dir test_corpus/prepared \
             --output-dir test_corpus/annotations \
@@ -65,17 +68,18 @@ jobs:
             --max-papers "${{ github.event.inputs.n_papers || 5 }}"
       - name: Validate annotations
         run: |
+          set -euo pipefail
           for file in test_corpus/annotations/*.json; do
             python scripts/fulltext_coding/validate_coding_output.py --input "$file"
           done
       - name: Write coding test manifest
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           files=sorted(Path('test_corpus/annotations').glob('*.json'))
           Path('test_corpus/annotations/test_manifest.json').write_text(json.dumps({
-            'workflow':'test_fulltext_coding','model':__import__('os').environ['FULLTEXT_CODING_MODEL'],
+            'workflow':'test_fulltext_coding','model':os.environ['FULLTEXT_CODING_MODEL'],
             'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v1.json',
             'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v1.txt','zenodo_deposition':22085902,
             'annotation_files':[p.name for p in files]}, indent=2)+'\n')
