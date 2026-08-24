@@ -20,8 +20,8 @@ if (file.exists(cache_file)) {
 }
 old_retracted <- cache |> filter(openalex_is_retracted %in% TRUE) |> pull(doi_for_lookup)
 now <- Sys.time()
-limit <- 500L
-due <- corpus_dois |> left_join(cache |> select(doi_for_lookup,next_check_at,openalex_is_retracted),by="doi_for_lookup") |> filter(!coalesce(openalex_is_retracted,FALSE)) |> filter(is.na(next_check_at) | next_check_at <= now) |> arrange(!is.na(next_check_at),next_check_at) |> slice_head(n=limit)
+limit <- nrow(corpus_dois)
+due <- corpus_dois |> left_join(cache |> select(doi_for_lookup,next_check_at,openalex_is_retracted),by="doi_for_lookup") |> filter(!coalesce(openalex_is_retracted,FALSE)) |> arrange(is.na(next_check_at),next_check_at) |> slice_head(n=limit)
 message(sprintf("Retraction sweep: %d corpus DOIs; checking %d.",nrow(corpus_dois),nrow(due)))
 if(nrow(due)){
   r <- lookup_openalex_dois(due$doi_for_lookup,api_key=api_key,batch_size=50L) |> mutate(last_checked_at=now)
