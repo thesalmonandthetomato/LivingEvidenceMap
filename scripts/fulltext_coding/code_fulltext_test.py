@@ -2,7 +2,8 @@
 """Code prepared full texts with the OpenAI Responses API.
 
 Every successful model response is checkpointed to per-paper output before
-validation or downstream processing. Existing checkpoints are never re-submitted to the model.
+validation or downstream processing. Existing checkpoints are never
+re-submitted to the model.
 """
 from __future__ import annotations
 
@@ -62,12 +63,9 @@ def response_text(data: dict) -> str:
 
 
 def normalise_annotation(annotation: dict) -> dict:
-    """Accept either direct schema output or a {fields: {...}, evidence: [...]} wrapper.
-
-    The model occasionally mirrors the schema's documentation structure and
-    nests substantive fields under `fields`. The persisted checkpoint should
-    always use the flat top-level annotation schema consumed by the validator.
-    """
+    """Accept direct schema output or a {fields: {...}, evidence: [...]} wrapper."""
+    if not isinstance(annotation, dict):
+        raise ValueError("Model output must be a JSON object")
     if isinstance(annotation.get("fields"), dict):
         fields = annotation["fields"]
         merged = dict(fields)
@@ -75,6 +73,7 @@ def normalise_annotation(annotation: dict) -> dict:
             if key in annotation:
                 merged[key] = annotation[key]
         annotation = merged
+    annotation["schema_version"] = "fulltext_coding_v1"
     return annotation
 
 
@@ -114,7 +113,6 @@ def main() -> int:
             "Code this article according to the supplied schema and ontology. "
             "Return a single valid JSON object only. The substantive annotation fields "
             "must be at the TOP LEVEL of the object, not nested under a `fields` key. "
-            "The top-level keys must match the example output structure. "
             "Cite concise evidence for substantive extracted fields.\n\n"
             "CODING SCHEMA:\n" + json.dumps(schema, ensure_ascii=False, indent=2)
             + "\n\nONTOLOGY CSV:\n" + ontology
@@ -127,12 +125,9 @@ def main() -> int:
                 text = response_text(data)
                 if not text:
                     raise RuntimeError("OpenAI API returned no output text")
-
-                # Checkpoint immediately after successful API response.
                 raw_out.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                 annotation = normalise_annotation(json.loads(text))
                 timestamp = datetime.now(timezone.utc).isoformat()
-                annotation["schema_version"] = "fulltext_coding_v1"
                 annotation["run_metadata"] = {
                     "schema_version": "fulltext_coding_v1",
                     "ontology_version": ontology_version,
