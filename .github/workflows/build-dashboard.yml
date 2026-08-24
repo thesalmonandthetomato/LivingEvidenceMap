@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/build-dashboard.yml'
       - 'scripts/build_dashboard.py'
+      - 'scripts/augment_dashboard_update_metrics.py'
+      - 'scripts/patch_dashboard_update_status.py'
       - 'scripts/enforce_v3_dashboard_topics.py'
       - 'scripts/build_dashboard_html_v2.py'
       - 'scripts/augment_dashboard_citations.py'
@@ -22,6 +24,9 @@ on:
       - 'config/iso3_numeric_map.json'
       - 'data/master/current/living_evidence_map_master.csv'
       - 'data/reference/topic_ontology_v3.csv'
+      - 'state/lens_weekly_harvest.json'
+      - 'state/search_history.json'
+      - 'state/search_baseline.json'
   workflow_run:
     workflows: ["Build final master"]
     types: [completed]
@@ -60,6 +65,8 @@ jobs:
         run: python scripts/augment_dashboard_data.py
       - name: Apply authoritative dashboard topic presentation data
         run: python scripts/patch_dashboard_feedback_data.py
+      - name: Add authoritative search and evidence update metrics
+        run: python scripts/augment_dashboard_update_metrics.py
       - name: Validate dashboard data quality
         run: python scripts/validate_dashboard_data.py
       - name: Audit master topic hierarchy
@@ -84,6 +91,9 @@ jobs:
             echo 'ERROR: docs/topic-radial.js changed during rebuild.'
             exit 1
           }
+
+      - name: Add dynamic search/update status to approved dashboard
+        run: python scripts/patch_dashboard_update_status.py
 
       - name: Validate generated dashboard JavaScript
         run: |
