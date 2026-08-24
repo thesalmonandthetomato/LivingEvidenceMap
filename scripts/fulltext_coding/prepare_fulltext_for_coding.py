@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """Prepare GROBID TEI XML into compact, section-aware text for coding.
 
-The preparation step preserves source section labels and page information where
-available, and writes a JSON intermediary for the coding step. It does not
-modify the source XML.
+Fails closed when usable article text cannot be extracted: an empty intermediary
+must never be sent to a paid model. Namespace handling is tolerant of TEI/XML
+variants produced by different GROBID/OpenAlex records.
 """
 from __future__ import annotations
-
-import argparse
-import json
-import re
-import xml.etree.ElementTree as ET
+import argparse, json, re, xml.etree.ElementTree as ET
 from pathlib import Path
-
-TEI_NS = {"tei": "http://www.tei-c.org/ns/1.0"}
 
 
 def local_name(tag: str) -> str:
@@ -21,20 +15,22 @@ def local_name(tag: str) -> str:
 
 
 def clean_text(text: str) -> str:
-    text = re.sub(r"\s+", " ", text or "")
-    return text.strip()
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
+def first_element(root: ET.Element, names: tuple[str, ...]) -> ET.Element | None:
+    for el in root.iter():
+        if local_name(el.tag) in names:
+            return el
+    return None
 
 
 def collect_divisions(root: ET.Element) -> list[dict]:
     sections: list[dict] = []
-    body = root.find(".//tei:text/tei:body", TEI_NS)
-    if body is None:
-        return sections
-
-    for div in body.iter():
+    for div in root.iter():
         if local_name(div.tag) != "div":
             continue
-        head = div.find("tei:head", TEI_NS)
+        head = next((x for x in div if local_name(x.tag) == "head"), None)
         heading = clean_text(" ".join(head.itertext())) if head is not None else ""
         paragraphs = []
         for p in div.iter():
@@ -50,15 +46,28 @@ def collect_divisions(root: ET.Element) -> list[dict]:
 
 def prepare(path: Path) -> dict:
     root = ET.parse(path).getroot()
-    title_el = root.find(".//tei:titleStmt/tei:title", TEI_NS)
+    title_el = first_element(root, ("title",))
     title = clean_text(" ".join(title_el.itertext())) if title_el is not None else None
     sections = collect_divisions(root)
-    methods = []
-    results = []
-    intro_tail = []
+
+    # Some GROBID records have usable paragraphs but no <div> structure.
+    if not sections:
+        paragraphs = []
+        for p in root.iter():
+            if local_name(p.tag) == "p":
+                txt = clean_text(" ".join(p.itertext()))
+                if txt:
+                    paragraphs.append(txt)
+        if paragraphs:
+            sections = [{"section": "unlabelled", "text": "\n\n".join(paragraphs)}]
+
+    if not sections:
+        raise ValueError(f"No usable article text extracted from {path.name}; refusing to send empty content to the model")
+
+    methods, results, intro_tail = [], [], []
     for sec in sections:
         heading = sec["section"].lower()
-        if any(k in heading for k in ("method", "material", "study area", "experimental")):
+        if any(k in heading for k in ("method", "material", "study area", "experimental", "sampling", "statistical")):
             methods.append(sec)
         if any(k in heading for k in ("result", "finding")):
             results.append(sec)
@@ -75,24 +84,22 @@ def prepare(path: Path) -> dict:
         "source_file": str(path),
         "title": title,
         "sections": sections,
-        "preferred_evidence": {
-            "methods": methods,
-            "results": results,
-            "introduction_tail": intro_tail[-2:],
+        "preferred_evidence": {"methods": methods, "results": results, "introduction_tail": intro_tail[-2:]},
+        "preparation_diagnostics": {
+            "section_count": len(sections),
+            "methods_section_count": len(methods),
+            "results_section_count": len(results),
+            "introduction_tail_count": len(intro_tail[-2:]),
+            "text_character_count": sum(len(s["text"]) for s in sections),
         },
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser(); parser.add_argument("--input", type=Path, required=True); parser.add_argument("--output", type=Path, required=True); args = parser.parse_args()
     data = prepare(args.input)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return 0
 
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())
