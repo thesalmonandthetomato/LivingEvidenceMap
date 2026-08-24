@@ -76,9 +76,13 @@ jobs:
           done < test_corpus/grobid_test_files.txt
 
       - name: Validate prepared JSON
+        shell: bash
         run: |
-          python scripts/fulltext_coding/validate_coding_output.py \
-            --prepared-dir test_corpus/prepared
+          set -euo pipefail
+          for file in test_corpus/prepared/*.json; do
+            echo "Validating ${file}"
+            python scripts/fulltext_coding/validate_coding_output.py --input "$file"
+          done
 
       - name: Write test manifest
         run: |
