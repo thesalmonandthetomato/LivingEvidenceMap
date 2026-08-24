@@ -1,0 +1,87 @@
+name: OpenAlex full-text download
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_number:
+        description: "Batch to download (1-40; max 100 content files)"
+        required: true
+        type: number
+        default: 1
+
+# Deliberately manual: this workflow must NEVER run daily or on push.
+# Each invocation requests at most 100 OpenAlex content files, matching the
+# current $1/day free content allowance for a free OpenAlex API key.
+
+concurrency:
+  group: openalex-fulltext-batch-${{ inputs.batch_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate batch number
+        shell: bash
+        run: |
+          set -euo pipefail
+          BATCH="${{ inputs.batch_number }}"
+          if ! [[ "$BATCH" =~ ^[0-9]+$ ]]; then
+            echo "Batch number must be an integer."
+            exit 1
+          fi
+          if (( BATCH < 1 || BATCH > 40 )); then
+            echo "Batch number must be between 1 and 40."
+            exit 1
+          fi
+
+      - name: Restore batch cache
+        uses: actions/cache/restore@v4
+        with:
+          path: openalex_fulltext/batch_${{ inputs.batch_number }}
+          key: openalex-fulltext-v1-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+
+      - name: Download OpenAlex full text
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        run: |
+          python scripts/download_openalex_fulltext.py \
+            --batch "${{ inputs.batch_number }}" \
+            --output openalex_fulltext
+
+      - name: Show manifest
+        if: always()
+        run: |
+          if [ -f "openalex_fulltext/batch_${{ inputs.batch_number }}/download_manifest.csv" ]; then
+            cat "openalex_fulltext/batch_${{ inputs.batch_number }}/download_manifest.csv"
+          fi
+
+      - name: Save batch cache, including partial progress
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: openalex_fulltext/batch_${{ inputs.batch_number }}
+          key: openalex-fulltext-v1-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+
+      - name: Upload batch artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-fulltext-batch-${{ inputs.batch_number }}
+          path: openalex_fulltext/batch_${{ inputs.batch_number }}
+          if-no-files-found: error
+          retention-days: 90
