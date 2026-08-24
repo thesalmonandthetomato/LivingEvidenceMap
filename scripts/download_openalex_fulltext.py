@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import hashlib
 import json
 import os
@@ -21,7 +22,7 @@ BATCH_SIZE = 100
 BATCHES_PER_ZENODO_DEPOSITION = 10
 MAX_RETRIES = 5
 TIMEOUT = 120
-USER_AGENT = "LivingEvidenceMap/OpenAlex-fulltext/2.2"
+USER_AGENT = "LivingEvidenceMap/OpenAlex-fulltext/2.3"
 ZENODO_API = "https://zenodo.org/api"
 ZENODO_TITLE_PREFIX = "LivingEvidenceMap OpenAlex Full Text"
 
@@ -84,11 +85,20 @@ def download_openalex(url: str, api_key: str, destination: Path, fmt: str) -> No
     last_error: Exception | None = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            req = Request(request_url, headers={"User-Agent": USER_AGENT, "Accept": "application/xml,text/xml,application/pdf,*/*"})
+            req = Request(request_url, headers={"User-Agent": USER_AGENT, "Accept": "application/xml,text/xml,application/pdf,*/*", "Accept-Encoding": "gzip"})
             with urlopen(req, timeout=TIMEOUT) as response:
                 status = getattr(response, "status", None)
                 content_type = response.headers.get("Content-Type", "")
+                content_encoding = response.headers.get("Content-Encoding", "").lower()
                 body = response.read()
+            # urllib does not automatically decompress gzip when used this way.
+            # OpenAlex may return GROBID TEI as application/gzip even when the
+            # HTTP status is 200. Decompress before writing/validating the file.
+            if content_encoding == "gzip" or body[:2] == b"\x1f\x8b" or content_type.lower().startswith("application/gzip"):
+                try:
+                    body = gzip.decompress(body)
+                except OSError as exc:
+                    raise RuntimeError(f"OpenAlex returned gzip content but decompression failed: {exc}") from exc
             tmp.write_bytes(body)
             tmp.replace(destination)
             ok, reason = validate_content(destination, fmt)
