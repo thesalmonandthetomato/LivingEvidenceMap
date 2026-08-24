@@ -45,13 +45,15 @@ jobs:
             exit 1
           fi
 
-      - name: Restore batch checkpoint
+      # The cache is a convenience/resume layer. The 90-day artifact below is
+      # the explicit checkpoint guarantee and is uploaded BEFORE Zenodo is tried.
+      - name: Restore batch checkpoint cache
         uses: actions/cache/restore@v4
         with:
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v5-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+          key: openalex-fulltext-v6-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
-      - name: Download OpenAlex full text
+      - name: Download OpenAlex full text only
         id: download
         continue-on-error: true
         env:
@@ -60,41 +62,70 @@ jobs:
         run: |
           python scripts/download_openalex_fulltext.py \
             --batch "${{ inputs.batch_number }}" \
-            --output openalex_fulltext
+            --output openalex_fulltext \
+            --mode download
 
-      # Runs regardless of whether the download/Zenodo step failed. The stable
-      # key deliberately allows a future rerun of the same batch to restore the
-      # already-downloaded files and avoid purchasing them again from OpenAlex.
-      - name: Save batch checkpoint
-        if: always()
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v5-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
-
-      - name: Upload batch checkpoint artifact
+      # HARD CHECKPOINT: this happens before any ZIP creation or Zenodo call.
+      # The original downloaded files remain untouched in the batch directory.
+      - name: Upload raw batch checkpoint (90 days)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: openalex-fulltext-batch-${{ inputs.batch_number }}-run-${{ github.run_id }}
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
+          compression-level: 0
+
+      - name: Save batch checkpoint cache
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: openalex_fulltext/batch_${{ inputs.batch_number }}
+          key: openalex-fulltext-v6-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+
+      # Zenodo is deliberately a SEPARATE stage. It cannot destroy the raw
+      # checkpoint because the artifact/cache already exists before this runs.
+      - name: Stage completed batch in private Zenodo
+        id: zenodo
+        if: steps.download.outcome == 'success'
+        continue-on-error: true
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          python scripts/download_openalex_fulltext.py \
+            --batch "${{ inputs.batch_number }}" \
+            --output openalex_fulltext \
+            --mode zenodo
+
+      # Upload the post-Zenodo state as a second 90-day checkpoint so the
+      # receipt is preserved too. The first artifact remains the immutable raw
+      # checkpoint made before Zenodo was contacted.
+      - name: Upload final batch state (90 days)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-fulltext-batch-${{ inputs.batch_number }}-final-${{ github.run_id }}
+          path: openalex_fulltext/batch_${{ inputs.batch_number }}
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
 
       - name: Show manifest and Zenodo receipt
         if: always()
         run: |
           BATCH_DIR="openalex_fulltext/batch_${{ inputs.batch_number }}"
-          if [ -f "$BATCH_DIR/download_manifest.csv" ]; then
-            echo "--- download_manifest.csv ---"
-            cat "$BATCH_DIR/download_manifest.csv"
-          fi
+          echo "--- download_manifest.csv ---"
+          cat "$BATCH_DIR/download_manifest.csv"
           if [ -f "$BATCH_DIR/zenodo_receipt.json" ]; then
             echo "--- zenodo_receipt.json ---"
             cat "$BATCH_DIR/zenodo_receipt.json"
+          else
+            echo "No Zenodo receipt was created."
           fi
 
-      - name: Fail if download or Zenodo staging failed
-        if: steps.download.outcome == 'failure'
+      - name: Fail if either stage failed
+        if: steps.download.outcome == 'failure' || steps.zenodo.outcome == 'failure'
         run: exit 1
