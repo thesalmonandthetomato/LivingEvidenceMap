@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       batch_number:
-        description: "Batch to download (1-40; max 100 content files)"
+        description: "Batch to download (1-40; max 100 OpenAlex content files)"
         required: true
         type: number
         default: 1
 
-# Deliberately manual: this workflow must NEVER run daily or on push.
-# Each invocation requests at most 100 OpenAlex content files, matching the
-# current $1/day free content allowance for a free OpenAlex API key.
-
+# Deliberately manual: never daily, on push, or on pull request.
+# One batch requests at most 100 OpenAlex content files.
+# A single global concurrency group prevents two batches from editing the same
+# private Zenodo draft at the same time.
 concurrency:
-  group: openalex-fulltext-batch-${{ inputs.batch_number }}
+  group: openalex-fulltext-zenodo
   cancel-in-progress: false
 
 permissions:
@@ -23,7 +23,7 @@ permissions:
 jobs:
   download:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 240
 
     steps:
       - name: Check out repository
@@ -52,21 +52,26 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v1-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+          key: openalex-fulltext-v2-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
-      - name: Download OpenAlex full text
+      - name: Download and store OpenAlex full text
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           python scripts/download_openalex_fulltext.py \
             --batch "${{ inputs.batch_number }}" \
             --output openalex_fulltext
 
-      - name: Show manifest
+      - name: Show manifest and Zenodo receipt
         if: always()
         run: |
-          if [ -f "openalex_fulltext/batch_${{ inputs.batch_number }}/download_manifest.csv" ]; then
-            cat "openalex_fulltext/batch_${{ inputs.batch_number }}/download_manifest.csv"
+          BATCH_DIR="openalex_fulltext/batch_${{ inputs.batch_number }}"
+          if [ -f "$BATCH_DIR/download_manifest.csv" ]; then
+            cat "$BATCH_DIR/download_manifest.csv"
+          fi
+          if [ -f "$BATCH_DIR/zenodo_receipt.json" ]; then
+            cat "$BATCH_DIR/zenodo_receipt.json"
           fi
 
       - name: Save batch cache, including partial progress
@@ -75,9 +80,9 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
-          key: openalex-fulltext-v1-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
+          key: openalex-fulltext-v2-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
-      - name: Upload batch artifact
+      - name: Upload batch artifact as secondary backup
         if: always()
         uses: actions/upload-artifact@v4
         with:
