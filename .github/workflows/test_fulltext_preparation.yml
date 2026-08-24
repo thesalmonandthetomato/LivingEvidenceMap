@@ -46,15 +46,13 @@ jobs:
           files = data.get("files", [])
           if not files:
               raise SystemExit("Zenodo deposition contains no files")
-          # The batch deposition contains a single ZIP.
           remote = files[0]
           url = remote["links"]["download"]
-          Path("test_corpus.zip").write_bytes(
-              urllib.request.urlopen(
-                  urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"}),
-                  timeout=180,
-              ).read()
-          )
+          with urllib.request.urlopen(
+              urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"}),
+              timeout=180,
+          ) as response:
+              Path("test_corpus.zip").write_bytes(response.read())
           print(f"Downloaded {remote['filename']} ({remote['filesize']} bytes)")
           PY
 
@@ -71,9 +69,10 @@ jobs:
         run: |
           mkdir -p test_corpus/prepared
           while IFS= read -r file; do
+            work_id="$(basename "$file" .tei.xml)"
             python scripts/fulltext_coding/prepare_fulltext_for_coding.py \
               --input "$file" \
-              --output-dir test_corpus/prepared
+              --output "test_corpus/prepared/${work_id}.json"
           done < test_corpus/grobid_test_files.txt
 
       - name: Validate prepared JSON
