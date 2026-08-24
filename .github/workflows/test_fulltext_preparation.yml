@@ -75,14 +75,36 @@ jobs:
               --output "test_corpus/prepared/${work_id}.json"
           done < test_corpus/grobid_test_files.txt
 
-      - name: Validate prepared JSON
+      - name: Validate prepared JSON structure
         shell: bash
         run: |
           set -euo pipefail
-          for file in test_corpus/prepared/*.json; do
-            echo "Validating ${file}"
-            python scripts/fulltext_coding/validate_coding_output.py --input "$file"
-          done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          files = sorted(Path("test_corpus/prepared").glob("*.json"))
+          if not files:
+              raise SystemExit("No prepared JSON files found")
+
+          for path in files:
+              record = json.loads(path.read_text(encoding="utf-8"))
+              required = {"source_file", "title", "sections", "preferred_evidence"}
+              missing = sorted(required - set(record))
+              if missing:
+                  raise SystemExit(f"{path}: missing prepared fields {missing}")
+              if not isinstance(record["sections"], list):
+                  raise SystemExit(f"{path}: sections must be a list")
+              preferred = record["preferred_evidence"]
+              if not isinstance(preferred, dict):
+                  raise SystemExit(f"{path}: preferred_evidence must be an object")
+              for key in ("methods", "results", "introduction_tail"):
+                  if key not in preferred or not isinstance(preferred[key], list):
+                      raise SystemExit(f"{path}: preferred_evidence.{key} must be a list")
+              print(f"VALID PREPARED: {path.name}")
+
+          print(f"Validated {len(files)} prepared records")
+          PY
 
       - name: Write test manifest
         run: |
@@ -92,7 +114,9 @@ jobs:
           files = sorted(Path("test_corpus/prepared").glob("*.json"))
           manifest = {
               "workflow": "test_fulltext_preparation",
+              "purpose": "validate preparation layer before any LLM calls",
               "ontology": "data/reference/topic_ontology_v3.csv",
+              "ontology_sha": "bd8bd87c6b9205465de3d081f595a10d82118e66",
               "schema": "scripts/fulltext_coding/coding_schema_v1.json",
               "prompt": "scripts/fulltext_coding/fulltext_coding_prompt_v1.txt",
               "zenodo_deposition": 22085902,
