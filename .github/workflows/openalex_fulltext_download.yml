@@ -58,7 +58,6 @@ jobs:
         continue-on-error: true
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           python scripts/download_openalex_fulltext.py \
             --batch "${{ inputs.batch_number }}" \
@@ -85,24 +84,22 @@ jobs:
           path: openalex_fulltext/batch_${{ inputs.batch_number }}
           key: openalex-fulltext-v6-batch-${{ inputs.batch_number }}-${{ hashFiles('data/openalex_grobid_candidates.csv', 'data/openalex_pdf_candidates.csv') }}
 
-      # Zenodo is deliberately a SEPARATE stage. It cannot destroy the raw
-      # checkpoint because the artifact/cache already exists before this runs.
-      - name: Stage completed batch in private Zenodo
+      # IMPORTANT: a partial batch is still deposited. Successfully retrieved
+      # files are valuable work product; failed records remain in the manifest
+      # for a later recovery workflow. This stage never downloads from OpenAlex.
+      - name: Stage available files in private Zenodo
         id: zenodo
-        if: steps.download.outcome == 'success'
+        if: always()
         continue-on-error: true
         env:
-          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
-          python scripts/download_openalex_fulltext.py \
+          python scripts/zenodo_partial_batch.py \
             --batch "${{ inputs.batch_number }}" \
-            --output openalex_fulltext \
-            --mode zenodo
+            --output openalex_fulltext
 
       # Upload the post-Zenodo state as a second 90-day checkpoint so the
-      # receipt is preserved too. The first artifact remains the immutable raw
-      # checkpoint made before Zenodo was contacted.
+      # receipt is preserved too. The first artifact remains the raw checkpoint.
       - name: Upload final batch state (90 days)
         if: always()
         uses: actions/upload-artifact@v4
@@ -126,6 +123,9 @@ jobs:
             echo "No Zenodo receipt was created."
           fi
 
-      - name: Fail if either stage failed
-        if: steps.download.outcome == 'failure' || steps.zenodo.outcome == 'failure'
+      # A download failure is not a batch failure: it is recorded for recovery.
+      # A Zenodo failure IS a workflow failure because it means the checkpoint
+      # could not be durably staged in the requested private storage.
+      - name: Fail only if Zenodo staging failed
+        if: steps.zenodo.outcome == 'failure'
         run: exit 1
