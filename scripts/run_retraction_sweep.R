@@ -10,10 +10,15 @@ api_key <- Sys.getenv("OPENALEX_API_KEY")
 if (!nzchar(api_key)) stop("OPENALEX_API_KEY was not found.")
 
 corpus <- readr::read_csv(corpus_file, show_col_types = FALSE, progress = FALSE)
-doi_col <- if ("doi_key" %in% names(corpus)) "doi_key" else "doi"
+# The master evidence-map field is `doi`. Do not prefer the legacy/internal
+# `doi_key` field: it does not contain the complete DOI coverage of the master.
+if (!"doi" %in% names(corpus)) stop("The master corpus does not contain the expected `doi` column.")
+doi_col <- "doi"
+
 corpus_dois <- corpus |>
   transmute(
     record_id = as.character(record_id),
+    doi_raw = as.character(.data[[doi_col]]),
     doi_for_lookup = normalise_doi_for_openalex(.data[[doi_col]])
   ) |>
   filter(nzchar(doi_for_lookup)) |>
@@ -31,12 +36,7 @@ cache_spec <- cols(
 )
 
 if (file.exists(cache_file)) {
-  cache <- readr::read_csv(
-    cache_file,
-    col_types = cache_spec,
-    na = c("", "NA"),
-    show_col_types = FALSE
-  )
+  cache <- readr::read_csv(cache_file, col_types = cache_spec, na = c("", "NA"), show_col_types = FALSE)
 } else {
   cache <- tibble::tibble(
     doi_for_lookup = character(),
@@ -70,8 +70,9 @@ now <- Sys.time()
 due <- corpus_dois
 
 message(sprintf(
-  "Full retraction sweep: %d corpus DOIs; checking %d.",
-  nrow(corpus_dois), nrow(due)
+  "Full retraction sweep: %d corpus DOI values; checking %d unique DOI values.",
+  nrow(filter(corpus, !is.na(.data[[doi_col]]), nzchar(trimws(as.character(.data[[doi_col]]))))),
+  nrow(due)
 ))
 
 if (nrow(due)) {
@@ -81,13 +82,8 @@ if (nrow(due)) {
 
   for (i in seq_along(batches)) {
     batch <- batches[[i]]
-    message(sprintf(
-      "OpenAlex retraction sweep: batch %d/%d (%d DOIs)",
-      i, total_batches, length(batch)
-    ))
-
+    message(sprintf("OpenAlex retraction sweep: batch %d/%d (%d DOIs)", i, total_batches, length(batch)))
     result <- lookup_openalex_dois(batch, api_key = api_key, batch_size = length(batch))
-
     batch_results[[i]] <- result |>
       transmute(
         doi_for_lookup = as.character(doi_for_lookup),
@@ -105,18 +101,7 @@ if (nrow(due)) {
       )
   }
 
-  r <- bind_rows(batch_results) |>
-    mutate(
-      doi_for_lookup = as.character(doi_for_lookup),
-      openalex_id = as.character(openalex_id),
-      openalex_title = as.character(openalex_title),
-      openalex_is_retracted = as.logical(openalex_is_retracted),
-      openalex_lookup_status = as.character(openalex_lookup_status),
-      openalex_error = as.character(openalex_error),
-      last_checked_at = as.POSIXct(last_checked_at, tz = "UTC"),
-      next_check_at = as.POSIXct(next_check_at, tz = "UTC")
-    )
-
+  r <- bind_rows(batch_results)
   cache <- cache |>
     filter(!doi_for_lookup %in% due$doi_for_lookup) |>
     bind_rows(r)
@@ -139,6 +124,8 @@ readr::write_csv(new, here::here("data", "reference", "new_retractions_detected.
 readr::write_csv(
   tibble::tibble(
     swept_at = format(now, tz = "UTC", usetz = TRUE),
+    corpus_records = nrow(corpus),
+    corpus_doi_values = nrow(filter(corpus, !is.na(.data[[doi_col]]), nzchar(trimws(as.character(.data[[doi_col]]))))),
     corpus_dois = nrow(corpus_dois),
     checked_dois = nrow(due),
     currently_retracted = nrow(current),
