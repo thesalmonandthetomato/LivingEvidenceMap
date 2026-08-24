@@ -5,6 +5,7 @@ import argparse
 import csv
 import gzip
 import hashlib
+import io
 import json
 import os
 import sys
@@ -39,13 +40,23 @@ def build_plan() -> list[dict[str, str]]:
     for row in grobid:
         if row.get("doi_exact_match") != "TRUE" or row.get("has_grobid_xml") != "TRUE":
             continue
-        grobid_rows.append({"doi": row["input_doi"], "openalex_id": row["openalex_id"].rstrip("/").split("/")[-1], "url": row.get("grobid_xml_url", ""), "format": "grobid_xml"})
+        grobid_rows.append({
+            "doi": row["input_doi"],
+            "openalex_id": row["openalex_id"].rstrip("/").split("/")[-1],
+            "url": row.get("grobid_xml_url", ""),
+            "format": "grobid_xml",
+        })
     grobid_dois = {r["doi"].lower() for r in grobid_rows}
     pdf_only_rows = []
     for row in pdf:
         doi = row.get("input_doi", "")
         if row.get("doi_exact_match") == "TRUE" and row.get("has_pdf") == "TRUE" and doi.lower() not in grobid_dois:
-            pdf_only_rows.append({"doi": doi, "openalex_id": row["openalex_id"].rstrip("/").split("/")[-1], "url": row.get("pdf_url", ""), "format": "pdf"})
+            pdf_only_rows.append({
+                "doi": doi,
+                "openalex_id": row["openalex_id"].rstrip("/").split("/")[-1],
+                "url": row.get("pdf_url", ""),
+                "format": "pdf",
+            })
     plan = grobid_rows + pdf_only_rows
     if not plan:
         raise RuntimeError("No OpenAlex candidates found.")
@@ -85,22 +96,29 @@ def download_openalex(url: str, api_key: str, destination: Path, fmt: str) -> No
     last_error: Exception | None = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            req = Request(request_url, headers={"User-Agent": USER_AGENT, "Accept": "application/xml,text/xml,application/pdf,*/*", "Accept-Encoding": "gzip"})
+            req = Request(
+                request_url,
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Accept": "application/xml,text/xml,application/pdf,*/*",
+                    "Accept-Encoding": "gzip",
+                },
+            )
             with urlopen(req, timeout=TIMEOUT) as response:
                 status = getattr(response, "status", None)
                 content_type = response.headers.get("Content-Type", "")
                 content_encoding = response.headers.get("Content-Encoding", "").lower()
                 body = response.read()
             if content_encoding == "gzip" or body[:2] == b"\x1f\x8b" or content_type.lower().startswith("application/gzip"):
-                try:
-                    body = gzip.decompress(body)
-                except OSError as exc:
-                    raise RuntimeError(f"OpenAlex returned gzip content but decompression failed: {exc}") from exc
+                body = gzip.decompress(body)
             tmp.write_bytes(body)
             tmp.replace(destination)
             ok, reason = validate_content(destination, fmt)
             if not ok:
-                raise RuntimeError(f"Downloaded content failed {fmt} validation; HTTP {status}; Content-Type={content_type!r}; {reason}")
+                raise RuntimeError(
+                    f"Downloaded content failed {fmt} validation; HTTP {status}; "
+                    f"Content-Type={content_type!r}; {reason}"
+                )
             return
         except HTTPError as exc:
             last_error = exc
@@ -184,13 +202,26 @@ def zenodo_existing_files(token: str, deposition_id: int) -> dict[str, dict]:
 
 def make_batch_zip(batch_dir: Path, batch_number: int) -> tuple[Path, str, int]:
     zip_path = batch_dir / f"openalex_fulltext_batch_{batch_number:03d}.zip"
-    if not zip_path.exists() or zip_path.stat().st_size < 512:
-        tmp = zip_path.with_suffix(".zip.part")
-        files = sorted(p for p in batch_dir.iterdir() if p.is_file() and p.name != zip_path.name and not p.name.endswith(".part"))
-        with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
-            for path in files:
-                zf.write(path, arcname=path.name)
-        tmp.replace(zip_path)
+    if zip_path.exists() and zip_path.stat().st_size >= 512:
+        return zip_path, sha256_file(zip_path), zip_path.stat().st_size
+    tmp = zip_path.with_suffix(".zip.part")
+    files = [
+        p for p in batch_dir.iterdir()
+        if p.is_file()
+        and p.name != zip_path.name
+        and not p.name.endswith(".part")
+        and not p.name.endswith(".zip")
+    ]
+    if not files:
+        raise RuntimeError("Cannot create batch ZIP: no downloaded files are present.")
+    if any(p.stat().st_size == 0 for p in files):
+        raise RuntimeError("Cannot create batch ZIP: at least one downloaded file is empty.")
+    with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+        for path in sorted(files):
+            zf.write(path, arcname=path.name)
+    if not tmp.exists() or tmp.stat().st_size < 512:
+        raise RuntimeError("Batch ZIP creation failed or produced an empty ZIP.")
+    tmp.replace(zip_path)
     return zip_path, sha256_file(zip_path), zip_path.stat().st_size
 
 
@@ -207,10 +238,17 @@ def upload_batch_to_zenodo(token: str, deposition: dict, zip_path: Path) -> str:
     if not bucket:
         raise RuntimeError("Zenodo deposition has no upload bucket URL")
     target = bucket.rstrip("/") + "/" + quote(filename)
-    with zip_path.open("rb") as fh:
-        # Zenodo's deposition bucket requires application/octet-stream for
-        # binary file uploads. application/zip returns HTTP 415.
-        status, response = zenodo_request("PUT", target, token, data=fh, content_type="application/octet-stream", timeout=1800)
+    payload = zip_path.read_bytes()
+    if not payload:
+        raise RuntimeError("Refusing to upload empty batch ZIP.")
+    status, response = zenodo_request(
+        "PUT",
+        target,
+        token,
+        data=payload,
+        content_type="application/octet-stream",
+        timeout=1800,
+    )
     if status not in (200, 201):
         raise RuntimeError(f"Unexpected Zenodo upload status: {status}")
     remote_size = int((response or {}).get("size", 0) or 0)
@@ -224,33 +262,40 @@ def main() -> int:
     parser.add_argument("--batch", type=int, required=True)
     parser.add_argument("--output", type=Path, default=ROOT / "openalex_fulltext")
     args = parser.parse_args()
+
     openalex_key = os.environ.get("OPENALEX_API_KEY", "").strip()
     zenodo_token = os.environ.get("ZENODO_ACCESS_TOKEN", "").strip()
     if not openalex_key:
         raise RuntimeError("OPENALEX_API_KEY is not set")
     if not zenodo_token:
         raise RuntimeError("ZENODO_ACCESS_TOKEN is not set")
+
     plan = build_plan()
     total_batches = (len(plan) + BATCH_SIZE - 1) // BATCH_SIZE
     if args.batch < 1 or args.batch > total_batches:
         raise RuntimeError(f"Batch must be between 1 and {total_batches}; got {args.batch}")
+
     start = (args.batch - 1) * BATCH_SIZE
     end = min(start + BATCH_SIZE, len(plan))
     batch = plan[start:end]
     part = (args.batch - 1) // BATCHES_PER_ZENODO_DEPOSITION + 1
+
     print(f"OpenAlex full-text plan: {len(plan)} files in {total_batches} batches", flush=True)
     print(f"Batch {args.batch}/{total_batches}: files {start + 1}-{end}", flush=True)
     print("GROBID-first; PDF-only fallback; maximum 100 OpenAlex content downloads", flush=True)
     print(f"Zenodo storage: private draft part {part}", flush=True)
-    batch_dir = args.output / f"batch_{args.batch:03d}"
+
+    batch_dir = args.output / f"batch_{args.batch}"
     batch_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = batch_dir / "download_manifest.csv"
     manifest_rows = []
     failures = []
+
     for i, row in enumerate(batch, start=start + 1):
         ext = ".tei.xml" if row["format"] == "grobid_xml" else ".pdf"
         destination = batch_dir / f"{row['openalex_id']}{ext}"
-        if validate_content(destination, row["format"])[0]:
+        existing_valid, _ = validate_content(destination, row["format"])
+        if existing_valid:
             status = "already_present"
             print(f"[{i}/{len(plan)}] SKIP {row['openalex_id']} ({row['format']})", flush=True)
         else:
@@ -262,25 +307,58 @@ def main() -> int:
                 status = "failed"
                 failures.append((row, str(exc)))
                 print(f"  FAILED: {exc}", flush=True)
+
         size = destination.stat().st_size if destination.exists() else 0
         checksum = sha256_file(destination) if status != "failed" and destination.exists() else ""
-        manifest_rows.append({"batch": args.batch, "batch_position": i, "doi": row["doi"], "openalex_id": row["openalex_id"], "format": row["format"], "url": row["url"], "status": status, "bytes": size, "sha256": checksum, "file": destination.name if destination.exists() else ""})
+        manifest_rows.append({
+            "batch": args.batch,
+            "batch_position": i,
+            "doi": row["doi"],
+            "openalex_id": row["openalex_id"],
+            "format": row["format"],
+            "url": row["url"],
+            "status": status,
+            "bytes": size,
+            "sha256": checksum,
+            "file": destination.name if destination.exists() else "",
+        })
         with manifest_path.open("w", encoding="utf-8", newline="") as fh:
             writer = csv.DictWriter(fh, fieldnames=manifest_rows[0].keys())
-            writer.writeheader(); writer.writerows(manifest_rows)
+            writer.writeheader()
+            writer.writerows(manifest_rows)
+
+    # Do not create/upload a batch ZIP if any OpenAlex download failed.
     if failures:
+        print(f"{len(failures)} OpenAlex downloads failed; batch is incomplete and will not be sent to Zenodo.", flush=True)
         return 1
+
+    # Make sure the batch directory contains the completed source files BEFORE
+    # any Zenodo operation. The workflow always preserves this directory.
     zip_path, zip_sha256, zip_bytes = make_batch_zip(batch_dir, args.batch)
+    print(f"Batch ZIP created: {zip_path.name} ({zip_bytes:,} bytes; SHA-256 {zip_sha256})", flush=True)
+
     deposition = get_or_create_zenodo_draft(zenodo_token, part, total_batches)
     upload_status = upload_batch_to_zenodo(zenodo_token, deposition, zip_path)
-    (batch_dir / "zenodo_receipt.json").write_text(json.dumps({"deposition_id": deposition["id"], "deposition_title": deposition.get("title"), "batch": args.batch, "zip": zip_path.name, "zip_bytes": zip_bytes, "zip_sha256": zip_sha256, "upload_status": upload_status, "uploaded_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "published": False}, indent=2) + "\n", encoding="utf-8")
+
+    receipt = {
+        "deposition_id": deposition["id"],
+        "deposition_title": deposition.get("title"),
+        "batch": args.batch,
+        "zip": zip_path.name,
+        "zip_bytes": zip_bytes,
+        "zip_sha256": zip_sha256,
+        "upload_status": upload_status,
+        "uploaded_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "published": False,
+    }
+    (batch_dir / "zenodo_receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print("Batch completed and durably staged in private Zenodo storage.", flush=True)
     return 0
 
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        raise SystemExit(main())
     except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr, flush=True)
-        sys.exit(1)
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise
