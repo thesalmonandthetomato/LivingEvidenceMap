@@ -1,6 +1,7 @@
 {
-  "original_search_results": 19793,
+  "original_search_results": 21851,
+  "baseline_date": "2026-08-24T00:00:00+00:00",
   "included_records": 12074,
   "excluded_records": 7719,
-  "basis": "Original candidate search corpus = included master corpus (12074) + EXCLUDES RIS (7719)."
+  "basis": "Current Lens search result count supplied by project owner on 24 August 2026; from this baseline onward, weekly raw Lens results are added before within-update duplicate removal."
 }
