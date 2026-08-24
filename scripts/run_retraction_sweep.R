@@ -19,18 +19,24 @@ corpus_dois <- corpus |>
   filter(nzchar(doi_for_lookup)) |>
   distinct(doi_for_lookup, .keep_all = TRUE)
 
+cache_spec <- cols(
+  doi_for_lookup = col_character(),
+  openalex_id = col_character(),
+  openalex_title = col_character(),
+  openalex_is_retracted = col_logical(),
+  openalex_lookup_status = col_character(),
+  openalex_error = col_character(),
+  last_checked_at = col_datetime(format = ""),
+  next_check_at = col_datetime(format = "")
+)
+
 if (file.exists(cache_file)) {
-  cache <- readr::read_csv(cache_file, show_col_types = FALSE) |>
-    mutate(
-      doi_for_lookup = as.character(doi_for_lookup),
-      openalex_id = as.character(openalex_id),
-      openalex_title = as.character(openalex_title),
-      openalex_is_retracted = as.logical(openalex_is_retracted),
-      openalex_lookup_status = as.character(openalex_lookup_status),
-      openalex_error = as.character(openalex_error),
-      last_checked_at = as.POSIXct(last_checked_at, tz = "UTC"),
-      next_check_at = as.POSIXct(next_check_at, tz = "UTC")
-    )
+  cache <- readr::read_csv(
+    cache_file,
+    col_types = cache_spec,
+    na = c("", "NA"),
+    show_col_types = FALSE
+  )
 } else {
   cache <- tibble::tibble(
     doi_for_lookup = character(),
@@ -43,6 +49,18 @@ if (file.exists(cache_file)) {
     next_check_at = as.POSIXct(character(), tz = "UTC")
   )
 }
+
+cache <- cache |>
+  mutate(
+    doi_for_lookup = as.character(doi_for_lookup),
+    openalex_id = as.character(openalex_id),
+    openalex_title = as.character(openalex_title),
+    openalex_is_retracted = as.logical(openalex_is_retracted),
+    openalex_lookup_status = as.character(openalex_lookup_status),
+    openalex_error = as.character(openalex_error),
+    last_checked_at = as.POSIXct(last_checked_at, tz = "UTC"),
+    next_check_at = as.POSIXct(next_check_at, tz = "UTC")
+  )
 
 old_retracted <- cache |>
   filter(openalex_is_retracted %in% TRUE) |>
@@ -68,30 +86,23 @@ if (nrow(due)) {
       i, total_batches, length(batch)
     ))
 
-    result <- lookup_openalex_dois(batch, api_key = api_key, batch_size = length(batch)) |>
-      mutate(
+    result <- lookup_openalex_dois(batch, api_key = api_key, batch_size = length(batch))
+
+    batch_results[[i]] <- result |>
+      transmute(
         doi_for_lookup = as.character(doi_for_lookup),
         openalex_id = as.character(openalex_id),
         openalex_title = as.character(openalex_title),
         openalex_is_retracted = as.logical(openalex_is_retracted),
         openalex_lookup_status = as.character(openalex_lookup_status),
         openalex_error = as.character(openalex_error),
-        last_checked_at = now
-      ) |>
-      mutate(
+        last_checked_at = now,
         next_check_at = case_when(
-          openalex_is_retracted ~ as.POSIXct(NA, tz = "UTC"),
+          openalex_is_retracted %in% TRUE ~ as.POSIXct(NA, tz = "UTC"),
           openalex_lookup_status == "failed" ~ now + days(1),
           TRUE ~ now + days(90)
         )
-      ) |>
-      select(
-        doi_for_lookup, openalex_id, openalex_title,
-        openalex_is_retracted, openalex_lookup_status,
-        openalex_error, last_checked_at, next_check_at
       )
-
-    batch_results[[i]] <- result
   }
 
   r <- bind_rows(batch_results) |>
@@ -101,7 +112,9 @@ if (nrow(due)) {
       openalex_title = as.character(openalex_title),
       openalex_is_retracted = as.logical(openalex_is_retracted),
       openalex_lookup_status = as.character(openalex_lookup_status),
-      openalex_error = as.character(openalex_error)
+      openalex_error = as.character(openalex_error),
+      last_checked_at = as.POSIXct(last_checked_at, tz = "UTC"),
+      next_check_at = as.POSIXct(next_check_at, tz = "UTC")
     )
 
   cache <- cache |>
@@ -110,14 +123,6 @@ if (nrow(due)) {
 }
 
 cache <- cache |>
-  mutate(
-    doi_for_lookup = as.character(doi_for_lookup),
-    openalex_id = as.character(openalex_id),
-    openalex_title = as.character(openalex_title),
-    openalex_is_retracted = as.logical(openalex_is_retracted),
-    openalex_lookup_status = as.character(openalex_lookup_status),
-    openalex_error = as.character(openalex_error)
-  ) |>
   semi_join(corpus_dois, by = "doi_for_lookup") |>
   arrange(doi_for_lookup)
 
@@ -129,18 +134,8 @@ new <- current |>
   filter(!doi_for_lookup %in% old_retracted) |>
   mutate(detected_at = format(now, tz = "UTC", usetz = TRUE))
 
-readr::write_csv(
-  cache,
-  cache_file,
-  na = ""
-)
-
-readr::write_csv(
-  new,
-  here::here("data", "reference", "new_retractions_detected.csv"),
-  na = ""
-)
-
+readr::write_csv(cache, cache_file, na = "")
+readr::write_csv(new, here::here("data", "reference", "new_retractions_detected.csv"), na = "")
 readr::write_csv(
   tibble::tibble(
     swept_at = format(now, tz = "UTC", usetz = TRUE),
