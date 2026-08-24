@@ -34,8 +34,6 @@ def prepare(path: Path) -> dict:
     root=ET.parse(path).getroot()
     title_el=first_element(root,("title",))
     title=clean_text(" ".join(title_el.itertext())) if title_el is not None else None
-    # GROBID/OpenAlex files may be wrapped as html > body > tei; local_name makes
-    # this transparent and collect_divisions searches the complete descendant tree.
     tei=first_element(root,("TEI","tei")) or root
     sections=collect_divisions(tei)
     if not sections:
@@ -47,15 +45,16 @@ def prepare(path: Path) -> dict:
         if paragraphs: sections=[{"section":"unlabelled","text":"\n\n".join(paragraphs)}]
     if not sections:
         raise ValueError(f"No usable article text extracted from {path.name}; refusing to send empty content to the model")
-    methods=[]; results=[]; intro_tail=[]
+    methods=[]; results=[]; intro_paragraphs=[]
     for sec in sections:
         h=sec["section"].lower()
         if any(k in h for k in ("method","material","study area","experimental","sampling","statistical")): methods.append(sec)
         if any(k in h for k in ("result","finding")): results.append(sec)
         if any(k in h for k in ("introduction","background","objective","aim")):
-            paras=[p.strip() for p in sec["text"].split("\n\n") if p.strip()]
-            intro_tail.append({"section":sec["section"],"text":"\n\n".join(paras[-2:])})
-    return {"source_file":str(path),"title":title,"sections":sections,"preferred_evidence":{"methods":methods,"results":results,"introduction_tail":intro_tail[-2:]},"preparation_diagnostics":{"section_count":len(sections),"methods_section_count":len(methods),"results_section_count":len(results),"introduction_tail_count":len(intro_tail[-2:]),"text_character_count":sum(len(s["text"]) for s in sections)}}
+            intro_paragraphs.extend(p.strip() for p in sec["text"].split("\n\n") if p.strip())
+    intro_tail_text="\n\n".join(intro_paragraphs[-2:]) if intro_paragraphs else ""
+    intro_tail=[{"section":"final_introduction_objectives_paragraphs","text":intro_tail_text}] if intro_tail_text else []
+    return {"source_file":str(path),"title":title,"sections":sections,"preferred_evidence":{"methods":methods,"results":results,"introduction_tail":intro_tail},"preparation_diagnostics":{"section_count":len(sections),"methods_section_count":len(methods),"results_section_count":len(results),"introduction_tail_paragraph_count":min(2,len(intro_paragraphs)),"text_character_count":sum(len(s["text"]) for s in sections)}}
 
 def main()->int:
     p=argparse.ArgumentParser(); p.add_argument("--input",type=Path,required=True); p.add_argument("--output",type=Path,required=True); a=p.parse_args(); d=prepare(a.input); a.output.parent.mkdir(parents=True,exist_ok=True); a.output.write_text(json.dumps(d,ensure_ascii=False,indent=2),encoding="utf-8"); return 0
