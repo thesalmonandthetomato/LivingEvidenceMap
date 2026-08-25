@@ -17,91 +17,74 @@ For substantive study characteristics, population, facility, system, interventio
 
 STUDY TYPE
 Use only the closed study_type vocabulary: experimental, observational, modelling, not_stated, not_applicable.
-
 Experimental means investigators deliberately manipulate or impose a condition on study subjects/specimens. In laboratory work, anything deliberately done TO the study subjects/specimens—such as infection/challenge, dosing, treatment, exposure, rearing manipulation, husbandry manipulation, intervention, or other experimental procedure—is experimental, whether or not a comparator exists. A laboratory assay performed only on already-collected material is not automatically experimental. If subjects are only observed/measured without manipulation, observational may be appropriate.
 
 STUDY DESIGN
-Use only: BA, CI, BACI, RCT, Time-series, Modelling, Qualitative, not_stated, not_applicable.
-Multiple values are allowed when genuinely applicable. CI is appropriate for a genuine comparison of intervention/treatment conditions, including deliberately imposed alternative challenge modes such as injection versus immersion. Do not invent a new design value. If the design is not represented, use not_stated and preserve the authors' terminology in evidence.
-Time-series and repeated longitudinal/repeated-measures temporal sampling should be coded as Time-series where appropriate; do not create longitudinal as a new value.
+Use only: BA, CI, BACI, RCT, Time-series, Modelling, Qualitative, not_stated, not_applicable. Multiple values are allowed when genuinely applicable. CI is appropriate for a genuine comparison of intervention/treatment conditions, including deliberately imposed alternative challenge modes such as injection versus immersion. Do not invent a new design value. If the design is not represented, use not_stated and preserve the authors' terminology in evidence. Time-series and repeated longitudinal/repeated-measures temporal sampling should be coded as Time-series where appropriate; do not create longitudinal as a new value.
 
 RESEARCH APPROACH
 Only: quantitative, qualitative, mixed_methods, not_applicable.
 
 SETTING
-Only: field, laboratory, in_vitro, in_silico.
-Setting means WHERE the research itself was conducted. It does not mean water type, production system, facility type, material analysed, or study subject.
-- field: research explicitly conducted in a field/natural setting.
-- laboratory: controlled laboratory/research-facility work.
-- in_vitro: work outside a whole organism in an in-vitro system.
-- in_silico: computational work conducted in silico.
-Never put marine, freshwater, hatchery, land_based, land_based_RAS, open_cages, closed_cages, processing, or any other term in setting.
+Only: field, laboratory, in_vitro, in_silico. Setting means WHERE the research itself was conducted. It does not mean water type, production system, facility type, material analysed, or study subject. field = explicit field/natural setting; laboratory = controlled laboratory/research-facility work; in_vitro = work outside a whole organism in an in-vitro system; in_silico = computational work conducted in silico. Never put marine, freshwater, hatchery, land_based, land_based_RAS, open_cages, closed_cages, processing, or any other term in setting.
 
 SPECIES / POPULATION / SAMPLE UNIT / FACILITY / SYSTEM
-species = the salmon species actually studied. Do not infer it merely from proximity to salmon farming.
+species is a CLOSED ARRAY using only: Atlantic salmon; chum salmon; pink salmon; coho salmon; chinook salmon; sockeye salmon; masu salmon; rainbow trout; unspecified salmon species.
+species means the farmed salmonid species actually studied. Do not code every species mentioned in the paper. Use multiple species only when multiple qualifying farmed salmonid species are actually studied. If the paper clearly concerns farmed salmonids but does not identify the species, use unspecified salmon species. Do not infer a specific species when unsupported.
 
 study_population = WHAT population/material is actually studied, e.g. salmon, humans, cleaner fish, sediment-associated organisms, salmon gut contents, salmon fillets, pathogens.
-
 sample_unit = the independently sampled, recruited, assigned, observed, or measured unit, e.g. individual fish, person, farm, community, household, cell, sediment grab/sample. Never use a species name as sample_unit. Never use a tissue/material such as fillet as sample_unit when the sampled unit is an individual fish; record the tissue/material under system_studied.
 
 There is ONE facility/production-system variable: aquaculture_facility. Do not create or populate farming_system as a separate field.
 
 AQUACULTURE FACILITY — CLOSED VOCABULARY
 Only: salmon_farming_region, hatchery, open_cages, closed_cages, land_based, land_based_RAS.
-
-Use aquaculture_facility only when the paper explicitly states or clearly and unambiguously identifies the salmon aquaculture production facility/system in which the study was conducted or the production system being evaluated. Do not infer facility type from water type, tanks, species, or the fact that animals came from a facility.
-
-- Laboratory study: aquaculture_facility is normally null/empty. A laboratory experiment using recirculated water is NOT a RAS unless the paper explicitly describes the study system as a land-based recirculating aquaculture system or an established equivalent synonym (e.g. recirculating aquaculture system/RAS, recirculating aquaculture facility, recirculating production system). Do not infer RAS merely from water recirculation in an experimental apparatus.
-- hatchery: only when the study is explicitly conducted at/in a hatchery facility.
-- open_cages: use for sea pens/open net pens/open cages where the paper describes that production system.
-- closed_cages: use only for explicitly described closed cages in the sea; this should be rare.
+Use aquaculture_facility only for the salmon aquaculture production facility/system in which the study was conducted or the production system being evaluated, when explicitly stated or clearly and unambiguously identified.
+CRITICAL LABORATORY RULE: If setting is clearly laboratory, aquaculture_facility MUST be null/empty. Do not code a facility because fish originated there or because the laboratory system resembles one. A laboratory study using recirculated water is NOT a RAS merely because water is recirculated. Only exceptionally code land_based_RAS when the paper explicitly identifies the actual study system as a land-based recirculating aquaculture system/RAS or a clearly recognised equivalent and the laboratory work is genuinely being conducted as part of that production system.
+- hatchery: only when explicitly conducted at/in a hatchery facility.
+- open_cages: sea pens/open net pens/open cages.
+- closed_cages: explicitly described closed cages in the sea; rare.
 - land_based: explicitly described land-based aquaculture production that is not identified as RAS.
-- land_based_RAS: explicitly described land-based recirculating aquaculture production/RAS, including a recognised synonymous term. This is a type of land-based facility; use the most specific allowed value rather than both unless the schema later requires hierarchical coding.
-- salmon_farming_region: only when the study explicitly identifies a salmon-farming region rather than merely naming a farm/location.
+- land_based_RAS: explicitly described land-based recirculating aquaculture production/RAS, including a clearly recognised synonymous term. Do not infer RAS from recirculated water alone.
+- salmon_farming_region: only when explicitly identified as a salmon-farming region rather than merely naming a farm/location.
 Never use wild, mixed, genetic variety/strain, river, marine, freshwater, recirculating alone, or any other invented value in aquaculture_facility.
 
 GENETIC VARIETY
-Keep strain/genetic variety separate from aquaculture_facility. Record it only in the appropriate free-text field/evidence; never place it in aquaculture_facility.
+Keep strain/genetic variety separate from aquaculture_facility; record it only in the appropriate free-text field/evidence.
 
 SYSTEM STUDIED
 system_studied = the biological, environmental, social system or material actually examined, e.g. sediment, water column, fish gut, fillet tissue, whole fish, farm workforce, supply chain, river ecosystem.
 
 PRODUCTION STAGE — CLOSED VOCABULARY
-Only: Feed, Hatchery, Transfer between Hatchery and Adult, Adult, Processing.
-Do not create a separate life_stage field. Do not use Roe, Fry, Smolt, broodstock, juvenile, or other invented production-stage values. Where the paper describes fish at hatchery stages such as roe, fry, or smolt, code Hatchery. Where it concerns movement from hatchery production into adult production, code Transfer between Hatchery and Adult. Use Adult for adult production/study stage. Use Feed and Processing when applicable.
+Only: Feed, Hatchery, Transfer between Hatchery and Adult, Adult, Processing. Do not create a separate life_stage field. Do not use Roe, Fry, Smolt, broodstock, juvenile, or other invented production-stage values. Roe/fry/smolt are coded Hatchery. Movement from hatchery production into adult production is Transfer between Hatchery and Adult. Use Adult for adult production/study stage.
 
 EXPOSURE / INTERVENTION / IMPACT PATHWAY / COMPARATOR
-These are distinct concepts.
-
-intervention = a deliberate treatment, manipulation, mitigation measure, vaccination, husbandry change, challenge, or other assigned experimental action.
+intervention = deliberate treatment, manipulation, mitigation measure, vaccination, husbandry change, challenge, or other assigned experimental action.
 exposure = an observational exposure whose relationship with an outcome/impact is investigated.
-
-Priority rule: when a mitigation intervention is being tested, intervention is the priority. Do NOT automatically also code exposure. Normally intervention and exposure are mutually exclusive. Both may be coded only in the rare case where the same article explicitly measures an exposure/impact relationship AND tests a mitigation intervention in the same article.
-
-impact_pathway is ALWAYS separate from exposure. It describes the mechanism/pathway through which an impact occurs and follows the analogous variable in the existing extraction spreadsheet. Do not use exposure as a substitute for impact_pathway.
-
-comparator = ONLY the actual comparison group, site, treatment condition, or intervention condition against which the focal intervention/exposure is compared. Comparator may be null where no genuine comparison exists. Do not code age, season, sampling period, strata, regulatory thresholds, guideline values, background reference values, or benchmark values as comparators unless they are actual study comparison conditions.
+When a mitigation intervention is being tested, intervention is the priority; do NOT automatically also code exposure. Normally intervention and exposure are mutually exclusive. Both only where the same article explicitly measures an exposure/impact relationship AND tests a mitigation intervention.
+impact_pathway is ALWAYS separate from exposure and describes the mechanism/pathway through which an impact occurs.
+comparator = ONLY the actual comparison group, site, treatment condition, or intervention condition against which the focal intervention/exposure is compared. Comparator may be null where no genuine comparison exists. Do not code age, season, sampling period, strata, regulatory thresholds, guideline values, background reference values, or benchmarks unless they are actual study comparison conditions.
 
 OUTCOMES / IMPACTS
 outcome_measured = substantive outcomes actually measured/assessed. impact_type and impact_details follow the existing extraction-sheet structure where applicable.
 
 METHODOLOGY
-methodology_for_data_collection = actual data-collection methods, using paper terminology where possible (e.g. questionnaire, interview, sampling, laboratory assay, molecular screening, secondary-data analysis, observation, focus group). Do not confuse a laboratory analytical method with experimental study type.
+methodology_for_data_collection = actual data-collection methods, using paper terminology where possible. Do not confuse a laboratory analytical method with experimental study type.
 
 RESEARCH QUESTION
-Give one concise, consistently phrased research question capturing what the document itself investigates. Use the Introduction as needed; do not restrict extraction to the final paragraphs. Use causal language only where justified.
+Give one concise, consistently phrased research question capturing what the document itself investigates. Use the Introduction as needed; do not restrict extraction to final paragraphs. Use causal language only where justified.
 
 OBJECTIVES
 Give a brief 1–2 sentence paraphrase of the document's objective(s).
 
 ONTOLOGY
-Apply data/reference/topic_ontology_v3.csv at the same conceptual level used for abstract coding. Use exact path_id values. Apply include_when, exclude_when and prompt_logic_note. Prefer the most specific supported node. Do not code topics merely mentioned in background, limitations, or discussion. Provide evidence for selected ontology codes.
+Apply data/reference/topic_ontology_v3.csv at the same conceptual level used for abstract coding. Use exact path_id values and apply include_when, exclude_when and prompt_logic_note. Prefer the most specific supported node. Do not code topics merely mentioned in background, limitations, or discussion. Provide evidence for selected ontology codes.
 
 METHODS ONTOLOGY
 Only code a Methods ontology branch when methodological development, validation, comparison, or evaluation is itself a substantive contribution. Do not code Methods merely because a paper has a Methods section.
 
 EVIDENCE
-For every substantive coded field, provide concise supporting evidence. Use the relevant full-text section; prefer Methods/Results for study characteristics/outcomes and Introduction for research question/objectives. Abstract evidence is an extreme fallback only. Each evidence item must contain field, value, text, section, and page (null if unavailable).
+For every substantive coded field, provide concise supporting evidence. Prefer Methods/Results for study characteristics/outcomes and Introduction for research question/objectives. Abstract evidence is an extreme fallback only. Each evidence item must contain field, value, text, section, and page (null if unavailable).
 
 OUTPUT
 Return one JSON object matching coding_schema_v1 exactly. All substantive fields are top-level. Do not add schema descriptions, enum definitions, explanatory top-level keys, or a fields wrapper.
