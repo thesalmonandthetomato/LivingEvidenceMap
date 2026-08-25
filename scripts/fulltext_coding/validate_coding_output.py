@@ -13,7 +13,7 @@ SCHEMA_KEYS = {
     "methodology_for_data_collection", "funding_body", "funder", "research_question", "objectives_summary",
     "ontology_codes", "evidence", "run_metadata"
 }
-DOCUMENT_TYPES = {"study", "review", "systematic_review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"}
+DOCUMENT_TYPES = {"study", "review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"}
 REVIEW_TYPES = {"primer_overview", "systematic_style", "not_applicable"}
 STUDY_TYPES = {"experimental", "observational", "modelling", "not_stated", "not_applicable"}
 STUDY_DESIGNS = {"BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"}
@@ -31,7 +31,6 @@ def validate(record: dict) -> list[str]:
     if missing: errors.append(f"missing top-level fields: {missing}")
     if extra: errors.append(f"unexpected top-level fields: {extra}")
     if record.get("schema_version") != "fulltext_coding_v1": errors.append("schema_version must be 'fulltext_coding_v1'")
-    # Incomplete-document sentinel: document_type null with all other coding fields blank/null/empty.
     if record.get("document_type") is None:
         exempt = {"schema_version", "document_type", "run_metadata", "evidence"}
         nonempty = []
