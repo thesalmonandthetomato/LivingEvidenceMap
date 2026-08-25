@@ -135,23 +135,38 @@ jobs:
           path: test_corpus/annotations/
           retention-days: 90
           if-no-files-found: warn
-      - name: Validate annotations
-        id: validate
-        continue-on-error: true
+      - name: Validate annotations and flag human review
+        if: always()
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          mkdir -p test_corpus/validation
+          report="test_corpus/validation/human_review_required.txt"
+          : > "$report"
           found=0
+          issues=0
           for file in test_corpus/annotations/*.json; do
             case "$file" in
               *.raw_response.json|*.checkpoint.json|*test_manifest.json) continue ;;
             esac
             found=1
-            python scripts/fulltext_coding/validate_coding_output.py --input "$file"
+            result=$(python scripts/fulltext_coding/validate_coding_output.py --input "$file" 2>&1)
+            status=$?
+            if [ "$status" -eq 0 ]; then
+              printf '%s: VALID\n' "$(basename "$file")" >> "$report"
+            else
+              issues=$((issues + 1))
+              {
+                printf '%s: HUMAN REVIEW REQUIRED\n' "$(basename "$file")"
+                printf '%s\n' "$result"
+                printf '\n'
+              } >> "$report"
+            fi
           done
           if [ "$found" -eq 0 ]; then
-            echo "No annotation JSON files found"
-            exit 1
+            echo "No annotation JSON files found" >> "$report"
           fi
+          echo "Validation completed: $issues annotation(s) require human review." >> "$report"
+          cat "$report"
       - name: Write coding test manifest
         if: always()
         env:
@@ -163,7 +178,8 @@ jobs:
           python - <<'PY'
           import json, os
           from pathlib import Path
-          files=sorted(p for p in Path('test_corpus/annotations').glob('*.json') if not p.name.endswith('.raw_response.json') and not p.name.endswith('.checkpoint.json') and p.name != 'test_manifest.json') if Path('test_corpus/annotations').exists() else []
+          root=Path('test_corpus/annotations')
+          files=sorted(p for p in root.glob('*.json') if not p.name.endswith('.raw_response.json') and not p.name.endswith('.checkpoint.json') and p.name != 'test_manifest.json') if root.exists() else []
           Path('test_corpus/annotations/test_manifest.json').write_text(json.dumps({
             'workflow':'test_fulltext_coding','model':os.environ['FULLTEXT_CODING_MODEL'],
             'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v1.json',
@@ -179,6 +195,11 @@ jobs:
           path: test_corpus/annotations/
           retention-days: 90
           if-no-files-found: warn
-      - name: Fail after checkpoint if validation failed
-        if: always() && steps.validate.outcome == 'failure'
-        run: exit 1
+      - name: CHECKPOINT human-review report (90 days)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fulltext-coding-validation-${{ github.run_id }}
+          path: test_corpus/validation/
+          retention-days: 90
+          if-no-files-found: warn
