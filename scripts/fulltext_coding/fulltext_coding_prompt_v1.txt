@@ -31,8 +31,8 @@ Use only: BA, CI, BACI, RCT, Time-series, Modelling, Qualitative, not_stated, no
 RESEARCH APPROACH
 Only: quantitative, qualitative, mixed_methods, not_applicable.
 
-SETTING
-Only: field, laboratory, in_vitro, in_silico. Setting means WHERE the research itself was conducted. It does not mean water type, production system, facility type, material analysed, or study subject. field = explicit field/natural setting; laboratory = controlled laboratory/research-facility work; in_vitro = work outside a whole organism in an in-vitro system; in_silico = computational work conducted in silico. Never put marine, freshwater, hatchery, land_based, land_based_RAS, open_cages, closed_cages, processing, or any other term in setting.
+SETTING — STUDY SETTING ONLY
+Only: field, laboratory, in_vitro, in_silico. Setting describes WHERE the substantive observational or experimental study itself was conducted, not where routine sample processing, laboratory analysis, chemical analysis, microscopy, sequencing, culturing, or quantification was subsequently performed. A field study does NOT become laboratory merely because field-collected samples are processed or analysed in a laboratory. Code laboratory only when the substantive observational or experimental study itself is conducted in a controlled laboratory/research-facility setting (for example, fish are held, exposed, infected, treated, observed, or experimentally manipulated there). Code in_vitro for substantive work outside a whole organism in an in-vitro system; code in_silico for substantive computational work conducted in silico. Never put marine, freshwater, hatchery, land_based, land_based_RAS, open_cages, closed_cages, processing, or any other term in setting.
 
 SPECIES / POPULATION / SAMPLE UNIT / FACILITY / SYSTEM
 species is REQUIRED, is a CLOSED ARRAY, and may contain ONLY: Atlantic salmon; chum salmon; pink salmon; coho salmon; chinook salmon; sockeye salmon; masu salmon; rainbow trout; unspecified salmon species.
@@ -50,8 +50,8 @@ Only: salmon_farming_region, hatchery, open_cages, closed_cages, land_based, lan
 Use aquaculture_facility only for the salmon aquaculture production facility/system in which the study was conducted or the production system being evaluated, when explicitly stated or clearly and unambiguously identified.
 CRITICAL LABORATORY RULE: If setting is clearly laboratory, aquaculture_facility MUST be null/empty. Do not code a facility because fish originated there or because the laboratory system resembles one. A laboratory study using recirculated water is NOT a RAS merely because water is recirculated. Only exceptionally code land_based_RAS when the paper explicitly identifies the actual study system as a land-based recirculating aquaculture system/RAS or a clearly recognised equivalent and the laboratory work is genuinely being conducted as part of that production system.
 - hatchery: only when explicitly conducted at/in a hatchery facility.
-- open_cages: sea pens/open net pens/open cages.
-- closed_cages: explicitly described closed cages in the sea; rare.
+- open_cages: sea pens/open net pens/open cages. For a substantive study conducted in a sea cage, code open_cages by default unless the paper explicitly identifies the cage as a closed cage with impermeable sides/walls or an equivalent recognised closed-cage system. Closed cages in the sea are rare and must be explicit.
+- closed_cages: explicitly described closed cages in the sea, specifically including impermeable-sided/walled cages or a recognised equivalent; rare.
 - land_based: explicitly described land-based aquaculture production that is not identified as RAS.
 - land_based_RAS: explicitly described land-based recirculating aquaculture production/RAS, including a clearly recognised synonymous term. Do not infer RAS from recirculated water alone.
 - salmon_farming_region: only when explicitly identified as a salmon-farming region rather than merely naming a farm/location.
@@ -64,7 +64,7 @@ SYSTEM STUDIED
 system_studied = the biological, environmental, social system or material actually examined, e.g. sediment, water column, fish gut, fillet tissue, whole fish, farm workforce, supply chain, river ecosystem.
 
 PRODUCTION STAGE — CLOSED VOCABULARY
-Only: Feed, Hatchery, Transfer between Hatchery and Adult, Adult grow-out, Processing. Do not create a separate life_stage field. Do not use Roe, Fry, Smolt, broodstock, juvenile, adult, or other invented production-stage values. Roe/fry/smolt are coded Hatchery ONLY when the paper explicitly identifies the study material/fish as part of hatchery production. Do not infer Hatchery from freshwater, juvenile terminology, cultivation centres, or similar context. Movement from hatchery production into adult production is Transfer between Hatchery and Adult. Use Adult grow-out for sea-pen/open-cage/closed-cage or other explicitly identified adult grow-out production. Use Feed and Processing when applicable.
+Only: Feed, Hatchery, Transfer between Hatchery and Adult, Adult grow-out, Processing. Do not create a separate life_stage field. Do not use Roe, Fry, Smolt, broodstock, juvenile, adult, or other invented production-stage values. Roe/fry/smolt are coded Hatchery ONLY when the paper explicitly identifies the study material/fish as part of hatchery production. Do not infer Hatchery from freshwater, juvenile terminology, cultivation centres, or similar context. Movement from hatchery production into adult production is Transfer between Hatchery and Adult. Use Adult grow-out for sea-cage/sea-pen/open-cage/closed-cage production unless the paper explicitly establishes a different production stage. Use Feed and Processing when applicable.
 
 EXPOSURE / INTERVENTION / COMPARATOR
 intervention = deliberate treatment, manipulation, mitigation measure, vaccination, husbandry change, challenge, or other assigned experimental action.
