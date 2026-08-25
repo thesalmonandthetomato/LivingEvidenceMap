@@ -45,7 +45,9 @@
     "funder": "string|null",
     "research_question": "string|null",
     "objectives_summary": "string|null",
-    "ontology_codes": "array[string]"
+    "ontology_codes": "array[string]",
+    "multiple_studies_flag": "boolean",
+    "multiple_studies_reason": "string|null"
   },
   "evidence": {
     "description": "For substantive coding, prefer Methods/Materials and Results/Findings. For research question and objectives, use the Introduction as needed. Use the Abstract only as an extreme fallback when the relevant information cannot be found elsewhere in the full text.",
