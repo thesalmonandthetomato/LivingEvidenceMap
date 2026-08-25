@@ -19,7 +19,7 @@ STUDY_TYPES = {"experimental", "observational", "modelling", "not_stated", "not_
 STUDY_DESIGNS = {"BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"}
 RESEARCH_APPROACHES = {"quantitative", "qualitative", "mixed_methods", "not_applicable"}
 SETTINGS = {"field", "laboratory", "in_vitro", "in_silico"}
-PRODUCTION_STAGES = {"Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult", "Processing"}
+PRODUCTION_STAGES = {"Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult grow-out", "Processing"}
 AQUACULTURE_FACILITIES = {"salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"}
 SPECIES = {"Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"}
 
