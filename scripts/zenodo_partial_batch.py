@@ -34,8 +34,6 @@ def main() -> int:
     if not successful:
         raise RuntimeError("No successfully downloaded files are available to deposit.")
 
-    # Validate every file that will enter the partial-batch ZIP. Failed/missing
-    # records are deliberately excluded and remain in the manifest for later recovery.
     valid_files = []
     for row in successful:
         fmt = row["format"]
@@ -45,9 +43,17 @@ def main() -> int:
             raise RuntimeError(f"Checkpoint file failed validation: {path.name}: {reason}")
         valid_files.append(path)
 
-    # make_batch_zip includes the manifest plus every valid downloaded content
-    # file in the batch directory. It never moves or deletes the source files.
     zip_path, zip_sha256, zip_bytes = oa.make_batch_zip(batch_dir, args.batch)
+
+    # The Zenodo filename is part of the provenance chain.  Every future
+    # deposition therefore carries the exact GitHub Actions run that produced it.
+    run_id = os.environ.get("GITHUB_RUN_ID", "unknown")
+    linked_zip_path = batch_dir / f"LivingEvidenceMap_fulltext_batch_{args.batch:03d}_run-{run_id}.zip"
+    if linked_zip_path.exists():
+        linked_zip_path.unlink()
+    zip_path.replace(linked_zip_path)
+    zip_path = linked_zip_path
+
     token = os.environ["ZENODO_ACCESS_TOKEN"]
     deposition = oa.get_or_create_zenodo_draft(token, part, total_batches)
     upload_status = oa.upload_batch_to_zenodo(token, deposition, zip_path)
@@ -68,6 +74,8 @@ def main() -> int:
         "zip_file": zip_path.name,
         "zip_bytes": zip_bytes,
         "zip_sha256": zip_sha256,
+        "github_run_id": run_id,
+        "github_run_url": f"https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/{run_id}",
     }
     (batch_dir / "zenodo_receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
 
