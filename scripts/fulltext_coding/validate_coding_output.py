@@ -65,8 +65,8 @@ def validate(record: dict) -> list[str]:
     if isinstance(record.get("aquaculture_facility"), list):
         bad=set(record["aquaculture_facility"])-AQUACULTURE_FACILITIES
         if bad: errors.append(f"invalid aquaculture_facility value(s): {sorted(bad)}")
-        if record.get("setting") and "laboratory/controlled facility" in record["setting"] and record["aquaculture_facility"]:
-            errors.append("laboratory/controlled facility studies should have null/empty aquaculture_facility unless the facility itself is explicitly the object/context of study")
+        if record.get("setting") and "in_vitro" in record["setting"] and record["aquaculture_facility"]:
+            errors.append("in_vitro studies should have null/empty aquaculture_facility unless the facility itself is explicitly the object/context of study")
     if record.get("document_type") in {"commentary", "editorial", "perspective", "book", "book_chapter"}:
         if record.get("sample_size") is not None: errors.append("non-primary document type should not inherit sample_size from discussed studies")
     if record.get("intervention") is not None and record.get("exposure") is not None and not record.get("mitigation_evaluation"):
