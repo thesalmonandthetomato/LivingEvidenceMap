@@ -23,11 +23,12 @@
     "research_approach": "enum",
     "setting": "array[enum]",
     "sample_size": "number|string|null",
-    "sample_unit": "string|null",
+    "sample_unit": "array[string]",
     "study_period": "string|null",
     "location_region": "string|null",
     "location_country": "string|null",
-    "species": "array[enum]",
+    "species": "array[enum; required, non-empty]",
+    "other_farmed_species": "array[string]",
     "study_population": "string|null",
     "aquaculture_facility": "array[enum]",
     "system_studied": "string|null",
@@ -35,7 +36,6 @@
     "impact_type": "array[string]",
     "impact_details": "string|null",
     "outcome_measured": "array[string]",
-    "impact_pathway": "array[string]",
     "mitigation_evaluation": "string|null",
     "intervention": "string|null",
     "exposure": "string|null",
@@ -48,7 +48,7 @@
     "ontology_codes": "array[string]"
   },
   "evidence": {
-    "description": "For substantive coding, prefer Methods/Materials and Results/Findings. For research question and objectives, use the Introduction as needed. Use the Abstract only as an extreme fallback when the relevant information cannot be found elsewhere in the full text.",
+    "description": "For substantive coding, prefer Methods/Materials and Results/Findings. For research question and objectives, use the Introduction as needed. Use the Abstract only as an extreme fallback when the relevant information cannot be established elsewhere in the full text.",
     "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
   },
   "run_metadata": {
