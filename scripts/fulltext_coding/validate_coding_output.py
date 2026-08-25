@@ -19,8 +19,8 @@ STUDY_TYPES = {"experimental", "observational", "modelling", "not_stated", "not_
 STUDY_DESIGNS = {"BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"}
 RESEARCH_APPROACHES = {"quantitative", "qualitative", "mixed_methods", "not_applicable"}
 SETTINGS = {"field", "laboratory", "in_vitro", "in_silico"}
-PRODUCTION_STAGES = {"Feed", "Roe", "Fry", "Smolt", "Adult", "Processing"}
-AQUACULTURE_FACILITIES = {"salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based"}
+PRODUCTION_STAGES = {"Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult", "Processing"}
+AQUACULTURE_FACILITIES = {"salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"}
 
 
 def validate(record: dict) -> list[str]:
@@ -52,10 +52,8 @@ def validate(record: dict) -> list[str]:
         if record.get("setting") and "laboratory" in record["setting"] and record["aquaculture_facility"]:
             errors.append("laboratory studies must have empty aquaculture_facility unless the paper explicitly states that the research was conducted within a listed aquaculture production facility")
     if record.get("document_type") in {"commentary", "editorial", "perspective", "book", "book_chapter"}:
-        # These documents may discuss primary studies, but should not inherit their empirical methods/data.
         if record.get("sample_size") is not None: errors.append("non-primary document type should not inherit sample_size from discussed studies")
     if record.get("intervention") is not None and record.get("exposure") is not None:
-        # Both are allowed only for the explicitly rare impact-plus-mitigation case; flag for manual review.
         if not record.get("mitigation_evaluation"): errors.append("intervention and exposure both populated without mitigation_evaluation; review the priority rule")
     if isinstance(record.get("objectives_summary"), str) and not record["objectives_summary"].strip(): errors.append("objectives_summary is empty")
     if not isinstance(record.get("run_metadata"), dict): errors.append("run_metadata must be an object")
