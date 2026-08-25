@@ -2,7 +2,7 @@
   "schema_version": "fulltext_coding_v1",
   "description": "Closed full-text coding schema aligned with the FRB Blue Food data extraction sheet, with LivingEvidenceMap topic ontology coding added.",
   "document_type": ["study", "review", "systematic_review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"],
-  "review_type": ["systematic", "non_systematic", "not_applicable"],
+  "review_type": ["primer_overview", "systematic_style", "not_applicable"],
   "study_type": ["experimental", "observational", "modelling", "not_stated", "not_applicable"],
   "study_design": ["BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"],
   "research_approach": ["quantitative", "qualitative", "mixed_methods", "not_applicable"],
