@@ -6,7 +6,7 @@
   "study_type": ["experimental", "observational", "modelling", "not_stated", "not_applicable"],
   "study_design": ["BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"],
   "research_approach": ["quantitative", "qualitative", "mixed_methods", "not_applicable"],
-  "setting": ["field", "laboratory", "in_vitro", "in_silico"],
+  "setting": ["field", "laboratory/controlled facility", "in_vitro", "in_silico"],
   "production_stage": ["Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult grow-out", "Processing"],
   "fish_life_stage": ["Sperm", "Egg", "Embryo", "Alevin", "Fry", "Parr", "Smolt", "Juvenile", "Adult", "Broodstock", "Harvest", "Product"],
   "aquaculture_facility": ["salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"],
@@ -49,10 +49,11 @@
     "objectives_summary": "string|null",
     "ontology_codes": "array[string]",
     "multiple_studies_flag": "boolean",
-    "multiple_studies_reason": "string|null"
+    "multiple_studies_reason": "string|null",
+    "document_completeness_evidence": "string|null"
   },
   "evidence": {
-    "description": "For substantive coding, prefer Methods/Materials and Results/Findings. For research question and objectives, use the Introduction as needed. Use the Abstract only as an extreme fallback when the relevant information cannot be found elsewhere in the full text.",
+    "description": "For substantive coding, first search Methods/Materials and Results/Findings for explicit evidence. Other sections may support explicit descriptive characteristics when Methods/Results do not state them. For research question and objectives, use the Introduction as needed. For outcome_measured, impact_type, and impact_details, Methods/Materials and Results/Findings, including tables and figure legends/captions, are mandatory evidence sources. Incomplete documents use document_completeness_evidence instead of substantive evidence.",
     "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
   },
   "run_metadata": {
