@@ -35,6 +35,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: PREFLIGHT schema-validator consistency
+        run: |
+          set -euo pipefail
+          python scripts/fulltext_coding/preflight_coding_schema.py \
+            --schema scripts/fulltext_coding/coding_schema_v1.json \
+            --validator scripts/fulltext_coding/validate_coding_output.py
       - name: Download existing Zenodo test corpus
         run: |
           set -euo pipefail
