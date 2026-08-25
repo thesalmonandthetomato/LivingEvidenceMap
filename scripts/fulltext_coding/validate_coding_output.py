@@ -14,7 +14,7 @@ SCHEMA_KEYS = {
     "ontology_codes", "evidence", "run_metadata"
 }
 DOCUMENT_TYPES = {"study", "review", "systematic_review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"}
-REVIEW_TYPES = {"systematic", "non_systematic", "not_applicable"}
+REVIEW_TYPES = {"primer_overview", "systematic_style", "not_applicable"}
 STUDY_TYPES = {"experimental", "observational", "modelling", "not_stated", "not_applicable"}
 STUDY_DESIGNS = {"BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"}
 RESEARCH_APPROACHES = {"quantitative", "qualitative", "mixed_methods", "not_applicable"}
@@ -31,9 +31,19 @@ def validate(record: dict) -> list[str]:
     if missing: errors.append(f"missing top-level fields: {missing}")
     if extra: errors.append(f"unexpected top-level fields: {extra}")
     if record.get("schema_version") != "fulltext_coding_v1": errors.append("schema_version must be 'fulltext_coding_v1'")
+    # Incomplete-document sentinel: document_type null with all other coding fields blank/null/empty.
+    if record.get("document_type") is None:
+        exempt = {"schema_version", "document_type", "run_metadata", "evidence"}
+        nonempty = []
+        for k, v in record.items():
+            if k in exempt: continue
+            if v not in (None, "", [], {}): nonempty.append(k)
+        if nonempty: errors.append(f"incomplete-document record has populated fields: {nonempty}")
+        if record.get("evidence") not in (None, []): errors.append("incomplete-document record must have empty evidence")
+        return errors
     if record.get("document_type") not in DOCUMENT_TYPES: errors.append(f"invalid document_type: {record.get('document_type')!r}")
     if record.get("review_type") not in REVIEW_TYPES: errors.append(f"invalid review_type: {record.get('review_type')!r}")
-    if record.get("document_type") == "review" and record.get("review_type") == "not_applicable": errors.append("review requires systematic or non_systematic review_type")
+    if record.get("document_type") == "review" and record.get("review_type") == "not_applicable": errors.append("review requires primer_overview or systematic_style review_type")
     if record.get("document_type") != "review" and record.get("review_type") != "not_applicable": errors.append("review_type must be not_applicable unless document_type is review")
     if record.get("study_type") not in STUDY_TYPES: errors.append(f"invalid study_type: {record.get('study_type')!r}")
     if not isinstance(record.get("study_design"), list): errors.append("study_design must be a JSON array")
