@@ -154,11 +154,16 @@ jobs:
           fi
       - name: Write coding test manifest
         if: always()
+        env:
+          START_INDEX: ${{ github.event.inputs.start_index || '6' }}
+          N_PAPERS: ${{ github.event.inputs.n_papers || '5' }}
         run: |
+          set -euo pipefail
+          mkdir -p test_corpus/annotations
           python - <<'PY'
           import json, os
           from pathlib import Path
-          files=sorted(p for p in Path('test_corpus/annotations').glob('*.json') if not p.name.endswith('.raw_response.json') and not p.name.endswith('.checkpoint.json') and p.name != 'test_manifest.json')
+          files=sorted(p for p in Path('test_corpus/annotations').glob('*.json') if not p.name.endswith('.raw_response.json') and not p.name.endswith('.checkpoint.json') and p.name != 'test_manifest.json') if Path('test_corpus/annotations').exists() else []
           Path('test_corpus/annotations/test_manifest.json').write_text(json.dumps({
             'workflow':'test_fulltext_coding','model':os.environ['FULLTEXT_CODING_MODEL'],
             'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v1.json',
@@ -166,9 +171,6 @@ jobs:
             'start_index':int(os.environ.get('START_INDEX','6')),'n_papers':int(os.environ.get('N_PAPERS','5')),
             'annotation_files':[p.name for p in files]}, indent=2)+'\n')
           PY
-        env:
-          START_INDEX: ${{ github.event.inputs.start_index || '6' }}
-          N_PAPERS: ${{ github.event.inputs.n_papers || '5' }}
       - name: CHECKPOINT final manifest (90 days)
         if: always()
         uses: actions/upload-artifact@v4
