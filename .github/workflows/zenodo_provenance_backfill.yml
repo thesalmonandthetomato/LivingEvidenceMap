@@ -1,0 +1,119 @@
+name: Backfill Zenodo full-text provenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      deposition_ids:
+        description: "Comma-separated published Zenodo deposition IDs to inspect/update"
+        required: true
+        default: "22085902"
+      rename_map:
+        description: "Optional JSON mapping of existing archive filename to originating GitHub run ID; leave blank for dry-run inspection"
+        required: false
+        default: ""
+      apply:
+        description: "Create a new Zenodo version with run-linked filenames"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inspect and optionally version Zenodo records
+        env:
+          DEPOSITION_IDS: ${{ inputs.deposition_ids }}
+          RENAME_MAP: ${{ inputs.rename_map }}
+          APPLY: ${{ inputs.apply }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import csv, io, json, os, re, zipfile
+          from pathlib import Path
+          import requests
+
+          token=os.environ['ZENODO_ACCESS_TOKEN']
+          deps=[x.strip() for x in os.environ['DEPOSITION_IDS'].split(',') if x.strip()]
+          rename_map=json.loads(os.environ['RENAME_MAP']) if os.environ.get('RENAME_MAP','').strip() else {}
+          apply=os.environ.get('APPLY','false').lower() == 'true'
+          out=Path('zenodo_backfill_report.csv')
+          rows=[]
+          H={'Authorization':f'Bearer {token}','Accept':'application/json'}
+          api='https://zenodo.org/api/deposit/depositions'
+
+          def get(url):
+              r=requests.get(url,headers=H,timeout=120); r.raise_for_status(); return r.json()
+          def post(url):
+              r=requests.post(url,headers=H,timeout=120); r.raise_for_status(); return r.json()
+          def delete(url):
+              r=requests.delete(url,headers=H,timeout=120); r.raise_for_status()
+          def upload(bucket,name,data):
+              r=requests.put(bucket.rstrip('/')+'/'+name,headers={'Authorization':f'Bearer {token}','Content-Type':'application/zip'},data=data,timeout=900); r.raise_for_status(); return r.json()
+
+          for dep_id in deps:
+              dep=get(f'{api}/{dep_id}')
+              print(f"Zenodo {dep_id}: {dep.get('title','')}")
+              files=dep.get('files',[])
+              for f in files:
+                  name=f.get('filename',f.get('key',''))
+                  run_id=rename_map.get(name,'')
+                  rows.append({'old_filename':name,'deposition_id':str(dep_id),'run_id':run_id,'action':'inspect_only' if not apply else ('rename' if run_id else 'MISSING_RUN_MAPPING')})
+                  print(f"  {name} -> run {run_id or '[not mapped]'}")
+
+              if not apply:
+                  continue
+              missing=[f.get('filename',f.get('key','')) for f in files if f.get('filename',f.get('key','')) not in rename_map]
+              if missing:
+                  raise SystemExit(f"Refusing to modify Zenodo {dep_id}: no run mapping for {missing}")
+
+              # Published records are immutable in place. Create a new version,
+              # preserve the bytes, replace each archive with a run-linked name,
+              # then publish. The concept DOI remains the stable provenance link.
+              version=post(f'{api}/{dep_id}/actions/newversion')
+              draft_id=str(version['id'])
+              draft=get(f'{api}/{draft_id}')
+              inherited=draft.get('files',[])
+              payloads=[]
+              for f in inherited:
+                  old=f.get('filename',f.get('key',''))
+                  dl=f.get('links',{}).get('download')
+                  if not dl: raise SystemExit(f'No download link for {old}')
+                  rr=requests.get(dl,headers=H,timeout=900); rr.raise_for_status()
+                  run_id=rename_map[old]
+                  new=f"LivingEvidenceMap_fulltext_{Path(old).stem}_run-{run_id}.zip"
+                  payloads.append((f['id'],new,rr.content))
+              for file_id,_,_ in payloads:
+                  delete(f'{api}/{draft_id}/files/{file_id}')
+              for _,new,data in payloads:
+                  upload(draft['links']['bucket'],new,data)
+              published=post(f'{api}/{draft_id}/actions/publish')
+              print(f"Published Zenodo new version {published.get('id')} for concept {published.get('conceptdoi','')}")
+              for _,new,_ in payloads:
+                  rows.append({'old_filename':'','deposition_id':str(published.get('id','')),'run_id':rename_map.get(new,''),'action':f'published_as:{new}'})
+
+          with out.open('w',encoding='utf-8',newline='') as fh:
+              w=csv.DictWriter(fh,fieldnames=['old_filename','deposition_id','run_id','action']); w.writeheader(); w.writerows(rows)
+          print(f"Wrote {out}")
+          PY
+      - name: Commit backfill report
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add zenodo_backfill_report.csv || true
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Record Zenodo provenance backfill"
+          git push
