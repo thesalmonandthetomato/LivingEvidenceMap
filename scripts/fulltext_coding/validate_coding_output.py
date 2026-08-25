@@ -21,6 +21,7 @@ RESEARCH_APPROACHES = {"quantitative", "qualitative", "mixed_methods", "not_appl
 SETTINGS = {"field", "laboratory", "in_vitro", "in_silico"}
 PRODUCTION_STAGES = {"Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult", "Processing"}
 AQUACULTURE_FACILITIES = {"salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"}
+SPECIES = {"Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"}
 
 
 def validate(record: dict) -> list[str]:
@@ -40,6 +41,9 @@ def validate(record: dict) -> list[str]:
     if record.get("research_approach") not in RESEARCH_APPROACHES: errors.append(f"invalid research_approach: {record.get('research_approach')!r}")
     for field in ("setting", "species", "aquaculture_facility", "production_stage", "impact_type", "outcome_measured", "impact_pathway", "methodology_for_data_collection", "ontology_codes", "evidence"):
         if field in record and not isinstance(record[field], list): errors.append(f"{field} must be a JSON array")
+    if isinstance(record.get("species"), list):
+        bad=set(record["species"])-SPECIES
+        if bad: errors.append(f"invalid species value(s): {sorted(bad)}")
     if isinstance(record.get("setting"), list):
         bad=set(record["setting"])-SETTINGS
         if bad: errors.append(f"invalid setting value(s): {sorted(bad)}")
@@ -50,11 +54,11 @@ def validate(record: dict) -> list[str]:
         bad=set(record["aquaculture_facility"])-AQUACULTURE_FACILITIES
         if bad: errors.append(f"invalid aquaculture_facility value(s): {sorted(bad)}")
         if record.get("setting") and "laboratory" in record["setting"] and record["aquaculture_facility"]:
-            errors.append("laboratory studies must have empty aquaculture_facility unless the paper explicitly states that the research was conducted within a listed aquaculture production facility")
+            errors.append("clearly laboratory studies must have null/empty aquaculture_facility")
     if record.get("document_type") in {"commentary", "editorial", "perspective", "book", "book_chapter"}:
         if record.get("sample_size") is not None: errors.append("non-primary document type should not inherit sample_size from discussed studies")
-    if record.get("intervention") is not None and record.get("exposure") is not None:
-        if not record.get("mitigation_evaluation"): errors.append("intervention and exposure both populated without mitigation_evaluation; review the priority rule")
+    if record.get("intervention") is not None and record.get("exposure") is not None and not record.get("mitigation_evaluation"):
+        errors.append("intervention and exposure both populated without mitigation_evaluation; review the priority rule")
     if isinstance(record.get("objectives_summary"), str) and not record["objectives_summary"].strip(): errors.append("objectives_summary is empty")
     if not isinstance(record.get("run_metadata"), dict): errors.append("run_metadata must be an object")
     else:
