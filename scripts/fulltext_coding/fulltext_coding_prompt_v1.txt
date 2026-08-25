@@ -1,77 +1,130 @@
 LivingEvidenceMap full-text coding prompt
 Schema version: fulltext_coding_v1
-Ontology: data/reference/topic_ontology_v3.csv
+Primary extraction basis: FRB Blue Food data extraction sheet
+Additional thematic coding: data/reference/topic_ontology_v3.csv
 
 TASK
 
-Code one document using the supplied structured schema and the supplied LivingEvidenceMap ontology. Return valid JSON only.
+Code one document using the supplied structured schema and the supplied LivingEvidenceMap ontology. Keep the extraction simple and as close as possible to the FRB Blue Food data extraction sheet. Return valid JSON only.
 
-DOCUMENT TYPE — USE ONLY THIS SINGLE TAXONOMY
+DOCUMENT TYPE
 
 Choose exactly one document_type:
 study, review, systematic_review, perspective, commentary, editorial, book, book_chapter, report, thesis, protocol, other
 
-Do not use journal_article, conference_paper, primary_research, or contribution_type. A thesis and dissertation are both coded as thesis.
-
-For document_type = review, review_type must be systematic or non_systematic. For all other document types, review_type = not_applicable.
+A thesis and dissertation are both coded as thesis. For document_type = review, review_type must be systematic or non_systematic. For all other document types, review_type = not_applicable.
 
 GENERAL PRINCIPLES
 
 - Code what the document actually investigates, measures, compares, models, evaluates, or reports.
-- Do not infer substantive topics from background discussion alone.
-- If evidence is insufficient, use null, an empty array, or not_applicable rather than inventing information.
-- Return the exact top-level schema. Do not wrap fields inside a `fields` object.
+- Keep categories simple and close to the existing extraction sheet.
+- Multiple responses are allowed where a field genuinely has multiple applicable values. Never use a catch-all value such as mixed when multiple values can be listed separately.
+- Avoid other. Use a specific existing category where possible; if a genuinely recurring new category is encountered, flag it through the evidence/metadata for later schema refinement rather than inventing a new one ad hoc.
+- If evidence is insufficient, use null, an empty array, or not_stated/not_applicable as appropriate rather than inventing information.
+- Return the exact top-level schema. Do not wrap fields inside a fields object.
 
 EVIDENCE PRIORITY
 
-1. Methods and Materials
+For substantive study characteristics, system, exposure/intervention, comparator and outcomes:
+1. Methods / Materials
 2. Results / Findings
-3. If the research focus remains unclear, inspect only the final two paragraphs of the Introduction/Objectives.
 
-Do not use the rest of the Introduction/background to infer substantive coding when Methods or Results provide no support.
+For research question and objectives:
+- Use the Introduction as needed. Prefer explicit aims/objectives and the latter part of the Introduction, but do not restrict the model to only the final two paragraphs when earlier Introduction material is needed to understand the research question.
 
-STUDY CHARACTERISTICS
+Abstracts:
+- Use the Abstract only as an extreme fallback when the relevant information cannot be found elsewhere in the full text.
+- If information can be established from the full text, do not use the Abstract as the supporting evidence.
 
-For studies and research-bearing reviews/theses/reports where applicable:
-- study_design: experimental, observational, laboratory, in_vitro, in_silico, modelling, other, not_applicable
-- research_approach: quantitative, qualitative, mixed, not_applicable
-- setting: field, laboratory, in_vitro, in_silico, mixed, not_applicable
-- sample_size and sample_unit
-- study_period
-- location_region and location_country
-- species: use the supplied salmon species controlled vocabulary when available
-- population: sea_pen, hatchery, river, land_based, wild, mixed, other, not_applicable
-- outcome_measured
-- intervention
-- comparator
+STUDY TYPE AND DESIGN
 
-Do not force inapplicable fields.
+study_type is a broad classification aligned with the existing extraction sheet:
+- experimental
+- observational
+- modelling
+- not_stated
+
+study_design uses the established extraction-sheet vocabulary where applicable:
+- BA = Before-After
+- CI = Comparator-Intervention
+- BACI = Before-After-Comparator-Intervention
+- RCT = Randomised Control Trial
+- Time-series = three or more measurements over time without a control site
+- Modelling = results generated through a quantitative model
+- Qualitative = non-comparator-based qualitative social science methodology
+- not_stated
+
+Multiple study_design values may be used when genuinely applicable. Do not force a biological or social-science study into an inappropriate design category. If a design is encountered repeatedly that is not represented here, preserve the authors' terminology in evidence and flag it for later iterative vocabulary refinement rather than inventing an ad hoc category.
+
+research_approach:
+- quantitative
+- qualitative
+- mixed_methods
+- not_applicable
+
+SETTING
+
+setting is an array of applicable values. Never use mixed. List multiple applicable settings separately.
+Examples include field, laboratory, marine, freshwater, in_vitro, in_silico, processing, survey/community, and other established context terms supported by the document. Do not treat setting as study design.
+
+SPECIES, POPULATION, FACILITY AND SYSTEM
+
+species means the farmed salmon species relevant to the study. Use the supplied salmon species vocabulary where available. Do not infer a species merely because a study occurs near a salmon farm.
+
+study_population means what was actually studied or sampled, for example:
+salmon, sediment, water, humans, cleaner fish, salmon gut, salmon fillets, pathogens, benthic organisms.
+
+Do not confuse study_population with the production facility or study setting.
+
+aquaculture_facility describes where/how the salmon aquaculture production system was studied. It may include salmon_farming_region, hatchery, sea_pen, land_based, river, genetic_variety, or not_applicable. It must never contain wild or mixed. Do not infer a facility category solely from the species or from a facility supplying experimental animals.
+
+system_studied describes the system/material/context actually examined, for example sediment, water column, fish gut, fillet, farm workforce, supply chain, or whole fish.
+
+production_stage and farming_system should follow the terminology of the extraction sheet where supported.
+
+EXPOSURE, INTERVENTION AND COMPARATOR
+
+Use intervention for an assigned experimental treatment.
+Use exposure for an observational/impact relationship or environmental/social exposure.
+Use comparator when the study actually has a comparison group/site/condition.
+Do not force an observational exposure into intervention.
+
+OUTCOMES AND IMPACTS
+
+outcome_measured should capture the substantive outcomes actually measured or assessed, keeping wording reasonably close to the paper.
+impact_type and impact_details should follow the existing extraction-sheet structure where applicable.
+
+METHODOLOGY
+
+methodology_for_data_collection should briefly describe the actual data-collection methods, using the paper's terminology where possible. This may include questionnaires, telephone interviews, sampling, laboratory assays, molecular screening, secondary-data analysis, observations, focus groups, etc.
 
 RESEARCH QUESTION
 
-Provide one concise, consistently phrased research question capturing what the document actually investigates.
-Use causal language only when justified. For descriptive work, use a descriptive question; for modelling/methods, ask about estimation, prediction, performance, or validation.
+Provide one concise, consistently phrased research question capturing what the document actually investigates. The full Introduction may be used when necessary. Use causal language only when justified.
 
 OBJECTIVES SUMMARY
 
-Provide a brief 1–2 sentence paraphrase of the objective(s). Use Methods/Results primarily and the final two Introduction/Objectives paragraphs only when necessary.
+Provide a brief 1–2 sentence paraphrase of the objective(s).
 
 ONTOLOGY CODING
 
-For each selected ontology code:
-- use the exact path_id from data/reference/topic_ontology_v3.csv;
-- apply include_when/exclude_when and prompt_logic_note;
-- do not code topics merely mentioned in background, limitations, or discussion;
-- prefer the most specific supported node.
+Apply data/reference/topic_ontology_v3.csv at the same conceptual level used for abstract coding.
+- Use the exact path_id.
+- Apply include_when/exclude_when and prompt_logic_note.
+- Prefer the most specific supported node.
+- Do not code topics merely mentioned in background, limitations, or discussion.
+- Provide evidence for each selected ontology code.
 
-METHODS
+METHODS ONTOLOGY
 
-Only code the ontology Methods branch when methodological development, validation, comparison, or evaluation is itself a substantive contribution. Do not code Methods simply because the paper has a Methods section.
+Only code a Methods ontology branch when methodological development, validation, comparison, or evaluation is itself a substantive contribution. Do not code Methods simply because the document has a Methods section.
 
 EVIDENCE
 
-For every substantive coded field, provide concise supporting evidence from Methods/Results where possible. Each evidence item must contain field, value, text, section, and page (null if unavailable).
+For every substantive coded field, provide concise supporting evidence. Evidence should come from the relevant full-text section, preferably Methods/Results for study characteristics and outcomes, and Introduction for research question/objectives when appropriate. Abstract evidence is permitted only as an extreme fallback.
+
+Each evidence item must contain field, value, text, section, and page (null if unavailable).
 
 OUTPUT
 
-Return one JSON object matching coding_schema_v1 exactly, with all substantive fields at the top level.
+Return one JSON object matching coding_schema_v1 exactly, with all substantive fields at the top level. Do not add descriptions, enum definitions, or other schema-documentation fields to the output.
