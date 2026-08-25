@@ -9,6 +9,7 @@
   "setting": ["field", "laboratory", "in_vitro", "in_silico"],
   "production_stage": ["Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult", "Processing"],
   "aquaculture_facility": ["salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"],
+  "species": ["Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"],
   "fields": {
     "source_id": "string",
     "openalex_id": "string",
@@ -26,7 +27,7 @@
     "study_period": "string|null",
     "location_region": "string|null",
     "location_country": "string|null",
-    "species": "array[string]",
+    "species": "array[enum]",
     "study_population": "string|null",
     "aquaculture_facility": "array[enum]",
     "system_studied": "string|null",
