@@ -8,17 +8,17 @@ SCHEMA_KEYS = {
     "schema_version", "source_id", "doi", "openalex_id", "title", "year", "document_type",
     "review_type", "study_type", "study_design", "research_approach", "setting", "sample_size", "sample_unit",
     "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility",
-    "system_studied", "production_stage", "impact_type", "impact_details", "outcome_measured",
+    "system_studied", "production_stage", "fish_life_stage", "impact_type", "impact_details", "outcome_measured",
     "mitigation_evaluation", "intervention", "exposure", "comparator",
     "methodology_for_data_collection", "funding_body", "funder", "research_question", "objectives_summary",
-    "ontology_codes", "evidence", "run_metadata"
+    "ontology_codes", "multiple_studies_flag", "multiple_studies_reason", "document_completeness_evidence", "evidence", "run_metadata"
 }
 DOCUMENT_TYPES = {"study", "review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"}
 REVIEW_TYPES = {"primer_overview", "systematic_style", "not_applicable"}
 STUDY_TYPES = {"experimental", "observational", "modelling", "not_stated", "not_applicable"}
 STUDY_DESIGNS = {"BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"}
 RESEARCH_APPROACHES = {"quantitative", "qualitative", "mixed_methods", "not_applicable"}
-SETTINGS = {"field", "laboratory", "in_vitro", "in_silico"}
+SETTINGS = {"field", "laboratory/controlled facility", "in_vitro", "in_silico"}
 PRODUCTION_STAGES = {"Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult grow-out", "Processing"}
 AQUACULTURE_FACILITIES = {"salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"}
 SPECIES = {"Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"}
@@ -32,13 +32,15 @@ def validate(record: dict) -> list[str]:
     if extra: errors.append(f"unexpected top-level fields: {extra}")
     if record.get("schema_version") != "fulltext_coding_v1": errors.append("schema_version must be 'fulltext_coding_v1'")
     if record.get("document_type") is None:
-        exempt = {"schema_version", "document_type", "run_metadata", "evidence"}
+        exempt = {"schema_version", "document_type", "run_metadata", "evidence", "document_completeness_evidence"}
         nonempty = []
         for k, v in record.items():
             if k in exempt: continue
             if v not in (None, "", [], {}): nonempty.append(k)
         if nonempty: errors.append(f"incomplete-document record has populated fields: {nonempty}")
         if record.get("evidence") not in (None, []): errors.append("incomplete-document record must have empty evidence")
+        if not isinstance(record.get("document_completeness_evidence"), str) or not record["document_completeness_evidence"].strip():
+            errors.append("incomplete-document record requires document_completeness_evidence")
         return errors
     if record.get("document_type") not in DOCUMENT_TYPES: errors.append(f"invalid document_type: {record.get('document_type')!r}")
     if record.get("review_type") not in REVIEW_TYPES: errors.append(f"invalid review_type: {record.get('review_type')!r}")
@@ -48,7 +50,7 @@ def validate(record: dict) -> list[str]:
     if not isinstance(record.get("study_design"), list): errors.append("study_design must be a JSON array")
     elif any(v not in STUDY_DESIGNS for v in record["study_design"]): errors.append(f"invalid study_design value(s): {[v for v in record['study_design'] if v not in STUDY_DESIGNS]}")
     if record.get("research_approach") not in RESEARCH_APPROACHES: errors.append(f"invalid research_approach: {record.get('research_approach')!r}")
-    for field in ("setting", "species", "other_farmed_species", "sample_unit", "aquaculture_facility", "production_stage", "impact_type", "outcome_measured", "methodology_for_data_collection", "ontology_codes", "evidence"):
+    for field in ("setting", "species", "other_farmed_species", "sample_unit", "aquaculture_facility", "production_stage", "fish_life_stage", "impact_type", "outcome_measured", "methodology_for_data_collection", "ontology_codes", "evidence"):
         if field in record and not isinstance(record[field], list): errors.append(f"{field} must be a JSON array")
     if "species" not in record or not isinstance(record.get("species"), list) or not record["species"]:
         errors.append("species must be a non-empty array and may never be null")
@@ -63,8 +65,8 @@ def validate(record: dict) -> list[str]:
     if isinstance(record.get("aquaculture_facility"), list):
         bad=set(record["aquaculture_facility"])-AQUACULTURE_FACILITIES
         if bad: errors.append(f"invalid aquaculture_facility value(s): {sorted(bad)}")
-        if record.get("setting") and "laboratory" in record["setting"] and record["aquaculture_facility"]:
-            errors.append("clearly laboratory studies must have null/empty aquaculture_facility")
+        if record.get("setting") and "laboratory/controlled facility" in record["setting"] and record["aquaculture_facility"]:
+            errors.append("laboratory/controlled facility studies should have null/empty aquaculture_facility unless the facility itself is explicitly the object/context of study")
     if record.get("document_type") in {"commentary", "editorial", "perspective", "book", "book_chapter"}:
         if record.get("sample_size") is not None: errors.append("non-primary document type should not inherit sample_size from discussed studies")
     if record.get("intervention") is not None and record.get("exposure") is not None and not record.get("mitigation_evaluation"):
