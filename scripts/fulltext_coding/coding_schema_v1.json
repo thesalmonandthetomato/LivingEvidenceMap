@@ -8,6 +8,7 @@
   "research_approach": ["quantitative", "qualitative", "mixed_methods", "not_applicable"],
   "setting": ["field", "laboratory", "in_vitro", "in_silico"],
   "production_stage": ["Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult grow-out", "Processing"],
+  "fish_life_stage": ["Sperm", "Egg", "Embryo", "Alevin", "Fry", "Parr", "Smolt", "Juvenile", "Adult", "Broodstock", "Harvest", "Product"],
   "aquaculture_facility": ["salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"],
   "species": ["Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"],
   "fields": {
@@ -33,6 +34,7 @@
     "aquaculture_facility": "array[enum]",
     "system_studied": "string|null",
     "production_stage": "array[enum]",
+    "fish_life_stage": "array[enum]",
     "impact_type": "array[string]",
     "impact_details": "string|null",
     "outcome_measured": "array[string]",
