@@ -7,7 +7,7 @@
   "study_design": ["BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"],
   "research_approach": ["quantitative", "qualitative", "mixed_methods", "not_applicable"],
   "setting": ["field", "laboratory", "in_vitro", "in_silico"],
-  "production_stage": ["Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult", "Processing"],
+  "production_stage": ["Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult grow-out", "Processing"],
   "aquaculture_facility": ["salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"],
   "species": ["Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"],
   "fields": {
@@ -48,7 +48,7 @@
     "ontology_codes": "array[string]"
   },
   "evidence": {
-    "description": "For substantive coding, prefer Methods/Materials and Results/Findings. For research question and objectives, use the Introduction as needed. Use the Abstract only as an extreme fallback when the relevant information cannot be established elsewhere in the full text.",
+    "description": "For substantive coding, prefer Methods/Materials and Results/Findings. For research question and objectives, use the Introduction as needed. Use the Abstract only as an extreme fallback when the relevant information cannot be found elsewhere in the full text.",
     "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
   },
   "run_metadata": {
