@@ -149,9 +149,7 @@ jobs:
               *.raw_response.json|*.checkpoint.json|*test_manifest.json) continue ;;
             esac
             found=1
-            result=$(python scripts/fulltext_coding/validate_coding_output.py --input "$file" 2>&1)
-            status=$?
-            if [ "$status" -eq 0 ]; then
+            if result=$(python scripts/fulltext_coding/validate_coding_output.py --input "$file" 2>&1); then
               printf '%s: VALID\n' "$(basename "$file")" >> "$report"
             else
               issues=$((issues + 1))
@@ -167,6 +165,8 @@ jobs:
           fi
           echo "Validation completed: $issues annotation(s) require human review." >> "$report"
           cat "$report"
+          # Validation findings are advisory. They must never fail a completed coding run.
+          exit 0
       - name: Write coding test manifest
         if: always()
         env:
