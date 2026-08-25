@@ -7,9 +7,9 @@ from pathlib import Path
 SCHEMA_KEYS = {
     "schema_version", "source_id", "doi", "openalex_id", "title", "year", "document_type",
     "review_type", "study_type", "study_design", "research_approach", "setting", "sample_size", "sample_unit",
-    "study_period", "location_region", "location_country", "species", "study_population", "aquaculture_facility",
+    "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility",
     "system_studied", "production_stage", "impact_type", "impact_details", "outcome_measured",
-    "impact_pathway", "mitigation_evaluation", "intervention", "exposure", "comparator",
+    "mitigation_evaluation", "intervention", "exposure", "comparator",
     "methodology_for_data_collection", "funding_body", "funder", "research_question", "objectives_summary",
     "ontology_codes", "evidence", "run_metadata"
 }
@@ -39,11 +39,12 @@ def validate(record: dict) -> list[str]:
     if not isinstance(record.get("study_design"), list): errors.append("study_design must be a JSON array")
     elif any(v not in STUDY_DESIGNS for v in record["study_design"]): errors.append(f"invalid study_design value(s): {[v for v in record['study_design'] if v not in STUDY_DESIGNS]}")
     if record.get("research_approach") not in RESEARCH_APPROACHES: errors.append(f"invalid research_approach: {record.get('research_approach')!r}")
-    for field in ("setting", "species", "aquaculture_facility", "production_stage", "impact_type", "outcome_measured", "impact_pathway", "methodology_for_data_collection", "ontology_codes", "evidence"):
+    for field in ("setting", "species", "other_farmed_species", "sample_unit", "aquaculture_facility", "production_stage", "impact_type", "outcome_measured", "methodology_for_data_collection", "ontology_codes", "evidence"):
         if field in record and not isinstance(record[field], list): errors.append(f"{field} must be a JSON array")
-    if isinstance(record.get("species"), list):
-        bad=set(record["species"])-SPECIES
-        if bad: errors.append(f"invalid species value(s): {sorted(bad)}")
+    if "species" not in record or not isinstance(record.get("species"), list) or not record["species"]:
+        errors.append("species must be a non-empty array and may never be null")
+    elif any(v not in SPECIES for v in record["species"]):
+        errors.append(f"invalid species value(s): {[v for v in record['species'] if v not in SPECIES]}")
     if isinstance(record.get("setting"), list):
         bad=set(record["setting"])-SETTINGS
         if bad: errors.append(f"invalid setting value(s): {sorted(bad)}")
