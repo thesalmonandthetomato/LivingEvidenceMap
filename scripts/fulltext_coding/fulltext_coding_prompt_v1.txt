@@ -29,11 +29,13 @@ SETTING
 Only: field, laboratory, in_vitro, in_silico. Setting means WHERE the research itself was conducted. It does not mean water type, production system, facility type, material analysed, or study subject. field = explicit field/natural setting; laboratory = controlled laboratory/research-facility work; in_vitro = work outside a whole organism in an in-vitro system; in_silico = computational work conducted in silico. Never put marine, freshwater, hatchery, land_based, land_based_RAS, open_cages, closed_cages, processing, or any other term in setting.
 
 SPECIES / POPULATION / SAMPLE UNIT / FACILITY / SYSTEM
-species is a CLOSED ARRAY using only: Atlantic salmon; chum salmon; pink salmon; coho salmon; chinook salmon; sockeye salmon; masu salmon; rainbow trout; unspecified salmon species.
-species means the farmed salmonid species actually studied. Do not code every species mentioned in the paper. Use multiple species only when multiple qualifying farmed salmonid species are actually studied. If the paper clearly concerns farmed salmonids but does not identify the species, use unspecified salmon species. Do not infer a specific species when unsupported.
+species is REQUIRED, is a CLOSED ARRAY, and may contain ONLY: Atlantic salmon; chum salmon; pink salmon; coho salmon; chinook salmon; sockeye salmon; masu salmon; rainbow trout; unspecified salmon species.
+species means the farmed salmonid species relevant to the study. It must be explicitly linked in the paper to a named species before using one of the eight named species. If the study concerns salmonids but no permitted named species can be established, ALWAYS use unspecified salmon species; species must NEVER be null. If the study is about salmon lice, pathogens, sediment, humans, etc. and the salmonid species is not explicitly named, use unspecified salmon species. Do not infer a named species from location, host association, common context, or other indirect clues. Use multiple permitted species only when multiple qualifying farmed salmonid species are actually studied.
+
+other_farmed_species = free-text array for additional farmed species outside the nine-value salmonid species vocabulary, e.g. brown trout or other farmed species. Never put these species into species. Never invent new controlled values for species.
 
 study_population = WHAT population/material is actually studied, e.g. salmon, humans, cleaner fish, sediment-associated organisms, salmon gut contents, salmon fillets, pathogens.
-sample_unit = the independently sampled, recruited, assigned, observed, or measured unit, e.g. individual fish, person, farm, community, household, cell, sediment grab/sample. Never use a species name as sample_unit. Never use a tissue/material such as fillet as sample_unit when the sampled unit is an individual fish; record the tissue/material under system_studied.
+sample_unit = ARRAY of the independently sampled, recruited, assigned, observed, or measured units. Multiple sampling units are permitted when the study genuinely uses different unit types, e.g. ["individual fish", "sampling site", "hatchery"]. Never use a species name as sample_unit. Never use a tissue/material such as fillet as sample_unit when the sampled unit is an individual fish; record the tissue/material under system_studied.
 
 There is ONE facility/production-system variable: aquaculture_facility. Do not create or populate farming_system as a separate field.
 
@@ -58,11 +60,10 @@ system_studied = the biological, environmental, social system or material actual
 PRODUCTION STAGE — CLOSED VOCABULARY
 Only: Feed, Hatchery, Transfer between Hatchery and Adult, Adult, Processing. Do not create a separate life_stage field. Do not use Roe, Fry, Smolt, broodstock, juvenile, or other invented production-stage values. Roe/fry/smolt are coded Hatchery. Movement from hatchery production into adult production is Transfer between Hatchery and Adult. Use Adult for adult production/study stage.
 
-EXPOSURE / INTERVENTION / IMPACT PATHWAY / COMPARATOR
+EXPOSURE / INTERVENTION / COMPARATOR
 intervention = deliberate treatment, manipulation, mitigation measure, vaccination, husbandry change, challenge, or other assigned experimental action.
 exposure = an observational exposure whose relationship with an outcome/impact is investigated.
 When a mitigation intervention is being tested, intervention is the priority; do NOT automatically also code exposure. Normally intervention and exposure are mutually exclusive. Both only where the same article explicitly measures an exposure/impact relationship AND tests a mitigation intervention.
-impact_pathway is ALWAYS separate from exposure and describes the mechanism/pathway through which an impact occurs.
 comparator = ONLY the actual comparison group, site, treatment condition, or intervention condition against which the focal intervention/exposure is compared. Comparator may be null where no genuine comparison exists. Do not code age, season, sampling period, strata, regulatory thresholds, guideline values, background reference values, or benchmarks unless they are actual study comparison conditions.
 
 OUTCOMES / IMPACTS
