@@ -1,14 +1,14 @@
 {
   "schema_version": "fulltext_coding_v1",
-  "description": "Minimal machine-readable full-text extraction schema aligned with the FRB Blue Food data extraction sheet, with LivingEvidenceMap topic ontology coding added. Controlled vocabularies are closed: never invent enum values.",
+  "description": "Closed full-text coding schema aligned with the FRB Blue Food data extraction sheet, with LivingEvidenceMap topic ontology coding added.",
   "document_type": ["study", "review", "systematic_review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"],
   "review_type": ["systematic", "non_systematic", "not_applicable"],
   "study_type": ["experimental", "observational", "modelling", "not_stated", "not_applicable"],
   "study_design": ["BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"],
   "research_approach": ["quantitative", "qualitative", "mixed_methods", "not_applicable"],
   "setting": ["field", "laboratory", "in_vitro", "in_silico"],
-  "production_stage": ["Feed", "Roe", "Fry", "Smolt", "Adult", "Processing"],
-  "aquaculture_facility": ["salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based"],
+  "production_stage": ["Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult", "Processing"],
+  "aquaculture_facility": ["salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"],
   "fields": {
     "source_id": "string",
     "openalex_id": "string",
