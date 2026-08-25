@@ -32,12 +32,14 @@ def validate(record: dict) -> list[str]:
     if extra: errors.append(f"unexpected top-level fields: {extra}")
     if record.get("schema_version") != "fulltext_coding_v1": errors.append("schema_version must be 'fulltext_coding_v1'")
     if record.get("document_type") is None:
-        exempt = {"schema_version", "document_type", "run_metadata", "evidence", "document_completeness_evidence"}
+        # Provenance/identity metadata is allowed to remain populated because it is
+        # supplied by the workflow rather than inferred from incomplete article text.
+        exempt = {"schema_version", "source_id", "doi", "openalex_id", "title", "year", "document_type", "run_metadata", "evidence", "document_completeness_evidence"}
         nonempty = []
         for k, v in record.items():
             if k in exempt: continue
             if v not in (None, "", [], {}): nonempty.append(k)
-        if nonempty: errors.append(f"incomplete-document record has populated fields: {nonempty}")
+        if nonempty: errors.append(f"incomplete-document record has populated substantive fields: {nonempty}")
         if record.get("evidence") not in (None, []): errors.append("incomplete-document record must have empty evidence")
         if not isinstance(record.get("document_completeness_evidence"), str) or not record["document_completeness_evidence"].strip():
             errors.append("incomplete-document record requires document_completeness_evidence")
@@ -91,5 +93,5 @@ def main() -> int:
     if errors:
         print("INVALID"); [print(f"- {e}") for e in errors]; return 1
     print("VALID"); return 0
-
+    
 if __name__ == "__main__": raise SystemExit(main())
