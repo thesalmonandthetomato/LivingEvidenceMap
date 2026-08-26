@@ -1,0 +1,64 @@
+LivingEvidenceMap full-text coding PROMPT ADDENDUM — supersedes conflicting instructions in fulltext_coding_prompt_v1.txt
+
+Apply this addendum after reading the base prompt. Where the base prompt conflicts with this addendum, this addendum controls.
+
+1. PROVENANCE METADATA IS NOT PART OF THE COMPLETENESS AUDIT
+DOI and year are supplied/maintained by the separate provenance database and must NOT be treated as substantive coding fields for field_completeness or not_reported_fields. Do not spend coding effort trying to recover them from the article. If present in the supplied record, preserve them; if absent, do not mark them NOT_REPORTED.
+
+The exact substantive fields that MUST appear in field_completeness are:
+document_type, review_type, study_type, study_design, research_approach, setting, sample_size, sample_unit, study_period, location_region, location_country, species, other_farmed_species, study_population, aquaculture_facility, system_studied, production_stage, fish_life_stage, impact_type, impact_details, outcome_measured, exposure_intervention, comparator, methodology_for_data_collection, funding_body, funder, research_question, objectives_summary, ontology_codes, multiple_studies_flag, multiple_studies_reason.
+
+Do NOT put source_id, openalex_id, doi, title, year, schema_version, document_completeness_evidence, non_methods_results_evidence, non_methods_results_evidence_fields, not_reported_fields, field_completeness, evidence, or run_metadata into field_completeness.
+
+2. COMBINE INTERVENTION AND EXPOSURE
+There is ONE combined substantive field: exposure_intervention.
+
+Do NOT output separate intervention or exposure fields.
+
+Use exposure_intervention for any deliberate intervention, assigned treatment, challenge, manipulation, environmental exposure, naturally occurring exposure, production-system exposure, dietary exposure, geographic exposure, host-associated exposure, or other exposure/intervention relevant to the eligible evidence.
+
+The distinction between intervention and exposure is intentionally not required because the classification depends on the analytical lens and is often minor. Describe the relevant factor in neutral terms, e.g.:
+- "Panax ginseng dietary supplementation followed by Yersinia ruckeri challenge"
+- "Sea-lice infestation level represented by manipulated adult Lepeophtheirus salmonis loads of 0, 6, 12 or 18 lice per fish"
+- "Embryonic incubation temperature of 4°C versus 8°C"
+- "Aquaculture escape/propagule-pressure context"
+- "Aqueous emamectin benzoate exposure at 400, 800 or 1200 μg L−1"
+
+For a deliberate concentration gradient or drug-dose comparison, study_design = CI is defensible where the concentrations constitute the focal treatment/comparison conditions. Do not downgrade such studies merely because the intervention is a chemical exposure or bioassay concentration series.
+
+For non-primary documents, exposure_intervention may contain explicit system-level exposure/intervention context. Do not inherit empirical methods or outcomes from cited studies merely because the document discusses them.
+
+3. FISH LIFE STAGE — BODY MASS MAY SUPPORT INFERENCE
+The previous absolute prohibition on inference from body mass is superseded. Life stage may be inferred from body mass when the mass is sufficiently diagnostic for the species and context and there is no contradictory explicit information.
+
+Use the following conservative operational guideline for salmon-specific coding:
+- Atlantic salmon: body mass >= 1.0 kg may be coded as Adult when the fish are in a grow-out/production context or otherwise clearly beyond juvenile/smolt size and the article gives no contradictory life-stage designation.
+- Atlantic salmon 0.5 to <1.0 kg is borderline: code Adult only when additional context (e.g. adult grow-out, sea-cage grow-out, maturity or explicit adult terminology) supports it.
+- Atlantic salmon <0.5 kg must NOT be coded Adult from mass alone.
+- For other large-bodied salmon species where no species-specific threshold is established in the article, use the conservative >=1.0 kg Adult threshold only when the fish are clearly beyond juvenile/smolt production context; otherwise leave life stage NOT_REPORTED.
+
+Never infer a specific earlier stage such as Smolt, Parr, Fry or Juvenile from body mass alone unless the article provides additional supporting context. Body mass can support Adult classification when sufficiently diagnostic; it does not replace explicit evidence where the mass is ambiguous.
+
+Example: an Atlantic salmon experiment using approximately 3 kg fish may be coded fish_life_stage = Adult even if the article does not explicitly use the word adult.
+
+Production stage and fish life stage remain independent variables. "Pre-market" is a production-stage/context descriptor, not itself a fish life-stage value. Pre-market fish may be coded Adult where body mass and/or other evidence support Adult.
+
+4. NON-PRIMARY SYSTEM/CONTEXT VARIABLES
+Commentaries, perspectives, reviews, editorials, books, book chapters and reports may contribute the following system/context variables when explicitly described for eligible salmon/farmed-salmon content:
+species; other_farmed_species; location_region; location_country; aquaculture_facility; system_studied; production_stage; fish_life_stage; setting; exposure_intervention.
+
+These may come from any section of the document. Do not require Methods/Results for these context variables in non-primary documents.
+
+A real-world production context may legitimately be coded setting = field. Do not force laboratory/controlled facility merely because the article mentions tanks, experimental facilities or controlled systems elsewhere. Choose the setting that actually characterises the eligible system/context being coded. If the document explicitly describes a field/open-cage production context and there is no basis for assigning laboratory/controlled facility as the relevant context, field is appropriate.
+
+5. SPECIES IDENTIFICATION
+If an eligible salmon species is explicitly named, ALWAYS use its specific permitted species value rather than "unspecified salmon species". In particular, Chinook salmon must be coded as "chinook salmon" whenever explicitly identified. Use "unspecified salmon species" only when the source establishes salmon but does not permit identification to one of the named controlled-vocabulary species.
+
+6. PRODUCTION STAGE
+Do not over-infer production_stage from generic aquaculture language. However, where the document explicitly describes a salmon production stage, code it. Production stage and life stage are independent.
+
+7. EXPOSURE/INTERVENTION AUDIT
+During the field-by-field audit, actively search for deliberate treatments, concentration gradients, challenges, dietary manipulations, environmental exposures, natural exposures, production-system exposures and other focal factors. A field should not be marked NOT_REPORTED merely because the factor was previously labelled intervention rather than exposure (or vice versa).
+
+8. FINAL OUTPUT REQUIREMENT
+Return exactly the schema-defined top-level fields. The combined field is exposure_intervention; intervention and exposure are prohibited legacy fields. The field_completeness object must contain exactly the substantive-field whitelist in Section 1 and no metadata/provenance fields.
