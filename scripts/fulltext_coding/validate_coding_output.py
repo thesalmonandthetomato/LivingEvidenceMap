@@ -12,7 +12,7 @@ SCHEMA_KEYS = {
     "intervention", "exposure", "comparator", "methodology_for_data_collection", "funding_body", "funder",
     "research_question", "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason",
     "document_completeness_evidence", "non_methods_results_evidence", "non_methods_results_evidence_fields", "not_reported_fields",
-    "evidence", "run_metadata"
+    "field_completeness", "evidence", "run_metadata"
 }
 DOCUMENT_TYPES = {"study", "review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"}
 REVIEW_TYPES = {"primer_overview", "systematic_style", "not_applicable"}
@@ -24,6 +24,19 @@ PRODUCTION_STAGES = {"Feed", "Hatchery", "Transfer between Hatchery and Adult", 
 FISH_LIFE_STAGES = {"Sperm", "Egg", "Embryo", "Alevin", "Fry", "Parr", "Smolt", "Juvenile", "Adult", "Broodstock", "Harvest", "Product"}
 AQUACULTURE_FACILITIES = {"salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"}
 SPECIES = {"Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"}
+COMPLETENESS_STATUSES = {"FOUND", "NOT_REPORTED", "NOT_APPLICABLE"}
+SUBSTANTIVE_FIELDS = {
+    "year", "document_type", "review_type", "study_type", "study_design", "research_approach", "setting",
+    "sample_size", "sample_unit", "study_period", "location_region", "location_country", "species",
+    "other_farmed_species", "study_population", "aquaculture_facility", "system_studied", "production_stage",
+    "fish_life_stage", "impact_type", "impact_details", "outcome_measured", "intervention", "exposure",
+    "comparator", "methodology_for_data_collection", "funding_body", "funder", "research_question",
+    "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"
+}
+
+
+def _is_empty(value) -> bool:
+    return value in (None, "", [], {})
 
 
 def validate(record: dict) -> list[str]:
@@ -34,14 +47,12 @@ def validate(record: dict) -> list[str]:
     if extra: errors.append(f"unexpected top-level fields: {extra}")
     if record.get("schema_version") != "fulltext_coding_v1": errors.append("schema_version must be 'fulltext_coding_v1'")
 
-    # Incomplete documents may retain workflow-supplied provenance/identity metadata,
-    # but no substantive coding. Validation must not fail merely because provenance exists.
     if record.get("document_type") is None:
-        exempt = {"schema_version", "source_id", "doi", "openalex_id", "title", "year", "document_type", "run_metadata", "document_completeness_evidence", "non_methods_results_evidence", "non_methods_results_evidence_fields", "not_reported_fields"}
+        exempt = {"schema_version", "source_id", "doi", "openalex_id", "title", "year", "document_type", "run_metadata", "document_completeness_evidence", "non_methods_results_evidence", "non_methods_results_evidence_fields", "not_reported_fields", "field_completeness"}
         nonempty = []
         for k, v in record.items():
             if k in exempt: continue
-            if v not in (None, "", [], {}): nonempty.append(k)
+            if not _is_empty(v): nonempty.append(k)
         if nonempty: errors.append(f"incomplete-document record has populated substantive fields: {nonempty}")
         if record.get("evidence") not in (None, []): errors.append("incomplete-document record must have empty evidence")
         if not isinstance(record.get("document_completeness_evidence"), str) or not record["document_completeness_evidence"].strip():
@@ -96,6 +107,29 @@ def validate(record: dict) -> list[str]:
     if not isinstance(record.get("not_reported_fields"), list): errors.append("not_reported_fields must be an array")
     elif any(not isinstance(v, str) or not v.strip() for v in record["not_reported_fields"]): errors.append("not_reported_fields must contain non-empty field names")
 
+    fc = record.get("field_completeness")
+    if not isinstance(fc, dict):
+        errors.append("field_completeness must be an object")
+    else:
+        missing_fc = sorted(SUBSTANTIVE_FIELDS - set(fc))
+        extra_fc = sorted(set(fc) - SUBSTANTIVE_FIELDS)
+        if missing_fc: errors.append(f"field_completeness missing fields: {missing_fc}")
+        if extra_fc: errors.append(f"field_completeness has unexpected fields: {extra_fc}")
+        bad_status = {k: v for k, v in fc.items() if v not in COMPLETENESS_STATUSES}
+        if bad_status: errors.append(f"invalid field_completeness status(es): {bad_status}")
+        expected_not_reported = sorted(k for k, v in fc.items() if v == "NOT_REPORTED")
+        actual_not_reported = sorted(set(record.get("not_reported_fields", []))) if isinstance(record.get("not_reported_fields"), list) else []
+        if expected_not_reported != actual_not_reported:
+            errors.append(f"not_reported_fields does not match field_completeness: expected {expected_not_reported}, got {actual_not_reported}")
+        for field, status in fc.items():
+            if field not in record: continue
+            if status == "FOUND" and field != "multiple_studies_flag" and _is_empty(record.get(field)):
+                errors.append(f"field_completeness says FOUND but {field} is empty")
+            if status == "NOT_REPORTED" and not _is_empty(record.get(field)):
+                errors.append(f"field_completeness says NOT_REPORTED but {field} is populated")
+            if status == "NOT_APPLICABLE" and field not in {"review_type", "multiple_studies_reason"} and not _is_empty(record.get(field)):
+                errors.append(f"field_completeness says NOT_APPLICABLE but {field} is populated")
+
     if not isinstance(record.get("run_metadata"), dict): errors.append("run_metadata must be an object")
     else:
         for key in ("schema_version", "ontology_version", "model", "provider", "timestamp_utc"):
@@ -108,7 +142,6 @@ def validate(record: dict) -> list[str]:
                 if key not in item: errors.append(f"evidence[{i}] missing {key}")
     else: errors.append("evidence must be an array")
 
-    # Legacy-field guard: mitigation_evaluation must never return to the schema.
     if "mitigation_evaluation" in record: errors.append("legacy field mitigation_evaluation is prohibited")
     return errors
 
@@ -119,5 +152,5 @@ def main() -> int:
     if errors:
         print("INVALID"); [print(f"- {e}") for e in errors]; return 1
     print("VALID"); return 0
-    
+
 if __name__ == "__main__": raise SystemExit(main())
