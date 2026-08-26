@@ -1,7 +1,7 @@
 LivingEvidenceMap full-text coding prompt
 Schema version: fulltext_coding_v1
 Primary extraction basis: FRB Blue Food data extraction sheet
-Additional thematic coding: data/reference/topic_ontology_v3.csv
+Additional thematic coding: data/reference/topic_ontology_v3.csv 
 
 TASK
 Code one document using the supplied schema and ontology. Keep extraction simple and aligned with the FRB Blue Food extraction sheet. Return one valid JSON object only.
