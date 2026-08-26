@@ -1,6 +1,6 @@
 {
   "schema_version": "fulltext_coding_v1",
-  "description": "Closed full-text coding schema aligned with the FRB Blue Food data extraction sheet, with LivingEvidenceMap topic ontology coding added.",
+  "description": "Bespoke LivingEvidenceMap full-text coding schema with closed vocabularies, evidence provenance, and completeness auditing.",
   "document_type": ["study", "review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"],
   "review_type": ["primer_overview", "systematic_style", "not_applicable"],
   "study_type": ["experimental", "observational", "modelling", "not_stated", "not_applicable"],
@@ -38,7 +38,6 @@
     "impact_type": "array[string]",
     "impact_details": "string|null",
     "outcome_measured": "array[string]",
-    "mitigation_evaluation": "string|null",
     "intervention": "string|null",
     "exposure": "string|null",
     "comparator": "string|null",
@@ -50,10 +49,15 @@
     "ontology_codes": "array[string]",
     "multiple_studies_flag": "boolean",
     "multiple_studies_reason": "string|null",
-    "document_completeness_evidence": "string|null"
+    "document_completeness_evidence": "string|null",
+    "non_methods_results_evidence": "boolean",
+    "non_methods_results_evidence_fields": "array[string]",
+    "not_reported_fields": "array[string]",
+    "evidence": "array[object]",
+    "run_metadata": "object"
   },
   "evidence": {
-    "description": "For substantive coding, first search Methods/Materials and Results/Findings for explicit evidence. Other sections may support explicit descriptive characteristics when Methods/Results do not state them. For research question and objectives, use the Introduction as needed. For outcome_measured, impact_type, and impact_details, Methods/Materials and Results/Findings, including tables and figure legends/captions, are mandatory evidence sources. Incomplete documents use document_completeness_evidence instead of substantive evidence.",
+    "description": "Evidence should primarily come from Methods/Materials and Results/Findings, including tables and figure legends/captions. Other sections may support explicit descriptive characteristics only when the relevant information is absent from Methods/Results. Outcome fields are Methods/Results-only. Each evidence item records the supporting section.",
     "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
   },
   "run_metadata": {
