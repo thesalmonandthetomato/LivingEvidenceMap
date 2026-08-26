@@ -8,12 +8,12 @@ CURRENT_FIELDS = {
     "document_type", "review_type", "study_type", "study_design", "research_approach", "setting", "sample_unit",
     "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population",
     "aquaculture_facility", "system_studied", "production_stage", "fish_life_stage", "exposure_intervention",
-    "comparator", "outcome_measured", "impact_type", "impact_details", "funding_body", "research_question",
-    "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"
+    "comparator", "outcome_measured", "funding_body", "research_question", "objectives_summary", "ontology_codes",
+    "multiple_studies_flag", "multiple_studies_reason"
 }
 PROHIBITED_FIELDS = {
-    "sample_size", "methodology_for_data_collection", "funder", "intervention", "exposure", "source_id",
-    "openalex_id", "doi", "title", "year", "schema_version", "run_metadata", "non_methods_results_evidence",
+    "sample_size", "methodology_for_data_collection", "funder", "intervention", "exposure", "impact_type", "impact_details",
+    "source_id", "openalex_id", "doi", "title", "year", "schema_version", "run_metadata", "non_methods_results_evidence",
     "non_methods_results_evidence_fields"
 }
 
@@ -37,7 +37,7 @@ def main() -> int:
     if schema_fields != CURRENT_FIELDS:
         errors.append(f"schema field mismatch: schema_only={sorted(schema_fields-CURRENT_FIELDS)}, missing={sorted(CURRENT_FIELDS-schema_fields)}")
     leaked=sorted(schema_fields & PROHIBITED_FIELDS)
-    if leaked: errors.append(f"prohibited legacy fields remain in schema: {leaked}")
+    if leaked: errors.append(f"prohibited legacy/removed fields remain in schema: {leaked}")
     mapping={"document_type":"DOCUMENT_TYPES","review_type":"REVIEW_TYPES","study_type":"STUDY_TYPES","study_design":"STUDY_DESIGNS","research_approach":"RESEARCH_APPROACHES","setting":"SETTINGS","production_stage":"PRODUCTION_STAGES","aquaculture_facility":"AQUACULTURE_FACILITIES","species":"SPECIES"}
     for field,const in mapping.items():
         if field not in schema: errors.append(f"schema missing controlled vocabulary: {field}"); continue
