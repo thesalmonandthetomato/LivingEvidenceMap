@@ -113,15 +113,12 @@ jobs:
       - name: Run AI coding
         run: |
           set -euo pipefail
-          cat scripts/fulltext_coding/fulltext_coding_prompt_v1.txt > /tmp/fulltext_coding_prompt_combined.txt
-          printf '\n\n' >> /tmp/fulltext_coding_prompt_combined.txt
-          cat scripts/fulltext_coding/fulltext_coding_prompt_v1_addendum.txt >> /tmp/fulltext_coding_prompt_combined.txt
           python scripts/fulltext_coding/code_fulltext_test.py \
             --input-dir test_corpus/prepared \
             --output-dir test_corpus/annotations \
             --ontology data/reference/topic_ontology_v3.csv \
             --schema scripts/fulltext_coding/coding_schema_v1.json \
-            --prompt /tmp/fulltext_coding_prompt_combined.txt \
+            --prompt scripts/fulltext_coding/fulltext_coding_prompt_v1.txt \
             --model "$FULLTEXT_CODING_MODEL" \
             --max-papers "${{ github.event.inputs.n_papers || 5 }}"
       - name: Validate generated annotations
@@ -151,7 +148,7 @@ jobs:
         if: always()
         env:
           START_INDEX: ${{ github.event.inputs.start_index || '6' }}
-          N_PAPERS: ${{ github.event.inputs.n_papers || '5' }}
+          N_PAPERS: ${{ github.event.inputs.n_papers || 5 }}
         run: |
           set -euo pipefail
           mkdir -p test_corpus/annotations
@@ -159,11 +156,11 @@ jobs:
           import json, os
           from pathlib import Path
           root=Path('test_corpus/annotations')
-          files=sorted(p for p in root.glob('*.json') if not p.name.endswith('.raw_response.json') and not p.name.endswith('.checkpoint.json') and p.name != 'test_manifest.json') if root.exists() else []
+          files=sorted(p for p in root.glob('*.json') if not p.name.endswith('.raw_response.json') and not p.name.endswith('.checkpoint.json') and p.name != 'test_manifest.json')
           Path('test_corpus/annotations/test_manifest.json').write_text(json.dumps({
             'workflow':'test_fulltext_coding','model':os.environ['FULLTEXT_CODING_MODEL'],
             'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v1.json',
-            'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v1.txt + scripts/fulltext_coding/fulltext_coding_prompt_v1_addendum.txt','zenodo_deposition':22085902,
+            'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v1.txt','zenodo_deposition':22085902,
             'start_index':int(os.environ.get('START_INDEX','6')),'n_papers':int(os.environ.get('N_PAPERS','5')),
             'annotation_files':[p.name for p in files]}, indent=2)+'\n')
           PY
