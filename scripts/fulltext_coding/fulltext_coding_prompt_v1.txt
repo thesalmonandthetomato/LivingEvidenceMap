@@ -2,120 +2,110 @@ LivingEvidenceMap full-text article coding prompt
 Schema version: fulltext_coding_v1
 
 TASK — FULL-TEXT ARTICLE CODING
-Code the supplied full text into the provided LivingEvidenceMap JSON schema. The purpose is to create a consistent, high-level structured representation of what the article actually studies, how it was conducted, what population/system it concerns, what was measured, and what the article reports.
+Code the supplied full text into the provided LivingEvidenceMap JSON schema. The schema and this prompt are the sole coding authority. Do not import fields, categories, terminology, or rules from external examples, previous prompts, coding sheets, datasets, or other legacy versions. Extract from the article itself. Return exactly one valid JSON object conforming to the schema, with no commentary or extra fields.
 
-The JSON schema and the rules in THIS prompt are the sole authority for coding. Do NOT import fields, categories, terminology, or coding rules from external examples, previous versions of this prompt, other datasets, or the article's own terminology where a controlled vocabulary is specified. Do not refer to or align the coding to an external coding sheet. Extract information from the article itself.
+CORE PRINCIPLE — METHODS/RESULTS FIRST
+For substantive article coding, FIRST and PRIMARILY search Methods/Materials and Results/Findings, including tables and figure legends/captions. These establish what the study actually did, where it was conducted, who/what was studied, and what data were actually collected and reported.
 
-The objective is accurate, reproducible extraction, not exhaustive interpretation or reconstruction of the study's statistical design. Prefer explicit evidence over inference. Return exactly one valid JSON object conforming to the supplied schema. Do not return commentary, Markdown, explanations outside the JSON object, or additional fields.
+Only when the relevant information is absent from Methods/Materials and Results/Findings may an explicit, unambiguous statement from the title, Abstract, Introduction, Discussion, or Conclusions support a descriptive/study-characteristic field. Such fallback evidence must be flagged in non_methods_results_evidence and non_methods_results_evidence_fields. Evidence objects must identify the actual article section.
 
-EVIDENCE HIERARCHY — CENTRAL RULE
-For substantive article coding, FIRST and PRIMARILY search Methods/Materials and Results/Findings, including tables and figure legends/captions. These are the preferred evidence sources because they establish what the study actually did, what population/system it actually used, and what data it actually collected and reported.
+OUTCOME EXCEPTION — STRICTER
+outcome_measured, impact_type, and impact_details may ONLY use Methods/Materials or Results/Findings evidence, including tables and figure legends/captions. They must represent data actually collected, measured, analysed, or reported by the study. A mention in the title, Abstract, Introduction, Discussion, Conclusions, background, references, or cited literature is not outcome evidence.
 
-Only when the relevant information is absent from Methods/Materials and Results/Findings may you use an explicit, unambiguous statement from the title, Abstract, Introduction, Discussion, or Conclusions for descriptive or study-characteristic fields. Never silently treat fallback evidence as equivalent to Methods/Results evidence.
+Research question and objectives are normally taken directly from explicit statements in the Introduction and, where clearly stated, the Abstract. Do not infer them solely from title or methods/results.
 
-For EVERY substantive field coded from fallback sections, set non_methods_results_evidence = true and list the affected field names in non_methods_results_evidence_fields. If all substantive coding is supported by Methods/Results/tables/figure legends, set non_methods_results_evidence = false and use an empty array for non_methods_results_evidence_fields. Evidence objects must also identify the actual article section supporting each value.
+FIELD-BY-FIELD COMPLETENESS AUDIT — MANDATORY CHECKLIST
+Before returning JSON, actively search EVERY substantive schema field. Do not stop after finding one plausible value. For every field, complete this checklist in order: (1) determine whether it is applicable; (2) search the preferred sources; (3) if absent there, search the permitted fallback sources; (4) if explicit information is found, code it; (5) if applicable but not reported after the prescribed search, mark NOT_REPORTED; (6) if genuinely inapplicable, mark NOT_APPLICABLE.
 
-OUTCOME FIELDS ARE STRICTER: outcome_measured, impact_type, and impact_details may ONLY be supported by Methods/Materials or Results/Findings, including tables and figure legends/captions. They must represent data actually collected, measured, analysed, or reported by the study. A mention in the title, Abstract, Introduction, Discussion, Conclusions, background, literature review, references, or cited literature is NOT outcome evidence and must not be coded as an outcome.
+| Field | First search | Fallback if absent | Status rule |
+|---|---|---|---|
+| DOI / source metadata | workflow metadata, article front matter | citation/title page | use supplied/explicit metadata |
+| year | front matter, citation, metadata | title/citation | FOUND if explicit; otherwise NOT_REPORTED if applicable |
+| document_type | title, abstract, article structure | full text | classify the document itself |
+| review_type | title, abstract, methods | full text | classify only reviews; otherwise NOT_APPLICABLE |
+| species | Methods, study population, Results | title, abstract, Introduction, Discussion | explicit permitted species; otherwise NOT_REPORTED if applicable |
+| other_farmed_species | Methods, study population | title, abstract, Introduction | explicit additional farmed species |
+| study_population | Methods, Results | title, abstract, Introduction | actual population/material studied |
+| sample_size | Methods, Results, tables | Abstract | reported study sample size |
+| sample_unit | Methods, Results | Abstract, Introduction | simple high-level unit represented by substantive outcome data |
+| study_period | Methods, study setting, Results | Abstract, title, Discussion | explicit study period |
+| location_region | Methods, study setting | title, Abstract, Introduction, Discussion | explicit study location |
+| location_country | Methods, study setting | title, Abstract, Introduction, Discussion | explicit study country |
+| aquaculture_facility | Methods, study setting | title, Abstract, Introduction, Discussion | explicit aquaculture production system only |
+| system_studied | Methods, Results | title, Abstract, Introduction | actual system/material examined |
+| production_stage | Methods, production description | title, Abstract, Introduction | explicit aquaculture production context |
+| fish_life_stage | Methods, study population, Results | title, Abstract, Introduction, Discussion | substantive fish life stage explicitly established; never infer |
+| setting | Methods, study setting | title, Abstract, Introduction | substantive study setting |
+| study_type | Methods, study design | Abstract | what investigators actually did |
+| study_design | Methods, study design | Abstract | supported design only |
+| research_approach | Methods | Abstract, Introduction | supported approach only |
+| intervention | Methods, Results | Abstract, Introduction | deliberate assigned action |
+| exposure | Methods, Results, analytical question | Abstract, Introduction | investigated observational exposure only |
+| comparator | Methods, Results | Abstract | actual focal comparison only |
+| outcome_measured | Methods + Results ONLY, incl. tables/figure legends | NONE | collected/analysed study outcomes only |
+| impact_type / impact_details | Methods + Results ONLY, incl. tables/figure legends | NONE | collected/analysed study impacts only |
+| methodology_for_data_collection | Methods | Results | actual data-collection methods |
+| funding_body / funder | funding statement, acknowledgements | full text | explicit funding information |
+| research_question | explicit aims/questions in Introduction | Abstract | direct statement only |
+| objectives_summary | explicit objectives/aims in Introduction | Abstract | direct statement only |
+| ontology_codes | substantive topic/method content | full text | ontology criteria must be met |
+| multiple_studies_flag | article structure, separate aims/methods/results | full text | TRUE only with strong positive evidence |
 
-RESEARCH QUESTION AND OBJECTIVES are an exception to the Methods/Results priority where appropriate: they should be taken directly from explicit statements of the article's aims/questions, normally in the Introduction and, where clearly stated, the Abstract. Do not infer them solely from title or from your interpretation of methods/results.
+For EVERY field, a blank is not an acceptable unexamined state. Assign a status in field_completeness: FOUND, NOT_REPORTED, or NOT_APPLICABLE. FOUND requires explicit supporting evidence. NOT_REPORTED means the field is applicable but is not reported after the full prescribed search. NOT_APPLICABLE means it genuinely does not apply. Do not use NOT_REPORTED for uncertainty and never invent information to avoid it.
 
-FIELD-BY-FIELD COMPLETENESS AUDIT — REQUIRED
-Before returning JSON, actively search the article for EVERY substantive schema field. Do not stop after finding one plausible value. For each field ask:
-1. Is this field applicable to the document?
-2. Have Methods/Materials and Results/Findings been searched first?
-3. If the relevant information is absent there, have the permitted fallback sections been searched?
-4. If explicit information exists, code it.
-5. If the field is applicable but the article notably does not report the information anywhere after a reasonable full-text search, record the field name in not_reported_fields.
-6. If the field genuinely does not apply, use the schema's appropriate null/empty/not_applicable state.
-
-NOT REPORTED means that the variable is relevant/applicable but the article does not report it after a reasonable search of the supplied full text. Do NOT use NOT REPORTED for uncertainty, and do NOT invent a value to avoid it. not_reported_fields is a dedicated audit column; do not create NOT REPORTED as a new controlled-vocabulary value. A field listed in not_reported_fields must remain null/empty unless the schema explicitly permits another value.
+not_reported_fields must contain every applicable field with NOT_REPORTED status. NOT_APPLICABLE fields must not appear there. The evidence array must support substantive FOUND values. Any field coded using fallback evidence must also appear in non_methods_results_evidence_fields.
 
 DOCUMENT COMPLETENESS — HARD RULE
-First determine whether the supplied full text appears complete enough to code. If it is clearly incomplete, truncated, corrupted, or only a fragment such that reliable article-level coding is impossible, return document_type = null and leave ALL substantive coding fields blank/null/empty as appropriate. Do not infer or salvage substantive coding from an incomplete document. document_completeness_evidence is REQUIRED: provide the first ~250 words of the supplied document (or all available opening text if shorter) and a concise reason why it is incomplete. This is a data-quality failure, not a substantive article classification. Workflow provenance/identity metadata may remain populated on an incomplete record; only substantive article coding must be blank/null/empty.
+First determine whether the supplied full text is complete enough to code. If clearly incomplete, truncated, corrupted, or only a fragment, return document_type = null and leave all substantive coding fields blank/null/empty. Do not infer or salvage substantive coding. document_completeness_evidence is REQUIRED and must provide the first ~250 words (or all available opening text if shorter) plus a concise reason. Workflow provenance/identity metadata may remain populated. This is a data-quality failure, not an article classification.
 
 CLOSED VOCABULARIES — HARD RULE
-All controlled-vocabulary fields are closed. Use ONLY values supplied in coding_schema_v1.json. Never invent, paraphrase, abbreviate, translate, or substitute a new enum value. Never create an 'other' value unless it is explicitly part of the schema. If no allowed value fits, use the schema's permitted null/empty/not_applicable state and preserve useful paper terminology only in free-text evidence.
+Use ONLY values supplied in coding_schema_v1.json. Never invent, paraphrase, abbreviate, translate, or create a new controlled-vocabulary value. If no allowed value fits, use the schema's missing/inapplicable state and preserve useful paper terminology only in free-text evidence.
 
-DOCUMENT SCOPE AND REVIEW HIERARCHY
-Code what this document itself investigates, measures, compares, models, evaluates, or reports. A review is document_type = review. review_type is then primer_overview or systematic_style. Use systematic_style if the review calls itself a systematic review, systematic literature review, systematic-style review, or equivalent; OR if it describes ANY methodology for identifying, selecting, searching, appraising, synthesising, or otherwise systematically handling the literature; OR if it uses quantitative measures to combine primary study findings. Otherwise use primer_overview.
+DOCUMENT SCOPE / REVIEWS
+Code what the document itself investigates, measures, compares, models, evaluates, or reports. Reviews are document_type = review. review_type = systematic_style if the review calls itself a systematic review/systematic literature review/systematic-style review or equivalent, OR describes ANY methodology for identifying/selecting/searching/appraising/synthesising literature, OR quantitatively combines primary study findings. Otherwise primer_overview. Review coding should represent the review as a whole, not one isolated included article. Commentary/editorial/perspective/book/book chapter do not inherit empirical variables from studies they discuss.
 
-Reviews may be coded based on the body of articles they review when those characteristics are representative of the review as a whole. Do not select a value solely because it occurs in one isolated included article. Commentary, editorial, perspective, book, and book chapter should not inherit empirical study variables from studies they merely discuss. Reports/theses/protocols should be coded according to what the document itself does.
+MULTIPLE STUDIES — RARE HUMAN REVIEW FLAG
+Set multiple_studies_flag = true ONLY with strong positive evidence of two or more independently structured studies/components: explicitly labelled studies; multiple substantive empirical thesis chapters; separate study aims/questions with corresponding separate methods/results; distinct samples/populations with distinct methods/results functioning as independent studies; or explicitly combined independent empirical studies. Multiple treatments, factor levels, conditions, time points, assays, outcomes, or populations within one coherent design do NOT suffice. If ambiguous, false. When true, give a concise reason. This is a human-review flag, not an error and not a workflow failure.
 
-COMPOUND / MULTIPLE-STUDY DOCUMENTS — RARE HUMAN REVIEW FLAG
-Do not automatically split a document. Set multiple_studies_flag = true ONLY when there is strong positive evidence that two or more independently structured studies/components are present. Strong evidence includes explicitly labelled Study 1/Study 2 or equivalent; a thesis/dissertation containing multiple substantive empirical chapters; clearly separate study aims/questions with corresponding separate methods and results; clearly separate samples/populations with distinct methods and results that function as independent studies; or an article explicitly combining two independently structured empirical studies.
-Multiple treatments, stimuli, factor levels, experimental conditions, time points, assays, outcomes, populations within one coherent design, or non-pairwise combinations ALONE are NOT sufficient and MUST NOT trigger the flag. A methods comparison or multiple assay types within one coherent study is normally one study. If evidence is ambiguous, set false. When true, give a concise reason identifying the concrete evidence for separate studies and why human review may be needed. This is a human-review flag, not an error and not a reason to fail the workflow.
+RESEARCH QUESTION / OBJECTIVES
+For every complete substantive research document, provide research_question and objectives_summary when explicit statements exist. Take them directly from the article and provide evidence. Do not manufacture them.
 
-RESEARCH QUESTION AND OBJECTIVES
-For every complete empirical study, modelling study, review, thesis, report, protocol, or other substantive research document, provide BOTH research_question and objectives_summary whenever the full text contains enough information to establish them. Take them directly from explicit statements in the article and provide evidence for both. Do not manufacture a research question from the title or methods.
+STUDY TYPE / DESIGN
+study_type only: experimental, observational, modelling, not_stated, not_applicable. Experimental requires deliberate manipulation/imposition on study subjects/specimens. Laboratory processing/analysis of field-collected material is not experimental. For laboratory studies, deliberate action TO the fish/specimens is experimental unless it is only processing/analysis of field samples.
+study_design only: BA, CI, BACI, RCT, Time-series, Modelling, Qualitative, not_stated, not_applicable. CI includes genuine intervention/treatment comparisons, including deliberately imposed alternative challenge modes such as injection versus immersion. Do not create longitudinal as a new value.
+research_approach only: quantitative, qualitative, mixed_methods, not_applicable.
 
-STUDY TYPE
-Use only: experimental, observational, modelling, not_stated, not_applicable. Experimental means investigators deliberately manipulate or impose a condition on study subjects/specimens. Laboratory/controlled-facility assays performed only on already-collected material are NOT experimental merely because they occur in a controlled facility. If subjects/specimens are only observed, measured, sampled, assayed, sequenced, or analysed without deliberate manipulation by investigators, do NOT code experimental. For laboratory studies, anything deliberately done TO the fish/specimens is experimental, unless the activity is only laboratory processing/analysis of field-collected material.
+SETTING
+Only: field, laboratory/controlled facility, in_vitro, in_silico. Setting describes WHERE the substantive study itself occurred, not where samples were later processed. Field includes real-world farms, sea cages, hatcheries, rivers, lakes and coastal/environmental locations, including controlled field experiments. Laboratory/controlled facility includes laboratory, university/research facility, tank/controlled aquaculture facility, or other controlled facility with no real-world field setting. Laboratory analysis of field samples does not make the study laboratory. Never put marine, freshwater, hatchery, land_based, RAS, open_cages or closed_cages in setting.
 
-STUDY DESIGN
-Use only: BA, CI, BACI, RCT, Time-series, Modelling, Qualitative, not_stated, not_applicable. CI is appropriate for genuine comparison of intervention/treatment conditions, including deliberately imposed alternative challenge modes such as injection versus immersion. Time-series includes repeated longitudinal/repeated-measures temporal sampling. Do not create longitudinal as a new value.
+SPECIES / POPULATION / SAMPLE UNIT
+species is REQUIRED for a complete relevant document and may ONLY contain: Atlantic salmon; chum salmon; pink salmon; coho salmon; chinook salmon; sockeye salmon; masu salmon; rainbow trout; unspecified salmon species. If a permitted named species is explicitly linked to the study, code it. Use unspecified salmon species only when no permitted named species is explicitly established; it must never be null for a complete relevant document. If the paper concerns salmon lice without an explicitly established permitted salmonid host, use unspecified salmon species.
+other_farmed_species is a free-text array for additional farmed species outside those nine values.
+study_population = actual population/material studied.
+sample_unit = simple high-level array. Prefer ONE primary unit such as fish, cells, people, farms, communities, grab samples, or households. Do not reconstruct pseudoreplication, nesting, statistical units, technical subsamples, parasites, tissues, assays, derived measurements, or tanks merely used as containers. Do not use a species name as sample_unit. Use multiple units only when substantive outcome data are independently collected/reported at genuinely distinct high-level scales.
 
-RESEARCH APPROACH
-Only: quantitative, qualitative, mixed_methods, not_applicable.
+AQUACULTURE FACILITY
+There is ONE facility/production-system field: aquaculture_facility. Do not create farming_system. Only: salmon_farming_region, hatchery, open_cages, closed_cages, land_based, land_based_RAS.
+Code only the salmon aquaculture production facility/system in which the substantive study was conducted or the production system evaluated, when explicitly stated. A laboratory/controlled facility may co-occur with aquaculture_facility when it is itself an aquaculture production system, such as a land-based RAS. Laboratory water circulation is NOT RAS. land_based_RAS requires explicit land-based RAS or a recognised synonym. hatchery requires explicit hatchery production context; do not infer from life-stage terms. Sea pens/open net pens/sea cages are open_cages unless explicitly closed. closed_cages requires explicit closed impermeable sides/walls or recognised equivalent. land_based requires explicit land-based aquaculture not identified as RAS. Never use wild, mixed, genetic variety/strain, river, marine, freshwater, recirculating alone, or invented values.
 
-SETTING — STUDY SETTING ONLY
-Only: field, laboratory/controlled facility, in_vitro, in_silico. Setting describes WHERE the substantive observational or experimental study itself was conducted, not where routine sample processing or laboratory analysis was subsequently performed.
-Use field when the substantive study is conducted in the real-world aquaculture/environmental setting, including farms, sea cages, hatcheries, rivers, lakes, coastal waters, or other real-world production/environmental locations, even when controlled or experimental. Use laboratory/controlled facility when the substantive study is conducted in a laboratory, university/research facility, tank/controlled aquaculture facility, or other controlled facility and no real-world field location is the study setting. This includes controlled aquaculture facilities with no location specified.
-A field/production-facility study does NOT become laboratory/controlled facility merely because samples are processed or analysed in a laboratory. Laboratory analysis of field samples is not a laboratory study. Never put marine, freshwater, hatchery, land_based, RAS, open_cages, or closed_cages in setting.
+SYSTEM / PRODUCTION STAGE
+system_studied = biological, environmental, social system or material actually examined.
+production_stage only: Feed, Hatchery, Transfer between Hatchery and Adult, Adult grow-out, Processing. It describes the aquaculture production context relevant to the study and is distinct from fish_life_stage. Feed means production/manufacture of feed OUTSIDE an aquaculture facility. Studies testing feed, diets, additives, alternative feeds, or feed efficiency on fish are NOT Feed; use the relevant fish production stage if explicit, or NULL when laboratory/controlled-facility based with no applicable production stage. Salmon are never themselves in Feed production. Adult grow-out includes explicitly framed studies of grow-out faeces, wastes, cages, water, sediments and other outputs. Hatchery requires explicit production context. Transfer between Hatchery and Adult requires explicit transfer. Processing concerns processing of harvested aquaculture product.
 
-SPECIES / POPULATION / SAMPLE UNIT / FACILITY / SYSTEM
-species is REQUIRED for a complete relevant document and is a CLOSED ARRAY containing ONLY: Atlantic salmon; chum salmon; pink salmon; coho salmon; chinook salmon; sockeye salmon; masu salmon; rainbow trout; unspecified salmon species. If a permitted named species is explicitly linked to the study, code that species. Use unspecified salmon species only when no permitted named species is explicitly established. If the paper is about salmon lice but does not explicitly establish a permitted farmed salmonid host species, use unspecified salmon species. species must NEVER be null or empty for a complete relevant document.
-other_farmed_species is a free-text array for additional farmed species outside the nine permitted species values, e.g. brown trout.
-study_population = the population/material actually studied.
-sample_unit = SIMPLE HIGH-LEVEL ARRAY. Prefer ONE primary high-level unit such as fish, cells, people, farms, communities, grab samples, or households. Do NOT reconstruct experimental units, pseudoreplication, nesting, or statistical unit-of-analysis. Do NOT enumerate nested organisms, parasites, tissues, subsamples, assays, derived measurements, tanks used merely as containers, or other technical units merely because they occur in Methods. Do not use a species name as sample_unit. Use multiple values ONLY when substantive outcome data are independently collected/reported at genuinely distinct high-level unit scales. Tanks are not a sample unit merely because they are experimental containers.
+FISH LIFE STAGE
+fish_life_stage is an array using ONLY: Sperm, Egg, Embryo, Alevin, Fry, Parr, Smolt, Juvenile, Adult, Broodstock, Harvest, Product. Code only substantive fish life stages actually studied. Do not infer from facility, production stage, species, age, or context. Search Methods/Results first, then permitted fallback sections. Do not code Harvest merely because fish were harvested, sacrificed, sampled, or euthanised at the end of an experiment. Harvest is appropriate only when harvested/product fish are themselves the substantive stage/population studied. Product refers to processed/market product. If no substantive life stage is explicitly established, leave the value empty and mark fish_life_stage NOT_REPORTED when applicable.
 
-There is ONE facility/production-system variable: aquaculture_facility. Do not create farming_system as a separate field.
-
-AQUACULTURE FACILITY — CLOSED VOCABULARY
-Only: salmon_farming_region, hatchery, open_cages, closed_cages, land_based, land_based_RAS.
-Use aquaculture_facility only for the salmon aquaculture production facility/system in which the substantive study was conducted or the production system being evaluated, when explicitly stated or clearly and unambiguously identified.
-If the study is clearly laboratory/controlled facility but the controlled facility is not itself an aquaculture production system, aquaculture_facility is null/empty. Laboratory/controlled facility may legitimately co-occur with aquaculture_facility when the controlled facility itself is an aquaculture production system, such as a land-based RAS.
-Laboratory circulation of water is NOT RAS. Code land_based_RAS only when the actual study system is explicitly identified as a land-based recirculating aquaculture system/RAS or a recognised synonym.
-hatchery: code when the substantive study was explicitly conducted at/in a hatchery facility or the hatchery is explicitly the aquaculture production system in which studied fish/material were held or sampled. Do not infer hatchery solely from life-stage terminology.
-open_cages: sea pens/open net pens/open cages. For a substantive study conducted in a sea cage, code open_cages by default unless explicitly described as closed.
-closed_cages: explicitly described closed cages with impermeable sides/walls or recognised equivalent.
-land_based: explicitly described land-based aquaculture production not identified as RAS.
-salmon_farming_region: only when explicitly identified as a salmon-farming region rather than merely naming a farm/location.
-Never use wild, mixed, genetic variety/strain, river, marine, freshwater, recirculating alone, or invented values in aquaculture_facility.
-
-GENETIC VARIETY
-Keep strain/genetic variety separate from aquaculture_facility; record it only in the appropriate free-text field/evidence.
-
-SYSTEM STUDIED
-system_studied = the biological, environmental, social system or material actually examined, e.g. sediment, water column, fish gut, fillet tissue, whole fish, farm workforce, supply chain, river ecosystem.
-
-PRODUCTION STAGE — CLOSED VOCABULARY
-Only: Feed, Hatchery, Transfer between Hatchery and Adult, Adult grow-out, Processing. Production stage describes the aquaculture production context relevant to what the study investigates. It is NOT the same as fish_life_stage.
-Feed means the production/manufacture of feed OUTSIDE an aquaculture facility. Do NOT use Feed merely because a study tests feed, diets, feed additives, alternative feeds, or feeding efficiency on fish. For such studies, use the relevant fish production stage when explicitly established, or null if the study is laboratory/controlled-facility based and no aquaculture production stage is applicable. Salmon are never themselves in a Feed production stage.
-Use Adult grow-out for substantive studies of processes/materials associated with adult grow-out production, including faeces, wastes, cages, water, sediments, or other outputs where the paper explicitly frames the process in the adult grow-out system. Use Hatchery only when explicitly identified as the production context. Use Transfer between Hatchery and Adult only where the study explicitly concerns that transfer process. Use Processing when the study concerns processing of harvested aquaculture product.
-
-FISH LIFE STAGE — CLOSED VOCABULARY
-fish_life_stage is an ARRAY and may contain multiple values. Use ONLY: Sperm, Egg, Embryo, Alevin, Fry, Parr, Smolt, Juvenile, Adult, Broodstock, Harvest, Product. Code the substantive biological life stage(s) actually studied, independent of production_stage. Do not infer from facility, production stage, species, age assumptions, or study context. Search Methods/Materials and Results first; an explicit unambiguous life-stage statement elsewhere may be used only when it is absent from those sections.
-HARVEST RULE: Do NOT code Harvest merely because fish were harvested, sacrificed, sampled, or euthanised at the end of an experiment. Use Harvest only when harvested/product fish are themselves the substantive biological life stage or study population being investigated. Product refers to processed/market product rather than the act of collecting study animals.
-If no substantive life stage is explicitly stated anywhere, leave fish_life_stage empty and list fish_life_stage in not_reported_fields when applicable.
-
-EXPOSURE / INTERVENTION / COMPARATOR
-intervention = deliberate treatment, manipulation, vaccination, husbandry change, challenge, or other assigned experimental action. It may include a mitigation/adaptation measure when such a measure is actually tested; there is NO separate mitigation_evaluation field.
-exposure = an observational exposure whose relationship with an outcome/impact is investigated. Geography, season, farm, host group, or descriptive grouping is NOT automatically an exposure.
-comparator = ONLY the actual comparison group, site, treatment condition, or intervention condition against which the focal intervention/exposure is compared. Comparator may be null where no genuine comparison exists. Do not list every experimental group or every factor level merely because multiple groups occur.
+INTERVENTION / EXPOSURE / COMPARATOR
+intervention = deliberate treatment, manipulation, vaccination, husbandry change, challenge, or other assigned experimental action. There is NO mitigation_evaluation field.
+exposure = investigated observational exposure; geography, season, farm, host group, or descriptive grouping is not automatically an exposure.
+comparator = only the actual focal comparison group/site/treatment/intervention condition. It may be null when no genuine comparison exists.
 
 OUTCOMES / IMPACTS
-outcome_measured = substantive outcomes actually measured/assessed using collected study data and reported by the document. impact_type and impact_details describe those collected/analysed study results where applicable. These fields may ONLY be supported by Methods/Materials or Results/Findings, including tables and figure legends/captions. Do not code an outcome because it is merely mentioned, proposed, discussed, cited, or listed as background elsewhere.
-Do not confuse a measured covariate, environmental condition, procedural parameter, or background characteristic with a substantive outcome unless it is actually analysed/reported as a study response or result.
-Do not invent ad-hoc controlled impact_type labels. Use only established values supported by the supplied schema/ontology; otherwise leave the field null/empty as appropriate.
+outcome_measured = substantive outcomes actually measured/assessed using collected study data and reported by the document. impact_type and impact_details describe collected/analysed study results where applicable. These fields are Methods/Results-only, including tables and figure legends/captions. Do not code outcomes merely mentioned elsewhere. Do not confuse covariates, environmental conditions, procedural parameters, or background characteristics with substantive outcomes unless actually analysed/reported as study responses. Do not invent impact_type labels; use only schema-supported values.
 
-METHODOLOGY
-methodology_for_data_collection = actual data-collection methods, using paper terminology where useful. Do not confuse laboratory analytical processing of field samples with a laboratory study or experimental manipulation.
+METHODOLOGY / ONTOLOGY
+methodology_for_data_collection = actual data-collection methods. Do not confuse laboratory analytical processing with experimental study type.
+Apply data/reference/topic_ontology_v3.csv using its exact path_id and include_when/exclude_when/prompt_logic_note criteria. Prefer the most specific supported node. Do not code background-only mentions. Code Methods ontology only when methodological development, validation, comparison, or evaluation is itself substantive.
 
-ONTOLOGY
-Apply data/reference/topic_ontology_v3.csv at the conceptual level defined by that ontology. Use exact path_id values and apply include_when, exclude_when, and prompt_logic_note. Prefer the most specific supported node. Do not code topics merely mentioned in background, limitations, or discussion. Provide evidence for selected ontology codes.
-
-METHODS ONTOLOGY
-Only code a Methods ontology branch when methodological development, validation, comparison, or evaluation is itself a substantive contribution. Do not code Methods merely because a paper has a Methods section.
-
-FINAL PRE-RETURN AUDIT — REQUIRED
-Before returning JSON, verify ALL of the following: the document was assessed for completeness; every substantive field was actively searched before a missing value was returned; not_reported_fields contains every applicable field that is notably absent from the full text; non_methods_results_evidence correctly identifies every substantive field whose coding required fallback evidence outside Methods/Results; controlled-vocabulary values are permitted and no legacy/invented values occur; species is one of the nine permitted values for complete relevant documents; setting distinguishes real-world field studies from laboratory/controlled facilities; laboratory processing of field samples has not been mistaken for a laboratory study; laboratory/controlled facility may co-occur with an explicitly studied aquaculture production facility such as land_based_RAS; in_vitro facility coding follows the facility rule; Feed is ONLY feed production/manufacture outside aquaculture facilities; fish_life_stage contains only explicitly supported substantive stages and never uses Harvest merely because fish were collected/sacrificed; sample_unit is preferably one basic high-level unit and tanks are not included merely as experimental containers; comparator contains only the actual focal comparison; exposure is not inferred from grouping variables; there is NO mitigation_evaluation field; outcome_measured, impact_type, and impact_details are supported ONLY by collected/analysed study data in Methods/Results, including tables and figure legends; multiple_studies_flag is rare and requires strong positive evidence; research_question and objectives are grounded in explicit article statements; and no extra fields are returned.
+FINAL PRE-RETURN AUDIT — HARD REQUIREMENT
+Complete the entire field-by-field checklist before generating JSON. Confirm every substantive field has exactly one field_completeness status; every applicable NOT_REPORTED field is in not_reported_fields; every fallback-coded field is in non_methods_results_evidence_fields; all FOUND values have supporting evidence; no controlled-vocabulary or legacy values occur; species is one of the nine permitted values for complete relevant documents; setting, facility, production stage, life stage, sample unit, intervention, exposure, comparator, outcomes, multiple-studies and incomplete-document rules have all been checked; outcomes use Methods/Results-only evidence; and no substantive field is silently left blank. Never create a new controlled-vocabulary value merely to fill a blank.
