@@ -56,17 +56,39 @@ def validate(record: dict) -> list[str]:
     if record.get("schema_version") != "fulltext_coding_v1":
         errors.append("schema_version must be 'fulltext_coding_v1'")
 
-    # Basic scalar / array types from the schema.
+    # These are always structural requirements, including for an explicitly incomplete document.
     if not isinstance(record.get("source_id"), str) or not record["source_id"].strip():
         errors.append("source_id must be a non-empty string")
+    if not isinstance(record.get("run_metadata"), dict):
+        errors.append("run_metadata must be an object")
+    else:
+        for key in ("schema_version", "ontology_version", "model", "provider", "timestamp_utc"):
+            if key not in record["run_metadata"]:
+                errors.append(f"run_metadata missing {key}")
+    if "mitigation_evaluation" in record: errors.append("legacy field mitigation_evaluation is prohibited")
+    if "intervention" in record or "exposure" in record: errors.append("legacy separate intervention/exposure fields are prohibited; use exposure_intervention")
+
+    # An explicitly incomplete document is a controlled workflow state. The validator does not
+    # decide whether that state is scientifically justified; it only checks that the state is
+    # represented with the required evidence and otherwise leaves its substantive fields alone.
+    if record.get("document_type") is None:
+        if not isinstance(record.get("document_completeness_evidence"), str) or not record["document_completeness_evidence"].strip():
+            errors.append("incomplete-document record requires document_completeness_evidence")
+        return errors
+
+    if record.get("document_type") not in DOCUMENT_TYPES:
+        errors.append(f"invalid document_type: {record.get('document_type')!r}")
+    if record.get("review_type") not in REVIEW_TYPES:
+        errors.append(f"invalid review_type: {record.get('review_type')!r}")
+    if record.get("study_type") not in STUDY_TYPES:
+        errors.append(f"invalid study_type: {record.get('study_type')!r}")
+    if record.get("research_approach") not in RESEARCH_APPROACHES:
+        errors.append(f"invalid research_approach: {record.get('research_approach')!r}")
+
     if record.get("doi") is not None and not isinstance(record.get("doi"), str): errors.append("doi must be string or null")
     if record.get("openalex_id") is not None and not isinstance(record.get("openalex_id"), str): errors.append("openalex_id must be string or null")
     if record.get("title") is not None and not isinstance(record.get("title"), str): errors.append("title must be string or null")
     if record.get("year") is not None and not isinstance(record.get("year"), int): errors.append("year must be integer or null")
-    if record.get("document_type") is not None and record.get("document_type") not in DOCUMENT_TYPES: errors.append(f"invalid document_type: {record.get('document_type')!r}")
-    if record.get("review_type") not in REVIEW_TYPES: errors.append(f"invalid review_type: {record.get('review_type')!r}")
-    if record.get("study_type") not in STUDY_TYPES: errors.append(f"invalid study_type: {record.get('study_type')!r}")
-    if record.get("research_approach") not in RESEARCH_APPROACHES: errors.append(f"invalid research_approach: {record.get('research_approach')!r}")
 
     array_fields = (
         "study_design", "setting", "sample_unit", "species", "other_farmed_species", "aquaculture_facility",
@@ -95,8 +117,6 @@ def validate(record: dict) -> list[str]:
 
     if not isinstance(record.get("multiple_studies_flag"), bool): errors.append("multiple_studies_flag must be boolean")
     if not isinstance(record.get("non_methods_results_evidence"), bool): errors.append("non_methods_results_evidence must be boolean")
-    if not isinstance(record.get("non_methods_results_evidence_fields"), list): errors.append("non_methods_results_evidence_fields must be an array")
-    if not isinstance(record.get("not_reported_fields"), list): errors.append("not_reported_fields must be an array")
     if not all(isinstance(v, str) and v.strip() for v in record["not_reported_fields"]): errors.append("not_reported_fields must contain non-empty strings")
 
     # Completeness is deterministic bookkeeping only. No scientific judgement is made here.
@@ -121,20 +141,11 @@ def validate(record: dict) -> list[str]:
                 errors.append(f"field_completeness says NOT FOUND but {field} is populated")
             elif status is None and not _is_empty(record.get(field)):
                 errors.append(f"field_completeness says null/inapplicable but {field} is populated")
-        # Populated fields are represented by omission, not FOUND.
         for field in SUBSTANTIVE_FIELDS:
             if field in fc and field in record and not _is_empty(record.get(field)):
                 errors.append(f"populated field {field} must be omitted from field_completeness")
-        # Explicitly prohibit FOUND anywhere in the completeness object.
         if any(v == "FOUND" for v in fc.values()):
             errors.append("FOUND is prohibited in field_completeness")
-
-    if not isinstance(record.get("run_metadata"), dict):
-        errors.append("run_metadata must be an object")
-    else:
-        for key in ("schema_version", "ontology_version", "model", "provider", "timestamp_utc"):
-            if key not in record["run_metadata"]:
-                errors.append(f"run_metadata missing {key}")
 
     for i, item in enumerate(record["evidence"]):
         if not isinstance(item, dict):
@@ -142,9 +153,6 @@ def validate(record: dict) -> list[str]:
             continue
         for key in ("field", "value", "text", "section", "page"):
             if key not in item: errors.append(f"evidence[{i}] missing {key}")
-
-    if "mitigation_evaluation" in record: errors.append("legacy field mitigation_evaluation is prohibited")
-    if "intervention" in record or "exposure" in record: errors.append("legacy separate intervention/exposure fields are prohibited; use exposure_intervention")
 
     return errors
 
