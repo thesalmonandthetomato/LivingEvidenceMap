@@ -119,22 +119,17 @@ jobs:
       - name: Run AI coding
         run: |
           set -euo pipefail
+          cat scripts/fulltext_coding/fulltext_coding_prompt_v1.txt > /tmp/fulltext_coding_prompt_combined.txt
+          printf '\n\n' >> /tmp/fulltext_coding_prompt_combined.txt
+          cat scripts/fulltext_coding/fulltext_coding_prompt_v1_addendum.txt >> /tmp/fulltext_coding_prompt_combined.txt
           python scripts/fulltext_coding/code_fulltext_test.py \
             --input-dir test_corpus/prepared \
             --output-dir test_corpus/annotations \
             --ontology data/reference/topic_ontology_v3.csv \
             --schema scripts/fulltext_coding/coding_schema_v1.json \
-            --prompt scripts/fulltext_coding/fulltext_coding_prompt_v1.txt \
+            --prompt /tmp/fulltext_coding_prompt_combined.txt \
             --model "$FULLTEXT_CODING_MODEL" \
             --max-papers "${{ github.event.inputs.n_papers || 5 }}"
-      - name: Append current coding-rule addendum
-        run: |
-          set -euo pipefail
-          test -s scripts/fulltext_coding/fulltext_coding_prompt_v1_addendum.txt
-          printf '\n\n' >> /tmp/fulltext_coding_prompt_combined.txt
-          cat scripts/fulltext_coding/fulltext_coding_prompt_v1.txt > /tmp/fulltext_coding_prompt_combined.txt
-          printf '\n\n' >> /tmp/fulltext_coding_prompt_combined.txt
-          cat scripts/fulltext_coding/fulltext_coding_prompt_v1_addendum.txt >> /tmp/fulltext_coding_prompt_combined.txt
       - name: CHECKPOINT generated annotations (90 days)
         if: always()
         uses: actions/upload-artifact@v4
