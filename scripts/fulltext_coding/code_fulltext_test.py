@@ -3,10 +3,12 @@
 
 Every model response is checkpointed before parsing/validation. A malformed
 response for one paper is retained for human review/retry and does not abort
-the remaining papers in the batch.
+the remaining papers in the batch. Deterministic validation is advisory:
+findings are embedded as validation_warnings in the output and never fail the
+batch.
 """
 from __future__ import annotations
-import argparse, json, os, time
+import argparse, json, os, time, importlib.util
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -16,6 +18,13 @@ DEFAULT_MODEL=os.getenv("FULLTEXT_CODING_MODEL","gpt-5.6-luna")
 CHECKPOINT_RULE=("After every model response, checkpoint the raw response before parsing, validation, aggregation, merging, or downstream processing. Never re-call the model when a complete successful checkpoint exists. A malformed response is a paper-level review/retry status and must not abort the batch.")
 
 def load(path: Path): return json.loads(path.read_text(encoding="utf-8"))
+
+def load_validator():
+    path=Path(__file__).with_name("validate_coding_output.py")
+    spec=importlib.util.spec_from_file_location("fulltext_validator", path)
+    if spec is None or spec.loader is None: raise RuntimeError(f"Cannot load validator: {path}")
+    module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    return module
 
 def call_api(base_url, api_key, model, system, user):
     payload={"model":model,"input":[{"role":"system","content":[{"type":"input_text","text":system}]},{"role":"user","content":[{"type":"input_text","text":user}]}]}
@@ -37,8 +46,6 @@ def response_text(data):
 def parse_annotation(text):
     annotation=json.loads(text)
     if not isinstance(annotation,dict): raise ValueError("Model output must be a JSON object")
-    # Do not normalise, inject, or silently remove fields. The validator must
-    # see the model's actual object so legacy-field regressions cannot hide.
     if "fields" in annotation:
         raise ValueError("Model output must place extraction fields at top level; nested fields object is prohibited")
     return annotation
@@ -47,19 +54,12 @@ def write_failed_checkpoint(path, raw_response, status_out, error):
     ts=datetime.now(timezone.utc).isoformat()
     failed_raw=path.parent/(path.stem+".raw_response.json")
     failed_raw.write_text(json.dumps(raw_response,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    status_out.write_text(json.dumps({
-        "source_prepared_file":path.name,
-        "raw_response_file":failed_raw.name,
-        "status":"needs_review_or_retry",
-        "error_type":"invalid_json_or_structure",
-        "error":str(error),
-        "checkpoint_rule":"raw_response_before_parsing",
-        "timestamp_utc":ts
-    },ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    status_out.write_text(json.dumps({"source_prepared_file":path.name,"raw_response_file":failed_raw.name,"status":"needs_review_or_retry","error_type":"invalid_json_or_structure","error":str(error),"checkpoint_rule":"raw_response_before_parsing","timestamp_utc":ts},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--input-dir",type=Path,required=True); ap.add_argument("--output-dir",type=Path,required=True); ap.add_argument("--ontology",type=Path,required=True); ap.add_argument("--schema",type=Path,required=True); ap.add_argument("--prompt",type=Path,required=True); ap.add_argument("--model",default=DEFAULT_MODEL); ap.add_argument("--max-papers",type=int,default=5); args=ap.parse_args()
     key=os.environ["OPENAI_API_KEY"]; base=os.getenv("OPENAI_BASE_URL","https://api.openai.com/v1"); args.output_dir.mkdir(parents=True,exist_ok=True)
+    validator=load_validator()
     system=args.prompt.read_text(encoding="utf-8")+"\n\n"+CHECKPOINT_RULE; ontology=args.ontology.read_text(encoding="utf-8"); schema=load(args.schema)
     files=sorted(args.input_dir.glob("*.json"))[:args.max_papers]
     if not files: raise SystemExit("No prepared JSON files found")
@@ -83,23 +83,27 @@ def main():
                 except (json.JSONDecodeError, ValueError) as exc:
                     write_failed_checkpoint(path,data,status_out,exc)
                     print(f"  INVALID JSON/STRUCTURE for {path.name}; raw response checkpointed; continuing batch",flush=True)
-                    completed=True
-                    break
+                    completed=True; break
+                # Validation is advisory. It is attached to the generated output
+                # and cannot fail or discard the model coding.
+                validation_warnings=validator.validate(annotation)
+                annotation=dict(annotation)
+                annotation["validation_warnings"]=validation_warnings
+                if validation_warnings:
+                    print(f"  VALIDATION WARNINGS ({len(validation_warnings)}) for {path.name}",flush=True)
+                    for warning in validation_warnings: print(f"    - {warning}",flush=True)
+                else:
+                    print(f"  VALIDATION OK for {path.name}",flush=True)
                 ts=datetime.now(timezone.utc).isoformat()
-                # Keep technical provenance in the checkpoint/status file, not in
-                # the model extraction object. This guarantees exact output scope.
                 out.write_text(json.dumps(annotation,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-                status_out.write_text(json.dumps({"source_prepared_file":path.name,"annotation_file":out.name,"raw_response_file":raw_out.name,"status":"generated","checkpoint_rule":"checkpoint_before_validation","timestamp_utc":ts},indent=2)+"\n",encoding="utf-8")
-                print(f"  CHECKPOINTED {out.name} before validation",flush=True); completed=True; break
+                status_out.write_text(json.dumps({"source_prepared_file":path.name,"annotation_file":out.name,"raw_response_file":raw_out.name,"status":"generated","validation_warning_count":len(validation_warnings),"checkpoint_rule":"checkpoint_before_validation","timestamp_utc":ts},indent=2)+"\n",encoding="utf-8")
+                print(f"  CHECKPOINTED {out.name} with validation warnings before downstream processing",flush=True); completed=True; break
             except Exception as exc:
                 print(f"  attempt {attempt+1}/4 failed before successful response: {exc}",flush=True)
                 if attempt==3:
                     status_out.write_text(json.dumps({"source_prepared_file":path.name,"status":"api_or_execution_error","error":str(exc),"timestamp_utc":datetime.now(timezone.utc).isoformat()},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-                    print(f"  PAPER FAILED, continuing batch: {path.name}",flush=True)
-                    completed=True
-                    break
+                    print(f"  PAPER FAILED, continuing batch: {path.name}",flush=True); completed=True; break
                 time.sleep(2**attempt)
-        if not completed:
-            print(f"  PAPER UNRESOLVED, continuing batch: {path.name}",flush=True)
+        if not completed: print(f"  PAPER UNRESOLVED, continuing batch: {path.name}",flush=True)
     return 0
 if __name__=="__main__": raise SystemExit(main())
