@@ -35,6 +35,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Preflight current coding schema
+        run: |
+          set -euo pipefail
+          python scripts/fulltext_coding/preflight_coding_schema.py \
+            --schema scripts/fulltext_coding/coding_schema_v1.json \
+            --validator scripts/fulltext_coding/validate_coding_output.py
       - name: Download existing Zenodo test corpus
         run: |
           set -euo pipefail
@@ -86,9 +92,7 @@ jobs:
           import json, os, urllib.request, zipfile, io
           from pathlib import Path
           repo=os.environ['GITHUB_REPOSITORY']; run_id=os.environ['GITHUB_RUN_ID']; token=os.environ['GH_TOKEN']
-          req=urllib.request.Request(
-              f'https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100',
-              headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+          req=urllib.request.Request(f'https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100', headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
           with urllib.request.urlopen(req, timeout=60) as r: data=json.load(r)
           candidates=[a for a in data.get('artifacts',[]) if a['name'].startswith('fulltext-coding-checkpoint-') and not a.get('expired')]
           if not candidates:
@@ -96,18 +100,14 @@ jobs:
               raise SystemExit(0)
           artifact=max(candidates, key=lambda a:a.get('created_at',''))
           print(f"Restoring checkpoint artifact {artifact['id']} ({artifact['name']})")
-          req=urllib.request.Request(
-              artifact['archive_download_url'],
-              headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+          req=urllib.request.Request(artifact['archive_download_url'], headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
           with urllib.request.urlopen(req, timeout=120) as r: blob=r.read()
-          with zipfile.ZipFile(io.BytesIO(blob)) as z:
-              z.extractall('/tmp/coding_checkpoint')
+          with zipfile.ZipFile(io.BytesIO(blob)) as z: z.extractall('/tmp/coding_checkpoint')
           restored=0
           for p in Path('/tmp/coding_checkpoint').rglob('*'):
               if p.is_file():
                   dest=Path('test_corpus/annotations')/p.name
-                  if not dest.exists():
-                      dest.write_bytes(p.read_bytes()); restored += 1
+                  if not dest.exists(): dest.write_bytes(p.read_bytes()); restored += 1
           print(f'Restored {restored} checkpoint files.')
           PY
       - name: Run AI coding
@@ -124,6 +124,21 @@ jobs:
             --prompt /tmp/fulltext_coding_prompt_combined.txt \
             --model "$FULLTEXT_CODING_MODEL" \
             --max-papers "${{ github.event.inputs.n_papers || 5 }}"
+      - name: Validate generated annotations
+        if: always()
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(test_corpus/annotations/*.json)
+          failed=0
+          for file in "${files[@]}"; do
+            case "$file" in
+              *.raw_response.json|*.checkpoint.json|*/test_manifest.json) continue ;;
+            esac
+            echo "Validating $file"
+            if ! python scripts/fulltext_coding/validate_coding_output.py --input "$file"; then failed=1; fi
+          done
+          exit "$failed"
       - name: CHECKPOINT generated annotations (90 days)
         if: always()
         uses: actions/upload-artifact@v4
