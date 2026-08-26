@@ -39,8 +39,7 @@
     "impact_type": "array[string]",
     "impact_details": "string|null",
     "outcome_measured": "array[string]",
-    "intervention": "string|null",
-    "exposure": "string|null",
+    "exposure_intervention": "string|null",
     "comparator": "string|null",
     "methodology_for_data_collection": "array[string]",
     "funding_body": "string|null",
@@ -63,7 +62,7 @@
     "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
   },
   "field_completeness": {
-    "description": "Mandatory field-by-field audit. Every substantive field must have exactly one status: FOUND, NOT_REPORTED, or NOT_APPLICABLE.",
+    "description": "Mandatory field-by-field audit. Every substantive field must have exactly one status: FOUND, NOT_REPORTED, or NOT_APPLICABLE. Provenance metadata such as DOI and year is maintained separately and is not part of this audit.",
     "allowed_statuses": ["FOUND", "NOT_REPORTED", "NOT_APPLICABLE"]
   },
   "run_metadata": {
