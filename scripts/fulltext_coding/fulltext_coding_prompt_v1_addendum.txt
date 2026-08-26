@@ -1,6 +1,6 @@
 LivingEvidenceMap full-text coding PROMPT ADDENDUM — supersedes conflicting instructions in fulltext_coding_prompt_v1.txt
 
-Apply this addendum after reading the base prompt. Where the base prompt conflicts with this addendum, this addendum controls.
+Apply this addendum after reading the base prompt. Where the base prompt conflicts with this addendum, this addendum controls. In particular, IGNORE the base prompt's older instructions to use FOUND, NOT_REPORTED, or NOT_APPLICABLE as field_completeness statuses. Those legacy statuses are no longer permitted.
 
 1. PROVENANCE METADATA IS NOT PART OF THE COMPLETENESS AUDIT
 DOI and year are supplied/maintained by the separate provenance database and must NOT be treated as substantive coding fields for field_completeness or not_reported_fields. Do not spend coding effort trying to recover them from the article. If present in the supplied record, preserve them; if absent, do not mark them NOT FOUND.
@@ -27,12 +27,13 @@ Every substantive field therefore has exactly one logical state: (a) populated i
 not_reported_fields MUST contain exactly the substantive fields whose field_completeness value is "NOT FOUND". Do not independently invent or maintain this list. Do not put fields with null status in not_reported_fields. Do not put populated fields in not_reported_fields.
 
 4. SCHEMA VALUE VS COMPLETENESS STATUS — DO NOT CONFUSE THEM
-JSON null is permitted as a completeness status. It does NOT mean that every main-record field should itself be null.
-- If the schema requires an enum value such as review_type, study_type, study_design or research_approach and the field is inapplicable, use that field's schema value "not_applicable".
-- If the schema requires an array and there are no applicable values, use an empty array [].
-- Use JSON null in the main record only where the schema defines the field as string|null or another nullable type.
+This distinction is mandatory. JSON null is a permitted COMPLETENESS STATUS. It does NOT mean that every main-record field should itself be null.
+- If the schema requires an enum value such as review_type, study_type, study_design or research_approach and the field is inapplicable, use that field's schema value "not_applicable" in the MAIN RECORD.
+- If the schema requires an array and there are no applicable values, use an empty array [] in the MAIN RECORD.
+- Use JSON null in the MAIN RECORD only where the schema defines that field as nullable.
 - Use JSON null in field_completeness to indicate that the substantive field is genuinely inapplicable.
-- Do not replace schema-valid "not_applicable" or [] values with null merely because the field is inapplicable.
+- NEVER output review_type: null, study_type: null, research_approach: null, or study_design: null. Those are schema violations. Use "not_applicable" (or ["not_applicable"] for study_design).
+- NEVER output an array-typed field as null. Use [] when it is genuinely inapplicable or has no applicable values.
 
 5. PROVENANCE AND DOCUMENT STATUS
 Do not use field_completeness for DOI/year or workflow provenance. document_completeness_evidence, non_methods_results_evidence, evidence, and run_metadata are outside the substantive completeness audit.
@@ -91,7 +92,7 @@ During the field-by-field audit, actively search for deliberate treatments, conc
 If multiple_studies_flag = false, multiple_studies_reason is genuinely inapplicable: set multiple_studies_reason = null and omit that field from field_completeness. If multiple_studies_flag = true, provide a concise reason in multiple_studies_reason and omit that field from field_completeness.
 
 13. REVIEW TYPE BOOKKEEPING
-For non-review documents, review_type must be the schema's not_applicable value and is genuinely inapplicable for completeness purposes: represent its field_completeness status as null if included. For reviews, provide the appropriate review_type value and omit review_type from field_completeness.
+For non-review documents, review_type must be the schema's not_applicable value and is genuinely inapplicable for completeness purposes: set review_type = "not_applicable" in the MAIN RECORD and represent its field_completeness status as null. For reviews, provide the appropriate review_type value and omit review_type from field_completeness.
 
 14. DOCUMENT COMPLETENESS — DO NOT CONFUSE EXTRACTION ARTEFACTS WITH INCOMPLETENESS
 Do not declare the document incomplete merely because GROBID contains duplicated text, malformed references, OCR/extraction artefacts, repeated sections, broken formatting, or other local corruption. If the supplied text contains enough article structure and substantive content to identify and code the document, code it normally and record any relevant extraction limitation only in evidence where useful.
