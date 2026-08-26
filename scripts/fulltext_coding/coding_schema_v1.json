@@ -1,6 +1,6 @@
 {
   "schema_version": "fulltext_coding_v1",
-  "description": "Bespoke LivingEvidenceMap full-text coding schema with closed vocabularies, evidence provenance, and completeness auditing.",
+  "description": "Bespoke LivingEvidenceMap full-text coding schema with closed vocabularies, evidence provenance, and explicit field-by-field completeness auditing.",
   "document_type": ["study", "review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"],
   "review_type": ["primer_overview", "systematic_style", "not_applicable"],
   "study_type": ["experimental", "observational", "modelling", "not_stated", "not_applicable"],
@@ -11,6 +11,7 @@
   "fish_life_stage": ["Sperm", "Egg", "Embryo", "Alevin", "Fry", "Parr", "Smolt", "Juvenile", "Adult", "Broodstock", "Harvest", "Product"],
   "aquaculture_facility": ["salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"],
   "species": ["Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"],
+  "field_completeness_status": ["FOUND", "NOT_REPORTED", "NOT_APPLICABLE"],
   "fields": {
     "source_id": "string",
     "openalex_id": "string",
@@ -53,12 +54,17 @@
     "non_methods_results_evidence": "boolean",
     "non_methods_results_evidence_fields": "array[string]",
     "not_reported_fields": "array[string]",
+    "field_completeness": "object[string -> FOUND|NOT_REPORTED|NOT_APPLICABLE]",
     "evidence": "array[object]",
     "run_metadata": "object"
   },
   "evidence": {
     "description": "Evidence should primarily come from Methods/Materials and Results/Findings, including tables and figure legends/captions. Other sections may support explicit descriptive characteristics only when the relevant information is absent from Methods/Results. Outcome fields are Methods/Results-only. Each evidence item records the supporting section.",
     "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
+  },
+  "field_completeness": {
+    "description": "Mandatory field-by-field audit. Every substantive field must have exactly one status: FOUND, NOT_REPORTED, or NOT_APPLICABLE.",
+    "allowed_statuses": ["FOUND", "NOT_REPORTED", "NOT_APPLICABLE"]
   },
   "run_metadata": {
     "schema_version": "string",
