@@ -9,7 +9,7 @@ SCHEMA_KEYS = {
     "review_type", "study_type", "study_design", "research_approach", "setting", "sample_size", "sample_unit",
     "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility",
     "system_studied", "production_stage", "fish_life_stage", "impact_type", "impact_details", "outcome_measured",
-    "intervention", "exposure", "comparator", "methodology_for_data_collection", "funding_body", "funder",
+    "exposure_intervention", "comparator", "methodology_for_data_collection", "funding_body", "funder",
     "research_question", "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason",
     "document_completeness_evidence", "non_methods_results_evidence", "non_methods_results_evidence_fields", "not_reported_fields",
     "field_completeness", "evidence", "run_metadata"
@@ -26,10 +26,10 @@ AQUACULTURE_FACILITIES = {"salmon_farming_region", "hatchery", "open_cages", "cl
 SPECIES = {"Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"}
 COMPLETENESS_STATUSES = {"FOUND", "NOT_REPORTED", "NOT_APPLICABLE"}
 SUBSTANTIVE_FIELDS = {
-    "year", "document_type", "review_type", "study_type", "study_design", "research_approach", "setting",
+    "document_type", "review_type", "study_type", "study_design", "research_approach", "setting",
     "sample_size", "sample_unit", "study_period", "location_region", "location_country", "species",
     "other_farmed_species", "study_population", "aquaculture_facility", "system_studied", "production_stage",
-    "fish_life_stage", "impact_type", "impact_details", "outcome_measured", "intervention", "exposure",
+    "fish_life_stage", "impact_type", "impact_details", "outcome_measured", "exposure_intervention",
     "comparator", "methodology_for_data_collection", "funding_body", "funder", "research_question",
     "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"
 }
@@ -128,6 +128,7 @@ def validate(record: dict) -> list[str]:
                 if key not in item: errors.append(f"evidence[{i}] missing {key}")
     else: errors.append("evidence must be an array")
     if "mitigation_evaluation" in record: errors.append("legacy field mitigation_evaluation is prohibited")
+    if "intervention" in record or "exposure" in record: errors.append("legacy separate intervention/exposure fields are prohibited; use exposure_intervention")
     return errors
 
 def main() -> int:
