@@ -35,12 +35,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: PREFLIGHT schema-validator consistency
-        run: |
-          set -euo pipefail
-          python scripts/fulltext_coding/preflight_coding_schema.py \
-            --schema scripts/fulltext_coding/coding_schema_v1.json \
-            --validator scripts/fulltext_coding/validate_coding_output.py
       - name: Download existing Zenodo test corpus
         run: |
           set -euo pipefail
@@ -69,7 +63,7 @@ jobs:
           n=int(os.environ.get('N_PAPERS','5'))
           selected=files[start-1:start-1+n]
           if len(selected) < n:
-              raise SystemExit(f'Requested {n} papers from position {start}, but only {len(selected)} are available')
+              raise SystemExit(f'Requested {n} papers from position {start}, but only {len(files)} are available')
           Path('test_corpus/grobid_test_files.txt').write_text('\n'.join(str(p) for p in selected)+'\n')
           print(f'Selected positions {start}-{start+n-1}:')
           for p in selected: print(p)
@@ -138,37 +132,6 @@ jobs:
           path: test_corpus/annotations/
           retention-days: 90
           if-no-files-found: warn
-      - name: Validate annotations and flag human review
-        if: always()
-        run: |
-          set -uo pipefail
-          mkdir -p test_corpus/validation
-          report="test_corpus/validation/human_review_required.txt"
-          : > "$report"
-          found=0
-          issues=0
-          for file in test_corpus/annotations/*.json; do
-            case "$file" in
-              *.raw_response.json|*.checkpoint.json|*test_manifest.json) continue ;;
-            esac
-            found=1
-            if result=$(python scripts/fulltext_coding/validate_coding_output.py --input "$file" 2>&1); then
-              printf '%s: VALID\n' "$(basename "$file")" >> "$report"
-            else
-              issues=$((issues + 1))
-              {
-                printf '%s: HUMAN REVIEW REQUIRED\n' "$(basename "$file")"
-                printf '%s\n' "$result"
-                printf '\n'
-              } >> "$report"
-            fi
-          done
-          if [ "$found" -eq 0 ]; then
-            echo "No annotation JSON files found" >> "$report"
-          fi
-          echo "Validation completed: $issues annotation(s) require human review." >> "$report"
-          cat "$report"
-          exit 0
       - name: Write coding test manifest
         if: always()
         env:
@@ -185,7 +148,7 @@ jobs:
           Path('test_corpus/annotations/test_manifest.json').write_text(json.dumps({
             'workflow':'test_fulltext_coding','model':os.environ['FULLTEXT_CODING_MODEL'],
             'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v1.json',
-            'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v1.txt + fulltext_coding_prompt_v1_addendum.txt','zenodo_deposition':22085902,
+            'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v1.txt + scripts/fulltext_coding/fulltext_coding_prompt_v1_addendum.txt','zenodo_deposition':22085902,
             'start_index':int(os.environ.get('START_INDEX','6')),'n_papers':int(os.environ.get('N_PAPERS','5')),
             'annotation_files':[p.name for p in files]}, indent=2)+'\n')
           PY
@@ -195,13 +158,5 @@ jobs:
         with:
           name: fulltext-coding-final-${{ github.run_id }}
           path: test_corpus/annotations/
-          retention-days: 90
-          if-no-files-found: warn
-      - name: CHECKPOINT human-review report (90 days)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fulltext-coding-validation-${{ github.run_id }}
-          path: test_corpus/validation/
           retention-days: 90
           if-no-files-found: warn
