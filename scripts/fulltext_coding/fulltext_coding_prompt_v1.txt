@@ -35,7 +35,7 @@ The substantive extraction fields are exactly:
 
 Do not add fields. In particular, do not return sample_size, impact_type, impact_details, methodology_for_data_collection, funder, exposure, intervention, mitigation_evaluation, or any other legacy/removed extraction field. Exposure and intervention are one combined field: exposure_intervention.
 
-Return only the substantive fields above plus the audit/evidence structures defined by the schema. Do not return workflow provenance or other metadata unless the schema explicitly requires it.
+Return only the substantive fields above plus these schema-defined audit structures: document_completeness, document_completeness_evidence, field_completeness, and not_reported_fields. Do not return workflow provenance or other metadata unless the schema explicitly requires it.
 
 ELIGIBLE-SPECIES FILTER
 First identify the eligible salmon/farmed-salmon species and components. Only information concerning eligible species/components may support substantive coding. Where eligible and ineligible species/components occur in the same document, keep them separate. Never combine characteristics, methods, populations, settings, locations, exposures, comparators or outcomes across eligible and ineligible components.
@@ -150,7 +150,7 @@ Code only an explicitly stated eligible salmon aquaculture production facility/s
 - land_based_RAS requires explicit land-based RAS or recognised equivalent;
 - salmon_farming_region requires an explicit regional salmon-farming context.
 
-Do not infer a facility from life stage alone. Laboratory water circulation is not RAS. Do not force a research station or laboratory into a production-facility category unless it also explicitly constitutes one of the permitted aquaculture production-system categories. If the source facility is only a research facility and no permitted aquaculture facility applies, use null/NOT FOUND according to the applicability rules below.
+Do not infer a facility from life stage alone. Laboratory water circulation is not RAS. Do not force a research station or laboratory into a production-facility category unless it also explicitly constitutes one of the permitted aquaculture production-system categories. If the source facility is only a research facility and no permitted aquaculture facility applies, use JSON null when the field is inapplicable; use NOT FOUND only when a permitted facility is applicable but not reported.
 
 SYSTEM AND PRODUCTION STAGE
 system_studied is the biological, environmental, social system or material actually examined for eligible components, or the explicitly described eligible salmon/system context in a non-primary document.
@@ -247,20 +247,28 @@ Multiple treatments, factor levels, conditions, time points, assays, outcomes or
 When multiple_studies_flag = false, multiple_studies_reason MUST be JSON null. When true, multiple_studies_reason must give a concise evidence-based reason.
 
 DOCUMENT COMPLETENESS
-First assess whether the supplied full text is complete enough for substantive extraction.
+First assess whether the supplied full text is complete enough for substantive extraction. Set document_completeness to exactly one of COMPLETE, INCOMPLETE, UNCERTAIN.
 
-If the supplied full text is clearly incomplete, truncated, corrupted, malformed or only a fragment, set document_type = null and do not perform substantive extraction. Set substantive fields to the schema-valid null/empty states appropriate for an incomplete document. document_completeness_evidence must provide the opening text (approximately 250 words, or all available opening text if shorter) plus a concise reason for the incompleteness.
+COMPLETE means the supplied full text appears sufficiently intact to support substantive extraction of the document. INCOMPLETE means there is positive evidence of truncation, corruption, malformed extraction, missing major content, or an explicit indication that the supplied text is only a fragment. UNCERTAIN means the text may be incomplete but there is not enough positive evidence to classify it as INCOMPLETE.
 
-Do not interpret a missing section in a demonstrably incomplete full text as evidence that the article did not report the variable. Such a record must be eligible for later reassessment when a complete full text becomes available.
+If document_completeness = COMPLETE, perform normal substantive extraction and the normal field-completeness audit.
+
+If document_completeness = INCOMPLETE, do NOT perform substantive extraction. Use only schema-valid neutral values: document_type = null; review_type = not_applicable; study_type = not_applicable; study_design = [not_applicable]; research_approach = not_applicable; setting = []; sample_unit = []; study_period = null; location_region = null; location_country = null; species = []; other_farmed_species = []; study_population = null; aquaculture_facility = []; system_studied = null; production_stage = []; fish_life_stage = []; exposure_intervention = null; comparator = null; outcome_measured = []; funding_body = null; research_question = null; objectives_summary = null; ontology_codes = []; multiple_studies_flag = false; multiple_studies_reason = null. Do not use NOT FOUND to describe information that may simply be absent because the source is incomplete.
+
+If document_completeness = UNCERTAIN, perform extraction only where the available text provides direct evidence, and use field_completeness normally for applicable fields that are genuinely unreported. Do not treat uncertainty about the source as evidence that a variable is NOT FOUND.
+
+When document_completeness is INCOMPLETE or UNCERTAIN, document_completeness_evidence is required. It must contain approximately the first 250 words of the supplied text (or all available opening text if shorter) plus a concise reason for the completeness classification. Do not claim a section is missing unless the supplied text provides evidence for that conclusion.
+
+Do not interpret a missing section in an INCOMPLETE document as evidence that the article did not report the variable. Such a record must be eligible for later reassessment when a complete full text becomes available.
 
 COMPLETENESS AUDIT
-Actively assess every current substantive extraction field.
+For COMPLETE and UNCERTAIN documents, actively assess every current substantive extraction field.
 
 For each current field:
 1. Determine whether it applies to the document/component.
 2. Search the appropriate full-text evidence.
 3. Code explicit information, or make only an inference explicitly permitted by this prompt.
-4. If the field applies but is not reported in the available complete text, mark it "NOT FOUND".
+4. If the field applies but is not reported in a sufficiently complete supplied text, mark it "NOT FOUND".
 5. If the field is genuinely inapplicable to the document/component, use JSON null.
 
 The only permitted field_completeness values are:
@@ -271,26 +279,28 @@ Never use "FOUND". Never use any other completeness status.
 
 Populated fields are omitted from field_completeness. Applicable but unreported fields must appear in not_reported_fields. Genuinely inapplicable fields must not appear in not_reported_fields.
 
-not_reported_fields must be mechanically identical to the set of current substantive fields whose field_completeness value is "NOT FOUND". Do not independently invent this list.
+not_reported_fields must contain exactly the substantive field names whose field_completeness value is "NOT FOUND". Do not independently invent or omit entries. For INCOMPLETE documents, not_reported_fields must be [] because source incompleteness is handled by document_completeness rather than NOT FOUND.
 
 Every populated current field must have field-specific evidence. The evidence must support the exact field/value. Evidence for one field must not be reused as if it supported a different field unless the same text genuinely supports both.
 
 CONTROLLED VOCABULARIES AND OUTPUT HYGIENE
-Use only values supplied by the current coding schema. Never invent, paraphrase, abbreviate, translate or create a new controlled-vocabulary value. If no allowed value fits, use the appropriate null/NOT FOUND state and preserve useful paper terminology only in free-text evidence.
+Use only values supplied by the current coding schema. Never invent, paraphrase, abbreviate, translate or create a new controlled-vocabulary value. If no allowed value fits, use the appropriate null/empty state and preserve useful paper terminology only in free-text evidence.
 
 Before returning the JSON, perform a final self-check:
-- exactly the 26 current substantive fields are present, plus only schema-defined audit/evidence structures;
+- exactly the 26 current substantive fields are present, plus only the four schema-defined audit structures: document_completeness, document_completeness_evidence, field_completeness, not_reported_fields;
 - no removed/legacy field is present;
 - no field or status contains the literal value "FOUND";
 - exposure and intervention appear only as exposure_intervention;
 - sample_size is absent;
-- every populated substantive field has field-specific evidence;
+- every populated substantive field has field-specific evidence when document_completeness is COMPLETE or UNCERTAIN;
 - every "NOT FOUND" completeness entry is represented in not_reported_fields;
 - no genuinely inapplicable field appears in not_reported_fields;
+- not_reported_fields is [] for INCOMPLETE documents;
 - multiple_studies_reason is null when multiple_studies_flag is false;
 - all controlled-vocabulary values exactly match the schema;
 - no information from ineligible species/components has been transferred to eligible coding;
-- life-stage inference, if used, is supported by Methods/equivalent study-design text and complies with the rules above.
+- life-stage inference, if used, is supported by Methods/equivalent study-design text and complies with the rules above;
+- if document_completeness is INCOMPLETE, all substantive fields use exactly the neutral states specified above.
 
 FINAL OUTPUT
-Return exactly one valid JSON object conforming to the current schema. The object may contain only the current substantive extraction fields and schema-defined audit/evidence structures. No other fields are permitted.
+Return exactly one valid JSON object conforming to the current schema. The object may contain only the current substantive extraction fields and the four schema-defined audit structures. No other fields are permitted.
