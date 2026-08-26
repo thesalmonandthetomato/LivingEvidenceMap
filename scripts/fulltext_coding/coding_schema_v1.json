@@ -12,6 +12,7 @@
   "aquaculture_facility": ["salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"],
   "species": ["Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"],
   "field_completeness_status": ["NOT FOUND", null],
+  "document_completeness": ["COMPLETE", "INCOMPLETE", "UNCERTAIN"],
   "fields": {
     "document_type": "enum|null",
     "review_type": "enum",
@@ -43,6 +44,10 @@
   "evidence": {
     "description": "Field-specific article/full-text evidence for substantive coding.",
     "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
+  },
+  "document_completeness_evidence": {
+    "description": "Record-level evidence supporting the assessment of supplied full-text completeness. Required when document_completeness is INCOMPLETE or UNCERTAIN.",
+    "item_schema": {"text": "string", "reason": "string", "section": "string|null", "page": "integer|null"}
   },
   "field_completeness": {
     "description": "Exception-only audit for current extraction fields. Populated fields are omitted. Applicable but unreported fields use 'NOT FOUND'. Genuinely inapplicable fields use JSON null.",
