@@ -24,7 +24,7 @@ PRODUCTION_STAGES = {"Feed", "Hatchery", "Transfer between Hatchery and Adult", 
 FISH_LIFE_STAGES = {"Sperm", "Egg", "Embryo", "Alevin", "Fry", "Parr", "Pre-smolt", "Smolt", "Juvenile", "Adult", "Broodstock", "Harvest", "Product"}
 AQUACULTURE_FACILITIES = {"salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"}
 SPECIES = {"Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"}
-COMPLETENESS_STATUSES = {"FOUND", "NOT_REPORTED", "NOT_APPLICABLE"}
+COMPLETENESS_STATUSES = {None, "NOT FOUND"}
 SUBSTANTIVE_FIELDS = {
     "document_type", "review_type", "study_type", "study_design", "research_approach", "setting",
     "sample_size", "sample_unit", "study_period", "location_region", "location_country", "species",
@@ -92,6 +92,7 @@ def validate(record: dict) -> list[str]:
 
     if not isinstance(record.get("multiple_studies_flag"), bool): errors.append("multiple_studies_flag must be boolean")
     if record.get("multiple_studies_flag") and not isinstance(record.get("multiple_studies_reason"), str): errors.append("multiple_studies_flag=true requires multiple_studies_reason")
+    if not record.get("multiple_studies_flag") and record.get("multiple_studies_reason") is not None: errors.append("multiple_studies_flag=false requires multiple_studies_reason=null")
     if not isinstance(record.get("non_methods_results_evidence"), bool): errors.append("non_methods_results_evidence must be boolean")
     if not isinstance(record.get("non_methods_results_evidence_fields"), list): errors.append("non_methods_results_evidence_fields must be an array")
     elif not record.get("non_methods_results_evidence") and record["non_methods_results_evidence_fields"]: errors.append("non_methods_results_evidence_fields must be empty when non_methods_results_evidence=false")
@@ -103,19 +104,23 @@ def validate(record: dict) -> list[str]:
     if not isinstance(fc, dict):
         errors.append("field_completeness must be an object")
     else:
-        missing_fc = sorted(SUBSTANTIVE_FIELDS - set(fc)); extra_fc = sorted(set(fc) - SUBSTANTIVE_FIELDS)
-        if missing_fc: errors.append(f"field_completeness missing fields: {missing_fc}")
+        extra_fc = sorted(set(fc) - SUBSTANTIVE_FIELDS)
         if extra_fc: errors.append(f"field_completeness has unexpected fields: {extra_fc}")
         bad_status = {k: v for k, v in fc.items() if v not in COMPLETENESS_STATUSES}
-        if bad_status: errors.append(f"invalid field_completeness status(es): {bad_status}")
-        expected_not_reported = sorted(k for k, v in fc.items() if v == "NOT_REPORTED")
+        if bad_status: errors.append(f"invalid field_completeness status(es); only null or 'NOT FOUND' are permitted: {bad_status}")
+        expected_not_reported = sorted(k for k, v in fc.items() if v == "NOT FOUND")
         actual_not_reported = sorted(set(record.get("not_reported_fields", []))) if isinstance(record.get("not_reported_fields"), list) else []
         if expected_not_reported != actual_not_reported: errors.append(f"not_reported_fields does not match field_completeness: expected {expected_not_reported}, got {actual_not_reported}")
         for field, status in fc.items():
             if field not in record: continue
-            if status == "FOUND" and field != "multiple_studies_flag" and _is_empty(record.get(field)): errors.append(f"field_completeness says FOUND but {field} is empty")
-            if status == "NOT_REPORTED" and not _is_empty(record.get(field)): errors.append(f"field_completeness says NOT_REPORTED but {field} is populated")
-            if status == "NOT_APPLICABLE" and field not in {"review_type", "multiple_studies_reason"} and not _is_empty(record.get(field)): errors.append(f"field_completeness says NOT_APPLICABLE but {field} is populated")
+            if status == "NOT FOUND" and not _is_empty(record.get(field)): errors.append(f"field_completeness says NOT FOUND but {field} is populated")
+            if status is None and not _is_empty(record.get(field)):
+                errors.append(f"field_completeness says NULL/inapplicable but {field} is populated")
+        # Found/populated substantive fields must be omitted from field_completeness.
+        for field in SUBSTANTIVE_FIELDS:
+            if field not in record: continue
+            if not _is_empty(record.get(field)) and field in fc:
+                errors.append(f"populated field {field} must be omitted from field_completeness; do not use FOUND")
 
     if not isinstance(record.get("run_metadata"), dict): errors.append("run_metadata must be an object")
     else:
