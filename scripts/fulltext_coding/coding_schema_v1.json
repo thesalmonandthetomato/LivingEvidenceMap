@@ -1,6 +1,6 @@
 {
   "schema_version": "fulltext_coding_v1",
-  "description": "Bespoke LivingEvidenceMap full-text coding schema with closed vocabularies, evidence provenance, and explicit exception-based completeness auditing.",
+  "description": "LivingEvidenceMap full-text coding schema for the current extraction variables. Workflow provenance is maintained outside the model extraction object.",
   "document_type": ["study", "review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"],
   "review_type": ["primer_overview", "systematic_style", "not_applicable"],
   "study_type": ["experimental", "observational", "modelling", "not_stated", "not_applicable"],
@@ -13,18 +13,12 @@
   "species": ["Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"],
   "field_completeness_status": ["NOT FOUND", null],
   "fields": {
-    "source_id": "string",
-    "openalex_id": "string",
-    "doi": "string|null",
-    "title": "string|null",
-    "year": "integer|null",
     "document_type": "enum|null",
     "review_type": "enum",
     "study_type": "enum",
     "study_design": "array[enum]",
     "research_approach": "enum",
     "setting": "array[enum]",
-    "sample_size": "number|string|null",
     "sample_unit": "array[string]",
     "study_period": "string|null",
     "location_region": "string|null",
@@ -41,37 +35,19 @@
     "outcome_measured": "array[string]",
     "exposure_intervention": "string|null",
     "comparator": "string|null",
-    "methodology_for_data_collection": "array[string]",
     "funding_body": "string|null",
-    "funder": "string|null",
     "research_question": "string|null",
     "objectives_summary": "string|null",
     "ontology_codes": "array[string]",
     "multiple_studies_flag": "boolean",
-    "multiple_studies_reason": "string|null",
-    "document_completeness_evidence": "string|null",
-    "non_methods_results_evidence": "boolean",
-    "non_methods_results_evidence_fields": "array[string]",
-    "not_reported_fields": "array[string]",
-    "field_completeness": "object[string -> null|'NOT FOUND']",
-    "evidence": "array[object]",
-    "run_metadata": "object"
+    "multiple_studies_reason": "string|null"
   },
   "evidence": {
-    "description": "Evidence should primarily come from Methods/Materials and Results/Findings, including tables and figure legends/captions. Other sections may support explicit descriptive characteristics only when the relevant information is absent from Methods/Results. Outcome fields are Methods/Results-only. Each evidence item records the supporting section.",
+    "description": "Field-specific article/full-text evidence for substantive coding.",
     "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
   },
   "field_completeness": {
-    "description": "Exception-only audit. Populated substantive fields are omitted. Applicable but unreported fields use 'NOT FOUND'. Genuinely inapplicable fields use JSON null. Metadata/provenance fields are excluded.",
+    "description": "Exception-only audit for current extraction fields. Populated fields are omitted. Applicable but unreported fields use 'NOT FOUND'. Genuinely inapplicable fields use JSON null.",
     "allowed_statuses": ["NOT FOUND", null]
-  },
-  "run_metadata": {
-    "schema_version": "string",
-    "ontology_version": "string",
-    "model": "string",
-    "provider": "string",
-    "timestamp_utc": "string",
-    "source_prepared_file": "string",
-    "coding_status": "string"
   }
 }
