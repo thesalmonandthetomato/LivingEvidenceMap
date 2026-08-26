@@ -30,8 +30,6 @@
     "system_studied": "string|null",
     "production_stage": "array[enum]",
     "fish_life_stage": "array[enum]",
-    "impact_type": "array[string]",
-    "impact_details": "string|null",
     "outcome_measured": "array[string]",
     "exposure_intervention": "string|null",
     "comparator": "string|null",
