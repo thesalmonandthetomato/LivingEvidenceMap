@@ -16,15 +16,15 @@ field_completeness is an exception/status audit, not a second copy of the extrac
 - A populated main-record field MUST NOT simultaneously have a field_completeness status of "NOT FOUND" or null.
 - A field omitted from field_completeness is interpreted as successfully found/populated.
 
-field_completeness may contain ONLY substantive schema fields. It must NOT contain source_id, openalex_id, doi, title, year, schema_version, document_completeness_evidence, non_methods_results_evidence, non_methods_results_evidence_fields, not_reported_fields, field_completeness, evidence, run_metadata, or any other metadata/provenance field.
+field_completeness may contain ONLY substantive schema fields. It must NOT contain source_id, openalex_id, doi, title, year, schema_version, sample_size, document_completeness_evidence, non_methods_results_evidence, non_methods_results_evidence_fields, not_reported_fields, field_completeness, evidence, run_metadata, or any other metadata/provenance field.
 
 The substantive field universe is:
-document_type, review_type, study_type, study_design, research_approach, setting, sample_size, sample_unit, study_period, location_region, location_country, species, other_farmed_species, study_population, aquaculture_facility, system_studied, production_stage, fish_life_stage, impact_type, impact_details, outcome_measured, exposure_intervention, comparator, methodology_for_data_collection, funding_body, funder, research_question, objectives_summary, ontology_codes, multiple_studies_flag, multiple_studies_reason.
+document_type, review_type, study_type, study_design, research_approach, setting, sample_unit, study_period, location_region, location_country, species, other_farmed_species, study_population, aquaculture_facility, system_studied, production_stage, fish_life_stage, impact_type, impact_details, outcome_measured, exposure_intervention, comparator, methodology_for_data_collection, funding_body, funder, research_question, objectives_summary, ontology_codes, multiple_studies_flag, multiple_studies_reason.
 
 Every substantive field therefore has exactly one logical state: (a) populated in the main record and OMITTED from field_completeness; (b) applicable but absent, represented by "NOT FOUND" and listed in not_reported_fields; or (c) genuinely inapplicable, represented by JSON null and absent from not_reported_fields.
 
 3. DERIVE NOT_REPORTED CONSISTENTLY
-not_reported_fields MUST contain exactly the substantive fields whose field_completeness value is "NOT FOUND". Do not independently invent or maintain this list. Do not put fields with null status in not_reported_fields. Do not put populated fields in not_reported_fields.
+not_reported_fields MUST contain exactly the substantive fields whose field_completeness value is "NOT FOUND". Do not independently invent or maintain this list. Do not put fields with null status in not_reported_fields. Do not put populated fields in not_reported_fields. sample_size MUST NOT appear in not_reported_fields.
 
 4. SCHEMA VALUE VS COMPLETENESS STATUS — DO NOT CONFUSE THEM
 JSON null is permitted as a completeness status. It does NOT mean that every main-record field should itself be null.
@@ -91,12 +91,12 @@ Do not over-infer production_stage from generic aquaculture language. However, w
 12. EXPOSURE/INTERVENTION AUDIT
 During the field-by-field audit, actively search for deliberate treatments, concentration gradients, challenges, dietary manipulations, environmental exposures, natural exposures, production-system exposures and other focal factors. A field should not be marked NOT FOUND merely because the factor was previously labelled intervention rather than exposure (or vice versa).
 
-13. SAMPLE SIZE AND SAMPLE UNIT — SAME METHODOLOGICAL CONCEPT
-sample_size and sample_unit MUST describe the same underlying methodological unit of analysis or sampling. Do not report a numerical sample size unless the corresponding sample unit is identifiable from the article.
+13. SAMPLE SIZE IS NOT A DATA-EXTRACTION VARIABLE
+Do NOT extract, infer, calculate, derive, audit, or report sample_size as a substantive coding variable. The schema still contains the legacy sample_size field for compatibility, but it MUST always be returned as JSON null. Do not search the article for a sample size for coding purposes and do not perform arithmetic such as multiplying numbers of sites, months, samples, replicates, or treatments to derive one.
 
-Do not combine or conflate numbers referring to different entities, such as fish, cages, farms, sites, samples, replicates, simulations, scenarios, treatments, or observations. If a paper reports several different counts, select the count corresponding to the unit that is actually the study's sample/analytical unit, and identify that unit explicitly in sample_unit.
+sample_size MUST NOT appear in field_completeness or not_reported_fields and MUST NOT require an evidence entry.
 
-For modelling studies, distinguish modelled farms/sites, simulations, scenarios, or other model entities from an empirical sample size. Do not label a modelled quantity as sample_size unless the study design clearly treats those entities as the study units. The evidence supporting sample_size must also support the corresponding sample_unit.
+sample_unit remains a substantive coding variable. Code a simple high-level unit when clearly identifiable from the article, preferably ONE primary unit such as fish, cells, farms, communities, grab samples or households. Do not reconstruct pseudoreplication, nesting, statistical units, technical subsamples, parasites, tissues, assays, derived measurements or tanks merely used as containers. Do not use a species name as sample_unit. If no meaningful sample unit can be identified, mark sample_unit NOT FOUND when applicable.
 
 14. MULTIPLE-STUDIES BOOKKEEPING
 If multiple_studies_flag = false, multiple_studies_reason is genuinely inapplicable: set multiple_studies_reason = null and omit that field from field_completeness. If multiple_studies_flag = true, provide a concise reason in multiple_studies_reason and omit that field from field_completeness.
@@ -113,4 +113,4 @@ Return document_type = null and leave substantive coding blank ONLY when the sup
 There is no semantic validation prompt. The scientific coding prompt is authoritative for substantive decisions. Any automated checking, if used, must be limited to deterministic JSON/schema and bookkeeping constraints and must not decide whether a field should be reported or whether a scientific coding judgement is correct.
 
 18. FINAL OUTPUT REQUIREMENT
-Return exactly the schema-defined top-level fields. The combined field is exposure_intervention; intervention and exposure are prohibited legacy fields. field_completeness may contain ONLY substantive fields and ONLY the values null or "NOT FOUND". Found/populated substantive fields are omitted from field_completeness. not_reported_fields must exactly match the fields marked "NOT FOUND". The string/value FOUND is prohibited.
+Return exactly the schema-defined top-level fields. The combined field is exposure_intervention; intervention and exposure are prohibited legacy fields. The legacy sample_size field MUST be JSON null and is excluded from substantive completeness auditing and evidence requirements. field_completeness may contain ONLY substantive fields and ONLY the values null or "NOT FOUND". Found/populated substantive fields are omitted from field_completeness. not_reported_fields must exactly match the fields marked "NOT FOUND". The string/value FOUND is prohibited.
