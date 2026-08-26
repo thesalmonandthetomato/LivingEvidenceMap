@@ -34,17 +34,13 @@ def response_text(data):
             if isinstance(c,dict) and c.get("type")=="output_text": parts.append(c.get("text",""))
     return "\n".join(parts).strip()
 
-def normalise_annotation(annotation):
+def parse_annotation(text):
+    annotation=json.loads(text)
     if not isinstance(annotation,dict): raise ValueError("Model output must be a JSON object")
-    if isinstance(annotation.get("fields"),dict):
-        fields=annotation["fields"]; merged=dict(fields)
-        for key in ("schema_version","evidence","run_metadata"):
-            if key in annotation: merged[key]=annotation[key]
-        annotation=merged
-    annotation.pop("description",None)
-    annotation.pop("document_type_description",None)
-    annotation.pop("contribution_type",None)
-    annotation["schema_version"]="fulltext_coding_v1"
+    # Do not normalise, inject, or silently remove fields. The validator must
+    # see the model's actual object so legacy-field regressions cannot hide.
+    if "fields" in annotation:
+        raise ValueError("Model output must place extraction fields at top level; nested fields object is prohibited")
     return annotation
 
 def write_failed_checkpoint(path, raw_response, status_out, error):
@@ -55,7 +51,7 @@ def write_failed_checkpoint(path, raw_response, status_out, error):
         "source_prepared_file":path.name,
         "raw_response_file":failed_raw.name,
         "status":"needs_review_or_retry",
-        "error_type":"invalid_json",
+        "error_type":"invalid_json_or_structure",
         "error":str(error),
         "checkpoint_rule":"raw_response_before_parsing",
         "timestamp_utc":ts
@@ -72,8 +68,8 @@ def main():
         if out.exists() and raw_out.exists() and status_out.exists(): print(f"[{i}/{len(files)}] CHECKPOINT EXISTS {out.name}; skipping model call",flush=True); continue
         prepared=load(path)
         user=("Code this article according to the supplied schema and ontology. Return a single valid JSON object only. "
-              "The substantive annotation fields must be at the TOP LEVEL, not under `fields`. Do not return schema descriptions, enum definitions, or explanatory top-level keys. "
-              "Use exactly the requested top-level fields. Cite concise evidence for substantive extracted fields.\n\n"
+              "Return exactly the current extraction fields and the explicitly permitted audit/evidence structures. Do not return schema descriptions, provenance metadata, legacy fields, or explanatory top-level keys. "
+              "The substantive annotation fields must be at the TOP LEVEL.\n\n"
               "CODING SCHEMA:\n"+json.dumps(schema,ensure_ascii=False,indent=2)+"\n\nONTOLOGY CSV:\n"+ontology+"\n\nPREPARED ARTICLE:\n"+json.dumps(prepared,ensure_ascii=False))
         print(f"[{i}/{len(files)}] CODING {path.name}",flush=True)
         completed=False
@@ -83,14 +79,15 @@ def main():
                 if not text: raise RuntimeError("OpenAI API returned no output text")
                 raw_out.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
                 try:
-                    annotation=normalise_annotation(json.loads(text))
-                except json.JSONDecodeError as exc:
+                    annotation=parse_annotation(text)
+                except (json.JSONDecodeError, ValueError) as exc:
                     write_failed_checkpoint(path,data,status_out,exc)
-                    print(f"  INVALID JSON for {path.name}; raw response checkpointed; continuing batch",flush=True)
+                    print(f"  INVALID JSON/STRUCTURE for {path.name}; raw response checkpointed; continuing batch",flush=True)
                     completed=True
                     break
                 ts=datetime.now(timezone.utc).isoformat()
-                annotation["run_metadata"]={"schema_version":"fulltext_coding_v1","ontology_version":"ontology_v3","model":args.model,"provider":"openai","timestamp_utc":ts,"source_prepared_file":path.name,"checkpoint_status":"generated"}
+                # Keep technical provenance in the checkpoint/status file, not in
+                # the model extraction object. This guarantees exact output scope.
                 out.write_text(json.dumps(annotation,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
                 status_out.write_text(json.dumps({"source_prepared_file":path.name,"annotation_file":out.name,"raw_response_file":raw_out.name,"status":"generated","checkpoint_rule":"checkpoint_before_validation","timestamp_utc":ts},indent=2)+"\n",encoding="utf-8")
                 print(f"  CHECKPOINTED {out.name} before validation",flush=True); completed=True; break
