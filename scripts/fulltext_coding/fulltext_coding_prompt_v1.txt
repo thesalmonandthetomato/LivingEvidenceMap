@@ -1,19 +1,56 @@
 LivingEvidenceMap full-text article coding prompt
 Schema version: fulltext_coding_v1
 
-TASK — FULL-TEXT ARTICLE CODING
-Code the supplied full text into the provided LivingEvidenceMap JSON schema. The schema and this prompt are the sole coding authority. Do not import fields, categories, terminology, or rules from external examples, previous prompts, coding sheets, datasets, or legacy versions. Extract from the article itself. Return exactly one valid JSON object conforming to the schema, with no commentary or extra fields.
+TASK
+Code the supplied full text into the current LivingEvidenceMap JSON schema. The schema and this prompt are the sole coding authority. Extract from the article itself. Return exactly one valid JSON object conforming to the schema, with no commentary or extra fields.
 
-ELIGIBLE-SPECIES FILTER — APPLY BEFORE SUBSTANTIVE CODING
-First identify which species/components are eligible. Only information concerning eligible species may be used for substantive coding. Where an article contains eligible and ineligible species, separate those components before extracting characteristics. Never use an ineligible species to populate, support, or infer study population, sample size, sample unit, life stage, production stage, setting, aquaculture facility, location, exposure, intervention, comparator, study design, study type, methodology, study period, or outcomes. Do not combine details across eligible and ineligible species.
+CURRENT EXTRACTION FIELDS
+The substantive extraction fields are exactly:
+- document_type
+- review_type
+- study_type
+- study_design
+- research_approach
+- setting
+- sample_unit
+- study_period
+- location_region
+- location_country
+- species
+- other_farmed_species
+- study_population
+- aquaculture_facility
+- system_studied
+- production_stage
+- fish_life_stage
+- exposure_intervention
+- comparator
+- outcome_measured
+- funding_body
+- research_question
+- objectives_summary
+- ontology_codes
+- multiple_studies_flag
+- multiple_studies_reason
 
-CORE PRINCIPLE — DISTINGUISH STUDY/METHOD EVIDENCE FROM SYSTEM/CONTEXT EVIDENCE
-For primary empirical studies, Methods/Materials and Results/Findings are the controlling evidence source for study-method and empirical variables. Search them first, including tables and figure legends/captions. Only when the relevant information is absent there may explicit, unambiguous statements from other sections support permitted descriptive fields; record such fallback evidence in non_methods_results_evidence and non_methods_results_evidence_fields.
+Do not add fields. Return only these substantive fields plus the required audit/evidence structures defined by the schema.
 
-IMPORTANT EXCEPTION FOR NON-PRIMARY ARTICLE TYPES
-Reviews, perspectives, commentaries, editorials, books, book chapters, reports and other non-primary documents may contain useful SYSTEM/CONTEXT information even when they contain no primary Methods/Results. This information MUST NOT be discarded merely because it is outside Methods/Results.
+ELIGIBLE-SPECIES FILTER
+First identify the eligible salmon/farmed-salmon species and components. Only information concerning eligible species/components may support substantive coding. Where eligible and ineligible species/components occur in the same document, keep them separate. Never combine characteristics, methods, populations, settings, locations, exposures, comparators or outcomes across eligible and ineligible components.
 
-For non-primary article types, explicitly extract the following system/context variables when the document itself clearly describes them in relation to eligible salmon/farmed-salmon content:
+EVIDENCE AND SOURCE DISCIPLINE
+Every populated substantive field must have a field-specific evidence entry. Evidence must support that exact field, not merely be generally relevant to the article. Use the article/full text as the source of evidence. Do not use model knowledge as evidence.
+
+For primary empirical studies, Methods/Materials and Results/Findings are the controlling evidence sources for empirical and study-method variables. Search them thoroughly, including tables and figure legends/captions. Other sections may support descriptive/system-context fields where this prompt explicitly permits it.
+
+For non-primary documents such as reviews, perspectives, commentaries, editorials, books, book chapters and reports, extract the document's own explicit system/context information. Such information may occur in the title, abstract, introduction, discussion, conclusions, tables, figures or other sections. Do not discard explicit system/context information merely because it is outside Methods/Results.
+
+Evidence must be specific enough to demonstrate why the coded value is correct. If a permitted inference is made, preserve the underlying article evidence and make clear in the evidence entry what information supports the inference.
+
+DOCUMENT TYPES AND NON-PRIMARY DOCUMENTS
+Code what the document itself investigates, evaluates, synthesises, discusses or explicitly describes, restricted to eligible species/components.
+
+Reviews, perspectives, commentaries, editorials, books, book chapters and reports may contribute explicit system/context information for eligible salmon/farmed-salmon content, including:
 - species
 - other_farmed_species
 - location_region
@@ -23,118 +60,214 @@ For non-primary article types, explicitly extract the following system/context v
 - production_stage
 - fish_life_stage
 - setting
-- exposure
+- exposure_intervention
 
-These variables may be supported by the title, Abstract, Introduction, Discussion, Conclusions, tables, figure legends/captions, or other sections. The evidence must be explicit; do not infer a system characteristic solely from a generic statement.
+For these non-primary documents, do not invent an empirical study population, sample unit, empirical study period, empirical design, comparator or empirical outcome merely because cited studies are discussed. Code the document's own research question/objectives where explicitly stated.
 
-System/context variables describe the biological, production, facility, environmental or exposure context itself. They are NOT study-method variables.
+REVIEWS
+review_type = systematic_style if the document calls itself a systematic review/systematic literature review/systematic-style review or equivalent, describes a methodology for identifying/selecting/searching/appraising/synthesising literature, or quantitatively combines primary-study findings. Otherwise use primer_overview for a review.
 
-DO NOT inherit or copy study-method/empirical variables from studies merely discussed or cited by a review, commentary, perspective, editorial, book or book chapter. In particular, do not inherit:
-- sample_size
-- sample_unit
-- empirical study_period
-- study_type
-- study_design
-- research_approach
-- intervention
-- comparator
-- methodology_for_data_collection
-- outcome_measured
-- impact_type
-- impact_details
-- study_population, unless the non-primary document itself reports/conducts an eligible empirical study.
+STUDY TYPE, DESIGN AND APPROACH
+study_type only: experimental, observational, modelling, not_stated, not_applicable.
+- Experimental requires deliberate manipulation/imposition on eligible study subjects/specimens.
+- Laboratory processing or analysis of field-collected material is not experimental by itself.
+- Deliberate action imposed on eligible fish/specimens is experimental unless it is only processing/analysis of field samples.
+- A non-primary document without its own eligible empirical study uses not_applicable.
 
-A non-primary article can therefore legitimately provide, for example, an explicit statement that adult salmon are produced in open sea cages. That may support fish_life_stage = Adult, production_stage = Adult grow-out, and aquaculture_facility = open_cages. It does NOT support sample size, experimental design, methods, or outcomes of any cited study.
+study_design only: BA, CI, BACI, RCT, Time-series, Modelling, Qualitative, not_stated, not_applicable.
+- CI includes genuine intervention/treatment comparisons, including deliberately imposed alternative challenge modes such as injection versus immersion.
+- Do not create new design labels.
+- A non-primary document without its own eligible empirical study uses [not_applicable].
 
-OUTCOME EXCEPTION — STRICTER
-outcome_measured, impact_type and impact_details may ONLY use Methods/Materials or Results/Findings evidence from an eligible primary study, including tables and figure legends/captions. They must represent data actually collected, measured, analysed or reported by that study. Mentions in titles, abstracts, introductions, discussions, conclusions, reviews, commentaries, cited literature or references are not outcome evidence. Do not transfer outcomes from cited/included studies into a non-primary document's record.
-
-RESEARCH QUESTION / OBJECTIVES
-Research question and objectives are normally taken from explicit statements in the document's Introduction and, where clearly stated, Abstract. For non-primary documents, code the document's own research question/objectives, not those of studies it discusses. Do not manufacture them.
-
-FIELD-BY-FIELD COMPLETENESS AUDIT — MANDATORY
-Actively search EVERY substantive schema field. For every field: (1) determine whether it applies; (2) determine whether it is a study-method/empirical field or a system/context field; (3) search the appropriate evidence sources; (4) code explicit information; (5) if applicable but not reported, mark NOT_REPORTED; (6) if genuinely inapplicable, mark NOT_APPLICABLE. Every substantive field must have exactly one field_completeness status. FOUND requires explicit supporting evidence. Do not use NOT_REPORTED for uncertainty.
-
-Preferred evidence by field:
-- DOI/source metadata: workflow metadata/front matter/citation.
-- year: front matter/citation/metadata.
-- document_type: title, abstract, article structure.
-- review_type: title, abstract, methods/full text; only for reviews.
-- species: Methods/study population/Results for primary studies; any explicit eligible-species/system statement for non-primary documents.
-- other_farmed_species: Methods/population for primary studies; any explicit system/context statement for non-primary documents.
-- study_population: Methods/Results for primary studies; do not inherit from cited studies.
-- sample_size/sample_unit: Methods/Results/tables; do not inherit from cited studies.
-- study_period: Methods/study setting/Results for primary studies; only an explicitly described empirical study period, never a literature-search period.
-- location_region/location_country: Methods/study setting for primary studies; any explicit eligible salmon/system location for non-primary documents.
-- aquaculture_facility: Methods/study setting for primary studies; any explicit eligible salmon production/facility context for non-primary documents.
-- system_studied: Methods/Results for primary studies; any explicit eligible biological, environmental, social system or material for non-primary documents.
-- production_stage: Methods/production description for primary studies; any explicit eligible salmon production-stage context for non-primary documents.
-- fish_life_stage: Methods/population/Results for primary studies; any explicit eligible fish life-stage statement for non-primary documents. Never infer.
-- setting: Methods/study setting for primary studies; any explicit eligible salmon/system setting for non-primary documents.
-- study_type/study_design/research_approach/intervention/comparator: only where the document itself conducts/reports the eligible empirical study; do not inherit from discussed studies.
-- exposure: Methods/Results for primary studies; an explicit investigated or system-level exposure relevant to eligible salmon may be coded from other sections in non-primary documents. A generic environmental mention is not automatically an exposure.
-- outcome_measured/impact_type/impact_details: Methods + Results ONLY; no fallback.
-- methodology_for_data_collection: Methods/Results for the document's own eligible empirical study only.
-- funding_body/funder: funding statement/acknowledgements/full text.
-- research_question/objectives_summary: explicit statements in the document.
-- ontology_codes: substantive eligible-species topic/method content according to data/reference/topic_ontology_v3.csv.
-- multiple_studies_flag: strong positive evidence of independent eligible studies/components only.
-
-not_reported_fields must contain every applicable NOT_REPORTED field. NOT_APPLICABLE fields must not appear there. Evidence must support FOUND values. Any value using permitted non-Methods/Results evidence must be included in non_methods_results_evidence_fields. For non-primary documents, this flag records the evidence location and does NOT mean the system/context value is invalid.
-
-DOCUMENT COMPLETENESS — HARD RULE
-If the supplied full text is clearly incomplete, truncated, corrupted or only a fragment, return document_type = null and leave substantive fields blank/null/empty. Do not infer or salvage substantive coding. document_completeness_evidence is REQUIRED and must provide the first ~250 words (or all available opening text if shorter) plus a concise reason. Workflow provenance/identity metadata may remain populated.
-
-CLOSED VOCABULARIES — HARD RULE
-Use ONLY values supplied in coding_schema_v1.json. Never invent, paraphrase, abbreviate, translate or create a new controlled-vocabulary value. If no allowed value fits, use the schema's missing/inapplicable state and preserve useful paper terminology only in free-text evidence.
-
-DOCUMENT SCOPE / REVIEWS / COMMENTARIES / PERSPECTIVES
-Code what the document itself investigates, evaluates, synthesises, discusses or explicitly describes, restricted to eligible species/components. Reviews are document_type = review. review_type = systematic_style if the review calls itself a systematic review/systematic literature review/systematic-style review or equivalent, OR describes ANY methodology for identifying/selecting/searching/appraising/synthesising literature, OR quantitatively combines primary study findings. Otherwise primer_overview.
-
-Commentary/editorial/perspective/book/book chapter do NOT inherit empirical study variables from studies they discuss. HOWEVER, they MAY contribute explicit system/context information: species, other_farmed_species, location_region, location_country, aquaculture_facility, system_studied, production_stage, fish_life_stage, setting and exposure. Extract these when explicitly described, regardless of whether they occur in Methods/Results.
-
-MULTIPLE STUDIES — RARE HUMAN REVIEW FLAG
-Set multiple_studies_flag = true ONLY with strong positive evidence of two or more independently structured eligible-species studies/components: explicitly labelled studies; multiple substantive empirical thesis chapters; separate study aims/questions with corresponding separate methods/results; distinct eligible samples/populations with distinct methods/results functioning as independent studies; or explicitly combined independent eligible empirical studies. Multiple treatments, factor levels, conditions, time points, assays, outcomes or populations within one coherent design do NOT suffice. Discussion of multiple cited studies in a review/commentary/perspective does NOT by itself make the flag true. If ambiguous, false. When true, give a concise reason.
-
-STUDY TYPE / DESIGN
-study_type only: experimental, observational, modelling, not_stated, not_applicable. Experimental requires deliberate manipulation/imposition on eligible study subjects/specimens. Laboratory processing/analysis of field-collected material is not experimental. For laboratory studies, deliberate action TO eligible fish/specimens is experimental unless it is only processing/analysis of field samples. For non-primary documents that do not themselves conduct an eligible empirical study, use not_applicable.
-study_design only: BA, CI, BACI, RCT, Time-series, Modelling, Qualitative, not_stated, not_applicable. CI includes genuine intervention/treatment comparisons, including deliberately imposed alternative challenge modes such as injection versus immersion. Do not create longitudinal as a new value. For non-primary documents without their own eligible empirical study, use [not_applicable].
-research_approach only: quantitative, qualitative, mixed_methods, not_applicable. For non-primary documents without their own eligible empirical study, use not_applicable.
+research_approach only: quantitative, qualitative, mixed_methods, not_applicable.
+- A non-primary document without its own eligible empirical study uses not_applicable.
 
 SETTING
-Only: field, laboratory/controlled facility, in_vitro, in_silico. For primary studies, setting describes WHERE the substantive eligible-species study itself occurred, not where samples were later processed. Field includes real-world farms, sea cages, hatcheries, rivers, lakes and coastal/environmental locations, including controlled field experiments. Laboratory/controlled facility includes laboratory, university/research facility, tank/controlled aquaculture facility, flow-through raceways, or other controlled facility with no real-world field setting. Flow-through raceways and other controlled aquaculture systems are laboratory/controlled facility when they constitute the substantive study environment; do not classify them as field merely because they are on a farm, power station, university site or other real-world premises. Laboratory analysis of field samples does not make the study laboratory. For non-primary documents, setting may describe the explicitly stated eligible salmon/system context, but must not be represented as a setting of an empirical study conducted by that document. Never put marine, freshwater, hatchery, land_based, RAS, open_cages or closed_cages in setting.
+Only: field, laboratory/controlled facility, in_vitro, in_silico.
 
-SPECIES / POPULATION / SAMPLE UNIT
-species is REQUIRED for a complete relevant document and may ONLY contain: Atlantic salmon; chum salmon; pink salmon; coho salmon; chinook salmon; sockeye salmon; masu salmon; rainbow trout; unspecified salmon species. If a permitted named species is explicitly linked to the eligible study component or system/context, code it. Use unspecified salmon species only when no permitted named species is explicitly established; it must never be null for a complete relevant document. If the paper concerns salmon lice without an explicitly established permitted salmonid host, use unspecified salmon species.
-other_farmed_species is a free-text array for additional farmed species outside those nine values. Do not allow information from an ineligible additional species to populate substantive fields.
-study_population = actual eligible population/material studied. For non-primary documents without their own eligible empirical study, do not invent one from cited literature; use NOT_APPLICABLE where appropriate.
-sample_unit = simple high-level array. Prefer ONE primary unit such as fish, cells, people, farms, communities, grab samples or households. Do not reconstruct pseudoreplication, nesting, statistical units, technical subsamples, parasites, tissues, assays, derived measurements or tanks merely used as containers. Do not use a species name as sample_unit.
+For primary studies, setting describes where the substantive eligible-species study occurred, not where samples were later processed.
+- field includes real-world farms, sea cages, hatcheries, rivers, lakes and coastal/environmental locations, including controlled field experiments;
+- laboratory/controlled facility includes laboratories, research facilities, tanks, controlled aquaculture facilities and flow-through raceways when these constitute the substantive study environment;
+- in_vitro applies to cell/culture experiments;
+- in_silico applies to computational/modelling studies.
+
+A controlled aquaculture system is not automatically field merely because it is located on a farm, university site or other real-world premises. Laboratory analysis of field-collected samples does not make the study laboratory.
+
+For non-primary documents, setting may describe an explicitly stated eligible salmon/system context.
+
+SPECIES
+species may ONLY contain:
+- Atlantic salmon
+- chum salmon
+- pink salmon
+- coho salmon
+- chinook salmon
+- sockeye salmon
+- masu salmon
+- rainbow trout
+- unspecified salmon species
+
+If a permitted named species is explicitly linked to the eligible study component or system/context, code it. Explicit Chinook salmon must be coded as chinook salmon. Use unspecified salmon species only when no permitted named species is explicitly established. For salmon-lice documents without an explicitly established permitted salmonid host, use unspecified salmon species.
+
+other_farmed_species is a free-text array for additional farmed species outside the permitted species vocabulary. Do not allow an ineligible species to populate other substantive fields.
+
+STUDY POPULATION
+study_population is the actual eligible population/material studied by the document. For a non-primary document without its own eligible empirical study, do not construct a population from cited studies.
+
+SAMPLE UNIT
+sample_unit is a simple high-level methodological unit when clearly identifiable. Prefer ONE primary unit such as fish, cells, farms, communities, grab samples or households. Do not reconstruct nesting, pseudoreplication, statistical units, technical subsamples, parasites, tissues, assays, derived measurements or tanks merely used as containers. Do not use a species name as sample_unit.
+
+Do not calculate or infer a sample size. Sample size is not an extraction variable.
+
+LOCATION
+For primary studies, use explicit study-setting information from Methods/study setting and relevant Results. For non-primary documents, an explicit eligible salmon/system location anywhere in the document may support location_region/location_country.
+
+Do not confuse the origin of a pathogen, strain, feed ingredient, cited study or other material with the location of the eligible study/system unless the document explicitly establishes that connection.
 
 AQUACULTURE FACILITY
-There is ONE facility/production-system field: aquaculture_facility. Do not create farming_system. Only: salmon_farming_region, hatchery, open_cages, closed_cages, land_based, land_based_RAS.
-Code only an explicitly stated salmon aquaculture production facility/system in which the eligible study was conducted OR the eligible salmon production system explicitly described/evaluated. Non-primary documents may populate this field from explicit system-level descriptions. Do not code a facility used only by an ineligible species. A laboratory/controlled facility may co-occur with aquaculture_facility when it is itself an aquaculture production system, such as a land-based RAS. Laboratory water circulation is NOT RAS. land_based_RAS requires explicit land-based RAS or recognised synonym. hatchery requires explicit hatchery production context; do not infer from life-stage terms. Sea pens/open net pens/sea cages are open_cages unless explicitly closed. closed_cages requires explicit closed impermeable sides/walls or recognised equivalent. land_based requires explicit land-based aquaculture not identified as RAS. Never use wild, mixed, genetic variety/strain, river, marine, freshwater, recirculating alone or invented values.
+aquaculture_facility is the single facility/production-system field. Only:
+- salmon_farming_region
+- hatchery
+- open_cages
+- closed_cages
+- land_based
+- land_based_RAS
 
-SYSTEM / PRODUCTION STAGE
-system_studied = biological, environmental, social system or material actually examined for eligible components, or explicitly described as the relevant eligible salmon system/context in a non-primary document.
-production_stage only: Feed, Hatchery, Transfer between Hatchery and Adult, Adult grow-out, Processing. It describes the aquaculture production context and is distinct from fish_life_stage. Feed means production/manufacture of feed OUTSIDE an aquaculture facility. Studies testing feed, diets, additives, alternative feeds or feed efficiency on fish are NOT Feed; use the relevant fish production stage if explicit, or NULL when laboratory/controlled-facility based with no applicable production stage. Salmon are never themselves in Feed production. Adult grow-out includes explicitly framed studies or system descriptions of grow-out faeces, wastes, cages, water, sediments and other outputs. Hatchery requires explicit production context. Transfer between Hatchery and Adult requires explicit transfer. Processing concerns processing of harvested aquaculture product. Never derive production_stage from an ineligible species/component. For non-primary documents, do not infer production_stage merely from generic references to aquaculture.
+Code only an explicitly stated eligible salmon aquaculture production facility/system in which the study was conducted or an eligible salmon production system explicitly described/evaluated. Non-primary documents may populate this field from explicit system-level descriptions.
+
+- hatchery requires explicit hatchery production context;
+- open_cages includes sea pens/open net pens/sea cages unless explicitly closed;
+- closed_cages requires explicit closed impermeable sides/walls or recognised equivalent;
+- land_based requires explicit land-based aquaculture not identified as RAS;
+- land_based_RAS requires explicit land-based RAS or recognised equivalent;
+- salmon_farming_region requires an explicit regional salmon-farming context.
+
+Do not infer a facility from life stage alone. Laboratory water circulation is not RAS.
+
+SYSTEM AND PRODUCTION STAGE
+system_studied is the biological, environmental, social system or material actually examined for eligible components, or the explicitly described eligible salmon/system context in a non-primary document.
+
+production_stage only:
+- Feed
+- Hatchery
+- Transfer between Hatchery and Adult
+- Adult grow-out
+- Processing
+
+Production stage describes the aquaculture production context and is independent of fish_life_stage.
+- Feed means production/manufacture of feed outside an aquaculture facility. Studies testing diets/feed on fish are not automatically Feed.
+- Hatchery requires explicit hatchery production context.
+- Transfer between Hatchery and Adult requires explicit transfer context.
+- Adult grow-out includes explicitly framed grow-out fish and associated grow-out wastes, faeces, cages, water, sediments or other outputs.
+- Processing concerns processing of harvested aquaculture product.
+
+For non-primary documents, do not infer production_stage merely from a generic reference to aquaculture.
 
 FISH LIFE STAGE
-fish_life_stage is an array using ONLY: Sperm, Egg, Embryo, Alevin, Fry, Parr, Pre-smolt, Smolt, Juvenile, Adult, Broodstock, Harvest, Product.
-Code all substantive eligible fish life stages actually studied when explicitly established. For non-primary documents, code an explicitly described eligible fish life stage even when no primary Methods/Results exist. Do not stop at the first life stage mentioned. For primary empirical studies, search the entire Methods and Results, including study-period descriptions, production descriptions, tables and figure legends, for later substantive stages in the same eligible cohort. For non-primary documents, search the entire document. Do not infer from facility, production stage, species, age or context.
-Pre-smolt is a valid explicit life-stage value. Do not code Harvest merely because fish were harvested, sacrificed, sampled or euthanised at the end of an experiment. Harvest is appropriate only when harvested/product fish are themselves the substantive stage/population studied. Product refers to processed/market product.
-PRODUCTION STAGE AND FISH LIFE STAGE ARE INDEPENDENT VARIABLES. "Pre-market" is not a permitted fish_life_stage value and must not automatically be converted to Adult. If a source explicitly describes pre-market fish as Adult, code Adult and separately record the production context where supported. If no substantive life stage is explicitly established, mark fish_life_stage NOT_REPORTED when applicable.
+fish_life_stage only:
+- Sperm
+- Egg
+- Embryo
+- Alevin
+- Fry
+- Parr
+- Pre-smolt
+- Smolt
+- Juvenile
+- Adult
+- Broodstock
+- Harvest
+- Product
 
-INTERVENTION / EXPOSURE / COMPARATOR
-intervention = deliberate assigned treatment, manipulation, vaccination, deliberately imposed husbandry change, challenge or other assigned experimental action affecting eligible species/material. Routine rearing, ordinary husbandry, commercial feeding, sampling, culture conditions or laboratory processing are NOT interventions unless deliberately assigned/imposed as the condition being tested. Do not inherit intervention from cited studies.
-exposure = investigated observational exposure affecting eligible species/material OR an explicitly described exposure context relevant to eligible salmon production/system. Environmental, dietary, geographic, production-system, seasonal, farm, host-group or other naturally occurring conditions may be exposures when actually investigated or explicitly characterised as the exposure/context of interest. A descriptive grouping is not automatically an exposure. Do not infer an exposure solely from a generic environmental mention.
-comparator = only the actual focal comparison within eligible empirical evidence. It may be null when no genuine comparison exists. Do not inherit comparator from cited studies.
+Code all substantive eligible fish life stages actually established in the document. For primary empirical studies, search the entire Methods and Results, including study-period descriptions, production descriptions, tables and figure legends, for later substantive stages in the same eligible cohort. For non-primary documents, search the entire document for explicit life-stage statements.
 
-OUTCOMES / IMPACTS
-outcome_measured = substantive outcomes actually measured/assessed using collected study data and reported by the eligible-species study. impact_type and impact_details describe collected/analysed study results where applicable. These fields are Methods/Results-only, including tables and figure legends/captions. Do not code outcomes merely mentioned elsewhere. Do not confuse covariates, environmental conditions, procedural parameters or background characteristics with substantive outcomes unless actually analysed/reported as study responses. Do not invent impact_type labels. Never use outcome evidence from an ineligible species/component or transfer outcomes from cited studies into a non-primary record.
+Production stage and fish life stage are independent variables.
 
-METHODOLOGY / ONTOLOGY
-methodology_for_data_collection = actual data-collection methods for eligible species/components. Do not confuse laboratory analytical processing with experimental study type. Do not extract methods used by cited studies merely because a non-primary document describes them.
-Apply data/reference/topic_ontology_v3.csv using its exact path_id and include_when/exclude_when/prompt_logic_note criteria. Prefer the most specific supported node. Do not code background-only mentions. Code Methods ontology only when methodological development, validation, comparison or evaluation is itself substantive.
+LIFE-STAGE INFERENCE FROM METHODS
+For primary empirical studies, life stage may be inferred from body mass, age, developmental descriptors or production information ONLY when the supporting information appears in Methods/Materials and Methods or equivalent study-design text for the fish being coded. Do not infer life stage from the Introduction, Discussion, abstract, title, cited literature or general knowledge alone.
 
-FINAL PRE-RETURN AUDIT — HARD REQUIREMENT
-Complete the entire field-by-field checklist before generating JSON. Confirm every substantive field has exactly one field_completeness status; every applicable NOT_REPORTED field is in not_reported_fields; every value using non-Methods/Results evidence is in non_methods_results_evidence_fields; all FOUND values have supporting evidence; no controlled-vocabulary or legacy values occur; only eligible-species evidence contributes to substantive fields; species is one of the nine permitted values for complete relevant documents; setting, facility, production stage, life stage, sample unit, intervention, exposure, comparator, outcomes, multiple-studies and incomplete-document rules have all been checked; primary empirical study-method variables preferentially use Methods/Results evidence; non-primary documents may provide explicit system/context variables outside Methods/Results; non-primary documents do not inherit empirical methods/results from cited studies; outcomes use Methods/Results-only evidence; production_stage and fish_life_stage are treated independently; all explicit later substantive fish life stages have been searched; "pre-market" has not been treated as a life-stage value or automatically converted to Adult; and no substantive field is silently left blank. Never create a new controlled-vocabulary value merely to fill a blank.
+Use this conservative salmon-specific body-mass guideline:
+- Atlantic salmon >=1.0 kg may be coded Adult when the fish are in grow-out/production context or otherwise clearly beyond juvenile/smolt size and no contradictory designation is given.
+- Atlantic salmon 0.5 to <1.0 kg is borderline and requires additional Methods context supporting Adult.
+- Atlantic salmon <0.5 kg must not be coded Adult from mass alone.
+- For other large-bodied salmon species without a species-specific threshold, the >=1.0 kg Adult rule may be used only when Methods establish a clearly post-juvenile/smolt production context.
+- Never infer Smolt, Parr, Fry or Juvenile from body mass alone unless the Methods provide additional supporting context.
+- If Methods show progression through multiple substantive life stages in the same eligible cohort, code all supported stages.
+
+Pre-market is not itself a permitted fish-life-stage value. If Methods explicitly describe pre-market fish as Adult, Adult may be coded. Do not automatically convert pre-market to Adult.
+
+Do not code Harvest merely because fish were sacrificed, sampled or euthanised. Harvest is appropriate when harvested/product fish are themselves the substantive stage/population studied. Product refers to processed/market product.
+
+EXPOSURE + INTERVENTION
+There is ONE combined field: exposure_intervention. Do not create separate exposure or intervention fields.
+
+For primary empirical studies, code the actual eligible-species intervention and/or exposure studied.
+- A deliberate assigned treatment, manipulation, vaccination, deliberately imposed husbandry change, challenge or other assigned experimental action is an intervention.
+- An investigated observational exposure or explicitly characterised exposure context may be coded as an exposure.
+- Routine rearing, ordinary husbandry, sampling, culture conditions or laboratory processing are not automatically interventions unless deliberately assigned/imposed as the condition being tested.
+- Environmental, dietary, geographic, production-system, seasonal, farm or host-group conditions may be exposures when actually investigated or explicitly characterised as the exposure/context of interest.
+- A generic environmental mention is not automatically an exposure.
+
+For non-primary documents, exposure_intervention may contain an explicit eligible salmon/system-level exposure or intervention context described by the document itself. Do not inherit an intervention/exposure from a cited study merely because that study is discussed.
+
+COMPARATOR
+comparator is only the actual focal comparison within eligible empirical evidence. It may be null when no genuine comparison exists. Do not inherit a comparator from cited studies.
+
+OUTCOME MEASURED
+outcome_measured contains substantive outcomes actually measured/assessed using study data and reported by the eligible-species primary study.
+
+For primary empirical studies, use Methods/Materials and Results/Findings, including tables and figure legends/captions. Do not code an outcome merely because it is mentioned in the title, abstract, Introduction, Discussion, Conclusions or cited literature.
+
+For non-primary documents without their own eligible empirical study, do not transfer outcomes from cited studies into the record.
+
+FUNDING
+funding_body is taken from explicit funding statements, acknowledgements or equivalent full-text attribution. Do not infer a funder from author affiliation, institutional address or publisher.
+
+RESEARCH QUESTION AND OBJECTIVES
+research_question and objectives_summary should reflect the document's own explicit research question and objectives. Use explicit statements in the document, normally the Introduction and, where clearly stated, the Abstract. For non-primary documents, do not substitute the aims of studies discussed by the document. Do not manufacture a question or objective.
+
+ONTOLOGY CODES
+ontology_codes should represent the eligible-species substantive topic/method content according to the repository's current topic ontology. Use only valid ontology codes. Do not invent codes.
+
+MULTIPLE STUDIES
+Set multiple_studies_flag = true only with strong positive evidence of two or more independently structured eligible-species studies/components, such as explicitly labelled studies, separate substantive thesis chapters, separate study aims/questions with corresponding separate methods/results, distinct eligible samples/populations with distinct methods/results functioning as independent studies, or explicitly combined independent eligible empirical studies.
+
+Multiple treatments, factor levels, conditions, time points, assays, outcomes or populations within one coherent design do not by themselves constitute multiple studies. Discussion of multiple cited studies in a review/commentary/perspective does not by itself make the flag true. If ambiguous, use false. When true, multiple_studies_reason must give a concise evidence-based reason.
+
+DOCUMENT COMPLETENESS
+If the supplied full text is clearly incomplete, truncated, corrupted or only a fragment, return document_type = null and leave substantive fields blank/null/empty. Do not infer or salvage substantive coding from an incomplete text. document_completeness_evidence is required and should provide the opening text (approximately 250 words, or all available opening text if shorter) plus a concise reason for the incompleteness.
+
+COMPLETENESS AUDIT
+Actively assess every current substantive extraction field.
+
+For each current field:
+1. Determine whether it applies to the document/component.
+2. Search the appropriate full-text evidence.
+3. Code explicit information, or make only an inference explicitly permitted by this prompt.
+4. If the field applies but is not reported, mark it "NOT FOUND".
+5. If the field is genuinely inapplicable, use JSON null.
+
+The only permitted field_completeness values are:
+- "NOT FOUND"
+- JSON null
+
+Do not use "FOUND" or any other status.
+
+Populated fields should be omitted from field_completeness. Applicable but unreported fields must appear in not_reported_fields. Genuinely inapplicable fields must not appear in not_reported_fields.
+
+not_reported_fields must be mechanically identical to the set of current substantive fields whose field_completeness value is "NOT FOUND". Do not independently invent this list.
+
+Every populated current field must have field-specific evidence. The evidence must support the exact field/value. Evidence for one field must not be reused as if it supported a different field unless the same text genuinely supports both.
+
+CONTROLLED VOCABULARIES
+Use only values supplied by the current coding schema. Never invent, paraphrase, abbreviate, translate or create a new controlled-vocabulary value. If no allowed value fits, use the appropriate null/NOT FOUND state and preserve useful paper terminology only in free-text evidence.
+
+FINAL OUTPUT
+Return exactly one valid JSON object conforming to the current schema. The object may contain only:
+- the 26 current substantive extraction fields;
+- field_completeness;
+- not_reported_fields;
+- evidence;
+- document_completeness_evidence when required by the document-completeness rule.
+
+No other fields are permitted.
