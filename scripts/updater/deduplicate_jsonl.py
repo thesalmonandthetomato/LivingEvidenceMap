@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Workflow 02: JSON-native staged bibliographic deduplication.
 
+Incoming Lens records remain rich JSON. The historical master may be supplied
+through the lossless legacy_master_adapter JSONL view. Matching is performed
+on a small canonical bibliographic projection while the complete incoming
+record is retained unchanged and annotated with the deterministic decision.
+
 Rules are ported from R/relevance_screening.R. Lens identity and bibliographic
 identity remain separate. DOI is supporting evidence only and is never, by
-itself, a duplicate decision. Every input record is preserved and annotated
-with the deterministic match result.
+itself, a duplicate decision.
 """
 from __future__ import annotations
 
@@ -30,15 +34,43 @@ def norm(value: Any) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def payload(record: dict[str, Any]) -> dict[str, Any]:
+def lens_payload(record: dict[str, Any]) -> dict[str, Any]:
     p = record.get("lens", {}).get("raw_payload", {})
     if not isinstance(p, dict):
-        raise RuntimeError("Record lens.raw_payload is not an object")
+        raise RuntimeError("Lens record lens.raw_payload is not an object")
     return p
 
 
+def canonical(record: dict[str, Any]) -> dict[str, Any]:
+    """Return the adapter's canonical bibliographic projection when present."""
+    c = record.get("canonical")
+    if isinstance(c, dict):
+        return c
+    p = lens_payload(record)
+    return {
+        "record_id": record.get("identity", {}).get("record_id") or record.get("record_id"),
+        "lens_id": record.get("identity", {}).get("lens_id") or p.get("lens_id"),
+        "title": p.get("title"),
+        "authors": p.get("authors"),
+        "year": p.get("year_published") if p.get("year_published") is not None else p.get("date_published"),
+        "source": (p.get("source") or {}).get("title") if isinstance(p.get("source"), dict) else p.get("source"),
+        "doi": None,
+        "abstract": p.get("abstract"),
+    }
+
+
 def extract_dois(record: dict[str, Any]) -> list[str]:
-    ids = payload(record).get("external_ids") or []
+    c = canonical(record)
+    if c.get("doi"):
+        value = norm(c.get("doi"))
+        value = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", value)
+        value = re.sub(r"^doi:\s*", "", value)
+        return [value] if value else []
+
+    try:
+        ids = lens_payload(record).get("external_ids") or []
+    except RuntimeError:
+        ids = []
     if not isinstance(ids, list):
         return []
     out: list[str] = []
@@ -54,42 +86,44 @@ def extract_dois(record: dict[str, Any]) -> list[str]:
 
 
 def title_key(record: dict[str, Any]) -> str:
-    return norm(payload(record).get("title"))
+    return norm(canonical(record).get("title"))
 
 
 def year_key(record: dict[str, Any]) -> str:
-    p = payload(record)
-    return norm(p.get("year_published") if p.get("year_published") is not None else p.get("date_published"))
+    return norm(canonical(record).get("year"))
 
 
 def source_key(record: dict[str, Any]) -> str:
-    source = payload(record).get("source") or {}
-    return norm(source.get("title") if isinstance(source, dict) else source)
+    return norm(canonical(record).get("source"))
 
 
-def authors_key(record: dict[str, Any]) -> str:
-    authors = payload(record).get("authors") or []
+def author_values(record: dict[str, Any]) -> list[str]:
+    authors = canonical(record).get("authors") or []
+    if isinstance(authors, str):
+        return [x.strip() for x in re.split(r"\s*\|\s*|\s*;\s*", authors) if x.strip()]
     if not isinstance(authors, list):
-        return ""
+        return []
     names = []
     for author in authors[:5]:
         if isinstance(author, dict):
             last = norm(author.get("last_name"))
             first = norm(author.get("first_name"))
-            names.append(" ".join(x for x in (last, first) if x))
+            name = " ".join(x for x in (last, first) if x)
+            if not name:
+                name = norm(author.get("name"))
+            names.append(name)
         else:
             names.append(norm(author))
-    return "|".join(x for x in names if x)
+    return [x for x in names if x]
+
+
+def authors_key(record: dict[str, Any]) -> str:
+    return "|".join(author_values(record))
 
 
 def first_author_key(record: dict[str, Any]) -> str:
-    authors = payload(record).get("authors") or []
-    if not isinstance(authors, list) or not authors:
-        return ""
-    author = authors[0]
-    if isinstance(author, dict):
-        return norm(author.get("last_name") or author.get("name") or author.get("first_name"))
-    return norm(author)
+    values = author_values(record)
+    return norm(values[0]) if values else ""
 
 
 def title_prefix(record: dict[str, Any]) -> str:
@@ -108,10 +142,11 @@ def title_similarity(a: str, b: str) -> float:
 
 
 def prepared(record: dict[str, Any]) -> dict[str, Any]:
+    c = canonical(record)
     return {
-        "lens_id": str(record.get("identity", {}).get("lens_id") or payload(record).get("lens_id") or ""),
-        "record_id": str(record.get("identity", {}).get("record_id") or record.get("record_id") or ""),
-        "title": payload(record).get("title") or "",
+        "lens_id": str(c.get("lens_id") or ""),
+        "record_id": str(c.get("record_id") or ""),
+        "title": c.get("title") or "",
         "title_key": title_key(record),
         "doi_keys": extract_dois(record),
         "year_key": year_key(record),
@@ -142,48 +177,28 @@ def best_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def match_record(inc: dict[str, Any], master: list[dict[str, Any]]) -> dict[str, Any] | None:
-    # 1. Exact normalized title, identical to the legacy highest-priority rule.
-    exact = [
-        m for m in master
-        if inc["title_key"] and m["title_key"] == inc["title_key"]
-    ]
+    exact = [m for m in master if inc["title_key"] and m["title_key"] == inc["title_key"]]
     if exact:
         m = exact[0]
-        return {
-            "status": "duplicate",
-            "basis": "exact normalised title",
-            "matched_master_record_id": m["record_id"],
-            "matched_master_title": m["title"],
-            "title_similarity": 1.0,
-            "priority": 1,
-        }
+        return {"status": "duplicate", "basis": "exact normalised title", "matched_master_record_id": m["record_id"], "matched_master_title": m["title"], "title_similarity": 1.0, "priority": 1}
 
-    # 2. DOI match, but only adjudicatively useful when bibliography is compatible.
     doi_candidates = []
     if inc["doi_keys"]:
-        inc_title = inc["title_key"]
         for m in master:
-            shared = set(inc["doi_keys"]) & set(m["doi_keys"])
-            if not shared:
+            if not (set(inc["doi_keys"]) & set(m["doi_keys"])):
                 continue
-            sim = title_similarity(inc_title, m["title_key"])
+            sim = title_similarity(inc["title_key"], m["title_key"])
             if sim >= DOI_TITLE_COMPATIBILITY_THRESHOLD:
                 status, priority, basis = "duplicate", 2, "matching DOI plus compatible title"
-            elif not inc_title or not m["title_key"]:
+            elif not inc["title_key"] or not m["title_key"]:
                 status, priority, basis = "possible_duplicate", 5, "matching DOI but one title unavailable"
             else:
                 status, priority, basis = "doi_conflict_review", 6, "matching DOI but discordant titles"
-            doi_candidates.append({
-                "status": status, "basis": basis,
-                "matched_master_record_id": m["record_id"],
-                "matched_master_title": m["title"],
-                "title_similarity": sim, "priority": priority,
-            })
+            doi_candidates.append({"status": status, "basis": basis, "matched_master_record_id": m["record_id"], "matched_master_title": m["title"], "title_similarity": sim, "priority": priority})
     chosen = best_candidate(doi_candidates)
     if chosen and chosen["status"] != "doi_conflict_review":
         return chosen
 
-    # 3. Fuzzy candidate generation: same year, first author, title prefix or token key.
     candidates: list[dict[str, Any]] = []
     for m in master:
         bases = []
@@ -201,19 +216,9 @@ def match_record(inc: dict[str, Any], master: list[dict[str, Any]]) -> dict[str,
         if sim < FUZZY_THRESHOLD:
             continue
         blocking = bases[0]
-        probable = sim >= PROBABLE_THRESHOLD and blocking in {
-            "same first author", "same title prefix", "same title-token key"
-        }
-        status = "probable_duplicate" if probable else "possible_duplicate"
-        priority = 3 if probable else 4
-        basis = f"{'very high' if probable else 'high'} title similarity plus {blocking}"
-        candidates.append({
-            "status": status, "basis": basis,
-            "matched_master_record_id": m["record_id"],
-            "matched_master_title": m["title"],
-            "title_similarity": sim, "priority": priority,
-        })
-    return best_candidate(candidates) or (chosen if chosen else None)
+        probable = sim >= PROBABLE_THRESHOLD and blocking in {"same first author", "same title prefix", "same title-token key"}
+        candidates.append({"status": "probable_duplicate" if probable else "possible_duplicate", "basis": f"{'very high' if probable else 'high'} title similarity plus {blocking}", "matched_master_record_id": m["record_id"], "matched_master_title": m["title"], "title_similarity": sim, "priority": 3 if probable else 4})
+    return best_candidate(candidates) or chosen
 
 
 def main() -> int:
@@ -229,46 +234,27 @@ def main() -> int:
     incoming = [prepared(r) for r in incoming_records]
     master = [prepared(r) for r in master_records]
 
-    seen_lens: dict[str, str] = {}
+    seen_lens: set[str] = set()
     output: list[dict[str, Any]] = []
     audit: list[dict[str, Any]] = []
 
-    for record in incoming:
+    for original, record in zip(incoming_records, incoming):
         lens_id = record["lens_id"]
         if not lens_id:
             raise RuntimeError("Incoming record has no authoritative lens_id")
         if lens_id in seen_lens:
-            decision = {
-                "status": "identity_match",
-                "basis": "matching lens_id",
-                "matched_master_record_id": "",
-                "matched_master_title": "",
-                "title_similarity": 1.0,
-            }
+            decision = {"status": "identity_match", "basis": "matching lens_id", "matched_master_record_id": "", "matched_master_title": "", "title_similarity": 1.0}
         else:
-            decision = match_record(record, master)
-            if decision is None:
-                decision = {
-                    "status": "new",
-                    "basis": "no deterministic bibliographic match",
-                    "matched_master_record_id": "",
-                    "matched_master_title": "",
-                    "title_similarity": 0.0,
-                }
-        seen_lens[lens_id] = lens_id
-        audit_row = {"lens_id": lens_id, **decision}
-        audit.append(audit_row)
-        output.append(audit_row)
+            decision = match_record(record, master) or {"status": "new", "basis": "no deterministic bibliographic match", "matched_master_record_id": "", "matched_master_title": "", "title_similarity": 0.0}
+        seen_lens.add(lens_id)
 
-    # The detailed candidate audit is the structured decision output.
-    Path(args.output).write_text(
-        "".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n" for r in output),
-        encoding="utf-8",
-    )
-    Path(args.audit).write_text(
-        "".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n" for r in audit),
-        encoding="utf-8",
-    )
+        enriched = dict(original)
+        enriched["deduplication"] = {k: v for k, v in decision.items() if k != "priority"}
+        output.append(enriched)
+        audit.append({"lens_id": lens_id, **{k: v for k, v in decision.items() if k != "priority"}})
+
+    Path(args.output).write_text("".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n" for r in output), encoding="utf-8")
+    Path(args.audit).write_text("".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n" for r in audit), encoding="utf-8")
     return 0
 
 
