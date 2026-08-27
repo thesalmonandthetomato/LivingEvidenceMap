@@ -1,0 +1,80 @@
+name: Test updater Workflow 02 - JSONL deduplication
+
+on:
+  workflow_dispatch:
+    inputs:
+      fixture_records:
+        description: 'Number of synthetic records to generate for the prototype test'
+        required: true
+        default: '20'
+
+permissions:
+  contents: read
+
+jobs:
+  deduplication-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Workflow 02 development branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-02-deduplication
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create deterministic JSONL fixture
+        env:
+          N: ${{ inputs.fixture_records }}
+        run: |
+          python - <<'PY'
+          import json, os
+          n = int(os.environ['N'])
+          records = []
+          for i in range(n):
+              lens_id = f'fixture-{i+1:04d}'
+              payload = {
+                  'title': f'Example evidence record {i+1}',
+                  'year_published': 2024,
+                  'source_title': 'Example Journal',
+                  'authors': [{'last_name': f'Author{i+1}', 'given_name': 'A'}],
+                  'doi': f'10.0000/example.{i+1}'
+              }
+              records.append({'identity': {'lens_id': lens_id}, 'lens': {'raw_payload': payload}})
+          records.append(json.loads(json.dumps(records[0])))
+          dup = json.loads(json.dumps(records[1]))
+          dup['identity']['lens_id'] = 'fixture-bib-duplicate'
+          records.append(dup)
+          with open('fixture.jsonl', 'w', encoding='utf-8') as f:
+              for r in records:
+                  f.write(json.dumps(r, ensure_ascii=False) + '\n')
+          PY
+
+      - name: Run Workflow 02 prototype
+        run: |
+          mkdir -p outputs/updater/deduplication_test
+          python scripts/updater/deduplicate_jsonl.py \
+            --input fixture.jsonl \
+            --output outputs/updater/deduplication_test/records_after_dedup.jsonl \
+            --audit outputs/updater/deduplication_test/dedup_audit.jsonl
+
+      - name: Validate identity and candidate separation
+        run: |
+          python - <<'PY'
+          import json
+          rows = [json.loads(x) for x in open('outputs/updater/deduplication_test/records_after_dedup.jsonl', encoding='utf-8')]
+          assert any(r.get('deduplication', {}).get('status') == 'identity_match' for r in rows)
+          assert any(r.get('deduplication', {}).get('status') == 'duplicate_candidate' for r in rows)
+          assert all('doi' not in r.get('deduplication', {}) or r['deduplication']['decision_source'] != 'doi' for r in rows)
+          print(f'Validated {len(rows)} output records')
+          PY
+
+      - name: Upload Workflow 02 artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-workflow-02-deduplication-${{ github.run_id }}
+          path: outputs/updater/deduplication_test/
+          if-no-files-found: error
+          retention-days: 30
