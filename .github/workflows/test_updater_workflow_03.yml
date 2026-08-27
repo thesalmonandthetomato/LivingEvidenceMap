@@ -1,0 +1,55 @@
+name: Test updater Workflow 03 - adjudication
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-03-adjudication
+
+      - name: Prepare candidate fixture
+        run: |
+          mkdir -p testdata/workflow03
+          cat > testdata/workflow03/candidates.jsonl <<'EOF'
+          {"candidate_id":"c1","incoming_record_id":"lens-001","matched_master_record_id":"master-001","duplicate_basis":"doi_conflict_review","title_similarity":0.91}
+          {"candidate_id":"c2","incoming_record_id":"lens-002","matched_master_record_id":"master-002","duplicate_basis":"possible_duplicate","title_similarity":0.88}
+          EOF
+
+      - name: Run Workflow 03 mock adjudication
+        run: |
+          python3 scripts/updater/adjudicate_jsonl.py \
+            --input testdata/workflow03/candidates.jsonl \
+            --output testdata/workflow03/decisions.jsonl \
+            --audit testdata/workflow03/audit.jsonl \
+            --mode mock
+
+      - name: Validate adjudication output
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          inp = Path('testdata/workflow03/candidates.jsonl')
+          out = Path('testdata/workflow03/decisions.jsonl')
+          audit = Path('testdata/workflow03/audit.jsonl')
+          candidates = [json.loads(x) for x in inp.read_text().splitlines() if x.strip()]
+          decisions = [json.loads(x) for x in out.read_text().splitlines() if x.strip()]
+          audits = [json.loads(x) for x in audit.read_text().splitlines() if x.strip()]
+          assert len(decisions) == len(candidates) == 2
+          assert len(audits) == len(decisions)
+          assert all(d['decision'] in {'duplicate','not_duplicate','uncertain'} for d in decisions)
+          assert all(0 <= d['confidence'] <= 1 for d in decisions)
+          assert all(d['rationale'] for d in decisions)
+          assert decisions[0]['decision'] == 'uncertain'
+          assert decisions[0]['duplicate_basis'] == 'doi_conflict_review'
+          print('Workflow 03 mock adjudication validation passed')
+          PY
+
+      - name: Upload artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow03-adjudication-test
+          path: testdata/workflow03/
