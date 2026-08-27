@@ -1,0 +1,93 @@
+name: TEST - Lens full JSON retrieval
+
+on:
+  workflow_dispatch:
+    inputs:
+      records:
+        description: 'Number of Lens records to retrieve (1-5)'
+        required: false
+        default: '3'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+      TEST_RECORDS: ${{ inputs.records }}
+    steps:
+      - name: Validate test size
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$TEST_RECORDS" in
+            1|2|3|4|5) ;;
+            *) echo 'records must be an integer from 1 to 5' >&2; exit 1 ;;
+          esac
+
+      - name: Retrieve unrestricted Lens JSON
+        shell: python
+        run: |
+          import json, os, urllib.request
+
+          # Same search terms/exclusions as the production Lens harvest.
+          query = {
+              "query": {
+                  "bool": {
+                      "must": [
+                          {"query_string": {"query": "(((title:(salmon OR salmonid* OR Salmo OR Oncorhynchus)) OR (abstract:(salmon OR salmonid* OR Salmo OR Oncorhynchus)) OR (keyword:(salmon OR salmonid* OR Salmo OR Oncorhynchus)))) AND ((((title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))))"}},
+                      {"bool": {"must_not": [
+                          {"term": {"publication_type": "news"}},
+                          {"term": {"publication_type": "report"}},
+                          {"term": {"publication_type": "dataset"}},
+                          {"term": {"publication_type": "libguide"}}
+                      ]}}
+                  ]
+              },
+              "size": int(os.environ["TEST_RECORDS"])
+          }
+
+          url = "https://api.lens.org/scholarly/search"
+          data = json.dumps(query).encode("utf-8")
+          req = urllib.request.Request(
+              url,
+              data=data,
+              headers={
+                  "Authorization": "Bearer " + os.environ["LENS_API_TOKEN"],
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+              },
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=120) as response:
+              payload = json.load(response)
+
+          os.makedirs("test-output", exist_ok=True)
+          with open("test-output/lens_full_response.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, ensure_ascii=False, indent=2)
+
+          # Write a small structural summary without copying the records into logs.
+          records = payload.get("data", [])
+          summary = {
+              "requested_records": int(os.environ["TEST_RECORDS"]),
+              "returned_records": len(records),
+              "top_level_keys": sorted(payload.keys()),
+              "record_keys": sorted(records[0].keys()) if records else [],
+          }
+          with open("test-output/structure_summary.json", "w", encoding="utf-8") as f:
+              json.dump(summary, f, indent=2)
+
+          print(json.dumps(summary, indent=2))
+
+      - name: Upload experimental JSON artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-full-json-test-${{ github.run_id }}
+          path: test-output/
+          if-no-files-found: warn
+          retention-days: 14
