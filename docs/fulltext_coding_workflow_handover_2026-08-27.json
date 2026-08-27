@@ -1,0 +1,75 @@
+{
+  "project": "LivingEvidenceMap",
+  "snapshot_date": "2026-08-27",
+  "purpose": "Machine-readable handover for resuming large-scale full-text coding after the OpenAlex-to-Zenodo acquisition period.",
+  "authoritative_coding_materials": {
+    "prompt": "scripts/fulltext_coding/fulltext_coding_prompt_v3.txt",
+    "schema": "scripts/fulltext_coding/coding_schema_v3.json",
+    "validator": "scripts/fulltext_coding/validate_coding_output_v4.py",
+    "preflight": "scripts/fulltext_coding/preflight_coding_schema_v4.py",
+    "preparation": "scripts/fulltext_coding/prepare_fulltext_for_coding.py",
+    "coder": "scripts/fulltext_coding/code_fulltext_test_v3.py",
+    "ontology": "data/reference/topic_ontology_v3.csv"
+  },
+  "coding_rules_locked_for_next_round": {
+    "eligible_species_only": true,
+    "eligible_species": ["Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"],
+    "exposure_field": "exposure_intervention",
+    "comparator": "Only genuine focal comparator; do not force survivor-versus-mortality contrasts into comparator.",
+    "production_vs_life_stage": "production_stage and fish_life_stage are independent; harvest is not a fish life stage; Adult grow-out is a production stage.",
+    "life_stage_inference": "When not explicit, infer only Juvenile or Adult from suitable age/mass/development evidence matching the species farmed growth trajectory; otherwise NOT FOUND. Do not infer other life stages from age/mass.",
+    "research_question_objectives": "Search the whole document; abstract/Introduction are useful but not exclusive. Explicit aims/objectives/questions elsewhere are acceptable.",
+    "array_completeness": "All array fields must remain arrays; when applicable but unsupported after active searching use [\"NOT FOUND\"].",
+    "validation": "Warnings are diagnostic/non-fatal unless the workflow explicitly fails.",
+    "ontology": "Use only topic_ontology_v3.csv codes; reporting terminology comes from its exact hierarchy_path.",
+    "multiple_studies": "Require strong evidence of independently structured eligible studies/components; multiple treatments/timepoints/outcomes alone do not qualify."
+  },
+  "acquisition": {
+    "workflow": ".github/workflows/openalex_fulltext_download.yml",
+    "schedule": "Daily OpenAlex full-text acquisition, maximum 100 content files per batch.",
+    "planned_batches": "6-40",
+    "output": "GROBID TEI/XML",
+    "provenance_registry": "data/reference/fulltext_batch_registry.csv",
+    "registry_key_fields": ["doi", "openalex_id", "workflow_run_id", "zenodo_record_id", "zenodo_record_url", "zenodo_version_doi", "zenodo_concept_doi", "zenodo_archive_filename", "status"]
+  },
+  "zenodo_coding_pipeline": {
+    "workflow": ".github/workflows/zenodo_fulltext_ai_coding.yml",
+    "mode": "manual workflow_dispatch only; no schedule",
+    "start": "User chooses when to start.",
+    "stop": "A manually started run processes uncompleted deposited Zenodo records sequentially until all are exhausted or the user cancels/stops the GitHub Actions run.",
+    "record_unit": "One Zenodo record at a time.",
+    "paper_unit": "One TEI full text at a time within the selected Zenodo record.",
+    "model": "gpt-5.6-luna",
+    "concurrency": "Only one Zenodo coding run may operate at once.",
+    "resume": "The cumulative architecture is consulted before coding; completed OpenAlex IDs are skipped.",
+    "per_record_checkpoint": true,
+    "checkpoint_rule": "After every successfully coded paper, update cumulative_coding.json and coding_architecture.json and commit/push both to GitHub before proceeding to the next paper.",
+    "failure_boundary": "If an annotation is not produced, the workflow stops before advancing to the next paper.",
+    "artifacts": {
+      "retention_days": 90,
+      "checkpoint_artifact": "Current annotations, downloaded archive and cumulative/provenance JSON state.",
+      "cumulative_artifact": "cumulative_coding.json"
+    }
+  },
+  "persistent_outputs": {
+    "cumulative_coding": "data/fulltext_coding/cumulative_coding.json",
+    "provenance_architecture": "data/fulltext_coding/coding_architecture.json",
+    "per_record_helper": "scripts/fulltext_coding/update_cumulative_coding.py",
+    "orchestrator": "scripts/fulltext_coding/run_zenodo_fulltext_ai_coding.py",
+    "provenance_chain": ["zenodo_record_id", "zenodo_archive_filename", "zenodo_source_filename", "openalex_id", "doi", "coding_run_id"],
+    "annotation_metadata": ["prompt_version", "schema_version", "ontology", "coding_timestamp_utc"]
+  },
+  "design_decision": "Do not create a separate bulk ingestion workflow. Zenodo is intentionally ingested one record at a time by the existing AI coding pipeline; persistence is cumulative and provenance is explicit.",
+  "before_full_scale_run": [
+    "Confirm all expected Zenodo records are deposited and present in fulltext_batch_registry.csv.",
+    "Confirm the master CSV contains stable OpenAlex IDs and DOIs.",
+    "Manually run the workflow on a deliberately selected Zenodo record as an end-to-end smoke test.",
+    "Inspect the first run's provenance, checkpoint commits, cumulative JSON and 90-day artifact before allowing large-scale processing.",
+    "Do not change the frozen coding prompt/schema/ontology unless a genuine systematic coding error is demonstrated."
+  ],
+  "baseline": {
+    "reviewed_studies": 20,
+    "status": "Useful baseline only; produced before the final completeness/NOT FOUND instruction and therefore not the benchmark for that change.",
+    "visual_report": "20-study categorical/ontology visualisation PDF was produced separately."
+  }
+}
