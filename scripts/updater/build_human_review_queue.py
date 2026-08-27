@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build a stable, lossless human-review queue from Workflow 03 results."""
-import argparse, json, uuid
+import argparse, hashlib, json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -9,16 +9,26 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def stable_case_id(row):
+    explicit = row.get('review_case_id')
+    if explicit:
+        return explicit
+    seed = '|'.join(str(row.get(k) or '') for k in (
+        'candidate_id', 'incoming_record_id', 'matched_master_record_id', 'promotion_reason'
+    ))
+    digest = hashlib.sha256(seed.encode('utf-8')).hexdigest()[:20]
+    return f"hr-{digest}"
+
+
 def run(inp, out):
     rows = [json.loads(x) for x in Path(inp).read_text(encoding='utf-8').splitlines() if x.strip()]
     with Path(out).open('w', encoding='utf-8', newline='\n') as f:
         for row in rows:
             if row.get('promotion') != 'human_review':
                 continue
-            case_id = row.get('review_case_id') or f"hr-{uuid.uuid4().hex}"
             review = {
                 'workflow': '03_adjudication',
-                'review_case_id': case_id,
+                'review_case_id': stable_case_id(row),
                 'status': 'pending',
                 'created_at': now(),
                 'candidate_id': row.get('candidate_id'),
