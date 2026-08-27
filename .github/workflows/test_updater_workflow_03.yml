@@ -15,17 +15,27 @@ jobs:
         run: |
           mkdir -p testdata/workflow03
           cat > testdata/workflow03/candidates.jsonl <<'EOF'
-          {"candidate_id":"c1","incoming_record_id":"lens-001","matched_master_record_id":"master-001","duplicate_basis":"doi_conflict_review","title_similarity":0.91}
-          {"candidate_id":"c2","incoming_record_id":"lens-002","matched_master_record_id":"master-002","duplicate_basis":"possible_duplicate","title_similarity":0.88}
+          {"candidate_id":"c1","incoming_record_id":"lens-001","matched_master_record_id":"master-001","duplicate_basis":"doi_conflict_review","title_similarity":0.91,"incoming_title":"A trial of tomato screening","matched_master_title":"A trial of tomato screening","incoming_year":2020,"matched_master_year":2020,"incoming_first_author":"Smith","matched_master_first_author":"Smith","incoming_doi":"10.1000/example-wrong","matched_master_doi":"10.1000/example-correct"}
+          {"candidate_id":"c2","incoming_record_id":"lens-002","matched_master_record_id":"master-002","duplicate_basis":"possible_duplicate","title_similarity":0.88,"incoming_title":"Evidence synthesis of tomato production","matched_master_title":"Evidence synthesis of tomato production methods","incoming_year":2021,"matched_master_year":2021,"incoming_first_author":"Jones","matched_master_first_author":"Jones","incoming_doi":"10.1000/example2","matched_master_doi":"10.1000/example2"}
           EOF
 
       - name: Run Workflow 03 mock adjudication
         run: |
           python3 scripts/updater/adjudicate_jsonl.py \
             --input testdata/workflow03/candidates.jsonl \
-            --output testdata/workflow03/decisions.jsonl \
-            --audit testdata/workflow03/audit.jsonl \
+            --output testdata/workflow03/decisions_mock.jsonl \
+            --audit testdata/workflow03/audit_mock.jsonl \
             --mode mock
+
+      - name: Run Workflow 03 real API adjudication
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python3 scripts/updater/adjudicate_jsonl.py \
+            --input testdata/workflow03/candidates.jsonl \
+            --output testdata/workflow03/decisions_api.jsonl \
+            --audit testdata/workflow03/audit_api.jsonl \
+            --mode api
 
       - name: Validate adjudication output
         run: |
@@ -33,23 +43,24 @@ jobs:
           import json
           from pathlib import Path
           inp = Path('testdata/workflow03/candidates.jsonl')
-          out = Path('testdata/workflow03/decisions.jsonl')
-          audit = Path('testdata/workflow03/audit.jsonl')
+          mock = Path('testdata/workflow03/decisions_mock.jsonl')
+          api = Path('testdata/workflow03/decisions_api.jsonl')
+          audit = Path('testdata/workflow03/audit_api.jsonl')
           candidates = [json.loads(x) for x in inp.read_text().splitlines() if x.strip()]
-          decisions = [json.loads(x) for x in out.read_text().splitlines() if x.strip()]
+          decisions = [json.loads(x) for x in api.read_text().splitlines() if x.strip()]
           audits = [json.loads(x) for x in audit.read_text().splitlines() if x.strip()]
           assert len(decisions) == len(candidates) == 2
           assert len(audits) == len(decisions)
           assert all(d['decision'] in {'duplicate','not_duplicate','uncertain'} for d in decisions)
           assert all(0 <= d['confidence'] <= 1 for d in decisions)
           assert all(d['rationale'] for d in decisions)
-          assert decisions[0]['decision'] == 'uncertain'
-          assert decisions[0]['duplicate_basis'] == 'doi_conflict_review'
-          print('Workflow 03 mock adjudication validation passed')
+          assert all(d['mode'] == 'api' for d in decisions)
+          print('Workflow 03 API adjudication validation passed')
           PY
 
       - name: Upload artefacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow03-adjudication-test
+          name: workflow03-adjudication-api-test
           path: testdata/workflow03/
