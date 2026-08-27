@@ -30,6 +30,7 @@ env:
   ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   FULLTEXT_CODING_MODEL: ${{ github.event.inputs.model || 'gpt-5.6-luna' }}
+  EARLIEST_AUTOMATED_DATE: "2026-09-27"
   PYTHONUNBUFFERED: "1"
 
 jobs:
@@ -61,7 +62,10 @@ jobs:
           python - <<'PY'
           import csv, json, os, urllib.request
           from pathlib import Path
+          from datetime import datetime, timezone
           token=os.environ['ZENODO_ACCESS_TOKEN']; requested=os.environ.get('INPUT_RECORD_ID','').strip()
+          if not requested and datetime.now(timezone.utc).date().isoformat() < os.environ['EARLIEST_AUTOMATED_DATE']:
+              raise SystemExit(f'Scheduled Zenodo coding is held until {os.environ["EARLIEST_AUTOMATED_DATE"]}; use workflow_dispatch with a record ID for an intentional preflight/test run.')
           rows=list(csv.DictReader(Path('data/reference/fulltext_batch_registry.csv').open(encoding='utf-8-sig',newline='')))
           arch=json.loads(Path('data/fulltext_coding/coding_architecture.json').read_text())
           processed={k for k,v in arch.get('records',{}).items() if v.get('coding_status')=='completed'}
