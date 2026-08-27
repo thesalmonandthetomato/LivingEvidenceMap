@@ -1,6 +1,6 @@
 {
   "schema_version": "fulltext_coding_v1",
-  "description": "LivingEvidenceMap full-text coding schema for the current extraction variables. Workflow provenance is maintained outside the model extraction object.",
+  "description": "LivingEvidenceMap full-text coding schema. The fulltext_coding_prompt_v1.txt is the authoritative coding master; this file defines the machine-readable output contract and must not add substantive variables beyond that prompt.",
   "document_type": ["study", "review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"],
   "review_type": ["primer_overview", "systematic_style", "not_applicable"],
   "study_type": ["experimental", "observational", "modelling", "not_stated", "not_applicable"],
@@ -31,9 +31,9 @@
     "system_studied": "string|null",
     "production_stage": "array[enum]",
     "fish_life_stage": "array[enum]",
-    "outcome_measured": "array[string]",
     "exposure_intervention": "string|null",
     "comparator": "string|null",
+    "outcome_measured": "array[string]",
     "funding_body": "string|null",
     "research_question": "string|null",
     "objectives_summary": "string|null",
@@ -42,15 +42,60 @@
     "multiple_studies_reason": "string|null"
   },
   "evidence": {
-    "description": "Field-specific article/full-text evidence for substantive coding.",
-    "item_schema": {"field": "string", "value": "any", "text": "string", "section": "string", "page": "integer|null"}
+    "description": "Array of field-specific article/full-text evidence objects. Every populated substantive field must have at least one matching evidence object. Evidence field names must be current substantive fields only.",
+    "type": "array",
+    "item_schema": {
+      "field": "current_substantive_field_name",
+      "value": "any",
+      "text": "string",
+      "section": "string",
+      "page": "integer|null"
+    },
+    "allowed_fields": [
+      "document_type", "review_type", "study_type", "study_design", "research_approach", "setting", "sample_unit", "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility", "system_studied", "production_stage", "fish_life_stage", "exposure_intervention", "comparator", "outcome_measured", "funding_body", "research_question", "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"
+    ]
   },
   "document_completeness_evidence": {
-    "description": "Record-level evidence supporting the assessment of supplied full-text completeness. Required when document_completeness is INCOMPLETE or UNCERTAIN.",
-    "item_schema": {"text": "string", "reason": "string", "section": "string|null", "page": "integer|null"}
+    "description": "Record-level evidence supporting the assessment of supplied full-text completeness. Required when document_completeness is INCOMPLETE or UNCERTAIN; must be absent or null when document_completeness is COMPLETE.",
+    "type": "object|null",
+    "item_schema": {
+      "text": "string",
+      "reason": "string",
+      "section": "string|null",
+      "page": "integer|null"
+    }
   },
   "field_completeness": {
-    "description": "Exception-only audit for current extraction fields. Populated fields are omitted. Applicable but unreported fields use 'NOT FOUND'. Genuinely inapplicable fields use JSON null.",
-    "allowed_statuses": ["NOT FOUND", null]
-  }
+    "description": "Exception-only audit keyed by current substantive extraction field name. Populated fields are omitted. Applicable but unreported fields use the literal string NOT FOUND. Genuinely inapplicable fields use JSON null. No other status is permitted.",
+    "type": "object",
+    "allowed_statuses": ["NOT FOUND", null],
+    "allowed_fields": [
+      "document_type", "review_type", "study_type", "study_design", "research_approach", "setting", "sample_unit", "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility", "system_studied", "production_stage", "fish_life_stage", "exposure_intervention", "comparator", "outcome_measured", "funding_body", "research_question", "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"
+    ]
+  },
+  "not_reported_fields": {
+    "description": "Mechanically derived list of current substantive fields whose field_completeness value is exactly NOT FOUND. It must contain no other fields and must be empty when no applicable current field is unreported.",
+    "type": "array[string]",
+    "allowed_values": [
+      "document_type", "review_type", "study_type", "study_design", "research_approach", "setting", "sample_unit", "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility", "system_studied", "production_stage", "fish_life_stage", "exposure_intervention", "comparator", "outcome_measured", "funding_body", "research_question", "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"
+    ],
+    "consistency_rule": "Exactly equal to the keys in field_completeness whose value is NOT FOUND."
+  },
+  "current_substantive_fields": [
+    "document_type", "review_type", "study_type", "study_design", "research_approach", "setting", "sample_unit", "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility", "system_studied", "production_stage", "fish_life_stage", "exposure_intervention", "comparator", "outcome_measured", "funding_body", "research_question", "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"
+  ],
+  "audit_fields": ["document_completeness", "document_completeness_evidence", "field_completeness", "not_reported_fields"],
+  "validation_rules": [
+    "The prompt is the authoritative substantive coding master; this schema must not introduce additional substantive extraction fields.",
+    "Exactly the 26 current_substantive_fields are permitted as substantive output fields.",
+    "The four audit_fields are the only additional output structures permitted.",
+    "The literal value FOUND is prohibited everywhere; field completeness may only be NOT FOUND or JSON null.",
+    "not_reported_fields must equal exactly the NOT FOUND keys in field_completeness.",
+    "Every populated substantive field must have field-specific evidence.",
+    "Evidence field names must belong to current_substantive_fields.",
+    "document_completeness_evidence is required for INCOMPLETE or UNCERTAIN and is not required for COMPLETE.",
+    "If document_completeness is INCOMPLETE, substantive fields must use the neutral states specified by the authoritative prompt and must not be marked NOT FOUND merely because content may be missing from the incomplete source.",
+    "multiple_studies_reason must be JSON null when multiple_studies_flag is false.",
+    "sample_size and all removed/legacy extraction variables are prohibited."
+  ]
 }
