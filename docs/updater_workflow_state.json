@@ -1,0 +1,41 @@
+{
+  "architecture_version": "json-boundaried-updater-v1",
+  "locked_workflows": {
+    "workflow_01_lens_ingestion": {
+      "status": "locked"
+    },
+    "workflow_02_deterministic_deduplication": {
+      "status": "locked",
+      "branch": "updater-workflow-02-deduplication",
+      "scope": "Deterministic bibliographic deduplication only; ambiguous cases leave Workflow 02 for adjudication.",
+      "identity_rule": "lens_id is authoritative record identity, not duplicate evidence.",
+      "doi_rule": "DOI is supporting evidence only and must not independently determine duplication; conflicting DOI/title evidence is retained for review.",
+      "matching_order": [
+        "exact normalised title",
+        "matching DOI plus compatible title",
+        "staged bibliographic candidate blocking",
+        "Jaro-Winkler title similarity"
+      ],
+      "outputs": [
+        "rich incoming Lens JSONL retained unchanged except for appended deduplication decision metadata",
+        "deduplication audit JSONL",
+        "checkpoint/restart artefacts"
+      ],
+      "decision_boundary": [
+        "duplicate",
+        "new",
+        "probable_duplicate",
+        "possible_duplicate",
+        "doi_conflict_review",
+        "identity_match"
+      ],
+      "test_status": "passed",
+      "last_verified_run": 33115282932,
+      "known_limitation": "Historical master records are currently supplied through the lossless legacy-master JSON adapter; later historical Lens reconstruction can replace that adapter without changing the Workflow 02 contract.",
+      "next_workflow": "workflow_03_adjudication"
+    }
+  },
+  "workflow_03_adjudication": {
+    "status": "next"
+  }
+}
