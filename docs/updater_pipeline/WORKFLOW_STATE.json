@@ -1,6 +1,6 @@
 {
   "pipeline": "LivingEvidenceMap updater",
-  "architecture_status": "in_design",
+  "architecture_status": "workflow_01_locked",
   "last_locked_workflow": "01_lens_ingestion",
   "next_workflow": "02_deduplication",
   "processing_format": {
@@ -26,7 +26,7 @@
   ],
   "workflow_01": {
     "name": "Lens ingestion",
-    "status": "locked_architecture",
+    "status": "locked_implementation_tested",
     "input": [
       "config/lens_search.json",
       "state/lens_weekly_harvest.json",
@@ -39,6 +39,15 @@
       "retrieval checkpoint",
       "successful-search checkpoint after complete success",
       "search history"
+    ],
+    "tests_passed": [
+      "six-month unrestricted Lens retrieval",
+      "multi-page Lens pagination/scrolling",
+      "full rich Lens payload retention",
+      "lens_id uniqueness and presence",
+      "canonical JSONL parse integrity",
+      "Unicode line-separator JSONL edge case",
+      "intentional mid-run failure and checkpoint/restart recovery"
     ],
     "must_not_do": [
       "deduplicate against the master corpus",
@@ -56,10 +65,10 @@
     "principle": "preserve current correct state; reconstruct historical JSON/provenance only where evidenced; leave unresolved historical decisions unknown/blank"
   },
   "repository_change_policy": {
-    "workflow_01_implementation": "not_yet_approved",
+    "workflow_01_implementation": "locked_for_next_stage; changes require explicit approval",
     "master_csv_changes": "defer_until_all_processing_workflows_are_mapped",
     "dashboard_changes": "defer_until_corrected_master_csv_is_final",
-    "temporary_test_workflow": "remove_after_lens_schema_investigation"
+    "temporary_test_workflow": "remove_after_workflow_01_lock_and_schema_investigation"
   },
   "resume_instruction": "Begin by reading this file and docs/updater_pipeline/WORKFLOW_01_LENS_INGESTION.md, then map Workflow 02 deduplication against the locked Workflow 01 downstream contract. Do not infer undocumented implementation details; verify them from repository workflows/scripts/config/state or ask the user."
 }
