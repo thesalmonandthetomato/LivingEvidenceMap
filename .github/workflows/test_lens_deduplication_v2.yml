@@ -64,12 +64,31 @@ jobs:
           mkdir -p outputs/updater/deduplication_test
           python scripts/updater/deduplicate_jsonl.py --input fixture.jsonl --output outputs/updater/deduplication_test/records_after_dedup.jsonl --audit outputs/updater/deduplication_test/dedup_audit.jsonl
 
-      - name: Validate real Lens structure and DOI safeguards
+      - name: Validate every JSONL output line
         run: |
           python - <<'PY'
           import json
-          rows = [json.loads(x) for x in open('outputs/updater/deduplication_test/records_after_dedup.jsonl', encoding='utf-8')]
-          assert len(rows) == 53, len(rows)
+          from pathlib import Path
+          path = Path('outputs/updater/deduplication_test/records_after_dedup.jsonl')
+          rows=[]
+          for line_no, line in enumerate(path.open(encoding='utf-8'), 1):
+              if not line.strip():
+                  continue
+              try:
+                  row=json.loads(line)
+              except json.JSONDecodeError as exc:
+                  raise SystemExit(f'Invalid JSONL at line {line_no}: {exc}')
+              rows.append(row)
+          assert len(rows)==53, len(rows)
+          assert len({r['identity']['lens_id'] for r in rows})==52
+          print(f'Parsed {len(rows)} JSONL records successfully')
+          PY
+
+      - name: Validate identity, bibliography and DOI safeguards
+        run: |
+          python - <<'PY'
+          import json
+          rows = [json.loads(x) for x in open('outputs/updater/deduplication_test/records_after_dedup.jsonl', encoding='utf-8') if x.strip()]
           assert any(r['deduplication']['status'] == 'identity_match' for r in rows)
           assert any(r['deduplication']['status'] == 'duplicate_candidate' for r in rows)
           wrong_doi = next(r for r in rows if r['identity']['lens_id'] == 'fixture-wrong-doi')
