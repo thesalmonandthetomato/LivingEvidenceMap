@@ -44,42 +44,53 @@ def build_query(template: dict[str, Any], start: str, end: str) -> dict[str, Any
     if not isinstance(base_query, dict):
         raise ValueError("config/lens_search.json must contain api_query.query")
 
-    # Add the resolved created-date range without modifying the configured
-    # subject/publication logic. The production config's query has a single
-    # query_string in bool.must and publication exclusions in bool.must_not.
     bool_query = base_query.setdefault("bool", {})
     filters = bool_query.setdefault("filter", [])
     filters.append({"range": {"created": {"gte": start, "lte": end}}})
 
+    configured_size = api_cfg.get("size", PAGE_SIZE)
+    try:
+        configured_size = int(configured_size)
+    except (TypeError, ValueError):
+        configured_size = PAGE_SIZE
+
     return {
         "query": base_query,
-        "size": min(PAGE_SIZE, int(template.get("api_query", {}).get("size", PAGE_SIZE)), 500),
+        "size": min(PAGE_SIZE, max(1, configured_size)),
         "scroll": SCROLL,
     }
 
 
 def request_with_retry(session: requests.Session, url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+    last_error: Exception | None = None
     for attempt in range(5):
         try:
-            r = session.post(url, headers=headers, json=payload, timeout=120)
+            response = session.post(url, headers=headers, json=payload, timeout=120)
         except requests.RequestException as exc:
+            last_error = exc
             if attempt == 4:
-                raise RuntimeError(f"Lens API request failed after retries: {exc}") from exc
+                break
             time.sleep(min(60, 2 ** attempt))
             continue
-        if r.status_code == 200:
-            return r.json()
-        if r.status_code == 429 or 500 <= r.status_code < 600:
-            retry_after = r.headers.get("Retry-After")
-            try:
-                delay = float(retry_after) if retry_after else min(60, 2 ** attempt)
-            except ValueError:
-                delay = min(60, 2 ** attempt)
+
+        if response.status_code == 200:
+            return response.json()
+
+        if response.status_code == 429 or 500 <= response.status_code < 600:
+            last_error = RuntimeError(f"Lens API HTTP {response.status_code}: {response.text[:1000]}")
             if attempt < 4:
+                retry_after = response.headers.get("Retry-After")
+                try:
+                    delay = float(retry_after) if retry_after else min(60, 2 ** attempt)
+                except ValueError:
+                    delay = min(60, 2 ** attempt)
                 time.sleep(delay)
                 continue
-        raise RuntimeError(f"Lens API HTTP {r.status_code}: {r.text[:1000]}")
-    raise RuntimeError("Lens API failed after retries")
+            break
+
+        raise RuntimeError(f"Lens API HTTP {response.status_code}: {response.text[:1000]}")
+
+    raise RuntimeError(f"Lens API request failed after retries: {last_error}")
 
 
 def main() -> int:
