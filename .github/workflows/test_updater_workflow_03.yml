@@ -29,29 +29,17 @@ jobs:
 
       - name: Run Workflow 03 mock adjudication
         run: |
-          python3 scripts/updater/adjudicate_jsonl.py \
-            --input testdata/workflow03/candidates.jsonl \
-            --output testdata/workflow03/decisions_mock.jsonl \
-            --audit testdata/workflow03/audit_mock.jsonl \
-            --mode mock
+          python3 scripts/updater/adjudicate_jsonl.py --input testdata/workflow03/candidates.jsonl --output testdata/workflow03/decisions_mock.jsonl --audit testdata/workflow03/audit_mock.jsonl --mode mock
 
       - name: Run Workflow 03 real OpenAI adjudication
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python3 scripts/updater/adjudicate_jsonl.py \
-            --input testdata/workflow03/candidates.jsonl \
-            --output testdata/workflow03/decisions_api.jsonl \
-            --audit testdata/workflow03/audit_api.jsonl \
-            --mode openai \
-            --model gpt-5-mini
+          python3 scripts/updater/adjudicate_jsonl.py --input testdata/workflow03/candidates.jsonl --output testdata/workflow03/decisions_api.jsonl --audit testdata/workflow03/audit_api.jsonl --mode openai --model gpt-5-mini
 
       - name: Run promotion gate on real API results
         run: |
-          python3 scripts/updater/promote_adjudication.py \
-            --input testdata/workflow03/decisions_api.jsonl \
-            --output testdata/workflow03/promoted_api.jsonl \
-            --threshold 0.80
+          python3 scripts/updater/promote_adjudication.py --input testdata/workflow03/decisions_api.jsonl --output testdata/workflow03/promoted_api.jsonl --threshold 0.80
 
       - name: Test promotion gate failure states
         run: |
@@ -61,33 +49,34 @@ jobs:
           {"candidate_id":"u3","decision":"not_duplicate","confidence":0.90,"rationale":"Technical test","adjudication_error":"TimeoutError: simulated"}
           {"candidate_id":"u4","decision":"bogus","confidence":0.99,"rationale":"Invalid decision"}
           EOF
-          python3 scripts/updater/promote_adjudication.py \
-            --input testdata/workflow03/promotion_edge_cases.jsonl \
-            --output testdata/workflow03/promotion_edge_results.jsonl \
-            --threshold 0.80
+          python3 scripts/updater/promote_adjudication.py --input testdata/workflow03/promotion_edge_cases.jsonl --output testdata/workflow03/promotion_edge_results.jsonl --threshold 0.80
 
-      - name: Validate adjudication and all promotion safety states
+      - name: Build human review queue
+        run: |
+          cat testdata/workflow03/promotion_edge_results.jsonl >> testdata/workflow03/review_input.jsonl
+          python3 scripts/updater/build_human_review_queue.py --input testdata/workflow03/review_input.jsonl --output testdata/workflow03/human_review_queue.jsonl
+
+      - name: Validate adjudication, promotion and review queue
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
           decisions = [json.loads(x) for x in Path('testdata/workflow03/decisions_api.jsonl').read_text().splitlines() if x.strip()]
-          promotions = [json.loads(x) for x in Path('testdata/workflow03/promoted_api.jsonl').read_text().splitlines() if x.strip()]
           edge = [json.loads(x) for x in Path('testdata/workflow03/promotion_edge_results.jsonl').read_text().splitlines() if x.strip()]
-          assert len(decisions) == len(promotions) == 2
-          assert all(d['decision'] in {'duplicate','not_duplicate','uncertain'} for d in decisions)
-          assert all(0 <= d['confidence'] <= 1 for d in decisions)
-          assert all(d['rationale'] for d in decisions)
-          assert all(not d.get('adjudication_error') for d in decisions)
-          assert [r['promotion'] for r in edge] == ['human_review','human_review','human_review','human_review']
-          reasons = [r['promotion_reason'] for r in edge]
-          assert reasons == ['model_uncertain','below_confidence_threshold','technical_failure','invalid_decision']
-          print('Workflow 03 adjudication and promotion safety validation passed')
+          queue = [json.loads(x) for x in Path('testdata/workflow03/human_review_queue.jsonl').read_text().splitlines() if x.strip()]
+          assert len(decisions) == 2
+          assert [r['promotion'] for r in edge] == ['human_review'] * 4
+          assert len(queue) == 4
+          assert len({r['review_case_id'] for r in queue}) == 4
+          assert all(r['status'] == 'pending' for r in queue)
+          assert all(r['human_decision'] is None and r['resolved_at'] is None for r in queue)
+          assert {r['promotion_reason'] for r in queue} == {'model_uncertain','below_confidence_threshold','technical_failure','invalid_decision'}
+          print('Workflow 03 human review queue validation passed')
           PY
 
       - name: Upload artefacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow03-adjudication-promotion-test
+          name: workflow03-human-review-queue-test
           path: testdata/workflow03/
