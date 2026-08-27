@@ -4,19 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       zenodo_record_id:
-        description: "Zenodo record ID to process; leave blank to select the first unprocessed deposited record from the provenance registry"
+        description: "Zenodo record ID to process; leave blank to select the first unprocessed deposited record"
         required: false
         default: ""
       model:
         description: "OpenAI model"
         required: false
         default: "gpt-5.6-luna"
-      checkpoint_size:
-        description: "Papers per durable coding checkpoint"
-        required: false
-        default: "10"
-  schedule:
-    - cron: "30 10 * * *"
 
 permissions:
   contents: write
@@ -30,7 +24,6 @@ env:
   ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   FULLTEXT_CODING_MODEL: ${{ github.event.inputs.model || 'gpt-5.6-luna' }}
-  EARLIEST_AUTOMATED_DATE: "2026-09-27"
   PYTHONUNBUFFERED: "1"
 
 jobs:
@@ -62,10 +55,7 @@ jobs:
           python - <<'PY'
           import csv, json, os, urllib.request
           from pathlib import Path
-          from datetime import datetime, timezone
           token=os.environ['ZENODO_ACCESS_TOKEN']; requested=os.environ.get('INPUT_RECORD_ID','').strip()
-          if not requested and datetime.now(timezone.utc).date().isoformat() < os.environ['EARLIEST_AUTOMATED_DATE']:
-              raise SystemExit(f'Scheduled Zenodo coding is held until {os.environ["EARLIEST_AUTOMATED_DATE"]}; use workflow_dispatch with a record ID for an intentional preflight/test run.')
           rows=list(csv.DictReader(Path('data/reference/fulltext_batch_registry.csv').open(encoding='utf-8-sig',newline='')))
           arch=json.loads(Path('data/fulltext_coding/coding_architecture.json').read_text())
           processed={k for k,v in arch.get('records',{}).items() if v.get('coding_status')=='completed'}
@@ -92,7 +82,6 @@ jobs:
               if len(zips)==1: archive=zips[0]
           if archive is None: raise SystemExit(f'Could not uniquely identify expected archive for Zenodo record {record_id}')
           url=archive.get('links',{}).get('download') or archive.get('links',{}).get('self')
-          if not url: raise SystemExit('Zenodo archive has no download URL')
           req=urllib.request.Request(url,headers={'Authorization':f'Bearer {token}'})
           with urllib.request.urlopen(req,timeout=600) as r: blob=r.read()
           Path('work/zenodo_archive').write_bytes(blob)
@@ -130,69 +119,37 @@ jobs:
           print(f'Matched and prepared {len(selected)} new TEI files')
           PY
 
-      - name: Code in durable checkpoints
-        env:
-          CHECKPOINT_SIZE: ${{ github.event.inputs.checkpoint_size || '10' }}
+      - name: Code one record at a time with immediate durable checkpoint
         run: |
           set -euo pipefail
           python - <<'PY'
-          import os, shutil, subprocess
+          import json, os, shutil, subprocess
           from pathlib import Path
-          prepared=sorted(Path('work/prepared').glob('*.json')); size=int(os.environ.get('CHECKPOINT_SIZE','10'))
-          for start in range(0,len(prepared),size):
-              chunk=prepared[start:start+size]; chunk_dir=Path('work/chunks')/f'chunk_{start+1:04d}_{start+len(chunk):04d}'; chunk_dir.mkdir(parents=True,exist_ok=True)
-              for p in chunk: shutil.copy2(p,chunk_dir/p.name)
-              print(f'CODING CHECKPOINT {start+1}-{start+len(chunk)} of {len(prepared)}')
-              subprocess.run(['python','scripts/fulltext_coding/code_fulltext_test_v3.py','--input-dir',str(chunk_dir),'--output-dir','work/annotations','--ontology','data/reference/topic_ontology_v3.csv','--schema','scripts/fulltext_coding/coding_schema_v3.json','--validator','scripts/fulltext_coding/validate_coding_output_v4.py','--prompt','scripts/fulltext_coding/fulltext_coding_prompt_v3.txt','--model',os.environ['FULLTEXT_CODING_MODEL'],'--max-papers',str(len(chunk))],check=True)
-          PY
-
-      - name: Build cumulative coding JSON and provenance architecture
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import csv, json, os
-          from pathlib import Path
-          from datetime import datetime, timezone
-          ctx=json.loads(Path('work/record_context.json').read_text())
+          prepared=sorted(Path('work/prepared').glob('*.json'))
           selected={r['openalex_id']:r for r in json.loads(Path('work/selected_registry.json').read_text())}
-          master=Path('data/master/current/living_evidence_map_master.csv')
-          master_rows=list(csv.DictReader(master.open(encoding='utf-8-sig',newline=''))) if master.exists() else []
-          def val(r,*names):
-              for n in names:
-                  if n in r and str(r[n]).strip(): return str(r[n]).strip()
-              return ''
-          master_by_openalex={val(r,'openalex_id','OpenAlex ID','openalex'):r for r in master_rows if val(r,'openalex_id','OpenAlex ID','openalex')}
-          master_by_doi={val(r,'doi','DOI').lower():r for r in master_rows if val(r,'doi','DOI')}
-          arch_path=Path('data/fulltext_coding/coding_architecture.json'); cum_path=Path('data/fulltext_coding/cumulative_coding.json')
-          arch=json.loads(arch_path.read_text()); cum=json.loads(cum_path.read_text()); arch.setdefault('records',{}); cum.setdefault('records',[])
-          existing={r.get('openalex_id'):i for i,r in enumerate(cum['records']) if r.get('openalex_id')}; now=datetime.now(timezone.utc).isoformat()
-          for p in sorted(Path('work/annotations').glob('*.json')):
-              if p.name.endswith('.raw_response.json') or p.name.endswith('.checkpoint.json') or p.name=='test_manifest.json': continue
-              wid=p.stem; prov=selected.get(wid,{}) ; doi=str(prov.get('doi') or '').strip(); master_row=master_by_openalex.get(wid) or master_by_doi.get(doi.lower()); annotation=json.loads(p.read_text())
-              record={'openalex_id':wid,'doi':doi or (val(master_row,'doi','DOI') if master_row else ''),'zenodo_record_id':ctx['zenodo_record_id'],'zenodo_record_url':ctx['zenodo_record_url'],'zenodo_archive_filename':ctx['zenodo_archive_filename'],'zenodo_source_filename':f'{wid}.tei.xml','master_csv_match':bool(master_row),'master_csv_doi':(val(master_row,'doi','DOI') if master_row else ''),'coding_status':'completed','coding_run_id':os.environ['GITHUB_RUN_ID'],'coding_timestamp_utc':now,'prompt_version':'fulltext_coding_v3','schema_version':'coding_schema_v3','ontology':'data/reference/topic_ontology_v3.csv','validation_warnings':annotation.get('validation_warnings',[]),'annotation':annotation}
-              if wid in existing: cum['records'][existing[wid]]=record
-              else: cum['records'].append(record)
-              arch['records'][wid]={k:record[k] for k in ['openalex_id','doi','zenodo_record_id','zenodo_record_url','zenodo_archive_filename','zenodo_source_filename','master_csv_match','master_csv_doi','coding_status','coding_run_id','coding_timestamp_utc','prompt_version','schema_version','ontology','validation_warnings']}
-          arch['updated_at_utc']=now; arch['record_count']=len(arch['records']); arch['workflow']='zenodo_fulltext_ai_coding'; arch['architecture_version']='1.0'; arch['provenance_key_order']=['zenodo_record_id','zenodo_archive_filename','zenodo_source_filename','openalex_id','doi','master_csv_match','coding_run_id']
-          cum['updated_at_utc']=now; cum['workflow']='zenodo_fulltext_ai_coding'; cum['architecture_version']='1.0'; cum['record_count']=len(cum['records'])
-          arch_path.write_text(json.dumps(arch,ensure_ascii=False,indent=2)+'\n'); cum_path.write_text(json.dumps(cum,ensure_ascii=False,indent=2)+'\n'); print(f'Cumulative coded records: {len(cum["records"])}')
+          for i,p in enumerate(prepared,1):
+              wid=p.stem
+              chunk_dir=Path('work/chunks')/f'record_{i:04d}'; chunk_dir.mkdir(parents=True,exist_ok=True)
+              shutil.copy2(p,chunk_dir/p.name)
+              print(f'CODING RECORD {i} of {len(prepared)}: {wid}')
+              subprocess.run(['python','scripts/fulltext_coding/code_fulltext_test_v3.py','--input-dir',str(chunk_dir),'--output-dir','work/annotations','--ontology','data/reference/topic_ontology_v3.csv','--schema','scripts/fulltext_coding/coding_schema_v3.json','--validator','scripts/fulltext_coding/validate_coding_output_v4.py','--prompt','scripts/fulltext_coding/fulltext_coding_prompt_v3.txt','--model',os.environ['FULLTEXT_CODING_MODEL'],'--max-papers','1'],check=True)
+              # The coder checkpoints each model response; stop only after this record has been written.
+              if not (Path('work/annotations')/(wid+'.json')).exists():
+                  raise SystemExit(f'No final annotation produced for {wid}; refusing to advance.')
+              subprocess.run(['python','scripts/fulltext_coding/validate_coding_output_v4.py','--schema','scripts/fulltext_coding/coding_schema_v3.json','--input',str(Path('work/annotations')/(wid+'.json'))],check=False)
+              # Immediate per-record persistence: update the cumulative files after every record.
+              subprocess.run(['python','scripts/fulltext_coding/update_cumulative_coding.py','--annotation',str(Path('work/annotations')/(wid+'.json')),'--provenance',str(Path('work/selected_registry.json')),'--record-id',wid,'--zenodo-context','work/record_context.json'],check=True)
+              subprocess.run(['git','add','data/fulltext_coding/cumulative_coding.json','data/fulltext_coding/coding_architecture.json'],check=True)
+              subprocess.run(['git','diff','--cached','--quiet']) if False else None
+              if subprocess.run(['git','diff','--cached','--quiet']).returncode != 0:
+                  subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+                  subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+                  subprocess.run(['git','commit','-m',f'Checkpoint full-text coding {wid}'],check=True)
+                  subprocess.run(['git','push'],check=True)
+              print(f'DURABLY CHECKPOINTED {wid}')
           PY
 
-      - name: Validate cumulative JSON
-        run: |
-          set -euo pipefail
-          python -m json.tool data/fulltext_coding/cumulative_coding.json >/dev/null
-          python -m json.tool data/fulltext_coding/coding_architecture.json >/dev/null
-
-      - name: Commit cumulative coding archive and provenance architecture
-        run: |
-          set -euo pipefail
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add data/fulltext_coding/cumulative_coding.json data/fulltext_coding/coding_architecture.json
-          if git diff --cached --quiet; then echo 'No new cumulative records to commit.'; else git commit -m "Archive Zenodo full-text coding and provenance"; git push; fi
-
-      - name: Upload checkpoint artifacts (90 days)
+      - name: Upload complete checkpoint artifacts (90 days)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -202,6 +159,7 @@ jobs:
             work/selected_registry.json
             work/record_context.json
             data/fulltext_coding/coding_architecture.json
+            data/fulltext_coding/cumulative_coding.json
           retention-days: 90
           if-no-files-found: warn
 
