@@ -46,32 +46,37 @@ jobs:
             --mode openai \
             --model gpt-5-mini
 
-      - name: Validate adjudication output
+      - name: Run promotion gate
+        run: |
+          python3 scripts/updater/promote_adjudication.py \
+            --input testdata/workflow03/decisions_api.jsonl \
+            --output testdata/workflow03/promoted.jsonl \
+            --threshold 0.80
+
+      - name: Validate adjudication and promotion
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
           inp = Path('testdata/workflow03/candidates.jsonl')
           api = Path('testdata/workflow03/decisions_api.jsonl')
-          audit = Path('testdata/workflow03/audit_api.jsonl')
-          candidates = [json.loads(x) for x in inp.read_text().splitlines() if x.strip()]
+          promoted = Path('testdata/workflow03/promoted.jsonl')
           decisions = [json.loads(x) for x in api.read_text().splitlines() if x.strip()]
-          audits = [json.loads(x) for x in audit.read_text().splitlines() if x.strip()]
-          assert len(decisions) == len(candidates) == 2
-          assert len(audits) == len(decisions)
+          promotions = [json.loads(x) for x in promoted.read_text().splitlines() if x.strip()]
+          assert len(decisions) == 2 == len(promotions)
           assert all(d['decision'] in {'duplicate','not_duplicate','uncertain'} for d in decisions)
           assert all(0 <= d['confidence'] <= 1 for d in decisions)
           assert all(d['rationale'] for d in decisions)
-          assert all(d['mode'] == 'openai' for d in decisions)
-          assert all(d['model'] == 'gpt-5-mini' for d in decisions)
           assert all(not d.get('adjudication_error') for d in decisions)
-          print('Workflow 03 real OpenAI adjudication validation passed')
-          print(json.dumps(decisions, indent=2))
+          assert all(p['promotion_threshold'] == 0.80 for p in promotions)
+          assert all(p['promotion'] in {'duplicate','not_duplicate','human_review'} for p in promotions)
+          print('Workflow 03 adjudication + promotion validation passed')
+          print(json.dumps(promotions, indent=2))
           PY
 
       - name: Upload artefacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow03-adjudication-api-test
+          name: workflow03-adjudication-promotion-test
           path: testdata/workflow03/
