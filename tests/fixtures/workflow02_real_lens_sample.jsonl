@@ -1,0 +1,12 @@
+{
+  "identity": {"lens_id": "real-lens-001"},
+  "lens": {"raw_payload": {"title": "Example conservation evidence study", "year_published": 2024, "source": {"title": "Example Journal"}, "authors": [{"last_name": "Smith", "first_name": "Jane"}], "external_ids": [{"type": "doi", "value": "10.1000/example"}]}}
+}
+{
+  "identity": {"lens_id": "real-lens-002"},
+  "lens": {"raw_payload": {"title": "Example conservation evidence study", "year_published": 2024, "source": {"title": "Example Journal"}, "authors": [{"last_name": "Smith", "first_name": "Jane"}], "external_ids": [{"type": "doi", "value": "10.1000/example-wrong"}]}}
+}
+{
+  "identity": {"lens_id": "real-lens-003"},
+  "lens": {"raw_payload": {"title": "Completely different study", "year_published": 2024, "source": {"title": "Different Journal"}, "authors": [{"last_name": "Jones", "first_name": "Alex"}], "external_ids": [{"type": "doi", "value": "10.1000/example"}]}}
+}
