@@ -2,8 +2,7 @@
 """Deterministic validator for current LivingEvidenceMap full-text coding output.
 
 Validation is deliberately NON-BLOCKING: findings are warnings attached to the
-coding output rather than job-failing errors. Infrastructure failures remain
-fatal at the workflow level.
+coding output rather than job-failing errors. Infrastructure failures remain fatal.
 """
 from __future__ import annotations
 import argparse, json
@@ -17,8 +16,12 @@ CURRENT_FIELDS = {
     "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"
 }
 VALIDATION_OUTPUT_FIELD = "validation_warnings"
-AUDIT_FIELDS = {"field_completeness", "not_reported_fields", "evidence", "document_completeness_evidence"}
+AUDIT_FIELDS = {
+    "document_completeness", "document_completeness_evidence",
+    "field_completeness", "not_reported_fields", "evidence"
+}
 ALLOWED_TOP_LEVEL = CURRENT_FIELDS | AUDIT_FIELDS
+DOCUMENT_COMPLETENESS = {"COMPLETE", "INCOMPLETE", "UNCERTAIN"}
 DOCUMENT_TYPES = {"study", "review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"}
 REVIEW_TYPES = {"primer_overview", "systematic_style", "not_applicable"}
 STUDY_TYPES = {"experimental", "observational", "modelling", "not_stated", "not_applicable"}
@@ -29,31 +32,62 @@ PRODUCTION_STAGES = {"Feed", "Hatchery", "Transfer between Hatchery and Adult", 
 FISH_LIFE_STAGES = {"Sperm", "Egg", "Embryo", "Alevin", "Fry", "Parr", "Pre-smolt", "Smolt", "Juvenile", "Adult", "Broodstock", "Harvest", "Product"}
 AQUACULTURE_FACILITIES = {"salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"}
 SPECIES = {"Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"}
+LEGACY_FIELDS = {"sample_size", "methodology_for_data_collection", "funder", "intervention", "exposure", "impact_type", "impact_details", "mitigation_evaluation"}
 
 
-def _empty(v): return v in (None, "", [], {})
+def _empty(v):
+    return v in (None, "", [], {})
+
+
+def _contains_found(value):
+    if isinstance(value, str):
+        return value.strip().upper() == "FOUND"
+    if isinstance(value, list):
+        return any(_contains_found(v) for v in value)
+    if isinstance(value, dict):
+        return any(_contains_found(k) or _contains_found(v) for k, v in value.items())
+    return False
 
 
 def validate(record: dict) -> list[str]:
     warnings = []
     if not isinstance(record, dict):
         return ["top-level output must be a JSON object"]
+
     extra = sorted(set(record) - ALLOWED_TOP_LEVEL - {VALIDATION_OUTPUT_FIELD})
     missing = sorted(CURRENT_FIELDS - set(record))
     if extra:
         warnings.append(f"unexpected top-level fields: {extra}")
     if missing:
         warnings.append(f"missing current extraction fields: {missing}")
+    if _contains_found(record):
+        warnings.append('literal value "FOUND" is prohibited')
+    if any(k in record for k in LEGACY_FIELDS):
+        warnings.append("legacy/removed extraction field present; remove it")
+
+    dc = record.get("document_completeness")
+    if dc not in DOCUMENT_COMPLETENESS:
+        warnings.append(f"invalid or missing document_completeness: {dc!r}")
+
+    dce = record.get("document_completeness_evidence")
+    if dc in {"INCOMPLETE", "UNCERTAIN"}:
+        if not isinstance(dce, dict) or not isinstance(dce.get("text"), str) or not dce.get("text", "").strip() or not isinstance(dce.get("reason"), str) or not dce.get("reason", "").strip():
+            warnings.append("INCOMPLETE/UNCERTAIN document requires document_completeness_evidence object with text and reason")
+    elif dc == "COMPLETE" and dce not in (None, {}):
+        warnings.append("document_completeness_evidence must be null/absent when document_completeness=COMPLETE")
 
     if record.get("document_type") is None:
         if any(k in record and not _empty(record[k]) for k in CURRENT_FIELDS if k != "document_type"):
             warnings.append("incomplete document must not contain substantive extraction values")
-        if not isinstance(record.get("document_completeness_evidence"), str) or not record["document_completeness_evidence"].strip():
-            warnings.append("incomplete document requires document_completeness_evidence")
+        if dc != "INCOMPLETE":
+            warnings.append("document_type=null is only permitted when document_completeness=INCOMPLETE")
         return warnings
 
     if record.get("document_type") not in DOCUMENT_TYPES:
         warnings.append(f"invalid document_type: {record.get('document_type')!r}")
+
+    if dc == "INCOMPLETE":
+        warnings.append("document_completeness=INCOMPLETE requires document_type=null")
 
     review_type = record.get("review_type")
     if review_type is not None and review_type not in REVIEW_TYPES:
@@ -137,17 +171,12 @@ def validate(record: dict) -> list[str]:
             if field not in evidence_fields:
                 warnings.append(f"populated current field lacks field-specific evidence: {field}")
 
-    if any(x in record for x in ("sample_size", "methodology_for_data_collection", "funder", "intervention", "exposure", "impact_type", "impact_details")):
-        warnings.append("legacy/removed extraction field present; remove it")
     return warnings
 
 
 def add_validation_warnings(record: dict) -> dict:
     out = dict(record)
-    warnings = validate(record)
-    # Validation findings are part of the generated audit output, not model
-    # extraction fields. An empty array makes the absence of warnings explicit.
-    out[VALIDATION_OUTPUT_FIELD] = warnings
+    out[VALIDATION_OUTPUT_FIELD] = validate(record)
     return out
 
 
@@ -167,8 +196,6 @@ def main() -> int:
             print(f"- {warning}")
     else:
         print("VALIDATION OK")
-    # Validation is deliberately non-blocking. Return non-zero only for an
-    # actual validator execution/input failure, not for coding findings.
     return 0
 
 
