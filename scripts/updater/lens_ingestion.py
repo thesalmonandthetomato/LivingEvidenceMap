@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
-"""Workflow 01: lossless Lens ingestion prototype.
-
-This is intentionally independent of the existing production updater.
-It resolves an explicit search window, retrieves full Lens records, writes
-immutable raw response batches plus canonical JSONL records, and records a
-run manifest. The production search state is never modified by this script.
-"""
+"""Workflow 01: lossless Lens ingestion prototype."""
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import sys
@@ -44,28 +39,54 @@ def load_query(path: Path) -> dict[str, Any]:
 
 
 def build_query(template: dict[str, Any], start: str, end: str) -> dict[str, Any]:
-    query = json.loads(json.dumps(template))
-    query["query"]["bool"]["must"][0]["range"]["created"]["gte"] = start
-    query["query"]["bool"]["must"][0]["range"]["created"]["lte"] = end
-    return query
+    api_cfg = template.get("api_query", {})
+    base_query = copy.deepcopy(api_cfg.get("query"))
+    if not isinstance(base_query, dict):
+        raise ValueError("config/lens_search.json must contain api_query.query")
+
+    # Add the resolved created-date range without modifying the configured
+    # subject/publication logic. The production config's query has a single
+    # query_string in bool.must and publication exclusions in bool.must_not.
+    bool_query = base_query.setdefault("bool", {})
+    filters = bool_query.setdefault("filter", [])
+    filters.append({"range": {"created": {"gte": start, "lte": end}}})
+
+    return {
+        "query": base_query,
+        "size": min(PAGE_SIZE, int(template.get("api_query", {}).get("size", PAGE_SIZE)), 500),
+        "scroll": SCROLL,
+    }
 
 
 def request_with_retry(session: requests.Session, url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
     for attempt in range(5):
-        r = session.post(url, headers=headers, json=payload, timeout=120)
+        try:
+            r = session.post(url, headers=headers, json=payload, timeout=120)
+        except requests.RequestException as exc:
+            if attempt == 4:
+                raise RuntimeError(f"Lens API request failed after retries: {exc}") from exc
+            time.sleep(min(60, 2 ** attempt))
+            continue
         if r.status_code == 200:
             return r.json()
         if r.status_code == 429 or 500 <= r.status_code < 600:
             retry_after = r.headers.get("Retry-After")
-            delay = float(retry_after) if retry_after and retry_after.replace('.', '', 1).isdigit() else min(60, 2 ** attempt)
-            time.sleep(delay)
-            continue
+            try:
+                delay = float(retry_after) if retry_after else min(60, 2 ** attempt)
+            except ValueError:
+                delay = min(60, 2 ** attempt)
+            if attempt < 4:
+                time.sleep(delay)
+                continue
         raise RuntimeError(f"Lens API HTTP {r.status_code}: {r.text[:1000]}")
     raise RuntimeError("Lens API failed after retries")
 
 
 def main() -> int:
     args = parse_args()
+    if args.max_records < 1:
+        raise ValueError("--max-records must be at least 1")
+
     token = os.environ.get("LENS_API_TOKEN")
     if not token:
         raise RuntimeError("LENS_API_TOKEN is required")
@@ -78,12 +99,14 @@ def main() -> int:
 
     template = load_query(Path(args.query_file))
     payload = build_query(template, args.start_date, args.end_date)
-    payload["size"] = min(PAGE_SIZE, args.max_records)
-    payload.pop("include", None)
-    payload.pop("exclude", None)
+    payload["size"] = min(payload["size"], args.max_records)
 
     url = os.environ.get("LENS_API_URL", DEFAULT_BASE_URL)
-    headers = {"Authorization": token, "Content-Type": "application/json"}
+    headers = {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     manifest: dict[str, Any] = {
         "workflow": "01_lens_ingestion",
@@ -98,14 +121,13 @@ def main() -> int:
         "full_record_request": True,
         "records_retrieved": 0,
         "batches": 0,
+        "records_without_lens_id": 0,
     }
 
     session = requests.Session()
-    first = request_with_retry(session, url, headers, {**payload, "scroll_id": None})
-    total = first.get("total", first.get("totalHits"))
-    manifest["lens_reported_total"] = total
-
-    records: list[dict[str, Any]] = first.get("data", first.get("results", [])) or []
+    first = request_with_retry(session, url, headers, payload)
+    manifest["lens_reported_total"] = first.get("total")
+    records = first.get("data", []) or []
     scroll_id = first.get("scroll_id")
     batch = 1
     seen: set[str] = set()
@@ -114,18 +136,31 @@ def main() -> int:
         while records and manifest["records_retrieved"] < args.max_records:
             records = records[: args.max_records - manifest["records_retrieved"]]
             raw_path = raw_dir / f"response_{batch:06d}.json"
-            raw_path.write_text(json.dumps({"data": records, "scroll_id": scroll_id}, ensure_ascii=False, indent=2), encoding="utf-8")
+            raw_path.write_text(
+                json.dumps({"data": records, "scroll_id": scroll_id}, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
 
             for record in records:
                 lens_id = record.get("lens_id")
-                if not lens_id or lens_id in seen:
+                if not lens_id:
+                    manifest["records_without_lens_id"] += 1
+                    continue
+                if lens_id in seen:
                     continue
                 seen.add(lens_id)
                 canonical = {
-                    "identity": {"lens_id": lens_id, "record_id": lens_id, "record_id_type": "lens_id"},
+                    "identity": {
+                        "lens_id": lens_id,
+                        "record_id": lens_id,
+                        "record_id_type": "lens_id",
+                    },
+                    "source": {
+                        "provider": "lens",
+                        "source_format": "lens_api_json",
+                    },
                     "lens": {"raw_payload": record},
                     "provenance": {
-                        "source": "lens",
                         "ingestion_run_id": run_id,
                         "retrieved_at": iso_now(),
                         "batch": batch,
@@ -137,15 +172,16 @@ def main() -> int:
             manifest["batches"] = batch
             if not scroll_id or len(records) < payload["size"] or manifest["records_retrieved"] >= args.max_records:
                 break
+
             response = request_with_retry(session, url, headers, {"scroll_id": scroll_id, "scroll": SCROLL})
-            records = response.get("data", response.get("results", [])) or []
+            records = response.get("data", []) or []
             scroll_id = response.get("scroll_id", scroll_id)
             batch += 1
 
     manifest["records_unique"] = len(seen)
     manifest["completed_at"] = iso_now()
     manifest["status"] = "success"
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(manifest, indent=2))
     return 0
 
