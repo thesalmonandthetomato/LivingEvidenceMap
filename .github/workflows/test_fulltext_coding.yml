@@ -10,7 +10,7 @@ on:
       start_index:
         description: "1-based position in sorted prepared corpus to start from"
         required: false
-        default: "11"
+        default: "1"
       model:
         description: "OpenAI model for the test"
         required: false
@@ -66,7 +66,7 @@ jobs:
           import os
           from pathlib import Path
           files=sorted(Path('test_corpus/raw').rglob('*.tei.xml'))
-          start=int(os.environ.get('START_INDEX','11'))
+          start=int(os.environ.get('START_INDEX','1'))
           n=int(os.environ.get('N_PAPERS','10'))
           selected=files[start-1:start-1+n]
           if len(selected) < n:
@@ -80,7 +80,7 @@ jobs:
             python scripts/fulltext_coding/prepare_fulltext_for_coding.py --input "$file" --output "test_corpus/prepared/${work_id}.json"
           done < test_corpus/grobid_test_files.txt
         env:
-          START_INDEX: ${{ github.event.inputs.start_index || '11' }}
+          START_INDEX: ${{ github.event.inputs.start_index || '1' }}
           N_PAPERS: ${{ github.event.inputs.n_papers || '10' }}
       - name: RESTORE durable coding checkpoint from this run
         if: always()
@@ -147,7 +147,7 @@ jobs:
       - name: Write coding test manifest
         if: always()
         env:
-          START_INDEX: ${{ github.event.inputs.start_index || '11' }}
+          START_INDEX: ${{ github.event.inputs.start_index || '1' }}
           N_PAPERS: ${{ github.event.inputs.n_papers || 10 }}
         run: |
           set -euo pipefail
@@ -161,7 +161,7 @@ jobs:
             'workflow':'test_fulltext_coding','model':os.environ['FULLTEXT_CODING_MODEL'],
             'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v3.json',
             'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v3.txt','zenodo_deposition':22085902,
-            'start_index':int(os.environ.get('START_INDEX','11')),'n_papers':int(os.environ.get('N_PAPERS','10')),
+            'start_index':int(os.environ.get('START_INDEX','1')),'n_papers':int(os.environ.get('N_PAPERS','10')),
             'annotation_files':[p.name for p in files]}, indent=2)+'\n')
           PY
       - name: CHECKPOINT final manifest (90 days)
