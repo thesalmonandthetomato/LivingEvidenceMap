@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       zenodo_record_id:
-        description: "Zenodo record ID to process; leave blank to select the first unprocessed deposited record"
+        description: "Optional starting Zenodo record ID; leave blank to process all uncompleted deposited records in order"
         required: false
         default: ""
       model:
@@ -27,9 +27,9 @@ env:
   PYTHONUNBUFFERED: "1"
 
 jobs:
-  code-one-zenodo-record:
+  sequential-zenodo-coding:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 2160
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,7 +37,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Preflight current coding contract
         run: |
           set -euo pipefail
@@ -45,124 +44,25 @@ jobs:
             --schema scripts/fulltext_coding/coding_schema_v3.json \
             --validator scripts/fulltext_coding/validate_coding_output_v4.py \
             --prompt scripts/fulltext_coding/fulltext_coding_prompt_v3.txt
-
-      - name: Select one Zenodo record and download its archive
+      - name: Process Zenodo records sequentially until stopped or exhausted
         env:
-          INPUT_RECORD_ID: ${{ github.event.inputs.zenodo_record_id || '' }}
+          ZENODO_RECORD_ID: ${{ github.event.inputs.zenodo_record_id || '' }}
         run: |
           set -euo pipefail
-          mkdir -p work/raw work/prepared work/annotations work/chunks
-          python - <<'PY'
-          import csv, json, os, urllib.request
-          from pathlib import Path
-          token=os.environ['ZENODO_ACCESS_TOKEN']; requested=os.environ.get('INPUT_RECORD_ID','').strip()
-          rows=list(csv.DictReader(Path('data/reference/fulltext_batch_registry.csv').open(encoding='utf-8-sig',newline='')))
-          arch=json.loads(Path('data/fulltext_coding/coding_architecture.json').read_text())
-          processed={k for k,v in arch.get('records',{}).items() if v.get('coding_status')=='completed'}
-          record_to_rows={}
-          for r in rows:
-              rid=str(r.get('zenodo_record_id','')).strip()
-              if rid: record_to_rows.setdefault(rid,[]).append(r)
-          if requested: record_id=requested
-          else:
-              candidates=[]
-              for rid,rr in record_to_rows.items():
-                  deposited=[r for r in rr if str(r.get('status','')).strip().lower()=='deposited']
-                  remaining=[r for r in deposited if str(r.get('openalex_id','')).strip() not in processed]
-                  if remaining: candidates.append((int(rid) if rid.isdigit() else rid,rid,remaining))
-              if not candidates: raise SystemExit('No unprocessed deposited Zenodo record remains in fulltext_batch_registry.csv')
-              candidates.sort(key=lambda x:x[0]); record_id=candidates[0][1]
-          req=urllib.request.Request(f'https://zenodo.org/api/records/{record_id}',headers={'Authorization':f'Bearer {token}','Accept':'application/json'})
-          with urllib.request.urlopen(req,timeout=60) as r: data=json.load(r)
-          expected_rows=record_to_rows.get(record_id,[])
-          expected_names={str(r.get('zenodo_archive_filename','')).strip() for r in expected_rows if r.get('zenodo_archive_filename')}
-          archive=next((f for f in data.get('files',[]) if f.get('key') in expected_names),None)
-          if archive is None:
-              zips=[f for f in data.get('files',[]) if str(f.get('key','')).lower().endswith(('.zip','.tar.gz','.tgz'))]
-              if len(zips)==1: archive=zips[0]
-          if archive is None: raise SystemExit(f'Could not uniquely identify expected archive for Zenodo record {record_id}')
-          url=archive.get('links',{}).get('download') or archive.get('links',{}).get('self')
-          req=urllib.request.Request(url,headers={'Authorization':f'Bearer {token}'})
-          with urllib.request.urlopen(req,timeout=600) as r: blob=r.read()
-          Path('work/zenodo_archive').write_bytes(blob)
-          Path('work/record_context.json').write_text(json.dumps({'zenodo_record_id':record_id,'zenodo_record_url':f'https://zenodo.org/records/{record_id}','zenodo_archive_filename':archive.get('key'),'zenodo_version_doi':data.get('doi'),'zenodo_concept_doi':data.get('conceptdoi'),'expected_registry_rows':expected_rows,'already_completed_openalex_ids':sorted(processed)},ensure_ascii=False,indent=2)+'\n')
-          print(f'Processing Zenodo record {record_id}: {archive.get("key")}')
-          PY
-
-      - name: Extract and prepare unprocessed TEI files
-        run: |
-          set -euo pipefail
-          case "$(file -b work/zenodo_archive)" in
-            *Zip*) unzip -q work/zenodo_archive -d work/raw ;;
-            *gzip*) mkdir -p work/raw; tar -xzf work/zenodo_archive -C work/raw ;;
-            *) echo "Unsupported Zenodo archive format"; exit 1 ;;
-          esac
-          python - <<'PY'
-          import json, subprocess
-          from pathlib import Path
-          ctx=json.loads(Path('work/record_context.json').read_text())
-          registry={str(r.get('openalex_id','')).strip():r for r in ctx.get('expected_registry_rows',[])}
-          completed=set(ctx.get('already_completed_openalex_ids',[]))
-          files=sorted(Path('work/raw').rglob('*.tei.xml'))
-          if not files: raise SystemExit('No GROBID TEI/XML files found in Zenodo archive')
-          selected=[]
-          for p in files:
-              wid=p.name.removesuffix('.tei.xml'); r=registry.get(wid)
-              if r is None: print(f'UNREGISTERED TEI FILE: {p.name}'); continue
-              if wid in completed: print(f'ALREADY COMPLETED; SKIPPING MODEL CALL: {p.name}'); continue
-              selected.append((p,r))
-          if not selected: raise SystemExit('No unprocessed TEI files remain in this Zenodo archive')
-          for p,r in selected:
-              out=Path('work/prepared')/(p.name.removesuffix('.tei.xml')+'.json')
-              subprocess.run(['python','scripts/fulltext_coding/prepare_fulltext_for_coding.py','--input',str(p),'--output',str(out)],check=True)
-          Path('work/selected_registry.json').write_text(json.dumps([{'source_filename':p.name,'openalex_id':r.get('openalex_id'),'doi':r.get('doi'),'zenodo_record_id':ctx['zenodo_record_id'],'zenodo_archive_filename':ctx['zenodo_archive_filename']} for p,r in selected],ensure_ascii=False,indent=2)+'\n')
-          print(f'Matched and prepared {len(selected)} new TEI files')
-          PY
-
-      - name: Code one record at a time with immediate durable checkpoint
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, os, shutil, subprocess
-          from pathlib import Path
-          prepared=sorted(Path('work/prepared').glob('*.json'))
-          selected={r['openalex_id']:r for r in json.loads(Path('work/selected_registry.json').read_text())}
-          for i,p in enumerate(prepared,1):
-              wid=p.stem
-              chunk_dir=Path('work/chunks')/f'record_{i:04d}'; chunk_dir.mkdir(parents=True,exist_ok=True)
-              shutil.copy2(p,chunk_dir/p.name)
-              print(f'CODING RECORD {i} of {len(prepared)}: {wid}')
-              subprocess.run(['python','scripts/fulltext_coding/code_fulltext_test_v3.py','--input-dir',str(chunk_dir),'--output-dir','work/annotations','--ontology','data/reference/topic_ontology_v3.csv','--schema','scripts/fulltext_coding/coding_schema_v3.json','--validator','scripts/fulltext_coding/validate_coding_output_v4.py','--prompt','scripts/fulltext_coding/fulltext_coding_prompt_v3.txt','--model',os.environ['FULLTEXT_CODING_MODEL'],'--max-papers','1'],check=True)
-              # The coder checkpoints each model response; stop only after this record has been written.
-              if not (Path('work/annotations')/(wid+'.json')).exists():
-                  raise SystemExit(f'No final annotation produced for {wid}; refusing to advance.')
-              subprocess.run(['python','scripts/fulltext_coding/validate_coding_output_v4.py','--schema','scripts/fulltext_coding/coding_schema_v3.json','--input',str(Path('work/annotations')/(wid+'.json'))],check=False)
-              # Immediate per-record persistence: update the cumulative files after every record.
-              subprocess.run(['python','scripts/fulltext_coding/update_cumulative_coding.py','--annotation',str(Path('work/annotations')/(wid+'.json')),'--provenance',str(Path('work/selected_registry.json')),'--record-id',wid,'--zenodo-context','work/record_context.json'],check=True)
-              subprocess.run(['git','add','data/fulltext_coding/cumulative_coding.json','data/fulltext_coding/coding_architecture.json'],check=True)
-              subprocess.run(['git','diff','--cached','--quiet']) if False else None
-              if subprocess.run(['git','diff','--cached','--quiet']).returncode != 0:
-                  subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
-                  subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
-                  subprocess.run(['git','commit','-m',f'Checkpoint full-text coding {wid}'],check=True)
-                  subprocess.run(['git','push'],check=True)
-              print(f'DURABLY CHECKPOINTED {wid}')
-          PY
-
-      - name: Upload complete checkpoint artifacts (90 days)
+          mkdir -p work/annotations work/raw work/prepared
+          python scripts/fulltext_coding/run_zenodo_fulltext_ai_coding.py
+      - name: Upload current checkpoint state (90 days)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: zenodo-fulltext-coding-checkpoint-${{ github.run_id }}
           path: |
             work/annotations/
-            work/selected_registry.json
-            work/record_context.json
+            work/zenodo_archive
             data/fulltext_coding/coding_architecture.json
             data/fulltext_coding/cumulative_coding.json
           retention-days: 90
           if-no-files-found: warn
-
       - name: Upload cumulative coding JSON (90 days)
         if: always()
         uses: actions/upload-artifact@v4
