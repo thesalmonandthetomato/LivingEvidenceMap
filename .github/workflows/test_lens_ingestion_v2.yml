@@ -1,0 +1,52 @@
+name: Test updater Workflow 01 - Lens ingestion
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Lens created date, inclusive (YYYY-MM-DD)'
+        required: true
+        default: '2026-08-01'
+      end_date:
+        description: 'Lens created date, inclusive (YYYY-MM-DD)'
+        required: true
+        default: '2026-08-07'
+      max_records:
+        description: 'Maximum records to retrieve for this test'
+        required: true
+        default: '100'
+
+permissions:
+  contents: read
+
+jobs:
+  lens-ingestion-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade requests
+
+      - name: Run Workflow 01 ingestion test
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        run: |
+          python scripts/updater/lens_ingestion.py \
+            --start-date '${{ inputs.start_date }}' \
+            --end-date '${{ inputs.end_date }}' \
+            --max-records '${{ inputs.max_records }}'
+
+      - name: Upload Workflow 01 artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-workflow-01-lens-ingestion-${{ github.run_id }}
+          path: outputs/updater/lens_ingestion_test/
+          if-no-files-found: error
+          retention-days: 30
