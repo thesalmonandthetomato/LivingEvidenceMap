@@ -35,7 +35,7 @@ The substantive extraction fields are exactly:
 
 Do not add fields. In particular, do not return sample_size, impact_type, impact_details, methodology_for_data_collection, funder, exposure, intervention, mitigation_evaluation, or any other legacy/removed extraction field. Exposure and intervention are one combined field: exposure_intervention.
 
-Return only the substantive fields above plus these schema-defined audit structures: document_completeness, document_completeness_evidence, field_completeness, and not_reported_fields. Do not return workflow provenance or other metadata unless the schema explicitly requires it.
+Return only the substantive fields above plus the schema-defined audit structures: document_completeness, document_completeness_evidence, field_completeness, and not_reported_fields. Do not return workflow provenance or other metadata unless the schema explicitly requires it.
 
 ELIGIBLE-SPECIES FILTER
 First identify the eligible salmon/farmed-salmon species and components. Only information concerning eligible species/components may support substantive coding. Where eligible and ineligible species/components occur in the same document, keep them separate. Never combine characteristics, methods, populations, settings, locations, exposures, comparators or outcomes across eligible and ineligible components.
@@ -49,7 +49,7 @@ For non-primary documents such as reviews, perspectives, commentaries, editorial
 
 Evidence must be specific enough to demonstrate why the coded value is correct. If a permitted inference is made, preserve the underlying article evidence and state in the evidence entry that the value is an inference permitted by this prompt.
 
-Do not use an abstract, introduction, discussion, cited study or general knowledge to override contradictory Methods evidence for a primary empirical study.
+Do not use an abstract, introduction, discussion, cited study or general knowledge to override contradictory Methods evidence for a primary empirical study. This does NOT prevent using the Abstract or Introduction to extract the document's own research question and objectives, as explicitly required below.
 
 DOCUMENT TYPES AND NON-PRIMARY DOCUMENTS
 Code what the document itself investigates, evaluates, synthesises, discusses or explicitly describes, restricted to eligible species/components.
@@ -83,7 +83,7 @@ study_type only: experimental, observational, modelling, not_stated, not_applica
 study_design only: BA, CI, BACI, RCT, Time-series, Modelling, Qualitative, not_stated, not_applicable.
 - CI includes genuine intervention/treatment comparisons, including deliberately imposed alternative challenge modes such as injection versus immersion.
 - Do not create new design labels.
-- A non-primary document without its own eligible empirical study uses [not_applicable].
+- A non-primary document without its own eligible empirical study uses not_applicable.
 
 research_approach only: quantitative, qualitative, mixed_methods, not_applicable.
 - A non-primary document without its own eligible empirical study uses not_applicable.
@@ -186,12 +186,13 @@ fish_life_stage only:
 - Juvenile
 - Adult
 - Broodstock
-- Harvest
 - Product
+
+Harvest is NOT a fish_life_stage value. Harvest belongs only to production_stage/context and must never be emitted in fish_life_stage.
 
 Code all substantive eligible fish life stages actually established in the document. For primary empirical studies, search the entire Methods and Results, including study-period descriptions, production descriptions, tables and figure legends, for later substantive stages in the same eligible cohort. For non-primary documents, search the entire document for explicit life-stage statements.
 
-Production stage and fish life stage are independent variables.
+Production stage and fish life stage are independent variables, but they may describe the same cohort at different levels. If fish reach harvest after a production/grow-out period, do not code Harvest as a life stage; code the biologically supported life stage, normally Adult where the Methods support adult/grow-out status.
 
 LIFE-STAGE INFERENCE FROM METHODS
 For primary empirical studies, life stage may be inferred from body mass, age, developmental descriptors or production information ONLY when the supporting information appears in Methods/Materials and Methods or equivalent study-design text for the fish being coded. Do not infer life stage from the Introduction, Discussion, abstract, title, cited literature or general knowledge alone.
@@ -206,10 +207,10 @@ Use this conservative salmon-specific body-mass guideline:
 
 Pre-market is not itself a permitted fish-life-stage value. If Methods explicitly describe pre-market fish as Adult, Adult may be coded. Do not automatically convert pre-market to Adult.
 
-Do not code Harvest merely because fish were sacrificed, sampled or euthanised. Harvest is appropriate when harvested/product fish are themselves the substantive stage/population studied. Product refers to processed/market product.
+If a study follows fish through production to harvest, use Methods evidence about age, size, maturation, smolt transfer, grow-out or other developmental descriptors to determine the corresponding fish_life_stage. Do not treat the word "harvest" alone as evidence of Adult; use the permitted inference rules and actual Methods context.
 
 EXPOSURE + INTERVENTION
-There is ONE combined field: exposure_intervention. Do not create separate exposure or intervention fields.
+There is ONE and ONLY ONE combined field: exposure_intervention. Do not create separate exposure or intervention fields under any circumstance. The output keys `exposure` and `intervention` are forbidden legacy fields and must never appear.
 
 For primary empirical studies, code the actual eligible-species intervention and/or exposure studied.
 - A deliberate assigned treatment, manipulation, vaccination, deliberately imposed husbandry change, challenge or other assigned experimental action is an intervention.
@@ -234,7 +235,15 @@ FUNDING
 funding_body is taken from explicit funding statements, acknowledgements or equivalent full-text attribution. Do not infer a funder from author affiliation, institutional address or publisher.
 
 RESEARCH QUESTION AND OBJECTIVES
-research_question and objectives_summary should reflect the document's own explicit research question and objectives. Use explicit statements in the document, normally the Introduction and, where clearly stated, the Abstract. For non-primary documents, do not substitute the aims of studies discussed by the document. Do not manufacture a question or objective.
+These two fields are mandatory retrieval targets, not optional descriptive fields.
+
+For every complete document, actively search the Abstract and Introduction for the document's own explicit research question, aim, purpose, objective(s), hypothesis or equivalent statement BEFORE considering either field NOT FOUND. Search the Methods/Results as a secondary check for explicit restatements of the aims. For reviews and other non-primary documents, use the document's own stated question/objectives, not the aims of cited studies.
+
+If an explicit question is stated, populate research_question with a faithful concise representation supported by evidence from the Abstract/Introduction. If no question is explicitly phrased as a question but the aim/purpose/objective is explicit, convert that explicit aim into a concise research-question formulation without adding substantive content not present in the article.
+
+Populate objectives_summary from explicit aims/objectives/purpose statements. It may be supported by the Abstract or Introduction. Do not leave research_question or objectives_summary unpopulated merely because the article uses "aim", "objective", "purpose", "we investigated", "we compared", "we evaluated", "we examined", "this study sought to", or equivalent wording rather than the word "question".
+
+Only after actively checking the Abstract and Introduction and finding no usable statement may either field be marked NOT FOUND. Do not infer a question/objective solely from the Methods or Results when the article provides no explicit aim/purpose/objective statement.
 
 ONTOLOGY CODES
 ontology_codes should represent the eligible-species substantive topic/method content according to the repository's current topic ontology. Use only valid ontology codes. Do not invent codes.
@@ -247,28 +256,20 @@ Multiple treatments, factor levels, conditions, time points, assays, outcomes or
 When multiple_studies_flag = false, multiple_studies_reason MUST be JSON null. When true, multiple_studies_reason must give a concise evidence-based reason.
 
 DOCUMENT COMPLETENESS
-First assess whether the supplied full text is complete enough for substantive extraction. Set document_completeness to exactly one of COMPLETE, INCOMPLETE, UNCERTAIN.
+First assess whether the supplied full text is complete enough for substantive extraction.
 
-COMPLETE means the supplied full text appears sufficiently intact to support substantive extraction of the document. INCOMPLETE means there is positive evidence of truncation, corruption, malformed extraction, missing major content, or an explicit indication that the supplied text is only a fragment. UNCERTAIN means the text may be incomplete but there is not enough positive evidence to classify it as INCOMPLETE.
+If the supplied full text is clearly incomplete, truncated, corrupted, malformed or only a fragment, set document_completeness = INCOMPLETE and do not perform substantive extraction. Set substantive fields to the schema-valid neutral states appropriate for an incomplete document. document_completeness_evidence must provide the opening text (approximately 250 words, or all available opening text if shorter) plus a concise reason for the incompleteness.
 
-If document_completeness = COMPLETE, perform normal substantive extraction and the normal field-completeness audit.
-
-If document_completeness = INCOMPLETE, do NOT perform substantive extraction. Use only schema-valid neutral values: document_type = null; review_type = not_applicable; study_type = not_applicable; study_design = [not_applicable]; research_approach = not_applicable; setting = []; sample_unit = []; study_period = null; location_region = null; location_country = null; species = []; other_farmed_species = []; study_population = null; aquaculture_facility = []; system_studied = null; production_stage = []; fish_life_stage = []; exposure_intervention = null; comparator = null; outcome_measured = []; funding_body = null; research_question = null; objectives_summary = null; ontology_codes = []; multiple_studies_flag = false; multiple_studies_reason = null. Do not use NOT FOUND to describe information that may simply be absent because the source is incomplete.
-
-If document_completeness = UNCERTAIN, perform extraction only where the available text provides direct evidence, and use field_completeness normally for applicable fields that are genuinely unreported. Do not treat uncertainty about the source as evidence that a variable is NOT FOUND.
-
-When document_completeness is INCOMPLETE or UNCERTAIN, document_completeness_evidence is required. It must contain approximately the first 250 words of the supplied text (or all available opening text if shorter) plus a concise reason for the completeness classification. Do not claim a section is missing unless the supplied text provides evidence for that conclusion.
-
-Do not interpret a missing section in an INCOMPLETE document as evidence that the article did not report the variable. Such a record must be eligible for later reassessment when a complete full text becomes available.
+Do not interpret a missing section in a demonstrably incomplete full text as evidence that the article did not report the variable. Such a record must be eligible for later reassessment when a complete full text becomes available.
 
 COMPLETENESS AUDIT
-For COMPLETE and UNCERTAIN documents, actively assess every current substantive extraction field.
+Actively assess every current substantive extraction field.
 
 For each current field:
 1. Determine whether it applies to the document/component.
 2. Search the appropriate full-text evidence.
 3. Code explicit information, or make only an inference explicitly permitted by this prompt.
-4. If the field applies but is not reported in a sufficiently complete supplied text, mark it "NOT FOUND".
+4. If the field applies but is not reported in the available complete text, mark it "NOT FOUND".
 5. If the field is genuinely inapplicable to the document/component, use JSON null.
 
 The only permitted field_completeness values are:
@@ -279,28 +280,28 @@ Never use "FOUND". Never use any other completeness status.
 
 Populated fields are omitted from field_completeness. Applicable but unreported fields must appear in not_reported_fields. Genuinely inapplicable fields must not appear in not_reported_fields.
 
-not_reported_fields must contain exactly the substantive field names whose field_completeness value is "NOT FOUND". Do not independently invent or omit entries. For INCOMPLETE documents, not_reported_fields must be [] because source incompleteness is handled by document_completeness rather than NOT FOUND.
+not_reported_fields must be mechanically identical to the set of current substantive fields whose field_completeness value is "NOT FOUND". Do not independently invent this list.
 
 Every populated current field must have field-specific evidence. The evidence must support the exact field/value. Evidence for one field must not be reused as if it supported a different field unless the same text genuinely supports both.
 
 CONTROLLED VOCABULARIES AND OUTPUT HYGIENE
-Use only values supplied by the current coding schema. Never invent, paraphrase, abbreviate, translate or create a new controlled-vocabulary value. If no allowed value fits, use the appropriate null/empty state and preserve useful paper terminology only in free-text evidence.
+Use only values supplied by the current coding schema. Never invent, paraphrase, abbreviate, translate or create a new controlled-vocabulary value. If no allowed value fits, use the appropriate null/NOT FOUND state and preserve useful paper terminology only in free-text evidence.
 
 Before returning the JSON, perform a final self-check:
-- exactly the 26 current substantive fields are present, plus only the four schema-defined audit structures: document_completeness, document_completeness_evidence, field_completeness, not_reported_fields;
+- exactly the 26 current substantive fields are present, plus only schema-defined audit/evidence structures;
 - no removed/legacy field is present;
 - no field or status contains the literal value "FOUND";
-- exposure and intervention appear only as exposure_intervention;
+- `exposure_intervention` is the only field used for exposure/intervention and the legacy keys `exposure` and `intervention` are absent;
 - sample_size is absent;
-- every populated substantive field has field-specific evidence when document_completeness is COMPLETE or UNCERTAIN;
+- Harvest is absent from fish_life_stage;
+- every populated substantive field has field-specific evidence;
 - every "NOT FOUND" completeness entry is represented in not_reported_fields;
 - no genuinely inapplicable field appears in not_reported_fields;
-- not_reported_fields is [] for INCOMPLETE documents;
 - multiple_studies_reason is null when multiple_studies_flag is false;
+- research_question and objectives_summary were actively checked against Abstract and Introduction before being marked NOT FOUND;
 - all controlled-vocabulary values exactly match the schema;
 - no information from ineligible species/components has been transferred to eligible coding;
-- life-stage inference, if used, is supported by Methods/equivalent study-design text and complies with the rules above;
-- if document_completeness is INCOMPLETE, all substantive fields use exactly the neutral states specified above.
+- life-stage inference, if used, is supported by Methods/equivalent study-design text and complies with the rules above.
 
 FINAL OUTPUT
-Return exactly one valid JSON object conforming to the current schema. The object may contain only the current substantive extraction fields and the four schema-defined audit structures. No other fields are permitted.
+Return exactly one valid JSON object conforming to the current schema. The object may contain only the current substantive extraction fields and schema-defined audit/evidence structures. No other fields are permitted.
