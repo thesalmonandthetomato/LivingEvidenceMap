@@ -16,7 +16,6 @@ import argparse
 import json
 import re
 import unicodedata
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +41,6 @@ def lens_payload(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def canonical(record: dict[str, Any]) -> dict[str, Any]:
-    """Return the adapter's canonical bibliographic projection when present."""
     c = record.get("canonical")
     if isinstance(c, dict):
         return c
@@ -66,7 +64,6 @@ def extract_dois(record: dict[str, Any]) -> list[str]:
         value = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", value)
         value = re.sub(r"^doi:\s*", "", value)
         return [value] if value else []
-
     try:
         ids = lens_payload(record).get("external_ids") or []
     except RuntimeError:
@@ -135,10 +132,47 @@ def title_token_key(record: dict[str, Any]) -> str:
     return " ".join(sorted(set(tokens[:8])))
 
 
-def title_similarity(a: str, b: str) -> float:
+def jaro_similarity(a: str, b: str) -> float:
+    """Exact Jaro similarity, matching the legacy R stringdist metric."""
+    if a == b:
+        return 1.0 if a else 0.0
     if not a or not b:
         return 0.0
-    return SequenceMatcher(None, a, b).ratio()
+    if len(a) > len(b):
+        a, b = b, a
+    match_distance = max(len(b) // 2 - 1, 0)
+    a_match = [False] * len(a)
+    b_match = [False] * len(b)
+    matches = 0
+    for i, char in enumerate(a):
+        start = max(0, i - match_distance)
+        end = min(i + match_distance + 1, len(b))
+        for j in range(start, end):
+            if b_match[j] or char != b[j]:
+                continue
+            a_match[i] = True
+            b_match[j] = True
+            matches += 1
+            break
+    if matches == 0:
+        return 0.0
+    a_seq = [a[i] for i in range(len(a)) if a_match[i]]
+    b_seq = [b[j] for j in range(len(b)) if b_match[j]]
+    transpositions = sum(x != y for x, y in zip(a_seq, b_seq)) / 2.0
+    return (matches / len(a) + matches / len(b) + (matches - transpositions) / matches) / 3.0
+
+
+def title_similarity(a: str, b: str) -> float:
+    """Jaro-Winkler title similarity used by the legacy matcher."""
+    if not a or not b:
+        return 0.0
+    j = jaro_similarity(a, b)
+    prefix = 0
+    for x, y in zip(a, b):
+        if x != y or prefix == 4:
+            break
+        prefix += 1
+    return j + prefix * 0.1 * (1.0 - j)
 
 
 def prepared(record: dict[str, Any]) -> dict[str, Any]:
