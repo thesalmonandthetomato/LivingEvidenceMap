@@ -1,0 +1,70 @@
+{
+  "snapshot_date": "2026-08-27",
+  "project": "LivingEvidenceMap",
+  "repository": "thesalmonandthetomato/LivingEvidenceMap",
+  "authority": {
+    "rule": "Current authoritative prompt/schema override historical discussion and legacy materials.",
+    "prompt": "scripts/fulltext_coding/fulltext_coding_prompt_v3.txt",
+    "schema": "scripts/fulltext_coding/coding_schema_v3.json",
+    "validator": "scripts/fulltext_coding/validate_coding_output_v4.py",
+    "preflight": "scripts/fulltext_coding/preflight_coding_schema_v4.py",
+    "preparation": "scripts/fulltext_coding/prepare_fulltext_for_coding.py",
+    "coder": "scripts/fulltext_coding/code_fulltext_test_v3.py",
+    "ontology": "data/reference/topic_ontology_v3.csv"
+  },
+  "decision_log": "docs/fulltext_coding_decision_log.md",
+  "acquisition": {
+    "workflow": ".github/workflows/openalex_fulltext_download.yml",
+    "registry": "data/reference/fulltext_batch_registry.csv",
+    "planned_batches": "6-40",
+    "daily_batch_limit": 100,
+    "output": "GROBID TEI/XML"
+  },
+  "coding_pipeline": {
+    "workflow": ".github/workflows/zenodo_fulltext_ai_coding.yml",
+    "trigger": "manual workflow_dispatch only",
+    "unit": "one Zenodo record at a time",
+    "stop_condition": "user may stop/cancel; otherwise continue through unprocessed deposited records",
+    "checkpoint_unit": "one paper",
+    "artifact_retention_days": 90,
+    "cumulative_coding": "data/fulltext_coding/cumulative_coding.json",
+    "provenance_architecture": "data/fulltext_coding/coding_architecture.json"
+  },
+  "provenance_key_order": [
+    "zenodo_record_id",
+    "zenodo_archive_filename",
+    "zenodo_source_filename",
+    "openalex_id",
+    "doi",
+    "master_csv_match",
+    "coding_run_id"
+  ],
+  "critical_rules": {
+    "eligible_species_only": true,
+    "exposure_field": "exposure_intervention",
+    "harvest_is_life_stage": false,
+    "production_stage_and_fish_life_stage_are_distinct": true,
+    "life_stage_inference": "Only Juvenile or Adult from suitable age/mass/development evidence when species-specific farmed trajectory supports it; other stages must be explicit.",
+    "research_question_and_objectives": "Search the whole document; abstract/Introduction are not exclusive locations.",
+    "array_not_found": "[NOT FOUND]",
+    "validation_warnings": "non-fatal diagnostics unless the workflow otherwise fails",
+    "ontology_source": "data/reference/topic_ontology_v3.csv",
+    "comparator": "genuine focal comparator only; do not force survivor-versus-mortality or incidental contrasts"
+  },
+  "historical_baseline": {
+    "study_count": 20,
+    "status": "broadly usable substantive extraction",
+    "caveat": "Generated before final completeness/NOT FOUND tightening; do not use its completeness warnings as evidence that the current prompt is wrong."
+  },
+  "resume_checklist": [
+    "Read docs/fulltext_coding_workflow_handover.md",
+    "Read docs/fulltext_coding_decision_log.md",
+    "Inspect current authoritative prompt/schema/ontology",
+    "Inspect fulltext_batch_registry.csv",
+    "Inspect coding_architecture.json and cumulative_coding.json",
+    "Manually dispatch zenodo_fulltext_ai_coding.yml",
+    "Pilot across multiple Zenodo records",
+    "Monitor per-paper checkpoints",
+    "Review coding accuracy/completeness against full text after bulk processing"
+  ]
+}
