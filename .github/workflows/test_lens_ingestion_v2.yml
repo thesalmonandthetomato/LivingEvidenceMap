@@ -6,7 +6,7 @@ on:
       start_date:
         description: 'Lens created date, inclusive (YYYY-MM-DD)'
         required: true
-        default: '2026-08-01'
+        default: '2026-02-01'
       end_date:
         description: 'Lens created date, inclusive (YYYY-MM-DD)'
         required: true
@@ -14,7 +14,12 @@ on:
       max_records:
         description: 'Maximum records to retrieve for this test'
         required: true
-        default: '100'
+        default: '1000'
+      checkpoint_test:
+        description: 'Run intentional failure then resume test'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -36,14 +41,49 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade requests
 
-      - name: Run Workflow 01 ingestion test
+      - name: Intentional failure checkpoint test
+        if: ${{ inputs.checkpoint_test }}
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        run: |
+          set +e
+          python scripts/updater/lens_ingestion.py \
+            --start-date '${{ inputs.start_date }}' \
+            --end-date '${{ inputs.end_date }}' \
+            --max-records '${{ inputs.max_records }}' \
+            --fail-after-batch 2
+          status=$?
+          set -e
+          test "$status" -ne 0
+          test -s outputs/updater/lens_ingestion_test/checkpoint.json
+          test -s outputs/updater/lens_ingestion_test/raw/response_000002.json
+          echo "Checkpointed intentional failure confirmed."
+
+      - name: Resume from checkpoint
         env:
           LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
         run: |
           python scripts/updater/lens_ingestion.py \
             --start-date '${{ inputs.start_date }}' \
             --end-date '${{ inputs.end_date }}' \
-            --max-records '${{ inputs.max_records }}'
+            --max-records '${{ inputs.max_records }}' \
+            --resume
+
+      - name: Validate final JSONL integrity and reconciliation
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('outputs/updater/lens_ingestion_test')
+          manifest = json.loads((root / 'manifest.json').read_text())
+          rows = [json.loads(line) for line in (root / 'records.jsonl').read_text().splitlines() if line.strip()]
+          ids = [r['identity']['lens_id'] for r in rows]
+          assert len(rows) == manifest['records_unique'], (len(rows), manifest['records_unique'])
+          assert len(ids) == len(set(ids)), 'Duplicate lens_id in canonical JSONL'
+          assert manifest['status'] == 'success'
+          assert manifest['batches'] >= 3, manifest['batches']
+          print(f"Validated {len(rows)} JSONL records across {manifest['batches']} batches.")
+          PY
 
       - name: Upload Workflow 01 artefacts
         uses: actions/upload-artifact@v4
