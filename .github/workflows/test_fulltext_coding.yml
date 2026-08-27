@@ -6,11 +6,11 @@ on:
       n_papers:
         description: "Number of prepared papers to code"
         required: false
-        default: "5"
+        default: "10"
       start_index:
         description: "1-based position in sorted prepared corpus to start from"
         required: false
-        default: "6"
+        default: "11"
       model:
         description: "OpenAI model for the test"
         required: false
@@ -65,8 +65,8 @@ jobs:
           import os
           from pathlib import Path
           files=sorted(Path('test_corpus/raw').rglob('*.tei.xml'))
-          start=int(os.environ.get('START_INDEX','6'))
-          n=int(os.environ.get('N_PAPERS','5'))
+          start=int(os.environ.get('START_INDEX','11'))
+          n=int(os.environ.get('N_PAPERS','10'))
           selected=files[start-1:start-1+n]
           if len(selected) < n:
               raise SystemExit(f'Requested {n} papers from position {start}, but only {len(files)} are available')
@@ -79,8 +79,8 @@ jobs:
             python scripts/fulltext_coding/prepare_fulltext_for_coding.py --input "$file" --output "test_corpus/prepared/${work_id}.json"
           done < test_corpus/grobid_test_files.txt
         env:
-          START_INDEX: ${{ github.event.inputs.start_index || '6' }}
-          N_PAPERS: ${{ github.event.inputs.n_papers || '5' }}
+          START_INDEX: ${{ github.event.inputs.start_index || '11' }}
+          N_PAPERS: ${{ github.event.inputs.n_papers || '10' }}
       - name: RESTORE durable coding checkpoint from this run
         if: always()
         env:
@@ -118,9 +118,9 @@ jobs:
             --output-dir test_corpus/annotations \
             --ontology data/reference/topic_ontology_v3.csv \
             --schema scripts/fulltext_coding/coding_schema_v1.json \
-            --prompt scripts/fulltext_coding/fulltext_coding_prompt_v1.txt \
+            --prompt scripts/fulltext_coding/fulltext_coding_prompt_v2.txt \
             --model "$FULLTEXT_CODING_MODEL" \
-            --max-papers "${{ github.event.inputs.n_papers || 5 }}"
+            --max-papers "${{ github.event.inputs.n_papers || 10 }}"
       - name: Validate generated annotations
         if: always()
         run: |
@@ -147,8 +147,8 @@ jobs:
       - name: Write coding test manifest
         if: always()
         env:
-          START_INDEX: ${{ github.event.inputs.start_index || '6' }}
-          N_PAPERS: ${{ github.event.inputs.n_papers || 5 }}
+          START_INDEX: ${{ github.event.inputs.start_index || '11' }}
+          N_PAPERS: ${{ github.event.inputs.n_papers || 10 }}
         run: |
           set -euo pipefail
           mkdir -p test_corpus/annotations
@@ -160,8 +160,8 @@ jobs:
           Path('test_corpus/annotations/test_manifest.json').write_text(json.dumps({
             'workflow':'test_fulltext_coding','model':os.environ['FULLTEXT_CODING_MODEL'],
             'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v1.json',
-            'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v1.txt','zenodo_deposition':22085902,
-            'start_index':int(os.environ.get('START_INDEX','6')),'n_papers':int(os.environ.get('N_PAPERS','5')),
+            'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v2.txt','zenodo_deposition':22085902,
+            'start_index':int(os.environ.get('START_INDEX','11')),'n_papers':int(os.environ.get('N_PAPERS','10')),
             'annotation_files':[p.name for p in files]}, indent=2)+'\n')
           PY
       - name: CHECKPOINT final manifest (90 days)
