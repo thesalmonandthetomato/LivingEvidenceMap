@@ -2,14 +2,10 @@ name: Test updater Workflow 02 - JSONL deduplication
 
 on:
   workflow_dispatch:
-    inputs:
-      fixture_records:
-        description: 'Number of Lens-shaped synthetic records'
-        required: true
-        default: '20'
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   deduplication-test:
@@ -25,58 +21,55 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Create Lens-shaped fixture
-        env:
-          N: ${{ inputs.fixture_records }}
-        run: |
-          python - <<'PY'
-          import json, os
-          n = int(os.environ['N'])
-          records = []
-          for i in range(n):
-              lens_id = f'fixture-{i+1:04d}'
-              payload = {
-                  'lens_id': lens_id,
-                  'title': f'Example evidence record {i+1}',
-                  'year_published': 2024,
-                  'source': {'title': 'Example Journal'},
-                  'authors': [{'last_name': f'Author{i+1}', 'first_name': 'A'}],
-                  'external_ids': [{'type': 'doi', 'value': f'10.0000/example.{i+1}'}]
-              }
-              records.append({'identity': {'lens_id': lens_id}, 'lens': {'raw_payload': payload}})
-          records.append(json.loads(json.dumps(records[0])))
-          dup = json.loads(json.dumps(records[1])); dup['identity']['lens_id'] = 'fixture-bib-duplicate'; dup['lens']['raw_payload']['lens_id'] = 'fixture-bib-duplicate'; records.append(dup)
-          wrong_doi = json.loads(json.dumps(records[2])); wrong_doi['identity']['lens_id'] = 'fixture-wrong-doi'; wrong_doi['lens']['raw_payload']['lens_id'] = 'fixture-wrong-doi'; wrong_doi['lens']['raw_payload']['title'] = 'Completely different publication'; wrong_doi['lens']['raw_payload']['authors'] = [{'last_name': 'DifferentAuthor', 'first_name': 'B'}]; records.append(wrong_doi)
-          different_doi = json.loads(json.dumps(records[3])); different_doi['identity']['lens_id'] = 'fixture-different-doi'; different_doi['lens']['raw_payload']['lens_id'] = 'fixture-different-doi'; different_doi['lens']['raw_payload']['external_ids'] = [{'type': 'doi', 'value': '10.0000/different'}]; records.append(different_doi)
-          with open('fixture.jsonl', 'w', encoding='utf-8') as f:
-              for r in records: f.write(json.dumps(r, ensure_ascii=False) + '\n')
-          PY
+      - name: Download successful Workflow 01 Lens artefact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 33107953267
+          name: updater-workflow-01-lens-ingestion-33107953267
+          path: workflow01_artifact
 
-      - name: Validate Lens-shaped fixture
+      - name: Prepare real Lens test fixture
         run: |
           python - <<'PY'
-          import json
-          rows = [json.loads(x) for x in open('fixture.jsonl', encoding='utf-8')]
-          assert all('lens_id' in r['identity'] for r in rows)
-          assert all('raw_payload' in r['lens'] for r in rows)
-          assert all(isinstance(r['lens']['raw_payload'].get('external_ids'), list) for r in rows)
-          assert all(any(e.get('type') == 'doi' for e in r['lens']['raw_payload']['external_ids']) for r in rows)
-          print(f'Validated Lens-shaped fixture with {len(rows)} records')
+          import copy, json
+          from pathlib import Path
+          src = Path('workflow01_artifact/records.jsonl')
+          rows = [json.loads(x) for x in src.open(encoding='utf-8') if x.strip()][:50]
+          assert len(rows) == 50
+          rows.append(copy.deepcopy(rows[0]))
+          doi_row = next(r for r in rows[:50] if any(i.get('type') == 'doi' for i in r['lens']['raw_payload'].get('external_ids', [])))
+          different_doi = copy.deepcopy(doi_row)
+          different_doi['identity']['lens_id'] = 'fixture-different-doi'
+          different_doi['identity']['record_id'] = 'fixture-different-doi'
+          different_doi['lens']['raw_payload']['lens_id'] = 'fixture-different-doi'
+          for identifier in different_doi['lens']['raw_payload'].get('external_ids', []):
+              if identifier.get('type') == 'doi': identifier['value'] = '10.0000/different-test'
+          rows.append(different_doi)
+          wrong_doi = copy.deepcopy(doi_row)
+          wrong_doi['identity']['lens_id'] = 'fixture-wrong-doi'
+          wrong_doi['identity']['record_id'] = 'fixture-wrong-doi'
+          wrong_doi['lens']['raw_payload']['lens_id'] = 'fixture-wrong-doi'
+          wrong_doi['lens']['raw_payload']['title'] = 'Deliberately unrelated publication used to test DOI safety'
+          wrong_doi['lens']['raw_payload']['authors'] = [{'first_name': 'Different', 'last_name': 'Author'}]
+          rows.append(wrong_doi)
+          with open('fixture.jsonl', 'w', encoding='utf-8') as f:
+              for row in rows: f.write(json.dumps(row, ensure_ascii=False) + '\n')
+          print(f'Prepared {len(rows)} records from actual Workflow 01 Lens artefact')
           PY
 
       - name: Run Workflow 02 prototype
         run: |
           mkdir -p outputs/updater/deduplication_test
-          python scripts/updater/deduplicate_jsonl.py \
-            --input fixture.jsonl \
-            --output outputs/updater/deduplication_test/records_after_dedup.jsonl \
-            --audit outputs/updater/deduplication_test/dedup_audit.jsonl
+          python scripts/updater/deduplicate_jsonl.py --input fixture.jsonl --output outputs/updater/deduplication_test/records_after_dedup.jsonl --audit outputs/updater/deduplication_test/dedup_audit.jsonl
 
-      - name: Validate identity, bibliographic and DOI safeguards
+      - name: Validate real Lens structure and DOI safeguards
         run: |
           python - <<'PY'
           import json
           rows = [json.loads(x) for x in open('outputs/updater/deduplication_test/records_after_dedup.jsonl', encoding='utf-8')]
+          assert len(rows) == 53, len(rows)
           assert any(r['deduplication']['status'] == 'identity_match' for r in rows)
           assert any(r['deduplication']['status'] == 'duplicate_candidate' for r in rows)
           wrong_doi = next(r for r in rows if r['identity']['lens_id'] == 'fixture-wrong-doi')
@@ -84,7 +77,8 @@ jobs:
           different_doi = next(r for r in rows if r['identity']['lens_id'] == 'fixture-different-doi')
           assert different_doi['deduplication']['status'] == 'duplicate_candidate'
           assert all(r['deduplication']['decision_source'] != 'doi' for r in rows)
-          print(f'Validated {len(rows)} output records and DOI safety rules')
+          assert all(r['source']['provider'] == 'lens' for r in rows)
+          print(f'Validated {len(rows)} records derived from actual Workflow 01 Lens artefact')
           PY
 
       - name: Upload Workflow 02 artefacts
