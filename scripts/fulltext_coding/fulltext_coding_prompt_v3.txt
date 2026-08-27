@@ -1,5 +1,5 @@
 LivingEvidenceMap full-text article coding prompt
-Schema version: fulltext_coding_v1
+Schema version: fulltext_coding_v2
 Prompt version: fulltext_coding_v3
 
 TASK
