@@ -55,13 +55,15 @@ jobs:
       - name: Build review notification package
         run: |
           python3 scripts/updater/build_review_package.py --input testdata/workflow03/human_review_queue.jsonl --outdir testdata/workflow03/review_package
+          python3 scripts/updater/build_notification_state.py --input testdata/workflow03/human_review_queue.jsonl --output testdata/workflow03/review_package/notification_state.json
+          python3 scripts/updater/build_notification_state.py --input testdata/workflow03/human_review_queue.jsonl --output testdata/workflow03/review_package/notification_state_repeat.json
 
       - name: Resolve one human review case
         run: |
           head -n 1 testdata/workflow03/human_review_queue.jsonl > testdata/workflow03/one_review_case.jsonl
           python3 scripts/updater/resolve_human_review.py --input testdata/workflow03/one_review_case.jsonl --output testdata/workflow03/resolved_case.jsonl --decision not_duplicate --rationale 'Human review confirms the records are distinct publications.' --reviewer 'nealhaddaway'
 
-      - name: Validate lifecycle and review package
+      - name: Validate lifecycle, review package and notification state
         run: |
           python3 - <<'PY'
           import json
@@ -70,17 +72,20 @@ jobs:
           resolved=[json.loads(x) for x in Path('testdata/workflow03/resolved_case.jsonl').read_text().splitlines() if x.strip()]
           package=Path('testdata/workflow03/review_package')
           manifest=json.loads((package/'review_manifest.json').read_text())
+          state=json.loads((package/'notification_state.json').read_text())
+          repeat=json.loads((package/'notification_state_repeat.json').read_text())
           assert len(queue)==4
-          assert manifest['pending_count']==4
-          assert len(manifest['cases'])==4
-          assert (package/'email_body.txt').exists()
-          assert (package/'index.html').exists()
+          assert manifest['pending_count']==4 and len(manifest['cases'])==4
+          assert state['pending_count']==4 and state['should_notify'] is True
+          assert state['notification_fingerprint']==repeat['notification_fingerprint']
+          assert state['pending_review_case_ids']==repeat['pending_review_case_ids']
+          assert len(state['notification_fingerprint'])==64
+          assert (package/'email_body.txt').exists() and (package/'index.html').exists()
           assert all((package/c['prompt_file']).exists() for c in manifest['cases'])
           html=(package/'index.html').read_text()
-          assert html.count('Copy case prompt')==4
-          assert html.count('Open ChatGPT')==4
+          assert html.count('Copy case prompt')==4 and html.count('Open ChatGPT')==4
           assert resolved[0]['status']=='resolved'
-          print('Workflow 03 review package and lifecycle passed')
+          print('Workflow 03 review package, lifecycle and notification state passed')
           PY
 
       - name: Upload artefacts
