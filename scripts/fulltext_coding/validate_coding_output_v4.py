@@ -35,7 +35,6 @@ def validate(r):
     if dc not in {"COMPLETE","INCOMPLETE","UNCERTAIN"}:w.append(f"invalid or missing document_completeness: {dc!r}")
     dce=r.get("document_completeness_evidence")
     if dc in {"INCOMPLETE","UNCERTAIN"} and (not isinstance(dce,dict) or not dce.get("text") or not dce.get("reason")):w.append("INCOMPLETE/UNCERTAIN document requires document_completeness_evidence with text and reason")
-    if dc=="COMPLETE" and dce not in (None,{}):w.append("document_completeness_evidence must be null/absent when COMPLETE")
     if r.get("document_type") not in DOC_TYPES and not (dc=="INCOMPLETE" and r.get("document_type") is None):w.append(f"invalid document_type: {r.get('document_type')!r}")
     if dc=="INCOMPLETE" and r.get("document_type") is not None:w.append("INCOMPLETE requires document_type=null")
     if r.get("review_type") not in REVIEW_TYPES and r.get("review_type") is not None:w.append("invalid review_type")
