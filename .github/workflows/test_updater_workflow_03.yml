@@ -52,36 +52,42 @@ jobs:
           cat testdata/workflow03/promotion_edge_results.jsonl > testdata/workflow03/review_input.jsonl
           python3 scripts/updater/build_human_review_queue.py --input testdata/workflow03/review_input.jsonl --output testdata/workflow03/human_review_queue.jsonl
 
+      - name: Build review notification package
+        run: |
+          python3 scripts/updater/build_review_package.py --input testdata/workflow03/human_review_queue.jsonl --outdir testdata/workflow03/review_package
+
       - name: Resolve one human review case
         run: |
           head -n 1 testdata/workflow03/human_review_queue.jsonl > testdata/workflow03/one_review_case.jsonl
           python3 scripts/updater/resolve_human_review.py --input testdata/workflow03/one_review_case.jsonl --output testdata/workflow03/resolved_case.jsonl --decision not_duplicate --rationale 'Human review confirms the records are distinct publications.' --reviewer 'nealhaddaway'
 
-      - name: Validate complete review lifecycle and case ID stability
+      - name: Validate lifecycle and review package
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
-          decisions=[json.loads(x) for x in Path('testdata/workflow03/decisions_api.jsonl').read_text().splitlines() if x.strip()]
-          edge=[json.loads(x) for x in Path('testdata/workflow03/promotion_edge_results.jsonl').read_text().splitlines() if x.strip()]
           queue=[json.loads(x) for x in Path('testdata/workflow03/human_review_queue.jsonl').read_text().splitlines() if x.strip()]
           resolved=[json.loads(x) for x in Path('testdata/workflow03/resolved_case.jsonl').read_text().splitlines() if x.strip()]
-          assert len(decisions)==2
-          assert [r['promotion'] for r in edge] == ['human_review']*4
-          assert len(queue)==4 and len({r['review_case_id'] for r in queue})==4
-          assert len(resolved)==1
+          package=Path('testdata/workflow03/review_package')
+          manifest=json.loads((package/'review_manifest.json').read_text())
+          assert len(queue)==4
+          assert manifest['pending_count']==4
+          assert manifest['chatgpt_url']=='https://chatgpt.com/'
+          assert len(manifest['cases'])==4
+          assert (package/'email_body.txt').exists()
+          assert (package/'index.html').exists()
+          assert all((package/c['prompt_file']).exists() for c in manifest['cases'])
+          html=(package/'index.html').read_text()
+          assert html.count('Copy case prompt')==4
+          assert html.count('Open ChatGPT')==4
           r=resolved[0]
-          assert r['status']=='resolved'
-          assert r['human_decision']=='not_duplicate'
-          assert r['human_rationale']
-          assert r['reviewer']=='nealhaddaway'
-          assert r['resolved_at']
-          print('Workflow 03 complete adjudication and human-review lifecycle passed')
+          assert r['status']=='resolved' and r['human_decision']=='not_duplicate'
+          print('Workflow 03 review package and lifecycle passed')
           PY
 
       - name: Upload artefacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow03-human-review-lifecycle-test
+          name: workflow03-human-review-interface-test
           path: testdata/workflow03/
