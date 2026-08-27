@@ -1,8 +1,9 @@
 {
   "pipeline": "LivingEvidenceMap updater",
-  "architecture_status": "workflow_01_locked",
+  "architecture_status": "workflow_01_locked_workflow_02_in_development",
   "last_locked_workflow": "01_lens_ingestion",
-  "next_workflow": "02_deduplication",
+  "active_workflow": "02_deduplication",
+  "next_workflow": "03_screening",
   "processing_format": {
     "source": "Lens API full JSON",
     "canonical": "JSONL",
@@ -14,7 +15,8 @@
     "Do not use the current restrictive Lens include list in the redesigned ingestion workflow.",
     "Use JSONL as the canonical processing representation.",
     "Use lens_id as the authoritative evidence-record identifier.",
-    "Treat DOI as a secondary bibliographic identifier.",
+    "A lens_id identity match is not itself a bibliographic duplicate decision.",
+    "DOI is a secondary bibliographic identifier and supporting signal only; DOI alone must never determine duplication.",
     "Keep raw Lens data lossless inside the canonical record.",
     "Separate run-level provenance from record-level provenance.",
     "Checkpoint API retrieval frequently and do not advance the successful-search checkpoint on partial failure.",
@@ -60,15 +62,62 @@
     ],
     "downstream_contract": "Workflow 02 consumes canonical JSONL records with complete Lens payload and ingestion provenance."
   },
+  "workflow_02": {
+    "name": "Deduplication",
+    "status": "in_development",
+    "real_lens_fixture_test": "passed_format_and_decision_safeguards",
+    "input": [
+      "Workflow 01 canonical JSONL",
+      "canonical historical corpus when available",
+      "legacy master CSV adapter during migration"
+    ],
+    "decision_order": [
+      "lens_id identity match",
+      "bibliographic matching with DOI as supporting evidence only",
+      "LLM adjudication of residual duplicate candidates",
+      "human review gate for unresolved/failed/uncertain cases"
+    ],
+    "output": [
+      "canonical JSONL with deduplication state and provenance",
+      "deduplication audit JSONL",
+      "LLM adjudication queue where required",
+      "human review queue where required",
+      "run manifest",
+      "checkpoint artefacts"
+    ],
+    "tests_passed": [
+      "synthetic identity-vs-duplicate separation",
+      "DOI safety test: same DOI plus materially different bibliography is not an automatic duplicate",
+      "DOI safety test: different DOI plus matching bibliography remains a candidate",
+      "real Lens-derived records with actual nested Lens structure",
+      "JSONL output integrity validated record-by-record"
+    ],
+    "tests_remaining": [
+      "full staged Bramer-style matching parity with the existing implementation",
+      "real-corpus candidate-rate assessment",
+      "historical corpus integration",
+      "LLM adjudication behaviour and failure handling",
+      "checkpoint/restart test"
+    ],
+    "must_not_do": [
+      "screen relevance",
+      "annotate species or geography",
+      "adjudicate species or geography",
+      "model topics",
+      "construct the master CSV",
+      "modify the dashboard"
+    ]
+  },
   "legacy_migration": {
     "current_master_records": 13389,
     "principle": "preserve current correct state; reconstruct historical JSON/provenance only where evidenced; leave unresolved historical decisions unknown/blank"
   },
   "repository_change_policy": {
     "workflow_01_implementation": "locked_for_next_stage; changes require explicit approval",
-    "master_csv_changes": "defer_until_all_processing_workflows_are_mapped",
-    "dashboard_changes": "defer_until_corrected_master_csv_is_final",
-    "temporary_test_workflow": "remove_after_workflow_01_lock_and_schema_investigation"
+    "workflow_02_implementation": "development_only; do not merge until remaining tests pass and workflow is explicitly locked",
+    "master_csv_changes": "defer_until_all processing workflows are mapped",
+    "dashboard_changes": "defer_until corrected master CSV is final",
+    "temporary_test_workflow": "remove after workflow lock and test/schema investigation"
   },
-  "resume_instruction": "Begin by reading this file and docs/updater_pipeline/WORKFLOW_01_LENS_INGESTION.md, then map Workflow 02 deduplication against the locked Workflow 01 downstream contract. Do not infer undocumented implementation details; verify them from repository workflows/scripts/config/state or ask the user."
+  "resume_instruction": "Read this file first. Workflow 01 is locked. Continue Workflow 02 by mapping and implementing full staged deduplication parity against the existing R implementation, then test real-corpus behaviour, historical integration, LLM adjudication, and restart recovery before locking Workflow 02. Do not modify the master CSV or dashboard."
 }
