@@ -1,41 +1,31 @@
 {
   "architecture_version": "json-boundaried-updater-v1",
   "locked_workflows": {
-    "workflow_01_lens_ingestion": {
-      "status": "locked"
-    },
+    "workflow_01_lens_ingestion": {"status": "locked"},
     "workflow_02_deterministic_deduplication": {
       "status": "locked",
       "branch": "updater-workflow-02-deduplication",
       "scope": "Deterministic bibliographic deduplication only; ambiguous cases leave Workflow 02 for adjudication.",
       "identity_rule": "lens_id is authoritative record identity, not duplicate evidence.",
       "doi_rule": "DOI is supporting evidence only and must not independently determine duplication; conflicting DOI/title evidence is retained for review.",
-      "matching_order": [
-        "exact normalised title",
-        "matching DOI plus compatible title",
-        "staged bibliographic candidate blocking",
-        "Jaro-Winkler title similarity"
-      ],
-      "outputs": [
-        "rich incoming Lens JSONL retained unchanged except for appended deduplication decision metadata",
-        "deduplication audit JSONL",
-        "checkpoint/restart artefacts"
-      ],
-      "decision_boundary": [
-        "duplicate",
-        "new",
-        "probable_duplicate",
-        "possible_duplicate",
-        "doi_conflict_review",
-        "identity_match"
-      ],
+      "matching_order": ["exact normalised title","matching DOI plus compatible title","staged bibliographic candidate blocking","Jaro-Winkler title similarity"],
       "test_status": "passed",
       "last_verified_run": 33115282932,
-      "known_limitation": "Historical master records are currently supplied through the lossless legacy-master JSON adapter; later historical Lens reconstruction can replace that adapter without changing the Workflow 02 contract.",
       "next_workflow": "workflow_03_adjudication"
+    },
+    "workflow_03_adjudication": {
+      "status": "locked_for_review_layer",
+      "branch": "updater-workflow-03-adjudication",
+      "scope": "Adjudicate residual duplicate candidates and route unresolved cases to human review without overwriting model provenance.",
+      "model": "gpt-5-mini",
+      "decision_set": ["duplicate","not_duplicate","uncertain"],
+      "promotion_threshold": 0.80,
+      "human_review_triggers": ["uncertain","below_confidence_threshold","technical_failure","invalid_decision"],
+      "review_case_requirements": ["stable review_case_id","pending status","model decision/confidence/rationale","promotion reason","technical error where applicable","human decision/rationale","reviewer","resolved_at"],
+      "outputs": ["adjudication JSONL","adjudication audit JSONL","human review queue JSONL","human resolution JSONL","workflow artefacts/checkpoints"],
+      "test_status": "passed",
+      "last_verified_run": 33119147624,
+      "next_step": "email_and_chatgpt_review_interface"
     }
-  },
-  "workflow_03_adjudication": {
-    "status": "next"
   }
 }
