@@ -93,6 +93,13 @@ def request_with_retry(session: requests.Session, url: str, headers: dict[str, s
     raise RuntimeError(f"Lens API request failed after retries: {last_error}")
 
 
+def write_jsonl_record(handle: Any, record: dict[str, Any]) -> None:
+    # JSONL requires one physical line per record. ensure_ascii=True also
+    # escapes Unicode line/paragraph separators (U+2028/U+2029), which
+    # Python's str.splitlines() otherwise treats as line boundaries.
+    handle.write(json.dumps(record, ensure_ascii=True, separators=(",", ":")) + "\n")
+
+
 def main() -> int:
     args = parse_args()
     if args.max_records < 1:
@@ -143,7 +150,7 @@ def main() -> int:
     batch = 1
     seen: set[str] = set()
 
-    with canonical_path.open("w", encoding="utf-8") as out:
+    with canonical_path.open("w", encoding="utf-8", newline="") as out:
         while records and manifest["records_retrieved"] < args.max_records:
             records = records[: args.max_records - manifest["records_retrieved"]]
             raw_path = raw_dir / f"response_{batch:06d}.json"
@@ -177,7 +184,7 @@ def main() -> int:
                         "batch": batch,
                     },
                 }
-                out.write(json.dumps(canonical, ensure_ascii=False, separators=(",", ":")) + "\n")
+                write_jsonl_record(out, canonical)
 
             manifest["records_retrieved"] += len(records)
             manifest["batches"] = batch
