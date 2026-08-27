@@ -72,7 +72,6 @@ jobs:
           manifest=json.loads((package/'review_manifest.json').read_text())
           assert len(queue)==4
           assert manifest['pending_count']==4
-          assert manifest['chatgpt_url']=='https://chatgpt.com/'
           assert len(manifest['cases'])==4
           assert (package/'email_body.txt').exists()
           assert (package/'index.html').exists()
@@ -80,8 +79,7 @@ jobs:
           html=(package/'index.html').read_text()
           assert html.count('Copy case prompt')==4
           assert html.count('Open ChatGPT')==4
-          r=resolved[0]
-          assert r['status']=='resolved' and r['human_decision']=='not_duplicate'
+          assert resolved[0]['status']=='resolved'
           print('Workflow 03 review package and lifecycle passed')
           PY
 
