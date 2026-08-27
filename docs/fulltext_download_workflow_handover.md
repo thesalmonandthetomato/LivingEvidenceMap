@@ -31,11 +31,40 @@ The DOI → OpenAlex mapping is represented in the candidate files:
 
 The downloader itself uses the `input_doi` and `openalex_id` fields from these candidate tables. It requires an exact DOI match and a valid OpenAlex content flag before including a work in the plan.
 
-### Historical manual stage
+## Historical manual stage and reconstruction of batches 1–5
 
-The pipeline began with manually initiated batches while the OpenAlex acquisition pathway was being developed and tested. Git history records the sequence of changes from the initial OpenAlex full-text implementation through the manual batch workflow, Zenodo storage, failure recovery, provenance recording, and finally the scheduled acquisition.
+The acquisition pipeline began with manually initiated batches while the OpenAlex acquisition pathway was being developed and tested. We have now reconstructed the **membership of the first five manual batches** from the downloader's deterministic planning logic and the subsequent Batch 6 run; this supersedes the earlier caution that the batch membership might be unrecoverable.
 
-**Important provenance limitation:** the current repository does **not** preserve a separate historical file containing the exact DOI lists used for every initial manually supplied batch. The reproducible source that survives in the repository is the DOI corpus/candidate tables plus the OpenAlex audit and the later per-batch manifests/registry. Therefore this handover does not invent exact historical batch-1/2/3 DOI lists. If an exact reconstruction of those early manual sets is ever required, use the relevant GitHub Actions artifacts/run manifests or Git history available for those runs.
+The downloader constructs one deterministic plan from the candidate tables, then assigns sequential positions and groups them into batches of 100. The batch boundaries are therefore:
+
+| Batch | Download-plan positions | Historical status |
+|---|---:|---|
+| 1 | 1–100 | manually initiated |
+| 2 | 101–200 | manually initiated |
+| 3 | 201–300 | manually initiated |
+| 4 | 301–400 | manually initiated |
+| 5 | 401–500 | manually initiated |
+| 6 | 501–600 | first scheduled/automated batch |
+
+The current downloader explicitly uses `BATCH_SIZE = 100` and computes the batch slice from `(batch_number - 1) * 100`. This means batches 1–5 were the first 500 records in the frozen download plan, rather than arbitrary sets of 100 DOIs.
+
+The plan itself is deterministic:
+
+1. include GROBID candidates where `doi_exact_match == TRUE` and `has_grobid_xml == TRUE`;
+2. then include PDF candidates where `doi_exact_match == TRUE`, `has_pdf == TRUE`, and the DOI is not already in the GROBID set;
+3. represent each work by DOI, OpenAlex Work ID, content URL and format;
+4. reject a plan containing duplicate DOIs;
+5. batch the resulting plan into groups of 100.
+
+A subsequent real Batch 6 Actions run provides an independent boundary check: run `32954157932` reports **Batch 6/40: files 501–600**, and its manifest contains `batch_position` values beginning at 501. Thus the end of manual batch 5 is established at position 500 and the beginning of automated batch 6 at position 501.
+
+### What this establishes, and what it does not
+
+**Established:** the exact DOI membership of batches 1–5 can be reconstructed deterministically as positions 1–500 of the download plan defined by the candidate tables and downloader code. To reproduce the exact DOI lists, take rows 1–500 of the plan produced by the current/compatible `build_plan()` logic, preserving its order.
+
+**Not established from the surviving permanent files alone:** the individual GitHub Actions run IDs, timestamps, artifact IDs, and Zenodo receipt details for each of manual batches 1–5. Those are historical execution metadata and should be recovered from the relevant Actions history/artifacts if needed. They are not necessary to establish DOI membership.
+
+This distinction is intentional: do not infer historical run metadata merely from batch membership.
 
 ## Deterministic download plan
 
@@ -219,7 +248,7 @@ A failed OpenAlex download does not result in a Zenodo upload of an incomplete b
 
 ## What must not be inferred
 
-Do not claim that the exact initial manually supplied DOI lists are preserved in the current repository unless the corresponding workflow artifact/manifest is actually available. The current repository supports reconstruction of the **selection method and corpus**, and later batches have explicit provenance, but the earliest manual DOI-list history is not represented as a dedicated permanent file.
+Do not claim that the exact historical Actions run IDs, timestamps, artifact IDs, or Zenodo receipt details for manual batches 1–5 are established merely from their reconstructed DOI membership. Those execution details require the corresponding historical Actions records/artifacts.
 
 Do not assume that a Zenodo record contains one DOI or one article. A Zenodo record/part contains batch ZIP archives, and each ZIP contains multiple OpenAlex works. Use the batch registry and source filenames to resolve individual papers.
 
