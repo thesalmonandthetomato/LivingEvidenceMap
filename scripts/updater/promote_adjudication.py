@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the Workflow 03 promotion gate to adjudication decisions."""
+"""Apply the Workflow 03 adjudication promotion gate."""
 import argparse, json
 from pathlib import Path
 
@@ -10,7 +10,7 @@ DEFAULT_THRESHOLD = 0.80
 def promote(record, threshold=DEFAULT_THRESHOLD):
     decision = record.get("decision")
     confidence = record.get("confidence")
-    technical_error = record.get("technical_error")
+    technical_error = record.get("technical_error") or record.get("adjudication_error")
     if technical_error:
         return "human_review", "technical_failure"
     if decision not in ALLOWED:
