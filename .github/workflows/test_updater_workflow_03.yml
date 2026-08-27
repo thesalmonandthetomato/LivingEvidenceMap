@@ -46,32 +46,43 @@ jobs:
             --mode openai \
             --model gpt-5-mini
 
-      - name: Run promotion gate
+      - name: Run promotion gate on real API results
         run: |
           python3 scripts/updater/promote_adjudication.py \
             --input testdata/workflow03/decisions_api.jsonl \
-            --output testdata/workflow03/promoted.jsonl \
+            --output testdata/workflow03/promoted_api.jsonl \
             --threshold 0.80
 
-      - name: Validate adjudication and promotion
+      - name: Test promotion gate failure states
+        run: |
+          cat > testdata/workflow03/promotion_edge_cases.jsonl <<'EOF'
+          {"candidate_id":"u1","decision":"uncertain","confidence":0.99,"rationale":"Conflicting evidence"}
+          {"candidate_id":"u2","decision":"duplicate","confidence":0.79,"rationale":"Below threshold"}
+          {"candidate_id":"u3","decision":"not_duplicate","confidence":0.90,"rationale":"Technical test","adjudication_error":"TimeoutError: simulated"}
+          {"candidate_id":"u4","decision":"bogus","confidence":0.99,"rationale":"Invalid decision"}
+          EOF
+          python3 scripts/updater/promote_adjudication.py \
+            --input testdata/workflow03/promotion_edge_cases.jsonl \
+            --output testdata/workflow03/promotion_edge_results.jsonl \
+            --threshold 0.80
+
+      - name: Validate adjudication and all promotion safety states
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
-          inp = Path('testdata/workflow03/candidates.jsonl')
-          api = Path('testdata/workflow03/decisions_api.jsonl')
-          promoted = Path('testdata/workflow03/promoted.jsonl')
-          decisions = [json.loads(x) for x in api.read_text().splitlines() if x.strip()]
-          promotions = [json.loads(x) for x in promoted.read_text().splitlines() if x.strip()]
-          assert len(decisions) == 2 == len(promotions)
+          decisions = [json.loads(x) for x in Path('testdata/workflow03/decisions_api.jsonl').read_text().splitlines() if x.strip()]
+          promotions = [json.loads(x) for x in Path('testdata/workflow03/promoted_api.jsonl').read_text().splitlines() if x.strip()]
+          edge = [json.loads(x) for x in Path('testdata/workflow03/promotion_edge_results.jsonl').read_text().splitlines() if x.strip()]
+          assert len(decisions) == len(promotions) == 2
           assert all(d['decision'] in {'duplicate','not_duplicate','uncertain'} for d in decisions)
           assert all(0 <= d['confidence'] <= 1 for d in decisions)
           assert all(d['rationale'] for d in decisions)
           assert all(not d.get('adjudication_error') for d in decisions)
-          assert all(p['promotion_threshold'] == 0.80 for p in promotions)
-          assert all(p['promotion'] in {'duplicate','not_duplicate','human_review'} for p in promotions)
-          print('Workflow 03 adjudication + promotion validation passed')
-          print(json.dumps(promotions, indent=2))
+          assert [r['promotion'] for r in edge] == ['human_review','human_review','human_review','human_review']
+          reasons = [r['promotion_reason'] for r in edge]
+          assert reasons == ['model_uncertain','below_confidence_threshold','technical_failure','invalid_decision']
+          print('Workflow 03 adjudication and promotion safety validation passed')
           PY
 
       - name: Upload artefacts
