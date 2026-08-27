@@ -1,0 +1,25 @@
+{
+  "schema_version": "fulltext_coding_v2",
+  "description": "Current LivingEvidenceMap full-text coding output contract.",
+  "document_type": ["study", "review", "perspective", "commentary", "editorial", "book", "book_chapter", "report", "thesis", "protocol", "other"],
+  "review_type": ["primer_overview", "systematic_style", "not_applicable"],
+  "study_type": ["experimental", "observational", "modelling", "not_stated", "not_applicable"],
+  "study_design": ["BA", "CI", "BACI", "RCT", "Time-series", "Modelling", "Qualitative", "not_stated", "not_applicable"],
+  "research_approach": ["quantitative", "qualitative", "mixed_methods", "not_applicable"],
+  "setting": ["field", "laboratory/controlled facility", "in_vitro", "in_silico"],
+  "production_stage": ["Feed", "Hatchery", "Transfer between Hatchery and Adult", "Adult grow-out", "Processing"],
+  "fish_life_stage": ["Sperm", "Egg", "Embryo", "Alevin", "Fry", "Parr", "Pre-smolt", "Smolt", "Juvenile", "Adult", "Broodstock", "Product"],
+  "aquaculture_facility": ["salmon_farming_region", "hatchery", "open_cages", "closed_cages", "land_based", "land_based_RAS"],
+  "species": ["Atlantic salmon", "chum salmon", "pink salmon", "coho salmon", "chinook salmon", "sockeye salmon", "masu salmon", "rainbow trout", "unspecified salmon species"],
+  "field_completeness_status": ["NOT FOUND", null],
+  "document_completeness": ["COMPLETE", "INCOMPLETE", "UNCERTAIN"],
+  "fields": {
+    "document_type": "enum|null", "review_type": "enum", "study_type": "enum", "study_design": "array[enum]", "research_approach": "enum", "setting": "array[enum]", "sample_unit": "array[string]", "study_period": "string|null", "location_region": "string|null", "location_country": "string|null", "species": "array[enum]", "other_farmed_species": "array[string]", "study_population": "string|null", "aquaculture_facility": "array[enum]", "system_studied": "string|null", "production_stage": "array[enum]", "fish_life_stage": "array[enum]", "exposure_intervention": "string|null", "comparator": "string|null", "outcome_measured": "array[string]", "funding_body": "string|null", "research_question": "string|null", "objectives_summary": "string|null", "ontology_codes": "array[string]", "multiple_studies_flag": "boolean", "multiple_studies_reason": "string|null"
+  },
+  "evidence": {"type": "array", "item_schema": {"field": "current_substantive_field_name", "value": "any", "text": "string", "section": "string", "page": "integer|null"}},
+  "document_completeness_evidence": {"type": "object|null", "item_schema": {"text": "string", "reason": "string", "section": "string|null", "page": "integer|null"}},
+  "field_completeness": {"type": "object", "allowed_statuses": ["NOT FOUND", null], "allowed_fields": ["document_type", "review_type", "study_type", "study_design", "research_approach", "setting", "sample_unit", "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility", "system_studied", "production_stage", "fish_life_stage", "exposure_intervention", "comparator", "outcome_measured", "funding_body", "research_question", "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"]},
+  "not_reported_fields": {"type": "array[string]", "allowed_values": ["document_type", "review_type", "study_type", "study_design", "research_approach", "setting", "sample_unit", "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility", "system_studied", "production_stage", "fish_life_stage", "exposure_intervention", "comparator", "outcome_measured", "funding_body", "research_question", "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"]},
+  "current_substantive_fields": ["document_type", "review_type", "study_type", "study_design", "research_approach", "setting", "sample_unit", "study_period", "location_region", "location_country", "species", "other_farmed_species", "study_population", "aquaculture_facility", "system_studied", "production_stage", "fish_life_stage", "exposure_intervention", "comparator", "outcome_measured", "funding_body", "research_question", "objectives_summary", "ontology_codes", "multiple_studies_flag", "multiple_studies_reason"],
+  "audit_fields": ["evidence", "document_completeness", "document_completeness_evidence", "field_completeness", "not_reported_fields"]
+}
