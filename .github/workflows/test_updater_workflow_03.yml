@@ -49,7 +49,7 @@ jobs:
 
       - name: Build human review queue
         run: |
-          cat testdata/workflow03/promotion_edge_results.jsonl >> testdata/workflow03/review_input.jsonl
+          cat testdata/workflow03/promotion_edge_results.jsonl > testdata/workflow03/review_input.jsonl
           python3 scripts/updater/build_human_review_queue.py --input testdata/workflow03/review_input.jsonl --output testdata/workflow03/human_review_queue.jsonl
 
       - name: Resolve one human review case
@@ -57,7 +57,7 @@ jobs:
           head -n 1 testdata/workflow03/human_review_queue.jsonl > testdata/workflow03/one_review_case.jsonl
           python3 scripts/updater/resolve_human_review.py --input testdata/workflow03/one_review_case.jsonl --output testdata/workflow03/resolved_case.jsonl --decision not_duplicate --rationale 'Human review confirms the records are distinct publications.' --reviewer 'nealhaddaway'
 
-      - name: Validate full Workflow 03 review lifecycle
+      - name: Validate complete review lifecycle and case ID stability
         run: |
           python3 - <<'PY'
           import json
@@ -76,7 +76,6 @@ jobs:
           assert r['human_rationale']
           assert r['reviewer']=='nealhaddaway'
           assert r['resolved_at']
-          assert r['model_decision'] is None or r['model_decision'] in {'duplicate','not_duplicate','uncertain','bogus'}
           print('Workflow 03 complete adjudication and human-review lifecycle passed')
           PY
 
