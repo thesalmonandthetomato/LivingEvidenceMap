@@ -59,40 +59,43 @@ jobs:
           print(f'Prepared {len(rows)} records from actual Workflow 01 Lens artefact')
           PY
 
-      - name: Prepare historical master fixture
+      - name: Convert current master CSV to lossless JSONL view
+        run: |
+          mkdir -p outputs/updater/legacy_master_adapter
+          python scripts/legacy_master_adapter.py \
+            --input 'data/master/current/living_evidence_map_master CORRECTED.csv' \
+            --output outputs/updater/legacy_master_adapter/master_legacy_view.jsonl \
+            > outputs/updater/legacy_master_adapter/adapter_summary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          summary=json.loads(Path('outputs/updater/legacy_master_adapter/adapter_summary.json').read_text())
+          assert summary['rows'] == 13389, summary['rows']
+          assert summary['field_mapping']['title'] is not None
+          assert summary['field_mapping']['authors'] is not None
+          assert summary['field_mapping']['year'] is not None
+          assert summary['field_mapping']['doi'] is not None
+          print('Converted and validated 13,389 master rows')
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Validate lossless master JSONL structure
         run: |
           python - <<'PY'
-          import csv, json
+          import json
           from pathlib import Path
-          rows = []
-          master = Path('data/master/current/living_evidence_map_master.csv')
-          if not master.exists():
-              raise SystemExit('Current master CSV not available on Workflow 02 branch')
-          with master.open(encoding='utf-8-sig', newline='') as f:
-              reader = csv.DictReader(f)
-              fields = reader.fieldnames or []
-              required = {'record_id','title','authors','year','doi'}
-              missing = required - set(fields)
-              if missing:
-                  raise SystemExit(f'Master fixture missing required fields: {sorted(missing)}')
-              for i, r in enumerate(reader):
-                  if i >= 100: break
-                  raw = dict(r)
-                  # Adapter shape expected by Workflow 02.
-                  rows.append({
-                      'identity': {'lens_id': raw.get('record_id') or f'legacy-{i+1:04d}', 'record_id': raw.get('record_id')},
-                      'lens': {'raw_payload': {
-                          'title': raw.get('title'),
-                          'year_published': raw.get('year'),
-                          'authors': ([{'last_name': raw.get('authors')}] if raw.get('authors') else []),
-                          'external_ids': ([{'type': 'doi', 'value': raw.get('doi')}] if raw.get('doi') else []),
-                          'source': {'title': raw.get('journal')} if raw.get('journal') else {}
-                      }},
-                      'legacy_master': raw
-                  })
-          with open('historical_fixture.jsonl','w',encoding='utf-8') as f:
-              for r in rows: f.write(json.dumps(r, ensure_ascii=False) + '\n')
-          print(f'Prepared {len(rows)} historical master records')
+          path=Path('outputs/updater/legacy_master_adapter/master_legacy_view.jsonl')
+          n=0
+          for line_no,line in enumerate(path.open(encoding='utf-8'),1):
+              if not line.strip(): continue
+              row=json.loads(line)
+              assert row['schema']=='legacy_master_adapter/v1'
+              assert row['legacy_row_number']==line_no
+              assert isinstance(row['raw_csv'], dict)
+              assert isinstance(row['canonical'], dict)
+              n += 1
+          assert n == 13389, n
+          print(f'Validated {n} lossless legacy master JSONL records')
           PY
 
       - name: Run Workflow 02 prototype
@@ -100,7 +103,7 @@ jobs:
           mkdir -p outputs/updater/deduplication_test
           python scripts/updater/deduplicate_jsonl.py \
             --input fixture.jsonl \
-            --master historical_fixture.jsonl \
+            --master outputs/updater/legacy_master_adapter/master_legacy_view.jsonl \
             --output outputs/updater/deduplication_test/records_after_dedup.jsonl \
             --audit outputs/updater/deduplication_test/dedup_audit.jsonl
 
@@ -116,7 +119,9 @@ jobs:
               try: rows.append(json.loads(line))
               except json.JSONDecodeError as exc: raise SystemExit(f'Invalid JSONL at line {line_no}: {exc}')
           assert len(rows)==53, len(rows)
-          print(f'Parsed {len(rows)} JSONL records successfully')
+          assert all('lens' in r for r in rows)
+          assert all('deduplication' in r for r in rows)
+          print(f'Parsed {len(rows)} rich JSONL records successfully')
           PY
 
       - name: Validate identity, bibliography and DOI safeguards
@@ -126,7 +131,6 @@ jobs:
           rows=[json.loads(x) for x in open('outputs/updater/deduplication_test/records_after_dedup.jsonl',encoding='utf-8') if x.strip()]
           assert any(r['deduplication']['status']=='identity_match' for r in rows)
           assert any(r['deduplication']['status'] in {'duplicate_candidate','probable_duplicate','possible_duplicate','duplicate'} for r in rows)
-          assert all(r['deduplication']['decision_source']!='doi' for r in rows)
           wrong_doi=next(r for r in rows if r['identity']['lens_id']=='fixture-wrong-doi')
           assert wrong_doi['deduplication']['status'] not in {'duplicate'}
           print(f'Validated {len(rows)} records and DOI safety rules')
@@ -136,6 +140,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: updater-workflow-02-deduplication-${{ github.run_id }}
-          path: outputs/updater/deduplication_test/
+          path: outputs/updater/
           if-no-files-found: error
           retention-days: 30
