@@ -1,0 +1,65 @@
+{
+  "pipeline": "LivingEvidenceMap updater",
+  "architecture_status": "in_design",
+  "last_locked_workflow": "01_lens_ingestion",
+  "next_workflow": "02_deduplication",
+  "processing_format": {
+    "source": "Lens API full JSON",
+    "canonical": "JSONL",
+    "final_dashboard_projection": "CSV",
+    "ris": "parallel_future_ingestion_adapter_only"
+  },
+  "locked_decisions": [
+    "Retain unrestricted Lens API records as immutable raw JSON.",
+    "Do not use the current restrictive Lens include list in the redesigned ingestion workflow.",
+    "Use JSONL as the canonical processing representation.",
+    "Use lens_id as the authoritative evidence-record identifier.",
+    "Treat DOI as a secondary bibliographic identifier.",
+    "Keep raw Lens data lossless inside the canonical record.",
+    "Separate run-level provenance from record-level provenance.",
+    "Checkpoint API retrieval frequently and do not advance the successful-search checkpoint on partial failure.",
+    "Make ingestion idempotent by lens_id.",
+    "Do not flatten to CSV until the explicit final master-construction projection.",
+    "Master CSV is a selected output schema, not a flat copy of canonical JSON.",
+    "Final species and geography columns are selected during master construction from the final adjudicated/approved values; if adjudication is unnecessary, the original annotation becomes final.",
+    "Historical decisions that cannot be established from archived evidence remain unknown/blank rather than being inferred."
+  ],
+  "workflow_01": {
+    "name": "Lens ingestion",
+    "status": "locked_architecture",
+    "input": [
+      "config/lens_search.json",
+      "state/lens_weekly_harvest.json",
+      "Lens API credential"
+    ],
+    "output": [
+      "immutable raw Lens JSON response batches",
+      "canonical JSONL increment",
+      "run manifest",
+      "retrieval checkpoint",
+      "successful-search checkpoint after complete success",
+      "search history"
+    ],
+    "must_not_do": [
+      "deduplicate against the master corpus",
+      "screen records",
+      "annotate species or geography",
+      "adjudicate model uncertainty",
+      "model topics",
+      "construct the master CSV",
+      "modify the dashboard"
+    ],
+    "downstream_contract": "Workflow 02 consumes canonical JSONL records with complete Lens payload and ingestion provenance."
+  },
+  "legacy_migration": {
+    "current_master_records": 13389,
+    "principle": "preserve current correct state; reconstruct historical JSON/provenance only where evidenced; leave unresolved historical decisions unknown/blank"
+  },
+  "repository_change_policy": {
+    "workflow_01_implementation": "not_yet_approved",
+    "master_csv_changes": "defer_until_all_processing_workflows_are_mapped",
+    "dashboard_changes": "defer_until_corrected_master_csv_is_final",
+    "temporary_test_workflow": "remove_after_lens_schema_investigation"
+  },
+  "resume_instruction": "Begin by reading this file and docs/updater_pipeline/WORKFLOW_01_LENS_INGESTION.md, then map Workflow 02 deduplication against the locked Workflow 01 downstream contract. Do not infer undocumented implementation details; verify them from repository workflows/scripts/config/state or ask the user."
+}
