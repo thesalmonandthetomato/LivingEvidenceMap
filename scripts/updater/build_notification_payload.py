@@ -12,7 +12,7 @@ def queue_fingerprint(case_ids):
     return hashlib.sha256(material).hexdigest()
 
 
-def run(manifest_path, output_path, repository, run_id, recipient):
+def run(manifest_path, output_path, repository, run_id, recipient, artifact_url=None):
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     cases = manifest.get("cases") or []
     case_ids = [c.get("review_case_id") for c in cases if c.get("review_case_id")]
@@ -25,16 +25,19 @@ def run(manifest_path, output_path, repository, run_id, recipient):
         "pending_count": pending_count,
         "queue_fingerprint": fingerprint,
         "review_case_ids": sorted(case_ids),
+        "review_artifact_url": artifact_url,
         "github_run_url": run_url,
         "chatgpt_url": CHATGPT_URL,
         "body_text": (
             f"LivingEvidenceMap human review required.\n\n"
             f"Pending cases: {pending_count}\n"
             f"Queue fingerprint: {fingerprint}\n\n"
+            + (f"Download review package: {artifact_url}\n" if artifact_url else "")
             + (f"GitHub Actions run: {run_url}\n" if run_url else "")
             + f"ChatGPT: {CHATGPT_URL}\n\n"
-            "Open the retained review-package artefact from the Actions run. "
-            "Review cases one-by-one using the stable review_case_id and case prompt."
+            "Download and unzip the review package, then open review_package/index.html. "
+            "For each unresolved case, use Copy case prompt and Open ChatGPT. "
+            "Review cases one-by-one using the stable review_case_id."
         ),
         "send_policy": {
             "send_only_if_pending_count_gt_zero": True,
@@ -52,5 +55,6 @@ if __name__ == "__main__":
     p.add_argument("--repository", default=os.getenv("GITHUB_REPOSITORY", ""))
     p.add_argument("--run-id", default=os.getenv("GITHUB_RUN_ID", ""))
     p.add_argument("--recipient", default=DEFAULT_RECIPIENT)
+    p.add_argument("--artifact-url", default=os.getenv("REVIEW_ARTIFACT_URL", ""))
     a = p.parse_args()
-    run(a.manifest, a.output, a.repository, a.run_id, a.recipient)
+    run(a.manifest, a.output, a.repository, a.run_id, a.recipient, a.artifact_url or None)
