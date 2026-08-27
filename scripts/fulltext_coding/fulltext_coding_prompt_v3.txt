@@ -1,5 +1,5 @@
 LivingEvidenceMap full-text article coding prompt
-Schema version: fulltext_coding_v2
+Schema version: fulltext_coding_v3
 Prompt version: fulltext_coding_v3
 
 TASK
@@ -65,7 +65,7 @@ FUNDING
 funding_body comes only from explicit funding statements, acknowledgements or equivalent attribution. Do not infer it from affiliation, address or publisher.
 
 RESEARCH QUESTION / OBJECTIVES
-These are mandatory retrieval targets. Search the entire document for the document's own explicit research question, aim, purpose, objectives, hypothesis or equivalent. Abstract and Introduction are preferred and should be checked early, but are not mandatory sources. Methods, Results, Discussion, Conclusions, tables or other sections may be used when they explicitly state the document's own question/aim/objectives. For non-primary documents use the document's own aims, not cited-study aims. If an explicit question exists, give a faithful concise representation. If no question is phrased as a question but an explicit aim/purpose/objective exists, convert that statement into a concise question without adding content. objectives_summary comes from explicit aims/objectives/purpose statements. Do not mark NOT FOUND merely because the article uses alternative wording such as investigated, compared, evaluated, examined or sought to. Mark NOT FOUND only after actively checking the full document and finding no explicit statement.
+research_question and objectives_summary are mandatory retrieval targets. Search the entire document for the document's own explicit research question, aim, purpose, objectives, hypothesis or equivalent. Abstract and Introduction are preferred and should be checked early, but are not mandatory sources. Methods, Results, Discussion, Conclusions, tables or other sections may be used when they explicitly state the document's own question/aim/objectives. For non-primary documents use the document's own aims, not cited-study aims. If an explicit question exists, give a faithful concise representation. If no question is phrased as a question but an explicit aim/purpose/objective exists, convert that statement into a concise question without adding content. objectives_summary comes from explicit aims/objectives/purpose statements. Do not mark NOT FOUND merely because the article uses alternative wording such as investigated, compared, evaluated, examined or sought to. Mark NOT FOUND only after actively checking the full document and finding no explicit statement.
 
 ONTOLOGY
 ontology_codes must use only valid codes from the repository's current topic ontology. Do not invent codes.
