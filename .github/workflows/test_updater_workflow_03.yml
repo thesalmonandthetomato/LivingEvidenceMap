@@ -2,6 +2,12 @@ name: Test updater Workflow 03 - adjudication
 
 on:
   workflow_dispatch:
+    inputs:
+      send_email:
+        description: 'Send one real review notification email'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   test:
@@ -93,6 +99,16 @@ jobs:
           assert resolved[0]['status']=='resolved'
           print('Workflow 03 production notification payload passed')
           PY
+
+      - name: Send one real SMTP notification
+        if: ${{ inputs.send_email }}
+        env:
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+        run: |
+          python3 scripts/updater/send_review_email.py --payload testdata/workflow03/review_package/notification_payload.json
 
       - name: Upload artefacts
         if: always()
