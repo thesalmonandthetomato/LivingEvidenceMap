@@ -25,7 +25,16 @@
       "outputs": ["adjudication JSONL","adjudication audit JSONL","human review queue JSONL","human resolution JSONL","workflow artefacts/checkpoints"],
       "test_status": "passed",
       "last_verified_run": 33119147624,
-      "next_step": "email_and_chatgpt_review_interface"
+      "review_interface": {
+        "status": "validated",
+        "outputs": ["review manifest","one prompt file per pending case","HTML one-case-at-a-time review page","email body","notification state","notification payload"],
+        "duplicate_notification_policy": "Queue fingerprint is deterministic from the exact set of pending review_case_ids; unchanged queue state must not trigger duplicate notification.",
+        "recipient": "nealhaddaway@gmail.com",
+        "chatgpt_link_policy": "Use https://chatgpt.com/ only; do not invent unsupported pre-filled prompt URLs.",
+        "last_verified_run": 33120208446,
+        "last_verified_job": 98684931185
+      },
+      "next_step": "configure_email_transport"
     }
   }
 }
