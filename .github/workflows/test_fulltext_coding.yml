@@ -15,9 +15,11 @@ on:
         description: "OpenAI model for the test"
         required: false
         default: "gpt-5.6-luna"
+
 permissions:
   contents: read
   actions: read
+
 jobs:
   code:
     runs-on: ubuntu-latest
@@ -31,22 +33,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
+        with:
+          python-version: "3.11"
       - name: Preflight current coding schema
         run: |
           set -euo pipefail
-          python scripts/fulltext_coding/preflight_coding_schema_v2.py --schema scripts/fulltext_coding/coding_schema_v2.json --validator scripts/fulltext_coding/validate_coding_output_v2.py
+          python scripts/fulltext_coding/preflight_coding_schema_v4.py \
+            --schema scripts/fulltext_coding/coding_schema_v3.json \
+            --validator scripts/fulltext_coding/validate_coding_output_v4.py \
+            --prompt scripts/fulltext_coding/fulltext_coding_prompt_v3.txt
       - name: Download existing Zenodo test corpus
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json,os,urllib.request
+          import json, os, urllib.request
           from pathlib import Path
-          token=os.environ['ZENODO_ACCESS_TOKEN'];dep=os.environ['ZENODO_DEPOSITION_ID']
-          req=urllib.request.Request(f'https://zenodo.org/api/deposit/depositions/{dep}',headers={'Authorization':f'Bearer {token}','Accept':'application/json'})
-          with urllib.request.urlopen(req,timeout=60) as r:data=json.load(r)
-          remote=data['files'][0]
-          with urllib.request.urlopen(urllib.request.Request(remote['links']['download'],headers={'Authorization':f'Bearer {token}'}),timeout=180) as r:Path('test_corpus.zip').write_bytes(r.read())
+          token=os.environ['ZENODO_ACCESS_TOKEN']; dep=os.environ['ZENODO_DEPOSITION_ID']
+          req=urllib.request.Request(f'https://zenodo.org/api/deposit/depositions/{dep}', headers={'Authorization':f'Bearer {token}','Accept':'application/json'})
+          with urllib.request.urlopen(req, timeout=60) as r: data=json.load(r)
+          remote=data['files'][0]; url=remote['links']['download']
+          with urllib.request.urlopen(urllib.request.Request(url, headers={'Authorization':f'Bearer {token}'}), timeout=180) as r:
+              Path('test_corpus.zip').write_bytes(r.read())
           print(remote['filename'])
           PY
       - name: Prepare test papers
@@ -58,43 +65,64 @@ jobs:
           python - <<'PY'
           import os
           from pathlib import Path
-          files=sorted(Path('test_corpus/raw').rglob('*.tei.xml'));start=int(os.environ.get('START_INDEX','11'));n=int(os.environ.get('N_PAPERS','10'));selected=files[start-1:start-1+n]
-          if len(selected)<n:raise SystemExit(f'Requested {n} papers from position {start}, but only {len(files)} are available')
-          Path('test_corpus/grobid_test_files.txt').write_text('\n'.join(str(p) for p in selected)+'\n');print(f'Selected positions {start}-{start+n-1}:');[print(p) for p in selected]
+          files=sorted(Path('test_corpus/raw').rglob('*.tei.xml'))
+          start=int(os.environ.get('START_INDEX','11'))
+          n=int(os.environ.get('N_PAPERS','10'))
+          selected=files[start-1:start-1+n]
+          if len(selected) < n:
+              raise SystemExit(f'Requested {n} papers from position {start}, but only {len(files)} are available')
+          Path('test_corpus/grobid_test_files.txt').write_text('\n'.join(str(p) for p in selected)+'\n')
+          print(f'Selected positions {start}-{start+n-1}:')
+          for p in selected: print(p)
           PY
-          while IFS= read -r file; do work_id="$(basename "$file" .tei.xml)"; python scripts/fulltext_coding/prepare_fulltext_for_coding.py --input "$file" --output "test_corpus/prepared/${work_id}.json"; done < test_corpus/grobid_test_files.txt
+          while IFS= read -r file; do
+            work_id="$(basename "$file" .tei.xml)"
+            python scripts/fulltext_coding/prepare_fulltext_for_coding.py --input "$file" --output "test_corpus/prepared/${work_id}.json"
+          done < test_corpus/grobid_test_files.txt
         env:
           START_INDEX: ${{ github.event.inputs.start_index || '11' }}
           N_PAPERS: ${{ github.event.inputs.n_papers || '10' }}
       - name: RESTORE durable coding checkpoint from this run
         if: always()
-        env: {GH_TOKEN: ${{ github.token }}}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/coding_checkpoint
           python - <<'PY'
-          import json,os,urllib.request,zipfile,io
+          import json, os, urllib.request, zipfile, io
           from pathlib import Path
-          repo=os.environ['GITHUB_REPOSITORY'];run_id=os.environ['GITHUB_RUN_ID'];token=os.environ['GH_TOKEN']
-          req=urllib.request.Request(f'https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100',headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
-          with urllib.request.urlopen(req,timeout=60) as r:data=json.load(r)
+          repo=os.environ['GITHUB_REPOSITORY']; run_id=os.environ['GITHUB_RUN_ID']; token=os.environ['GH_TOKEN']
+          req=urllib.request.Request(f'https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100', headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+          with urllib.request.urlopen(req, timeout=60) as r: data=json.load(r)
           candidates=[a for a in data.get('artifacts',[]) if a['name'].startswith('fulltext-coding-checkpoint-') and not a.get('expired')]
-          if not candidates:print('No prior checkpoint artifact for this workflow run; starting with no restored annotations.');raise SystemExit(0)
-          artifact=max(candidates,key=lambda a:a.get('created_at',''));print(f"Restoring checkpoint artifact {artifact['id']} ({artifact['name']})")
-          req=urllib.request.Request(artifact['archive_download_url'],headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
-          with urllib.request.urlopen(req,timeout=120) as r:blob=r.read()
-          with zipfile.ZipFile(io.BytesIO(blob)) as z:z.extractall('/tmp/coding_checkpoint')
+          if not candidates:
+              print('No prior checkpoint artifact for this workflow run; starting with no restored annotations.')
+              raise SystemExit(0)
+          artifact=max(candidates, key=lambda a:a.get('created_at',''))
+          print(f"Restoring checkpoint artifact {artifact['id']} ({artifact['name']})")
+          req=urllib.request.Request(artifact['archive_download_url'], headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+          with urllib.request.urlopen(req, timeout=120) as r: blob=r.read()
+          with zipfile.ZipFile(io.BytesIO(blob)) as z: z.extractall('/tmp/coding_checkpoint')
           restored=0
           for p in Path('/tmp/coding_checkpoint').rglob('*'):
-           if p.is_file():
-            dest=Path('test_corpus/annotations')/p.name
-            if not dest.exists():dest.write_bytes(p.read_bytes());restored+=1
+              if p.is_file():
+                  dest=Path('test_corpus/annotations')/p.name
+                  if not dest.exists(): dest.write_bytes(p.read_bytes()); restored += 1
           print(f'Restored {restored} checkpoint files.')
           PY
       - name: Run AI coding
         run: |
           set -euo pipefail
-          python scripts/fulltext_coding/code_fulltext_test_v2.py --input-dir test_corpus/prepared --output-dir test_corpus/annotations --ontology data/reference/topic_ontology_v3.csv --schema scripts/fulltext_coding/coding_schema_v2.json --prompt scripts/fulltext_coding/fulltext_coding_prompt_v3.txt --model "$FULLTEXT_CODING_MODEL" --max-papers "${{ github.event.inputs.n_papers || 10 }}"
+          python scripts/fulltext_coding/code_fulltext_test_v3.py \
+            --input-dir test_corpus/prepared \
+            --output-dir test_corpus/annotations \
+            --ontology data/reference/topic_ontology_v3.csv \
+            --schema scripts/fulltext_coding/coding_schema_v3.json \
+            --validator scripts/fulltext_coding/validate_coding_output_v4.py \
+            --prompt scripts/fulltext_coding/fulltext_coding_prompt_v3.txt \
+            --model "$FULLTEXT_CODING_MODEL" \
+            --max-papers "${{ github.event.inputs.n_papers || 10 }}"
       - name: Validate generated annotations
         if: always()
         run: |
@@ -102,9 +130,11 @@ jobs:
           shopt -s nullglob
           files=(test_corpus/annotations/*.json)
           for file in "${files[@]}"; do
-            case "$file" in *.raw_response.json|*.checkpoint.json|*/test_manifest.json) continue;; esac
+            case "$file" in
+              *.raw_response.json|*.checkpoint.json|*/test_manifest.json) continue ;;
+            esac
             echo "Validating $file"
-            python scripts/fulltext_coding/validate_coding_output_v2.py --input "$file" || true
+            python scripts/fulltext_coding/validate_coding_output_v4.py --input "$file" || true
           done
       - name: CHECKPOINT generated annotations (90 days)
         if: always()
@@ -123,10 +153,16 @@ jobs:
           set -euo pipefail
           mkdir -p test_corpus/annotations
           python - <<'PY'
-          import json,os
+          import json, os
           from pathlib import Path
-          root=Path('test_corpus/annotations');files=sorted(p for p in root.glob('*.json') if not p.name.endswith('.raw_response.json') and not p.name.endswith('.checkpoint.json') and p.name!='test_manifest.json')
-          Path('test_corpus/annotations/test_manifest.json').write_text(json.dumps({'workflow':'test_fulltext_coding','model':os.environ['FULLTEXT_CODING_MODEL'],'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v2.json','prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v3.txt','zenodo_deposition':22085902,'start_index':int(os.environ.get('START_INDEX','11')),'n_papers':int(os.environ.get('N_PAPERS','10')),'annotation_files':[p.name for p in files]},indent=2)+'\n')
+          root=Path('test_corpus/annotations')
+          files=sorted(p for p in root.glob('*.json') if not p.name.endswith('.raw_response.json') and not p.name.endswith('.checkpoint.json') and p.name != 'test_manifest.json')
+          Path('test_corpus/annotations/test_manifest.json').write_text(json.dumps({
+            'workflow':'test_fulltext_coding','model':os.environ['FULLTEXT_CODING_MODEL'],
+            'ontology':'data/reference/topic_ontology_v3.csv','schema':'scripts/fulltext_coding/coding_schema_v3.json',
+            'prompt':'scripts/fulltext_coding/fulltext_coding_prompt_v3.txt','zenodo_deposition':22085902,
+            'start_index':int(os.environ.get('START_INDEX','11')),'n_papers':int(os.environ.get('N_PAPERS','10')),
+            'annotation_files':[p.name for p in files]}, indent=2)+'\n')
           PY
       - name: CHECKPOINT final manifest (90 days)
         if: always()
