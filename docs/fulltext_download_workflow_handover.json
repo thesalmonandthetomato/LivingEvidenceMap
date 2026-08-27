@@ -1,0 +1,138 @@
+{
+  "snapshot_date":"2026-08-27",
+  "project":"LivingEvidenceMap",
+  "purpose":"Canonical machine-readable handover for the full-text acquisition pathway from corpus DOI records through OpenAlex content, GROBID/PDF selection, GitHub checkpointing, private Zenodo storage, and provenance registry.",
+  "source_of_truth_files":{
+    "workflow":".github/workflows/openalex_fulltext_download.yml",
+    "downloader":"scripts/download_openalex_fulltext.py",
+    "openalex_only_wrapper":"scripts/download_openalex_only.py",
+    "zenodo_partial_depositor":"scripts/zenodo_partial_batch.py",
+    "zenodo_verifier":"scripts/verify_zenodo_batch.py",
+    "registry":"data/reference/fulltext_batch_registry.csv",
+    "grobid_candidates":"data/openalex_grobid_candidates.csv",
+    "pdf_candidates":"data/openalex_pdf_candidates.csv"
+  },
+  "corpus_audit":{
+    "doi_records_checked":11291,
+    "exact_openalex_doi_matches":11265,
+    "openalex_oa_records":6199,
+    "pdf_available":3935,
+    "grobid_xml_available":3705,
+    "pdf_and_grobid":3705,
+    "pdf_only":230,
+    "grobid_only":0,
+    "download_files":3935,
+    "selection_rule":"GROBID first; PDF only when no GROBID is available for the DOI/OpenAlex work"
+  },
+  "doi_lineage":{
+    "basis":"LivingEvidenceMap corpus DOI records followed by OpenAlex metadata/content audit",
+    "candidate_fields":"input_doi and openalex_id",
+    "matching_requirement":"doi_exact_match == TRUE plus corresponding OpenAlex content availability",
+    "historical_manual_sets":"The exact DOI lists used for the earliest manually initiated batches are not preserved as a dedicated permanent file in the current repository. Do not invent them; use historical Actions artifacts/manifests or Git history if exact reconstruction is required."
+  },
+  "batch_plan":{
+    "maximum_content_files_per_batch":100,
+    "total_batches":40,
+    "batches_1_37":"100 GROBID XML each",
+    "batch_38":"5 GROBID XML + 95 PDF-only",
+    "batch_39":"100 PDF-only",
+    "batch_40":"35 PDF-only",
+    "openalex_content_cost_basis":"0.01 USD per content file as documented in repository at snapshot"
+  },
+  "download_logic":{
+    "grobid_condition":"doi_exact_match == TRUE AND has_grobid_xml == TRUE",
+    "pdf_only_condition":"doi_exact_match == TRUE AND has_pdf == TRUE AND DOI not already in GROBID set",
+    "duplicate_doi_plan":"fatal error",
+    "formats":"GROBID TEI XML preferred; PDF fallback",
+    "validation":"PDF magic bytes or TEI marker; gzip GROBID responses supported",
+    "retries":5,
+    "retry_strategy":"exponential backoff for transient HTTP/network failures"
+  },
+  "workflow_current_state":{
+    "workflow":".github/workflows/openalex_fulltext_download.yml",
+    "manual_dispatch":true,
+    "manual_input":"batch_number 1-40",
+    "scheduled":true,
+    "schedule":"0 9 * * * UTC",
+    "schedule_start_date":"2026-08-26",
+    "schedule_start_batch":6,
+    "last_batch":40,
+    "concurrency":"openalex-fulltext-zenodo",
+    "runner":"ubuntu-latest",
+    "python":"3.12",
+    "timeout_minutes":240
+  },
+  "historical_evolution":[
+    "OpenAlex metadata/full-text audit",
+    "initial full-text downloader",
+    "manual batch workflow",
+    "private Zenodo draft storage",
+    "OpenAlex authentication/diagnostic fixes",
+    "GROBID validation and gzip handling",
+    "partial-batch checkpointing",
+    "Zenodo partial-batch recovery",
+    "DOI/OpenAlex/workflow/Zenodo provenance registry",
+    "scheduled batches 6-40"
+  ],
+  "relevant_history_commits":[
+    "91ad96a2aa51fdd3ba5925b9e9f928b468b07a59",
+    "66b5e63f370ad437294471fcb0de47061010bba0",
+    "9953d328cab2e81295897b488c243bf9512604f2",
+    "f563b29aab82a00ba8e53168de6efe4f02ab27c1",
+    "dca9450fcb22f1e7384d251a36147eead21d97bc",
+    "a8094b3c2a6da43c2a6da43ae2c18ba1ad503ac",
+    "8477bb44801615e4eaa283abf2221c8132203a7a",
+    "12fea08a5a9b617ea058bdb4d1581cfb90c673da",
+    "2fbef5eb7d9f9c2fd2cd12bdbf5d1d853f719433",
+    "d2c10cd14e36035c3a61b2c60eab205d869cbc02"
+  ],
+  "checkpointing":{
+    "per_file":"downloaded files are validated and manifest is updated during the batch",
+    "github_cache":"batch-specific cache",
+    "github_artifact_retention_days":90,
+    "zenodo":"durable private draft ZIP storage",
+    "round_trip_verification":true,
+    "registry_commit":true
+  },
+  "zenodo":{
+    "storage":"private unpublished draft depositions",
+    "parts":{
+      "01":"batches 01-10",
+      "02":"batches 11-20",
+      "03":"batches 21-30",
+      "04":"batches 31-40"
+    },
+    "archive_naming":"LivingEvidenceMap_fulltext_batch_NNN_run-GITHUB_RUN_ID.zip",
+    "partial_depositor":"scripts/zenodo_partial_batch.py",
+    "receipt":"zenodo_receipt.json",
+    "receipt_fields":["batch","successful_files","failed_files","deposition_id","deposition_url","upload_status","zip_file","zip_bytes","zip_sha256","github_run_id","github_run_url"]
+  },
+  "registry":{
+    "path":"data/reference/fulltext_batch_registry.csv",
+    "key_fields":["doi","openalex_id","workflow_run_id","workflow_run_url","zenodo_record_id","zenodo_record_url","zenodo_version_doi","zenodo_concept_doi","zenodo_archive_filename","status"],
+    "individual_source_provenance":"notes field records GROBID source filename such as W4205942496.tei.xml",
+    "role":"bridge between individual DOI/OpenAlex works and Zenodo batch/archive provenance"
+  },
+  "confirmed_example":{
+    "batch":6,
+    "github_run_id":32954157932,
+    "zenodo_record_id":22109515,
+    "archive":"LivingEvidenceMap_fulltext_batch_006_run-32954157932.zip"
+  },
+  "resume_protocol":[
+    "Read docs/fulltext_download_workflow_handover.md",
+    "Read this JSON",
+    "Inspect current workflow and downloader rather than relying on historical descriptions",
+    "Inspect candidate tables",
+    "Inspect fulltext_batch_registry.csv",
+    "Inspect Actions artifacts/runs for incomplete batches",
+    "Inspect Zenodo receipts/draft records",
+    "Only then continue or repair acquisition"
+  ],
+  "important_limits":[
+    "Exact early manually supplied DOI lists are not preserved as a dedicated repository file.",
+    "Zenodo record IDs represent batch storage, not individual papers.",
+    "Individual-paper provenance must be resolved through DOI/OpenAlex ID and the batch registry/source filename.",
+    "Do not assume the older docs/openalex_fulltext.md trigger description is current; inspect .github/workflows/openalex_fulltext_download.yml because the workflow later acquired a daily schedule."
+  ]
+}
