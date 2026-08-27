@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Workflow 02: conservative JSONL deduplication prototype.
 
-Identity (lens_id) and bibliographic duplicate status are deliberately kept
-separate. DOI is only a supporting signal and is never sufficient by itself.
-This prototype is bounded to deterministic matching; LLM adjudication will be
-added only after deterministic behaviour is tested.
+`lens_id` identifies the Lens record and is not itself a bibliographic
+duplicate decision. DOI is only supporting evidence and can never by itself
+cause a duplicate decision. The implementation preserves every input record
+and adds a deduplication decision/audit object rather than deleting records.
 """
 from __future__ import annotations
 
@@ -21,38 +21,74 @@ def norm(value: Any) -> str:
     if value is None:
         return ""
     s = unicodedata.normalize("NFKC", str(value)).casefold()
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def payload(record: dict[str, Any]) -> dict[str, Any]:
+    p = record.get("lens", {}).get("raw_payload", {})
+    if not isinstance(p, dict):
+        raise RuntimeError("Record lens.raw_payload is not an object")
+    return p
+
+
+def extract_dois(record: dict[str, Any]) -> list[str]:
+    ids = payload(record).get("external_ids") or []
+    values: list[str] = []
+    if not isinstance(ids, list):
+        return values
+    for item in ids:
+        if not isinstance(item, dict):
+            continue
+        if norm(item.get("type")) != "doi":
+            continue
+        value = norm(item.get("value"))
+        value = re.sub(r"^https?://doi\.org/", "", value)
+        if value:
+            values.append(value)
+    return sorted(set(values))
 
 
 def title_key(record: dict[str, Any]) -> str:
-    p = record.get("lens", {}).get("raw_payload", {})
-    return norm(p.get("title"))
+    return norm(payload(record).get("title"))
 
 
-def doi_key(record: dict[str, Any]) -> str:
-    p = record.get("lens", {}).get("raw_payload", {})
-    doi = p.get("doi")
-    if isinstance(doi, list):
-        doi = doi[0] if doi else ""
-    return norm(doi).removeprefix("https://doi.org/").removeprefix("http://doi.org/")
+def year_key(record: dict[str, Any]) -> str:
+    p = payload(record)
+    value = p.get("year_published")
+    if value is None:
+        value = p.get("date_published")
+    return norm(value)
+
+
+def source_key(record: dict[str, Any]) -> str:
+    source = payload(record).get("source") or {}
+    if isinstance(source, dict):
+        return norm(source.get("title"))
+    return norm(source)
 
 
 def authors_key(record: dict[str, Any]) -> str:
-    p = record.get("lens", {}).get("raw_payload", {})
-    authors = p.get("authors") or []
+    authors = payload(record).get("authors") or []
+    if not isinstance(authors, list):
+        return ""
     names = []
-    for a in authors[:5]:
-        if isinstance(a, dict):
-            names.append(norm(a.get("last_name") or a.get("name") or a.get("given_name")))
-        else:
-            names.append(norm(a))
+    for author in authors[:5]:
+        if not isinstance(author, dict):
+            names.append(norm(author))
+            continue
+        last = norm(author.get("last_name"))
+        first = norm(author.get("first_name"))
+        names.append(" ".join(x for x in (last, first) if x))
     return "|".join(x for x in names if x)
 
 
-def bibliographic_signature(record: dict[str, Any]) -> str:
-    p = record.get("lens", {}).get("raw_payload", {})
-    parts = [title_key(record), norm(p.get("year_published")), norm(p.get("source_title")), authors_key(record)]
+def bibliographic_signature(record: dict[str, Any]) -> str | None:
+    parts = [title_key(record), year_key(record), source_key(record), authors_key(record)]
+    if not all(parts):
+        return None
     return hashlib.sha256("\x1f".join(parts).encode()).hexdigest()
 
 
@@ -88,29 +124,31 @@ def main() -> int:
         if not lens_id:
             raise RuntimeError("Record has no lens_id; Workflow 02 requires authoritative Lens identity")
 
-        result = dict(record)
-        dedup: dict[str, Any] = {"status": "unique", "decision_source": "deterministic"}
+        result = json.loads(json.dumps(record, ensure_ascii=False))
+        dois = extract_dois(result)
+        signature = bibliographic_signature(result)
+        dedup: dict[str, Any] = {
+            "status": "unique",
+            "decision_source": "deterministic",
+            "doi_supporting": bool(dois),
+        }
 
         if lens_id in seen_lens:
             dedup = {
                 "status": "identity_match",
                 "duplicate_of": seen_lens[lens_id],
                 "decision_source": "lens_id",
+                "doi_supporting": bool(dois),
             }
-        else:
-            signature = bibliographic_signature(record)
-            doi = doi_key(record)
-            # DOI is only a candidate/supporting signal. It is deliberately
-            # never sufficient to declare a duplicate on its own.
-            if signature and signature in seen_strong:
-                dedup = {
-                    "status": "duplicate_candidate",
-                    "duplicate_of": seen_strong[signature],
-                    "decision_source": "bibliographic_signature",
-                    "doi_supporting_signal": bool(doi),
-                }
-            elif signature:
-                seen_strong[signature] = lens_id
+        elif signature and signature in seen_strong:
+            dedup = {
+                "status": "duplicate_candidate",
+                "duplicate_of": seen_strong[signature],
+                "decision_source": "bibliographic_signature",
+                "doi_supporting": bool(dois),
+            }
+        elif signature:
+            seen_strong[signature] = lens_id
 
         result["deduplication"] = dedup
         output.append(result)
