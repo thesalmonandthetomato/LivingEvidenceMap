@@ -11,6 +11,14 @@ jobs:
         with:
           ref: updater-workflow-03-adjudication
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OpenAI SDK
+        run: python -m pip install --upgrade openai
+
       - name: Prepare candidate fixture
         run: |
           mkdir -p testdata/workflow03
@@ -27,7 +35,7 @@ jobs:
             --audit testdata/workflow03/audit_mock.jsonl \
             --mode mock
 
-      - name: Run Workflow 03 real API adjudication
+      - name: Run Workflow 03 real OpenAI adjudication
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -56,7 +64,9 @@ jobs:
           assert all(d['rationale'] for d in decisions)
           assert all(d['mode'] == 'openai' for d in decisions)
           assert all(d['model'] == 'gpt-5-mini' for d in decisions)
-          print('Workflow 03 API adjudication validation passed')
+          assert all(not d.get('adjudication_error') for d in decisions)
+          print('Workflow 03 real OpenAI adjudication validation passed')
+          print(json.dumps(decisions, indent=2))
           PY
 
       - name: Upload artefacts
