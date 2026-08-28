@@ -13,20 +13,12 @@ BASE="https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 def raw(r):
     return r.get("lens",{}).get("raw_payload",{}) if isinstance(r.get("lens"),dict) else {}
 
-def first(v):
-    if isinstance(v,list): return next((x for x in v if x),None)
-    return v
-
 def doi(r):
-    p=raw(r)
-    candidates=[p.get("doi"),p.get("DOI"),p.get("external_ids",{}).get("doi") if isinstance(p.get("external_ids"),dict) else None]
-    for v in candidates:
-        v=first(v)
-        if v:
-            s=str(v).strip()
-            if s.lower().startswith("https://doi.org/"): s=s[16:]
-            if s.lower().startswith("doi:"): s=s[4:].strip()
-            return s
+    # Lens stores external_ids as a list of {type, value} objects. Keep this
+    # identical to the DOI extraction already validated in the OpenAlex test.
+    for x in raw(r).get("external_ids") or []:
+        if isinstance(x,dict) and str(x.get("type","")).lower()=="doi" and x.get("value"):
+            return str(x["value"]).strip().lower().removeprefix("https://doi.org/").removeprefix("http://doi.org/")
     return None
 
 def abstract(r):
@@ -65,7 +57,7 @@ def main():
     Path(a.output).write_text("".join(json.dumps(x,ensure_ascii=False)+"\n" for x in results),encoding="utf-8")
     counts={}
     for x in results: counts[x["status"]]=counts.get(x["status"],0)+1
-    report={"total_input_records":len(rows),"missing_abstract":len(results),"status_counts":counts,"recovered":sum(x["status"]=="abstract_recovered" for x in results)}
+    report={"total_input_records":len(rows),"missing_abstract":len(results),"missing_with_doi":sum(bool(x["doi"]) for x in results),"missing_without_doi":sum(not x["doi"] for x in results),"status_counts":counts,"recovered":sum(x["status"]=="abstract_recovered" for x in results)}
     Path(a.report).write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(report,indent=2))
 if __name__=="__main__": main()
