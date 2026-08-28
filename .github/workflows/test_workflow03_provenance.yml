@@ -1,0 +1,92 @@
+name: Test Workflow 03 - adjudication provenance
+
+on:
+  workflow_dispatch:
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Workflow 03 development code
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-03-adjudication
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OpenAI SDK
+        run: python -m pip install --upgrade openai
+
+      - name: Prepare provenance fixture
+        run: |
+          mkdir -p testdata/workflow03/provenance
+          cat > testdata/workflow03/provenance/candidate.jsonl <<'EOF'
+          {"candidate_id":"provenance-001","incoming_record_id":"lens-prov-001","matched_master_record_id":"master-prov-001","duplicate_basis":"possible_duplicate","title_similarity":0.93,"incoming_title":"Effects of dietary composition on Atlantic salmon growth","matched_master_title":"Effects of dietary composition on growth in Atlantic salmon","incoming_year":2023,"matched_master_year":2023,"incoming_first_author":"Andersen","matched_master_first_author":"Andersen","incoming_doi":null,"matched_master_doi":"10.1000/provenance.001","nested_upstream_evidence":{"lens_record":{"lens_id":"lens-prov-001","abstract":"Synthetic provenance fixture","external_ids":{"doi":null}},"deterministic_match":{"candidate_generation_rule":"title_author_year","score":0.93}}}
+          EOF
+
+      - name: Run real OpenAI adjudication
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python3 scripts/updater/adjudicate_jsonl.py \
+            --input testdata/workflow03/provenance/candidate.jsonl \
+            --output testdata/workflow03/provenance/decision.jsonl \
+            --audit testdata/workflow03/provenance/audit.jsonl \
+            --mode openai \
+            --model gpt-5-mini
+
+      - name: Validate complete adjudication provenance
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          candidate=json.loads(Path('testdata/workflow03/provenance/candidate.jsonl').read_text().strip())
+          decision=json.loads(Path('testdata/workflow03/provenance/decision.jsonl').read_text().strip())
+          audit=json.loads(Path('testdata/workflow03/provenance/audit.jsonl').read_text().strip())
+          prov=audit['adjudication_provenance']
+
+          # Upstream evidence must survive unchanged into the decision and audit trace.
+          assert decision['nested_upstream_evidence']==candidate['nested_upstream_evidence']
+          assert audit['candidate_evidence']==candidate
+          assert audit['decision_record']==decision
+
+          # Exact request/prompt snapshot.
+          request=prov['request']
+          assert request['model']=='gpt-5-mini'
+          assert request['input'][0]['role']=='system'
+          assert 'DOI is supporting evidence only' in request['input'][0]['content']
+          assert request['input'][1]['role']=='user'
+          assert json.loads(request['input'][1]['content'])==candidate
+          assert request['text']['format']['type']=='json_schema'
+          assert request['text']['format']['strict'] is True
+
+          # API response provenance.
+          assert isinstance(prov['response_id'],str) and prov['response_id'].startswith('resp_')
+          assert isinstance(prov['resolved_model'],str) and prov['resolved_model']
+          assert prov['requested_model']=='gpt-5-mini'
+          assert isinstance(prov['usage'],dict) and prov['usage']
+          assert isinstance(prov['raw_response'],dict) and prov['raw_response']
+          assert prov['parsed_response']['decision']==decision['decision']
+          assert prov['parsed_response']['confidence']==decision['confidence']
+          assert prov['parsed_response']['rationale']==decision['rationale']
+          assert prov['adjudication_error'] is None
+          assert prov['started_at'] and prov['completed_at']
+
+          # Convenient top-level provenance fields also remain on the decision record.
+          assert decision['response_id']==prov['response_id']
+          assert decision['resolved_model']==prov['resolved_model']
+          assert decision['usage']==prov['usage']
+          assert decision['adjudication_error'] is None
+
+          print('Workflow 03 complete adjudication provenance passed')
+          PY
+
+      - name: Upload provenance artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow03-adjudication-provenance-test
+          path: testdata/workflow03/provenance/
