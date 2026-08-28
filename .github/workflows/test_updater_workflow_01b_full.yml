@@ -77,7 +77,7 @@ jobs:
                     'lens':{'raw_payload':record},
                     'provenance':{'ingestion_run_id':'full-corpus-test','retrieved_at':datetime.now(timezone.utc).isoformat(),'batch':batches}
                   }
-                  out.write(json.dumps(wrapped,ensure_ascii=False,separators=(',',':'))+'\n')
+                  out.write(json.dumps(wrapped,ensure_ascii=True,separators=(',',':'))+'\n')
               sid=response.get('scroll_id')
               if not sid: break
               if reported is not None and retrieved >= int(reported): break
