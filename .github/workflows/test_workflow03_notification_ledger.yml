@@ -1,0 +1,83 @@
+name: Test Workflow 03 - persistent notification ledger
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-ledger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Workflow 03 development code
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-03-adjudication
+
+      - name: Check out dedicated test state branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-notification-state-test
+          path: notification-state
+
+      - name: Prepare deterministic test notification state
+        run: |
+          mkdir -p testdata/workflow03/ledger_test
+          cat > testdata/workflow03/ledger_test/notification_state.json <<'EOF'
+          {
+            "pending_count": 2,
+            "pending_review_case_ids": ["ledger-test-case-001", "ledger-test-case-002"],
+            "notification_fingerprint": "9d44b2ff1a0ab01ef6168487dc83b0732700c258adaacff6ce43aeb36d58943f",
+            "should_notify": true
+          }
+          EOF
+
+      - name: Check durable ledger before simulated send
+        run: |
+          python3 scripts/updater/notification_ledger.py check \
+            --state testdata/workflow03/ledger_test/notification_state.json \
+            --ledger notification-state/state/workflow03_notification_ledger.json \
+            --output testdata/workflow03/ledger_test/check_before.json
+          cat testdata/workflow03/ledger_test/check_before.json
+
+      - name: Record simulated successful notification if new
+        run: |
+          SHOULD_SEND=$(python3 -c "import json; print(str(json.load(open('testdata/workflow03/ledger_test/check_before.json'))['should_send']).lower())")
+          if [ "$SHOULD_SEND" = "true" ]; then
+            python3 scripts/updater/notification_ledger.py record \
+              --state testdata/workflow03/ledger_test/notification_state.json \
+              --ledger notification-state/state/workflow03_notification_ledger.json \
+              --run-id "$GITHUB_RUN_ID"
+            git -C notification-state config user.name "github-actions[bot]"
+            git -C notification-state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C notification-state add state/workflow03_notification_ledger.json
+            git -C notification-state commit -m "Record Workflow 03 notification ledger test $GITHUB_RUN_ID"
+            git -C notification-state push origin HEAD:updater-notification-state-test
+          else
+            echo "Fingerprint already recorded in durable test ledger; duplicate notification suppressed."
+          fi
+
+      - name: Re-fetch durable state and verify duplicate suppression
+        run: |
+          git -C notification-state fetch origin updater-notification-state-test
+          git -C notification-state reset --hard origin/updater-notification-state-test
+          python3 scripts/updater/notification_ledger.py check \
+            --state testdata/workflow03/ledger_test/notification_state.json \
+            --ledger notification-state/state/workflow03_notification_ledger.json \
+            --output testdata/workflow03/ledger_test/check_after.json
+          python3 - <<'PY'
+          import json
+          before=json.load(open('testdata/workflow03/ledger_test/check_before.json'))
+          after=json.load(open('testdata/workflow03/ledger_test/check_after.json'))
+          ledger=json.load(open('notification-state/state/workflow03_notification_ledger.json'))
+          fp='9d44b2ff1a0ab01ef6168487dc83b0732700c258adaacff6ce43aeb36d58943f'
+          assert after['already_sent'] is True
+          assert after['should_send'] is False
+          matches=[x for x in ledger['sent'] if x.get('fingerprint')==fp]
+          assert len(matches)==1, f'Expected exactly one durable ledger entry, found {len(matches)}'
+          assert matches[0]['pending_review_case_ids']==['ledger-test-case-001','ledger-test-case-002']
+          print('Persistent notification ledger passed')
+          print('Initial should_send:', before['should_send'])
+          print('After durable record should_send:', after['should_send'])
+          PY
