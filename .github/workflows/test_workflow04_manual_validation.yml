@@ -1,0 +1,117 @@
+name: Validate Workflow 04 against manual screening
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install OpenAI SDK
+        run: python -m pip install --upgrade openai
+      - name: Download historical Lens API output
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p testdata/workflow04/manual_validation/source
+          gh api repos/${{ github.repository }}/actions/artifacts/9678731785/zip > testdata/workflow04/manual_validation/historical.zip
+          unzip -q testdata/workflow04/manual_validation/historical.zip -d testdata/workflow04/manual_validation/source
+          test -s testdata/workflow04/manual_validation/source/records.jsonl
+      - name: Build blinded 200-record validation input
+        run: |
+          python3 - <<'PY'
+          import csv,json
+          from pathlib import Path
+          base=Path('testdata/workflow04')
+          labels={r['lens_id']:r['validation_truth'] for r in csv.DictReader(open(base/'manual_validation_labels.csv'))}
+          source=base/'manual_validation/source/records.jsonl'
+          out=base/'manual_validation/input.jsonl'
+          found={}
+          with source.open(encoding='utf-8') as f:
+              for line in f:
+                  if not line.strip(): continue
+                  r=json.loads(line); lid=str(r.get('identity',{}).get('lens_id') or '')
+                  if lid in labels:
+                      x=dict(r)
+                      x['deduplication']={'status':'new'}
+                      x['validation_truth']=labels[lid]
+                      found[lid]=x
+          missing=sorted(set(labels)-set(found))
+          if missing: raise SystemExit(f'{len(missing)} labelled Lens IDs missing from API output: {missing[:5]}')
+          with out.open('w',encoding='utf-8') as f:
+              for lid in labels: f.write(json.dumps(found[lid],ensure_ascii=False,separators=(',',':'))+'\n')
+          assert len(found)==200
+          print('Validation input:',len(found),'records')
+          PY
+      - name: Screen manual validation sample
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python3 scripts/updater/relevance_screen_jsonl.py \
+            --input testdata/workflow04/manual_validation/input.jsonl \
+            --output testdata/workflow04/manual_validation/output.jsonl \
+            --audit testdata/workflow04/manual_validation/audit.jsonl \
+            --checkpoint testdata/workflow04/manual_validation/checkpoint.json \
+            --chunk-size 25 --mode openai --model gpt-5-mini
+      - name: Calculate validation metrics and disagreement table
+        run: |
+          python3 - <<'PY'
+          import csv,json
+          from pathlib import Path
+          p=Path('testdata/workflow04/manual_validation')
+          rows=[json.loads(x) for x in open(p/'output.jsonl') if x.strip()]
+          counts={}
+          disagreements=[]
+          for r in rows:
+              truth=r['validation_truth']; pred=r['screening']['decision']
+              counts[(truth,pred)]=counts.get((truth,pred),0)+1
+              if truth!=pred:
+                  raw=r.get('lens',{}).get('raw_payload',{})
+                  disagreements.append({
+                    'lens_id':r['identity']['lens_id'],'manual':truth,'workflow04':pred,
+                    'title':raw.get('title') or '', 'reason':r['screening'].get('reason') or '',
+                    'technical_error':r['screening'].get('technical_error') or ''})
+          def n(t,p): return counts.get((t,p),0)
+          total=len(rows); exact=n('retain','retain')+n('exclude','exclude')
+          metrics={
+            'n':total,'manual_retain':sum(1 for r in rows if r['validation_truth']=='retain'),
+            'manual_exclude':sum(1 for r in rows if r['validation_truth']=='exclude'),
+            'exact_agreement_n':exact,'exact_agreement':exact/total,
+            'retain_retain':n('retain','retain'),'retain_exclude_false_exclusion':n('retain','exclude'),
+            'retain_uncertain':n('retain','uncertain'),'exclude_exclude':n('exclude','exclude'),
+            'exclude_retain_false_retention':n('exclude','retain'),'exclude_uncertain':n('exclude','uncertain'),
+            'sensitivity_retain':n('retain','retain')/100,
+            'false_exclusion_rate':n('retain','exclude')/100,
+            'specificity_exclude':n('exclude','exclude')/100,
+            'false_retention_rate':n('exclude','retain')/100,
+            'uncertain_rate':(n('retain','uncertain')+n('exclude','uncertain'))/total,
+            'technical_failures':sum(bool(r['screening'].get('technical_error')) for r in rows)
+          }
+          (p/'metrics.json').write_text(json.dumps(metrics,indent=2)+'\n')
+          with open(p/'disagreements.csv','w',newline='',encoding='utf-8') as f:
+              w=csv.DictWriter(f,fieldnames=['lens_id','manual','workflow04','title','reason','technical_error']); w.writeheader(); w.writerows(disagreements)
+          print(json.dumps(metrics,indent=2))
+          print('Disagreements:',len(disagreements))
+          PY
+      - name: Upload 90-day validation artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-manual-validation-${{ github.run_id }}
+          path: |
+            testdata/workflow04/manual_validation/output.jsonl
+            testdata/workflow04/manual_validation/audit.jsonl
+            testdata/workflow04/manual_validation/checkpoint.json
+            testdata/workflow04/manual_validation/metrics.json
+            testdata/workflow04/manual_validation/disagreements.csv
+          retention-days: 90
+          if-no-files-found: error
