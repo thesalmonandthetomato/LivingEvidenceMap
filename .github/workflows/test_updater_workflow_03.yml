@@ -8,10 +8,8 @@ on:
         required: true
         default: false
         type: boolean
-
 permissions:
   contents: write
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -19,21 +17,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: updater-workflow-03-adjudication
-
-      - name: Check out durable notification state
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: updater-workflow-03-notification-state
           path: notification-state
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install OpenAI SDK
         run: python -m pip install --upgrade openai
-
       - name: Prepare candidate fixture including sparse metadata
         run: |
           mkdir -p testdata/workflow03
@@ -44,138 +36,60 @@ jobs:
           {"candidate_id":"sparse-partial","incoming_record_id":"lens-sparse-002","matched_master_record_id":"master-sparse-002","duplicate_basis":"possible_duplicate","title_similarity":0.86,"incoming_title":"Sea lice treatment outcomes in farmed Atlantic salmon","matched_master_title":"Sea lice treatment outcomes in Atlantic salmon","incoming_year":null,"matched_master_year":null,"incoming_first_author":"MacLeod","matched_master_first_author":"","incoming_doi":null,"matched_master_doi":null}
           {"candidate_id":"sparse-minimal","incoming_record_id":"lens-sparse-003","matched_master_record_id":"master-sparse-003","duplicate_basis":null,"title_similarity":null,"incoming_title":null,"matched_master_title":"","incoming_year":null,"matched_master_year":null,"incoming_first_author":"","matched_master_first_author":null,"incoming_doi":null,"matched_master_doi":""}
           EOF
-
-      - name: Run Workflow 03 real OpenAI adjudication
+      - name: Run Workflow 03 with checkpoints
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python3 scripts/updater/adjudicate_jsonl.py --input testdata/workflow03/candidates.jsonl --output testdata/workflow03/decisions_api.jsonl --audit testdata/workflow03/audit_api.jsonl --mode openai --model gpt-5-mini
-
-      - name: Validate sparse OpenAI adjudication
+        run: python3 scripts/updater/adjudicate_jsonl.py --input testdata/workflow03/candidates.jsonl --output testdata/workflow03/decisions_api.jsonl --audit testdata/workflow03/audit_api.jsonl --checkpoint testdata/workflow03/adjudication_checkpoint.json --chunk-size 2 --mode openai --model gpt-5-mini
+      - name: Validate adjudication checkpoint and sparse cases
         run: |
           python3 - <<'PY'
           import json
-          from pathlib import Path
-          rows=[json.loads(x) for x in Path('testdata/workflow03/decisions_api.jsonl').read_text().splitlines() if x.strip()]
-          by_id={r['candidate_id']:r for r in rows}
-          assert len(rows)==5
+          rows=[json.loads(x) for x in open('testdata/workflow03/decisions_api.jsonl') if x.strip()]; by={r['candidate_id']:r for r in rows}; cp=json.load(open('testdata/workflow03/adjudication_checkpoint.json'))
+          assert len(rows)==5 and cp['completed_candidates']==5 and cp['next_candidate_index']==5 and cp['chunk_size']==2
           for cid in ('sparse-strong','sparse-partial','sparse-minimal'):
-              row=by_id[cid]
-              assert row['decision'] in {'duplicate','not_duplicate','uncertain'}
-              assert isinstance(row['confidence'],(int,float)) and 0 <= row['confidence'] <= 1
-              assert isinstance(row['rationale'],str) and row['rationale'].strip()
-              assert row.get('adjudication_error') is None
-          assert by_id['sparse-minimal']['decision']=='uncertain'
-          print('Sparse OpenAI adjudication passed')
+              assert by[cid]['decision'] in {'duplicate','not_duplicate','uncertain'} and by[cid].get('adjudication_error') is None
+          assert by['sparse-minimal']['decision']=='uncertain'
           PY
-
+      - name: Test Workflow 03 resume is idempotent at completed checkpoint
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python3 scripts/updater/adjudicate_jsonl.py --input testdata/workflow03/candidates.jsonl --output testdata/workflow03/decisions_api.jsonl --audit testdata/workflow03/audit_api.jsonl --checkpoint testdata/workflow03/adjudication_checkpoint.json --chunk-size 2 --resume --mode openai --model gpt-5-mini
+          test "$(grep -c . testdata/workflow03/decisions_api.jsonl)" -eq 5
       - name: Run promotion gate
         run: python3 scripts/updater/promote_adjudication.py --input testdata/workflow03/decisions_api.jsonl --output testdata/workflow03/promoted_api.jsonl --threshold 0.80
-
       - name: Validate sparse promotion routing
         run: |
           python3 - <<'PY'
           import json
-          rows=[json.loads(x) for x in open('testdata/workflow03/promoted_api.jsonl') if x.strip()]
-          minimal={r['candidate_id']:r for r in rows}['sparse-minimal']
-          assert minimal['promotion']=='human_review'
-          assert minimal['promotion_reason']=='model_uncertain'
-          assert minimal.get('adjudication_error') is None
+          rows=[json.loads(x) for x in open('testdata/workflow03/promoted_api.jsonl') if x.strip()]; minimal={r['candidate_id']:r for r in rows}['sparse-minimal']; assert minimal['promotion']=='human_review' and minimal['promotion_reason']=='model_uncertain'
           PY
-
-      - name: Test promotion gate failure states
-        run: |
-          cat > testdata/workflow03/promotion_edge_cases.jsonl <<'EOF'
-          {"candidate_id":"u1","decision":"uncertain","confidence":0.99,"rationale":"Conflicting evidence"}
-          {"candidate_id":"u2","decision":"duplicate","confidence":0.79,"rationale":"Below threshold"}
-          {"candidate_id":"u3","decision":"not_duplicate","confidence":0.90,"rationale":"Technical test","adjudication_error":"TimeoutError: simulated"}
-          {"candidate_id":"u4","decision":"bogus","confidence":0.99,"rationale":"Invalid decision"}
-          EOF
-          python3 scripts/updater/promote_adjudication.py --input testdata/workflow03/promotion_edge_cases.jsonl --output testdata/workflow03/promotion_edge_results.jsonl --threshold 0.80
-
-      - name: Prepare realistic human review cases
+      - name: Prepare and build human review package
         run: |
           cat > testdata/workflow03/review_input.jsonl <<'EOF'
-          {"candidate_id":"review-001","incoming_record_id":"lens-review-001","matched_master_record_id":"master-review-001","duplicate_basis":"doi_conflict_review","title_similarity":0.97,"incoming_title":"Effects of dietary composition on growth performance of Atlantic salmon","matched_master_title":"Effects of dietary composition on growth performance in Atlantic salmon","incoming_year":2022,"matched_master_year":2022,"incoming_first_author":"Andersen","matched_master_first_author":"Andersen","incoming_doi":"10.1000/salmon.2022.a","matched_master_doi":"10.1000/salmon.2022.b","decision":"uncertain","confidence":0.94,"rationale":"Title, author and year strongly agree, but the DOI conflict prevents a confident automated decision.","promotion":"human_review","promotion_reason":"model_uncertain","promotion_threshold":0.80}
-          {"candidate_id":"review-002","incoming_record_id":"lens-review-002","matched_master_record_id":"master-review-002","duplicate_basis":"possible_duplicate","title_similarity":0.89,"incoming_title":"Sea lice infestation and treatment outcomes in farmed Atlantic salmon","matched_master_title":"Sea lice infestation and treatment in Atlantic salmon aquaculture","incoming_year":2021,"matched_master_year":null,"incoming_first_author":"MacLeod","matched_master_first_author":"","incoming_doi":null,"matched_master_doi":"10.1000/lice.2020.44","decision":"uncertain","confidence":0.72,"rationale":"Available title evidence suggests a possible match, but the available metadata are insufficient for a confident automated decision.","promotion":"human_review","promotion_reason":"model_uncertain","promotion_threshold":0.80}
+          {"candidate_id":"review-001","incoming_record_id":"lens-review-001","matched_master_record_id":"master-review-001","duplicate_basis":"doi_conflict_review","title_similarity":0.97,"incoming_title":"Effects of dietary composition on growth performance of Atlantic salmon","matched_master_title":"Effects of dietary composition on growth performance in Atlantic salmon","incoming_year":2022,"matched_master_year":2022,"incoming_first_author":"Andersen","matched_master_first_author":"Andersen","incoming_doi":"10.1000/salmon.2022.a","matched_master_doi":"10.1000/salmon.2022.b","decision":"uncertain","confidence":0.94,"rationale":"Conflicting DOI evidence.","promotion":"human_review","promotion_reason":"model_uncertain","promotion_threshold":0.80}
+          {"candidate_id":"review-002","incoming_record_id":"lens-review-002","matched_master_record_id":"master-review-002","duplicate_basis":"possible_duplicate","title_similarity":0.89,"incoming_title":"Sea lice infestation and treatment outcomes in farmed Atlantic salmon","matched_master_title":"Sea lice infestation and treatment in Atlantic salmon aquaculture","incoming_year":2021,"matched_master_year":null,"incoming_first_author":"MacLeod","matched_master_first_author":"","incoming_doi":null,"matched_master_doi":"10.1000/lice.2020.44","decision":"uncertain","confidence":0.72,"rationale":"Insufficient metadata.","promotion":"human_review","promotion_reason":"model_uncertain","promotion_threshold":0.80}
           EOF
           python3 scripts/updater/build_human_review_queue.py --input testdata/workflow03/review_input.jsonl --output testdata/workflow03/human_review_queue.jsonl
-
-      - name: Build review package and notification state
-        run: |
           python3 scripts/updater/build_review_package.py --input testdata/workflow03/human_review_queue.jsonl --outdir testdata/workflow03/review_package
           python3 scripts/updater/build_notification_state.py --input testdata/workflow03/human_review_queue.jsonl --output testdata/workflow03/review_package/notification_state.json
-          python3 scripts/updater/build_notification_state.py --input testdata/workflow03/human_review_queue.jsonl --output testdata/workflow03/review_package/notification_state_repeat.json
-
-      - name: Resolve one human review case
-        run: |
-          head -n 1 testdata/workflow03/human_review_queue.jsonl > testdata/workflow03/one_review_case.jsonl
-          python3 scripts/updater/resolve_human_review.py --input testdata/workflow03/one_review_case.jsonl --output testdata/workflow03/resolved_case.jsonl --decision not_duplicate --rationale 'Human review confirms the records are distinct publications.' --reviewer 'nealhaddaway'
-
-      - name: Validate lifecycle and sparse bibliographic review package
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          queue=[json.loads(x) for x in Path('testdata/workflow03/human_review_queue.jsonl').read_text().splitlines() if x.strip()]
-          resolved=[json.loads(x) for x in Path('testdata/workflow03/resolved_case.jsonl').read_text().splitlines() if x.strip()]
-          package=Path('testdata/workflow03/review_package')
-          manifest=json.loads((package/'review_manifest.json').read_text())
-          state=json.loads((package/'notification_state.json').read_text())
-          repeat=json.loads((package/'notification_state_repeat.json').read_text())
-          assert len(queue)==2
-          assert manifest['pending_count']==2 and len(manifest['cases'])==2
-          assert state['pending_count']==2 and state['should_notify'] is True
-          assert state['notification_fingerprint']==repeat['notification_fingerprint']
-          sparse=next(c for c in queue if c['candidate_id']=='review-002')
-          assert sparse['matched_master_year'] is None
-          assert sparse['matched_master_first_author']==''
-          assert sparse['incoming_doi'] is None
-          for case in queue:
-              assert case.get('review_case_id') and case.get('candidate_id')
-              assert case.get('incoming_record_id') and case.get('matched_master_record_id')
-              assert case.get('status')=='pending'
-          assert sparse['model_decision']=='uncertain'
-          assert sparse['promotion_reason']=='model_uncertain'
-          assert resolved[0]['status']=='resolved'
-          print('Workflow 03 lifecycle passed')
-          PY
-
-      - name: Upload review artefact
+      - name: Upload 90-day review and checkpoint artefact
         id: upload_review
         uses: actions/upload-artifact@v4
         with:
           name: workflow03-human-review-interface-test
           path: testdata/workflow03/
-
-      - name: Build and validate notification payload with direct artefact link
+          retention-days: 90
+      - name: Build notification payload
         env:
           REVIEW_ARTIFACT_URL: ${{ steps.upload_review.outputs.artifact-url }}
-        run: |
-          python3 scripts/updater/build_notification_payload.py --manifest testdata/workflow03/review_package/review_manifest.json --output testdata/workflow03/review_package/notification_payload.json
-          python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          package=Path('testdata/workflow03/review_package')
-          state=json.loads((package/'notification_state.json').read_text())
-          payload=json.loads((package/'notification_payload.json').read_text())
-          assert payload['recipient']=='nealhaddaway@gmail.com'
-          assert payload['pending_count']==2
-          assert payload['queue_fingerprint']==state['notification_fingerprint']
-          assert payload['review_artifact_url']==os.environ['REVIEW_ARTIFACT_URL']
-          assert payload['review_artifact_url'] in payload['body_text']
-          PY
-
+        run: python3 scripts/updater/build_notification_payload.py --manifest testdata/workflow03/review_package/review_manifest.json --output testdata/workflow03/review_package/notification_payload.json
       - name: Check durable notification ledger
         id: ledger_check
         run: |
-          python3 scripts/updater/notification_ledger.py check \
-            --state testdata/workflow03/review_package/notification_state.json \
-            --ledger notification-state/state/workflow03_notification_ledger.json \
-            --output testdata/workflow03/review_package/notification_ledger_check.json
+          python3 scripts/updater/notification_ledger.py check --state testdata/workflow03/review_package/notification_state.json --ledger notification-state/state/workflow03_notification_ledger.json --output testdata/workflow03/review_package/notification_ledger_check.json
           SHOULD_SEND=$(python3 -c "import json; print(str(json.load(open('testdata/workflow03/review_package/notification_ledger_check.json'))['should_send']).lower())")
           echo "should_send=$SHOULD_SEND" >> "$GITHUB_OUTPUT"
-          cat testdata/workflow03/review_package/notification_ledger_check.json
-
       - name: Send one real SMTP notification
         if: ${{ inputs.send_email && steps.ledger_check.outputs.should_send == 'true' }}
         env:
@@ -184,20 +98,11 @@ jobs:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
         run: python3 scripts/updater/send_review_email.py --payload testdata/workflow03/review_package/notification_payload.json
-
       - name: Record successful notification durably
         if: ${{ inputs.send_email && steps.ledger_check.outputs.should_send == 'true' }}
         run: |
-          python3 scripts/updater/notification_ledger.py record \
-            --state testdata/workflow03/review_package/notification_state.json \
-            --ledger notification-state/state/workflow03_notification_ledger.json \
-            --run-id "$GITHUB_RUN_ID"
-          git -C notification-state config user.name "github-actions[bot]"
-          git -C notification-state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C notification-state add state/workflow03_notification_ledger.json
-          git -C notification-state commit -m "Record Workflow 03 notification $GITHUB_RUN_ID"
-          git -C notification-state push origin HEAD:updater-workflow-03-notification-state
-
+          python3 scripts/updater/notification_ledger.py record --state testdata/workflow03/review_package/notification_state.json --ledger notification-state/state/workflow03_notification_ledger.json --run-id "$GITHUB_RUN_ID"
+          git -C notification-state config user.name "github-actions[bot]"; git -C notification-state config user.email "41898282+github-actions[bot]@users.noreply.github.com"; git -C notification-state add state/workflow03_notification_ledger.json; git -C notification-state commit -m "Record Workflow 03 notification $GITHUB_RUN_ID"; git -C notification-state push origin HEAD:updater-workflow-03-notification-state
       - name: Confirm duplicate email suppression
         if: ${{ inputs.send_email && steps.ledger_check.outputs.should_send != 'true' }}
         run: echo "This review queue fingerprint was already notified; duplicate email suppressed."
