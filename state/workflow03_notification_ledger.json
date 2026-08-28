@@ -1,4 +1,15 @@
 {
   "version": 1,
-  "sent": []
+  "sent": [
+    {
+      "fingerprint": "b5f7e0d2b0d85ba660d95a5201f30540a9e77812a7563dda4a07352deab30d03",
+      "pending_count": 2,
+      "pending_review_case_ids": [
+        "hr-2487347256c84797c655",
+        "hr-71e4e83c2e62556561c7"
+      ],
+      "sent_at": "2026-08-28T07:14:14.888081+00:00",
+      "github_run_id": "33150653651"
+    }
+  ]
 }
