@@ -1,0 +1,146 @@
+name: Test updater Workflow 01B - full Lens corpus
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+    steps:
+      - name: Check out Workflow 01B development branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-01b-abstract-enrichment
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check requests
+
+      - name: Retrieve entire Lens search result set
+        run: |
+          python - <<'PY'
+          import copy, json, os, time
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import requests
+
+          root=Path('testdata/workflow01b_full')
+          root.mkdir(parents=True,exist_ok=True)
+          cfg=json.load(open('config/lens_search.json',encoding='utf-8'))
+          query=copy.deepcopy(cfg['api_query']['query'])
+          url='https://api.lens.org/scholarly/search'
+          headers={'Authorization':'Bearer '+os.environ['LENS_API_TOKEN'],'Content-Type':'application/json','Accept':'application/json'}
+          session=requests.Session()
+
+          def post(body):
+              last=None
+              for attempt in range(6):
+                  try:
+                      r=session.post(url,headers=headers,json=body,timeout=120)
+                      if r.status_code==200:
+                          return r.json()
+                      last=RuntimeError(f'HTTP {r.status_code}: {r.text[:500]}')
+                      if r.status_code!=429 and not 500 <= r.status_code < 600:
+                          raise last
+                  except Exception as e:
+                      last=e
+                  if attempt<5: time.sleep(min(60,2**attempt))
+              raise RuntimeError(f'Lens request failed after retries: {last}')
+
+          first=post({'query':query,'size':500,'scroll':'1m'})
+          reported=first.get('total')
+          seen=set(); retrieved=0; batches=0
+          out=(root/'lens_records.jsonl').open('w',encoding='utf-8')
+          response=first
+          while True:
+              data=response.get('data') or []
+              if not data: break
+              batches+=1
+              retrieved+=len(data)
+              for record in data:
+                  lid=record.get('lens_id')
+                  if not lid or lid in seen: continue
+                  seen.add(lid)
+                  wrapped={
+                    'identity':{'lens_id':lid,'record_id':lid,'record_id_type':'lens_id'},
+                    'source':{'provider':'lens','source_format':'lens_api_json'},
+                    'lens':{'raw_payload':record},
+                    'provenance':{'ingestion_run_id':'full-corpus-test','retrieved_at':datetime.now(timezone.utc).isoformat(),'batch':batches}
+                  }
+                  out.write(json.dumps(wrapped,ensure_ascii=False,separators=(',',':'))+'\n')
+              sid=response.get('scroll_id')
+              if not sid: break
+              if reported is not None and retrieved >= int(reported): break
+              response=post({'scroll_id':sid,'scroll':'1m'})
+          out.close()
+          manifest={'lens_reported_total':reported,'records_retrieved':retrieved,'records_unique':len(seen),'batches':batches,'records_without_or_duplicate_lens_id':retrieved-len(seen),'query_scope':'entire configured Lens search, no created-date filter'}
+          (root/'lens_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(manifest,indent=2))
+          assert len(seen)>0
+          if reported is not None:
+              assert retrieved==int(reported), (retrieved,reported)
+          PY
+
+      - name: Run Europe PMC-only Workflow 01B on full corpus
+        run: |
+          python scripts/updater/abstract_enrichment.py \
+            --input testdata/workflow01b_full/lens_records.jsonl \
+            --output testdata/workflow01b_full/records_for_deduplication.jsonl \
+            --audit testdata/workflow01b_full/abstract_enrichment_audit.jsonl \
+            --report testdata/workflow01b_full/report.json \
+            --delay 0.12
+          cat testdata/workflow01b_full/report.json
+
+      - name: Validate full-corpus contract and summarise recovery
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('testdata/workflow01b_full')
+          inp=[json.loads(x) for x in (root/'lens_records.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          out=[json.loads(x) for x in (root/'records_for_deduplication.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          audit=[json.loads(x) for x in (root/'abstract_enrichment_audit.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          assert len(inp)==len(out)==len(audit)
+          assert [r['identity']['lens_id'] for r in inp]==[r['identity']['lens_id'] for r in out]
+          required={'record_id','lens_id','title','authors','year','source','doi','abstract'}
+          for before,after in zip(inp,out):
+              assert required <= set(after['canonical'])
+              assert after['lens']['raw_payload']==before['lens']['raw_payload']
+              assert after['abstract_enrichment']['provider']=='europe_pmc'
+              assert all(a.get('method')=='europe_pmc_exact_doi' for a in after['abstract_enrichment']['attempts'])
+          technical=sum(any(a.get('outcome')=='technical_error' for a in r['attempts']) for r in audit)
+          report=json.loads((root/'report.json').read_text())
+          targets=report['doi_missing_abstract_targets']; recovered=report['abstracts_recovered']
+          summary={
+            'total_lens_records':len(inp),
+            'existing_abstracts':report['status_counts'].get('existing_abstract',0),
+            'missing_abstract_no_doi':report['status_counts'].get('missing_no_doi',0),
+            'doi_missing_abstract_targets':targets,
+            'abstracts_recovered_from_europe_pmc':recovered,
+            'not_recovered':report['status_counts'].get('no_abstract_recovered',0),
+            'technical_error_records':technical,
+            'recovery_percent_of_doi_targets':round(100*recovered/targets,1) if targets else None,
+            'output_records':len(out),
+            'output':'deduplication_ready'
+          }
+          (root/'full_corpus_summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload 90-day full-corpus artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01b-full-lens-europepmc-${{ github.run_id }}
+          path: testdata/workflow01b_full/
+          retention-days: 90
+          if-no-files-found: error
