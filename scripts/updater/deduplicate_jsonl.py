@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse, json, re, unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 FUZZY_THRESHOLD=0.965
 PROBABLE_THRESHOLD=0.985
@@ -54,7 +53,9 @@ def author_values(r):
 def first_author_key(r):
     v=author_values(r); return norm(v[0]) if v else ""
 def title_prefix(r): return title_key(r)[:24]
-def title_token_key(r): return " ".join(sorted(set(t for t in re.split(r"\s+",title_key(r)) if t)[:8]))
+def title_token_key(r):
+    tokens=[t for t in re.split(r"\s+",title_key(r)) if t]
+    return " ".join(sorted(set(tokens[:8])))
 def jaro_similarity(a,b):
     if a==b: return 1.0 if a else 0.0
     if not a or not b: return 0.0
@@ -126,7 +127,7 @@ def main():
     if args.resume:
         state=json.loads(cp.read_text(encoding="utf-8")); start=int(state["completed_records"])
         if state["total_records"]!=len(incoming_records):raise RuntimeError("Checkpoint input length mismatch")
-        existing=load_records(outp); seen={str(r.get("identity",{}).get("lens_id") or canonical(r).get("lens_id") or "") for r in existing};
+        existing=load_records(outp); seen={str(r.get("identity",{}).get("lens_id") or canonical(r).get("lens_id") or "") for r in existing}
         if len(existing)!=start:raise RuntimeError("Checkpoint/output record count mismatch")
     else:
         outp.write_text("",encoding="utf-8"); auditp.write_text("",encoding="utf-8"); save_checkpoint(cp,0,len(incoming_records),args.chunk_size)
