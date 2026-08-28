@@ -1,0 +1,82 @@
+name: Test updater Workflow 04 - relevance screening
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install OpenAI SDK
+        run: python -m pip install --upgrade openai
+      - name: Prepare Workflow 04 boundary fixture
+        run: |
+          mkdir -p testdata/workflow04
+          cat > testdata/workflow04/input.jsonl <<'EOF'
+          {"identity":{"lens_id":"wf4-retain"},"lens":{"raw_payload":{"lens_id":"wf4-retain","title":"Growth of Atlantic salmon in commercial aquaculture","abstract":"We tested diets in farmed Atlantic salmon reared in sea cages."}},"deduplication":{"status":"new"}}
+          {"identity":{"lens_id":"wf4-exclude"},"lens":{"raw_payload":{"lens_id":"wf4-exclude","title":"Migration of wild salmon","abstract":"This study examines migration and conservation of wild salmon populations."}},"deduplication":{"status":"new"}}
+          {"identity":{"lens_id":"wf4-uncertain-duplicate"},"lens":{"raw_payload":{"lens_id":"wf4-uncertain-duplicate","title":"Salmon production and coastal systems","abstract":"The relationship between salmon production and coastal systems is examined."}},"deduplication":{"status":"possible_duplicate"},"adjudication":{"decision":"uncertain"}}
+          {"identity":{"lens_id":"wf4-provisional-exclude"},"lens":{"raw_payload":{"lens_id":"wf4-provisional-exclude","title":"Wild salmon ecology","abstract":"Ecology of wild salmon populations."}},"deduplication":{"status":"new"}}
+          {"identity":{"lens_id":"wf4-definitive-duplicate"},"lens":{"raw_payload":{"lens_id":"wf4-definitive-duplicate","title":"Growth of Atlantic salmon in commercial aquaculture","abstract":"Duplicate fixture."}},"deduplication":{"status":"duplicate"}}
+          {"identity":{"lens_id":"wf4-sparse"},"lens":{"raw_payload":{"lens_id":"wf4-sparse","title":null,"abstract":null}},"deduplication":{"status":"new"}}
+          EOF
+      - name: Run Workflow 04 with frequent checkpoints
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python3 scripts/updater/relevance_screen_jsonl.py --input testdata/workflow04/input.jsonl --output testdata/workflow04/records_after_screening.jsonl --audit testdata/workflow04/screening_audit.jsonl --checkpoint testdata/workflow04/checkpoint.json --chunk-size 2 --mode openai --model gpt-5-mini
+      - name: Validate Workflow 04 architecture
+        run: |
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(x) for x in open('testdata/workflow04/records_after_screening.jsonl') if x.strip()]
+          by={r['identity']['lens_id']:r for r in rows}; cp=json.load(open('testdata/workflow04/checkpoint.json'))
+          assert len(rows)==6
+          assert cp['completed_records']==6 and cp['next_record_index']==6 and cp['chunk_size']==2
+          assert cp['screened_records']==5 and cp['definitive_duplicates_skipped']==1
+          # Definitive duplicate stops here.
+          assert by['wf4-definitive-duplicate']['screening']['status']=='not_screened_definitive_duplicate'
+          # Unresolved duplicate status MUST continue into relevance screening.
+          assert by['wf4-uncertain-duplicate']['screening']['status']=='screened'
+          # Sparse metadata is substantive uncertainty, not a technical failure.
+          assert by['wf4-sparse']['screening']['decision']=='uncertain'
+          assert by['wf4-sparse']['screening']['technical_error'] is None
+          # No screening decision removes a record at Workflow 04: all six remain in output.
+          for r in rows:
+              assert 'screening' in r
+          # Every screened decision is provisional for later consolidated adjudication/finalisation.
+          for r in rows:
+              if r['screening']['status']=='screened': assert r['screening']['provisional'] is True
+          PY
+      - name: Test Workflow 04 completed-run resume
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python3 scripts/updater/relevance_screen_jsonl.py --input testdata/workflow04/input.jsonl --output testdata/workflow04/records_after_screening.jsonl --audit testdata/workflow04/screening_audit.jsonl --checkpoint testdata/workflow04/checkpoint.json --chunk-size 2 --mode openai --model gpt-5-mini --resume
+          test "$(grep -c . testdata/workflow04/records_after_screening.jsonl)" -eq 6
+      - name: Validate audit provenance exists for every input record
+        run: |
+          python3 - <<'PY'
+          import json
+          audit=[json.loads(x) for x in open('testdata/workflow04/screening_audit.jsonl') if x.strip()]
+          assert len(audit)==6
+          screened=[x for x in audit if x['screening']['status']=='screened']
+          assert len(screened)==5
+          for x in screened:
+              p=x['screening_provenance']; assert p is not None; assert p['request']; assert 'response_id' in p; assert 'raw_response' in p; assert 'usage' in p
+          PY
+      - name: Upload 90-day Workflow 04 artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-relevance-screening-test-${{ github.run_id }}
+          path: testdata/workflow04/
+          retention-days: 90
+          if-no-files-found: error
