@@ -1,0 +1,63 @@
+name: Test Lens URL abstract scraping on 12 records
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Workflow 04 development branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install HTML parser
+        run: python -m pip install --disable-pip-version-check beautifulsoup4
+
+      - name: Download 200-record validation artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 33170913926 -n workflow04-manual-validation-33170913926 -D validation
+          test -f validation/output.jsonl
+
+      - name: Download Europe PMC enrichment artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 33191451941 -n europepmc-abstract-enrichment-200-33191451941 -D europepmc
+          test -f europepmc/europepmc_results.jsonl
+
+      - name: Scrape only Lens-provided URLs for the 12 Europe PMC misses
+        run: |
+          python scripts/updater/test_lens_url_abstract_scraping.py \
+            --records validation/output.jsonl \
+            --europepmc-results europepmc/europepmc_results.jsonl \
+            --output lens_url_scrape_results.jsonl \
+            --report lens_url_scrape_report.json
+          cat lens_url_scrape_report.json
+
+      - name: Verify test boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('lens_url_scrape_report.json'))
+          assert r['target_count']==12, r
+          assert len(r['records'])==12, r
+          print('PASS: scraped Lens-provided source URLs for exactly the 12 DOI-bearing Europe PMC misses')
+          PY
+
+      - name: Upload 90-day scrape test artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-url-abstract-scrape-12-${{ github.run_id }}
+          retention-days: 90
+          path: |
+            lens_url_scrape_results.jsonl
+            lens_url_scrape_report.json
