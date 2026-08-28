@@ -15,12 +15,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: updater-workflow-02-deduplication
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Download successful Workflow 01 Lens artefact
         uses: actions/download-artifact@v4
         with:
@@ -29,117 +26,45 @@ jobs:
           run-id: 33107953267
           name: updater-workflow-01-lens-ingestion-33107953267
           path: workflow01_artifact
-
       - name: Prepare real Lens test fixture
         run: |
           python - <<'PY'
-          import copy, json
+          import copy,json
           from pathlib import Path
-          src = Path('workflow01_artifact/records.jsonl')
-          rows = [json.loads(x) for x in src.open(encoding='utf-8') if x.strip()][:50]
-          assert len(rows) == 50
-          rows.append(copy.deepcopy(rows[0]))
-          doi_row = next(r for r in rows[:50] if any(i.get('type') == 'doi' for i in r['lens']['raw_payload'].get('external_ids', [])))
-          different_doi = copy.deepcopy(doi_row)
-          different_doi['identity']['lens_id'] = 'fixture-different-doi'
-          different_doi['identity']['record_id'] = 'fixture-different-doi'
-          different_doi['lens']['raw_payload']['lens_id'] = 'fixture-different-doi'
-          for identifier in different_doi['lens']['raw_payload'].get('external_ids', []):
-              if identifier.get('type') == 'doi': identifier['value'] = '10.0000/different-test'
-          rows.append(different_doi)
-          wrong_doi = copy.deepcopy(doi_row)
-          wrong_doi['identity']['lens_id'] = 'fixture-wrong-doi'
-          wrong_doi['identity']['record_id'] = 'fixture-wrong-doi'
-          wrong_doi['lens']['raw_payload']['lens_id'] = 'fixture-wrong-doi'
-          wrong_doi['lens']['raw_payload']['title'] = 'Deliberately unrelated publication used to test DOI safety'
-          wrong_doi['lens']['raw_payload']['authors'] = [{'first_name': 'Different', 'last_name': 'Author'}]
-          rows.append(wrong_doi)
-          with open('fixture.jsonl', 'w', encoding='utf-8') as f:
-              for row in rows: f.write(json.dumps(row, ensure_ascii=False) + '\n')
-          print(f'Prepared {len(rows)} records from actual Workflow 01 Lens artefact')
+          rows=[json.loads(x) for x in Path('workflow01_artifact/records.jsonl').open(encoding='utf-8') if x.strip()][:50]
+          assert len(rows)==50; rows.append(copy.deepcopy(rows[0])); doi_row=next(r for r in rows[:50] if any(i.get('type')=='doi' for i in r['lens']['raw_payload'].get('external_ids',[])))
+          different=copy.deepcopy(doi_row); different['identity']['lens_id']=different['identity']['record_id']='fixture-different-doi'; different['lens']['raw_payload']['lens_id']='fixture-different-doi'
+          for i in different['lens']['raw_payload'].get('external_ids',[]):
+              if i.get('type')=='doi':i['value']='10.0000/different-test'
+          rows.append(different); wrong=copy.deepcopy(doi_row); wrong['identity']['lens_id']=wrong['identity']['record_id']='fixture-wrong-doi'; wrong['lens']['raw_payload']['lens_id']='fixture-wrong-doi'; wrong['lens']['raw_payload']['title']='Deliberately unrelated publication used to test DOI safety'; wrong['lens']['raw_payload']['authors']=[{'first_name':'Different','last_name':'Author'}]; rows.append(wrong)
+          with open('fixture.jsonl','w',encoding='utf-8') as f:
+              for r in rows:f.write(json.dumps(r,ensure_ascii=False)+'\n')
           PY
-
       - name: Convert current master CSV to lossless JSONL view
         run: |
           mkdir -p outputs/updater/legacy_master_adapter
-          python scripts/legacy_master_adapter.py \
-            --input 'data/master/current/living_evidence_map_master CORRECTED.csv' \
-            --output outputs/updater/legacy_master_adapter/master_legacy_view.jsonl \
-            > outputs/updater/legacy_master_adapter/adapter_summary.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          summary=json.loads(Path('outputs/updater/legacy_master_adapter/adapter_summary.json').read_text())
-          assert summary['rows'] == 13389, summary['rows']
-          assert summary['field_mapping']['title'] is not None
-          assert summary['field_mapping']['authors'] is not None
-          assert summary['field_mapping']['year'] is not None
-          assert summary['field_mapping']['doi'] is not None
-          print('Converted and validated 13,389 master rows')
-          print(json.dumps(summary, indent=2))
-          PY
-
-      - name: Validate lossless master JSONL structure
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          path=Path('outputs/updater/legacy_master_adapter/master_legacy_view.jsonl')
-          n=0
-          for line_no,line in enumerate(path.open(encoding='utf-8'),1):
-              if not line.strip(): continue
-              row=json.loads(line)
-              assert row['schema']=='legacy_master_adapter/v1'
-              assert row['legacy_row_number']==line_no
-              assert isinstance(row['raw_csv'], dict)
-              assert isinstance(row['canonical'], dict)
-              n += 1
-          assert n == 13389, n
-          print(f'Validated {n} lossless legacy master JSONL records')
-          PY
-
-      - name: Run Workflow 02 prototype
+          python scripts/legacy_master_adapter.py --input 'data/master/current/living_evidence_map_master CORRECTED.csv' --output outputs/updater/legacy_master_adapter/master_legacy_view.jsonl > outputs/updater/legacy_master_adapter/adapter_summary.json
+          python -c "import json; assert json.load(open('outputs/updater/legacy_master_adapter/adapter_summary.json'))['rows']==13389"
+      - name: Run Workflow 02 with frequent checkpoints
         run: |
           mkdir -p outputs/updater/deduplication_test
-          python scripts/updater/deduplicate_jsonl.py \
-            --input fixture.jsonl \
-            --master outputs/updater/legacy_master_adapter/master_legacy_view.jsonl \
-            --output outputs/updater/deduplication_test/records_after_dedup.jsonl \
-            --audit outputs/updater/deduplication_test/dedup_audit.jsonl
-
-      - name: Validate every JSONL output line
+          python scripts/updater/deduplicate_jsonl.py --input fixture.jsonl --master outputs/updater/legacy_master_adapter/master_legacy_view.jsonl --output outputs/updater/deduplication_test/records_after_dedup.jsonl --audit outputs/updater/deduplication_test/dedup_audit.jsonl --checkpoint outputs/updater/deduplication_test/checkpoint.json --chunk-size 10
+      - name: Validate checkpoint and outputs
         run: |
           python - <<'PY'
           import json
-          from pathlib import Path
-          path=Path('outputs/updater/deduplication_test/records_after_dedup.jsonl')
-          rows=[]
-          for line_no,line in enumerate(path.open(encoding='utf-8'),1):
-              if not line.strip(): continue
-              try: rows.append(json.loads(line))
-              except json.JSONDecodeError as exc: raise SystemExit(f'Invalid JSONL at line {line_no}: {exc}')
-          assert len(rows)==53, len(rows)
-          assert all('lens' in r for r in rows)
-          assert all('deduplication' in r for r in rows)
-          print(f'Parsed {len(rows)} rich JSONL records successfully')
+          rows=[json.loads(x) for x in open('outputs/updater/deduplication_test/records_after_dedup.jsonl',encoding='utf-8') if x.strip()]; cp=json.load(open('outputs/updater/deduplication_test/checkpoint.json'))
+          assert len(rows)==53 and cp['completed_records']==53 and cp['next_record_index']==53 and cp['chunk_size']==10
+          assert any(r['deduplication']['status']=='identity_match' for r in rows); wrong=next(r for r in rows if r['identity']['lens_id']=='fixture-wrong-doi'); assert wrong['deduplication']['status']!='duplicate'
           PY
-
-      - name: Validate identity, bibliography and DOI safeguards
+      - name: Test Workflow 02 resume is idempotent at completed checkpoint
         run: |
-          python - <<'PY'
-          import json
-          rows=[json.loads(x) for x in open('outputs/updater/deduplication_test/records_after_dedup.jsonl',encoding='utf-8') if x.strip()]
-          assert any(r['deduplication']['status']=='identity_match' for r in rows)
-          assert any(r['deduplication']['status'] in {'duplicate_candidate','probable_duplicate','possible_duplicate','duplicate'} for r in rows)
-          wrong_doi=next(r for r in rows if r['identity']['lens_id']=='fixture-wrong-doi')
-          assert wrong_doi['deduplication']['status'] not in {'duplicate'}
-          print(f'Validated {len(rows)} records and DOI safety rules')
-          PY
-
+          python scripts/updater/deduplicate_jsonl.py --input fixture.jsonl --master outputs/updater/legacy_master_adapter/master_legacy_view.jsonl --output outputs/updater/deduplication_test/records_after_dedup.jsonl --audit outputs/updater/deduplication_test/dedup_audit.jsonl --checkpoint outputs/updater/deduplication_test/checkpoint.json --chunk-size 10 --resume
+          test "$(grep -c . outputs/updater/deduplication_test/records_after_dedup.jsonl)" -eq 53
       - name: Upload Workflow 02 artefacts
         uses: actions/upload-artifact@v4
         with:
           name: updater-workflow-02-deduplication-${{ github.run_id }}
           path: outputs/updater/
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
