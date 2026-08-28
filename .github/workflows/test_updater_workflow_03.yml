@@ -25,12 +25,15 @@ jobs:
       - name: Install OpenAI SDK
         run: python -m pip install --upgrade openai
 
-      - name: Prepare candidate fixture
+      - name: Prepare candidate fixture including sparse metadata
         run: |
           mkdir -p testdata/workflow03
           cat > testdata/workflow03/candidates.jsonl <<'EOF'
           {"candidate_id":"c1","incoming_record_id":"lens-001","matched_master_record_id":"master-001","duplicate_basis":"doi_conflict_review","title_similarity":0.91,"incoming_title":"A trial of tomato screening","matched_master_title":"A trial of tomato screening","incoming_year":2020,"matched_master_year":2020,"incoming_first_author":"Smith","matched_master_first_author":"Smith","incoming_doi":"10.1000/example-wrong","matched_master_doi":"10.1000/example-correct"}
           {"candidate_id":"c2","incoming_record_id":"lens-002","matched_master_record_id":"master-002","duplicate_basis":"possible_duplicate","title_similarity":0.88,"incoming_title":"Evidence synthesis of tomato production","matched_master_title":"Evidence synthesis of tomato production methods","incoming_year":2021,"matched_master_year":2021,"incoming_first_author":"Jones","matched_master_first_author":"Jones","incoming_doi":"10.1000/example2","matched_master_doi":"10.1000/example2"}
+          {"candidate_id":"sparse-strong","incoming_record_id":"lens-sparse-001","matched_master_record_id":"master-sparse-001","duplicate_basis":"possible_duplicate","title_similarity":0.99,"incoming_title":"Effects of dietary lipid composition on growth performance of Atlantic salmon","matched_master_title":"Effects of dietary lipid composition on growth performance of Atlantic salmon","incoming_year":2022,"matched_master_year":2022,"incoming_first_author":"Andersen","matched_master_first_author":"Andersen","incoming_doi":null,"matched_master_doi":""}
+          {"candidate_id":"sparse-partial","incoming_record_id":"lens-sparse-002","matched_master_record_id":"master-sparse-002","duplicate_basis":"possible_duplicate","title_similarity":0.86,"incoming_title":"Sea lice treatment outcomes in farmed Atlantic salmon","matched_master_title":"Sea lice treatment outcomes in Atlantic salmon","incoming_year":null,"matched_master_year":null,"incoming_first_author":"MacLeod","matched_master_first_author":"","incoming_doi":null,"matched_master_doi":null}
+          {"candidate_id":"sparse-minimal","incoming_record_id":"lens-sparse-003","matched_master_record_id":"master-sparse-003","duplicate_basis":null,"title_similarity":null,"incoming_title":null,"matched_master_title":"","incoming_year":null,"matched_master_year":null,"incoming_first_author":"","matched_master_first_author":null,"incoming_doi":null,"matched_master_doi":""}
           EOF
 
       - name: Run Workflow 03 real OpenAI adjudication
@@ -39,9 +42,43 @@ jobs:
         run: |
           python3 scripts/updater/adjudicate_jsonl.py --input testdata/workflow03/candidates.jsonl --output testdata/workflow03/decisions_api.jsonl --audit testdata/workflow03/audit_api.jsonl --mode openai --model gpt-5-mini
 
+      - name: Validate sparse OpenAI adjudication
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          rows=[json.loads(x) for x in Path('testdata/workflow03/decisions_api.jsonl').read_text().splitlines() if x.strip()]
+          by_id={r['candidate_id']:r for r in rows}
+          assert len(rows)==5
+          for cid in ('sparse-strong','sparse-partial','sparse-minimal'):
+              row=by_id[cid]
+              assert row['decision'] in {'duplicate','not_duplicate','uncertain'}
+              assert isinstance(row['confidence'],(int,float)) and 0 <= row['confidence'] <= 1
+              assert isinstance(row['rationale'],str) and row['rationale'].strip()
+              assert row.get('adjudication_error') is None, f'{cid} became a technical failure: {row.get("adjudication_error")}'
+          # With essentially no bibliographic evidence, the safe substantive result is uncertain,
+          # not a fabricated duplicate/not-duplicate judgement and not a technical failure.
+          assert by_id['sparse-minimal']['decision']=='uncertain', by_id['sparse-minimal']
+          print('Sparse OpenAI adjudication passed')
+          PY
+
       - name: Run promotion gate
         run: |
           python3 scripts/updater/promote_adjudication.py --input testdata/workflow03/decisions_api.jsonl --output testdata/workflow03/promoted_api.jsonl --threshold 0.80
+
+      - name: Validate sparse promotion routing
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          rows=[json.loads(x) for x in Path('testdata/workflow03/promoted_api.jsonl').read_text().splitlines() if x.strip()]
+          by_id={r['candidate_id']:r for r in rows}
+          minimal=by_id['sparse-minimal']
+          assert minimal['promotion']=='human_review'
+          assert minimal['promotion_reason']=='model_uncertain'
+          assert minimal.get('adjudication_error') is None
+          print('Sparse insufficient evidence routed to human review')
+          PY
 
       - name: Test promotion gate failure states
         run: |
@@ -88,13 +125,10 @@ jobs:
           assert state['pending_count']==2 and state['should_notify'] is True
           assert state['notification_fingerprint']==repeat['notification_fingerprint']
           assert len(state['notification_fingerprint'])==64
-          # Sparse bibliographic metadata is valid. Preserve null/blank values exactly;
-          # do not fail merely because an optional evidence field is unavailable.
           sparse=next(c for c in queue if c['candidate_id']=='review-002')
           assert sparse['matched_master_year'] is None
           assert sparse['matched_master_first_author']==''
           assert sparse['incoming_doi'] is None
-          # The review case itself must remain identifiable and retain the evidence that is available.
           for case in queue:
               assert case.get('review_case_id')
               assert case.get('candidate_id')
