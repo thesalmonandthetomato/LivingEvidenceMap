@@ -1,15 +1,11 @@
-name: Test updater Workflow 03 - adjudication
+name: Test updater Workflow 03 - duplicate adjudication
 
 on:
   workflow_dispatch:
-    inputs:
-      send_email:
-        description: 'Send one real review notification email'
-        required: true
-        default: false
-        type: boolean
+
 permissions:
-  contents: write
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -17,10 +13,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: updater-workflow-03-adjudication
-      - uses: actions/checkout@v4
-        with:
-          ref: updater-workflow-03-notification-state
-          path: notification-state
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -44,10 +36,14 @@ jobs:
         run: |
           python3 - <<'PY'
           import json
-          rows=[json.loads(x) for x in open('testdata/workflow03/decisions_api.jsonl') if x.strip()]; by={r['candidate_id']:r for r in rows}; cp=json.load(open('testdata/workflow03/adjudication_checkpoint.json'))
-          assert len(rows)==5 and cp['completed_candidates']==5 and cp['next_candidate_index']==5 and cp['chunk_size']==2
+          rows=[json.loads(x) for x in open('testdata/workflow03/decisions_api.jsonl') if x.strip()]
+          by={r['candidate_id']:r for r in rows}
+          cp=json.load(open('testdata/workflow03/adjudication_checkpoint.json'))
+          assert len(rows)==5
+          assert cp['completed_candidates']==5 and cp['next_candidate_index']==5 and cp['chunk_size']==2
           for cid in ('sparse-strong','sparse-partial','sparse-minimal'):
-              assert by[cid]['decision'] in {'duplicate','not_duplicate','uncertain'} and by[cid].get('adjudication_error') is None
+              assert by[cid]['decision'] in {'duplicate','not_duplicate','uncertain'}
+              assert by[cid].get('adjudication_error') is None
           assert by['sparse-minimal']['decision']=='uncertain'
           PY
       - name: Test Workflow 03 resume is idempotent at completed checkpoint
@@ -58,51 +54,21 @@ jobs:
           test "$(grep -c . testdata/workflow03/decisions_api.jsonl)" -eq 5
       - name: Run promotion gate
         run: python3 scripts/updater/promote_adjudication.py --input testdata/workflow03/decisions_api.jsonl --output testdata/workflow03/promoted_api.jsonl --threshold 0.80
-      - name: Validate sparse promotion routing
+      - name: Validate unresolved cases are flagged, not notified
         run: |
           python3 - <<'PY'
           import json
-          rows=[json.loads(x) for x in open('testdata/workflow03/promoted_api.jsonl') if x.strip()]; minimal={r['candidate_id']:r for r in rows}['sparse-minimal']; assert minimal['promotion']=='human_review' and minimal['promotion_reason']=='model_uncertain'
+          rows=[json.loads(x) for x in open('testdata/workflow03/promoted_api.jsonl') if x.strip()]
+          minimal={r['candidate_id']:r for r in rows}['sparse-minimal']
+          assert minimal['promotion']=='human_review'
+          assert minimal['promotion_reason']=='model_uncertain'
+          # Workflow 03 ends here. Human-review packaging and notification are deferred
+          # until the consolidated post-topic adjudication stage.
           PY
-      - name: Prepare and build human review package
-        run: |
-          cat > testdata/workflow03/review_input.jsonl <<'EOF'
-          {"candidate_id":"review-001","incoming_record_id":"lens-review-001","matched_master_record_id":"master-review-001","duplicate_basis":"doi_conflict_review","title_similarity":0.97,"incoming_title":"Effects of dietary composition on growth performance of Atlantic salmon","matched_master_title":"Effects of dietary composition on growth performance in Atlantic salmon","incoming_year":2022,"matched_master_year":2022,"incoming_first_author":"Andersen","matched_master_first_author":"Andersen","incoming_doi":"10.1000/salmon.2022.a","matched_master_doi":"10.1000/salmon.2022.b","decision":"uncertain","confidence":0.94,"rationale":"Conflicting DOI evidence.","promotion":"human_review","promotion_reason":"model_uncertain","promotion_threshold":0.80}
-          {"candidate_id":"review-002","incoming_record_id":"lens-review-002","matched_master_record_id":"master-review-002","duplicate_basis":"possible_duplicate","title_similarity":0.89,"incoming_title":"Sea lice infestation and treatment outcomes in farmed Atlantic salmon","matched_master_title":"Sea lice infestation and treatment in Atlantic salmon aquaculture","incoming_year":2021,"matched_master_year":null,"incoming_first_author":"MacLeod","matched_master_first_author":"","incoming_doi":null,"matched_master_doi":"10.1000/lice.2020.44","decision":"uncertain","confidence":0.72,"rationale":"Insufficient metadata.","promotion":"human_review","promotion_reason":"model_uncertain","promotion_threshold":0.80}
-          EOF
-          python3 scripts/updater/build_human_review_queue.py --input testdata/workflow03/review_input.jsonl --output testdata/workflow03/human_review_queue.jsonl
-          python3 scripts/updater/build_review_package.py --input testdata/workflow03/human_review_queue.jsonl --outdir testdata/workflow03/review_package
-          python3 scripts/updater/build_notification_state.py --input testdata/workflow03/human_review_queue.jsonl --output testdata/workflow03/review_package/notification_state.json
-      - name: Upload 90-day review and checkpoint artefact
-        id: upload_review
+      - name: Upload 90-day Workflow 03 decision artefact
         uses: actions/upload-artifact@v4
         with:
-          name: workflow03-human-review-interface-test
+          name: workflow03-duplicate-adjudication-test-${{ github.run_id }}
           path: testdata/workflow03/
           retention-days: 90
-      - name: Build notification payload
-        env:
-          REVIEW_ARTIFACT_URL: ${{ steps.upload_review.outputs.artifact-url }}
-        run: python3 scripts/updater/build_notification_payload.py --manifest testdata/workflow03/review_package/review_manifest.json --output testdata/workflow03/review_package/notification_payload.json
-      - name: Check durable notification ledger
-        id: ledger_check
-        run: |
-          python3 scripts/updater/notification_ledger.py check --state testdata/workflow03/review_package/notification_state.json --ledger notification-state/state/workflow03_notification_ledger.json --output testdata/workflow03/review_package/notification_ledger_check.json
-          SHOULD_SEND=$(python3 -c "import json; print(str(json.load(open('testdata/workflow03/review_package/notification_ledger_check.json'))['should_send']).lower())")
-          echo "should_send=$SHOULD_SEND" >> "$GITHUB_OUTPUT"
-      - name: Send one real SMTP notification
-        if: ${{ inputs.send_email && steps.ledger_check.outputs.should_send == 'true' }}
-        env:
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-        run: python3 scripts/updater/send_review_email.py --payload testdata/workflow03/review_package/notification_payload.json
-      - name: Record successful notification durably
-        if: ${{ inputs.send_email && steps.ledger_check.outputs.should_send == 'true' }}
-        run: |
-          python3 scripts/updater/notification_ledger.py record --state testdata/workflow03/review_package/notification_state.json --ledger notification-state/state/workflow03_notification_ledger.json --run-id "$GITHUB_RUN_ID"
-          git -C notification-state config user.name "github-actions[bot]"; git -C notification-state config user.email "41898282+github-actions[bot]@users.noreply.github.com"; git -C notification-state add state/workflow03_notification_ledger.json; git -C notification-state commit -m "Record Workflow 03 notification $GITHUB_RUN_ID"; git -C notification-state push origin HEAD:updater-workflow-03-notification-state
-      - name: Confirm duplicate email suppression
-        if: ${{ inputs.send_email && steps.ledger_check.outputs.should_send != 'true' }}
-        run: echo "This review queue fingerprint was already notified; duplicate email suppressed."
+          if-no-files-found: error
