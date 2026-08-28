@@ -1,4 +1,4 @@
-name: Test updater Workflow 01B - abstract enrichment
+name: Test updater Workflow 01B - Europe PMC abstract enrichment
 
 on:
   workflow_dispatch:
@@ -16,8 +16,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install parser
-        run: python -m pip install --disable-pip-version-check beautifulsoup4 requests
       - name: Build Workflow 01B fixture
         run: |
           mkdir -p testdata/workflow01b
@@ -43,12 +41,12 @@ jobs:
           assert a['abstract_enrichment']['attempts']==[]
           assert b['abstract_enrichment']['status']=='missing_no_doi'
           assert b['abstract_enrichment']['attempts']==[]
-          # Complete canonical object is required because Workflow 02 treats it as authoritative.
           required={'record_id','lens_id','title','authors','year','source','doi','abstract'}
           for r in rows:
               assert required <= set(r['canonical'])
               assert r['canonical']['title']==r['lens']['raw_payload']['title']
-          # The original Lens payload must remain untouched.
+              assert r['abstract_enrichment']['provider']=='europe_pmc'
+              assert all(x.get('method')=='europe_pmc_exact_doi' for x in r['abstract_enrichment']['attempts'])
           assert c['lens']['raw_payload']['abstract'] is None
           assert c['canonical']['doi']=='10.1111/j.1365-2109.2009.02327.x'
           assert c['abstract_enrichment']['status'] in {'abstract_recovered','no_abstract_recovered'}
@@ -61,7 +59,7 @@ jobs:
       - name: Upload 90-day Workflow 01B artefact
         uses: actions/upload-artifact@v4
         with:
-          name: workflow01b-abstract-enrichment-test-${{ github.run_id }}
+          name: workflow01b-europepmc-enrichment-test-${{ github.run_id }}
           path: testdata/workflow01b/
           retention-days: 90
           if-no-files-found: error
