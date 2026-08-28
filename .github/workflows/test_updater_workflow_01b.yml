@@ -1,0 +1,65 @@
+name: Test updater Workflow 01B - Europe PMC abstract enrichment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-01b-abstract-enrichment
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build Workflow 01B fixture
+        run: |
+          mkdir -p testdata/workflow01b
+          cat > testdata/workflow01b/input.jsonl <<'EOF'
+          {"identity":{"lens_id":"wf1b-existing","record_id":"wf1b-existing","record_id_type":"lens_id"},"source":{"provider":"lens","source_format":"lens_api_json"},"lens":{"raw_payload":{"lens_id":"wf1b-existing","title":"Existing abstract fixture","authors":[{"first_name":"A","last_name":"Author"}],"year_published":2025,"source":{"title":"Journal"},"external_ids":[{"type":"doi","value":"10.1000/existing"}],"abstract":"This Lens abstract must remain exactly unchanged and must not be replaced by an enrichment source."}}}
+          {"identity":{"lens_id":"wf1b-no-doi","record_id":"wf1b-no-doi","record_id_type":"lens_id"},"source":{"provider":"lens","source_format":"lens_api_json"},"lens":{"raw_payload":{"lens_id":"wf1b-no-doi","title":"No DOI fixture","authors":[{"first_name":"B","last_name":"Author"}],"year_published":2024,"source":{"title":"Journal"},"abstract":null}}}
+          {"identity":{"lens_id":"wf1b-recover","record_id":"wf1b-recover","record_id_type":"lens_id"},"source":{"provider":"lens","source_format":"lens_api_json"},"lens":{"raw_payload":{"lens_id":"wf1b-recover","title":"Effects of dietary lipid sources on growth performance, feed utilisation and tissue fatty acid composition of Atlantic salmon Salmo salar","authors":[{"first_name":"M","last_name":"Author"}],"year_published":2010,"source":{"title":"Aquaculture Research"},"external_ids":[{"type":"doi","value":"10.1111/j.1365-2109.2009.02327.x"}],"abstract":null}}}
+          EOF
+      - name: Run Workflow 01B
+        run: |
+          python scripts/updater/abstract_enrichment.py --input testdata/workflow01b/input.jsonl --output testdata/workflow01b/records_for_deduplication.jsonl --audit testdata/workflow01b/abstract_enrichment_audit.jsonl --report testdata/workflow01b/report.json --delay 0.1
+          cat testdata/workflow01b/report.json
+      - name: Validate Workflow 01B contract
+        run: |
+          python - <<'PY'
+          import json
+          rows=[json.loads(x) for x in open('testdata/workflow01b/records_for_deduplication.jsonl') if x.strip()]
+          assert len(rows)==3
+          by={r['identity']['lens_id']:r for r in rows}
+          a=by['wf1b-existing']; b=by['wf1b-no-doi']; c=by['wf1b-recover']
+          assert a['canonical']['abstract']==a['lens']['raw_payload']['abstract']
+          assert a['abstract_enrichment']['status']=='existing_abstract'
+          assert a['abstract_enrichment']['attempts']==[]
+          assert b['abstract_enrichment']['status']=='missing_no_doi'
+          assert b['abstract_enrichment']['attempts']==[]
+          required={'record_id','lens_id','title','authors','year','source','doi','abstract'}
+          for r in rows:
+              assert required <= set(r['canonical'])
+              assert r['canonical']['title']==r['lens']['raw_payload']['title']
+              assert r['abstract_enrichment']['provider']=='europe_pmc'
+              assert all(x.get('method')=='europe_pmc_exact_doi' for x in r['abstract_enrichment']['attempts'])
+          assert c['lens']['raw_payload']['abstract'] is None
+          assert c['canonical']['doi']=='10.1111/j.1365-2109.2009.02327.x'
+          assert c['abstract_enrichment']['status'] in {'abstract_recovered','no_abstract_recovered'}
+          if c['abstract_enrichment']['status']=='abstract_recovered': assert c['canonical']['abstract']
+          PY
+      - name: Validate JSONL and audit cardinality
+        run: |
+          test "$(grep -c . testdata/workflow01b/records_for_deduplication.jsonl)" -eq 3
+          test "$(grep -c . testdata/workflow01b/abstract_enrichment_audit.jsonl)" -eq 3
+      - name: Upload 90-day Workflow 01B artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01b-europepmc-enrichment-test-${{ github.run_id }}
+          path: testdata/workflow01b/
+          retention-days: 90
+          if-no-files-found: error
