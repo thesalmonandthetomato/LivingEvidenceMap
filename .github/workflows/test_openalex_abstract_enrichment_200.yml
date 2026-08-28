@@ -1,0 +1,61 @@
+name: Test OpenAlex abstract enrichment on 200 records
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  test-enrichment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Workflow 04 development branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download existing 200-record validation artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-manual-validation-33170913926
+          path: validation
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 33170913926
+
+      - name: Test DOI-only OpenAlex abstract recovery
+        run: |
+          mkdir -p enrichment
+          python scripts/updater/test_openalex_abstract_enrichment.py \
+            --input validation/output.jsonl \
+            --output enrichment/enriched.jsonl \
+            --report enrichment/report.json
+
+      - name: Verify test boundary
+        run: |
+          python - <<'PY'
+          import json
+          rows=[json.loads(x) for x in open('enrichment/enriched.jsonl') if x.strip()]
+          report=json.load(open('enrichment/report.json'))
+          assert len(rows)==200
+          assert report['stats']['total']==200
+          # Lens payloads must remain unchanged; enrichment is additive only.
+          original=[json.loads(x) for x in open('validation/output.jsonl') if x.strip()]
+          for before,after in zip(original,rows):
+              assert before.get('lens')==after.get('lens')
+          print(json.dumps(report['stats'],indent=2))
+          PY
+
+      - name: Upload 90-day enrichment test artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-abstract-enrichment-200-${{ github.run_id }}
+          path: enrichment/
+          retention-days: 90
