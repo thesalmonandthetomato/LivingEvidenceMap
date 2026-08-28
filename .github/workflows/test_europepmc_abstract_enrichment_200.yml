@@ -1,0 +1,47 @@
+name: Test Europe PMC abstract enrichment on 200 records
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Workflow 04 development branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download existing 200-record validation artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 33170913926 -n workflow04-manual-validation-33170913926 -D validation
+          test -f validation/output.jsonl
+      - name: Test DOI-only Europe PMC abstract recovery
+        run: |
+          python scripts/updater/test_europepmc_abstract_enrichment.py \
+            --input validation/output.jsonl \
+            --output europepmc_results.jsonl \
+            --report europepmc_report.json
+          cat europepmc_report.json
+      - name: Verify test boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('europepmc_report.json'))
+          assert r['total_input_records']==200, r
+          assert r['missing_abstract']==41, r
+          print('PASS: tested exactly the 41 missing abstracts from the 200-record set')
+          PY
+      - name: Upload 90-day enrichment test artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: europepmc-abstract-enrichment-200-${{ github.run_id }}
+          retention-days: 90
+          path: |
+            europepmc_results.jsonl
+            europepmc_report.json
