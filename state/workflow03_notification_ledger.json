@@ -1,4 +1,15 @@
 {
   "version": 1,
-  "sent": []
+  "sent": [
+    {
+      "fingerprint": "9d44b2ff1a0ab01ef6168487dc83b0732700c258adaacff6ce43aeb36d58943f",
+      "pending_count": 2,
+      "pending_review_case_ids": [
+        "ledger-test-case-001",
+        "ledger-test-case-002"
+      ],
+      "sent_at": "2026-08-28T06:45:36.944634+00:00",
+      "github_run_id": "33149003245"
+    }
+  ]
 }
