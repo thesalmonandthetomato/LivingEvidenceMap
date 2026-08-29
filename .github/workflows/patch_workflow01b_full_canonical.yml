@@ -1,0 +1,204 @@
+name: Patch Workflow 01B full canonical JSON
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  patch-canonical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download retained full-corpus and retry artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p patch_work/full patch_work/retry
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9711167560/zip" \
+            -o patch_work/full.zip
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9712320383/zip" \
+            -o patch_work/retry.zip
+          unzip -q patch_work/full.zip -d patch_work/full
+          unzip -q patch_work/retry.zip -d patch_work/retry
+          find patch_work/full -maxdepth 2 -type f -print
+          find patch_work/retry -maxdepth 2 -type f -print
+
+      - name: Patch retry outcomes and exact existing abstracts
+        run: |
+          python - <<'PY'
+          import json, shutil
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          full=Path('patch_work/full')
+          retry=Path('patch_work/retry')
+          outdir=Path('patch_work/patched')
+          outdir.mkdir(parents=True,exist_ok=True)
+
+          def read_jsonl(path):
+              with path.open('r',encoding='utf-8') as f:
+                  return [json.loads(line) for line in f if line.strip()]
+
+          lens_rows=read_jsonl(full/'lens_records.jsonl')
+          rows=read_jsonl(full/'records_for_deduplication.jsonl')
+          audit=read_jsonl(full/'abstract_enrichment_audit.jsonl')
+          retry_rows=read_jsonl(retry/'output.jsonl')
+          retry_audit=read_jsonl(retry/'audit.jsonl')
+
+          assert len(lens_rows)==len(rows)==len(audit)==21851
+          assert len(retry_rows)==len(retry_audit)==7
+
+          retry_by_id={r['identity']['lens_id']:r for r in retry_rows}
+          retry_audit_by_id={r['lens_id']:r for r in retry_audit}
+          assert set(retry_by_id)==set(retry_audit_by_id)
+
+          restored_existing=0
+          patched_retry=0
+          patched_recovered=0
+          new_rows=[]
+          new_audit=[]
+
+          for source,row,a in zip(lens_rows,rows,audit):
+              lid=row['identity']['lens_id']
+              assert source['identity']['lens_id']==lid==a['lens_id']
+              assert row['lens']['raw_payload']==source['lens']['raw_payload']
+
+              if row.get('abstract_enrichment',{}).get('status')=='existing_abstract':
+                  raw_abs=source['lens']['raw_payload'].get('abstract')
+                  assert isinstance(raw_abs,str) and raw_abs.strip()
+                  row['canonical']['abstract']=raw_abs
+                  a['abstract_chars']=len(raw_abs)
+                  restored_existing+=1
+
+              if lid in retry_by_id:
+                  rr=retry_by_id[lid]
+                  ra=retry_audit_by_id[lid]
+                  row['canonical']['abstract']=rr['canonical'].get('abstract')
+                  row['abstract_enrichment']=rr['abstract_enrichment']
+                  a=ra
+                  patched_retry+=1
+                  if ra['status']=='abstract_recovered':
+                      patched_recovered+=1
+
+              new_rows.append(row)
+              new_audit.append(a)
+
+          assert patched_retry==7
+          assert patched_recovered==5
+          assert restored_existing==17147
+
+          required={'record_id','lens_id','title','authors','year','source','doi','abstract'}
+          technical=0
+          status_counts={}
+          recovered_ids=[]
+          for source,row,a in zip(lens_rows,new_rows,new_audit):
+              lid=row['identity']['lens_id']
+              assert required <= set(row['canonical'])
+              assert row['canonical']['lens_id']==lid
+              assert row['lens']['raw_payload']==source['lens']['raw_payload']
+              assert row['abstract_enrichment']['provider']=='europe_pmc'
+              assert all(x.get('method')=='europe_pmc_exact_doi' for x in row['abstract_enrichment'].get('attempts',[]))
+              status=row['abstract_enrichment']['status']
+              status_counts[status]=status_counts.get(status,0)+1
+              if status=='existing_abstract':
+                  assert row['canonical']['abstract']==source['lens']['raw_payload'].get('abstract')
+              if any(x.get('outcome')=='technical_error' for x in a.get('attempts',[])):
+                  technical+=1
+              if status=='abstract_recovered':
+                  assert row['canonical']['abstract']
+                  recovered_ids.append(lid)
+
+          assert technical==0, technical
+          assert status_counts.get('existing_abstract',0)==17147
+          assert status_counts.get('abstract_recovered',0)==1977
+          assert status_counts.get('no_abstract_recovered',0)==1790
+          assert status_counts.get('missing_no_doi',0)==937
+          assert len(new_rows)==21851
+
+          with (outdir/'records_for_deduplication.jsonl').open('w',encoding='utf-8') as f:
+              for r in new_rows:
+                  f.write(json.dumps(r,ensure_ascii=True,separators=(',',':'))+'\n')
+          with (outdir/'abstract_enrichment_audit.jsonl').open('w',encoding='utf-8') as f:
+              for r in new_audit:
+                  f.write(json.dumps(r,ensure_ascii=True,separators=(',',':'))+'\n')
+
+          shutil.copy2(full/'lens_records.jsonl',outdir/'lens_records.jsonl')
+          shutil.copy2(full/'lens_manifest.json',outdir/'lens_manifest.json')
+
+          report={
+            'workflow':'01B_abstract_enrichment',
+            'provider':'europe_pmc',
+            'created_at':datetime.now(timezone.utc).isoformat(),
+            'total_records':21851,
+            'status_counts':status_counts,
+            'doi_missing_abstract_targets':3767,
+            'abstracts_recovered':status_counts.get('abstract_recovered',0),
+            'technical_error_records':0,
+            'output':'deduplication_ready'
+          }
+          (outdir/'report.json').write_text(json.dumps(report,indent=2,ensure_ascii=True)+'\n',encoding='utf-8')
+
+          summary={
+            'total_lens_records':21851,
+            'existing_abstracts':status_counts.get('existing_abstract',0),
+            'missing_abstract_no_doi':status_counts.get('missing_no_doi',0),
+            'doi_missing_abstract_targets':3767,
+            'abstracts_recovered_from_europe_pmc':status_counts.get('abstract_recovered',0),
+            'not_recovered':status_counts.get('no_abstract_recovered',0),
+            'technical_error_records':0,
+            'recovery_percent_of_doi_targets':round(100*status_counts.get('abstract_recovered',0)/3767,1),
+            'exact_existing_abstracts_restored':restored_existing,
+            'retry_records_patched':patched_retry,
+            'retry_abstracts_added':patched_recovered,
+            'output_records':21851,
+            'output':'deduplication_ready',
+            'canonical_contract':'validated'
+          }
+          (outdir/'full_corpus_summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=True)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Re-parse patched JSONL and verify cardinality
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('patch_work/patched')
+          for name in ('lens_records.jsonl','records_for_deduplication.jsonl','abstract_enrichment_audit.jsonl'):
+              n=0
+              with (root/name).open('r',encoding='utf-8') as f:
+                  for line in f:
+                      if line.strip():
+                          json.loads(line)
+                          n+=1
+              assert n==21851,(name,n)
+              print(name,n)
+          PY
+
+      - name: Upload patched canonical artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01b-full-canonical-repaired-${{ github.run_id }}
+          path: patch_work/patched/
+          retention-days: 90
+          if-no-files-found: warn
