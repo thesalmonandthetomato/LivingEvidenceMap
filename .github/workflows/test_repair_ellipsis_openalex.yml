@@ -1,0 +1,82 @@
+name: Test repair ellipsis abstracts - OpenAlex
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01b-ellipsis-repair
+    paths:
+      - scripts/updater/repair_ellipsis_abstracts.py
+      - .github/workflows/test_repair_ellipsis_openalex.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  repair-openalex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download Europe PMC repaired canonical artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p repair_work/input repair_work/output
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9717339832/zip" \
+            -o repair_work/input.zip
+          unzip -q repair_work/input.zip -d repair_work/input
+          test -f repair_work/input/records_for_deduplication_ellipsis_epmc_repaired.jsonl
+
+      - name: Repair remaining DOI ellipsis abstracts from OpenAlex
+        run: |
+          python scripts/updater/repair_ellipsis_abstracts.py \
+            --input repair_work/input/records_for_deduplication_ellipsis_epmc_repaired.jsonl \
+            --output repair_work/output/records_for_deduplication.jsonl \
+            --audit repair_work/output/ellipsis_openalex_audit.jsonl \
+            --summary repair_work/output/ellipsis_openalex_summary.json \
+            --providers openalex \
+            --delay 0.10
+
+      - name: Preserve Europe PMC repair audit
+        run: |
+          cp repair_work/input/ellipsis_epmc_audit.jsonl repair_work/output/ellipsis_epmc_audit.jsonl
+          cp repair_work/input/ellipsis_epmc_summary.json repair_work/output/ellipsis_epmc_summary.json
+
+      - name: Validate patched canonical JSON
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('repair_work/output/records_for_deduplication.jsonl')
+          rows=[]
+          with p.open(encoding='utf-8') as f:
+              for line in f:
+                  if line.strip(): rows.append(json.loads(line))
+          assert len(rows)==21851, len(rows)
+          assert all(isinstance(r.get('canonical'),dict) for r in rows)
+          summary=json.loads(Path('repair_work/output/ellipsis_openalex_summary.json').read_text())
+          assert summary['total_corpus_records']==21851
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload OpenAlex repaired canonical artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01b-ellipsis-openalex-repaired-${{ github.run_id }}
+          path: repair_work/output/
+          retention-days: 90
+          if-no-files-found: warn
