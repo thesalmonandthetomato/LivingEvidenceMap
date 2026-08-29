@@ -2,11 +2,21 @@
   "schema": "living_evidence_map_canonical_jsonl",
   "schema_version": 1,
   "stage": "current_repair",
-  "created_at": "2026-08-29T19:31:31.488646+00:00",
-  "record_count": 21851,
-  "records_sha256": "ebe76f527c19a27dffae5d368f0dba43a08ca0f402d43f5f1309e330f95e78dd",
+  "created_at": "2026-08-29T21:02:35.015949+00:00",
+  "record_count": 22131,
+  "records_sha256": "79973bb48c410b2d1546d4f0f5590f2243b49460e55c964201523694d2d5836f",
   "source_artifact_id": 9713685583,
   "source_workflow_run_id": 33248475565,
-  "notes": "Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE).",
-  "archive_source": "data/canonical/archive/repair/04_human_screening_adjudication"
+  "notes": "Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE). Appended 280 historical INCLUDE records recovered by exact Lens ID; deduplicated solely on identity.lens_id; one non-Lens historical record left out of scope.",
+  "archive_source": "data/canonical/archive/repair/04_human_screening_adjudication",
+  "historical_lens_include_recovery": {
+    "source_unmatched_records": 281,
+    "lens_backed_records_considered": 280,
+    "records_appended": 280,
+    "exact_lens_id_overlaps": 0,
+    "deduplication_key": "lens_id",
+    "source_workflow_run_id": 33274405524,
+    "source_artifact_id": 9721057470,
+    "non_lens_record_out_of_scope": 1
+  }
 }
