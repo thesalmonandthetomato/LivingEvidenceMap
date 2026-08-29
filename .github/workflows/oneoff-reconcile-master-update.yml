@@ -1,0 +1,105 @@
+name: One-off reconcile master update records
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main for historical master CSV
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: mainrepo
+      - name: Checkout repaired canonical corpus with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonicalrepo
+          lfs: true
+      - name: Reconcile master against historical INCLUDE Lens IDs
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv, json, re
+          from pathlib import Path
+
+          master = Path('mainrepo/data/master/current/living_evidence_map_master.csv')
+          canonical = Path('canonicalrepo/data/canonical/current/repair/records.jsonl')
+          hist_ids_path = Path('mainrepo/config/oneoff_unmatched_include_lens_ids.txt')
+          # The 280 recovery IDs alone are not the complete 12,074 historical set,
+          # so obtain historical Lens IDs from the original RIS only if it exists in repo.
+          ris_candidates = list(Path('mainrepo').rglob('INCLUDES(1).ris'))
+          if not ris_candidates:
+              raise RuntimeError('INCLUDES(1).ris is not stored in the repository; this reconciliation needs the original 12,074-record RIS as an input artifact/file.')
+          ris = ris_candidates[0]
+
+          # Parse Lens IDs from RIS records. Lens IDs are stable nnn-nnn-nnn-nnn-nnn strings.
+          text = ris.read_text(encoding='utf-8', errors='replace')
+          blocks = re.split(r'\nER\s*-.*?(?:\n|$)', text)
+          historical = set()
+          historical_records = 0
+          no_lens = 0
+          for b in blocks:
+              if not b.strip(): continue
+              historical_records += 1
+              ids = re.findall(r'\b\d{3}-\d{3}-\d{3}-\d{3}-\d{3}\b', b)
+              if ids: historical.add(ids[0])
+              else: no_lens += 1
+          if historical_records != 12074:
+              raise RuntimeError(f'Expected 12074 RIS records, found {historical_records}')
+
+          # Detect Lens ID column in master.
+          with master.open(encoding='utf-8-sig', newline='') as f:
+              reader = csv.DictReader(f)
+              fields = reader.fieldnames or []
+              lens_fields = [x for x in fields if x.lower().replace(' ','_') in {'lens_id','lensid'}]
+              if not lens_fields:
+                  raise RuntimeError(f'No Lens ID column found in master. Fields: {fields}')
+              lf = lens_fields[0]
+              rows = list(reader)
+          if len(rows) != 13389:
+              raise RuntimeError(f'Expected 13389 master rows, found {len(rows)}')
+          master_ids = [str(r.get(lf) or '').strip() for r in rows]
+          master_lens = {x for x in master_ids if x}
+          master_no_lens = sum(not x for x in master_ids)
+
+          canonical_ids = set()
+          with canonical.open(encoding='utf-8') as f:
+              for line in f:
+                  if line.strip():
+                      rec=json.loads(line); lid=(rec.get('identity') or {}).get('lens_id')
+                      if lid: canonical_ids.add(lid)
+          remainder = sorted(master_lens - historical)
+          missing_from_canonical = sorted(set(remainder) - canonical_ids)
+          result = {
+            'master_rows': len(rows),
+            'master_unique_lens_ids': len(master_lens),
+            'master_rows_without_lens_id': master_no_lens,
+            'historical_ris_records': historical_records,
+            'historical_unique_lens_ids': len(historical),
+            'historical_ris_records_without_lens_id': no_lens,
+            'master_lens_ids_not_in_historical_ris': len(remainder),
+            'remainder_unique_lens_ids': len(set(remainder)),
+            'remainder_present_in_canonical': len(set(remainder) & canonical_ids),
+            'remainder_missing_from_canonical': len(missing_from_canonical),
+            'missing_lens_ids': missing_from_canonical,
+            'canonical_unique_lens_ids': len(canonical_ids)
+          }
+          Path('reconciliation.json').write_text(json.dumps(result,indent=2)+'\n')
+          Path('update_remainder_lens_ids.txt').write_text('\n'.join(remainder)+'\n')
+          print(json.dumps(result,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: master-update-reconciliation-${{ github.run_id }}
+          path: |
+            reconciliation.json
+            update_remainder_lens_ids.txt
+          if-no-files-found: warn
+          retention-days: 90
