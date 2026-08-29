@@ -37,7 +37,10 @@ def doi(r):
     return None
 def existing_abstract(r):
     c=r.get("canonical") if isinstance(r.get("canonical"),dict) else {}
-    return clean(c.get("abstract") or payload(r).get("abstract"))
+    for v in (c.get("abstract"),payload(r).get("abstract")):
+        if isinstance(v,str) and v.strip():
+            return v
+    return None
 def canonicalise(r, abstract_value):
     p=payload(r); old=r.get("canonical") if isinstance(r.get("canonical"),dict) else {}
     src=p.get("source"); src_title=src.get("title") if isinstance(src,dict) else src
@@ -56,7 +59,7 @@ def transient_epmc_error(e):
         return e.code == 429 or 500 <= e.code < 600
     return isinstance(e, (TimeoutError, urllib.error.URLError))
 def epmc_lookup(d):
-    q=urllib.parse.urlencode({"query":f'DOI:"{d}"',"format":"json","resultType":"core","pageSize":5})
+    q=urllib.parse.urlencode({"query":f'DOI:\"{d}\"',"format":"json","resultType":"core","pageSize":5})
     req=urllib.request.Request(BASE+"?"+q,headers={"User-Agent":UA,"Accept":"application/json"})
     errors=[]
     for attempt_no in range(1,EPMC_MAX_ATTEMPTS+1):
