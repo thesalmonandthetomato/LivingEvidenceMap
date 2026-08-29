@@ -12,12 +12,19 @@ from pathlib import Path
 
 DECISIONS={"retain","exclude","uncertain"}
 CHECKPOINT_VERSION=1
-SYSTEM_PROMPT="""You are screening bibliographic records for a living evidence map of commercial salmon and rainbow-trout aquaculture. Use only the supplied TITLE, ABSTRACT, KEYWORDS and JOURNAL / SOURCE TITLE.
+SYSTEM_PROMPT="""You are screening bibliographic records for inclusion in a living evidence map of commercial aquaculture of Atlantic salmon, Pacific salmon, and rainbow trout.
 
-A record is eligible only when BOTH of these gates are satisfied by the supplied metadata:
+This is a HIGH-SENSITIVITY title/abstract screening stage.
 
-GATE 1 — ELIGIBLE SPECIES
-There must be explicit evidence of at least one eligible species or group:
+Your task is to classify each record as exactly one of: RETAIN, EXCLUDE, UNCERTAIN.
+
+RETAIN whenever the available bibliographic evidence reasonably establishes eligibility.
+Do not exclude merely because the study's main outcome, organism, discipline, or document type is unusual.
+
+Use ALL supplied metadata: title, abstract, keywords, journal/source title, and any explicitly supplied affiliation or funding information. Do not infer facts that are not present in those fields.
+
+1. ELIGIBLE SPECIES
+Eligible species/groups are:
 - Atlantic salmon (Salmo salar)
 - Chinook salmon (Oncorhynchus tshawytscha)
 - coho salmon (Oncorhynchus kisutch)
@@ -25,34 +32,73 @@ There must be explicit evidence of at least one eligible species or group:
 - chum salmon (Oncorhynchus keta)
 - pink salmon (Oncorhynchus gorbuscha)
 - masu salmon (Oncorhynchus masou)
-- rainbow trout (Oncorhynchus mykiss), including an explicitly identified O. mykiss form
-- unspecified salmon, when the record says salmon but does not identify the species
+- rainbow trout (Oncorhynchus mykiss; including historical synonyms)
+- unspecified "salmon" where the aquaculture/farming context is established
 
-Do NOT treat generic terms such as trout, salmonid, salmonids, fish, or cultured fish as sufficient evidence of an eligible species. Do NOT infer an eligible host species from a pathogen name such as Aeromonas salmonicida.
+Generic terms such as salmonid, salmonids, trout, or fish DO NOT by themselves satisfy the species criterion. Do not infer an eligible species merely from a salmonid-specific pathogen.
 
-GATE 2 — AQUACULTURE CONTEXT
-There must be explicit evidence that the eligible fish, population, product, system or evidence concerns aquaculture, farming or commercial culture. Evidence may occur in any supplied field, including the journal/source title.
+However, explicit SALMON FARMING can itself establish the relevant salmon context for studies examining impacts arising from salmon aquaculture, even where the organism actually measured is not an eligible species. Examples: sea trout affected by salmon farming -> RETAIN; lumpfish deployed in salmon farms -> RETAIN; prawns exposed to salmon-farm treatments -> RETAIN; environmental effects of salmon net pens -> RETAIN.
 
-Valid aquaculture evidence includes explicit terms or clear production-system terminology such as aquaculture, aquacultural, farmed, farming, fish farm, salmon farm, cultured, commercial culture, rearing for production, sea cage/net-pen production, stocking density in a production context, or equivalent wording. An aquaculture-focused journal/source title (for example Aquaculture, Aquaculture Research, Aquaculture Nutrition or Aquaculture International) counts as explicit aquaculture evidence. A journal/source title using Agriculture may also count as production-context evidence when the record explicitly concerns an eligible aquatic species and the study itself concerns a production, processing, sorting or other agricultural application.
+2. AQUACULTURE CONTEXT
+The record must concern commercial/farmed aquaculture, its products, processes, infrastructure, inputs, consequences, impacts, or closely connected research. Evidence can come from any supplied metadata field.
 
-Do NOT infer aquaculture merely because a study of an eligible species concerns diet, feed, growth, reproduction, breeding, genetics, physiology, immunology, disease, diagnostics, transport, environmental stress, processing, products, or another topic that could be useful to aquaculture. Potential applicability is not evidence of aquaculture context.
+Explicit indicators include aquaculture, mariculture, farmed, salmon farm, fish farm, commercial production, aquaculture production, recirculating aquaculture system/RAS, commercial sea cages/net pens, aquaculture feed, farm management, on-farm monitoring, or commercial processing of farmed fish.
 
-SPECIAL CASES
-- Genetically engineered salmon intended as a produced food animal may be treated as inherently aquaculture-related even if the supplied fields do not separately say farmed or aquaculture.
-- Hatchery does NOT automatically mean aquaculture. EXCLUDE records about hatchery fish produced for release, sport-fish stocking, stock enhancement, supplementation of wild populations, sea ranching or ocean ranching when that is the relevant production context.
-- Wild salmonids, capture fisheries and conservation are not eligible unless the record explicitly and substantively examines an effect, pressure, interaction or consequence of eligible commercial salmon/rainbow-trout aquaculture. A wild population alone is not enough.
-- Products derived from salmon or trout are not automatically aquaculture products. Require evidence that both the species gate and aquaculture-context gate are satisfied.
-- For mixed-species studies, RETAIN only when an eligible species is explicitly identified and is a substantive part of the aquaculture evidence, analysis or conclusions. A generic claim covering all fish or all animal species is not enough.
-- Reviews, systematic reviews, meta-analyses, policy papers and synthesis papers are eligible under the same two-gate rule.
+An explicitly aquaculture-focused journal may establish aquaculture context where the eligible species and study subject are otherwise clear.
 
-DECISIONS
-RETAIN when both gates are satisfied and eligible commercial aquaculture is a substantive part of the record.
-EXCLUDE when either gate clearly fails, when the only relevant context is wild/capture/conservation/ranching/stock enhancement, or when salmon aquaculture is only background or a passing example.
-UNCERTAIN only when the supplied metadata genuinely do not contain enough information to determine whether one or both gates are satisfied. Do not use UNCERTAIN merely because the abstract is missing if the other supplied fields establish both gates.
+An explicitly aquaculture-focused author affiliation or funding source may establish context where eligible species/relevance are clear but the title/abstract does not state the production setting. A generic university, fisheries, marine, agriculture, or government affiliation is insufficient.
 
-This is a high-sensitivity updater screen: avoid false exclusions when the supplied evidence genuinely supports both gates. However, do not invent or infer a missing species gate or aquaculture gate from likely applicability.
+"Commercial conditions" may establish aquaculture context when clearly referring to production of an eligible species. For Atlantic salmon, an explicit "seawater phase" may establish aquaculture production context.
 
-Give one concise reason that identifies the evidence for, or failure of, the species gate and aquaculture-context gate."""
+Broodstock, experimental diets, commercial diets, selective breeding, production stressors, processing, slaughter, welfare, disease control and other production-related research can establish aquaculture context when the metadata clearly connects them to production.
+
+3. IMPORTANT HIGH-SENSITIVITY RULE
+Do NOT require the eligible salmon/rainbow trout to be the organism directly measured.
+
+RETAIN studies of environmental, ecological, occupational, social, economic, health, disease, treatment or other consequences of eligible salmon aquaculture. Examples include effects of salmon farms on wild fish or wildlife, environmental enrichment beneath salmon farms, disease transmission from/between salmon farms, occupational safety in salmon aquaculture, effects of salmon-farm therapeutants on non-target species, cleaner fish used within salmon farms, and hydrodynamics relevant to salmon-farm disease transmission.
+
+An explicit reference to an eligible salmon/rainbow-trout farm or aquaculture operation is sufficient at this screening stage even if it is not the principal analytical subject. Do not introduce a "substantive focus" requirement that is not part of the eligibility criteria.
+
+4. FISHMEAL RULE
+If a record refers to (a) an eligible salmon species or rainbow trout AND (b) fishmeal, RETAIN it regardless of whether additional aquaculture terminology is present.
+
+5. HATCHERY / STOCK ENHANCEMENT
+Do NOT treat hatchery use automatically as aquaculture.
+EXCLUDE studies where eligible salmon are hatchery-reared solely for release into rivers/ocean, restocking, stock enhancement, population supplementation, sport fisheries, conservation release, or sea/ocean ranching. These are not commercial aquaculture for this evidence map.
+A facility being called a "fish farm" or hatchery does not override clear evidence that the purpose is population supplementation or release.
+
+6. EXPERIMENTAL CAGES AND PENS
+Do NOT infer commercial aquaculture solely because fish are held experimentally in cages, pens, net pens, or tanks. Experimental containment used only for an exposure/ecology experiment is insufficient. There must be additional evidence connecting the study to commercial aquaculture or production.
+
+7. WILD POPULATIONS
+A study of wild eligible salmonids is not automatically relevant.
+EXCLUDE purely wild-population ecology, genetics, migration, conservation, restocking, or disease surveillance where aquaculture appears only as generic background and the study does not evaluate or meaningfully connect to salmon aquaculture.
+RETAIN where the wild-population study explicitly evaluates an exposure, impact, interaction, disease risk, genetic interaction or other consequence connected to eligible salmon aquaculture. At this high-sensitivity stage, an explicit and plausible salmon-farming connection should normally favour RETAIN.
+
+8. GENERIC SALMONIDS
+Strong aquaculture context does NOT rescue a direct study that identifies the relevant fish only as "salmonid" or "salmonids".
+Example: "Sea lice infestation of salmonids in Chile" in the journal Aquaculture, with no eligible species or explicit "salmon" -> EXCLUDE.
+Likewise, "triploid salmonids for aquaculture" -> EXCLUDE if no eligible species is identified.
+But this rule does NOT apply where the study is explicitly about the IMPACT OF SALMON FARMING itself, e.g. "salmon net pens", "salmon farms", or "salmon mariculture". In those cases the aquaculture activity supplies the relevant salmon context.
+
+9. PRODUCTS AND PROCESSING
+Studies of salmon/rainbow-trout food products, processing, storage, fillets, slaughter or post-harvest quality are eligible where commercial aquaculture origin is explicit or reasonably established from the supplied metadata. Do not assume all salmon products are farmed. However, production geography and industrial context can establish origin where the context makes farmed origin unambiguous.
+
+10. SPECIAL CASES
+Genetically engineered salmon intended for food production -> RETAIN.
+Corrections/corrigenda to otherwise eligible studies -> RETAIN at relevance screening. Document-type cleanup occurs downstream.
+Administrative, programme, report, chapter or other non-journal records are NOT excluded merely because they are not primary research if they explicitly concern eligible salmon aquaculture. Do not impose an unstated study-design criterion.
+Contents pages, tables of contents, collections of book reviews, or composite records must NOT be retained by combining species evidence from one listed item with aquaculture evidence from another listed item. Assess the record itself as one coherent work.
+
+11. DECISION LOGIC
+RETAIN when eligible species/relevant salmon farming is established AND commercial aquaculture relevance is established, OR a specific inclusion rule above applies.
+EXCLUDE when an eligibility gate clearly fails, the record clearly concerns only wild/restocking/non-commercial contexts, or only generic salmonid terminology is available for a direct-species study.
+UNCERTAIN only when available metadata are genuinely insufficient or contradictory AND neither RETAIN nor EXCLUDE can be justified from the supplied evidence. Do NOT use UNCERTAIN merely because a record is unusual.
+This is a high-sensitivity screening stage. Where evidence genuinely supports both interpretations and exclusion is not clearly justified, favour RETAIN.
+
+12. OUTPUT
+Return structured output with decision and reason. The decision value must be exactly one of: retain, exclude, uncertain. The reason must be one concise sentence identifying the specific bibliographic evidence that determines the decision. Identify the relevant species evidence and aquaculture-context evidence, or state explicitly which gate failed.
+Do not invent missing metadata. Do not infer species from subject matter alone. Do not use topical similarity alone as evidence of eligibility."""
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def schema(): return {"type":"object","properties":{"decision":{"type":"string","enum":["retain","exclude","uncertain"]},"reason":{"type":"string"}},"required":["decision","reason"],"additionalProperties":False}
@@ -67,15 +113,43 @@ def first_value(*values):
 def source_title(v):
     if isinstance(v,dict): return first_value(v.get("title"),v.get("name"))
     return first_value(v)
+def textify(v):
+    if v is None: return ""
+    if isinstance(v,str): return v.strip()
+    if isinstance(v,(int,float,bool)): return str(v)
+    if isinstance(v,list): return "; ".join(x for x in (textify(i) for i in v) if x)
+    if isinstance(v,dict):
+        preferred=[]
+        for k in ("name","name_original","title","funder_name","agency","grant_number","value"):
+            if k in v and textify(v.get(k)): preferred.append(textify(v.get(k)))
+        if preferred: return "; ".join(dict.fromkeys(preferred))
+        return "; ".join(x for x in (textify(i) for i in v.values()) if x)
+    return str(v)
+def affiliations(r):
+    c=canonical(r); p=payload(r); vals=[]
+    for source in (c,p):
+        authors=source.get("authors",[]) if isinstance(source,dict) else []
+        if isinstance(authors,list):
+            for author in authors:
+                if isinstance(author,dict): vals.append(textify(author.get("affiliations")))
+        vals.append(textify(source.get("affiliations") if isinstance(source,dict) else None))
+    return "; ".join(dict.fromkeys(x for x in vals if x))
+def funding(r):
+    c=canonical(r); p=payload(r); vals=[]
+    for source in (c,p):
+        if not isinstance(source,dict): continue
+        for k in ("funding","funders","funder","funding_sources","funding_source","grants","grant","funding_text","acknowledgements"):
+            if k in source: vals.append(textify(source.get(k)))
+    return "; ".join(dict.fromkeys(x for x in vals if x))
 def screening_fields(r):
     p=payload(r); c=canonical(r)
     title=first_value(c.get("title"),p.get("title"))
     abstract=first_value(c.get("abstract"),p.get("abstract"))
     keywords=first_value(c.get("keywords"),p.get("keywords"),p.get("keyword"),p.get("author_keywords"))
     journal=first_value(c.get("source_title"),c.get("journal"),p.get("source_title"),p.get("journal"),source_title(p.get("source")),source_title(p.get("publication")))
-    return title,abstract,keywords,journal
+    return title,abstract,keywords,journal,affiliations(r),funding(r)
 def title_abstract(r):
-    title,abstract,_,_=screening_fields(r); return title,abstract
+    title,abstract,_,_,_,_=screening_fields(r); return title,abstract
 def lens_id(r): return str(r.get("identity",{}).get("lens_id") or payload(r).get("lens_id") or "")
 def definitive_duplicate(r):
     d=r.get("deduplication",{}) if isinstance(r.get("deduplication"),dict) else {}
@@ -83,8 +157,8 @@ def definitive_duplicate(r):
     a=r.get("adjudication",{}) if isinstance(r.get("adjudication"),dict) else {}
     return a.get("decision")=="duplicate" or (r.get("workflow")=="03_adjudication" and r.get("decision")=="duplicate")
 def request(r,model):
-    title,abstract,keywords,journal=screening_fields(r)
-    user=f"TITLE\n{title}\n\nABSTRACT\n{abstract}\n\nKEYWORDS\n{keywords}\n\nJOURNAL / SOURCE TITLE\n{journal}\n\nDecide whether this record meets the eligibility criteria."
+    title,abstract,keywords,journal,affiliation,funding_text=screening_fields(r)
+    user=f"TITLE\n{title}\n\nABSTRACT\n{abstract}\n\nKEYWORDS\n{keywords}\n\nJOURNAL / SOURCE TITLE\n{journal}\n\nAFFILIATIONS\n{affiliation}\n\nFUNDING\n{funding_text}\n\nDecide whether this record meets the eligibility criteria."
     return {"model":model,"store":False,"reasoning":{"effort":"low"},"input":[{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":user}],"text":{"verbosity":"low","format":{"type":"json_schema","name":"salmon_farming_relevance_screen","strict":True,"schema":schema()}}}
 def dump(v):
     if v is None:return None
@@ -95,8 +169,8 @@ def dump(v):
 def screen(r,mode,model):
     started=now(); req=request(r,model)
     if mode=="mock":
-        title,abstract,keywords,journal=screening_fields(r); text=" ".join((title,abstract,keywords,journal)).lower()
-        if not any((title,abstract,keywords,journal)): parsed={"decision":"uncertain","reason":"No screening metadata is available."}
+        fields=screening_fields(r); title,abstract=fields[0],fields[1]; text=" ".join(fields).lower()
+        if not any(fields): parsed={"decision":"uncertain","reason":"No screening metadata is available."}
         elif "atlantic salmon" in text and any(x in text for x in ("farm","aquaculture","cultured")): parsed={"decision":"retain","reason":"Eligible salmon and aquaculture context are explicit."}
         elif "wild salmon" in text and not any(x in text for x in ("farm","aquaculture","cultured")): parsed={"decision":"exclude","reason":"The supplied evidence concerns wild salmon only and lacks aquaculture context."}
         else: parsed={"decision":"uncertain","reason":"Mock mode cannot make a defensible eligibility decision."}
