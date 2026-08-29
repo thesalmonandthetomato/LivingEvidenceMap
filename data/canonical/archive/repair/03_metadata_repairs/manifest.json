@@ -2,7 +2,7 @@
   "schema": "living_evidence_map_canonical_jsonl",
   "schema_version": 1,
   "stage": "03_metadata_repairs",
-  "created_at": "2026-08-29T18:40:26.283856+00:00",
+  "created_at": "2026-08-29T19:31:19.237620+00:00",
   "record_count": 21851,
   "records_sha256": "39d2f8504186c40bc9503340347097fccbcc44e85afcee23de8245daadda51ce",
   "source_artifact_id": 9718474490,

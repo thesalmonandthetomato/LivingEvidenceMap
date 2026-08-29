@@ -2,7 +2,7 @@
   "schema": "living_evidence_map_canonical_jsonl",
   "schema_version": 1,
   "stage": "02_retry_ellipsis_repair",
-  "created_at": "2026-08-29T18:40:22.893898+00:00",
+  "created_at": "2026-08-29T19:31:13.126853+00:00",
   "record_count": 21851,
   "records_sha256": "af6d0e3fc17e9434fa463c6310b5010d5acb9413b9a1938f1be821757938ba1c",
   "source_artifact_id": 9718474490,

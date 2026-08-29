@@ -1,12 +1,11 @@
 {
   "schema": "living_evidence_map_canonical_jsonl",
   "schema_version": 1,
-  "stage": "current_repair",
+  "stage": "04_human_screening_adjudication",
   "created_at": "2026-08-29T19:31:31.488646+00:00",
   "record_count": 21851,
   "records_sha256": "ebe76f527c19a27dffae5d368f0dba43a08ca0f402d43f5f1309e330f95e78dd",
   "source_artifact_id": 9713685583,
   "source_workflow_run_id": 33248475565,
-  "notes": "Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE).",
-  "archive_source": "data/canonical/archive/repair/04_human_screening_adjudication"
+  "notes": "Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE)."
 }
