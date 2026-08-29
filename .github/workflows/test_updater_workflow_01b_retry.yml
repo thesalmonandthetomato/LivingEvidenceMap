@@ -1,0 +1,110 @@
+name: Test updater Workflow 01B - retry seven Europe PMC errors
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retry-seven:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out Workflow 01B development branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-01b-abstract-enrichment
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build seven-record retry fixture
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows = [
+            ('107-257-426-839-027','10.1016/j.aquaculture.2010.01.029'),
+            ('053-385-202-351-97X','10.1016/j.aquaculture.2014.02.015'),
+            ('054-216-744-936-437','10.18452/7809'),
+            ('056-367-180-315-651','10.1016/j.chemosphere.2006.12.063'),
+            ('045-430-937-401-659','10.1016/s0165-7836(98)00131-3'),
+            ('060-916-881-592-559','10.1016/j.aquaeng.2015.10.004'),
+            ('063-279-546-093-832','10.1016/j.micpath.2017.08.003'),
+          ]
+
+          root=Path('testdata/workflow01b_retry')
+          root.mkdir(parents=True,exist_ok=True)
+          with (root/'input.jsonl').open('w',encoding='utf-8') as f:
+              for lens_id,doi in rows:
+                  rec={
+                    'identity':{'lens_id':lens_id,'record_id':lens_id,'record_id_type':'lens_id'},
+                    'source':{'provider':'lens','source_format':'lens_api_json'},
+                    'lens':{'raw_payload':{
+                      'lens_id':lens_id,
+                      'external_ids':[{'type':'doi','value':doi}],
+                      'abstract':None
+                    }},
+                    'provenance':{'ingestion_run_id':'retry-seven-test'}
+                  }
+                  f.write(json.dumps(rec,ensure_ascii=True,separators=(',',':'))+'\n')
+          PY
+
+      - name: Run Workflow 01B retry logic
+        run: |
+          python scripts/updater/abstract_enrichment.py \
+            --input testdata/workflow01b_retry/input.jsonl \
+            --output testdata/workflow01b_retry/output.jsonl \
+            --audit testdata/workflow01b_retry/audit.jsonl \
+            --report testdata/workflow01b_retry/report.json \
+            --delay 0.12
+          cat testdata/workflow01b_retry/report.json
+
+      - name: Validate retry results
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('testdata/workflow01b_retry')
+          out=[json.loads(x) for x in (root/'output.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          audit=[json.loads(x) for x in (root/'audit.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          assert len(out)==7
+          assert len(audit)==7
+          technical=[]
+          retried=[]
+          recovered=[]
+          for row in audit:
+              attempts=row.get('attempts',[])
+              assert all(a.get('method')=='europe_pmc_exact_doi' for a in attempts)
+              if any(a.get('outcome')=='technical_error' for a in attempts):
+                  technical.append({'lens_id':row['lens_id'],'doi':row['doi'],'attempts':attempts})
+              if any((a.get('request_attempts') or 1)>1 for a in attempts):
+                  retried.append({'lens_id':row['lens_id'],'doi':row['doi'],'attempts':attempts})
+              if row.get('status')=='abstract_recovered':
+                  recovered.append({'lens_id':row['lens_id'],'doi':row['doi']})
+          summary={
+            'records_tested':7,
+            'abstracts_recovered':len(recovered),
+            'records_that_required_retry':len(retried),
+            'technical_errors_after_retries':len(technical),
+            'technical_error_records':technical,
+            'retried_records':retried,
+            'recovered_records':recovered
+          }
+          (root/'retry_summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=True)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          assert not technical, f'Technical errors remain after retry logic: {technical}'
+          PY
+
+      - name: Upload retry-test artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01b-retry-seven-${{ github.run_id }}
+          path: testdata/workflow01b_retry/
+          retention-days: 90
+          if-no-files-found: warn
