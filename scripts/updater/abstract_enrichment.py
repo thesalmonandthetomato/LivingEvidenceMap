@@ -85,12 +85,13 @@ def main():
         out.append(enriched)
         audit.append({"lens_id":lens_id(r),"doi":d,"status":status,"abstract_chars":len(old or recovered or ""),"attempts":attempts})
         if d and not old: time.sleep(args.delay)
-    Path(args.output).parent.mkdir(parents=True,exist_ok=True)
-    Path(args.output).write_text("".join(json.dumps(x,ensure_ascii=False,separators=(",",":"))+"\n" for x in out),encoding="utf-8")
-    Path(args.audit).write_text("".join(json.dumps(x,ensure_ascii=False,separators=(",",":"))+"\n" for x in audit),encoding="utf-8")
+    for path in (Path(args.output),Path(args.audit),Path(args.report)):
+        path.parent.mkdir(parents=True,exist_ok=True)
+    Path(args.output).write_text("".join(json.dumps(x,ensure_ascii=True,separators=(",",":"))+"\n" for x in out),encoding="utf-8")
+    Path(args.audit).write_text("".join(json.dumps(x,ensure_ascii=True,separators=(",",":"))+"\n" for x in audit),encoding="utf-8")
     counts={}
     for x in audit: counts[x["status"]]=counts.get(x["status"],0)+1
     report={"workflow":"01B_abstract_enrichment","provider":"europe_pmc","created_at":now(),"total_records":len(rows),"status_counts":counts,"doi_missing_abstract_targets":sum(bool(x["doi"]) and x["status"]!="existing_abstract" for x in audit),"abstracts_recovered":counts.get("abstract_recovered",0),"output":"deduplication_ready"}
-    Path(args.report).write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+    Path(args.report).write_text(json.dumps(report,indent=2,ensure_ascii=True)+"\n",encoding="utf-8")
     print(json.dumps(report,indent=2))
 if __name__=="__main__": raise SystemExit(main())
