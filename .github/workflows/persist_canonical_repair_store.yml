@@ -56,9 +56,11 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
+          import copy
           import hashlib
           import json
           import shutil
+          from collections import Counter
           from datetime import datetime, timezone
           from pathlib import Path
 
@@ -66,8 +68,9 @@ jobs:
           a1 = root / 'archive/repair/01_abstract_enrichment'
           a2 = root / 'archive/repair/02_retry_ellipsis_repair'
           a3 = root / 'archive/repair/03_metadata_repairs'
+          a4 = root / 'archive/repair/04_human_screening_adjudication'
           cur = root / 'current/repair'
-          for d in (a1, a2, a3, cur):
+          for d in (a1, a2, a3, a4, cur):
               d.mkdir(parents=True, exist_ok=True)
 
           src1 = Path('repair_work/01')
@@ -104,21 +107,17 @@ jobs:
               assert manifest['record_count'] == 21851
               (directory / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
 
-          # Archive the validated full-corpus abstract-enrichment state.
+          # Stage 01: validated full-corpus abstract-enrichment state.
           shutil.copy2(src1 / 'records_for_deduplication.jsonl', a1 / 'records.jsonl')
           for name in ('abstract_enrichment_audit.jsonl', 'full_corpus_summary.json', 'report.json'):
               if (src1 / name).exists():
                   shutil.copy2(src1 / name, a1 / name)
           write_manifest(
-              a1,
-              '01_abstract_enrichment',
-              9711167560,
-              None,
-              a1 / 'records.jsonl',
+              a1, '01_abstract_enrichment', 9711167560, None, a1 / 'records.jsonl',
               'Validated full-corpus Workflow 01B state before retry patch and ellipsis repair.'
           )
 
-          # Archive the validated production state after retry patch + ellipsis repair.
+          # Stage 02: validated production state after retry patch + ellipsis repair.
           shutil.copy2(src2 / 'records_for_deduplication.jsonl', a2 / 'records.jsonl')
           for name in (
               'abstract_enrichment_audit.jsonl',
@@ -130,21 +129,16 @@ jobs:
               if (src2 / name).exists():
                   shutil.copy2(src2 / name, a2 / name)
           write_manifest(
-              a2,
-              '02_retry_ellipsis_repair',
-              9718474490,
-              33264142800,
-              a2 / 'records.jsonl',
+              a2, '02_retry_ellipsis_repair', 9718474490, 33264142800, a2 / 'records.jsonl',
               'Validated Workflow 01B production output after retry patch and exact-DOI ellipsis repair.'
           )
 
-          # Apply the first human-verified metadata repair while preserving Lens raw_payload unchanged.
+          # Stage 03: human-verified parent-article metadata repair.
           target_lens_id = '023-156-696-663-49X'
           corrected_title = 'Molecular and epigenetic responses to crowding stress in rainbow trout (Oncorhynchus mykiss) skeletal muscle'
           corrected_doi = '10.3389/fendo.2025.1571111'
           old_title_expected = 'Table 1.xlsx'
           old_doi_expected = '10.3389/fendo.2025.1571111.s001'
-
           source_records = a2 / 'records.jsonl'
           repaired_records = a3 / 'records.jsonl'
           found = 0
@@ -157,16 +151,14 @@ jobs:
                       found += 1
                       assert row['canonical']['title'] == old_title_expected
                       assert row['canonical']['doi'] == old_doi_expected
-                      assert row['lens']['raw_payload']['title'] == old_title_expected
+                      raw_before = copy.deepcopy(row['lens']['raw_payload'])
                       row['canonical']['title'] = corrected_title
                       row['canonical']['doi'] = corrected_doi
-                      # Raw Lens payload is deliberately untouched.
-                      assert row['lens']['raw_payload']['title'] == old_title_expected
-                      assert row['lens']['raw_payload']['external_ids'][0]['value'] == old_doi_expected
+                      assert row['lens']['raw_payload'] == raw_before
                   out.write(json.dumps(row, ensure_ascii=True, separators=(',', ':')) + '\n')
           assert found == 1, found
 
-          audit = {
+          metadata_audit = {
               'lens_id': target_lens_id,
               'repair_type': 'parent_article_metadata',
               'fields_changed': {
@@ -179,31 +171,101 @@ jobs:
                   'pmid': '40309435',
                   'source_url': 'https://pmc.ncbi.nlm.nih.gov/articles/PMC12040688/'
               },
-              'reason': 'Lens indexed a supplementary component (Table 1.xlsx) while carrying the parent article abstract. Human-verified repair maps canonical metadata to the parent article.',
-              'repaired_at': datetime.now(timezone.utc).isoformat(),
+              'reason': 'Lens indexed a supplementary component while carrying the parent article abstract; canonical metadata was mapped to the independently verified parent article.',
           }
-          (a3 / 'metadata_repair_audit.jsonl').write_text(json.dumps(audit, ensure_ascii=True) + '\n', encoding='utf-8')
+          (a3 / 'metadata_repair_audit.jsonl').write_text(json.dumps(metadata_audit, ensure_ascii=True) + '\n', encoding='utf-8')
           write_manifest(
-              a3,
-              '03_metadata_repairs',
-              9718474490,
-              33264142800,
-              repaired_records,
+              a3, '03_metadata_repairs', 9718474490, 33264142800, repaired_records,
               'Workflow 01B production output plus human-verified canonical title/DOI repair for Lens ID 023-156-696-663-49X.'
           )
 
-          # Current repair state is always an exact copy of the latest archived state.
-          shutil.copy2(repaired_records, cur / 'records.jsonl')
+          # Stage 04: human relevance-screening adjudications from Workflow 04 validation.
+          decision_path = root / 'adjudication/workflow04_fresh_200_human_decisions.json'
+          ledger = json.loads(decision_path.read_text(encoding='utf-8'))
+          assert ledger['schema'] == 'living_evidence_map_human_screening_adjudication'
+          assert ledger['adjudication_set'] == 'workflow04_fresh_200'
+          assert ledger['record_count'] == 54
+          decisions = ledger['decisions']
+          assert len(decisions) == 54
+          assert len({d['lens_id'] for d in decisions}) == 54
+          counts = Counter(d['human_decision'] for d in decisions)
+          assert counts == Counter({'RETAIN': 44, 'EXCLUDE': 10}), counts
+          assert set(counts) <= {'RETAIN', 'EXCLUDE'}
+          decision_map = {d['lens_id']: d for d in decisions}
+
+          screening_records = a4 / 'records.jsonl'
+          seen = set()
+          changed = 0
+          with repaired_records.open('r', encoding='utf-8') as inp, screening_records.open('w', encoding='utf-8') as out:
+              for line in inp:
+                  if not line.strip():
+                      continue
+                  before = json.loads(line)
+                  row = copy.deepcopy(before)
+                  lens_id = row.get('identity', {}).get('lens_id')
+                  if lens_id in decision_map:
+                      seen.add(lens_id)
+                      d = decision_map[lens_id]
+                      raw_before = copy.deepcopy(row.get('lens', {}).get('raw_payload'))
+                      screening = row.setdefault('screening', {})
+                      assert isinstance(screening, dict)
+                      assert 'relevance' not in screening
+                      screening['relevance'] = {
+                          'decision': d['human_decision'],
+                          'decision_source': 'human_adjudication',
+                          'adjudication_set': ledger['adjudication_set'],
+                          'adjudication_date': ledger['adjudication_date'],
+                      }
+                      assert row.get('lens', {}).get('raw_payload') == raw_before
+                      test = copy.deepcopy(row)
+                      test_screening = test.get('screening', {})
+                      test_screening.pop('relevance', None)
+                      if not test_screening:
+                          test.pop('screening', None)
+                      assert test == before
+                      changed += 1
+                  else:
+                      assert row == before
+                  out.write(json.dumps(row, ensure_ascii=True, separators=(',', ':')) + '\n')
+
+          assert seen == set(decision_map), (len(seen), len(decision_map), sorted(set(decision_map) - seen))
+          assert changed == 54
+          assert count_jsonl(screening_records) == 21851
+
+          with (a4 / 'screening_adjudication_audit.jsonl').open('w', encoding='utf-8') as f:
+              for d in decisions:
+                  audit = {
+                      'index': d['index'],
+                      'lens_id': d['lens_id'],
+                      'human_decision': d['human_decision'],
+                      'decision_source': 'human_adjudication',
+                      'adjudication_set': ledger['adjudication_set'],
+                      'adjudication_date': ledger['adjudication_date'],
+                      'source_workflow_run_id': ledger['source_workflow_run_id'],
+                      'source_artifact_id': ledger['source_artifact_id'],
+                  }
+                  f.write(json.dumps(audit, ensure_ascii=True, separators=(',', ':')) + '\n')
+
+          write_manifest(
+              a4, '04_human_screening_adjudication', ledger['source_artifact_id'], ledger['source_workflow_run_id'], screening_records,
+              'Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE).'
+          )
+
+          # Promote the latest archived state to current.
+          shutil.copy2(screening_records, cur / 'records.jsonl')
           shutil.copy2(a3 / 'metadata_repair_audit.jsonl', cur / 'metadata_repair_audit.jsonl')
-          current_manifest = json.loads((a3 / 'manifest.json').read_text(encoding='utf-8'))
+          shutil.copy2(a4 / 'screening_adjudication_audit.jsonl', cur / 'screening_adjudication_audit.jsonl')
+          current_manifest = json.loads((a4 / 'manifest.json').read_text(encoding='utf-8'))
           current_manifest['stage'] = 'current_repair'
-          current_manifest['archive_source'] = 'data/canonical/archive/repair/03_metadata_repairs'
+          current_manifest['archive_source'] = 'data/canonical/archive/repair/04_human_screening_adjudication'
           (cur / 'manifest.json').write_text(json.dumps(current_manifest, indent=2) + '\n', encoding='utf-8')
 
           # Final invariants.
           assert count_jsonl(cur / 'records.jsonl') == 21851
-          assert sha256(cur / 'records.jsonl') == sha256(a3 / 'records.jsonl')
+          assert sha256(cur / 'records.jsonl') == sha256(a4 / 'records.jsonl')
+          assert count_jsonl(cur / 'screening_adjudication_audit.jsonl') == 54
           print(json.dumps(current_manifest, indent=2))
+          print('screening decisions:', dict(counts))
           PY
 
       - name: Commit persistent canonical repair store
@@ -225,10 +287,12 @@ jobs:
           set -euo pipefail
           git lfs ls-files
           test -f data/canonical/current/repair/manifest.json
+          test -f data/canonical/current/repair/screening_adjudication_audit.jsonl
           python - <<'PY'
           import json
           from pathlib import Path
-          m=json.loads(Path('data/canonical/current/repair/manifest.json').read_text())
-          assert m['record_count']==21851
+          m = json.loads(Path('data/canonical/current/repair/manifest.json').read_text())
+          assert m['record_count'] == 21851
+          assert m['archive_source'] == 'data/canonical/archive/repair/04_human_screening_adjudication'
           print(json.dumps(m, indent=2))
           PY
