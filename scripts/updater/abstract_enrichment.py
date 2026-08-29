@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Workflow 01B: Europe PMC-only abstract enrichment for DOI-bearing Lens records."""
 from __future__ import annotations
-import argparse, json, re, time, urllib.parse, urllib.request
+import argparse, json, re, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
 BASE="https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 UA="LivingEvidenceMap abstract enrichment"
 MAX_CHARS=12000
+EPMC_MAX_ATTEMPTS=4
+EPMC_BACKOFF_SECONDS=(1,2,4)
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def payload(r):
@@ -49,16 +51,28 @@ def canonicalise(r, abstract_value):
         "doi":old.get("doi") or doi(r),
         "abstract":abstract_value,
     }
+def transient_epmc_error(e):
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code == 429 or 500 <= e.code < 600
+    return isinstance(e, (TimeoutError, urllib.error.URLError))
 def epmc_lookup(d):
     q=urllib.parse.urlencode({"query":f'DOI:"{d}"',"format":"json","resultType":"core","pageSize":5})
     req=urllib.request.Request(BASE+"?"+q,headers={"User-Agent":UA,"Accept":"application/json"})
-    with urllib.request.urlopen(req,timeout=30) as resp:
-        data=json.load(resp); final_url=resp.geturl(); status=getattr(resp,"status",None)
-    hits=data.get("resultList",{}).get("result",[])
-    exact=[h for h in hits if norm_doi(h.get("doi"))==d]
-    abstract=next((clean(h.get("abstractText")) for h in exact if clean(h.get("abstractText"))),None)
-    outcome="abstract_recovered" if abstract else ("matched_no_abstract" if exact else "no_exact_match")
-    return abstract,{"method":"europe_pmc_exact_doi","url":final_url,"http_status":status,"hit_count":data.get("hitCount"),"exact_doi_hits":len(exact),"outcome":outcome}
+    errors=[]
+    for attempt_no in range(1,EPMC_MAX_ATTEMPTS+1):
+        try:
+            with urllib.request.urlopen(req,timeout=30) as resp:
+                data=json.load(resp); final_url=resp.geturl(); status=getattr(resp,"status",None)
+            hits=data.get("resultList",{}).get("result",[])
+            exact=[h for h in hits if norm_doi(h.get("doi"))==d]
+            abstract=next((clean(h.get("abstractText")) for h in exact if clean(h.get("abstractText"))),None)
+            outcome="abstract_recovered" if abstract else ("matched_no_abstract" if exact else "no_exact_match")
+            return abstract,{"method":"europe_pmc_exact_doi","url":final_url,"http_status":status,"hit_count":data.get("hitCount"),"exact_doi_hits":len(exact),"outcome":outcome,"request_attempts":attempt_no,"retry_errors":errors}
+        except Exception as e:
+            errors.append(f"{type(e).__name__}: {e}")
+            if attempt_no >= EPMC_MAX_ATTEMPTS or not transient_epmc_error(e):
+                raise RuntimeError(f"Europe PMC failed after {attempt_no} attempt(s): {' | '.join(errors)}") from e
+            time.sleep(EPMC_BACKOFF_SECONDS[attempt_no-1])
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--input",required=True); ap.add_argument("--output",required=True)
