@@ -1,0 +1,151 @@
+name: Test Workflow 04 - fresh independent 200
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  screen-fresh-200:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out Workflow 04 development branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OpenAI client
+        run: python -m pip install --upgrade openai
+
+      - name: Download repaired full canonical corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p testdata/workflow04_fresh_200/source
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/thesalmonandthetomato/LivingEvidenceMap/actions/artifacts/9712396254/zip" \
+            -o testdata/workflow04_fresh_200/source.zip
+          unzip -q testdata/workflow04_fresh_200/source.zip -d testdata/workflow04_fresh_200/source
+          test -f testdata/workflow04_fresh_200/source/records_for_deduplication.jsonl
+
+      - name: Select fresh independent 200 records
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          root=Path('testdata/workflow04_fresh_200')
+          previous={x.strip() for x in Path('testdata/workflow04/verification_200_lens_ids.txt').read_text(encoding='utf-8').splitlines() if x.strip()}
+          assert len(previous)==200, len(previous)
+          candidates=[]
+          with (root/'source'/'records_for_deduplication.jsonl').open(encoding='utf-8') as f:
+              for line in f:
+                  if not line.strip(): continue
+                  r=json.loads(line)
+                  lid=str(r.get('identity',{}).get('lens_id') or r.get('canonical',{}).get('lens_id') or '')
+                  if lid and lid not in previous:
+                      # Deterministic pseudo-random ordering: reproducible and independent of file order.
+                      key=hashlib.sha256(('workflow04-fresh-validation-v1:'+lid).encode()).hexdigest()
+                      candidates.append((key,lid,r))
+          candidates.sort(key=lambda x:x[0])
+          selected=candidates[:200]
+          assert len(selected)==200
+          ids=[x[1] for x in selected]
+          assert not (set(ids) & previous), 'Fresh sample overlaps original verification 200'
+          assert len(set(ids))==200
+          with (root/'input_200.jsonl').open('w',encoding='utf-8') as f:
+              for _,_,r in selected:
+                  f.write(json.dumps(r,ensure_ascii=True,separators=(',',':'))+'\n')
+          (root/'fresh_200_lens_ids.txt').write_text('\n'.join(ids)+'\n',encoding='utf-8')
+          with_abs=sum(bool((r.get('canonical',{}) or {}).get('abstract')) for _,_,r in selected)
+          enrichment={}
+          for _,_,r in selected:
+              status=(r.get('abstract_enrichment',{}) or {}).get('status') or 'none'
+              enrichment[status]=enrichment.get(status,0)+1
+          manifest={
+              'records':200,
+              'sample':'fresh independent deterministic pseudo-random sample',
+              'excluded_previous_verification_ids':len(previous),
+              'overlap_with_previous_200':0,
+              'selection_seed':'workflow04-fresh-validation-v1',
+              'records_with_abstract':with_abs,
+              'records_without_abstract':200-with_abs,
+              'abstract_enrichment_status_counts':enrichment,
+              'source_artifact_id':9712396254,
+              'source_artifact_name':'workflow01b-full-canonical-repaired-33244481872',
+              'screening_prompt':'revised Workflow 04 prompt after first-200 adjudication'
+          }
+          (root/'input_manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=True)+'\n',encoding='utf-8')
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Run revised Workflow 04 LLM screening
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/updater/relevance_screen_jsonl.py \
+            --input testdata/workflow04_fresh_200/input_200.jsonl \
+            --output testdata/workflow04_fresh_200/screened_200.jsonl \
+            --audit testdata/workflow04_fresh_200/screening_audit_200.jsonl \
+            --checkpoint testdata/workflow04_fresh_200/checkpoint.json \
+            --chunk-size 25 \
+            --mode openai \
+            --model gpt-5-mini
+
+      - name: Build human verification table and summary
+        run: |
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+          root=Path('testdata/workflow04_fresh_200')
+          rows=[]
+          with (root/'screened_200.jsonl').open(encoding='utf-8') as f:
+              for line in f:
+                  if line.strip(): rows.append(json.loads(line))
+          assert len(rows)==200, len(rows)
+          counts={}; errors=[]; out=[]
+          for i,r in enumerate(rows,1):
+              c=r.get('canonical',{}) or {}; p=((r.get('lens',{}) or {}).get('raw_payload',{}) or {}); s=r.get('screening',{}) or {}; ae=r.get('abstract_enrichment',{}) or {}
+              source=c.get('source') or p.get('source') or {}
+              journal=(source.get('title') if isinstance(source,dict) else source) or c.get('source_title') or c.get('journal') or p.get('source_title') or p.get('journal') or ''
+              keywords=c.get('keywords') or p.get('keywords') or p.get('keyword') or p.get('author_keywords') or ''
+              if isinstance(keywords,list): keywords='; '.join(str(x) for x in keywords)
+              decision=s.get('decision'); counts[decision]=counts.get(decision,0)+1
+              if s.get('technical_error'): errors.append({'lens_id':c.get('lens_id'),'error':s.get('technical_error')})
+              out.append({'order':i,'lens_id':c.get('lens_id'),'title':c.get('title'),'abstract':c.get('abstract'),'keywords':keywords,'journal_source_title':journal,'abstract_present':'YES' if c.get('abstract') else 'NO','abstract_enrichment_status':ae.get('status'),'model_judgement':(decision or '').upper(),'model_reason':s.get('reason'),'human_judgement':'','review_note':'','technical_error':s.get('technical_error') or ''})
+          with (root/'human_verification_200.csv').open('w',newline='',encoding='utf-8-sig') as f:
+              w=csv.DictWriter(f,fieldnames=list(out[0])); w.writeheader(); w.writerows(out)
+          manifest=json.loads((root/'input_manifest.json').read_text(encoding='utf-8'))
+          summary={**manifest,'model_decision_counts':counts,'technical_errors':len(errors),'output_records':len(rows)}
+          (root/'screening_summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=True)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          if errors: raise RuntimeError(f'Workflow 04 technical errors: {errors}')
+          PY
+
+      - name: Upload fresh 200 validation artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-fresh-independent-200-${{ github.run_id }}
+          path: |
+            testdata/workflow04_fresh_200/input_200.jsonl
+            testdata/workflow04_fresh_200/input_manifest.json
+            testdata/workflow04_fresh_200/fresh_200_lens_ids.txt
+            testdata/workflow04_fresh_200/screened_200.jsonl
+            testdata/workflow04_fresh_200/screening_audit_200.jsonl
+            testdata/workflow04_fresh_200/checkpoint.json
+            testdata/workflow04_fresh_200/human_verification_200.csv
+            testdata/workflow04_fresh_200/screening_summary.json
+          retention-days: 90
+          if-no-files-found: warn
