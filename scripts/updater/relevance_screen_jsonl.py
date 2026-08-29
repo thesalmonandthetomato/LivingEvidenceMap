@@ -64,12 +64,15 @@ def first_value(*values):
         if isinstance(v,str) and v.strip(): return v.strip()
         if isinstance(v,(list,tuple)) and v: return "; ".join(str(x) for x in v if x is not None)
     return ""
+def source_title(v):
+    if isinstance(v,dict): return first_value(v.get("title"),v.get("name"))
+    return first_value(v)
 def screening_fields(r):
     p=payload(r); c=canonical(r)
     title=first_value(c.get("title"),p.get("title"))
     abstract=first_value(c.get("abstract"),p.get("abstract"))
     keywords=first_value(c.get("keywords"),p.get("keywords"),p.get("keyword"),p.get("author_keywords"))
-    journal=first_value(c.get("source_title"),c.get("journal"),p.get("source_title"),p.get("journal"),p.get("source"),p.get("publication"))
+    journal=first_value(c.get("source_title"),c.get("journal"),p.get("source_title"),p.get("journal"),source_title(p.get("source")),source_title(p.get("publication")))
     return title,abstract,keywords,journal
 def title_abstract(r):
     title,abstract,_,_=screening_fields(r); return title,abstract
