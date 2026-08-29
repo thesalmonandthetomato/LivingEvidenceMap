@@ -1,0 +1,50 @@
+name: One-off append recovered historical INCLUDE records
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  append:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout canonical repair branch with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Download recovered Lens records
+        uses: actions/download-artifact@v4
+        with:
+          name: oneoff-unmatched-include-lens-recovery-33274405524
+          path: recovered
+          github-token: ${{ github.token }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 33274405524
+
+      - name: Append and validate
+        run: python scripts/oneoff_append_recovered_lens.py data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json recovered/records.jsonl recovered/append_audit.json
+
+      - name: Commit updated canonical corpus
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git diff --cached --stat
+          git commit -m "Append 280 recovered historical Lens INCLUDE records"
+          git push origin canonical-repair-store
+
+      - name: Upload append audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-lens-include-append-audit-${{ github.run_id }}
+          path: recovered/append_audit.json
+          if-no-files-found: error
+          retention-days: 90
