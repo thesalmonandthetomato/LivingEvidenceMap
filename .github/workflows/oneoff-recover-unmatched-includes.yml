@@ -1,0 +1,158 @@
+name: One-off recover unmatched INCLUDE Lens records
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install requests
+        run: python -m pip install --upgrade requests
+
+      - name: Retrieve exact Lens records
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, time
+          from pathlib import Path
+          import requests
+
+          ids_path = Path('config/oneoff_unmatched_include_lens_ids.txt')
+          ids = [x.strip() for x in ids_path.read_text(encoding='utf-8').splitlines() if x.strip()]
+          assert len(ids) == 280, f'Expected 280 Lens IDs, found {len(ids)}'
+          assert len(set(ids)) == 280, 'Duplicate Lens IDs in input file'
+
+          token = os.environ.get('LENS_API_TOKEN')
+          if not token:
+              raise RuntimeError('LENS_API_TOKEN is required')
+
+          out = Path('outputs/oneoff_unmatched_include_recovery')
+          out.mkdir(parents=True, exist_ok=True)
+          headers = {
+              'Authorization': 'Bearer ' + token,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+          }
+          url = 'https://api.lens.org/scholarly/search'
+
+          def post(payload):
+              last = None
+              for attempt in range(5):
+                  r = requests.post(url, headers=headers, json=payload, timeout=120)
+                  if r.status_code == 200:
+                      return r.json()
+                  if r.status_code == 204:
+                      return {'data': []}
+                  last = f'HTTP {r.status_code}: {r.text[:1000]}'
+                  if r.status_code == 429 or 500 <= r.status_code < 600:
+                      wait = r.headers.get('x-rate-limit-retry-after-seconds') or r.headers.get('Retry-After') or str(2 ** attempt)
+                      try:
+                          wait = min(60.0, float(wait))
+                      except Exception:
+                          wait = min(60.0, float(2 ** attempt))
+                      time.sleep(wait)
+                      continue
+                  raise RuntimeError(last)
+              raise RuntimeError(f'Lens request failed after retries: {last}')
+
+          payload = {
+              'query': {'terms': {'lens_id': ids}},
+              'size': 500,
+          }
+          response = post(payload)
+          (out / 'raw_exact_id_response.json').write_text(json.dumps(response, ensure_ascii=False, indent=2), encoding='utf-8')
+
+          returned = response.get('data', []) or []
+          by_id = {}
+          unexpected = []
+          for rec in returned:
+              lid = rec.get('lens_id')
+              if not lid:
+                  continue
+              if lid not in set(ids):
+                  unexpected.append(lid)
+                  continue
+              if lid in by_id:
+                  raise RuntimeError(f'Duplicate Lens result for {lid}')
+              by_id[lid] = rec
+
+          found_ids = [lid for lid in ids if lid in by_id]
+          missing_ids = [lid for lid in ids if lid not in by_id]
+
+          with (out / 'records.jsonl').open('w', encoding='utf-8') as fh:
+              for lid in found_ids:
+                  rec = by_id[lid]
+                  wrapper = {
+                      'identity': {'lens_id': lid, 'record_id': lid, 'record_id_type': 'lens_id'},
+                      'source': {'provider': 'lens', 'source_format': 'lens_api_json'},
+                      'lens': {'raw_payload': rec},
+                      'provenance': {'recovery': 'oneoff_unmatched_include_exact_lens_id'},
+                  }
+                  fh.write(json.dumps(wrapper, ensure_ascii=False, separators=(',', ':')) + '\n')
+
+          (out / 'requested_ids.txt').write_text('\n'.join(ids) + '\n', encoding='utf-8')
+          (out / 'found_ids.txt').write_text('\n'.join(found_ids) + ('\n' if found_ids else ''), encoding='utf-8')
+          (out / 'missing_ids.txt').write_text('\n'.join(missing_ids) + ('\n' if missing_ids else ''), encoding='utf-8')
+
+          # One of the 281 unmatched RIS records genuinely has no Lens ID in the RIS export.
+          # Search it separately by exact title, but do not auto-accept any result.
+          fallback_title = 'In the shadow of farmed salmons-fishing small pelagic fish for fish feed in Senegal: a critical analysis of a worlding practice'
+          fallback = post({'query': {'match_phrase': {'title': fallback_title}}, 'size': 20})
+          (out / 'raw_missing_lens_id_title_search.json').write_text(json.dumps(fallback, ensure_ascii=False, indent=2), encoding='utf-8')
+
+          manifest = {
+              'source_unmatched_records': 281,
+              'records_with_lens_id': 280,
+              'records_without_lens_id': 1,
+              'exact_ids_requested': len(ids),
+              'exact_ids_found': len(found_ids),
+              'exact_ids_missing': len(missing_ids),
+              'unexpected_ids_returned': unexpected,
+              'fallback_title': fallback_title,
+              'fallback_title_candidates': len(fallback.get('data', []) or []),
+              'canonical_modified': False,
+          }
+          (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Validate recovery outputs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('outputs/oneoff_unmatched_include_recovery')
+          m = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          assert m['source_unmatched_records'] == 281
+          assert m['records_with_lens_id'] == 280
+          assert m['records_without_lens_id'] == 1
+          assert m['exact_ids_requested'] == 280
+          assert m['canonical_modified'] is False
+          lines = [x for x in (root / 'records.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          assert len(lines) == m['exact_ids_found']
+          print(f"Recovered {m['exact_ids_found']}/280 exact Lens IDs; {m['exact_ids_missing']} missing")
+          print(f"Fallback title candidates for no-ID record: {m['fallback_title_candidates']}")
+          PY
+
+      - name: Upload recovery artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oneoff-unmatched-include-lens-recovery-${{ github.run_id }}
+          path: outputs/oneoff_unmatched_include_recovery/
+          if-no-files-found: error
+          retention-days: 90
