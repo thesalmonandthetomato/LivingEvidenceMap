@@ -136,6 +136,18 @@ def lookup(provider, d):
     raise ValueError(provider)
 
 
+def read_jsonl(path):
+    # Iterate over physical newline-delimited records. str.splitlines() also
+    # splits at Unicode U+2028/U+2029, which can occur legitimately inside an
+    # abstract JSON string and would corrupt otherwise valid JSONL.
+    rows = []
+    with Path(path).open("r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                rows.append(json.loads(line))
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", required=True)
@@ -150,7 +162,7 @@ def main():
     if not providers or any(x not in {"europe_pmc", "openalex"} for x in providers):
         raise SystemExit(f"Invalid providers: {providers}")
 
-    rows = [json.loads(line) for line in Path(args.input).read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows = read_jsonl(args.input)
     out, audit = [], []
     targets = targets_with_doi = targets_without_doi = replaced = technical_errors = 0
     provider_queries = {p: 0 for p in providers}
