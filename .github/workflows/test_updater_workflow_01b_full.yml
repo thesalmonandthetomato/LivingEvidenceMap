@@ -138,9 +138,10 @@ jobs:
           PY
 
       - name: Upload 90-day full-corpus artefact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workflow01b-full-lens-europepmc-${{ github.run_id }}
           path: testdata/workflow01b_full/
           retention-days: 90
-          if-no-files-found: error
+          if-no-files-found: warn
