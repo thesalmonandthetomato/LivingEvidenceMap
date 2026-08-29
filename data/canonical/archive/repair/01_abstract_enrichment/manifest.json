@@ -1,0 +1,11 @@
+{
+  "schema": "living_evidence_map_canonical_jsonl",
+  "schema_version": 1,
+  "stage": "01_abstract_enrichment",
+  "created_at": "2026-08-29T18:40:21.858439+00:00",
+  "record_count": 21851,
+  "records_sha256": "56c7a0b72937635dbc91d8d0ffee298137597fe8e77b5a8a94212c8f0811af12",
+  "source_artifact_id": 9711167560,
+  "source_workflow_run_id": null,
+  "notes": "Validated full-corpus Workflow 01B state before retry patch and ellipsis repair."
+}

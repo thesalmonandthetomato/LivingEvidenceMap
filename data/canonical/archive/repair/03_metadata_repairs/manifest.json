@@ -1,0 +1,11 @@
+{
+  "schema": "living_evidence_map_canonical_jsonl",
+  "schema_version": 1,
+  "stage": "03_metadata_repairs",
+  "created_at": "2026-08-29T18:40:26.283856+00:00",
+  "record_count": 21851,
+  "records_sha256": "39d2f8504186c40bc9503340347097fccbcc44e85afcee23de8245daadda51ce",
+  "source_artifact_id": 9718474490,
+  "source_workflow_run_id": 33264142800,
+  "notes": "Workflow 01B production output plus human-verified canonical title/DOI repair for Lens ID 023-156-696-663-49X."
+}

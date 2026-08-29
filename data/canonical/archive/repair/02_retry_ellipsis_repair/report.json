@@ -1,0 +1,55 @@
+{
+  "workflow": "01B_abstract_enrichment",
+  "provider": "europe_pmc",
+  "created_at": "2026-08-29T16:53:12.751614+00:00",
+  "total_records": 21851,
+  "status_counts": {
+    "existing_abstract": 17147,
+    "abstract_recovered": 1977,
+    "no_abstract_recovered": 1790,
+    "missing_no_doi": 937
+  },
+  "doi_missing_abstract_targets": 3767,
+  "abstracts_recovered": 1977,
+  "technical_error_records": 0,
+  "output": "deduplication_ready",
+  "ellipsis_abstract_repair": {
+    "created_at": "2026-08-29T17:20:10.406959+00:00",
+    "lookup_policy": "Canonical abstracts containing ... or \u2026 are queried by exact DOI only; a provider result replaces the entire canonical abstract; Lens raw payload is never changed.",
+    "providers": [
+      "europe_pmc",
+      "openalex"
+    ],
+    "total_corpus_records": 21851,
+    "ellipsis_target_records": 948,
+    "targets_with_doi": 840,
+    "targets_without_doi": 108,
+    "abstracts_replaced": 816,
+    "provider_queries": {
+      "europe_pmc": 840,
+      "openalex": 729
+    },
+    "provider_replacements": {
+      "europe_pmc": 111,
+      "openalex": 705
+    },
+    "provider_status_counts": {
+      "europe_pmc": {
+        "technical_error": 33,
+        "no_exact_match": 658,
+        "abstract_recovered": 111,
+        "matched_no_abstract": 38
+      },
+      "openalex": {
+        "abstract_recovered": 705,
+        "technical_error": 10,
+        "matched_no_abstract": 14
+      }
+    },
+    "technical_errors": 43,
+    "replacement_abstracts_still_containing_ellipsis": 144,
+    "replacement_abstracts_ending_in_ellipsis": 101,
+    "records_still_containing_ellipsis_after_repair": 276,
+    "records_still_ending_in_ellipsis_after_repair": 213
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "workflow": "01B_abstract_enrichment",
+  "provider": "europe_pmc",
+  "created_at": "2026-08-29T07:14:53.175200+00:00",
+  "total_records": 21851,
+  "status_counts": {
+    "existing_abstract": 17147,
+    "abstract_recovered": 1972,
+    "no_abstract_recovered": 1795,
+    "missing_no_doi": 937
+  },
+  "doi_missing_abstract_targets": 3767,
+  "abstracts_recovered": 1972,
+  "output": "deduplication_ready"
+}
