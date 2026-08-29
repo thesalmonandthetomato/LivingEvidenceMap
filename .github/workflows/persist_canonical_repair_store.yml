@@ -1,0 +1,234 @@
+name: Persist canonical repair store
+
+on:
+  push:
+    branches:
+      - canonical-repair-store
+    paths:
+      - .github/workflows/persist_canonical_repair_store.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  persist-canonical-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          fetch-depth: 0
+          lfs: true
+
+      - name: Configure Git LFS
+        run: |
+          set -euo pipefail
+          git lfs install
+          git lfs track 'data/canonical/**/*.jsonl'
+          git add .gitattributes
+
+      - name: Download validated repair artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p repair_work/01 repair_work/02
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9711167560/zip" \
+            -o repair_work/01.zip
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9718474490/zip" \
+            -o repair_work/02.zip
+          unzip -q repair_work/01.zip -d repair_work/01
+          unzip -q repair_work/02.zip -d repair_work/02
+
+      - name: Build archived repair states and current canonical corpus
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import shutil
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          root = Path('data/canonical')
+          a1 = root / 'archive/repair/01_abstract_enrichment'
+          a2 = root / 'archive/repair/02_retry_ellipsis_repair'
+          a3 = root / 'archive/repair/03_metadata_repairs'
+          cur = root / 'current/repair'
+          for d in (a1, a2, a3, cur):
+              d.mkdir(parents=True, exist_ok=True)
+
+          src1 = Path('repair_work/01')
+          src2 = Path('repair_work/02')
+
+          def count_jsonl(path):
+              n = 0
+              with path.open('r', encoding='utf-8') as f:
+                  for line in f:
+                      if line.strip():
+                          json.loads(line)
+                          n += 1
+              return n
+
+          def sha256(path):
+              h = hashlib.sha256()
+              with path.open('rb') as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          def write_manifest(directory, stage, source_artifact, source_run, records_path, notes):
+              manifest = {
+                  'schema': 'living_evidence_map_canonical_jsonl',
+                  'schema_version': 1,
+                  'stage': stage,
+                  'created_at': datetime.now(timezone.utc).isoformat(),
+                  'record_count': count_jsonl(records_path),
+                  'records_sha256': sha256(records_path),
+                  'source_artifact_id': source_artifact,
+                  'source_workflow_run_id': source_run,
+                  'notes': notes,
+              }
+              assert manifest['record_count'] == 21851
+              (directory / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+
+          # Archive the validated full-corpus abstract-enrichment state.
+          shutil.copy2(src1 / 'records_for_deduplication.jsonl', a1 / 'records.jsonl')
+          for name in ('abstract_enrichment_audit.jsonl', 'full_corpus_summary.json', 'report.json'):
+              if (src1 / name).exists():
+                  shutil.copy2(src1 / name, a1 / name)
+          write_manifest(
+              a1,
+              '01_abstract_enrichment',
+              9711167560,
+              None,
+              a1 / 'records.jsonl',
+              'Validated full-corpus Workflow 01B state before retry patch and ellipsis repair.'
+          )
+
+          # Archive the validated production state after retry patch + ellipsis repair.
+          shutil.copy2(src2 / 'records_for_deduplication.jsonl', a2 / 'records.jsonl')
+          for name in (
+              'abstract_enrichment_audit.jsonl',
+              'ellipsis_abstract_repair_audit.jsonl',
+              'ellipsis_abstract_repair_summary.json',
+              'full_corpus_summary.json',
+              'report.json',
+          ):
+              if (src2 / name).exists():
+                  shutil.copy2(src2 / name, a2 / name)
+          write_manifest(
+              a2,
+              '02_retry_ellipsis_repair',
+              9718474490,
+              33264142800,
+              a2 / 'records.jsonl',
+              'Validated Workflow 01B production output after retry patch and exact-DOI ellipsis repair.'
+          )
+
+          # Apply the first human-verified metadata repair while preserving Lens raw_payload unchanged.
+          target_lens_id = '023-156-696-663-49X'
+          corrected_title = 'Molecular and epigenetic responses to crowding stress in rainbow trout (Oncorhynchus mykiss) skeletal muscle'
+          corrected_doi = '10.3389/fendo.2025.1571111'
+          old_title_expected = 'Table 1.xlsx'
+          old_doi_expected = '10.3389/fendo.2025.1571111.s001'
+
+          source_records = a2 / 'records.jsonl'
+          repaired_records = a3 / 'records.jsonl'
+          found = 0
+          with source_records.open('r', encoding='utf-8') as inp, repaired_records.open('w', encoding='utf-8') as out:
+              for line in inp:
+                  if not line.strip():
+                      continue
+                  row = json.loads(line)
+                  if row.get('identity', {}).get('lens_id') == target_lens_id:
+                      found += 1
+                      assert row['canonical']['title'] == old_title_expected
+                      assert row['canonical']['doi'] == old_doi_expected
+                      assert row['lens']['raw_payload']['title'] == old_title_expected
+                      row['canonical']['title'] = corrected_title
+                      row['canonical']['doi'] = corrected_doi
+                      # Raw Lens payload is deliberately untouched.
+                      assert row['lens']['raw_payload']['title'] == old_title_expected
+                      assert row['lens']['raw_payload']['external_ids'][0]['value'] == old_doi_expected
+                  out.write(json.dumps(row, ensure_ascii=True, separators=(',', ':')) + '\n')
+          assert found == 1, found
+
+          audit = {
+              'lens_id': target_lens_id,
+              'repair_type': 'parent_article_metadata',
+              'fields_changed': {
+                  'canonical.title': {'from': old_title_expected, 'to': corrected_title},
+                  'canonical.doi': {'from': old_doi_expected, 'to': corrected_doi},
+              },
+              'raw_payload_changed': False,
+              'evidence': {
+                  'pmcid': 'PMC12040688',
+                  'pmid': '40309435',
+                  'source_url': 'https://pmc.ncbi.nlm.nih.gov/articles/PMC12040688/'
+              },
+              'reason': 'Lens indexed a supplementary component (Table 1.xlsx) while carrying the parent article abstract. Human-verified repair maps canonical metadata to the parent article.',
+              'repaired_at': datetime.now(timezone.utc).isoformat(),
+          }
+          (a3 / 'metadata_repair_audit.jsonl').write_text(json.dumps(audit, ensure_ascii=True) + '\n', encoding='utf-8')
+          write_manifest(
+              a3,
+              '03_metadata_repairs',
+              9718474490,
+              33264142800,
+              repaired_records,
+              'Workflow 01B production output plus human-verified canonical title/DOI repair for Lens ID 023-156-696-663-49X.'
+          )
+
+          # Current repair state is always an exact copy of the latest archived state.
+          shutil.copy2(repaired_records, cur / 'records.jsonl')
+          shutil.copy2(a3 / 'metadata_repair_audit.jsonl', cur / 'metadata_repair_audit.jsonl')
+          current_manifest = json.loads((a3 / 'manifest.json').read_text(encoding='utf-8'))
+          current_manifest['stage'] = 'current_repair'
+          current_manifest['archive_source'] = 'data/canonical/archive/repair/03_metadata_repairs'
+          (cur / 'manifest.json').write_text(json.dumps(current_manifest, indent=2) + '\n', encoding='utf-8')
+
+          # Final invariants.
+          assert count_jsonl(cur / 'records.jsonl') == 21851
+          assert sha256(cur / 'records.jsonl') == sha256(a3 / 'records.jsonl')
+          print(json.dumps(current_manifest, indent=2))
+          PY
+
+      - name: Commit persistent canonical repair store
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .gitattributes data/canonical
+          git lfs status
+          if git diff --cached --quiet; then
+            echo 'Canonical repair store already up to date.'
+            exit 0
+          fi
+          git commit -m 'Persist canonical repair corpus and archives'
+          git push origin HEAD:canonical-repair-store
+
+      - name: Verify committed LFS pointers and current manifest
+        run: |
+          set -euo pipefail
+          git lfs ls-files
+          test -f data/canonical/current/repair/manifest.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('data/canonical/current/repair/manifest.json').read_text())
+          assert m['record_count']==21851
+          print(json.dumps(m, indent=2))
+          PY
