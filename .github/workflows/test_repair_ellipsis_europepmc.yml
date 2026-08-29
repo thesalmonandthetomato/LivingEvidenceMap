@@ -1,0 +1,131 @@
+name: Test repair ellipsis abstracts - Europe PMC
+
+on:
+  push:
+    paths:
+      - '.github/workflows/test_repair_ellipsis_europepmc.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download canonical Workflow 01B artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p input
+          gh api repos/${{ github.repository }}/actions/artifacts/9712396254/zip > artifact.zip
+          unzip -q artifact.zip -d input
+
+      - name: Repair ellipsis abstracts from Europe PMC
+        run: |
+          python - <<'PY'
+          import json, time, urllib.parse, urllib.request
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          inp=Path('input/records_for_deduplication.jsonl')
+          out=Path('records_for_deduplication_ellipsis_epmc_repaired.jsonl')
+          audit=Path('ellipsis_epmc_audit.jsonl')
+          BASE='https://www.ebi.ac.uk/europepmc/webservices/rest/search'
+
+          def get_doi(r):
+              c=r.get('canonical') or {}
+              d=c.get('doi')
+              if d:
+                  return str(d).strip().lower().removeprefix('https://doi.org/').removeprefix('http://doi.org/')
+              p=(r.get('lens') or {}).get('raw_payload') or {}
+              for x in p.get('external_ids') or []:
+                  if isinstance(x,dict) and str(x.get('type','')).lower()=='doi' and x.get('value'):
+                      return str(x['value']).strip().lower().removeprefix('https://doi.org/').removeprefix('http://doi.org/')
+              return None
+
+          def epmc(d):
+              q=urllib.parse.urlencode({'query':f'DOI:"{d}"','format':'json','resultType':'core','pageSize':5})
+              req=urllib.request.Request(BASE+'?'+q,headers={'User-Agent':'LivingEvidenceMap ellipsis-abstract-repair/1.0'})
+              with urllib.request.urlopen(req,timeout=30) as resp:
+                  return json.load(resp)
+
+          rows=[json.loads(x) for x in inp.read_text(encoding='utf-8').splitlines() if x.strip()]
+          targets=[]
+          for i,r in enumerate(rows):
+              a=str((r.get('canonical') or {}).get('abstract') or '')
+              if '...' in a or '…' in a:
+                  targets.append((i,r,a,get_doi(r)))
+
+          audit_rows=[]
+          recovered=0
+          matched_no_abstract=0
+          no_exact_match=0
+          no_doi=0
+          technical_error=0
+          retrieved=datetime.now(timezone.utc).isoformat()
+
+          for n,(i,r,old,d) in enumerate(targets,1):
+              lid=str((r.get('identity') or {}).get('lens_id') or '')
+              ar={'lens_id':lid,'doi':d,'old_abstract':old,'status':None,'replacement_abstract':None}
+              if not d:
+                  ar['status']='no_doi'; no_doi+=1
+              else:
+                  try:
+                      data=epmc(d)
+                      hits=(data.get('resultList') or {}).get('result') or []
+                      exact=[h for h in hits if str(h.get('doi') or '').strip().lower()==d]
+                      ar['hit_count']=data.get('hitCount')
+                      ar['exact_doi_hit_count']=len(exact)
+                      if not exact:
+                          ar['status']='no_exact_match'; no_exact_match+=1
+                      else:
+                          new=next((h.get('abstractText') for h in exact if h.get('abstractText')),None)
+                          if new:
+                              new=str(new).strip()
+                              ar['status']='abstract_replaced'
+                              ar['replacement_abstract']=new
+                              ar['replacement_contains_ellipsis']=('...' in new or '…' in new)
+                              r.setdefault('canonical',{})['abstract']=new
+                              ae=r.setdefault('abstract_enrichment',{})
+                              ae.update({'workflow':'01B-ellipsis-repair','provider':'europe_pmc','status':'abstract_replaced','doi':d,'retrieved_at':retrieved})
+                              ae.setdefault('repair_history',[]).append({'reason':'ellipsis_detected','provider':'europe_pmc','retrieved_at':retrieved,'previous_abstract':old})
+                              recovered+=1
+                          else:
+                              ar['status']='matched_no_abstract'; matched_no_abstract+=1
+                  except Exception as e:
+                      ar['status']='technical_error'; ar['error']=type(e).__name__+': '+str(e); technical_error+=1
+              audit_rows.append(ar)
+              if d: time.sleep(0.08)
+              if n%100==0: print('processed',n,'of',len(targets))
+
+          out.write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in rows),encoding='utf-8')
+          audit.write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in audit_rows),encoding='utf-8')
+          remaining=sum(1 for r in rows if ('...' in str((r.get('canonical') or {}).get('abstract') or '') or '…' in str((r.get('canonical') or {}).get('abstract') or '')))
+          replacement_still_ellipsis=sum(1 for x in audit_rows if x.get('status')=='abstract_replaced' and x.get('replacement_contains_ellipsis'))
+          summary={
+              'total_corpus_records':len(rows),
+              'ellipsis_target_records':len(targets),
+              'targets_with_doi':sum(bool(d) for _,_,_,d in targets),
+              'targets_without_doi':sum(not bool(d) for _,_,_,d in targets),
+              'europe_pmc_abstracts_found_and_replaced':recovered,
+              'europe_pmc_exact_match_no_abstract':matched_no_abstract,
+              'europe_pmc_no_exact_doi_match':no_exact_match,
+              'technical_errors':technical_error,
+              'replacement_abstracts_still_containing_ellipsis':replacement_still_ellipsis,
+              'records_still_containing_ellipsis_after_repair':remaining
+          }
+          Path('ellipsis_epmc_summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload repair artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01b-ellipsis-europepmc-repair-${{ github.run_id }}
+          path: |
+            records_for_deduplication_ellipsis_epmc_repaired.jsonl
+            ellipsis_epmc_audit.jsonl
+            ellipsis_epmc_summary.json
+          retention-days: 30
