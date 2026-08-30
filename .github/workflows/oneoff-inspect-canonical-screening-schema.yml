@@ -1,0 +1,59 @@
+name: One-off inspect canonical screening schema
+
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-inspect-canonical-screening-schema.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical repair store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Inspect screening-related schema
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, collections
+          from pathlib import Path
+
+          p=Path('data/canonical/current/repair/records.jsonl')
+          key_counts=collections.Counter()
+          examples=[]
+          n=0
+          for line in p.open(encoding='utf-8'):
+              r=json.loads(line); n+=1
+              def walk(x, path=''):
+                  if isinstance(x, dict):
+                      for k,v in x.items():
+                          kp=f'{path}.{k}' if path else k
+                          if any(s in k.lower() for s in ('screen','decision','adjud','relevance')):
+                              key_counts[kp]+=1
+                          walk(v,kp)
+                  elif isinstance(x,list):
+                      for v in x[:3]: walk(v,path+'[]')
+              walk(r)
+              if len(examples)<8:
+                  s=json.dumps(r,ensure_ascii=False)
+                  if any(t in s.lower() for t in ('human_decision','human_judgement','adjudication','screening')):
+                      examples.append(r)
+          print('record_count',n)
+          print('screening_related_paths')
+          for k,c in key_counts.most_common(): print(c,k)
+          print('example_count',len(examples))
+          for i,r in enumerate(examples,1):
+              slim={'identity':r.get('identity')}
+              for k,v in r.items():
+                  if any(s in k.lower() for s in ('screen','decision','adjud','relevance','provenance')):
+                      slim[k]=v
+              print('EXAMPLE',i,json.dumps(slim,ensure_ascii=False)[:12000])
+          PY
