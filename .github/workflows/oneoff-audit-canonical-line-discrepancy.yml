@@ -1,0 +1,18 @@
+name: One-off audit canonical line discrepancy
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-audit-canonical-line-discrepancy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+      - run: python scripts/oneoff_audit_canonical_line_discrepancy.py
