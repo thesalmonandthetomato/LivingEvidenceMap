@@ -1,0 +1,55 @@
+name: One-off apply final-master reconciliation
+
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-apply-final-master-reconciliation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout canonical repair store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Download verified Lens recovery artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/recovery
+          curl --fail --location \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/thesalmonandthetomato/LivingEvidenceMap/actions/artifacts/9731817905/zip" \
+            --output /tmp/recovery.zip
+          unzip -q /tmp/recovery.zip -d /tmp/recovery
+          test -f /tmp/recovery/records.jsonl
+          test "$(grep -cve '^$' /tmp/recovery/records.jsonl)" -eq 17
+
+      - name: Apply audited final-master reconciliation
+        env:
+          RECOVERED_17_PATH: /tmp/recovery/records.jsonl
+        run: python scripts/oneoff_apply_final_master_reconciliation.py
+
+      - name: Commit repaired canonical corpus
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl \
+                  data/canonical/current/repair/manifest.json \
+                  data/canonical/archive/repair/07_final_master_reconciliation/
+          git diff --cached --stat
+          git commit -m 'Reconcile 28 retained final-master records'
+          git push origin HEAD:canonical-repair-store
