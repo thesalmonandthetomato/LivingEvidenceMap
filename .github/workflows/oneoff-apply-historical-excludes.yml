@@ -1,0 +1,37 @@
+name: One-off apply historical EXCLUDES reconciliation
+
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-apply-historical-excludes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout canonical repair store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Apply audited historical EXCLUDES decisions
+        run: python scripts/oneoff_apply_historical_excludes.py
+
+      - name: Commit repaired canonical corpus
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl \
+                  data/canonical/current/repair/manifest.json \
+                  data/canonical/archive/repair/08_historical_excludes_reconciliation/
+          git diff --cached --stat
+          git commit -m 'Apply verified historical EXCLUDES decisions'
+          git push origin HEAD:canonical-repair-store
