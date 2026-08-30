@@ -1,0 +1,28 @@
+{
+  "schema": "jsonl_repair_and_screening_normalisation_audit",
+  "created_at": "2026-08-30T15:02:41.706824+00:00",
+  "misleading_python_splitlines_count_before": 22262,
+  "literal_control_char_repairs": 0,
+  "reconstructed_records": 22148,
+  "unique_lens_ids": 22148,
+  "sorted_lens_id_sha256": "c08d310a033037fcca7f2d7f9f0f9f8efd34c4ab10e855c367a1fce928c35080",
+  "before_decisions": {
+    "RETAIN": 72,
+    "EXCLUDE": 6015,
+    "UNDECIDED": 16061,
+    "OTHER": 0
+  },
+  "final_master_records": 13388,
+  "retain_written": 13344,
+  "retain_preserved": 44,
+  "stale_excludes_superseded_by_final_master": 7,
+  "residual_provisional_excludes_written": 2724,
+  "after_decisions": {
+    "RETAIN": 13416,
+    "EXCLUDE": 8732,
+    "UNDECIDED": 0,
+    "OTHER": 0
+  },
+  "undecided_after": 0,
+  "records_sha256": "6f10280977d9b8331bec9a3e9fea540dbbeb8b6edd4ab7e51092c731d0d902f3"
+}
