@@ -1,0 +1,44 @@
+name: One-off inspect canonical line structure
+
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-inspect-canonical-line-structure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout canonical repair store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+      - name: Inspect JSONL line structure
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('data/canonical/current/repair/records.jsonl')
+          total=blank=valid=bad=0
+          bad_examples=[]
+          for i,line in enumerate(p.open(encoding='utf-8'),1):
+              total += 1
+              if not line.strip():
+                  blank += 1
+                  continue
+              try:
+                  json.loads(line)
+                  valid += 1
+              except Exception as e:
+                  bad += 1
+                  if len(bad_examples) < 10:
+                      bad_examples.append({'line':i,'error':str(e),'prefix':line[:120]})
+          print(json.dumps({'total_lines':total,'blank_lines':blank,'valid_json_lines':valid,'invalid_nonblank_lines':bad,'bad_examples':bad_examples},indent=2))
+          PY
