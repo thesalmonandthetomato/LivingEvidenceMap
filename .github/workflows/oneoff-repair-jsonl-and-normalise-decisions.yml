@@ -1,0 +1,30 @@
+name: One-off repair JSONL and normalise screening decisions
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-repair-jsonl-and-normalise-decisions.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+      - name: Repair JSONL and normalise all screening decisions
+        run: python scripts/oneoff_repair_jsonl_and_normalise_decisions.py
+      - name: Commit repaired canonical corpus
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl \
+                  data/canonical/current/repair/manifest.json \
+                  data/canonical/archive/repair/09_jsonl_repair_and_screening_normalisation/
+          git diff --cached --stat
+          git commit -m 'Repair canonical JSONL and normalise screening decisions'
+          git push origin HEAD:canonical-repair-store
