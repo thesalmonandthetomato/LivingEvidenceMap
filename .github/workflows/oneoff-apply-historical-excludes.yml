@@ -35,3 +35,5 @@ jobs:
           git diff --cached --stat
           git commit -m 'Apply verified historical EXCLUDES decisions'
           git push origin HEAD:canonical-repair-store
+
+# retriggered after verifying 5,953 safe unique EXCLUDE targets
