@@ -23,7 +23,16 @@ jobs:
           fetch-depth: 1
 
       - name: Apply audited historical EXCLUDES decisions
-        run: python scripts/oneoff_apply_historical_excludes.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src = Path('scripts/oneoff_apply_historical_excludes.py').read_text(encoding='utf-8')
+          old = "raw_lines = records_path.read_text(encoding='utf-8').splitlines()"
+          new = "raw_lines = list(records_path.open(encoding='utf-8'))"
+          assert old in src
+          Path('/tmp/oneoff_apply_historical_excludes.py').write_text(src.replace(old, new, 1), encoding='utf-8')
+          PY
+          python /tmp/oneoff_apply_historical_excludes.py
 
       - name: Commit repaired canonical corpus
         run: |
@@ -35,5 +44,3 @@ jobs:
           git diff --cached --stat
           git commit -m 'Apply verified historical EXCLUDES decisions'
           git push origin HEAD:canonical-repair-store
-
-# retriggered after verifying 5,953 safe unique EXCLUDE targets
