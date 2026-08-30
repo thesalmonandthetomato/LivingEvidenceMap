@@ -1,0 +1,34 @@
+name: One-off normalise all canonical screening decisions
+
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-normalise-all-screening-decisions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  normalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout canonical repair store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+      - name: Normalise historical decisions and assign residual provisional EXCLUDE
+        run: python scripts/oneoff_normalise_all_screening_decisions.py
+      - name: Commit repaired canonical corpus
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl \
+                  data/canonical/current/repair/manifest.json \
+                  data/canonical/archive/repair/09_screening_decision_normalisation/
+          git diff --cached --stat
+          git commit -m 'Normalise all canonical screening decisions'
+          git push origin HEAD:canonical-repair-store
