@@ -1,0 +1,18 @@
+{
+  "schema": "living_evidence_map_historical_excludes_reconciliation_audit",
+  "stage": "08_historical_excludes_reconciliation",
+  "created_at": "2026-08-30T14:15:54.967571+00:00",
+  "canonical_record_count": 22148,
+  "canonical_sorted_lens_id_sha256": "c08d310a033037fcca7f2d7f9f0f9f8efd34c4ab10e855c367a1fce928c35080",
+  "source_file": "EXCLUDES(3).ris",
+  "source_records_total": 7719,
+  "source_records_verified_matched": 5981,
+  "unique_canonical_matches": 5977,
+  "final_master_conflicts_not_overwritten": 24,
+  "unique_exclusion_targets": 5941,
+  "new_exclude_decisions_written": 5940,
+  "existing_exclude_decisions_preserved": 1,
+  "previously_reported_matches_not_reproduced": 4,
+  "canonical_records_sha256": "d45dea9e8ed6e15c745e1a89d7f5bc936eee089b9f295a9552291b66f7dce87a",
+  "workflow_run_id": "33316360534"
+}
