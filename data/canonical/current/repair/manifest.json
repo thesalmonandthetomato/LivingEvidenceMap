@@ -2,12 +2,12 @@
   "schema": "living_evidence_map_canonical_jsonl",
   "schema_version": 1,
   "stage": "current_repair",
-  "created_at": "2026-08-30T08:15:45.755736+00:00",
-  "record_count": 22131,
-  "records_sha256": "7b9ba593ff4a499b45fa3df629cda80b591ea0ec3da27eebbd6bc276f64895c3",
+  "created_at": "2026-08-30T13:10:44.059122+00:00",
+  "record_count": 22148,
+  "records_sha256": "b8c815bc9b2403daefd9e1f6481aeb0e894ede47813ef1f1781b8ee47285b876",
   "source_artifact_id": 9713685583,
   "source_workflow_run_id": 33248475565,
-  "notes": "Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE). Appended 280 historical INCLUDE records recovered by exact Lens ID; deduplicated solely on identity.lens_id; one non-Lens historical record left out of scope. Added 66 manual relevance reassessment exclusions identified as historical INCLUDES(1).ris records absent from the final 13,389-record master.",
+  "notes": "Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE). Appended 280 historical INCLUDE records recovered by exact Lens ID; deduplicated solely on identity.lens_id; one non-Lens historical record left out of scope. Added 66 manual relevance reassessment exclusions identified as historical INCLUDES(1).ris records absent from the final 13,389-record master. Reconciled the final historical master against current Lens identities: 11 existing canonical records received historical RETAIN decisions via verified Lens-ID re-key mappings, and 17 exact Lens records were recovered and appended with historical RETAIN decisions.",
   "archive_source": "data/canonical/archive/repair/04_human_screening_adjudication",
   "historical_lens_include_recovery": {
     "source_unmatched_records": 281,
@@ -29,5 +29,17 @@
     "deduplication_key": "lens_id",
     "matching": "exact_lens_id",
     "workflow_run_id": "33301120194"
+  },
+  "final_master_reconciliation": {
+    "historical_master_lens_records_previously_unaccounted": 28,
+    "existing_rekeyed_records_updated": 11,
+    "recovered_records_appended": 17,
+    "screening_decision": "RETAIN",
+    "decision_source": "historical_final_master",
+    "adjudication_set": "historical_master_reconciliation",
+    "adjudication_date": "2026-08-30",
+    "source_lens_workflow_run_id": 33310473136,
+    "source_lens_artifact_id": 9731817905,
+    "repair_workflow_run_id": "33313416309"
   }
 }
