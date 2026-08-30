@@ -1,0 +1,34 @@
+name: One-off assign residual canonical EXCLUDES
+
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-assign-residual-excludes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout canonical repair store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+      - name: Assign residual undecided records as provisional EXCLUDE
+        run: python scripts/oneoff_assign_residual_excludes.py
+      - name: Commit repaired canonical corpus
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl \
+                  data/canonical/current/repair/manifest.json \
+                  data/canonical/archive/repair/09_residual_exclusion_assignment/
+          git diff --cached --stat
+          git commit -m 'Assign residual canonical records as provisional EXCLUDE'
+          git push origin HEAD:canonical-repair-store
