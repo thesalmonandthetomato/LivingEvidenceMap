@@ -1,0 +1,192 @@
+name: One-off apply 66 manual relevance exclusions
+
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-apply-66-manual-relevance-exclusions.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical repair store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Apply manual relevance exclusions
+        shell: bash
+        run: |
+          python - <<'PY'
+          import copy
+          import hashlib
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          ids_path = Path('config/manual_relevance_exclusions_66.txt')
+          records_path = Path('data/canonical/current/repair/records.jsonl')
+          manifest_path = Path('data/canonical/current/repair/manifest.json')
+          archive_dir = Path('data/canonical/archive/repair/05_historical_master_relevance_reassessment')
+          archive_dir.mkdir(parents=True, exist_ok=True)
+          audit_path = archive_dir / 'screening_adjudication_audit.jsonl'
+          archive_manifest_path = archive_dir / 'manifest.json'
+
+          target_ids = [x.strip().upper() for x in ids_path.read_text(encoding='utf-8').splitlines() if x.strip()]
+          assert len(target_ids) == 66, f'Expected 66 target IDs, found {len(target_ids)}'
+          assert len(set(target_ids)) == 66, 'Target Lens IDs are not unique'
+          target_set = set(target_ids)
+
+          raw_lines = records_path.read_text(encoding='utf-8').splitlines(keepends=True)
+          assert len(raw_lines) == 22131, f'Expected 22131 canonical records, found {len(raw_lines)}'
+
+          seen_ids = set()
+          target_occurrences = {lid: 0 for lid in target_ids}
+          existing_conflicts = []
+          audit_rows = []
+          output_lines = []
+
+          adjudication_date = '2026-08-30'
+          new_relevance = {
+              'decision': 'EXCLUDE',
+              'decision_source': 'human_relevance_reassessment',
+              'adjudication_set': 'historical_master_relevance_reassessment',
+              'adjudication_date': adjudication_date,
+              'decision_basis': 'removed_from_final_master_after_relevance_reassessment'
+          }
+
+          for raw in raw_lines:
+              rec = json.loads(raw)
+              lid = ((rec.get('identity') or {}).get('lens_id') or '').upper()
+              assert lid, 'Canonical record missing identity.lens_id'
+              assert lid not in seen_ids, f'Duplicate canonical Lens ID: {lid}'
+              seen_ids.add(lid)
+
+              if lid not in target_set:
+                  output_lines.append(raw if raw.endswith('\n') else raw + '\n')
+                  continue
+
+              target_occurrences[lid] += 1
+              screening = rec.setdefault('screening', {})
+              assert isinstance(screening, dict), f'screening is not an object for {lid}'
+              previous = copy.deepcopy(screening.get('relevance'))
+              if previous is not None:
+                  assert isinstance(previous, dict), f'screening.relevance is not an object for {lid}'
+                  prev_decision = previous.get('decision')
+                  if prev_decision not in (None, 'EXCLUDE'):
+                      existing_conflicts.append({'lens_id': lid, 'previous': previous})
+
+              screening['relevance'] = copy.deepcopy(new_relevance)
+              audit_rows.append({
+                  'lens_id': lid,
+                  'match_basis': 'exact_lens_id',
+                  'previous_screening_relevance': previous,
+                  'new_screening_relevance': copy.deepcopy(new_relevance),
+                  'reason': 'Present in INCLUDES(1).ris but absent from final 13,389-record master after relevance reassessment'
+              })
+              output_lines.append(json.dumps(rec, ensure_ascii=False) + '\n')
+
+          assert len(seen_ids) == 22131
+          missing = sorted(lid for lid, n in target_occurrences.items() if n == 0)
+          duplicate_targets = sorted(lid for lid, n in target_occurrences.items() if n != 1)
+          assert not missing, f'Target Lens IDs missing from canonical: {missing}'
+          assert not duplicate_targets, f'Target Lens IDs not matched exactly once: {duplicate_targets}'
+          assert len(audit_rows) == 66
+
+          if existing_conflicts:
+              print('Existing non-EXCLUDE screening decisions that will be superseded by later manual reassessment:')
+              for row in existing_conflicts:
+                  print(json.dumps(row, ensure_ascii=False))
+
+          tmp = records_path.with_suffix('.jsonl.tmp')
+          tmp.write_text(''.join(output_lines), encoding='utf-8')
+
+          # Full post-write validation before replacing canonical.
+          verify_count = 0
+          verify_ids = set()
+          verified_targets = 0
+          for line in tmp.open(encoding='utf-8'):
+              r = json.loads(line)
+              verify_count += 1
+              lid = (r.get('identity') or {}).get('lens_id')
+              assert lid and lid not in verify_ids
+              verify_ids.add(lid)
+              if lid.upper() in target_set:
+                  rel = ((r.get('screening') or {}).get('relevance') or {})
+                  assert rel == new_relevance, f'Incorrect relevance decision for {lid}: {rel}'
+                  verified_targets += 1
+          assert verify_count == 22131
+          assert len(verify_ids) == 22131
+          assert verified_targets == 66
+
+          tmp.replace(records_path)
+          digest = hashlib.sha256(records_path.read_bytes()).hexdigest()
+
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          assert manifest.get('record_count') == 22131
+          manifest['created_at'] = datetime.now(timezone.utc).isoformat()
+          manifest['records_sha256'] = digest
+          addition = 'Added 66 manual relevance reassessment exclusions identified as historical INCLUDES(1).ris records absent from the final 13,389-record master.'
+          notes = manifest.get('notes') or ''
+          if addition not in notes:
+              manifest['notes'] = (notes.rstrip() + ' ' + addition).strip()
+          manifest['manual_relevance_reassessment_exclusions'] = {
+              'records': 66,
+              'decision': 'EXCLUDE',
+              'decision_source': 'human_relevance_reassessment',
+              'adjudication_set': 'historical_master_relevance_reassessment',
+              'adjudication_date': adjudication_date,
+              'decision_basis': 'removed_from_final_master_after_relevance_reassessment',
+              'deduplication_key': 'lens_id',
+              'matching': 'exact_lens_id',
+              'workflow_run_id': os.environ.get('GITHUB_RUN_ID')
+          }
+          manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+
+          with audit_path.open('w', encoding='utf-8') as f:
+              for row in audit_rows:
+                  f.write(json.dumps(row, ensure_ascii=False) + '\n')
+
+          archive_manifest = {
+              'schema': 'living_evidence_map_screening_adjudication_audit',
+              'stage': '05_historical_master_relevance_reassessment',
+              'created_at': datetime.now(timezone.utc).isoformat(),
+              'records': 66,
+              'decision': 'EXCLUDE',
+              'decision_source': 'human_relevance_reassessment',
+              'adjudication_set': 'historical_master_relevance_reassessment',
+              'match_basis': 'exact_lens_id',
+              'existing_nonexclude_decisions_superseded': len(existing_conflicts),
+              'canonical_record_count': 22131,
+              'canonical_records_sha256': digest,
+              'workflow_run_id': os.environ.get('GITHUB_RUN_ID')
+          }
+          archive_manifest_path.write_text(json.dumps(archive_manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+
+          print(json.dumps({
+              'record_count': 22131,
+              'target_ids': 66,
+              'exact_matches': 66,
+              'manual_excludes_verified': 66,
+              'existing_nonexclude_decisions_superseded': len(existing_conflicts),
+              'records_sha256': digest
+          }, indent=2))
+          PY
+
+      - name: Commit repaired canonical corpus
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl \
+                  data/canonical/current/repair/manifest.json \
+                  data/canonical/archive/repair/05_historical_master_relevance_reassessment/
+          git diff --cached --stat
+          git commit -m 'Apply 66 manual relevance reassessment exclusions'
+          git push origin HEAD:canonical-repair-store
