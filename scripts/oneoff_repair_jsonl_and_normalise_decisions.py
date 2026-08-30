@@ -14,9 +14,9 @@ DATE='2026-08-30'
 
 text=RECORDS.read_text(encoding='utf-8')
 
-# Repair invalid literal control characters occurring inside JSON strings, then
-# split only when a complete top-level JSON object closes. This preserves all
-# record content while restoring valid one-record-per-line JSONL.
+# Parse complete top-level JSON objects rather than using str.splitlines(),
+# because splitlines() also treats Unicode line-separator characters occurring
+# legitimately inside bibliographic strings as record boundaries.
 chunks=[]; buf=[]; depth=0; in_string=False; esc=False; repairs=0
 for ch in text:
     if in_string:
@@ -72,8 +72,6 @@ sha_ids=hashlib.sha256(('\n'.join(sorted_ids)+'\n').encode()).hexdigest()
 if sha_ids!=EXPECTED_SORTED_ID_SHA256:
     raise SystemExit(f'Identity hash mismatch after reconstruction: {sha_ids}')
 
-# Reuse the already verified final-master membership bitset from the prior
-# normalisation script without executing that script.
 src=SOURCE_SCRIPT.read_text(encoding='utf-8')
 m=re.search(r"FINAL_MASTER_BITSET_B64\s*=\s*'''(.*?)'''",src,re.S)
 if not m: raise SystemExit('Could not recover verified final-master membership bitset')
@@ -93,9 +91,6 @@ for r in records:
     elif d is None: before['UNDECIDED']+=1
     else: before['OTHER']+=1
 
-# Final reconciled master is authoritative RETAIN membership. Existing EXCLUDE
-# decisions on these records are treated as stale historical conflicts and are
-# superseded, but preserved in provenance for auditability.
 retain_written=0; retain_preserved=0; retain_superseded_excludes=0
 for r in records:
     lid=r['identity']['lens_id'].upper()
@@ -116,8 +111,6 @@ for r in records:
     }
     retain_written+=1
 
-# Every remaining undecided record is the user's explicitly authorised
-# provisional EXCLUDE set. Existing historical EXCLUDE decisions are preserved.
 residual=0
 for r in records:
     if dec(r) is None:
@@ -140,17 +133,20 @@ for r in records:
 if after['UNDECIDED'] or after['OTHER'] or after['RETAIN']+after['EXCLUDE']!=EXPECTED_RECORDS:
     raise SystemExit(f'Incomplete decision coverage after normalisation: {after}')
 
-# Write compact, valid JSONL and prove it round-trips one record per line.
 with RECORDS.open('w',encoding='utf-8',newline='\n') as f:
     for r in records: f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
-check=[json.loads(x) for x in RECORDS.read_text(encoding='utf-8').splitlines() if x.strip()]
-if len(check)!=EXPECTED_RECORDS: raise SystemExit(f'Round-trip line validation failed: {len(check)}')
+# JSONL records are separated by literal LF only. Do not use str.splitlines(),
+# which also splits on Unicode U+2028/U+2029 and related characters in strings.
+check=[json.loads(x) for x in RECORDS.read_text(encoding='utf-8').split('\n') if x.strip()]
+if len(check)!=EXPECTED_RECORDS: raise SystemExit(f'Round-trip LF validation failed: {len(check)}')
+if len({((r.get('identity') or {}).get('lens_id') or '').upper() for r in check})!=EXPECTED_RECORDS:
+    raise SystemExit('Round-trip unique Lens-ID validation failed')
 sha=hashlib.sha256(RECORDS.read_bytes()).hexdigest()
 
 ARCHIVE.mkdir(parents=True,exist_ok=True)
 audit={
  'schema':'jsonl_repair_and_screening_normalisation_audit','created_at':datetime.now(timezone.utc).isoformat(),
- 'physical_nonempty_lines_before':22262,'literal_control_char_repairs':repairs,
+ 'misleading_python_splitlines_count_before':22262,'literal_control_char_repairs':repairs,
  'reconstructed_records':len(records),'unique_lens_ids':len(seen),'sorted_lens_id_sha256':sha_ids,
  'before_decisions':before,'final_master_records':len(final_ids),'retain_written':retain_written,
  'retain_preserved':retain_preserved,'stale_excludes_superseded_by_final_master':retain_superseded_excludes,
