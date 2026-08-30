@@ -2,6 +2,11 @@ name: One-off recover 28 final-master Lens records
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/oneoff-recover-28-final-master-lens.yml'
 
 permissions:
   contents: read
