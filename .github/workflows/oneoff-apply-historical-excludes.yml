@@ -27,10 +27,18 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           src = Path('scripts/oneoff_apply_historical_excludes.py').read_text(encoding='utf-8')
-          old = "raw_lines = records_path.read_text(encoding='utf-8').splitlines()"
-          new = "raw_lines = list(records_path.open(encoding='utf-8'))"
-          assert old in src
-          Path('/tmp/oneoff_apply_historical_excludes.py').write_text(src.replace(old, new, 1), encoding='utf-8')
+          src = src.replace("raw_lines = records_path.read_text(encoding='utf-8').splitlines()", "raw_lines = list(records_path.open(encoding='utf-8'))", 1)
+          src = src.replace("EXPECTED_TARGETS = 5953", "EXPECTED_TARGETS = 5941", 1)
+          marker = "assert len(target_ids) == EXPECTED_TARGETS, f'Expected {EXPECTED_TARGETS} targets, found {len(target_ids)}'"
+          conflict_block = '''assert len(target_ids) == 5953, f'Expected 5953 pre-conflict targets, found {len(target_ids)}'\nHUMAN_RETAIN_CONFLICT_IDS = {\n    '020-101-685-466-207', '138-166-487-127-219', '078-490-795-935-226',\n    '018-877-018-882-991', '006-393-938-573-773', '007-084-914-950-156',\n    '005-018-408-312-073', '166-341-029-903-39X', '004-258-943-860-377',\n    '155-928-341-367-468', '071-290-688-380-447', '004-176-178-804-212',\n}\nassert HUMAN_RETAIN_CONFLICT_IDS <= target_ids\ntarget_ids -= HUMAN_RETAIN_CONFLICT_IDS\n''' + marker
+          assert marker in src
+          src = src.replace(marker, conflict_block, 1)
+          src = src.replace("'safe_unique_exclusion_targets': 5953,", "'safe_unique_exclusion_targets': 5941,\n                'human_retain_conflicts_excluded_from_target_set': 12,", 1)
+          src = src.replace("'final_master_conflicts_not_overwritten': 24,\n    'unique_exclusion_targets': EXPECTED_TARGETS,", "'final_master_conflicts_not_overwritten': 24,\n    'human_retain_conflicts_not_overwritten': 12,\n    'unique_exclusion_targets': EXPECTED_TARGETS,", 1)
+          src = src.replace("'final_master_conflicts_not_overwritten': 24,\n    'previously_reported_matches_not_reproduced': 4,", "'final_master_conflicts_not_overwritten': 24,\n    'human_retain_conflicts_not_overwritten': 12,\n    'previously_reported_matches_not_reproduced': 4,", 1)
+          src = src.replace("5,953 non-conflicting unique canonical records are now EXCLUDE; '" , "5,941 non-conflicting unique canonical records are now EXCLUDE; '", 1)
+          src = src.replace("'24 records also present in the final retained master were deliberately not targeted, and 4 previously reported matches remain unresolved.'", "'24 records also present in the final retained master and 12 records with later human RETAIN adjudications were deliberately not targeted; 4 previously reported matches remain unresolved.'", 1)
+          Path('/tmp/oneoff_apply_historical_excludes.py').write_text(src, encoding='utf-8')
           PY
           python /tmp/oneoff_apply_historical_excludes.py
 
