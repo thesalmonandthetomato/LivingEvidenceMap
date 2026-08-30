@@ -1,0 +1,14 @@
+{
+  "schema": "living_evidence_map_screening_adjudication_audit",
+  "stage": "05_historical_master_relevance_reassessment",
+  "created_at": "2026-08-30T08:15:45.779441+00:00",
+  "records": 66,
+  "decision": "EXCLUDE",
+  "decision_source": "human_relevance_reassessment",
+  "adjudication_set": "historical_master_relevance_reassessment",
+  "match_basis": "exact_lens_id",
+  "existing_nonexclude_decisions_superseded": 0,
+  "canonical_record_count": 22131,
+  "canonical_records_sha256": "7b9ba593ff4a499b45fa3df629cda80b591ea0ec3da27eebbd6bc276f64895c3",
+  "workflow_run_id": "33301120194"
+}

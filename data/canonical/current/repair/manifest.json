@@ -2,12 +2,12 @@
   "schema": "living_evidence_map_canonical_jsonl",
   "schema_version": 1,
   "stage": "current_repair",
-  "created_at": "2026-08-29T21:02:35.015949+00:00",
+  "created_at": "2026-08-30T08:15:45.755736+00:00",
   "record_count": 22131,
-  "records_sha256": "79973bb48c410b2d1546d4f0f5590f2243b49460e55c964201523694d2d5836f",
+  "records_sha256": "7b9ba593ff4a499b45fa3df629cda80b591ea0ec3da27eebbd6bc276f64895c3",
   "source_artifact_id": 9713685583,
   "source_workflow_run_id": 33248475565,
-  "notes": "Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE). Appended 280 historical INCLUDE records recovered by exact Lens ID; deduplicated solely on identity.lens_id; one non-Lens historical record left out of scope.",
+  "notes": "Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE). Appended 280 historical INCLUDE records recovered by exact Lens ID; deduplicated solely on identity.lens_id; one non-Lens historical record left out of scope. Added 66 manual relevance reassessment exclusions identified as historical INCLUDES(1).ris records absent from the final 13,389-record master.",
   "archive_source": "data/canonical/archive/repair/04_human_screening_adjudication",
   "historical_lens_include_recovery": {
     "source_unmatched_records": 281,
@@ -18,5 +18,16 @@
     "source_workflow_run_id": 33274405524,
     "source_artifact_id": 9721057470,
     "non_lens_record_out_of_scope": 1
+  },
+  "manual_relevance_reassessment_exclusions": {
+    "records": 66,
+    "decision": "EXCLUDE",
+    "decision_source": "human_relevance_reassessment",
+    "adjudication_set": "historical_master_relevance_reassessment",
+    "adjudication_date": "2026-08-30",
+    "decision_basis": "removed_from_final_master_after_relevance_reassessment",
+    "deduplication_key": "lens_id",
+    "matching": "exact_lens_id",
+    "workflow_run_id": "33301120194"
   }
 }
