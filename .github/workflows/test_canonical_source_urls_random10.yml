@@ -1,0 +1,49 @@
+name: Test canonical source URLs - random 10
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [updater-workflow-04-relevance-screening]
+    paths:
+      - '.github/workflows/test_canonical_source_urls_random10.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Checkout canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical_store
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependency
+        run: pip install beautifulsoup4
+
+      - name: Test 10 random missing-abstract records with stored URLs
+        run: |
+          python scripts/updater/test_canonical_source_urls_random10.py \
+            --records canonical_store/data/canonical/current/repair/records.jsonl \
+            --output testdata/canonical_source_urls_random10/repairs.jsonl \
+            --report testdata/canonical_source_urls_random10/report.json \
+            --max-records 10 \
+            --seed canonical-source-url-random10-2026-08-31
+          cat testdata/canonical_source_urls_random10/report.json
+
+      - name: Upload audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-source-urls-random10-${{ github.run_id }}
+          path: testdata/canonical_source_urls_random10/
