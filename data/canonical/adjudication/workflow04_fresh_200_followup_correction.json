@@ -1,0 +1,36 @@
+{
+  "schema": "living_evidence_map_human_screening_adjudication_correction",
+  "schema_version": 1,
+  "adjudication_set": "workflow04_fresh_200_followup",
+  "adjudication_date": "2026-08-31",
+  "lens_id": "086-016-459-404-495",
+  "previous_screening": {
+    "relevance": {
+      "decision": "EXCLUDE",
+      "decision_source": "human_relevance_reassessment",
+      "adjudication_set": "historical_master_relevance_reassessment",
+      "adjudication_date": "2026-08-30",
+      "decision_basis": "removed_from_final_master_after_relevance_reassessment"
+    }
+  },
+  "final_human_decision": "EXCLUDE",
+  "new_screening": {
+    "relevance": {
+      "decision": "EXCLUDE",
+      "decision_source": "human_relevance_reassessment",
+      "adjudication_set": "historical_master_relevance_reassessment",
+      "adjudication_date": "2026-08-30",
+      "decision_basis": "removed_from_final_master_after_relevance_reassessment"
+    },
+    "prior_decision": null,
+    "prior_decision_source": null,
+    "decision": "EXCLUDE",
+    "decision_source": "human_adjudication",
+    "adjudication_set": "workflow04_fresh_200_followup",
+    "adjudication_date": "2026-08-31",
+    "decision_basis": "human correction during fresh-200 conflict review; eligible species present but no aquaculture context",
+    "adjudicated_lens_id": "086-016-459-404-495"
+  },
+  "reason": "eligible species present but no explicit aquaculture context",
+  "records_sha256_after": "01af8f626bb31e23d772e5b603a6e4332b8dd030bac85c015517981ed9dba9f4"
+}
