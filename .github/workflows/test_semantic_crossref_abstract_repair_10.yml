@@ -1,0 +1,62 @@
+name: Test Semantic Scholar + Crossref abstract repair - 10
+
+on:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - .github/workflows/test_semantic_crossref_abstract_repair_10.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair-10:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out development branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Check out canonical repair store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical_store
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test Semantic Scholar and Crossref on 10 missing abstracts
+        run: |
+          set -euo pipefail
+          mkdir -p testdata/semantic_crossref_abstract_repair_10
+          python scripts/updater/test_abstract_recovery_semantic_crossref.py \
+            --records canonical_store/data/canonical/current/repair/records.jsonl \
+            --output testdata/semantic_crossref_abstract_repair_10/abstract_repairs.jsonl \
+            --report testdata/semantic_crossref_abstract_repair_10/abstract_repairs_report.json \
+            --max-records 10
+
+      - name: Show report
+        if: always()
+        run: |
+          if [ -f testdata/semantic_crossref_abstract_repair_10/abstract_repairs_report.json ]; then
+            cat testdata/semantic_crossref_abstract_repair_10/abstract_repairs_report.json
+          fi
+
+      - name: Upload test artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-crossref-abstract-repair-10-${{ github.run_id }}
+          path: |
+            testdata/semantic_crossref_abstract_repair_10/abstract_repairs.jsonl
+            testdata/semantic_crossref_abstract_repair_10/abstract_repairs_report.json
+          retention-days: 30
+          if-no-files-found: warn
