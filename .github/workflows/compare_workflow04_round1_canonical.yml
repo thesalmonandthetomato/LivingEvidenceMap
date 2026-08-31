@@ -1,0 +1,78 @@
+name: Compare Workflow 04 round 1 with canonical
+
+on:
+  push:
+    branches: [updater-workflow-04-relevance-screening]
+    paths: [.github/workflows/compare_workflow04_round1_canonical.yml]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+      - uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical_store
+          lfs: true
+      - name: Download completed round-1 model output
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9749344494/zip" -o round1.zip
+          mkdir round1 && unzip -q round1.zip -d round1
+      - name: Compare all 200 with canonical relevance decisions
+        run: |
+          python - <<'PY'
+          import csv,json
+          from pathlib import Path
+          screened=[json.loads(x) for x in Path('round1/screened_200.jsonl').read_text().splitlines() if x.strip()]
+          wanted={str((r.get('identity') or {}).get('lens_id') or '') for r in screened}
+          canon={}
+          with Path('canonical_store/data/canonical/current/repair/records.jsonl').open() as f:
+            for line in f:
+              if not line.strip(): continue
+              r=json.loads(line); lid=str((r.get('identity') or {}).get('lens_id') or '')
+              if lid in wanted: canon[lid]=r
+          assert len(screened)==200
+          assert len(canon)==200, (len(canon), sorted(wanted-set(canon)))
+          rows=[]
+          for i,r in enumerate(screened,1):
+            lid=str((r.get('identity') or {}).get('lens_id') or '')
+            model=str(((r.get('screening') or {}).get('decision')) or '').upper()
+            cr=canon[lid]
+            canonical=str((((cr.get('screening') or {}).get('relevance') or {}).get('decision')) or '').upper()
+            assert canonical in {'RETAIN','EXCLUDE'}, (lid,canonical)
+            c=r.get('canonical') or {}; p=((r.get('lens') or {}).get('raw_payload') or {}); s=r.get('screening') or {}
+            source_meta=c.get('source') or p.get('source') or {}
+            journal=(source_meta.get('title') if isinstance(source_meta,dict) else source_meta) or c.get('source_title') or c.get('journal') or p.get('source_title') or p.get('journal') or ''
+            kw=c.get('keywords') or p.get('keywords') or p.get('keyword') or p.get('author_keywords') or ''
+            if isinstance(kw,list): kw='; '.join(map(str,kw))
+            rows.append({'order':i,'lens_id':lid,'title':c.get('title') or p.get('title') or '', 'keywords':kw,'journal_source_title':journal,'abstract':c.get('abstract') or p.get('abstract') or '', 'canonical_decision':canonical,'model_decision':model,'model_reason':s.get('reason') or '', 'conflict':'YES' if model!=canonical else 'NO'})
+          conflicts=[x for x in rows if x['conflict']=='YES']
+          with open('round1_canonical_comparison.csv','w',newline='',encoding='utf-8-sig') as f:
+            w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
+          with open('round1_canonical_conflicts.csv','w',newline='',encoding='utf-8-sig') as f:
+            w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(conflicts)
+          summary={'records':200,'conflicts':len(conflicts),'agreements':200-len(conflicts),'model_counts':{},'conflict_matrix':{}}
+          for x in rows: summary['model_counts'][x['model_decision']]=summary['model_counts'].get(x['model_decision'],0)+1
+          for x in conflicts:
+            k=x['canonical_decision']+' -> '+x['model_decision']; summary['conflict_matrix'][k]=summary['conflict_matrix'].get(k,0)+1
+          Path('round1_canonical_summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          print(json.dumps(summary,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-round1-full-canonical-${{ github.run_id }}
+          path: |
+            round1_canonical_summary.json
+            round1_canonical_comparison.csv
+            round1_canonical_conflicts.csv
+          retention-days: 90
