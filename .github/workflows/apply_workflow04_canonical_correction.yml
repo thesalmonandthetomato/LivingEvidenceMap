@@ -1,0 +1,124 @@
+name: Apply Workflow 04 canonical correction
+
+on:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - .github/workflows/apply_workflow04_canonical_correction.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-correction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out canonical repair store with Git LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Apply human correction transparently
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import copy, hashlib, json
+          from pathlib import Path
+          from datetime import date
+
+          target='086-016-459-404-495'
+          records=Path('data/canonical/current/repair/records.jsonl')
+          manifest_path=Path('data/canonical/current/repair/manifest.json')
+          tmp=records.with_suffix('.jsonl.tmp')
+
+          found=0
+          before=None
+          after=None
+          retain=exclude=other=0
+
+          with records.open(encoding='utf-8') as src, tmp.open('w',encoding='utf-8') as dst:
+              for line in src:
+                  if not line.strip():
+                      continue
+                  r=json.loads(line)
+                  lid=str((r.get('identity') or {}).get('lens_id') or '')
+                  if lid==target:
+                      found+=1
+                      before=copy.deepcopy(r.get('screening') or {})
+                      screening=r.setdefault('screening',{})
+                      prior_decision=screening.get('decision')
+                      prior_source=screening.get('decision_source')
+                      screening['prior_decision']=prior_decision
+                      screening['prior_decision_source']=prior_source
+                      screening['decision']='EXCLUDE'
+                      screening['decision_source']='human_adjudication'
+                      screening['adjudication_set']='workflow04_fresh_200_followup'
+                      screening['adjudication_date']='2026-08-31'
+                      screening['decision_basis']='human correction during fresh-200 conflict review; eligible species present but no aquaculture context'
+                      screening['adjudicated_lens_id']=target
+                      after=copy.deepcopy(screening)
+                  decision=str(((r.get('screening') or {}).get('decision')) or '').upper()
+                  if decision=='RETAIN': retain+=1
+                  elif decision=='EXCLUDE': exclude+=1
+                  else: other+=1
+                  dst.write(json.dumps(r,ensure_ascii=True,separators=(',',':'))+'\n')
+
+          assert found==1, f'Expected exactly one record for {target}, found {found}'
+          assert after['decision']=='EXCLUDE'
+          tmp.replace(records)
+
+          digest=hashlib.sha256(records.read_bytes()).hexdigest()
+          manifest=json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['records_sha256']=digest
+          manifest['record_count']=retain+exclude+other
+          manifest['workflow04_followup_human_correction']={
+              'lens_id':target,
+              'previous_screening':before,
+              'new_screening':after,
+              'decision':'EXCLUDE',
+              'decision_source':'human_adjudication',
+              'adjudication_set':'workflow04_fresh_200_followup',
+              'adjudication_date':'2026-08-31',
+              'reason':'eligible species present but no explicit aquaculture context',
+              'record_count_after':retain+exclude+other,
+              'decision_counts_after':{'RETAIN':retain,'EXCLUDE':exclude,'OTHER':other},
+              'records_sha256_after':digest
+          }
+          manifest_path.write_text(json.dumps(manifest,indent=2,ensure_ascii=True)+'\n',encoding='utf-8')
+
+          audit=Path('data/canonical/adjudication/workflow04_fresh_200_followup_correction.json')
+          audit.write_text(json.dumps({
+              'schema':'living_evidence_map_human_screening_adjudication_correction',
+              'schema_version':1,
+              'adjudication_set':'workflow04_fresh_200_followup',
+              'adjudication_date':'2026-08-31',
+              'lens_id':target,
+              'previous_screening':before,
+              'final_human_decision':'EXCLUDE',
+              'new_screening':after,
+              'reason':'eligible species present but no explicit aquaculture context',
+              'records_sha256_after':digest
+          },indent=2,ensure_ascii=True)+'\n',encoding='utf-8')
+
+          print(json.dumps({'lens_id':target,'before':before,'after':after,'counts':{'RETAIN':retain,'EXCLUDE':exclude,'OTHER':other},'sha256':digest},indent=2))
+          PY
+
+      - name: Commit corrected canonical corpus and audit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl \
+                  data/canonical/current/repair/manifest.json \
+                  data/canonical/adjudication/workflow04_fresh_200_followup_correction.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Apply Workflow 04 human screening correction"
+            git push origin HEAD:canonical-repair-store
+          fi
