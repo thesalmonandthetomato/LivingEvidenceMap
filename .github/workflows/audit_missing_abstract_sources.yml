@@ -1,0 +1,48 @@
+name: Audit missing abstract source coverage
+
+on:
+  push:
+    branches: [updater-workflow-04-relevance-screening]
+    paths:
+      - '.github/workflows/audit_missing_abstract_sources.yml'
+      - 'scripts/updater/audit_missing_abstract_sources.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out workflow branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+          fetch-depth: 1
+
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Audit records still missing abstracts
+        run: |
+          python scripts/updater/audit_missing_abstract_sources.py \
+            --records canonical-store/data/canonical/current/repair/records.jsonl \
+            --outdir audit_missing_abstract_sources
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: missing-abstract-source-audit-${{ github.run_id }}
+          path: audit_missing_abstract_sources/
+          if-no-files-found: error
+          retention-days: 30
