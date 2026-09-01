@@ -57,7 +57,8 @@ jobs:
                   if not line.strip():
                       continue
                   rec=json.loads(line)
-                  lid=rec.get('lens_id') or rec.get('id') or ''
+                  identity=rec.get('identity') or {}
+                  lid=identity.get('lens_id') or rec.get('lens_id') or rec.get('id') or ''
                   if lid in repairs:
                       can=rec.get('canonical') or {}
                       title=can.get('title') or ''
@@ -105,7 +106,9 @@ jobs:
               if not line.strip(): continue
               r=json.loads(line); c=r.get('canonical') or {}
               t=c.get('title') or ''; a=c.get('abstract') or ''
-              if t and a and norm(t)==norm(a): bad.append(r.get('lens_id') or r.get('id'))
+              if t and a and norm(t)==norm(a):
+                  ident=r.get('identity') or {}
+                  bad.append(ident.get('lens_id') or r.get('lens_id') or r.get('id'))
           print('remaining_title_equals_abstract=', len(bad))
           if bad:
               raise RuntimeError(f'Remaining title=abstract records: {bad}')
