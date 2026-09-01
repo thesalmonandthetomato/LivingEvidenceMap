@@ -1,0 +1,82 @@
+name: Recover and apply eCite Figshare abstracts
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  recover-apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out workflow branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+          path: workflow
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+          path: canonical
+      - name: Recover and identity-validate eCite Figshare abstracts
+        run: |
+          mkdir -p out/ecite
+          python workflow/scripts/updater/recover_ecite_figshare_abstracts.py \
+            --records canonical/data/canonical/current/repair/records.jsonl \
+            --outdir out/ecite
+      - name: Apply validated patch with field provenance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          cp=Path('canonical/data/canonical/current/repair/records.jsonl')
+          pp=Path('out/ecite/validated_patch.jsonl')
+          patches={}
+          for line in pp.read_text(encoding='utf-8').splitlines():
+              if line.strip():
+                  p=json.loads(line); patches[p['record_id']]=p
+          assert len(patches)==sum(1 for l in pp.read_text(encoding='utf-8').splitlines() if l.strip()), 'duplicate patch record IDs'
+          out=[]; applied=0
+          for line in cp.read_text(encoding='utf-8').splitlines():
+              if not line.strip(): continue
+              r=json.loads(line)
+              rid=str(((r.get('identity') or {}).get('lens_id') or r.get('record_id') or r.get('lens_id') or (r.get('canonical') or {}).get('lens_id') or ''))
+              p=patches.get(rid)
+              if p:
+                  c=r.setdefault('canonical',{})
+                  cur=' '.join(str(c.get('abstract') or '').split())
+                  expected=' '.join(str(p.get('old_abstract') or '').split())
+                  assert cur==expected, f'abstract changed since recovery for {rid}'
+                  c['abstract']=p['abstract']
+                  # Field-level provenance. Append rather than overwrite any existing provenance.
+                  prov=r.setdefault('provenance',{})
+                  enrich=prov.setdefault('canonical_field_enrichment',[])
+                  enrich.append(p['provenance'])
+                  applied+=1
+              out.append(json.dumps(r,ensure_ascii=False,separators=(',',':')))
+          assert len(out)==22148, f'canonical record count changed: {len(out)}'
+          assert applied==len(patches), f'applied {applied} != patch {len(patches)}'
+          cp.write_text('\n'.join(out)+'\n',encoding='utf-8')
+          Path('out/ecite/apply_report.json').write_text(json.dumps({'patch_count':len(patches),'applied':applied,'canonical_record_count':len(out),'provenance_path':'provenance.canonical_field_enrichment'},indent=2),encoding='utf-8')
+          print(json.dumps({'patch_count':len(patches),'applied':applied,'canonical_record_count':len(out)},indent=2))
+          PY
+      - name: Commit canonical changes
+        working-directory: canonical
+        run: |
+          if git diff --quiet -- data/canonical/current/repair/records.jsonl; then
+            echo 'No validated changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl
+          git commit -m 'Recover eCite Figshare abstracts with provenance'
+          git push origin canonical-repair-store
+      - name: Upload recovery audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecite-figshare-recovery-${{ github.run_id }}
+          path: out/ecite/
+          if-no-files-found: error
+          retention-days: 30
