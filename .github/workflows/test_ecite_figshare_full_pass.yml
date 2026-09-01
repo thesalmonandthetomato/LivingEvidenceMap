@@ -1,0 +1,46 @@
+name: Test eCite Figshare full abstract recovery pass
+
+on:
+  push:
+    branches: [updater-workflow-04-relevance-screening]
+    paths:
+      - '.github/workflows/test_ecite_figshare_full_pass.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-ecite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out workflow branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+          path: workflow
+
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+          path: canonical
+
+      - name: Test all eCite-linked missing-abstract records
+        run: |
+          mkdir -p out/ecite
+          python workflow/scripts/updater/test_targeted_abstract_recovery.py \
+            --records canonical/data/canonical/current/repair/records.jsonl \
+            --provider ecite \
+            --limit 10000 \
+            --outdir out/ecite
+
+      - name: Upload eCite results
+        uses: actions/upload-artifact@v4
+        with:
+          name: abstract-test-ecite-full-${{ github.run_id }}
+          path: out/ecite/
+          if-no-files-found: error
+          retention-days: 30
