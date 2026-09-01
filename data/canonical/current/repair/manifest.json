@@ -4,7 +4,7 @@
   "stage": "current_repair",
   "created_at": "2026-08-30T14:15:54.967571+00:00",
   "record_count": 22148,
-  "records_sha256": "01af8f626bb31e23d772e5b603a6e4332b8dd030bac85c015517981ed9dba9f4",
+  "records_sha256": "ffc00974e6907178951e16e94ac8b594065ba602d108dbd593eabd8685130625",
   "source_artifact_id": 9713685583,
   "source_workflow_run_id": 33248475565,
   "notes": "Canonical repair corpus plus 54 human relevance-screening adjudications from Workflow 04 fresh-200 validation (44 RETAIN, 10 EXCLUDE). Appended 280 historical INCLUDE records recovered by exact Lens ID; deduplicated solely on identity.lens_id; one non-Lens historical record left out of scope. Added 66 manual relevance reassessment exclusions identified as historical INCLUDES(1).ris records absent from the final 13,389-record master. Reconciled the final historical master against current Lens identities: 11 existing canonical records received historical RETAIN decisions via verified Lens-ID re-key mappings, and 17 exact Lens records were recovered and appended with historical RETAIN decisions. Reconciled verified historical EXCLUDES(3).ris matches: 5,941 non-conflicting unique canonical records are now EXCLUDE; 24 records also present in the final retained master and 12 records with later human RETAIN adjudications were deliberately not targeted; 4 previously reported matches remain unresolved.",
@@ -132,5 +132,30 @@
       "OTHER": 22147
     },
     "records_sha256_after": "01af8f626bb31e23d772e5b603a6e4332b8dd030bac85c015517981ed9dba9f4"
+  },
+  "workflow04_revised_first_200_latest_human_adjudication": {
+    "lens_id": "036-960-343-432-126",
+    "previous_relevance": {
+      "decision": "EXCLUDE",
+      "decision_source": "historical_excludes_ris",
+      "adjudication_set": "historical_EXCLUDES(3).ris_reconciliation",
+      "adjudication_date": "2026-08-30",
+      "decision_basis": "matched_to_historical_EXCLUDES(3).ris"
+    },
+    "new_relevance": {
+      "decision": "RETAIN",
+      "decision_source": "human_adjudication",
+      "adjudication_set": "workflow04_revised_first_200",
+      "adjudication_date": "2026-09-01",
+      "decision_basis": "Human conflict adjudication: eligible rainbow trout is explicitly connected to upstream land-based rainbow trout farms.",
+      "prior_decision": "EXCLUDE",
+      "prior_decision_source": "historical_excludes_ris",
+      "adjudicated_lens_id": "036-960-343-432-126"
+    },
+    "final_human_decision": "RETAIN",
+    "adjudication_date": "2026-09-01",
+    "reason": "eligible rainbow trout explicitly connected to upstream land-based rainbow trout farms",
+    "record_count_after": 22148,
+    "records_sha256_after": "ffc00974e6907178951e16e94ac8b594065ba602d108dbd593eabd8685130625"
   }
 }

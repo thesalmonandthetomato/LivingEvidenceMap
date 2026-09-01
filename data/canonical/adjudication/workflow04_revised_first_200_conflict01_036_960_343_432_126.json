@@ -1,0 +1,27 @@
+{
+  "schema": "living_evidence_map_human_screening_adjudication",
+  "schema_version": 1,
+  "adjudication_set": "workflow04_revised_first_200",
+  "adjudication_date": "2026-09-01",
+  "lens_id": "036-960-343-432-126",
+  "previous_relevance": {
+    "decision": "EXCLUDE",
+    "decision_source": "historical_excludes_ris",
+    "adjudication_set": "historical_EXCLUDES(3).ris_reconciliation",
+    "adjudication_date": "2026-08-30",
+    "decision_basis": "matched_to_historical_EXCLUDES(3).ris"
+  },
+  "final_human_decision": "RETAIN",
+  "new_relevance": {
+    "decision": "RETAIN",
+    "decision_source": "human_adjudication",
+    "adjudication_set": "workflow04_revised_first_200",
+    "adjudication_date": "2026-09-01",
+    "decision_basis": "Human conflict adjudication: eligible rainbow trout is explicitly connected to upstream land-based rainbow trout farms.",
+    "prior_decision": "EXCLUDE",
+    "prior_decision_source": "historical_excludes_ris",
+    "adjudicated_lens_id": "036-960-343-432-126"
+  },
+  "reason": "eligible rainbow trout explicitly connected to upstream land-based rainbow trout farms",
+  "records_sha256_after": "ffc00974e6907178951e16e94ac8b594065ba602d108dbd593eabd8685130625"
+}
