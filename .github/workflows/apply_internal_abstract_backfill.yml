@@ -1,0 +1,110 @@
+name: Apply internal abstract backfill
+
+on:
+  push:
+    paths:
+      - '.github/internal_abstract_backfill_trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out workflow code and internal sources
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+          path: workflow
+          fetch-depth: 1
+
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical
+          fetch-depth: 1
+          lfs: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rebuild approved proposal set
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/internal_abstract_backfill
+          python workflow/scripts/updater/audit_internal_abstract_backfill.py \
+            --canonical canonical/data/canonical/current/repair/records.jsonl \
+            --master "workflow/data/master/current/living_evidence_map_master.csv" \
+            --includes "workflow/data/reference/INCLUDES fixed abstracts.txt" \
+            --outdir out/internal_abstract_backfill
+          python - <<'PY'
+          import json
+          s=json.load(open('out/internal_abstract_backfill/summary.json'))
+          assert s['canonical_records']==22148, s
+          assert s['proposed_total']==1766, s
+          assert s['proposed_missing_fill']==1760, s
+          assert s['proposed_partial_replace']==6, s
+          assert s['canonical_mutated'] is False, s
+          print(json.dumps(s,indent=2))
+          PY
+
+      - name: Apply approved proposals with provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python workflow/scripts/updater/apply_internal_abstract_backfill.py \
+            --canonical canonical/data/canonical/current/repair/records.jsonl \
+            --proposals out/internal_abstract_backfill/proposed_backfill.jsonl \
+            --summary out/internal_abstract_backfill/writeback_summary.json \
+            --expected-total 1766 \
+            --expected-missing-fill 1760 \
+            --expected-partial-replace 6
+
+      - name: Commit canonical writeback
+        shell: bash
+        working-directory: canonical
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl
+          git diff --cached --quiet && { echo 'No canonical changes to commit'; exit 1; }
+          git commit -m 'Backfill 1766 abstracts from internal sources'
+          git push origin HEAD:canonical-repair-store
+          git rev-parse HEAD
+
+      - name: Verify canonical counts after writeback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p='canonical/data/canonical/current/repair/records.jsonl'
+          n=with_abs=without_abs=0
+          for line in open(p,encoding='utf-8'):
+              if not line.strip(): continue
+              r=json.loads(line); n+=1
+              a=((r.get('canonical') or {}).get('abstract'))
+              if a is not None and str(a).strip(): with_abs+=1
+              else: without_abs+=1
+          out={'canonical_records':n,'with_abstract':with_abs,'without_abstract':without_abs}
+          print(json.dumps(out,indent=2))
+          assert n==22148, out
+          assert without_abs==1061, out
+          assert with_abs==21087, out
+          open('out/internal_abstract_backfill/final_counts.json','w').write(json.dumps(out,indent=2)+'\n')
+          PY
+
+      - name: Upload writeback audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: internal-abstract-backfill-writeback-${{ github.run_id }}
+          path: |
+            out/internal_abstract_backfill/summary.json
+            out/internal_abstract_backfill/proposed_backfill.csv
+            out/internal_abstract_backfill/writeback_summary.json
+            out/internal_abstract_backfill/final_counts.json
+          if-no-files-found: error
+          retention-days: 30
