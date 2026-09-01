@@ -1,0 +1,122 @@
+name: Apply title equals abstract repairs v2
+
+on:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - .github/workflows/apply_title_equals_abstract_repairs_v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out patch source
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+          path: patch-source
+          fetch-depth: 1
+
+      - name: Check out canonical store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Apply repairs
+        shell: python
+        run: |
+          import csv, json, re, unicodedata
+          from pathlib import Path
+
+          patch = Path('patch-source/testdata/workflow04/title_equals_abstract_repairs_2026-09-01.csv')
+          src = Path('canonical-store/data/canonical/current/repair/records.jsonl')
+
+          with patch.open('r', encoding='utf-8', newline='') as fh:
+              rows = list(csv.DictReader(fh))
+          if len(rows) != 28:
+              raise RuntimeError(f'Expected 28 repair rows, found {len(rows)}')
+          repairs = {r['lens_id'].strip(): r['repaired_abstract'] for r in rows}
+          if len(repairs) != 28:
+              raise RuntimeError('Repair Lens IDs are not unique')
+
+          def norm(s):
+              s = '' if s is None else str(s)
+              return re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', s)).strip().casefold()
+
+          out=[]; matched=set(); nonblank=0; blank=0
+          with src.open('r', encoding='utf-8') as fh:
+              for line in fh:
+                  if not line.strip():
+                      continue
+                  rec=json.loads(line)
+                  lid=rec.get('lens_id') or rec.get('id') or ''
+                  if lid in repairs:
+                      can=rec.get('canonical') or {}
+                      title=can.get('title') or ''
+                      old=can.get('abstract') or ''
+                      if not title or not old or norm(title) != norm(old):
+                          raise RuntimeError(f'Guard failed for {lid}: canonical abstract is no longer the title')
+                      new=repairs[lid]
+                      can['abstract']=new
+                      rec['canonical']=can
+                      prov=rec.setdefault('provenance', {})
+                      hist=prov.setdefault('title_equals_abstract_repair', [])
+                      if not isinstance(hist, list):
+                          hist=[hist]
+                          prov['title_equals_abstract_repair']=hist
+                      hist.append({
+                          'date':'2026-09-01',
+                          'reason':'Erroneous canonical abstract duplicated title',
+                          'action':'replace_with_user_recovered_abstract' if new.strip() else 'clear_abstract_no_available_abstract',
+                          'source':'user-supplied title_equals_abstract_with_doi(1).csv',
+                          'review_context':'title=abstract canonical integrity audit'
+                      })
+                      matched.add(lid)
+                      nonblank += bool(new.strip())
+                      blank += not bool(new.strip())
+                  out.append(json.dumps(rec, ensure_ascii=False, separators=(',', ':')))
+
+          if matched != set(repairs):
+              raise RuntimeError(f'Missing Lens IDs: {sorted(set(repairs)-matched)}')
+          if nonblank != 10 or blank != 18:
+              raise RuntimeError(f'Unexpected repair counts: nonblank={nonblank}, blank={blank}')
+          src.write_text('\n'.join(out)+'\n', encoding='utf-8')
+          print(json.dumps({'matched':len(matched),'repaired_with_abstract':nonblank,'cleared_to_blank':blank}, indent=2))
+
+      - name: Verify title equals abstract count is zero
+        shell: python
+        run: |
+          import json, re, unicodedata
+          from pathlib import Path
+          p=Path('canonical-store/data/canonical/current/repair/records.jsonl')
+          def norm(s):
+              s='' if s is None else str(s)
+              return re.sub(r'\s+',' ',unicodedata.normalize('NFKC',s)).strip().casefold()
+          bad=[]
+          for line in p.open(encoding='utf-8'):
+              if not line.strip(): continue
+              r=json.loads(line); c=r.get('canonical') or {}
+              t=c.get('title') or ''; a=c.get('abstract') or ''
+              if t and a and norm(t)==norm(a): bad.append(r.get('lens_id') or r.get('id'))
+          print('remaining_title_equals_abstract=', len(bad))
+          if bad:
+              raise RuntimeError(f'Remaining title=abstract records: {bad}')
+
+      - name: Commit and push canonical store
+        shell: bash
+        working-directory: canonical-store
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl
+          git diff --cached --quiet && { echo "No changes to commit"; exit 1; }
+          git commit -m "Repair 28 title-equals-abstract canonical records"
+          git push origin HEAD:canonical-repair-store
