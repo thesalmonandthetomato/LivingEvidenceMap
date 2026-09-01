@@ -1,4 +1,4 @@
-name: Audit title equals abstract
+name: Repair title equals abstract records
 
 on:
   push:
@@ -8,103 +8,112 @@ on:
       - .github/workflows/audit_title_equals_abstract.yml
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  audit:
+  repair:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out canonical repair store with Git LFS
+      - name: Check out patch source
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+          path: patch-source
+          fetch-depth: 1
+
+      - name: Check out canonical store with Git LFS
         uses: actions/checkout@v4
         with:
           ref: canonical-repair-store
+          path: canonical-store
           lfs: true
           fetch-depth: 1
 
-      - name: Audit title equals abstract
+      - name: Apply repairs from user CSV
         shell: python
         run: |
-          import csv
-          import json
-          import re
-          import unicodedata
+          import csv, json, re, unicodedata
           from pathlib import Path
-
-          src = Path('data/canonical/current/repair/records.jsonl')
-          out = Path('title_equals_abstract_audit.csv')
-          summary = Path('title_equals_abstract_summary.json')
-
-          def text(v):
-              if v is None:
-                  return ''
-              if isinstance(v, str):
-                  return v
-              return str(v)
-
-          def norm(v):
-              s = unicodedata.normalize('NFKC', text(v))
-              s = re.sub(r'\s+', ' ', s).strip().casefold()
-              return s
-
-          rows = []
-          total = 0
-          with_title = 0
-          with_abstract = 0
-          raw_exact = 0
-          normalised_exact = 0
-
+          patch = Path('patch-source/testdata/workflow04/title_equals_abstract_repairs_2026-09-01.csv')
+          src = Path('canonical-store/data/canonical/current/repair/records.jsonl')
+          with patch.open('r', encoding='utf-8', newline='') as fh:
+              rows = list(csv.DictReader(fh))
+          if len(rows) != 28:
+              raise RuntimeError(f'Expected 28 repair rows, found {len(rows)}')
+          repairs = {r['lens_id'].strip(): r['repaired_abstract'] for r in rows}
+          if len(repairs) != 28:
+              raise RuntimeError('Repair Lens IDs are not unique')
+          def norm(s):
+              s = '' if s is None else str(s)
+              return re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', s)).strip().casefold()
+          out=[]; matched=set(); nonblank=0; blank=0
           with src.open('r', encoding='utf-8') as fh:
-              for line_no, line in enumerate(fh, 1):
+              for line in fh:
                   if not line.strip():
                       continue
-                  rec = json.loads(line)
-                  total += 1
-                  can = rec.get('canonical') or {}
-                  title = text(can.get('title')).strip()
-                  abstract = text(can.get('abstract')).strip()
-                  if title:
-                      with_title += 1
-                  if abstract:
-                      with_abstract += 1
-                  if not title or not abstract:
-                      continue
-
-                  is_raw = title == abstract
-                  is_norm = norm(title) == norm(abstract)
-                  if is_raw:
-                      raw_exact += 1
-                  if is_norm:
-                      normalised_exact += 1
-                      prov = rec.get('provenance') or {}
-                      rows.append({
-                          'line_no': line_no,
-                          'lens_id': rec.get('lens_id') or rec.get('id') or '',
-                          'title': title,
-                          'abstract': abstract,
-                          'raw_exact': is_raw,
-                          'normalised_exact': is_norm,
-                          'canonical_field_enrichment': json.dumps(prov.get('canonical_field_enrichment'), ensure_ascii=False, sort_keys=True),
+                  rec=json.loads(line)
+                  lid=rec.get('lens_id') or rec.get('id') or ''
+                  if lid in repairs:
+                      can=rec.get('canonical') or {}
+                      title=can.get('title') or ''
+                      old=can.get('abstract') or ''
+                      if not title or not old or norm(title) != norm(old):
+                          raise RuntimeError(f'Guard failed for {lid}: current abstract is not the title')
+                      new=repairs[lid]
+                      can['abstract']=new
+                      rec['canonical']=can
+                      prov=rec.setdefault('provenance', {})
+                      hist=prov.setdefault('title_equals_abstract_repair', [])
+                      if not isinstance(hist, list):
+                          hist=[hist]
+                          prov['title_equals_abstract_repair']=hist
+                      hist.append({
+                          'date':'2026-09-01',
+                          'reason':'Erroneous canonical abstract duplicated title',
+                          'action':'replace_with_user_recovered_abstract' if new.strip() else 'clear_abstract_no_available_abstract',
+                          'source':'user-supplied title_equals_abstract_with_doi(1).csv',
+                          'review_context':'title=abstract canonical integrity audit'
                       })
+                      matched.add(lid)
+                      nonblank += int(bool(new.strip()))
+                      blank += int(not bool(new.strip()))
+                  out.append(json.dumps(rec, ensure_ascii=False, separators=(',', ':')))
+          if matched != set(repairs):
+              raise RuntimeError(f'Missing Lens IDs: {sorted(set(repairs)-matched)}')
+          if nonblank != 10 or blank != 18:
+              raise RuntimeError(f'Unexpected counts: nonblank={nonblank}, blank={blank}')
+          src.write_text('\n'.join(out)+'\n', encoding='utf-8')
+          print(json.dumps({'matched':len(matched),'repaired_with_abstract':nonblank,'cleared_to_blank':blank}, indent=2))
 
-          with out.open('w', encoding='utf-8', newline='') as fh:
-              w = csv.DictWriter(fh, fieldnames=['line_no','lens_id','title','abstract','raw_exact','normalised_exact','canonical_field_enrichment'])
-              w.writeheader()
-              w.writerows(rows)
+      - name: Verify no title equals abstract records remain
+        shell: python
+        run: |
+          import json, re, unicodedata
+          from pathlib import Path
+          p=Path('canonical-store/data/canonical/current/repair/records.jsonl')
+          def norm(s):
+              s='' if s is None else str(s)
+              return re.sub(r'\s+',' ',unicodedata.normalize('NFKC',s)).strip().casefold()
+          bad=[]
+          for line in p.open(encoding='utf-8'):
+              if not line.strip():
+                  continue
+              r=json.loads(line); c=r.get('canonical') or {}
+              t=c.get('title') or ''; a=c.get('abstract') or ''
+              if t and a and norm(t)==norm(a):
+                  bad.append(r.get('lens_id') or r.get('id'))
+          print('remaining_title_equals_abstract=', len(bad))
+          if bad:
+              raise RuntimeError(f'Remaining title=abstract records: {bad}')
 
-          result = {
-              'total_records': total,
-              'records_with_title': with_title,
-              'records_with_abstract': with_abstract,
-              'raw_title_equals_abstract': raw_exact,
-              'normalised_title_equals_abstract': normalised_exact,
-              'output_csv': str(out),
-          }
-          summary.write_text(json.dumps(result, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
-          print(json.dumps(result, indent=2, ensure_ascii=False))
-
-      - name: Upload audit artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: title-equals-abstract-audit-${{ github.run_id }}
-          path: |
-            title_equals_abstract_audit.csv
-            title_equals_abstract_summary.json
-          if-no-files-found: error
+      - name: Commit and push canonical repair
+        shell: bash
+        working-directory: canonical-store
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl
+          git diff --cached --quiet && { echo "No changes to commit"; exit 1; }
+          git commit -m "Repair 28 title-equals-abstract canonical records"
+          git push origin HEAD:canonical-repair-store
