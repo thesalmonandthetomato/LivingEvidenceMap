@@ -1,0 +1,75 @@
+name: Apply publisher abstract for 058-437-548-010-017
+
+on:
+  push:
+    branches: [updater-workflow-04-relevance-screening]
+    paths:
+      - '.github/workflows/apply_publisher_abstract_058_437_548_010_017.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Apply publisher abstract if missing
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          target_id = '058-437-548-010-017'
+          expected_doi = '10.1016/j.ecss.2020.106811'
+          abstract = '''Seasonal cycles of primary production and freshwater run-off contribute to elevated particulate matter fluxes of marine and terrestrial origin in fjords. In Norwegian fjords, aquaculture operations and jellyfish carcasses may further enhance these particulate matter fluxes. In this study, sediment traps were deployed in four Norwegian fjords (Lurefjorden, Masfjorden, Hardangerfjorden and Kaldfjorden) to quantify seasonal variations in downward particle fluxes and to investigate the contribution of aquaculture operations to these fluxes. Sediment traps were deployed in Lurefjorden, a fjord heavily populated by the deep-sea coronate medusae Periphylla periphylla, in Masfjorden, a nearby fjord without mass occurrence of P. periphylla, in Hardangerfjorden, a fjord with high density of salmon farms, and in Kaldfjorden, a northern fjord also hosting aquaculture activities. Measurements of total particulate matter (TPM), particulate organic carbon (POC), chlorophyll a (chl a), and diatom fluxes indicated the export of a diatom bloom starting in March or April and a large input of land-derived inorganic matter during rain and snowmelt events in all fjords sampled. The highest annual POC flux was recorded in the nearly landlocked Lurefjorden. In Hardangerfjorden, export fluxes suggested a local impact of aquaculture operations but freshwater run-off and water exchange had a larger influence on export fluxes than the release of aquaculture waste. In Kaldfjorden, nearly absent TPM, POC, chl a, and diatom fluxes in late spring-early summer suggested that strong stratification prevented the export of particulate matter to depth. Overall, sediment trap-derived fluxes reflected the spatial and temporal variations in the sources of particulate matter in Norwegian fjords.'''
+
+          p = Path('data/canonical/current/repair/records.jsonl')
+          tmp = p.with_suffix('.jsonl.tmp')
+          total = 0
+          matches = 0
+          applied = 0
+          already_present = 0
+
+          with p.open(encoding='utf-8') as src, tmp.open('w', encoding='utf-8') as dst:
+              for line in src:
+                  if not line.strip():
+                      continue
+                  r = json.loads(line)
+                  total += 1
+                  lid = str((r.get('identity') or {}).get('lens_id') or '')
+                  if lid == target_id:
+                      matches += 1
+                      c = r.setdefault('canonical', {})
+                      doi = str(c.get('doi') or r.get('doi') or '').strip().lower()
+                      assert doi == expected_doi, f'Unexpected DOI for target: {doi!r}'
+                      current = c.get('abstract')
+                      if isinstance(current, str) and current.strip():
+                          already_present += 1
+                      else:
+                          c['abstract'] = abstract
+                          applied += 1
+                  dst.write(json.dumps(r, ensure_ascii=False, separators=(',', ':')) + '\n')
+
+          assert total == 22148, total
+          assert matches == 1, matches
+          assert applied + already_present == 1
+          tmp.replace(p)
+          print(json.dumps({'canonical_record_count': total, 'lens_id': target_id, 'doi': expected_doi, 'applied_count': applied, 'already_present_count': already_present, 'source': 'ScienceDirect publisher abstract'}, indent=2))
+          PY
+
+      - name: Commit canonical update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl
+          git diff --cached --quiet && { echo 'No canonical changes'; exit 0; }
+          git commit -m "Add publisher abstract for 058-437-548-010-017"
+          git push origin HEAD:canonical-repair-store
