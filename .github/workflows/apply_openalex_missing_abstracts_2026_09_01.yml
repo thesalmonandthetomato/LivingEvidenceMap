@@ -1,0 +1,117 @@
+name: Apply recovered OpenAlex abstracts to canonical
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - '.github/workflows/apply_openalex_missing_abstracts_2026_09_01.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Download vetted recovery artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/recovery
+          gh api repos/${{ github.repository }}/actions/artifacts/9791819586/zip > /tmp/recovery/recovery.zip
+          unzip -q /tmp/recovery/recovery.zip -d /tmp/recovery/out
+          test -f /tmp/recovery/out/abstract_patches.jsonl
+          test "$(wc -l < /tmp/recovery/out/abstract_patches.jsonl)" -eq 92
+
+      - name: Apply abstracts with strict validation
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          records_path = Path('data/canonical/current/repair/records.jsonl')
+          patches_path = Path('/tmp/recovery/out/abstract_patches.jsonl')
+          report_path = Path('/tmp/recovery/apply_report.json')
+
+          patches = {}
+          for line in patches_path.open(encoding='utf-8'):
+              if not line.strip():
+                  continue
+              p = json.loads(line)
+              rid = p['record_id']
+              assert rid not in patches, f'duplicate patch record_id: {rid}'
+              assert p.get('identity_basis') == 'exact_doi', f'non-exact DOI patch: {rid}'
+              assert p.get('abstract_source') == 'openalex_grobid_xml', f'unexpected source: {rid}'
+              assert isinstance(p.get('abstract'), str) and p['abstract'].strip(), f'blank abstract: {rid}'
+              patches[rid] = p
+
+          assert len(patches) == 92, f'expected 92 patches, found {len(patches)}'
+
+          out_path = records_path.with_suffix('.jsonl.tmp')
+          seen = set()
+          applied = 0
+          already_present = 0
+          total = 0
+
+          with records_path.open(encoding='utf-8') as src, out_path.open('w', encoding='utf-8') as dst:
+              for line in src:
+                  if not line.strip():
+                      continue
+                  r = json.loads(line)
+                  total += 1
+                  rid = r.get('record_id') or r.get('lens_id') or (r.get('canonical') or {}).get('lens_id')
+                  if rid in patches:
+                      assert rid not in seen, f'duplicate canonical record_id: {rid}'
+                      seen.add(rid)
+                      p = patches[rid]
+                      canonical = r.setdefault('canonical', {})
+                      current = canonical.get('abstract')
+                      if isinstance(current, str) and current.strip():
+                          already_present += 1
+                      else:
+                          canonical['abstract'] = p['abstract'].strip()
+                          applied += 1
+                  dst.write(json.dumps(r, ensure_ascii=False, separators=(',', ':')) + '\n')
+
+          missing = sorted(set(patches) - seen)
+          assert not missing, f'patch records not found in canonical: {missing}'
+          assert applied + already_present == 92
+          assert total == 22148, f'unexpected canonical record count: {total}'
+
+          out_path.replace(records_path)
+          report = {
+              'canonical_record_count': total,
+              'patch_count': len(patches),
+              'applied_count': applied,
+              'already_present_count': already_present,
+              'unmatched_patch_count': len(missing),
+              'source': 'OpenAlex GROBID XML',
+              'identity_basis': 'exact DOI',
+              'source_artifact_id': 9791819586,
+              'source_run_id': 33484890198
+          }
+          report_path.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Commit canonical update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl
+          if git diff --cached --quiet; then
+            echo "No canonical changes required"
+          else
+            git commit -m "Add 92 recovered OpenAlex abstracts to canonical"
+            git push origin HEAD:canonical-repair-store
+          fi
