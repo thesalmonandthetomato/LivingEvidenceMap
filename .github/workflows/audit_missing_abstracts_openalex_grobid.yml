@@ -1,0 +1,32 @@
+name: Audit missing abstracts - OpenAlex GROBID
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [updater-workflow-04-relevance-screening]
+    paths: ['.github/workflows/audit_missing_abstracts_openalex_grobid.yml']
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical_store
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit OpenAlex GROBID availability
+        run: |
+          python scripts/updater/audit_missing_abstracts_openalex_grobid.py \
+            --records canonical_store/data/canonical/current/repair/records.jsonl \
+            --output testdata/openalex_grobid_missing_abstracts/audit.jsonl \
+            --report testdata/openalex_grobid_missing_abstracts/report.json
+          cat testdata/openalex_grobid_missing_abstracts/report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openalex-grobid-missing-abstracts-${{ github.run_id }}
+          path: testdata/openalex_grobid_missing_abstracts/
