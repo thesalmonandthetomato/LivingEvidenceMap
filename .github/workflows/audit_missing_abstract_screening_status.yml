@@ -1,0 +1,58 @@
+name: Audit missing-abstract screening status
+
+on:
+  push:
+    paths:
+      - '.github/missing_abstract_status_trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Count screening decisions among missing abstracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from collections import Counter
+
+          path='data/canonical/current/repair/records.jsonl'
+          total=0
+          missing=0
+          counts=Counter()
+
+          for line in open(path, encoding='utf-8'):
+              if not line.strip():
+                  continue
+              r=json.loads(line)
+              total += 1
+              abstract=((r.get('canonical') or {}).get('abstract'))
+              if abstract is not None and str(abstract).strip():
+                  continue
+              missing += 1
+              decision=(((r.get('screening') or {}).get('relevance') or {}).get('decision'))
+              if decision is None or not str(decision).strip():
+                  decision='MISSING_DECISION'
+              counts[str(decision).strip()] += 1
+
+          out={
+              'canonical_records': total,
+              'without_abstract': missing,
+              'screening_relevance_decision_counts': dict(sorted(counts.items()))
+          }
+          print(json.dumps(out, indent=2, ensure_ascii=False))
+          assert total == 22148, out
+          assert missing == 1061, out
+          PY
