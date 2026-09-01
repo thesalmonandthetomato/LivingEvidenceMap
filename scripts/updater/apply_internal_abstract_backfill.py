@@ -16,6 +16,15 @@ def abstract(r):
     return norm((r.get('canonical') or {}).get('abstract'))
 
 
+def read_jsonl(path):
+    out=[]
+    with Path(path).open(encoding='utf-8') as f:
+        for line in f:
+            if line.strip():
+                out.append(json.loads(line))
+    return out
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--canonical', required=True)
@@ -26,7 +35,7 @@ def main():
     ap.add_argument('--expected-partial-replace', type=int, default=6)
     args=ap.parse_args()
 
-    props=[json.loads(x) for x in Path(args.proposals).read_text(encoding='utf-8').splitlines() if x.strip()]
+    props=read_jsonl(args.proposals)
     if len(props)!=args.expected_total:
         raise SystemExit(f'proposal count {len(props)} != expected {args.expected_total}')
     miss=sum(p.get('target')=='missing' for p in props)
@@ -37,7 +46,7 @@ def main():
     if len(by_id)!=len(props): raise SystemExit('duplicate Lens IDs in proposals')
 
     path=Path(args.canonical)
-    records=[json.loads(x) for x in path.read_text(encoding='utf-8').splitlines() if x.strip()]
+    records=read_jsonl(path)
     if len(records)!=22148: raise SystemExit(f'canonical count {len(records)} != 22148')
     before_missing=sum(not abstract(r) for r in records)
     now=datetime.now(timezone.utc).isoformat()
