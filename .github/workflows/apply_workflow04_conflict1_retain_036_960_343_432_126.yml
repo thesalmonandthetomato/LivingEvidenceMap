@@ -1,0 +1,116 @@
+name: Apply Workflow 04 conflict 1 RETAIN correction
+
+on:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - .github/workflows/apply_workflow04_conflict1_retain_036_960_343_432_126.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-correction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out canonical repair store with Git LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Apply human adjudication to canonical relevance decision
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import copy, hashlib, json
+          from pathlib import Path
+
+          target='036-960-343-432-126'
+          records=Path('data/canonical/current/repair/records.jsonl')
+          manifest_path=Path('data/canonical/current/repair/manifest.json')
+          audit_path=Path('data/canonical/adjudication/workflow04_revised_first_200_conflict01_036_960_343_432_126.json')
+          tmp=records.with_suffix('.jsonl.tmp')
+
+          found=0
+          before=None
+          after=None
+          total=0
+
+          with records.open(encoding='utf-8') as src, tmp.open('w',encoding='utf-8') as dst:
+              for line in src:
+                  if not line.strip():
+                      continue
+                  r=json.loads(line)
+                  total += 1
+                  lid=str((r.get('identity') or {}).get('lens_id') or '')
+                  if lid==target:
+                      found += 1
+                      screening=r.setdefault('screening',{})
+                      relevance=screening.setdefault('relevance',{})
+                      before=copy.deepcopy(relevance)
+                      prior_decision=relevance.get('decision')
+                      prior_source=relevance.get('decision_source')
+                      relevance['prior_decision']=prior_decision
+                      relevance['prior_decision_source']=prior_source
+                      relevance['decision']='RETAIN'
+                      relevance['decision_source']='human_adjudication'
+                      relevance['adjudication_set']='workflow04_revised_first_200'
+                      relevance['adjudication_date']='2026-09-01'
+                      relevance['decision_basis']='Human conflict adjudication: eligible rainbow trout is explicitly connected to upstream land-based rainbow trout farms.'
+                      relevance['adjudicated_lens_id']=target
+                      after=copy.deepcopy(relevance)
+                  dst.write(json.dumps(r,ensure_ascii=True,separators=(',',':'))+'\n')
+
+          assert found==1, f'Expected exactly one canonical record for {target}, found {found}'
+          assert total==22148, f'Canonical record count changed unexpectedly: {total}'
+          assert after is not None and str(after.get('decision')).upper()=='RETAIN'
+          tmp.replace(records)
+
+          digest=hashlib.sha256(records.read_bytes()).hexdigest()
+          manifest=json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['records_sha256']=digest
+          manifest['record_count']=total
+          manifest['workflow04_revised_first_200_latest_human_adjudication']={
+              'lens_id':target,
+              'previous_relevance':before,
+              'new_relevance':after,
+              'final_human_decision':'RETAIN',
+              'adjudication_date':'2026-09-01',
+              'reason':'eligible rainbow trout explicitly connected to upstream land-based rainbow trout farms',
+              'record_count_after':total,
+              'records_sha256_after':digest
+          }
+          manifest_path.write_text(json.dumps(manifest,indent=2,ensure_ascii=True)+'\n',encoding='utf-8')
+
+          audit_path.parent.mkdir(parents=True,exist_ok=True)
+          audit_path.write_text(json.dumps({
+              'schema':'living_evidence_map_human_screening_adjudication',
+              'schema_version':1,
+              'adjudication_set':'workflow04_revised_first_200',
+              'adjudication_date':'2026-09-01',
+              'lens_id':target,
+              'previous_relevance':before,
+              'final_human_decision':'RETAIN',
+              'new_relevance':after,
+              'reason':'eligible rainbow trout explicitly connected to upstream land-based rainbow trout farms',
+              'records_sha256_after':digest
+          },indent=2,ensure_ascii=True)+'\n',encoding='utf-8')
+
+          print(json.dumps({'lens_id':target,'before':before,'after':after,'record_count':total,'sha256':digest},indent=2))
+          PY
+
+      - name: Commit canonical correction and audit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl \
+                  data/canonical/current/repair/manifest.json \
+                  data/canonical/adjudication/workflow04_revised_first_200_conflict01_036_960_343_432_126.json
+          git commit -m "Adjudicate Workflow 04 conflict 1 as RETAIN"
+          git push origin HEAD:canonical-repair-store
