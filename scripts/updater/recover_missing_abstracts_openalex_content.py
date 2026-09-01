@@ -13,6 +13,7 @@ content but no GROBID XML.
 from __future__ import annotations
 
 import argparse
+import gzip
 import io
 import json
 import os
@@ -55,13 +56,7 @@ def getv(d, *paths):
 
 
 def record_id(record):
-    return str(getv(
-        record,
-        ("identity", "lens_id"),
-        ("record_id",),
-        ("lens_id",),
-        ("canonical", "lens_id"),
-    ) or "")
+    return str(getv(record, ("identity", "lens_id"), ("record_id",), ("lens_id",), ("canonical", "lens_id")) or "")
 
 
 def title_of(record):
@@ -102,7 +97,22 @@ def text_from_element(element):
     return clean(" ".join(element.itertext()))
 
 
-def extract_tei_abstract(xml_bytes):
+def maybe_decompress_gzip(raw, headers=None):
+    headers = headers or {}
+    ctype = str(headers.get("Content-Type") or headers.get("content-type") or "").lower()
+    cenc = str(headers.get("Content-Encoding") or headers.get("content-encoding") or "").lower()
+    if raw[:2] == b"\x1f\x8b" or "gzip" in ctype or cenc == "gzip":
+        return gzip.decompress(raw)
+    return raw
+
+
+def extract_tei_abstract(xml_bytes, headers=None):
+    xml_bytes = maybe_decompress_gzip(xml_bytes, headers)
+    # Fail clearly if OpenAlex returned a non-XML error document/body.
+    stripped = xml_bytes.lstrip()
+    if not stripped.startswith(b"<"):
+        preview = stripped[:80].decode("utf-8", errors="replace")
+        raise ValueError(f"OpenAlex GROBID response was not XML: {preview!r}")
     root = ET.fromstring(xml_bytes)
     candidates = []
     for element in root.iter():
@@ -115,13 +125,9 @@ def extract_tei_abstract(xml_bytes):
 
 def extract_pdf_abstract(pdf_bytes):
     from pypdf import PdfReader
-
     reader = PdfReader(io.BytesIO(pdf_bytes))
-    # Abstracts should be in front matter; bounded extraction avoids processing
-    # the full document and reduces false matches.
     raw_text = "\n".join((page.extract_text() or "") for page in reader.pages[:6])
     raw_text = raw_text.replace("\r", "\n")
-
     patterns = [
         r"(?is)(?:^|\n)\s*abstract\s*[:.\-]?\s*(.{80,12000}?)(?=\n\s*(?:keywords?|key\s+words|index\s+terms|introduction|1\.?\s+introduction)\b)",
         r"(?is)(?:^|\n)\s*summary\s*[:.\-]?\s*(.{80,12000}?)(?=\n\s*(?:keywords?|key\s+words|introduction|1\.?\s+introduction)\b)",
@@ -147,8 +153,8 @@ def content_url(work, kind):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--records", required=True)
-    parser.add_argument("--output", required=True, help="Per-record audit JSONL")
-    parser.add_argument("--patches", required=True, help="Recovered abstract patch JSONL")
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--patches", required=True)
     parser.add_argument("--report", required=True)
     parser.add_argument("--max-content-downloads", type=int, default=70)
     parser.add_argument("--delay", type=float, default=0.08)
@@ -163,23 +169,13 @@ def main():
     report_path = Path(args.report)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    rows = []
-    patches = []
+    rows, patches = [], []
     content_downloads = 0
-    counts = {
-        "input_record_count": 0,
-        "missing_abstract_count": 0,
-        "missing_with_doi_count": 0,
-        "openalex_matched_count": 0,
-        "grobid_xml_available_count": 0,
-        "pdf_only_available_count": 0,
-        "grobid_download_attempt_count": 0,
-        "pdf_download_attempt_count": 0,
-        "grobid_abstract_recovered_count": 0,
-        "pdf_abstract_recovered_count": 0,
-        "content_checked_no_abstract_count": 0,
-        "content_download_failure_count": 0,
-    }
+    counts = {k: 0 for k in [
+        "input_record_count","missing_abstract_count","missing_with_doi_count","openalex_matched_count",
+        "grobid_xml_available_count","pdf_only_available_count","grobid_download_attempt_count",
+        "pdf_download_attempt_count","grobid_abstract_recovered_count","pdf_abstract_recovered_count",
+        "content_checked_no_abstract_count","content_download_failure_count"]}
 
     with open(args.records, encoding="utf-8") as handle:
         for line in handle:
@@ -190,127 +186,77 @@ def main():
             if abstract_of(record):
                 continue
             counts["missing_abstract_count"] += 1
-
             doi = doi_of(record)
             if not doi:
                 continue
             counts["missing_with_doi_count"] += 1
-
-            result = {
-                "record_id": record_id(record),
-                "title": title_of(record),
-                "doi": doi,
-                "openalex_matched": False,
-                "grobid_xml": False,
-                "pdf": False,
-                "status": "not_recovered",
-                "canonical_mutated": False,
-            }
-
-            status, work, headers = fetch_work_by_doi(doi, api_key)
+            result = {"record_id": record_id(record), "title": title_of(record), "doi": doi,
+                      "openalex_matched": False, "grobid_xml": False, "pdf": False,
+                      "status": "not_recovered", "canonical_mutated": False}
+            status, work, _ = fetch_work_by_doi(doi, api_key)
             result["openalex_lookup_status"] = status
             if not work:
-                rows.append(result)
-                time.sleep(args.delay)
-                continue
-
+                rows.append(result); time.sleep(args.delay); continue
             counts["openalex_matched_count"] += 1
             result["openalex_matched"] = True
             result["openalex_id"] = work.get("id")
             openalex_doi = norm_doi((work.get("ids") or {}).get("doi") or work.get("doi"))
             result["openalex_doi"] = openalex_doi
-
-            # Direct DOI resolution should be exact, but fail closed if OpenAlex
-            # returns a conflicting DOI.
             if openalex_doi and openalex_doi != doi:
-                result["status"] = "doi_conflict"
-                rows.append(result)
-                continue
-
-            has_content = work.get("has_content") or {}
-            grobid = bool(has_content.get("grobid_xml"))
-            pdf = bool(has_content.get("pdf"))
-            result["grobid_xml"] = grobid
-            result["pdf"] = pdf
-            if grobid:
-                counts["grobid_xml_available_count"] += 1
-            if pdf and not grobid:
-                counts["pdf_only_available_count"] += 1
-
+                result["status"] = "doi_conflict"; rows.append(result); continue
+            hc = work.get("has_content") or {}
+            grobid, pdf = bool(hc.get("grobid_xml")), bool(hc.get("pdf"))
+            result["grobid_xml"], result["pdf"] = grobid, pdf
+            if grobid: counts["grobid_xml_available_count"] += 1
+            if pdf and not grobid: counts["pdf_only_available_count"] += 1
             if not grobid and not pdf:
-                result["status"] = "no_openalex_content"
-                rows.append(result)
-                continue
-
+                result["status"] = "no_openalex_content"; rows.append(result); continue
             if content_downloads >= args.max_content_downloads:
-                result["status"] = "content_download_limit_reached"
-                rows.append(result)
-                continue
+                result["status"] = "content_download_limit_reached"; rows.append(result); continue
 
-            recovered = None
-            source = None
+            recovered = source = None
             try:
                 if grobid:
                     counts["grobid_download_attempt_count"] += 1
-                    raw, _, _ = request_bytes(content_url(work, "grobid_xml"), api_key, "application/xml,text/xml,*/*")
+                    raw, _, headers = request_bytes(content_url(work, "grobid_xml"), api_key, "application/xml,text/xml,application/gzip,*/*")
                     content_downloads += 1
-                    recovered = extract_tei_abstract(raw)
+                    recovered = extract_tei_abstract(raw, headers)
                     source = "openalex_grobid_xml"
-                    if recovered:
-                        counts["grobid_abstract_recovered_count"] += 1
+                    if recovered: counts["grobid_abstract_recovered_count"] += 1
                 elif pdf:
                     counts["pdf_download_attempt_count"] += 1
                     raw, _, _ = request_bytes(content_url(work, "pdf"), api_key, "application/pdf,*/*")
                     content_downloads += 1
                     recovered = extract_pdf_abstract(raw)
                     source = "openalex_pdf"
-                    if recovered:
-                        counts["pdf_abstract_recovered_count"] += 1
+                    if recovered: counts["pdf_abstract_recovered_count"] += 1
             except Exception as exc:
                 counts["content_download_failure_count"] += 1
                 result["status"] = "content_download_or_parse_failure"
                 result["error"] = f"{type(exc).__name__}: {exc}"
 
             if recovered:
-                result["status"] = "abstract_recovered"
-                result["abstract_source"] = source
-                result["abstract_chars"] = len(recovered)
-                result["abstract"] = recovered
-                patches.append({
-                    "record_id": record_id(record),
-                    "title": title_of(record),
-                    "doi": doi,
-                    "openalex_id": work.get("id"),
-                    "abstract": recovered,
-                    "abstract_source": source,
-                    "identity_basis": "exact_doi",
-                    "canonical_mutated": False,
-                })
+                result.update(status="abstract_recovered", abstract_source=source,
+                              abstract_chars=len(recovered), abstract=recovered)
+                patches.append({"record_id": record_id(record), "title": title_of(record), "doi": doi,
+                                "openalex_id": work.get("id"), "abstract": recovered,
+                                "abstract_source": source, "identity_basis": "exact_doi",
+                                "canonical_mutated": False})
             elif result["status"] == "not_recovered":
                 result["status"] = "content_checked_no_abstract"
                 counts["content_checked_no_abstract_count"] += 1
-
             rows.append(result)
             time.sleep(args.delay)
 
-    with output_path.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-
-    with patches_path.open("w", encoding="utf-8") as handle:
-        for patch in patches:
-            handle.write(json.dumps(patch, ensure_ascii=False) + "\n")
-
-    report = {
-        **counts,
-        "content_download_count": content_downloads,
-        "recovered_total_count": len(patches),
-        "max_content_downloads": args.max_content_downloads,
-        "canonical_mutated": False,
-    }
+    with output_path.open("w", encoding="utf-8") as h:
+        for row in rows: h.write(json.dumps(row, ensure_ascii=False) + "\n")
+    with patches_path.open("w", encoding="utf-8") as h:
+        for patch in patches: h.write(json.dumps(patch, ensure_ascii=False) + "\n")
+    report = {**counts, "content_download_count": content_downloads,
+              "recovered_total_count": len(patches), "max_content_downloads": args.max_content_downloads,
+              "canonical_mutated": False}
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
-
 
 if __name__ == "__main__":
     main()
