@@ -1,0 +1,59 @@
+name: Recover all missing abstracts from OpenAlex content
+
+on:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - '.github/workflows/recover_missing_abstracts_openalex_full.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: openalex-abstract-recovery-full
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Check out workflow branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical_store
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PDF parser
+        run: pip install pypdf
+
+      - name: Recover all currently available missing abstracts from OpenAlex content
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        run: |
+          python scripts/updater/recover_missing_abstracts_openalex_content.py \
+            --records canonical_store/data/canonical/current/repair/records.jsonl \
+            --output testdata/openalex_abstract_recovery_full/audit.jsonl \
+            --patches testdata/openalex_abstract_recovery_full/abstract_patches.jsonl \
+            --report testdata/openalex_abstract_recovery_full/report.json \
+            --max-content-downloads 159
+          cat testdata/openalex_abstract_recovery_full/report.json
+
+      - name: Upload full recovery outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-abstract-recovery-full-${{ github.run_id }}
+          path: testdata/openalex_abstract_recovery_full/
+          if-no-files-found: error
+          retention-days: 90
