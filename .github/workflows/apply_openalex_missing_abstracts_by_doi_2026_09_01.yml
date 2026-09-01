@@ -1,0 +1,107 @@
+name: Apply recovered OpenAlex abstracts to canonical by DOI
+
+on:
+  push:
+    branches: [updater-workflow-04-relevance-screening]
+    paths:
+      - '.github/workflows/apply_openalex_missing_abstracts_by_doi_2026_09_01.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Download vetted recovery artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/recovery
+          gh api repos/thesalmonandthetomato/LivingEvidenceMap/actions/artifacts/9791819586/zip > /tmp/recovery/recovery.zip
+          unzip -q /tmp/recovery/recovery.zip -d /tmp/recovery/out
+          test -f /tmp/recovery/out/abstract_patches.jsonl
+          test "$(wc -l < /tmp/recovery/out/abstract_patches.jsonl)" -eq 92
+
+      - name: Apply abstracts using exact DOI identity
+        run: |
+          python - <<'PY'
+          import json, re
+          from pathlib import Path
+
+          records_path = Path('data/canonical/current/repair/records.jsonl')
+          patches_path = Path('/tmp/recovery/out/abstract_patches.jsonl')
+
+          def norm_doi(v):
+              if not isinstance(v, str): return None
+              s=v.strip()
+              s=re.sub(r'^https?://(?:dx\\.)?doi\\.org/','',s,flags=re.I)
+              s=re.sub(r'^doi:\\s*','',s,flags=re.I).strip()
+              return s.lower() if s.lower().startswith('10.') and '/' in s else None
+
+          patches_by_doi = {}
+          for line in patches_path.open(encoding='utf-8'):
+              if not line.strip(): continue
+              p=json.loads(line)
+              assert p.get('identity_basis') == 'exact_doi'
+              assert p.get('abstract_source') == 'openalex_grobid_xml'
+              doi=norm_doi(p.get('doi'))
+              assert doi and doi not in patches_by_doi, f'duplicate/invalid patch DOI: {doi}'
+              assert isinstance(p.get('abstract'), str) and p['abstract'].strip()
+              patches_by_doi[doi]=p
+          assert len(patches_by_doi)==92
+
+          out_path=records_path.with_suffix('.jsonl.tmp')
+          seen=set(); applied=0; already_present=0; total=0
+          with records_path.open(encoding='utf-8') as src, out_path.open('w',encoding='utf-8') as dst:
+              for line in src:
+                  if not line.strip(): continue
+                  r=json.loads(line); total += 1
+                  c=r.get('canonical') if isinstance(r.get('canonical'),dict) else {}
+                  vals=[c.get('doi'),r.get('doi')]
+                  ids=r.get('identifiers')
+                  if isinstance(ids,dict): vals += [ids.get('doi'),ids.get('DOI')]
+                  raw=r.get('raw')
+                  if isinstance(raw,dict): vals.append(raw.get('doi'))
+                  dois={d for d in (norm_doi(v) for v in vals) if d}
+                  matched=dois.intersection(patches_by_doi)
+                  assert len(matched) <= 1, f'canonical record matches multiple patch DOIs: {matched}'
+                  if matched:
+                      doi=next(iter(matched))
+                      assert doi not in seen, f'duplicate canonical DOI match: {doi}'
+                      seen.add(doi)
+                      p=patches_by_doi[doi]
+                      canonical=r.setdefault('canonical',{})
+                      current=canonical.get('abstract')
+                      if isinstance(current,str) and current.strip():
+                          already_present += 1
+                      else:
+                          canonical['abstract']=p['abstract'].strip()
+                          applied += 1
+                  dst.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+
+          missing=sorted(set(patches_by_doi)-seen)
+          assert not missing, f'patch DOIs not found in canonical: {missing}'
+          assert applied + already_present == 92
+          assert total == 22148
+          out_path.replace(records_path)
+          print(json.dumps({'canonical_record_count':total,'patch_count':92,'applied_count':applied,'already_present_count':already_present,'unmatched_patch_count':0,'identity_basis':'exact DOI','source_artifact_id':9791819586},indent=2))
+          PY
+
+      - name: Commit canonical update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl
+          git diff --cached --quiet && { echo 'No canonical changes'; exit 0; }
+          git commit -m "Add 92 recovered OpenAlex abstracts to canonical"
+          git push origin HEAD:canonical-repair-store
