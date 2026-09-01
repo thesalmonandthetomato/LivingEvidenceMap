@@ -1,0 +1,110 @@
+name: Audit title equals abstract
+
+on:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - .github/workflows/audit_title_equals_abstract.yml
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out canonical repair store with Git LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Audit title equals abstract
+        shell: python
+        run: |
+          import csv
+          import json
+          import re
+          import unicodedata
+          from pathlib import Path
+
+          src = Path('data/canonical/current/repair/records.jsonl')
+          out = Path('title_equals_abstract_audit.csv')
+          summary = Path('title_equals_abstract_summary.json')
+
+          def text(v):
+              if v is None:
+                  return ''
+              if isinstance(v, str):
+                  return v
+              return str(v)
+
+          def norm(v):
+              s = unicodedata.normalize('NFKC', text(v))
+              s = re.sub(r'\s+', ' ', s).strip().casefold()
+              return s
+
+          rows = []
+          total = 0
+          with_title = 0
+          with_abstract = 0
+          raw_exact = 0
+          normalised_exact = 0
+
+          with src.open('r', encoding='utf-8') as fh:
+              for line_no, line in enumerate(fh, 1):
+                  if not line.strip():
+                      continue
+                  rec = json.loads(line)
+                  total += 1
+                  can = rec.get('canonical') or {}
+                  title = text(can.get('title')).strip()
+                  abstract = text(can.get('abstract')).strip()
+                  if title:
+                      with_title += 1
+                  if abstract:
+                      with_abstract += 1
+                  if not title or not abstract:
+                      continue
+
+                  is_raw = title == abstract
+                  is_norm = norm(title) == norm(abstract)
+                  if is_raw:
+                      raw_exact += 1
+                  if is_norm:
+                      normalised_exact += 1
+                      prov = rec.get('provenance') or {}
+                      rows.append({
+                          'line_no': line_no,
+                          'lens_id': rec.get('lens_id') or rec.get('id') or '',
+                          'title': title,
+                          'abstract': abstract,
+                          'raw_exact': is_raw,
+                          'normalised_exact': is_norm,
+                          'canonical_field_enrichment': json.dumps(prov.get('canonical_field_enrichment'), ensure_ascii=False, sort_keys=True),
+                      })
+
+          with out.open('w', encoding='utf-8', newline='') as fh:
+              w = csv.DictWriter(fh, fieldnames=['line_no','lens_id','title','abstract','raw_exact','normalised_exact','canonical_field_enrichment'])
+              w.writeheader()
+              w.writerows(rows)
+
+          result = {
+              'total_records': total,
+              'records_with_title': with_title,
+              'records_with_abstract': with_abstract,
+              'raw_title_equals_abstract': raw_exact,
+              'normalised_title_equals_abstract': normalised_exact,
+              'output_csv': str(out),
+          }
+          summary.write_text(json.dumps(result, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          print(json.dumps(result, indent=2, ensure_ascii=False))
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: title-equals-abstract-audit-${{ github.run_id }}
+          path: |
+            title_equals_abstract_audit.csv
+            title_equals_abstract_summary.json
+          if-no-files-found: error
