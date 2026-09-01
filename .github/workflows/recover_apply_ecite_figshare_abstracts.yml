@@ -33,32 +33,46 @@ jobs:
           cp=Path('canonical/data/canonical/current/repair/records.jsonl')
           pp=Path('out/ecite/validated_patch.jsonl')
           patches={}
-          for line in pp.read_text(encoding='utf-8').splitlines():
-              if line.strip():
-                  p=json.loads(line); patches[p['record_id']]=p
-          assert len(patches)==sum(1 for l in pp.read_text(encoding='utf-8').splitlines() if l.strip()), 'duplicate patch record IDs'
-          out=[]; applied=0
-          for line in cp.read_text(encoding='utf-8').splitlines():
-              if not line.strip(): continue
-              r=json.loads(line)
-              rid=str(((r.get('identity') or {}).get('lens_id') or r.get('record_id') or r.get('lens_id') or (r.get('canonical') or {}).get('lens_id') or ''))
-              p=patches.get(rid)
-              if p:
-                  c=r.setdefault('canonical',{})
-                  cur=' '.join(str(c.get('abstract') or '').split())
-                  expected=' '.join(str(p.get('old_abstract') or '').split())
-                  assert cur==expected, f'abstract changed since recovery for {rid}'
-                  c['abstract']=p['abstract']
-                  prov=r.setdefault('provenance',{})
-                  enrich=prov.setdefault('canonical_field_enrichment',[])
-                  enrich.append(p['provenance'])
-                  applied+=1
-              out.append(json.dumps(r,ensure_ascii=False,separators=(',',':')))
-          assert len(out)==22148, f'canonical record count changed: {len(out)}'
+          patch_lines=0
+          with pp.open(encoding='utf-8') as src:
+              for line in src:
+                  if not line.strip(): continue
+                  patch_lines += 1
+                  p=json.loads(line)
+                  rid=p['record_id']
+                  assert rid not in patches, f'duplicate patch record ID: {rid}'
+                  assert p.get('provenance',{}).get('identity_valid') is True
+                  patches[rid]=p
+          assert len(patches)==patch_lines, 'duplicate patch record IDs'
+
+          out_path=cp.with_suffix('.jsonl.tmp')
+          applied=0; total=0; seen=set()
+          with cp.open(encoding='utf-8') as src, out_path.open('w',encoding='utf-8') as dst:
+              for line in src:
+                  if not line.strip(): continue
+                  r=json.loads(line); total += 1
+                  rid=str(((r.get('identity') or {}).get('lens_id') or r.get('record_id') or r.get('lens_id') or (r.get('canonical') or {}).get('lens_id') or ''))
+                  p=patches.get(rid)
+                  if p:
+                      assert rid not in seen, f'duplicate canonical match: {rid}'
+                      seen.add(rid)
+                      c=r.setdefault('canonical',{})
+                      cur=' '.join(str(c.get('abstract') or '').split())
+                      expected=' '.join(str(p.get('old_abstract') or '').split())
+                      assert cur==expected, f'abstract changed since recovery for {rid}'
+                      c['abstract']=p['abstract']
+                      prov=r.setdefault('provenance',{})
+                      enrich=prov.setdefault('canonical_field_enrichment',[])
+                      enrich.append(p['provenance'])
+                      applied += 1
+                  dst.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+          missing=sorted(set(patches)-seen)
+          assert not missing, f'patch record IDs not found in canonical: {missing}'
+          assert total==22148, f'canonical record count changed: {total}'
           assert applied==len(patches), f'applied {applied} != patch {len(patches)}'
-          cp.write_text('\n'.join(out)+'\n',encoding='utf-8')
-          Path('out/ecite/apply_report.json').write_text(json.dumps({'patch_count':len(patches),'applied':applied,'canonical_record_count':len(out),'provenance_path':'provenance.canonical_field_enrichment'},indent=2),encoding='utf-8')
-          print(json.dumps({'patch_count':len(patches),'applied':applied,'canonical_record_count':len(out)},indent=2))
+          out_path.replace(cp)
+          Path('out/ecite/apply_report.json').write_text(json.dumps({'patch_count':len(patches),'applied':applied,'canonical_record_count':total,'provenance_path':'provenance.canonical_field_enrichment'},indent=2),encoding='utf-8')
+          print(json.dumps({'patch_count':len(patches),'applied':applied,'canonical_record_count':total},indent=2))
           PY
       - name: Commit canonical changes
         working-directory: canonical
