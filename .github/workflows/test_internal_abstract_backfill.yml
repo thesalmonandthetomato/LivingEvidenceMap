@@ -1,0 +1,56 @@
+name: Test internal abstract backfill
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out audit code and internal sources
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+          path: workflow
+          fetch-depth: 1
+
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical
+          fetch-depth: 1
+          lfs: true
+
+      - name: Run dry-run internal abstract backfill audit
+        run: |
+          mkdir -p out/internal_abstract_backfill
+          python workflow/scripts/updater/audit_internal_abstract_backfill.py \
+            --canonical canonical/data/canonical/current/repair/records.jsonl \
+            --master "workflow/data/master/current/living_evidence_map_master.csv" \
+            --includes "workflow/data/reference/INCLUDES fixed abstracts.txt" \
+            --outdir out/internal_abstract_backfill
+
+      - name: Verify dry-run invariants
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('out/internal_abstract_backfill/summary.json')
+          s=json.loads(p.read_text(encoding='utf-8'))
+          assert s['canonical_records']==22148, s
+          assert s['canonical_mutated'] is False, s
+          assert s['proposed_total']==s['proposed_missing_fill']+s['proposed_partial_replace'], s
+          print(json.dumps(s,indent=2))
+          PY
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: internal-abstract-backfill-test-${{ github.run_id }}
+          path: out/internal_abstract_backfill/
+          if-no-files-found: error
+          retention-days: 30
