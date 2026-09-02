@@ -1,0 +1,146 @@
+name: Apply salmonid-only search correction
+
+on:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - .github/workflows/apply_salmonid_only_search_correction.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  filter-canonical:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical-store
+          lfs: true
+          fetch-depth: 1
+
+      - name: Remove salmonid-only search hits and write reversible audit
+        shell: python
+        run: |
+          import json, re
+          from pathlib import Path
+
+          src = Path('canonical-store/data/canonical/current/repair/records.jsonl')
+          audit_dir = Path('canonical-store/data/canonical/audit/search_query_corrections')
+          audit_dir.mkdir(parents=True, exist_ok=True)
+          removed_path = audit_dir / '2026-09-02_salmonid_only_removed.jsonl'
+          manifest_path = audit_dir / '2026-09-02_salmonid_only_manifest.json'
+
+          if removed_path.exists() or manifest_path.exists():
+              raise RuntimeError('Audit outputs already exist; refusing to apply correction twice')
+
+          salmonid_re = re.compile(r'\bsalmonid\w*\b', re.I)
+          allowed_re = re.compile(r'\b(?:salmon|salmo|oncorhynchus)\b', re.I)
+
+          def textify(v):
+              if v is None:
+                  return ''
+              if isinstance(v, str):
+                  return v
+              if isinstance(v, list):
+                  return ' '.join(textify(x) for x in v)
+              if isinstance(v, dict):
+                  return ' '.join(textify(x) for x in v.values())
+              return str(v)
+
+          kept = []
+          removed = []
+          total = 0
+
+          with src.open('r', encoding='utf-8') as fh:
+              for line_number, line in enumerate(fh, 1):
+                  if not line.strip():
+                      continue
+                  total += 1
+                  rec = json.loads(line)
+                  c = rec.get('canonical') or {}
+                  searchable = '\n'.join([
+                      textify(c.get('title')),
+                      textify(c.get('abstract')),
+                      textify(c.get('keywords')),
+                  ])
+                  has_salmonid = bool(salmonid_re.search(searchable))
+                  has_allowed = bool(allowed_re.search(searchable))
+
+                  if has_salmonid and not has_allowed:
+                      ident = rec.get('identity') or {}
+                      removed.append({
+                          'original_line_number': line_number,
+                          'lens_id': str(ident.get('lens_id') or rec.get('lens_id') or rec.get('id') or ''),
+                          'reason': 'search_query_correction_salmonid_only',
+                          'criterion': 'salmonid* AND NOT (salmon OR Salmo OR Oncorhynchus) in canonical title/abstract/keywords',
+                          'record': rec,
+                      })
+                  else:
+                      kept.append(rec)
+
+          if not removed:
+              raise RuntimeError('Filter matched zero records; refusing no-op canonical commit')
+
+          kept_ids = set()
+          for rec in kept:
+              ident = rec.get('identity') or {}
+              lid = str(ident.get('lens_id') or rec.get('lens_id') or rec.get('id') or '')
+              if lid:
+                  if lid in kept_ids:
+                      raise RuntimeError(f'Duplicate Lens ID in kept records: {lid}')
+                  kept_ids.add(lid)
+
+          removed_ids = [x['lens_id'] for x in removed if x['lens_id']]
+          if len(removed_ids) != len(set(removed_ids)):
+              raise RuntimeError('Duplicate Lens IDs among removed records')
+          if kept_ids.intersection(removed_ids):
+              raise RuntimeError('A removed Lens ID is still present in the kept set')
+
+          src.write_text(''.join(json.dumps(r, ensure_ascii=False, separators=(',', ':')) + '\n' for r in kept), encoding='utf-8')
+          removed_path.write_text(''.join(json.dumps(r, ensure_ascii=False, separators=(',', ':')) + '\n' for r in removed), encoding='utf-8')
+
+          manifest = {
+              'date': '2026-09-02',
+              'operation': 'remove_search_results_retrieved_only_by_erroneous_salmonid_star_term',
+              'criterion': 'salmonid* AND NOT (salmon OR Salmo OR Oncorhynchus) in canonical title/abstract/keywords',
+              'fields': ['canonical.title', 'canonical.abstract', 'canonical.keywords'],
+              'case_sensitive': False,
+              'records_before': total,
+              'records_removed': len(removed),
+              'records_after': len(kept),
+              'reversibility': {
+                  'method_1': 'git revert the dedicated canonical commit',
+                  'method_2': 'reinsert exact record objects from 2026-09-02_salmonid_only_removed.jsonl using original_line_number',
+              },
+          }
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+
+          # Verify the post-filter canonical store contains no remaining records matching the removal criterion.
+          residual = []
+          for rec in kept:
+              c = rec.get('canonical') or {}
+              searchable = '\n'.join([textify(c.get('title')), textify(c.get('abstract')), textify(c.get('keywords'))])
+              if salmonid_re.search(searchable) and not allowed_re.search(searchable):
+                  ident = rec.get('identity') or {}
+                  residual.append(str(ident.get('lens_id') or ''))
+          if residual:
+              raise RuntimeError(f'Residual salmonid-only records remain: {residual[:20]}')
+
+          print(json.dumps(manifest, indent=2))
+
+      - name: Commit and push canonical correction
+        shell: bash
+        working-directory: canonical-store
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl data/canonical/audit/search_query_corrections/2026-09-02_salmonid_only_removed.jsonl data/canonical/audit/search_query_corrections/2026-09-02_salmonid_only_manifest.json
+          git diff --cached --quiet && { echo "No changes to commit"; exit 1; }
+          git commit -m "Remove salmonid-only search-query records from canonical store"
+          git push origin HEAD:canonical-repair-store
