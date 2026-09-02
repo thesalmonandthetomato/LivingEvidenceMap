@@ -1,0 +1,18 @@
+{
+  "date": "2026-09-02",
+  "operation": "remove_search_results_retrieved_only_by_erroneous_salmonid_star_term",
+  "criterion": "salmonid* AND NOT (salmon OR Salmo OR Oncorhynchus) in canonical title/abstract/keywords",
+  "fields": [
+    "canonical.title",
+    "canonical.abstract",
+    "canonical.keywords"
+  ],
+  "case_sensitive": false,
+  "records_before": 22148,
+  "records_removed": 1660,
+  "records_after": 20488,
+  "reversibility": {
+    "method_1": "git revert the dedicated canonical commit",
+    "method_2": "reinsert exact record objects from 2026-09-02_salmonid_only_removed.jsonl using original_line_number"
+  }
+}
