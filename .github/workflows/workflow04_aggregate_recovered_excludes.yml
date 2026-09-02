@@ -47,11 +47,8 @@ jobs:
       - name: Extract and aggregate safely
         run: |
           python - <<'PY'
-          import csv, json, importlib.util
+          import csv, json
           from pathlib import Path
-
-          spec=importlib.util.spec_from_file_location('v2','scripts/updater/relevance_screen_jsonl_v2.py')
-          mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
 
           def read_jsonl(path):
               text=Path(path).read_text(encoding='utf-8')
@@ -94,7 +91,6 @@ jobs:
                           'model_decision':d,
                           'model_reason':s.get('reason') or '',
                           'input_record':r,
-                          'reconstructed_request':mod.request(r,'gpt-5-mini'),
                           'source_shard':shard,
                       })
 
