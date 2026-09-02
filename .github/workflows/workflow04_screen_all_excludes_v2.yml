@@ -1,0 +1,205 @@
+name: Workflow 04 screen all canonical excludes v2
+
+on:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - .github/workflows/workflow04_screen_all_excludes_v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  screen:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Workflow 04 branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Check out post-search-correction canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical_store
+          lfs: true
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OpenAI client
+        run: python -m pip install --upgrade openai
+
+      - name: Select historical EXCLUDE records for shard
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          shard=int(os.environ['SHARD']); nshards=8
+          src=Path('canonical_store/data/canonical/current/repair/records.jsonl')
+          root=Path(f'testdata/workflow04_all_excludes_v2/shard_{shard}')
+          root.mkdir(parents=True, exist_ok=True)
+          selected=[]; total=0; excludes=0
+          for line in src.open(encoding='utf-8'):
+              if not line.strip(): continue
+              total += 1
+              r=json.loads(line)
+              rel=((r.get('screening') or {}).get('relevance') or {})
+              if str(rel.get('decision') or '').upper() != 'EXCLUDE':
+                  continue
+              excludes += 1
+              if (excludes-1) % nshards == shard:
+                  selected.append(r)
+          with (root/'input.jsonl').open('w',encoding='utf-8') as f:
+              for r in selected:
+                  f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+          manifest={
+              'canonical_records':total,
+              'historical_excludes':excludes,
+              'shard':shard,
+              'shards':nshards,
+              'records_in_shard':len(selected),
+              'canonical_commit':subprocess.check_output(['git','-C','canonical_store','rev-parse','HEAD'],text=True).strip(),
+              'model':'gpt-5-mini',
+              'prompt':'relevance_screen_jsonl_v2.py human-validated production rules'
+          }
+          (root/'input_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(manifest,indent=2))
+          if not selected: raise RuntimeError('Shard contains zero EXCLUDE records')
+          PY
+
+      - name: Screen shard
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          root="testdata/workflow04_all_excludes_v2/shard_${SHARD}"
+          python scripts/updater/relevance_screen_jsonl_v2.py \
+            --input "$root/input.jsonl" \
+            --output "$root/screened.jsonl" \
+            --audit "$root/audit.jsonl" \
+            --checkpoint "$root/checkpoint.json" \
+            --chunk-size 25 --mode openai --model gpt-5-mini
+
+      - name: Extract disagreements
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          shard=int(os.environ['SHARD'])
+          root=Path(f'testdata/workflow04_all_excludes_v2/shard_{shard}')
+          screened=[json.loads(x) for x in (root/'screened.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          audits=[json.loads(x) for x in (root/'audit.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          audit_by={str(x.get('lens_id') or ''):x for x in audits}
+          conflicts=[]; errors=[]; counts={}
+          for r in screened:
+              lid=str((r.get('identity') or {}).get('lens_id') or '')
+              s=r.get('screening') or {}
+              d=str(s.get('decision') or '').upper()
+              counts[d]=counts.get(d,0)+1
+              if s.get('technical_error'): errors.append({'lens_id':lid,'error':s.get('technical_error')})
+              if d!='EXCLUDE':
+                  a=audit_by[lid]
+                  conflicts.append({
+                      'lens_id':lid,
+                      'historical_decision':'EXCLUDE',
+                      'model_decision':d,
+                      'model_reason':s.get('reason') or '',
+                      'input_record':a.get('input_record'),
+                      'screening_provenance':a.get('screening_provenance')
+                  })
+          with (root/'conflicts.jsonl').open('w',encoding='utf-8') as f:
+              for x in conflicts: f.write(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n')
+          summary={'shard':shard,'screened':len(screened),'model_counts':counts,'conflicts':len(conflicts),'technical_errors':len(errors)}
+          (root/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          (root/'technical_errors.json').write_text(json.dumps(errors,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          if errors: raise RuntimeError(f'Technical screening errors: {len(errors)}')
+          PY
+
+      - name: Upload shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-all-excludes-v2-shard-${{ matrix.shard }}
+          path: testdata/workflow04_all_excludes_v2/shard_${{ matrix.shard }}/
+          retention-days: 90
+
+  aggregate:
+    needs: screen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Workflow 04 branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Download shard artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow04-all-excludes-v2-shard-*
+          path: downloaded
+
+      - name: Aggregate disagreements
+        run: |
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+          roots=sorted(Path('downloaded').glob('workflow04-all-excludes-v2-shard-*'))
+          if len(roots)!=8: raise RuntimeError(f'Expected 8 shards, found {len(roots)}')
+          summaries=[]; conflicts=[]
+          for root in roots:
+              summaries.append(json.loads((root/'summary.json').read_text(encoding='utf-8')))
+              p=root/'conflicts.jsonl'
+              conflicts.extend(json.loads(x) for x in p.read_text(encoding='utf-8').splitlines() if x.strip())
+          conflicts.sort(key=lambda x:x['lens_id'])
+          known={}
+          ledger=Path('testdata/workflow04_revised_new_200/human_adjudication_2026-09-02.csv')
+          with ledger.open(encoding='utf-8',newline='') as f:
+              for r in csv.DictReader(f): known[r['lens_id']]=r
+          out=Path('testdata/workflow04_all_excludes_v2/aggregate'); out.mkdir(parents=True,exist_ok=True)
+          new=[]
+          with (out/'all_conflicts.jsonl').open('w',encoding='utf-8') as f:
+              for x in conflicts:
+                  x['previously_adjudicated']=x['lens_id'] in known
+                  if x['lens_id'] in known:
+                      x['previous_human_decision']=known[x['lens_id']]['human_decision']
+                      x['previous_disposition']=known[x['lens_id']]['disposition']
+                  else:
+                      new.append(x)
+                  f.write(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n')
+          with (out/'new_conflicts.jsonl').open('w',encoding='utf-8') as f:
+              for x in new: f.write(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n')
+          summary={
+              'historical_excludes_screened':sum(x['screened'] for x in summaries),
+              'all_model_disagreements':len(conflicts),
+              'previously_adjudicated_disagreements':len(conflicts)-len(new),
+              'new_disagreements_for_human_review':len(new),
+              'model_counts':{},
+              'technical_errors':sum(x['technical_errors'] for x in summaries)
+          }
+          for s in summaries:
+              for k,v in s['model_counts'].items(): summary['model_counts'][k]=summary['model_counts'].get(k,0)+v
+          (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload aggregate review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-all-excludes-v2-aggregate-${{ github.run_id }}
+          path: testdata/workflow04_all_excludes_v2/aggregate/
+          retention-days: 90
