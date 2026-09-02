@@ -1,0 +1,156 @@
+name: Workflow 04 aggregate recovered excludes
+
+on:
+  push:
+    branches:
+      - updater-workflow-04-relevance-screening
+    paths:
+      - .github/workflows/workflow04_aggregate_recovered_excludes.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Workflow 04 branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Download successful original shards
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p downloaded
+          for s in 0 1 2 5 6; do
+            gh run download 33626091575 \
+              --repo thesalmonandthetomato/LivingEvidenceMap \
+              --name "workflow04-all-excludes-v2-shard-${s}" \
+              --dir "downloaded/shard_${s}"
+          done
+
+      - name: Download recovered shards
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for s in 3 4 7; do
+            gh run download 33632881763 \
+              --repo thesalmonandthetomato/LivingEvidenceMap \
+              --name "workflow04-all-excludes-v2-recovered-shard-${s}" \
+              --dir "downloaded/shard_${s}"
+          done
+
+      - name: Extract and aggregate safely
+        run: |
+          python - <<'PY'
+          import csv, json, importlib.util
+          from pathlib import Path
+
+          spec=importlib.util.spec_from_file_location('v2','scripts/updater/relevance_screen_jsonl_v2.py')
+          mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+
+          def read_jsonl(path):
+              text=Path(path).read_text(encoding='utf-8')
+              rows=[]
+              for i, raw in enumerate(text.split('\n'), 1):
+                  if not raw.strip():
+                      continue
+                  try:
+                      rows.append(json.loads(raw))
+                  except Exception as e:
+                      raise RuntimeError(f'{path}: invalid JSONL record {i}: {e}') from e
+              return rows
+
+          all_conflicts=[]
+          summaries=[]
+          total_screened=0
+          total_errors=0
+          model_counts={}
+
+          for shard in range(8):
+              root=Path(f'downloaded/shard_{shard}')
+              screened=read_jsonl(root/'screened.jsonl')
+              manifest=json.loads((root/'input_manifest.json').read_text(encoding='utf-8'))
+              expected=int(manifest['records_in_shard'])
+              if len(screened) != expected:
+                  raise RuntimeError(f'shard {shard}: expected {expected} screened records, found {len(screened)}')
+
+              counts={}; errors=[]; conflicts=[]
+              for r in screened:
+                  lid=str((r.get('identity') or {}).get('lens_id') or '')
+                  s=r.get('screening') or {}
+                  d=str(s.get('decision') or '').upper()
+                  counts[d]=counts.get(d,0)+1
+                  if s.get('technical_error'):
+                      errors.append({'lens_id':lid,'error':s.get('technical_error')})
+                  if d!='EXCLUDE':
+                      conflicts.append({
+                          'lens_id':lid,
+                          'historical_decision':'EXCLUDE',
+                          'model_decision':d,
+                          'model_reason':s.get('reason') or '',
+                          'input_record':r,
+                          'reconstructed_request':mod.request(r,'gpt-5-mini'),
+                          'source_shard':shard,
+                      })
+
+              summary={'shard':shard,'screened':len(screened),'model_counts':counts,'conflicts':len(conflicts),'technical_errors':len(errors)}
+              summaries.append(summary)
+              total_screened += len(screened)
+              total_errors += len(errors)
+              for k,v in counts.items(): model_counts[k]=model_counts.get(k,0)+v
+              all_conflicts.extend(conflicts)
+
+          if total_screened != 7566:
+              raise RuntimeError(f'Expected 7566 historical excludes screened, found {total_screened}')
+
+          all_conflicts.sort(key=lambda x:x['lens_id'])
+          known={}
+          ledger=Path('testdata/workflow04_revised_new_200/human_adjudication_2026-09-02.csv')
+          with ledger.open(encoding='utf-8',newline='') as f:
+              for r in csv.DictReader(f): known[r['lens_id']]=r
+
+          out=Path('testdata/workflow04_all_excludes_v2/aggregate_recovered')
+          out.mkdir(parents=True,exist_ok=True)
+          new=[]
+          with (out/'all_conflicts.jsonl').open('w',encoding='utf-8') as f:
+              for x in all_conflicts:
+                  x['previously_adjudicated']=x['lens_id'] in known
+                  if x['lens_id'] in known:
+                      x['previous_human_decision']=known[x['lens_id']]['human_decision']
+                      x['previous_disposition']=known[x['lens_id']]['disposition']
+                  else:
+                      new.append(x)
+                  f.write(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n')
+          with (out/'new_conflicts.jsonl').open('w',encoding='utf-8') as f:
+              for x in new:
+                  f.write(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n')
+
+          summary={
+              'canonical_records':20488,
+              'canonical_commit':'a90c916d6417e4d36ccae87b15a4d6b0fe3eaba6',
+              'historical_excludes_screened':total_screened,
+              'all_model_disagreements':len(all_conflicts),
+              'previously_adjudicated_disagreements':len(all_conflicts)-len(new),
+              'new_disagreements_for_human_review':len(new),
+              'model_counts':model_counts,
+              'technical_errors':total_errors,
+              'source_runs':{'original':33626091575,'recovered':33632881763},
+              'shards':summaries,
+          }
+          (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          if total_errors:
+              raise RuntimeError(f'Technical screening errors: {total_errors}')
+          PY
+
+      - name: Upload aggregate review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-all-excludes-v2-aggregate-recovered-${{ github.run_id }}
+          path: testdata/workflow04_all_excludes_v2/aggregate_recovered/
+          retention-days: 90
