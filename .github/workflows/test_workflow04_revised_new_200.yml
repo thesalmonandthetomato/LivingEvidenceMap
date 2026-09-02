@@ -1,0 +1,191 @@
+name: Test Workflow 04 revised prompt - new independent 200
+
+on:
+  push:
+    branches: [updater-workflow-04-relevance-screening]
+    paths: [.github/workflows/test_workflow04_revised_new_200.yml]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  revised-new-200:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out Workflow 04 branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Check out current canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: canonical_store
+          lfs: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OpenAI client
+        run: python -m pip install --upgrade openai
+
+      - name: Download prior independent validation IDs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p testdata/workflow04_revised_new_200/prior
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9751108982/zip" \
+            -o testdata/workflow04_revised_new_200/prior.zip
+          unzip -q testdata/workflow04_revised_new_200/prior.zip -d testdata/workflow04_revised_new_200/prior
+          test -f testdata/workflow04_revised_new_200/prior/next_200_lens_ids.txt
+          test -f canonical_store/data/canonical/current/repair/records.jsonl
+
+      - name: Select genuinely new independent 200
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, subprocess
+          from pathlib import Path
+
+          root=Path('testdata/workflow04_revised_new_200')
+          first={x.strip() for x in Path('testdata/workflow04/verification_200_lens_ids.txt').read_text(encoding='utf-8').splitlines() if x.strip()}
+          prior={x.strip() for x in (root/'prior'/'next_200_lens_ids.txt').read_text(encoding='utf-8').splitlines() if x.strip()}
+          assert len(first)==200 and len(prior)==200
+          assert not (first & prior), 'Prior validation samples overlap'
+          excluded=first|prior
+
+          source=Path('canonical_store/data/canonical/current/repair/records.jsonl')
+          candidates=[]
+          total=0
+          for line in source.open(encoding='utf-8'):
+              if not line.strip(): continue
+              total+=1
+              r=json.loads(line)
+              lid=str((r.get('identity') or {}).get('lens_id') or '')
+              if lid and lid not in excluded:
+                  key=hashlib.sha256(('workflow04-revised-validation-2026-09-02-v2:'+lid).encode()).hexdigest()
+                  candidates.append((key,lid,r))
+          assert total==22148, total
+          candidates.sort(key=lambda x:x[0])
+          selected=candidates[:200]
+          assert len(selected)==200
+          ids=[lid for _,lid,_ in selected]
+          assert len(set(ids))==200
+          assert not (set(ids)&excluded)
+
+          root.mkdir(parents=True,exist_ok=True)
+          with (root/'input_200.jsonl').open('w',encoding='utf-8') as f:
+              for _,_,r in selected:
+                  f.write(json.dumps(r,ensure_ascii=True,separators=(',',':'))+'\n')
+          (root/'new_200_lens_ids.txt').write_text('\n'.join(ids)+'\n',encoding='utf-8')
+          canonical_commit=subprocess.check_output(['git','-C','canonical_store','rev-parse','HEAD'],text=True).strip()
+          with_abs=sum(bool(((r.get('canonical') or {}).get('abstract') or '').strip()) for _,_,r in selected)
+          manifest={
+              'records':200,
+              'canonical_source_records':total,
+              'canonical_commit':canonical_commit,
+              'records_with_abstract':with_abs,
+              'records_without_abstract':200-with_abs,
+              'sample':'new independent deterministic pseudo-random sample',
+              'excluded_previous_validation_ids':len(excluded),
+              'overlap_with_previous_samples':0,
+              'excluded_samples':'original/revised first 200 plus prior independent next 200',
+              'prior_independent_artifact_id':9751108982,
+              'selection_seed':'workflow04-revised-validation-2026-09-02-v2',
+              'screening_prompt':'Workflow 04 validation prompt after full 42-conflict human review'
+          }
+          (root/'input_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Screen new 200 with revised prompt
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          python scripts/updater/relevance_screen_jsonl_revised_validation.py \
+            --input testdata/workflow04_revised_new_200/input_200.jsonl \
+            --output testdata/workflow04_revised_new_200/screened_200.jsonl \
+            --audit testdata/workflow04_revised_new_200/screening_audit_200.jsonl \
+            --checkpoint testdata/workflow04_revised_new_200/checkpoint.json \
+            --chunk-size 25 --mode openai --model gpt-5-mini
+
+      - name: Compare revised model with current canonical decisions
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import csv, json
+          from collections import Counter
+          from pathlib import Path
+
+          root=Path('testdata/workflow04_revised_new_200')
+          source=[json.loads(x) for x in (root/'input_200.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          screened=[json.loads(x) for x in (root/'screened_200.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          assert len(source)==len(screened)==200
+          src_by_id={str((r.get('identity') or {}).get('lens_id') or ''):r for r in source}
+          assert len(src_by_id)==200
+
+          matrix=Counter(); conflicts=[]; errors=[]; model_counts=Counter()
+          for i,r in enumerate(screened,1):
+              lid=str((r.get('identity') or {}).get('lens_id') or '')
+              src=src_by_id[lid]
+              rel=((src.get('screening') or {}).get('relevance') or {})
+              canonical=str(rel.get('decision') or '').upper()
+              assert canonical in {'RETAIN','EXCLUDE'}, (lid,canonical)
+              s=r.get('screening') or {}
+              model=str(s.get('decision') or '').upper()
+              assert model in {'RETAIN','EXCLUDE','UNCERTAIN'}, (lid,model)
+              model_counts[model]+=1
+              if s.get('technical_error'): errors.append({'lens_id':lid,'error':s.get('technical_error')})
+              matrix[(canonical,model)]+=1
+              if canonical!=model:
+                  c=src.get('canonical') or {}
+                  conflicts.append({
+                      'conflict_number':len(conflicts)+1,
+                      'sample_order':i,
+                      'lens_id':lid,
+                      'canonical_decision':canonical,
+                      'model_decision':model,
+                      'title':c.get('title') or '',
+                      'journal_source_title':c.get('source_title') or c.get('journal') or '',
+                      'keywords':c.get('keywords') or '',
+                      'abstract':c.get('abstract') or '',
+                      'model_reason':s.get('reason') or ''
+                  })
+
+          fields=['conflict_number','sample_order','lens_id','canonical_decision','model_decision','title','journal_source_title','keywords','abstract','model_reason']
+          with (root/'conflicts.csv').open('w',newline='',encoding='utf-8-sig') as f:
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(conflicts)
+          summary={
+              'records':200,
+              'agreements':200-len(conflicts),
+              'conflicts':len(conflicts),
+              'agreement_rate':(200-len(conflicts))/200,
+              'technical_errors':len(errors),
+              'model_decision_counts':dict(sorted(model_counts.items())),
+              'matrix':{f'{a}__{b}':n for (a,b),n in sorted(matrix.items())}
+          }
+          (root/'comparison_summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          (root/'technical_errors.json').write_text(json.dumps(errors,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          assert not errors, errors
+          PY
+
+      - name: Upload revised new-200 artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-revised-new-200-${{ github.run_id }}
+          path: testdata/workflow04_revised_new_200/
+          retention-days: 90
+          if-no-files-found: warn
