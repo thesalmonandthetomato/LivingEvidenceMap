@@ -18,6 +18,9 @@ from pathlib import Path
 from deduplicate_jsonl import canonical, extract_dois, load_records, norm
 
 PREPRINT_TERMS = {"preprint", "biorxiv", "medrxiv", "arxiv", "repository", "thesis", "dissertation"}
+AUTO_ABSTRACT_THRESHOLD = 0.95
+AUTO_TITLE_THRESHOLD = 0.90
+MAX_COMPATIBLE_YEAR_GAP = 2
 
 
 def raw_payload(record):
@@ -44,16 +47,54 @@ def page_int(value):
     return int(m.group(0)) if m else None
 
 
-def author_count(record):
+def author_values(record):
     authors = canonical(record).get("authors") or []
     if isinstance(authors, str):
-        return len([x for x in re.split(r"\s*\|\s*|\s*;\s*", authors) if x.strip()])
-    return len(authors) if isinstance(authors, list) else 0
+        return [norm(x) for x in re.split(r"\s*\|\s*|\s*;\s*", authors) if x.strip()]
+    if not isinstance(authors, list):
+        return []
+    out = []
+    for a in authors:
+        if isinstance(a, dict):
+            name = " ".join(x for x in (norm(a.get("last_name")), norm(a.get("first_name"))) if x) or norm(a.get("name"))
+            if name:
+                out.append(name)
+        else:
+            v = norm(a)
+            if v:
+                out.append(v)
+    return out
+
+
+def author_count(record):
+    return len(author_values(record))
+
+
+def first_author(record):
+    vals = author_values(record)
+    return vals[0] if vals else ""
+
+
+def compatible_authors(a, b):
+    aa, bb = author_values(a), author_values(b)
+    if not aa or not bb:
+        return False
+    if aa[0] != bb[0]:
+        return False
+    # Same first author is required; overlap in the wider author lists strengthens compatibility.
+    return bool(set(aa) & set(bb))
 
 
 def year_value(record):
     m = re.search(r"(?:19|20)\d{2}", str(canonical(record).get("year") or ""))
     return int(m.group(0)) if m else 0
+
+
+def compatible_year(a, b):
+    ya, yb = year_value(a), year_value(b)
+    if not ya or not yb:
+        return True
+    return abs(ya - yb) <= MAX_COMPATIBLE_YEAR_GAP
 
 
 def survivor_score(record):
@@ -112,13 +153,6 @@ def different_nonempty(a, b):
 
 
 def strong_distinct_work_evidence(a, b, candidate):
-    """Return (reason_code, evidence) when published records are clearly distinct.
-
-    The hierarchy is deliberately conservative: DOI disagreement is never sufficient
-    alone, and preprint/repository manifestations are exempt. Once several independent
-    bibliographic fields positively indicate separate published articles, abstract
-    similarity cannot keep the pair in duplicate adjudication.
-    """
     if is_preprint_like(a) or is_preprint_like(b):
         return None, []
 
@@ -142,43 +176,26 @@ def strong_distinct_work_evidence(a, b, candidate):
     dois_a, dois_b = set(extract_dois(a)), set(extract_dois(b))
     disjoint_dois = bool(dois_a and dois_b and not (dois_a & dois_b))
 
-    evidence = []
-
-    # Strongest common false-positive pattern: related articles by the same team in
-    # different journals. Different source + different DOI + materially different
-    # title is sufficient published-work evidence; pagination/volume strengthen it.
     if different_source and disjoint_dois and title_sim < 0.985:
-        evidence.extend([
-            "different journal/source",
-            "different DOI values",
-            "materially different titles",
-        ])
+        evidence = ["different journal/source", "different DOI values", "materially different titles"]
         if different_volume:
             evidence.append("different volume")
         if different_start_page or nonoverlap:
             evidence.append("different pagination")
         return "reject_different_journal_doi_title", evidence
 
-    # Same journal context but clearly separate article locations.
     if same_source and same_volume and nonoverlap and title_sim < 0.985:
-        evidence.extend([
-            "same journal and volume",
-            "non-overlapping pagination",
-            "materially different titles",
-        ])
+        evidence = ["same journal and volume", "non-overlapping pagination", "materially different titles"]
         if disjoint_dois:
             evidence.append("different DOI values")
         if different_issue:
             evidence.append("different issue")
         return "reject_distinct_pagination", evidence
 
-    # Same journal/issue, but distinct article locations plus distinct DOI/title.
     if same_source and same_issue and disjoint_dois and different_start_page and title_sim < 0.985:
         return "reject_same_issue_distinct_article", [
-            "same journal and issue",
-            "different DOI values",
-            "different start pages/article locations",
-            "materially different titles",
+            "same journal and issue", "different DOI values",
+            "different start pages/article locations", "materially different titles",
         ]
 
     return None, []
@@ -192,29 +209,43 @@ def auto_resolvable(candidate, a_record, b_record):
     status = candidate.get("status")
     if status == "duplicate":
         return "duplicate", "deterministic_duplicate", []
-    if status != "probable_duplicate":
-        return "queue", "requires_adjudication", []
 
     manifestation = candidate.get("manifestation_pattern") or ""
     asim = float(candidate.get("abstract_similarity") or 0.0)
     tsim = float(candidate.get("title_similarity") or 0.0)
+
     if manifestation == "preprint_or_repository_to_later_manifestation" and asim >= 0.90:
         return "duplicate", "high_confidence_preprint_version", []
     if manifestation == "same_work_manifestation" and asim >= 0.95 and tsim >= 0.85:
         return "duplicate", "very_high_confidence_same_work_version", []
+
+    # Conservative general threshold: only auto-resolve when both text signals are
+    # very strong, authors and year are compatible, and no bibliographic conflict fired.
+    if (
+        asim >= AUTO_ABSTRACT_THRESHOLD
+        and tsim >= AUTO_TITLE_THRESHOLD
+        and compatible_authors(a_record, b_record)
+        and compatible_year(a_record, b_record)
+    ):
+        return "duplicate", "high_abstract_title_similarity_compatible_bibliography", [
+            f"abstract similarity >= {AUTO_ABSTRACT_THRESHOLD}",
+            f"title similarity >= {AUTO_TITLE_THRESHOLD}",
+            "compatible authors",
+            "compatible publication year",
+            "no strong bibliographic contradiction",
+        ]
+
     return "queue", "requires_adjudication", []
 
 
 class UnionFind:
     def __init__(self, n):
         self.parent = list(range(n))
-
     def find(self, x):
         while self.parent[x] != x:
             self.parent[x] = self.parent[self.parent[x]]
             x = self.parent[x]
         return x
-
     def union(self, a, b):
         ra, rb = self.find(a), self.find(b)
         if ra != rb:
@@ -263,6 +294,8 @@ def main():
     n = len(records)
 
     auto_pairs, queued_pairs, rejected_pairs = [], [], []
+    auto_rule_counts = Counter()
+    rejection_reason_counts = Counter()
     for candidate in candidates:
         c = dict(candidate)
         a, b = c.get("record_index"), c.get("matched_index")
@@ -273,11 +306,13 @@ def main():
         disposition, rule, evidence = auto_resolvable(c, records[a], records[b])
         c["resolution_rule"] = rule
         if evidence:
-            c["bibliographic_conflict_evidence"] = evidence
+            c["resolution_evidence"] = evidence
         if disposition == "duplicate":
             auto_pairs.append(c)
+            auto_rule_counts[rule] += 1
         elif disposition == "not_duplicate":
             rejected_pairs.append(c)
+            rejection_reason_counts[rule] += 1
         else:
             queued_pairs.append(c)
 
@@ -378,20 +413,19 @@ def main():
         for row in sorted(queue_rows,key=lambda x:(str(x.get("status")),x.get("record_index",-1))):
             f.write(json.dumps(row,ensure_ascii=False)+"\n")
 
-    rejection_reason_counts = Counter(c.get("resolution_rule") for c in rejected_pairs)
     audit = {
         "resolved_groups": resolved_groups,
         "bibliographically_rejected_pairs": [dict(c,
             incoming_record=record_summary(records[c["record_index"]],c["record_index"]),
             matched_record=record_summary(records[c["matched_index"]],c["matched_index"])) for c in rejected_pairs],
-        "bibliographic_rejection_reason_counts": dict(sorted(rejection_reason_counts.items())),
     }
     Path(args.audit).write_text(json.dumps(audit,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
     summary = {
         "input_records":n,"output_records":len(output_records),"candidate_pairs":len(candidates),
-        "auto_candidate_pairs":len(auto_pairs),"bibliographically_rejected_pairs":len(rejected_pairs),
-        "bibliographic_rejection_reason_counts":dict(sorted(rejection_reason_counts.items())),
+        "auto_candidate_pairs":len(auto_pairs),"auto_resolution_rule_counts":dict(auto_rule_counts),
+        "bibliographically_rejected_pairs":len(rejected_pairs),
+        "bibliographic_rejection_reason_counts":dict(rejection_reason_counts),
         "resolved_groups":len(resolved_groups),"canonical_representatives":counts["canonical"],
         "duplicates_flagged":counts["duplicate"],"unique_records":counts["unique"],
         "adjudication_records":counts["adjudication_required"],"adjudication_pairs":len(queue_rows),
