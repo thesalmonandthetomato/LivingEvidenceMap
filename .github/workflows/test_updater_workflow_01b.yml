@@ -1,4 +1,4 @@
-name: Test updater Workflow 01B - Europe PMC abstract enrichment
+name: Workflow 01B - Abstract enrichment and cleaning
 
 on:
   workflow_dispatch:
