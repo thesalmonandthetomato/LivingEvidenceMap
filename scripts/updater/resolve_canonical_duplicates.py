@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-"""Workflow 02 deterministic duplicate resolution.
+"""Workflow 02 duplicate resolution by annotation.
 
-Consumes the read-only canonical duplicate audit and produces:
-- a proposed deduplicated canonical JSONL (artifact only; never writes the source store),
-- an adjudication queue for ambiguous pairs/groups,
-- an audit trail and summary.
-
-Automatic resolution is deliberately conservative. Exact bibliographic duplicates and
-high-confidence preprint/version manifestations are resolved. Conflicting current
-screening decisions always force human adjudication.
+The canonical JSONL is permanent and lossless: no record is deleted, collapsed, or
+nested inside another record. Workflow 02 assigns deduplication state so downstream
+workflows can process one representative per resolved duplicate group while retaining
+every original record in the same JSONL.
 """
 from __future__ import annotations
 
@@ -22,10 +18,6 @@ from pathlib import Path
 from deduplicate_jsonl import canonical, extract_dois, load_records, norm
 
 
-def load_jsonl(path: Path):
-    return load_records(path)
-
-
 def current_relevance_decision(record):
     screening = record.get("screening")
     if not isinstance(screening, dict):
@@ -37,32 +29,26 @@ def current_relevance_decision(record):
 
 
 def author_count(record):
-    a = canonical(record).get("authors") or []
-    if isinstance(a, str):
-        return len([x for x in re.split(r"\s*\|\s*|\s*;\s*", a) if x.strip()])
-    return len(a) if isinstance(a, list) else 0
-
-
-def source_value(record):
-    return norm(canonical(record).get("source"))
+    authors = canonical(record).get("authors") or []
+    if isinstance(authors, str):
+        return len([x for x in re.split(r"\s*\|\s*|\s*;\s*", authors) if x.strip()])
+    return len(authors) if isinstance(authors, list) else 0
 
 
 def year_value(record):
-    value = canonical(record).get("year")
-    m = re.search(r"(?:19|20)\d{2}", str(value or ""))
+    m = re.search(r"(?:19|20)\d{2}", str(canonical(record).get("year") or ""))
     return int(m.group(0)) if m else 0
 
 
 def survivor_score(record):
-    """Prefer richer, published manifestations without relying on DOI alone."""
+    """Prefer the richer published manifestation; DOI is supportive, never decisive."""
     c = canonical(record)
-    source = source_value(record)
-    dois = extract_dois(record)
+    source = norm(c.get("source"))
     abstract = norm(c.get("abstract"))
     title = norm(c.get("title"))
     return (
         4 if source else 0,
-        3 if dois else 0,
+        3 if extract_dois(record) else 0,
         min(author_count(record), 10),
         min(len(abstract), 5000),
         min(len(title), 1000),
@@ -81,16 +67,10 @@ def auto_resolvable(candidate):
     asim = float(candidate.get("abstract_similarity") or 0.0)
     tsim = float(candidate.get("title_similarity") or 0.0)
 
-    # Known preprint/repository failure mode: same first author and compatible year
-    # have already been enforced by Workflow 02 classification. Require >=0.90
-    # abstract similarity before automatic collapse.
     if manifestation == "preprint_or_repository_to_later_manifestation" and asim >= 0.90:
         return True, "high_confidence_preprint_version"
-
-    # Same-work manifestations without explicit preprint evidence need a higher bar.
     if manifestation == "same_work_manifestation" and asim >= 0.95 and tsim >= 0.85:
         return True, "very_high_confidence_same_work_version"
-
     return False, "requires_adjudication"
 
 
@@ -125,36 +105,16 @@ def record_summary(record, index):
     }
 
 
-def merge_group(records, indices, candidate_rows):
-    survivor_idx = max(indices, key=lambda i: survivor_score(records[i]))
-    survivor = copy.deepcopy(records[survivor_idx])
-    absorbed = [i for i in indices if i != survivor_idx]
+def lens_id(record):
+    return str(canonical(record).get("lens_id") or "")
 
-    prior_dedup = survivor.get("deduplication")
-    aliases = []
-    merged_records = []
-    for i in absorbed:
-        c = canonical(records[i])
-        lid = str(c.get("lens_id") or "")
-        if lid and lid != str(canonical(survivor).get("lens_id") or ""):
-            aliases.append(lid)
-        # Preserve the complete absorbed source record exactly as evidence.
-        merged_records.append({"source_index": i, "record": records[i]})
 
-    bases = sorted({str(c.get("resolution_rule") or "") for c in candidate_rows if c.get("resolution_rule")})
-    survivor["deduplication"] = {
-        "workflow": "02_deduplication",
-        "resolution_status": "auto_resolved",
-        "canonical_survivor": True,
-        "survivor_source_index": survivor_idx,
-        "absorbed_count": len(absorbed),
-        "alternate_lens_ids": sorted(set(aliases)),
-        "resolution_rules": bases,
-        "merged_records": merged_records,
-    }
-    if prior_dedup is not None:
-        survivor["deduplication"]["prior_deduplication"] = prior_dedup
-    return survivor_idx, survivor, absorbed
+def dedup_with_history(record, value):
+    previous = record.get("deduplication")
+    result = dict(value)
+    if previous is not None:
+        result["prior_deduplication"] = previous
+    return result
 
 
 def main():
@@ -167,100 +127,137 @@ def main():
     ap.add_argument("--summary", required=True)
     args = ap.parse_args()
 
-    records = load_jsonl(Path(args.canonical))
-    candidates = load_jsonl(Path(args.candidates))
+    records = load_records(Path(args.canonical))
+    candidates = load_records(Path(args.candidates))
     n = len(records)
 
     auto_pairs = []
     queued_pairs = []
-    for c in candidates:
-        ok, rule = auto_resolvable(c)
-        enriched = dict(c)
-        enriched["resolution_rule"] = rule
+    for candidate in candidates:
+        ok, rule = auto_resolvable(candidate)
+        c = dict(candidate)
+        c["resolution_rule"] = rule
         a, b = c.get("record_index"), c.get("matched_index")
         if not isinstance(a, int) or not isinstance(b, int) or not (0 <= a < n and 0 <= b < n):
-            enriched["resolution_rule"] = "invalid_pair_indices"
-            queued_pairs.append(enriched)
-            continue
-        if ok:
-            auto_pairs.append(enriched)
+            c["resolution_rule"] = "invalid_pair_indices"
+            queued_pairs.append(c)
+        elif ok:
+            auto_pairs.append(c)
         else:
-            queued_pairs.append(enriched)
+            queued_pairs.append(c)
 
-    # Build candidate auto-resolution groups.
     uf = UnionFind(n)
     for c in auto_pairs:
         uf.union(c["record_index"], c["matched_index"])
 
-    groups = defaultdict(list)
     touched = set()
     for c in auto_pairs:
-        touched.update([c["record_index"], c["matched_index"]])
+        touched.update((c["record_index"], c["matched_index"]))
+
+    groups = defaultdict(list)
     for i in touched:
         groups[uf.find(i)].append(i)
 
-    # Map auto-pair evidence to groups.
     group_candidates = defaultdict(list)
     for c in auto_pairs:
         group_candidates[uf.find(c["record_index"])].append(c)
 
     resolved_groups = []
     conflict_groups = []
-    absorbed_indices = set()
-    survivor_records = {}
+    representative_by_index = {}
+    members_by_representative = defaultdict(list)
+    group_rules = defaultdict(set)
 
     for root, indices in sorted(groups.items()):
         indices = sorted(set(indices))
         decisions = {current_relevance_decision(records[i]) for i in indices if current_relevance_decision(records[i])}
         if len(decisions) > 1:
-            conflict = {
+            conflict_groups.append({
                 "queue_reason": "conflicting_current_screening_decisions",
                 "screening_decisions": sorted(decisions),
                 "records": [record_summary(records[i], i) for i in indices],
                 "candidate_evidence": group_candidates[root],
-            }
-            conflict_groups.append(conflict)
-            # Every pair in the conflicted group becomes adjudication material.
+            })
             queued_pairs.extend(group_candidates[root])
             continue
 
-        survivor_idx, survivor, absorbed = merge_group(records, indices, group_candidates[root])
-        survivor_records[survivor_idx] = survivor
-        absorbed_indices.update(absorbed)
+        rep = max(indices, key=lambda i: survivor_score(records[i]))
+        for i in indices:
+            representative_by_index[i] = rep
+            if i != rep:
+                members_by_representative[rep].append(i)
+        group_rules[rep].update(c["resolution_rule"] for c in group_candidates[root])
         resolved_groups.append({
-            "survivor_index": survivor_idx,
-            "survivor": record_summary(records[survivor_idx], survivor_idx),
-            "absorbed_indices": absorbed,
-            "absorbed": [record_summary(records[i], i) for i in absorbed],
-            "resolution_rules": sorted({c["resolution_rule"] for c in group_candidates[root]}),
+            "representative_index": rep,
+            "representative": record_summary(records[rep], rep),
+            "duplicate_indices": sorted(i for i in indices if i != rep),
+            "duplicates": [record_summary(records[i], i) for i in indices if i != rep],
+            "resolution_rules": sorted(group_rules[rep]),
             "candidate_evidence": group_candidates[root],
         })
 
-    # Mark unresolved records in the proposed output without collapsing them.
     review_refs = defaultdict(list)
     for c in queued_pairs:
         a, b = c.get("record_index"), c.get("matched_index")
         if isinstance(a, int) and isinstance(b, int) and 0 <= a < n and 0 <= b < n:
-            review_refs[a].append({"other_index": b, "status": c.get("status"), "basis": c.get("basis")})
-            review_refs[b].append({"other_index": a, "status": c.get("status"), "basis": c.get("basis")})
+            link_ab = {
+                "other_index": b,
+                "other_lens_id": lens_id(records[b]),
+                "status": c.get("status"),
+                "basis": c.get("basis"),
+                "title_similarity": c.get("title_similarity"),
+                "abstract_similarity": c.get("abstract_similarity"),
+                "manifestation_pattern": c.get("manifestation_pattern"),
+            }
+            link_ba = dict(link_ab, other_index=a, other_lens_id=lens_id(records[a]))
+            review_refs[a].append(link_ab)
+            review_refs[b].append(link_ba)
 
     output_records = []
+    unique_count = 0
+    representative_count = 0
+    duplicate_count = 0
+    adjudication_record_count = 0
+
     for i, original in enumerate(records):
-        if i in absorbed_indices:
-            continue
-        if i in survivor_records:
-            output_records.append(survivor_records[i])
-            continue
         r = copy.deepcopy(original)
-        if review_refs.get(i):
-            prior = r.get("deduplication")
-            r["deduplication"] = {
+        if i in review_refs:
+            r["deduplication"] = dedup_with_history(r, {
                 "workflow": "02_deduplication",
-                "resolution_status": "adjudication_required",
+                "status": "adjudication_required",
+                "downstream_eligible": False,
                 "candidate_links": review_refs[i],
-            }
-            if prior is not None:
-                r["deduplication"]["prior_deduplication"] = prior
+            })
+            adjudication_record_count += 1
+        elif i in representative_by_index:
+            rep = representative_by_index[i]
+            if i == rep:
+                duplicate_members = [lens_id(records[j]) for j in sorted(members_by_representative[rep])]
+                r["deduplication"] = dedup_with_history(r, {
+                    "workflow": "02_deduplication",
+                    "status": "canonical",
+                    "downstream_eligible": True,
+                    "duplicate_members": duplicate_members,
+                    "resolution_rules": sorted(group_rules[rep]),
+                })
+                representative_count += 1
+            else:
+                r["deduplication"] = dedup_with_history(r, {
+                    "workflow": "02_deduplication",
+                    "status": "duplicate",
+                    "downstream_eligible": False,
+                    "duplicate_of": lens_id(records[rep]),
+                    "representative_index": rep,
+                    "resolution_rules": sorted(group_rules[rep]),
+                })
+                duplicate_count += 1
+        else:
+            r["deduplication"] = dedup_with_history(r, {
+                "workflow": "02_deduplication",
+                "status": "unique",
+                "downstream_eligible": True,
+            })
+            unique_count += 1
         output_records.append(r)
 
     outp = Path(args.output)
@@ -269,7 +266,6 @@ def main():
         for r in output_records:
             f.write(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n")
 
-    # Deduplicate queue pairs by record-index pair and retain strongest available evidence.
     unique_queue = {}
     for c in queued_pairs:
         a, b = c.get("record_index"), c.get("matched_index")
@@ -288,29 +284,33 @@ def main():
             row["matched_record"] = record_summary(records[b], b)
         queue_rows.append(row)
 
-    qp = Path(args.queue)
-    with qp.open("w", encoding="utf-8") as f:
-        for r in sorted(queue_rows, key=lambda x: (str(x.get("status")), x.get("record_index", -1))):
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    with Path(args.queue).open("w", encoding="utf-8") as f:
+        for row in sorted(queue_rows, key=lambda x: (str(x.get("status")), x.get("record_index", -1))):
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    audit = {
+    Path(args.audit).write_text(json.dumps({
         "resolved_groups": resolved_groups,
         "screening_conflict_groups": conflict_groups,
-    }
-    Path(args.audit).write_text(json.dumps(audit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     summary = {
         "input_records": n,
+        "output_records": len(output_records),
         "candidate_pairs": len(candidates),
         "auto_candidate_pairs_before_conflict_gate": len(auto_pairs),
         "resolved_groups": len(resolved_groups),
-        "absorbed_records": len(absorbed_indices),
-        "proposed_output_records": len(output_records),
+        "canonical_representatives": representative_count,
+        "duplicates_flagged": duplicate_count,
+        "unique_records": unique_count,
+        "adjudication_records": adjudication_record_count,
         "screening_conflict_groups": len(conflict_groups),
         "adjudication_pairs": len(queue_rows),
+        "records_removed": 0,
+        "records_nested": 0,
         "canonical_source_modified": False,
-        "output_is_proposed_artifact": True,
+        "output_is_annotated_single_jsonl": True,
     }
+    assert len(output_records) == n
     Path(args.summary).write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, indent=2))
     return 0
