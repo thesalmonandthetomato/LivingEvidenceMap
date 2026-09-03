@@ -38,26 +38,33 @@ jobs:
               for r in (p,j): f.write(json.dumps(r)+'\n')
           PY
 
-      - name: Validate classification and deterministic resolution
+      - name: Validate classification and lossless resolution annotations
         if: ${{ inputs.mode == 'validation_test' }}
         run: |
           mkdir -p outputs/workflow02
           python scripts/updater/audit_canonical_duplicates.py --input fixture.jsonl --output outputs/workflow02/candidates.jsonl --summary outputs/workflow02/classification_summary.json
-          python scripts/updater/resolve_canonical_duplicates.py --canonical fixture.jsonl --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/proposed_records_after_dedup.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
+          python scripts/updater/resolve_canonical_duplicates.py --canonical fixture.jsonl --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/annotated_records.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
           python - <<'PY'
           import json
           c=[json.loads(x) for x in open('outputs/workflow02/candidates.jsonl') if x.strip()]
-          r=[json.loads(x) for x in open('outputs/workflow02/proposed_records_after_dedup.jsonl') if x.strip()]
+          r=[json.loads(x) for x in open('outputs/workflow02/annotated_records.jsonl') if x.strip()]
           q=[json.loads(x) for x in open('outputs/workflow02/adjudication_queue.jsonl') if x.strip()]
           assert len(c)==1 and c[0]['status']=='probable_duplicate', c
           assert c[0]['manifestation_pattern']=='preprint_or_repository_to_later_manifestation', c
-          assert len(r)==1 and not q, (r,q)
-          assert r[0]['canonical']['lens_id']=='journal', r[0]['canonical']
-          d=r[0]['deduplication']
-          assert d['resolution_status']=='auto_resolved' and d['absorbed_count']==1, d
-          assert 'preprint' in d['alternate_lens_ids'], d
-          assert d['merged_records'][0]['record']['canonical']['lens_id']=='preprint', d
-          print('Workflow 02 end-to-end resolution validated')
+          assert len(r)==2 and not q, (r,q)
+          by={x['canonical']['lens_id']:x for x in r}
+          assert by['journal']['deduplication']['status']=='canonical'
+          assert by['journal']['deduplication']['downstream_eligible'] is True
+          assert by['journal']['deduplication']['duplicate_members']==['preprint']
+          assert by['preprint']['deduplication']['status']=='duplicate'
+          assert by['preprint']['deduplication']['downstream_eligible'] is False
+          assert by['preprint']['deduplication']['duplicate_of']=='journal'
+          assert 'merged_records' not in by['journal']['deduplication']
+          assert 'merged_records' not in by['preprint']['deduplication']
+          s=json.load(open('outputs/workflow02/resolution_summary.json'))
+          assert s['input_records']==2 and s['output_records']==2
+          assert s['records_removed']==0 and s['records_nested']==0
+          print('Workflow 02 lossless single-JSON architecture validated')
           PY
 
       - name: Checkout canonical JSON with LFS
@@ -68,14 +75,14 @@ jobs:
           lfs: true
           path: canonical_store
 
-      - name: Run canonical classification and proposed resolution
+      - name: Run canonical classification and annotation proposal
         if: ${{ inputs.mode == 'canonical_audit' }}
         run: |
           mkdir -p outputs/workflow02
           SRC=canonical_store/data/canonical/current/repair/records.jsonl
           test -f "$SRC"
           python scripts/updater/audit_canonical_duplicates.py --input "$SRC" --output outputs/workflow02/candidates.jsonl --summary outputs/workflow02/classification_summary.json
-          python scripts/updater/resolve_canonical_duplicates.py --canonical "$SRC" --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/proposed_records_after_dedup.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
+          python scripts/updater/resolve_canonical_duplicates.py --canonical "$SRC" --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/annotated_records.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
           python - <<'PY'
           import json
           ids={'154-579-994-777-836','011-403-740-852-889'}
@@ -83,8 +90,9 @@ jobs:
           assert any({r.get('lens_id'),r.get('matched_master_lens_id')}==ids for r in c)
           s=json.load(open('outputs/workflow02/resolution_summary.json'))
           assert s['canonical_source_modified'] is False
-          assert s['output_is_proposed_artifact'] is True
-          assert s['proposed_output_records'] <= s['input_records']
+          assert s['output_is_annotated_single_jsonl'] is True
+          assert s['output_records']==s['input_records']
+          assert s['records_removed']==0 and s['records_nested']==0
           print(json.dumps(s,indent=2))
           PY
 
