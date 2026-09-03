@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Validation test or full canonical audit/resolution'
+        description: 'Validation, canonical dedup audit, or explicit screening reset'
         required: true
         default: validation_test
         type: choice
-        options: [validation_test, canonical_audit]
+        options: [validation_test, canonical_audit, reset_screening]
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -68,7 +68,7 @@ jobs:
           PY
 
       - name: Checkout canonical JSON with LFS
-        if: ${{ inputs.mode == 'canonical_audit' }}
+        if: ${{ inputs.mode == 'canonical_audit' || inputs.mode == 'reset_screening' }}
         uses: actions/checkout@v4
         with:
           ref: canonical-repair-store
@@ -95,6 +95,42 @@ jobs:
           assert s['records_removed']==0 and s['records_nested']==0
           print(json.dumps(s,indent=2))
           PY
+
+      - name: Reset all canonical screening decisions
+        if: ${{ inputs.mode == 'reset_screening' }}
+        run: |
+          mkdir -p outputs/workflow02
+          SRC=canonical_store/data/canonical/current/repair/records.jsonl
+          TMP=canonical_store/data/canonical/current/repair/records.screening-reset.jsonl
+          test -f "$SRC"
+          python scripts/updater/strip_screening_from_canonical.py \
+            --input "$SRC" \
+            --output "$TMP" \
+            --summary outputs/workflow02/screening_reset_summary.json
+          python - <<'PY'
+          import json
+          s=json.load(open('outputs/workflow02/screening_reset_summary.json'))
+          assert s['records_in']==s['records_out']
+          assert s['records_with_screening_removed']==s['records_in']
+          assert s['verification']['remaining_screening_objects']==0
+          assert not any(s['verification']['remaining_screening_provenance'].values())
+          assert s['verification']['records_removed']==0
+          print(json.dumps(s,indent=2))
+          PY
+          mv "$TMP" "$SRC"
+
+      - name: Commit screening reset to canonical branch
+        if: ${{ inputs.mode == 'reset_screening' }}
+        working-directory: canonical_store
+        run: |
+          git status --short
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl
+          git diff --cached --quiet && { echo 'No canonical screening changes detected'; exit 1; }
+          git commit -m 'Reset canonical screening decisions for fresh reassessment'
+          git push origin HEAD:canonical-repair-store
 
       - name: Upload Workflow 02 artefacts
         uses: actions/upload-artifact@v4
