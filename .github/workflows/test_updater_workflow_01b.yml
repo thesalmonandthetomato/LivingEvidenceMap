@@ -20,7 +20,7 @@ jobs:
         run: |
           mkdir -p testdata/workflow01b
           cat > testdata/workflow01b/input.jsonl <<'EOF'
-          {"identity":{"lens_id":"wf1b-existing","record_id":"wf1b-existing","record_id_type":"lens_id"},"source":{"provider":"lens","source_format":"lens_api_json"},"lens":{"raw_payload":{"lens_id":"wf1b-existing","title":"Existing abstract fixture","authors":[{"first_name":"A","last_name":"Author"}],"year_published":2025,"source":{"title":"Journal"},"external_ids":[{"type":"doi","value":"10.1000/existing"}],"abstract":"This Lens abstract must remain exactly unchanged and must not be replaced by an enrichment source."}}}
+          {"identity":{"lens_id":"wf1b-existing","record_id":"wf1b-existing","record_id_type":"lens_id"},"source":{"provider":"lens","source_format":"lens_api_json"},"lens":{"raw_payload":{"lens_id":"wf1b-existing","title":"Existing abstract fixture","authors":[{"first_name":"A","last_name":"Author"}],"year_published":2025,"source":{"title":"Journal"},"external_ids":[{"type":"doi","value":"10.1000/existing"}],"abstract":"<abstract><sec><title>Background</title><p>Atlantic salmon &amp; rainbow trout were studied.</p></sec><sec><title>Methods</title><p>Fish were sampled at day 30.</p></sec></abstract>"}}}
           {"identity":{"lens_id":"wf1b-no-doi","record_id":"wf1b-no-doi","record_id_type":"lens_id"},"source":{"provider":"lens","source_format":"lens_api_json"},"lens":{"raw_payload":{"lens_id":"wf1b-no-doi","title":"No DOI fixture","authors":[{"first_name":"B","last_name":"Author"}],"year_published":2024,"source":{"title":"Journal"},"abstract":null}}}
           {"identity":{"lens_id":"wf1b-recover","record_id":"wf1b-recover","record_id_type":"lens_id"},"source":{"provider":"lens","source_format":"lens_api_json"},"lens":{"raw_payload":{"lens_id":"wf1b-recover","title":"Effects of dietary lipid sources on growth performance, feed utilisation and tissue fatty acid composition of Atlantic salmon Salmo salar","authors":[{"first_name":"M","last_name":"Author"}],"year_published":2010,"source":{"title":"Aquaculture Research"},"external_ids":[{"type":"doi","value":"10.1111/j.1365-2109.2009.02327.x"}],"abstract":null}}}
           EOF
@@ -36,9 +36,14 @@ jobs:
           assert len(rows)==3
           by={r['identity']['lens_id']:r for r in rows}
           a=by['wf1b-existing']; b=by['wf1b-no-doi']; c=by['wf1b-recover']
-          assert a['canonical']['abstract']==a['lens']['raw_payload']['abstract']
+          raw=a['lens']['raw_payload']['abstract']
+          assert '<abstract>' in raw and '<title>Background</title>' in raw
+          assert a['canonical']['abstract']=='Atlantic salmon & rainbow trout were studied. Fish were sampled at day 30.'
+          assert '<' not in a['canonical']['abstract'] and '>' not in a['canonical']['abstract']
           assert a['abstract_enrichment']['status']=='existing_abstract'
           assert a['abstract_enrichment']['attempts']==[]
+          assert a['abstract_enrichment']['cleaning']['method']=='html_jats_plaintext_v1'
+          assert a['abstract_enrichment']['cleaning']['changed'] is True
           assert b['abstract_enrichment']['status']=='missing_no_doi'
           assert b['abstract_enrichment']['attempts']==[]
           required={'record_id','lens_id','title','authors','year','source','doi','abstract'}
@@ -46,11 +51,17 @@ jobs:
               assert required <= set(r['canonical'])
               assert r['canonical']['title']==r['lens']['raw_payload']['title']
               assert r['abstract_enrichment']['provider']=='europe_pmc'
+              assert 'cleaning' in r['abstract_enrichment']
               assert all(x.get('method')=='europe_pmc_exact_doi' for x in r['abstract_enrichment']['attempts'])
           assert c['lens']['raw_payload']['abstract'] is None
           assert c['canonical']['doi']=='10.1111/j.1365-2109.2009.02327.x'
           assert c['abstract_enrichment']['status'] in {'abstract_recovered','no_abstract_recovered'}
-          if c['abstract_enrichment']['status']=='abstract_recovered': assert c['canonical']['abstract']
+          if c['abstract_enrichment']['status']=='abstract_recovered':
+              assert c['canonical']['abstract']
+              assert '<' not in c['canonical']['abstract'] and '>' not in c['canonical']['abstract']
+          report=json.load(open('testdata/workflow01b/report.json'))
+          assert report['abstract_cleaning_method']=='html_jats_plaintext_v1'
+          assert report['abstracts_cleaned'] >= 1
           PY
       - name: Validate JSONL and audit cardinality
         run: |
