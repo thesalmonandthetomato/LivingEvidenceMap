@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Validation, canonical dedup audit, or explicit screening reset'
+        description: 'Validation, canonical dedup audit/apply, or explicit screening reset'
         required: true
         default: validation_test
         type: choice
-        options: [validation_test, canonical_audit, reset_screening]
+        options: [validation_test, canonical_audit, canonical_apply, reset_screening]
 
 permissions:
   contents: write
@@ -68,15 +68,15 @@ jobs:
           PY
 
       - name: Checkout canonical JSON with LFS
-        if: ${{ inputs.mode == 'canonical_audit' || inputs.mode == 'reset_screening' }}
+        if: ${{ inputs.mode == 'canonical_audit' || inputs.mode == 'canonical_apply' || inputs.mode == 'reset_screening' }}
         uses: actions/checkout@v4
         with:
           ref: canonical-repair-store
           lfs: true
           path: canonical_store
 
-      - name: Run canonical classification and annotation proposal
-        if: ${{ inputs.mode == 'canonical_audit' }}
+      - name: Run canonical classification and annotation
+        if: ${{ inputs.mode == 'canonical_audit' || inputs.mode == 'canonical_apply' }}
         run: |
           mkdir -p outputs/workflow02
           SRC=canonical_store/data/canonical/current/repair/records.jsonl
@@ -89,11 +89,71 @@ jobs:
           c=[json.loads(x) for x in open('outputs/workflow02/candidates.jsonl') if x.strip()]
           assert any({r.get('lens_id'),r.get('matched_master_lens_id')}==ids for r in c)
           s=json.load(open('outputs/workflow02/resolution_summary.json'))
-          assert s['canonical_source_modified'] is False
           assert s['output_is_annotated_single_jsonl'] is True
-          assert s['output_records']==s['input_records']
+          assert s['output_records']==s['input_records']==20488
           assert s['records_removed']==0 and s['records_nested']==0
           print(json.dumps(s,indent=2))
+          PY
+
+      - name: Persist deduplication annotations into canonical JSON
+        if: ${{ inputs.mode == 'canonical_apply' }}
+        run: |
+          SRC=canonical_store/data/canonical/current/repair/records.jsonl
+          OUT=outputs/workflow02/annotated_records.jsonl
+          cp "$OUT" "$SRC"
+          python - <<'PY'
+          import json, collections
+          path='canonical_store/data/canonical/current/repair/records.jsonl'
+          records=[json.loads(x) for x in open(path) if x.strip()]
+          assert len(records)==20488, len(records)
+          counts=collections.Counter()
+          bad=[]
+          for i,r in enumerate(records):
+              d=r.get('deduplication')
+              if not isinstance(d,dict) or not d.get('status'):
+                  bad.append(i)
+                  continue
+              counts[d['status']]+=1
+              if d['status']=='duplicate':
+                  assert d.get('duplicate_of')
+                  assert d.get('downstream_eligible') is False
+              elif d['status'] in {'canonical','unique'}:
+                  assert d.get('downstream_eligible') is True
+              elif d['status']=='adjudication_required':
+                  assert d.get('downstream_eligible') is False
+          assert not bad, f'missing deduplication annotations: {bad[:20]}'
+          assert sum(counts.values())==20488
+          print(json.dumps({'records':len(records),'deduplication_status_counts':dict(counts)},indent=2))
+          PY
+
+      - name: Commit deduplication state to canonical branch
+        if: ${{ inputs.mode == 'canonical_apply' }}
+        working-directory: canonical_store
+        run: |
+          git status --short
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl
+          git diff --cached --quiet && { echo 'No canonical deduplication changes detected'; exit 1; }
+          git commit -m 'Persist Workflow 02 deduplication state in canonical JSON'
+          git push origin HEAD:canonical-repair-store
+
+      - name: Verify committed canonical deduplication state
+        if: ${{ inputs.mode == 'canonical_apply' }}
+        working-directory: canonical_store
+        run: |
+          git fetch origin canonical-repair-store
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/canonical-repair-store)"
+          python - <<'PY'
+          import json, collections
+          path='data/canonical/current/repair/records.jsonl'
+          records=[json.loads(x) for x in open(path) if x.strip()]
+          counts=collections.Counter((r.get('deduplication') or {}).get('status') for r in records)
+          assert len(records)==20488
+          assert None not in counts
+          assert sum(counts.values())==20488
+          print(json.dumps({'committed_records':len(records),'committed_deduplication_status_counts':dict(counts)},indent=2))
           PY
 
       - name: Reset all canonical screening decisions
