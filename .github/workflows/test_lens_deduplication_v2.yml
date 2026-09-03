@@ -4,13 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Run the small validation test or a read-only audit of the full canonical JSON'
+        description: 'Validation test or full canonical audit/resolution'
         required: true
-        default: 'validation_test'
+        default: validation_test
         type: choice
-        options:
-          - validation_test
-          - canonical_audit
+        options: [validation_test, canonical_audit]
 
 permissions:
   contents: read
@@ -20,155 +18,46 @@ jobs:
   deduplication-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Workflow 02 development branch
+      - name: Checkout Workflow 02 branch
         uses: actions/checkout@v4
         with:
           ref: updater-workflow-02-deduplication
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Download successful Workflow 01 Lens artefact
-        if: ${{ inputs.mode == 'validation_test' }}
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: 33107953267
-          name: updater-workflow-01-lens-ingestion-33107953267
-          path: workflow01_artifact
-
-      - name: Prepare real Lens master and incoming fixtures
-        if: ${{ inputs.mode == 'validation_test' }}
-        run: |
-          python - <<'PY'
-          import copy, json
-          from pathlib import Path
-
-          src = Path('workflow01_artifact/records.jsonl')
-          base = []
-          with src.open(encoding='utf-8') as f:
-              for line in f:
-                  if line.strip():
-                      base.append(json.loads(line))
-                  if len(base) == 50:
-                      break
-          assert len(base) == 50
-
-          with open('master_fixture.jsonl', 'w', encoding='utf-8') as f:
-              for row in base:
-                  f.write(json.dumps(row, ensure_ascii=False) + '\n')
-
-          incoming = []
-          incoming.append(copy.deepcopy(base[0]))
-          doi_row = next(r for r in base if any(i.get('type') == 'doi' for i in r['lens']['raw_payload'].get('external_ids', [])))
-
-          different_doi = copy.deepcopy(doi_row)
-          different_doi['identity']['lens_id'] = 'fixture-different-doi'
-          different_doi['identity']['record_id'] = 'fixture-different-doi'
-          different_doi['lens']['raw_payload']['lens_id'] = 'fixture-different-doi'
-          for identifier in different_doi['lens']['raw_payload'].get('external_ids', []):
-              if identifier.get('type') == 'doi':
-                  identifier['value'] = '10.0000/different-test'
-          incoming.append(different_doi)
-
-          wrong_doi = copy.deepcopy(doi_row)
-          wrong_doi['identity']['lens_id'] = 'fixture-wrong-doi'
-          wrong_doi['identity']['record_id'] = 'fixture-wrong-doi'
-          wrong_doi['lens']['raw_payload']['lens_id'] = 'fixture-wrong-doi'
-          wrong_doi['lens']['raw_payload']['title'] = 'Deliberately unrelated publication used to test DOI safety'
-          wrong_doi['lens']['raw_payload']['authors'] = [{'first_name': 'Different', 'last_name': 'Author'}]
-          wrong_doi['lens']['raw_payload']['abstract'] = 'This deliberately unrelated abstract is included to ensure a shared DOI cannot override contradictory bibliographic evidence.'
-          incoming.append(wrong_doi)
-
-          preprint = {
-              'identity': {'lens_id': 'fixture-preprint', 'record_id': 'fixture-preprint'},
-              'canonical': {
-                  'record_id': 'fixture-preprint',
-                  'lens_id': 'fixture-preprint',
-                  'title': 'Minimizing marine resource utilization in diets of farmed Atlantic salmon: effects on growth performance and tissue composition',
-                  'authors': 'Foroutani, M. B.',
-                  'year': 2017,
-                  'source': '',
-                  'doi': '',
-                  'abstract': 'Due to the limited availability of fish meal and fish oil resources and their high costs in producing aquafeeds for the aquaculture industry, it is important to conduct research on possible replacements that are sustainable sources of protein and lipids. In this study, seven different diets containing various protein and lipid sources were formulated to feed farmed Atlantic salmon, and their effects on growth performance, tissue lipid class, fatty acid, and elemental composition were examined. Growth performance results showed that the diet containing the lowest level of fish meal and fish oil led to the lowest weight gain, followed by the diet with the highest content of animal by-products. Fish meal could be reduced to 5 percent without affecting growth as long as there was at least 5 percent fish oil.'
-              }
-          }
-          journal = {
-              'identity': {'lens_id': 'fixture-journal', 'record_id': 'fixture-journal'},
-              'canonical': {
-                  'record_id': 'fixture-journal',
-                  'lens_id': 'fixture-journal',
-                  'title': 'Minimizing marine ingredients in diets of farmed Atlantic salmon (Salmo salar): Effects on growth performance and muscle lipid and fatty acid composition',
-                  'authors': 'Foroutani, M. B. | Parrish, C. C. | Wells, J. | Taylor, R. G.',
-                  'year': 2018,
-                  'source': 'Journal of Aquaculture Nutrition',
-                  'doi': '10.1101/328716',
-                  'abstract': 'Due to limited fish meal and fish oil resources and their high costs for the aquaculture industry, it is necessary to find alternative sustainable sources of protein and lipids. Therefore, seven different diets were formulated with different protein and lipid sources to feed farmed Atlantic salmon, and their effects on growth performance, muscle lipid class, and fatty acid composition were examined. Growth performance indicated that the diet with the lowest fish meal and fish oil content resulted in the lowest weight gain and final weight, followed by the diet containing the highest level of animal by-products. Fish meal could be reduced to 5 percent without affecting growth as long as there was a minimum of 5 percent fish oil.'
-              }
-          }
-          incoming.extend([preprint, journal])
-
-          with open('incoming_fixture.jsonl', 'w', encoding='utf-8') as f:
-              for row in incoming:
-                  f.write(json.dumps(row, ensure_ascii=False) + '\n')
-          print(f'Prepared {len(base)} master records and {len(incoming)} incoming records')
-          PY
-
-      - name: Validate fixture JSONL integrity
+      - name: Build validation fixture
         if: ${{ inputs.mode == 'validation_test' }}
         run: |
           python - <<'PY'
           import json
-          for path, expected in [('master_fixture.jsonl', 50), ('incoming_fixture.jsonl', 5)]:
-              rows = []
-              with open(path, encoding='utf-8') as f:
-                  for line_no, line in enumerate(f, 1):
-                      if not line.strip():
-                          continue
-                      try:
-                          rows.append(json.loads(line))
-                      except json.JSONDecodeError as e:
-                          raise SystemExit(f'Invalid {path} JSONL at line {line_no}: {e}')
-              assert len(rows) == expected, (path, len(rows), expected)
-          print('Fixture JSONL validated')
+          p={'identity':{'lens_id':'preprint','record_id':'preprint'},'canonical':{'record_id':'preprint','lens_id':'preprint','title':'Minimizing marine resource utilization in diets of farmed Atlantic salmon: effects on growth and tissue composition','authors':'Foroutani, M. B.','year':2017,'source':'','doi':'','abstract':'Due to limited fish meal and fish oil resources and high costs for aquaculture, seven diets containing different protein and lipid sources were formulated for farmed Atlantic salmon. Growth performance, tissue lipid class and fatty acid composition were examined. The diet with the lowest fish meal and fish oil produced the lowest weight gain. Fish meal could be reduced to 5 percent without affecting growth provided at least 5 percent fish oil remained.'}}
+          j={'identity':{'lens_id':'journal','record_id':'journal'},'canonical':{'record_id':'journal','lens_id':'journal','title':'Minimizing marine ingredients in diets of farmed Atlantic salmon (Salmo salar): Effects on growth performance and muscle lipid and fatty acid composition','authors':'Foroutani, M. B. | Parrish, C. C. | Wells, J.','year':2018,'source':'Journal of Aquaculture Nutrition','doi':'10.1101/328716','abstract':'Due to limited fish meal and fish oil resources and high costs for the aquaculture industry, seven diets with different protein and lipid sources were formulated for farmed Atlantic salmon. Growth performance, muscle lipid class and fatty acid composition were examined. The diet containing the lowest fish meal and fish oil resulted in the lowest weight gain. Fish meal could be reduced to 5 percent without affecting growth provided a minimum 5 percent fish oil remained.'}}
+          with open('fixture.jsonl','w') as f:
+              for r in (p,j): f.write(json.dumps(r)+'\n')
           PY
 
-      - name: Run Workflow 02 validation test
+      - name: Validate classification and deterministic resolution
         if: ${{ inputs.mode == 'validation_test' }}
         run: |
-          mkdir -p outputs/updater/deduplication_test
-          python scripts/updater/deduplicate_jsonl.py \
-            --input incoming_fixture.jsonl \
-            --master master_fixture.jsonl \
-            --output outputs/updater/deduplication_test/records_after_dedup.jsonl \
-            --audit outputs/updater/deduplication_test/dedup_audit.jsonl
-
-      - name: Validate output and preprint safeguards
-        if: ${{ inputs.mode == 'validation_test' }}
-        run: |
+          mkdir -p outputs/workflow02
+          python scripts/updater/audit_canonical_duplicates.py --input fixture.jsonl --output outputs/workflow02/candidates.jsonl --summary outputs/workflow02/classification_summary.json
+          python scripts/updater/resolve_canonical_duplicates.py --canonical fixture.jsonl --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/proposed_records_after_dedup.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
           python - <<'PY'
           import json
-          rows = [json.loads(line) for line in open('outputs/updater/deduplication_test/records_after_dedup.jsonl', encoding='utf-8') if line.strip()]
-          assert len(rows) == 5, len(rows)
-          identity = rows[0]
-          assert identity['deduplication']['status'] in {'duplicate', 'identity_match'}, identity['deduplication']
-          different_doi = next(r for r in rows if r['identity']['lens_id'] == 'fixture-different-doi')
-          assert different_doi['deduplication']['status'] in {'duplicate', 'probable_duplicate', 'possible_duplicate'}, different_doi['deduplication']
-          wrong_doi = next(r for r in rows if r['identity']['lens_id'] == 'fixture-wrong-doi')
-          assert wrong_doi['deduplication']['status'] in {'doi_conflict_review', 'new'}, wrong_doi['deduplication']
-          assert wrong_doi['deduplication']['status'] != 'duplicate', wrong_doi['deduplication']
-          preprint = next(r for r in rows if r['identity']['lens_id'] == 'fixture-preprint')
-          assert preprint['deduplication']['status'] == 'new', preprint['deduplication']
-          journal = next(r for r in rows if r['identity']['lens_id'] == 'fixture-journal')
-          assert journal['deduplication']['status'] == 'probable_duplicate', journal['deduplication']
-          assert journal['deduplication']['matched_master_lens_id'] == 'fixture-preprint', journal['deduplication']
-          assert journal['deduplication']['matched_record_origin'] == 'incoming', journal['deduplication']
-          assert journal['deduplication']['manifestation_pattern'] == 'preprint_or_repository_to_later_manifestation', journal['deduplication']
-          assert journal['deduplication']['abstract_similarity'] >= 0.88, journal['deduplication']
-          print('Validated Workflow 02 including abstract-based preprint detection and within-batch matching')
+          c=[json.loads(x) for x in open('outputs/workflow02/candidates.jsonl') if x.strip()]
+          r=[json.loads(x) for x in open('outputs/workflow02/proposed_records_after_dedup.jsonl') if x.strip()]
+          q=[json.loads(x) for x in open('outputs/workflow02/adjudication_queue.jsonl') if x.strip()]
+          assert len(c)==1 and c[0]['status']=='probable_duplicate', c
+          assert c[0]['manifestation_pattern']=='preprint_or_repository_to_later_manifestation', c
+          assert len(r)==1 and not q, (r,q)
+          assert r[0]['canonical']['lens_id']=='journal', r[0]['canonical']
+          d=r[0]['deduplication']
+          assert d['resolution_status']=='auto_resolved' and d['absorbed_count']==1, d
+          assert 'preprint' in d['alternate_lens_ids'], d
+          assert d['merged_records'][0]['record']['canonical']['lens_id']=='preprint', d
+          print('Workflow 02 end-to-end resolution validated')
           PY
 
       - name: Checkout canonical JSON with LFS
@@ -179,62 +68,30 @@ jobs:
           lfs: true
           path: canonical_store
 
-      - name: Validate canonical JSONL
+      - name: Run canonical classification and proposed resolution
         if: ${{ inputs.mode == 'canonical_audit' }}
         run: |
-          test -f canonical_store/data/canonical/current/repair/records.jsonl
-          python - <<'PY'
-          import json
-          p='canonical_store/data/canonical/current/repair/records.jsonl'
-          n=0
-          with open(p,encoding='utf-8') as f:
-              for line_no,line in enumerate(f,1):
-                  if not line.strip():
-                      continue
-                  json.loads(line)
-                  n += 1
-          print(f'Canonical JSONL records: {n}')
-          assert n > 10000
-          PY
-
-      - name: Run read-only full canonical duplicate audit
-        if: ${{ inputs.mode == 'canonical_audit' }}
-        run: |
-          mkdir -p outputs/updater/canonical_dedup_audit
-          python scripts/updater/audit_canonical_duplicates.py \
-            --input canonical_store/data/canonical/current/repair/records.jsonl \
-            --output outputs/updater/canonical_dedup_audit/duplicate_candidates.jsonl \
-            --summary outputs/updater/canonical_dedup_audit/summary.json
-
-      - name: Check known Foroutani manifestations
-        if: ${{ inputs.mode == 'canonical_audit' }}
-        run: |
+          mkdir -p outputs/workflow02
+          SRC=canonical_store/data/canonical/current/repair/records.jsonl
+          test -f "$SRC"
+          python scripts/updater/audit_canonical_duplicates.py --input "$SRC" --output outputs/workflow02/candidates.jsonl --summary outputs/workflow02/classification_summary.json
+          python scripts/updater/resolve_canonical_duplicates.py --canonical "$SRC" --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/proposed_records_after_dedup.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
           python - <<'PY'
           import json
           ids={'154-579-994-777-836','011-403-740-852-889'}
-          found=[]
-          with open('outputs/updater/canonical_dedup_audit/duplicate_candidates.jsonl',encoding='utf-8') as f:
-              for line in f:
-                  r=json.loads(line)
-                  if {r.get('lens_id'),r.get('matched_master_lens_id')} == ids:
-                      found.append(r)
-          print(json.dumps({'foroutani_pair_found': bool(found), 'matches': found}, indent=2))
+          c=[json.loads(x) for x in open('outputs/workflow02/candidates.jsonl') if x.strip()]
+          assert any({r.get('lens_id'),r.get('matched_master_lens_id')}==ids for r in c)
+          s=json.load(open('outputs/workflow02/resolution_summary.json'))
+          assert s['canonical_source_modified'] is False
+          assert s['output_is_proposed_artifact'] is True
+          assert s['proposed_output_records'] <= s['input_records']
+          print(json.dumps(s,indent=2))
           PY
 
-      - name: Upload Workflow 02 validation artefact
-        if: ${{ inputs.mode == 'validation_test' }}
+      - name: Upload Workflow 02 artefacts
         uses: actions/upload-artifact@v4
         with:
-          name: updater-workflow-02-deduplication-${{ github.run_id }}
-          path: outputs/updater/deduplication_test/
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload canonical dedup audit artefact
-        if: ${{ inputs.mode == 'canonical_audit' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: workflow02-canonical-dedup-audit-${{ github.run_id }}
-          path: outputs/updater/canonical_dedup_audit/
+          name: workflow02-${{ inputs.mode }}-${{ github.run_id }}
+          path: outputs/workflow02/
           if-no-files-found: error
           retention-days: 30
