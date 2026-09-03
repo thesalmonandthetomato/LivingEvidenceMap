@@ -3,8 +3,8 @@
 
 Every input record remains a top-level record in the canonical JSONL. Duplicate
 resolution uses bibliographic evidence from the full Lens payload as well as the
-candidate similarity evidence. Strong evidence that two journal records are distinct
-prevents them from being collapsed and removes them from the human duplicate queue.
+candidate similarity evidence. Strong evidence that two published records are distinct
+outranks abstract similarity and removes those pairs from the human duplicate queue.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import argparse
 import copy
 import json
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from deduplicate_jsonl import canonical, extract_dois, load_records, norm
@@ -26,8 +26,7 @@ def raw_payload(record):
 
 
 def source_metadata(record):
-    p = raw_payload(record)
-    s = p.get("source")
+    s = raw_payload(record).get("source")
     return s if isinstance(s, dict) else {}
 
 
@@ -79,14 +78,13 @@ def is_preprint_like(record):
 def bibliographic_fields(record):
     p = raw_payload(record)
     s = source_metadata(record)
-    issn = s.get("issn") or []
     return {
         "publication_type": p.get("publication_type"),
         "publication_supplementary_type": p.get("publication_supplementary_type"),
         "source": source_title(record),
         "publisher": s.get("publisher"),
         "source_type": s.get("type"),
-        "issn": issn,
+        "issn": s.get("issn") or [],
         "volume": p.get("volume"),
         "issue": p.get("issue"),
         "start_page": p.get("start_page"),
@@ -108,39 +106,88 @@ def page_ranges_nonoverlap(a, b):
     return ea < sb or eb < sa
 
 
-def strong_distinct_work_evidence(a, b, candidate):
-    """Return evidence proving two candidate records are distinct journal works.
+def different_nonempty(a, b):
+    na, nb = norm(a), norm(b)
+    return bool(na and nb and na != nb)
 
-    DOI disagreement alone is never decisive. Pagination is only used as a hard
-    discriminator when both records look like published manifestations in the same
-    source/volume context and the titles are not effectively identical.
+
+def strong_distinct_work_evidence(a, b, candidate):
+    """Return (reason_code, evidence) when published records are clearly distinct.
+
+    The hierarchy is deliberately conservative: DOI disagreement is never sufficient
+    alone, and preprint/repository manifestations are exempt. Once several independent
+    bibliographic fields positively indicate separate published articles, abstract
+    similarity cannot keep the pair in duplicate adjudication.
     """
     if is_preprint_like(a) or is_preprint_like(b):
-        return []
+        return None, []
+
     ca, cb = canonical(a), canonical(b)
-    if norm(ca.get("title")) and norm(ca.get("title")) == norm(cb.get("title")):
-        return []
+    title_a, title_b = norm(ca.get("title")), norm(cb.get("title"))
+    if title_a and title_a == title_b:
+        return None, []
 
     pa, pb = raw_payload(a), raw_payload(b)
-    same_source = bool(norm(source_title(a)) and norm(source_title(a)) == norm(source_title(b)))
+    source_a, source_b = norm(source_title(a)), norm(source_title(b))
+    same_source = bool(source_a and source_a == source_b)
+    different_source = bool(source_a and source_b and source_a != source_b)
     same_volume = bool(norm(pa.get("volume")) and norm(pa.get("volume")) == norm(pb.get("volume")))
-    same_issue = not (pa.get("issue") and pb.get("issue")) or norm(pa.get("issue")) == norm(pb.get("issue"))
+    different_volume = different_nonempty(pa.get("volume"), pb.get("volume"))
+    same_issue = bool(norm(pa.get("issue")) and norm(pa.get("issue")) == norm(pb.get("issue")))
+    different_issue = different_nonempty(pa.get("issue"), pb.get("issue"))
+    start_a, start_b = page_int(pa.get("start_page")), page_int(pb.get("start_page"))
+    different_start_page = bool(start_a is not None and start_b is not None and start_a != start_b)
+    nonoverlap = page_ranges_nonoverlap(a, b)
     title_sim = float(candidate.get("title_similarity") or 0.0)
     dois_a, dois_b = set(extract_dois(a)), set(extract_dois(b))
     disjoint_dois = bool(dois_a and dois_b and not (dois_a & dois_b))
 
-    reasons = []
-    if same_source and same_volume and same_issue and page_ranges_nonoverlap(a, b) and title_sim < 0.985:
-        reasons.append("same source/volume context but non-overlapping pagination")
+    evidence = []
+
+    # Strongest common false-positive pattern: related articles by the same team in
+    # different journals. Different source + different DOI + materially different
+    # title is sufficient published-work evidence; pagination/volume strengthen it.
+    if different_source and disjoint_dois and title_sim < 0.985:
+        evidence.extend([
+            "different journal/source",
+            "different DOI values",
+            "materially different titles",
+        ])
+        if different_volume:
+            evidence.append("different volume")
+        if different_start_page or nonoverlap:
+            evidence.append("different pagination")
+        return "reject_different_journal_doi_title", evidence
+
+    # Same journal context but clearly separate article locations.
+    if same_source and same_volume and nonoverlap and title_sim < 0.985:
+        evidence.extend([
+            "same journal and volume",
+            "non-overlapping pagination",
+            "materially different titles",
+        ])
         if disjoint_dois:
-            reasons.append("different DOI values support distinct published articles")
-    return reasons
+            evidence.append("different DOI values")
+        if different_issue:
+            evidence.append("different issue")
+        return "reject_distinct_pagination", evidence
+
+    # Same journal/issue, but distinct article locations plus distinct DOI/title.
+    if same_source and same_issue and disjoint_dois and different_start_page and title_sim < 0.985:
+        return "reject_same_issue_distinct_article", [
+            "same journal and issue",
+            "different DOI values",
+            "different start pages/article locations",
+            "materially different titles",
+        ]
+
+    return None, []
 
 
 def auto_resolvable(candidate, a_record, b_record):
-    distinct = strong_distinct_work_evidence(a_record, b_record, candidate)
-    if distinct:
-        return "not_duplicate", "strong_bibliographic_conflict", distinct
+    reject_rule, evidence = strong_distinct_work_evidence(a_record, b_record, candidate)
+    if reject_rule:
+        return "not_duplicate", reject_rule, evidence
 
     status = candidate.get("status")
     if status == "duplicate":
@@ -196,7 +243,6 @@ def lens_id(record):
 def dedup_with_history(record, value):
     previous = record.get("deduplication")
     result = dict(value)
-    # Do not recursively archive Workflow 02's own previous state on reruns.
     if isinstance(previous, dict) and previous.get("workflow") not in (None, "02_deduplication"):
         result["prior_deduplication"] = previous
     return result
@@ -305,7 +351,8 @@ def main():
         counts[value["status"]] += 1
         output_records.append(r)
 
-    outp = Path(args.output); outp.parent.mkdir(parents=True, exist_ok=True)
+    outp = Path(args.output)
+    outp.parent.mkdir(parents=True, exist_ok=True)
     with outp.open("w", encoding="utf-8") as f:
         for r in output_records:
             f.write(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n")
@@ -322,24 +369,29 @@ def main():
     for c in unique_queue.values():
         a, b = c.get("record_index"), c.get("matched_index")
         row = dict(c)
-        if isinstance(a,int) and 0 <= a < n: row["incoming_record"] = record_summary(records[a],a)
-        if isinstance(b,int) and 0 <= b < n: row["matched_record"] = record_summary(records[b],b)
+        if isinstance(a,int) and 0 <= a < n:
+            row["incoming_record"] = record_summary(records[a],a)
+        if isinstance(b,int) and 0 <= b < n:
+            row["matched_record"] = record_summary(records[b],b)
         queue_rows.append(row)
     with Path(args.queue).open("w", encoding="utf-8") as f:
         for row in sorted(queue_rows,key=lambda x:(str(x.get("status")),x.get("record_index",-1))):
             f.write(json.dumps(row,ensure_ascii=False)+"\n")
 
+    rejection_reason_counts = Counter(c.get("resolution_rule") for c in rejected_pairs)
     audit = {
         "resolved_groups": resolved_groups,
         "bibliographically_rejected_pairs": [dict(c,
             incoming_record=record_summary(records[c["record_index"]],c["record_index"]),
             matched_record=record_summary(records[c["matched_index"]],c["matched_index"])) for c in rejected_pairs],
+        "bibliographic_rejection_reason_counts": dict(sorted(rejection_reason_counts.items())),
     }
     Path(args.audit).write_text(json.dumps(audit,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
     summary = {
         "input_records":n,"output_records":len(output_records),"candidate_pairs":len(candidates),
         "auto_candidate_pairs":len(auto_pairs),"bibliographically_rejected_pairs":len(rejected_pairs),
+        "bibliographic_rejection_reason_counts":dict(sorted(rejection_reason_counts.items())),
         "resolved_groups":len(resolved_groups),"canonical_representatives":counts["canonical"],
         "duplicates_flagged":counts["duplicate"],"unique_records":counts["unique"],
         "adjudication_records":counts["adjudication_required"],"adjudication_pairs":len(queue_rows),
