@@ -1,0 +1,78 @@
+name: Audit Workflow 02 - canonical JSON duplicates
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-dedup-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Workflow 02 branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-02-deduplication
+          path: workflow02
+
+      - name: Checkout canonical JSON with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          path: canonical_store
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate canonical JSONL exists
+        run: |
+          test -f canonical_store/data/canonical/current/repair/records.jsonl
+          python - <<'PY'
+          import json
+          p='canonical_store/data/canonical/current/repair/records.jsonl'
+          n=0
+          with open(p,encoding='utf-8') as f:
+              for line_no,line in enumerate(f,1):
+                  if not line.strip(): continue
+                  json.loads(line)
+                  n += 1
+          print(f'Canonical JSONL records: {n}')
+          assert n > 10000
+          PY
+
+      - name: Run read-only full canonical duplicate audit
+        working-directory: workflow02
+        run: |
+          mkdir -p outputs/updater/canonical_dedup_audit
+          python scripts/updater/audit_canonical_duplicates.py \
+            --input ../canonical_store/data/canonical/current/repair/records.jsonl \
+            --output outputs/updater/canonical_dedup_audit/duplicate_candidates.jsonl \
+            --summary outputs/updater/canonical_dedup_audit/summary.json
+
+      - name: Check known Foroutani manifestations
+        working-directory: workflow02
+        run: |
+          python - <<'PY'
+          import json
+          ids={'154-579-994-777-836','011-403-740-852-889'}
+          found=[]
+          with open('outputs/updater/canonical_dedup_audit/duplicate_candidates.jsonl',encoding='utf-8') as f:
+              for line in f:
+                  r=json.loads(line)
+                  pair={r.get('lens_id'),r.get('matched_master_lens_id')}
+                  if pair==ids:
+                      found.append(r)
+          print(json.dumps({'foroutani_pair_found': bool(found), 'matches': found}, indent=2))
+          PY
+
+      - name: Upload audit artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-canonical-dedup-audit-${{ github.run_id }}
+          path: workflow02/outputs/updater/canonical_dedup_audit/
+          if-no-files-found: error
+          retention-days: 30
