@@ -371,6 +371,7 @@ def main():
 
     incoming_records = load_records(Path(args.input))
     master = [prepared(r, origin="master") for r in load_records(Path(args.master))]
+    master_by_lens_id = {m["lens_id"]: m for m in master if m["lens_id"]}
     incoming = [prepared(r, origin="incoming") for r in incoming_records]
     outp = Path(args.output)
     auditp = Path(args.audit)
@@ -402,7 +403,10 @@ def main():
             lid = record["lens_id"]
             if not lid:
                 raise RuntimeError("Incoming record has no authoritative lens_id")
-            if lid in seen:
+            if lid in master_by_lens_id:
+                matched = master_by_lens_id[lid]
+                decision = candidate_payload("identity_match", "matching authoritative lens_id in master", matched, 1.0, 0, 1.0)
+            elif lid in seen:
                 decision = {
                     "status": "identity_match",
                     "basis": "matching lens_id within incoming batch",
