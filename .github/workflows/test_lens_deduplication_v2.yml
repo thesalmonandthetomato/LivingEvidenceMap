@@ -30,22 +30,35 @@ jobs:
           name: updater-workflow-01-lens-ingestion-33107953267
           path: workflow01_artifact
 
-      - name: Prepare real Lens test fixture
+      - name: Prepare real Lens master and incoming fixtures
         run: |
           python - <<'PY'
           import copy, json
           from pathlib import Path
+
           src = Path('workflow01_artifact/records.jsonl')
-          rows = []
+          base = []
           with src.open(encoding='utf-8') as f:
               for line in f:
                   if line.strip():
-                      rows.append(json.loads(line))
-                  if len(rows) == 50:
+                      base.append(json.loads(line))
+                  if len(base) == 50:
                       break
-          assert len(rows) == 50
-          rows.append(copy.deepcopy(rows[0]))
-          doi_row = next(r for r in rows[:50] if any(i.get('type') == 'doi' for i in r['lens']['raw_payload'].get('external_ids', [])))
+          assert len(base) == 50
+
+          with open('master_fixture.jsonl', 'w', encoding='utf-8') as f:
+              for row in base:
+                  f.write(json.dumps(row, ensure_ascii=False) + '\n')
+
+          incoming = []
+
+          # Exact-Lens identity repeat against master.
+          incoming.append(copy.deepcopy(base[0]))
+
+          doi_row = next(r for r in base if any(i.get('type') == 'doi' for i in r['lens']['raw_payload'].get('external_ids', [])))
+
+          # Same bibliographic record but deliberately altered DOI: should still be a candidate,
+          # demonstrating that DOI is not decisive by itself.
           different_doi = copy.deepcopy(doi_row)
           different_doi['identity']['lens_id'] = 'fixture-different-doi'
           different_doi['identity']['record_id'] = 'fixture-different-doi'
@@ -53,47 +66,84 @@ jobs:
           for identifier in different_doi['lens']['raw_payload'].get('external_ids', []):
               if identifier.get('type') == 'doi':
                   identifier['value'] = '10.0000/different-test'
-          rows.append(different_doi)
+          incoming.append(different_doi)
+
+          # Matching DOI but contradictory title/author: must not be called a duplicate.
           wrong_doi = copy.deepcopy(doi_row)
           wrong_doi['identity']['lens_id'] = 'fixture-wrong-doi'
           wrong_doi['identity']['record_id'] = 'fixture-wrong-doi'
           wrong_doi['lens']['raw_payload']['lens_id'] = 'fixture-wrong-doi'
           wrong_doi['lens']['raw_payload']['title'] = 'Deliberately unrelated publication used to test DOI safety'
           wrong_doi['lens']['raw_payload']['authors'] = [{'first_name': 'Different', 'last_name': 'Author'}]
-          rows.append(wrong_doi)
-          with open('fixture.jsonl', 'w', encoding='utf-8') as f:
-              for row in rows:
+          wrong_doi['lens']['raw_payload']['abstract'] = 'This deliberately unrelated abstract is included to ensure a shared DOI cannot override contradictory bibliographic evidence.'
+          incoming.append(wrong_doi)
+
+          # Synthetic preprint -> journal manifestation based on the known Foroutani failure mode:
+          # different Lens IDs, title wording and year; earlier version has no journal/source;
+          # abstracts are strongly overlapping and first author is the same.
+          preprint = {
+              'identity': {'lens_id': 'fixture-preprint', 'record_id': 'fixture-preprint'},
+              'canonical': {
+                  'record_id': 'fixture-preprint',
+                  'lens_id': 'fixture-preprint',
+                  'title': 'Minimizing marine resource utilization in diets of farmed Atlantic salmon: effects on growth performance and tissue composition',
+                  'authors': 'Foroutani, M. B.',
+                  'year': 2017,
+                  'source': '',
+                  'doi': '',
+                  'abstract': 'Due to the limited availability of fish meal and fish oil resources and their high costs in producing aquafeeds for the aquaculture industry, it is important to conduct research on possible replacements that are sustainable sources of protein and lipids. In this study, seven different diets containing various protein and lipid sources were formulated to feed farmed Atlantic salmon, and their effects on growth performance, tissue lipid class, fatty acid, and elemental composition were examined. Growth performance results showed that the diet containing the lowest level of fish meal and fish oil led to the lowest weight gain, followed by the diet with the highest content of animal by-products. Fish meal could be reduced to 5 percent without affecting growth as long as there was at least 5 percent fish oil.'
+              }
+          }
+          journal = {
+              'identity': {'lens_id': 'fixture-journal', 'record_id': 'fixture-journal'},
+              'canonical': {
+                  'record_id': 'fixture-journal',
+                  'lens_id': 'fixture-journal',
+                  'title': 'Minimizing marine ingredients in diets of farmed Atlantic salmon (Salmo salar): Effects on growth performance and muscle lipid and fatty acid composition',
+                  'authors': 'Foroutani, M. B. | Parrish, C. C. | Wells, J. | Taylor, R. G.',
+                  'year': 2018,
+                  'source': 'Journal of Aquaculture Nutrition',
+                  'doi': '10.1101/328716',
+                  'abstract': 'Due to limited fish meal and fish oil resources and their high costs for the aquaculture industry, it is necessary to find alternative sustainable sources of protein and lipids. Therefore, seven different diets were formulated with different protein and lipid sources to feed farmed Atlantic salmon, and their effects on growth performance, muscle lipid class, and fatty acid composition were examined. Growth performance indicated that the diet with the lowest fish meal and fish oil content resulted in the lowest weight gain and final weight, followed by the diet containing the highest level of animal by-products. Fish meal could be reduced to 5 percent without affecting growth as long as there was a minimum of 5 percent fish oil.'
+              }
+          }
+          incoming.extend([preprint, journal])
+
+          with open('incoming_fixture.jsonl', 'w', encoding='utf-8') as f:
+              for row in incoming:
                   f.write(json.dumps(row, ensure_ascii=False) + '\n')
-          print(f'Prepared {len(rows)} records from the actual Workflow 01 Lens artefact')
+
+          print(f'Prepared {len(base)} master records and {len(incoming)} incoming records')
           PY
 
       - name: Validate fixture JSONL integrity
         run: |
           python - <<'PY'
           import json
-          path = 'fixture.jsonl'
-          rows = []
-          with open(path, encoding='utf-8') as f:
-              for line_no, line in enumerate(f, 1):
-                  if not line.strip():
-                      continue
-                  try:
-                      rows.append(json.loads(line))
-                  except json.JSONDecodeError as e:
-                      raise SystemExit(f'Invalid fixture JSONL at line {line_no}: {e}')
-          assert len(rows) == 53, len(rows)
-          print(f'Fixture contains {len(rows)} valid JSONL records')
+          for path, expected in [('master_fixture.jsonl', 50), ('incoming_fixture.jsonl', 5)]:
+              rows = []
+              with open(path, encoding='utf-8') as f:
+                  for line_no, line in enumerate(f, 1):
+                      if not line.strip():
+                          continue
+                      try:
+                          rows.append(json.loads(line))
+                      except json.JSONDecodeError as e:
+                          raise SystemExit(f'Invalid {path} JSONL at line {line_no}: {e}')
+              assert len(rows) == expected, (path, len(rows), expected)
+          print('Fixture JSONL validated')
           PY
 
       - name: Run Workflow 02 prototype
         run: |
           mkdir -p outputs/updater/deduplication_test
           python scripts/updater/deduplicate_jsonl.py \
-            --input fixture.jsonl \
+            --input incoming_fixture.jsonl \
+            --master master_fixture.jsonl \
             --output outputs/updater/deduplication_test/records_after_dedup.jsonl \
             --audit outputs/updater/deduplication_test/dedup_audit.jsonl
 
-      - name: Validate output JSONL and DOI safeguards
+      - name: Validate output and preprint safeguards
         run: |
           python - <<'PY'
           import json
@@ -106,15 +156,30 @@ jobs:
                       rows.append(json.loads(line))
                   except json.JSONDecodeError as e:
                       raise SystemExit(f'Invalid output JSONL at line {line_no}: {e}')
-          assert len(rows) == 53, len(rows)
-          assert any(r['deduplication']['status'] == 'identity_match' for r in rows)
-          assert any(r['deduplication']['status'] == 'duplicate_candidate' for r in rows)
-          wrong_doi = next(r for r in rows if r['identity']['lens_id'] == 'fixture-wrong-doi')
-          assert wrong_doi['deduplication']['status'] == 'unique'
+
+          assert len(rows) == 5, len(rows)
+
+          identity = rows[0]
+          assert identity['deduplication']['status'] in {'duplicate', 'identity_match'}, identity['deduplication']
+
           different_doi = next(r for r in rows if r['identity']['lens_id'] == 'fixture-different-doi')
-          assert different_doi['deduplication']['status'] == 'duplicate_candidate'
-          assert all(r['deduplication']['decision_source'] != 'doi' for r in rows)
-          print(f'Validated {len(rows)} records derived from the actual Workflow 01 Lens artefact')
+          assert different_doi['deduplication']['status'] in {'duplicate', 'probable_duplicate', 'possible_duplicate'}, different_doi['deduplication']
+
+          wrong_doi = next(r for r in rows if r['identity']['lens_id'] == 'fixture-wrong-doi')
+          assert wrong_doi['deduplication']['status'] in {'doi_conflict_review', 'new'}, wrong_doi['deduplication']
+          assert wrong_doi['deduplication']['status'] != 'duplicate', wrong_doi['deduplication']
+
+          preprint = next(r for r in rows if r['identity']['lens_id'] == 'fixture-preprint')
+          assert preprint['deduplication']['status'] == 'new', preprint['deduplication']
+
+          journal = next(r for r in rows if r['identity']['lens_id'] == 'fixture-journal')
+          assert journal['deduplication']['status'] == 'probable_duplicate', journal['deduplication']
+          assert journal['deduplication']['matched_master_lens_id'] == 'fixture-preprint', journal['deduplication']
+          assert journal['deduplication']['matched_record_origin'] == 'incoming', journal['deduplication']
+          assert journal['deduplication']['manifestation_pattern'] == 'preprint_or_repository_to_later_manifestation', journal['deduplication']
+          assert journal['deduplication']['abstract_similarity'] >= 0.88, journal['deduplication']
+
+          print('Validated Workflow 02 including abstract-based preprint detection and within-batch matching')
           PY
 
       - name: Upload Workflow 02 artefacts
