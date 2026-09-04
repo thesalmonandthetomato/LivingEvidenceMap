@@ -101,38 +101,39 @@ jobs:
             --output outputs/workflow01b/cleaned_records.jsonl \
             --audit outputs/workflow01b/abstract_cleaning_audit.jsonl \
             --report outputs/workflow01b/report.json \
-            --clean-only
+            --clean-only \
+            --expected-records 20488
           cat outputs/workflow01b/report.json
 
       - name: Validate canonical cleaning is lossless
         if: ${{ inputs.mode != 'fixture_test' }}
         run: |
           python - <<'PY'
-          import json
+          import json, sys
+          sys.path.insert(0,'scripts/updater')
+          from abstract_enrichment import read_json_object_stream
           src='canonical_store/data/canonical/current/repair/records.jsonl'
           out='outputs/workflow01b/cleaned_records.jsonl'
-          n=0
+          source=read_json_object_stream(src)
+          cleaned=read_json_object_stream(out)
+          assert len(source)==20488, len(source)
+          assert len(cleaned)==20488, len(cleaned)
           changed=0
-          with open(src,encoding='utf-8') as fa, open(out,encoding='utf-8') as fb:
-              for la,lb in zip(fa,fb):
-                  if not la.strip() and not lb.strip():
-                      continue
-                  a=json.loads(la); b=json.loads(lb); n+=1
-                  assert a.get('identity')==b.get('identity')
-                  assert a.get('lens')==b.get('lens')
-                  ca=a.get('canonical') or {}; cb=b.get('canonical') or {}
-                  for k,v in ca.items():
-                      if k!='abstract': assert cb.get(k)==v, (n,k)
-                  for k in cb:
-                      if k!='abstract' and k not in ca:
-                          raise AssertionError((n,'unexpected canonical field',k))
-                  if ca.get('abstract')!=cb.get('abstract'): changed+=1
-              assert not fa.readline().strip() and not fb.readline().strip()
-          assert n==20488, n
+          for n,(a,b) in enumerate(zip(source,cleaned),1):
+              assert a.get('identity')==b.get('identity'), n
+              assert a.get('lens')==b.get('lens'), n
+              ca=a.get('canonical') or {}; cb=b.get('canonical') or {}
+              for k,v in ca.items():
+                  if k!='abstract': assert cb.get(k)==v, (n,k)
+              for k in cb:
+                  if k!='abstract' and k not in ca:
+                      raise AssertionError((n,'unexpected canonical field',k))
+              if ca.get('abstract')!=cb.get('abstract'): changed+=1
           report=json.load(open('outputs/workflow01b/report.json'))
-          assert report['total_records']==n
+          assert report['total_records']==20488
+          assert report['expected_records']==20488
           assert report['abstracts_cleaned']==changed
-          print(json.dumps({'records_verified':n,'canonical_abstracts_changed':changed},indent=2))
+          print(json.dumps({'records_verified':20488,'canonical_abstracts_changed':changed},indent=2))
           PY
 
       - name: Apply cleaned abstracts to canonical store
