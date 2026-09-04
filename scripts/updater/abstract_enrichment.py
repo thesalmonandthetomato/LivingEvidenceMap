@@ -40,19 +40,15 @@ def clean_abstract(v):
     s=CDATA_RE.sub(lambda m:m.group(1),s)
     s=COMMENT_RE.sub(" ",s)
 
-    # Remove standard structured-abstract headings but retain non-standard title text.
     def title_repl(m):
         inner=TAG_RE.sub(" ",html.unescape(m.group(1)))
         label=re.sub(r"[^a-z]+"," ",inner.casefold()).strip()
         return " " if label in SECTION_LABELS else f" {inner} "
     s=JATS_TITLE_RE.sub(title_repl,s)
 
-    # Add boundaries before stripping tags so adjacent paragraphs do not concatenate.
     s=BLOCK_TAG_RE.sub(" ",s)
     s=TAG_RE.sub(" ",s)
-    # Decode named/numeric entities; twice handles escaped source markup such as &amp;lt;.
     s=html.unescape(html.unescape(s))
-    # Remove any tags exposed only after entity decoding.
     s=BLOCK_TAG_RE.sub(" ",s)
     s=TAG_RE.sub(" ",s)
     s=re.sub(r"\s+"," ",s).strip()
@@ -83,18 +79,25 @@ def existing_abstract(r):
     return None
 
 def canonicalise(r, abstract_value):
+    """Update canonical fields losslessly, preserving fields owned by other workflows."""
     p=payload(r); old=r.get("canonical") if isinstance(r.get("canonical"),dict) else {}
     src=p.get("source"); src_title=src.get("title") if isinstance(src,dict) else src
-    return {
-        "record_id":old.get("record_id") or r.get("identity",{}).get("record_id") or lens_id(r),
-        "lens_id":old.get("lens_id") or lens_id(r),
-        "title":old.get("title") or p.get("title"),
-        "authors":old.get("authors") or p.get("authors"),
-        "year":old.get("year") or p.get("year_published") or p.get("date_published"),
-        "source":old.get("source") or src_title,
-        "doi":old.get("doi") or doi(r),
-        "abstract":clean_abstract(abstract_value),
+    result=dict(old)
+    defaults={
+        "record_id":r.get("identity",{}).get("record_id") or lens_id(r),
+        "lens_id":lens_id(r),
+        "title":p.get("title"),
+        "authors":p.get("authors"),
+        "year":p.get("year_published") or p.get("date_published"),
+        "source":src_title,
+        "doi":doi(r),
     }
+    for key,value in defaults.items():
+        if result.get(key) in (None,"") and value not in (None,""):
+            result[key]=value
+    result["abstract"]=clean_abstract(abstract_value)
+    return result
+
 def transient_epmc_error(e):
     if isinstance(e, urllib.error.HTTPError):
         return e.code == 429 or 500 <= e.code < 600
@@ -122,6 +125,7 @@ def main():
     ap.add_argument("--input",required=True); ap.add_argument("--output",required=True)
     ap.add_argument("--audit",required=True); ap.add_argument("--report",required=True)
     ap.add_argument("--delay",type=float,default=0.08)
+    ap.add_argument("--clean-only",action="store_true",help="Clean existing abstracts without querying Europe PMC for missing abstracts")
     args=ap.parse_args()
     rows=[json.loads(x) for x in Path(args.input).read_text(encoding="utf-8").splitlines() if x.strip()]
     out=[]; audit=[]
@@ -129,6 +133,8 @@ def main():
         d=doi(r); old=existing_abstract(r); recovered=None; attempts=[]
         if old:
             status="existing_abstract"
+        elif args.clean_only:
+            status="missing_clean_only"
         elif not d:
             status="missing_no_doi"
         else:
@@ -141,16 +147,24 @@ def main():
         cleaned_abstract=clean_abstract(source_abstract)
         enriched=dict(r)
         enriched["canonical"]=canonicalise(r,source_abstract)
-        enriched["abstract_enrichment"]={
-            "workflow":"01B","provider":"europe_pmc","status":status,"doi":d,
-            "retrieved_at":now() if recovered else None,"attempts":attempts,
-            "cleaning":{
-                "method":"html_jats_plaintext_v1",
+        if args.clean_only:
+            enriched["abstract_cleaning"]={
+                "workflow":"01B","method":"html_jats_plaintext_v1",
                 "source_chars":len(source_abstract or ""),
                 "cleaned_chars":len(cleaned_abstract or ""),
                 "changed":bool(source_abstract and cleaned_abstract != source_abstract),
-            },
-        }
+            }
+        else:
+            enriched["abstract_enrichment"]={
+                "workflow":"01B","provider":"europe_pmc","status":status,"doi":d,
+                "retrieved_at":now() if recovered else None,"attempts":attempts,
+                "cleaning":{
+                    "method":"html_jats_plaintext_v1",
+                    "source_chars":len(source_abstract or ""),
+                    "cleaned_chars":len(cleaned_abstract or ""),
+                    "changed":bool(source_abstract and cleaned_abstract != source_abstract),
+                },
+            }
         out.append(enriched)
         audit.append({
             "lens_id":lens_id(r),"doi":d,"status":status,
@@ -159,7 +173,7 @@ def main():
             "abstract_cleaned":bool(source_abstract and cleaned_abstract != source_abstract),
             "attempts":attempts,
         })
-        if d and not old: time.sleep(args.delay)
+        if d and not old and not args.clean_only: time.sleep(args.delay)
     for path in (Path(args.output),Path(args.audit),Path(args.report)):
         path.parent.mkdir(parents=True,exist_ok=True)
     Path(args.output).write_text("".join(json.dumps(x,ensure_ascii=True,separators=(",",":"))+"\n" for x in out),encoding="utf-8")
@@ -168,8 +182,9 @@ def main():
     for x in audit: counts[x["status"]]=counts.get(x["status"],0)+1
     report={
         "workflow":"01B_abstract_enrichment","provider":"europe_pmc","created_at":now(),
+        "mode":"clean_only" if args.clean_only else "enrich_and_clean",
         "total_records":len(rows),"status_counts":counts,
-        "doi_missing_abstract_targets":sum(bool(x["doi"]) and x["status"]!="existing_abstract" for x in audit),
+        "doi_missing_abstract_targets":sum(bool(x["doi"]) and x["status"] not in {"existing_abstract","missing_clean_only"} for x in audit),
         "abstracts_recovered":counts.get("abstract_recovered",0),
         "abstracts_cleaned":sum(bool(x["abstract_cleaned"]) for x in audit),
         "abstract_cleaning_method":"html_jats_plaintext_v1",
