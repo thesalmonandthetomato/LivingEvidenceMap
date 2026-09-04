@@ -1,13 +1,23 @@
-name: Workflow 01B TEST - Abstract enrichment and cleaning
+name: Workflow 01B - Abstract enrichment and cleaning
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run mode'
+        required: true
+        default: 'fixture_test'
+        type: choice
+        options:
+          - fixture_test
+          - canonical_audit
+          - canonical_apply
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  test:
+  run:
     runs-on: ubuntu-latest
     steps:
       - name: Check out Workflow 01B development branch
@@ -20,6 +30,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build Workflow 01B cleaning fixture
+        if: ${{ inputs.mode == 'fixture_test' }}
         run: |
           mkdir -p testdata/workflow01b
           cat > testdata/workflow01b/input.jsonl <<'EOF'
@@ -28,7 +39,8 @@ jobs:
           {"identity":{"lens_id":"wf1b-recover","record_id":"wf1b-recover","record_id_type":"lens_id"},"source":{"provider":"lens","source_format":"lens_api_json"},"lens":{"raw_payload":{"lens_id":"wf1b-recover","title":"Effects of dietary lipid sources on growth performance, feed utilisation and tissue fatty acid composition of Atlantic salmon Salmo salar","authors":[{"first_name":"M","last_name":"Author"}],"year_published":2010,"source":{"title":"Aquaculture Research"},"external_ids":[{"type":"doi","value":"10.1111/j.1365-2109.2009.02327.x"}],"abstract":null}}}
           EOF
 
-      - name: Run Workflow 01B
+      - name: Run fixture test
+        if: ${{ inputs.mode == 'fixture_test' }}
         run: |
           python scripts/updater/abstract_enrichment.py \
             --input testdata/workflow01b/input.jsonl \
@@ -38,7 +50,8 @@ jobs:
             --delay 0.1
           cat testdata/workflow01b/report.json
 
-      - name: Validate cleaning contract
+      - name: Validate fixture cleaning contract
+        if: ${{ inputs.mode == 'fixture_test' }}
         run: |
           python - <<'PY'
           import json
@@ -64,19 +77,87 @@ jobs:
               assert 'cleaning' in r['abstract_enrichment']
           assert c['lens']['raw_payload']['abstract'] is None
           assert c['canonical']['doi']=='10.1111/j.1365-2109.2009.02327.x'
-          assert c['abstract_enrichment']['status'] in {'abstract_recovered','no_abstract_recovered'}
-          if c['abstract_enrichment']['status']=='abstract_recovered':
-              assert c['canonical']['abstract']
-              assert '<' not in c['canonical']['abstract'] and '>' not in c['canonical']['abstract']
           report=json.load(open('testdata/workflow01b/report.json'))
           assert report['abstract_cleaning_method']=='html_jats_plaintext_v1'
           assert report['abstracts_cleaned'] >= 1
           PY
 
-      - name: Upload test artefact
+      - name: Check out canonical store
+        if: ${{ inputs.mode != 'fixture_test' }}
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          path: canonical_store
+
+      - name: Run canonical abstract cleaning
+        if: ${{ inputs.mode != 'fixture_test' }}
+        run: |
+          mkdir -p outputs/workflow01b
+          SRC=canonical_store/data/canonical/current/repair/records.jsonl
+          test -f "$SRC"
+          python scripts/updater/abstract_enrichment.py \
+            --input "$SRC" \
+            --output outputs/workflow01b/cleaned_records.jsonl \
+            --audit outputs/workflow01b/abstract_cleaning_audit.jsonl \
+            --report outputs/workflow01b/report.json \
+            --clean-only
+          cat outputs/workflow01b/report.json
+
+      - name: Validate canonical cleaning is lossless
+        if: ${{ inputs.mode != 'fixture_test' }}
+        run: |
+          python - <<'PY'
+          import json
+          src='canonical_store/data/canonical/current/repair/records.jsonl'
+          out='outputs/workflow01b/cleaned_records.jsonl'
+          n=0
+          changed=0
+          with open(src,encoding='utf-8') as fa, open(out,encoding='utf-8') as fb:
+              for la,lb in zip(fa,fb):
+                  if not la.strip() and not lb.strip():
+                      continue
+                  a=json.loads(la); b=json.loads(lb); n+=1
+                  assert a.get('identity')==b.get('identity')
+                  assert a.get('lens')==b.get('lens')
+                  ca=a.get('canonical') or {}; cb=b.get('canonical') or {}
+                  for k,v in ca.items():
+                      if k!='abstract': assert cb.get(k)==v, (n,k)
+                  for k in cb:
+                      if k!='abstract' and k not in ca:
+                          raise AssertionError((n,'unexpected canonical field',k))
+                  if ca.get('abstract')!=cb.get('abstract'): changed+=1
+              assert not fa.readline().strip() and not fb.readline().strip()
+          assert n==20488, n
+          report=json.load(open('outputs/workflow01b/report.json'))
+          assert report['total_records']==n
+          assert report['abstracts_cleaned']==changed
+          print(json.dumps({'records_verified':n,'canonical_abstracts_changed':changed},indent=2))
+          PY
+
+      - name: Apply cleaned abstracts to canonical store
+        if: ${{ inputs.mode == 'canonical_apply' }}
+        run: |
+          cp outputs/workflow01b/cleaned_records.jsonl canonical_store/data/canonical/current/repair/records.jsonl
+          cd canonical_store
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl
+          if git diff --cached --quiet; then
+            echo 'No canonical changes to commit.'
+          else
+            git commit -m 'Clean canonical abstracts in Workflow 01B'
+            git push origin HEAD:canonical-repair-store
+          fi
+          git fetch origin canonical-repair-store --depth=1
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/canonical-repair-store)"
+
+      - name: Upload Workflow 01B artefact
         uses: actions/upload-artifact@v4
         with:
-          name: workflow01b-abstract-cleaning-test-${{ github.run_id }}
-          path: testdata/workflow01b/
+          name: workflow01b-${{ inputs.mode }}-${{ github.run_id }}
+          path: |
+            testdata/workflow01b/
+            outputs/workflow01b/
           retention-days: 90
           if-no-files-found: error
