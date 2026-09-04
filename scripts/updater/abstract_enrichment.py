@@ -15,7 +15,6 @@ MAX_CHARS=12000
 EPMC_MAX_ATTEMPTS=4
 EPMC_BACKOFF_SECONDS=(1,2,4)
 
-# JATS/structured-abstract labels add source-format noise but no study content.
 SECTION_LABELS={
     "abstract","aim","aims","background","conclusion","conclusions","discussion",
     "importance","introduction","method","methods","objective","objectives","purpose",
@@ -33,19 +32,34 @@ def payload(r):
     if not isinstance(p,dict): raise RuntimeError("lens.raw_payload is not an object")
     return p
 
+def read_json_object_stream(path):
+    """Read whitespace-separated JSON objects, allowing objects to span physical lines."""
+    text=Path(path).read_text(encoding="utf-8")
+    decoder=json.JSONDecoder()
+    rows=[]; pos=0; n=len(text)
+    while True:
+        while pos<n and text[pos].isspace(): pos+=1
+        if pos>=n: break
+        try:
+            obj,end=decoder.raw_decode(text,pos)
+        except json.JSONDecodeError as e:
+            context=text[max(0,e.pos-80):min(n,e.pos+80)].replace("\n","\\n")
+            raise RuntimeError(f"Invalid canonical JSON near character {e.pos}: {e.msg}; context={context!r}") from e
+        if not isinstance(obj,dict):
+            raise RuntimeError(f"Expected a top-level JSON object at character {pos}, got {type(obj).__name__}")
+        rows.append(obj); pos=end
+    return rows
+
 def clean_abstract(v):
-    """Return comparison-friendly plain text without discarding substantive content."""
     if v is None: return None
     s=unicodedata.normalize("NFKC",str(v))
     s=CDATA_RE.sub(lambda m:m.group(1),s)
     s=COMMENT_RE.sub(" ",s)
-
     def title_repl(m):
         inner=TAG_RE.sub(" ",html.unescape(m.group(1)))
         label=re.sub(r"[^a-z]+"," ",inner.casefold()).strip()
         return " " if label in SECTION_LABELS else f" {inner} "
     s=JATS_TITLE_RE.sub(title_repl,s)
-
     s=BLOCK_TAG_RE.sub(" ",s)
     s=TAG_RE.sub(" ",s)
     s=html.unescape(html.unescape(s))
@@ -74,12 +88,10 @@ def doi(r):
 def existing_abstract(r):
     c=r.get("canonical") if isinstance(r.get("canonical"),dict) else {}
     for v in (c.get("abstract"),payload(r).get("abstract")):
-        if isinstance(v,str) and v.strip():
-            return v
+        if isinstance(v,str) and v.strip(): return v
     return None
 
 def canonicalise(r, abstract_value):
-    """Update canonical fields losslessly, preserving fields owned by other workflows."""
     p=payload(r); old=r.get("canonical") if isinstance(r.get("canonical"),dict) else {}
     src=p.get("source"); src_title=src.get("title") if isinstance(src,dict) else src
     result=dict(old)
@@ -93,14 +105,12 @@ def canonicalise(r, abstract_value):
         "doi":doi(r),
     }
     for key,value in defaults.items():
-        if result.get(key) in (None,"") and value not in (None,""):
-            result[key]=value
+        if result.get(key) in (None,"") and value not in (None,""): result[key]=value
     result["abstract"]=clean_abstract(abstract_value)
     return result
 
 def transient_epmc_error(e):
-    if isinstance(e, urllib.error.HTTPError):
-        return e.code == 429 or 500 <= e.code < 600
+    if isinstance(e, urllib.error.HTTPError): return e.code == 429 or 500 <= e.code < 600
     return isinstance(e, (TimeoutError, urllib.error.URLError))
 def epmc_lookup(d):
     q=urllib.parse.urlencode({"query":f'DOI:\"{d}\"',"format":"json","resultType":"core","pageSize":5})
@@ -120,23 +130,24 @@ def epmc_lookup(d):
             if attempt_no >= EPMC_MAX_ATTEMPTS or not transient_epmc_error(e):
                 raise RuntimeError(f"Europe PMC failed after {attempt_no} attempt(s): {' | '.join(errors)}") from e
             time.sleep(EPMC_BACKOFF_SECONDS[attempt_no-1])
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--input",required=True); ap.add_argument("--output",required=True)
     ap.add_argument("--audit",required=True); ap.add_argument("--report",required=True)
     ap.add_argument("--delay",type=float,default=0.08)
-    ap.add_argument("--clean-only",action="store_true",help="Clean existing abstracts without querying Europe PMC for missing abstracts")
+    ap.add_argument("--clean-only",action="store_true")
+    ap.add_argument("--expected-records",type=int,default=None)
     args=ap.parse_args()
-    rows=[json.loads(x) for x in Path(args.input).read_text(encoding="utf-8").splitlines() if x.strip()]
+    rows=read_json_object_stream(args.input)
+    if args.expected_records is not None and len(rows)!=args.expected_records:
+        raise RuntimeError(f"Canonical cardinality guard failed: expected {args.expected_records} records, parsed {len(rows)}")
     out=[]; audit=[]
     for r in rows:
         d=doi(r); old=existing_abstract(r); recovered=None; attempts=[]
-        if old:
-            status="existing_abstract"
-        elif args.clean_only:
-            status="missing_clean_only"
-        elif not d:
-            status="missing_no_doi"
+        if old: status="existing_abstract"
+        elif args.clean_only: status="missing_clean_only"
+        elif not d: status="missing_no_doi"
         else:
             try:
                 recovered,attempt=epmc_lookup(d); attempts.append(attempt)
@@ -148,48 +159,18 @@ def main():
         enriched=dict(r)
         enriched["canonical"]=canonicalise(r,source_abstract)
         if args.clean_only:
-            enriched["abstract_cleaning"]={
-                "workflow":"01B","method":"html_jats_plaintext_v1",
-                "source_chars":len(source_abstract or ""),
-                "cleaned_chars":len(cleaned_abstract or ""),
-                "changed":bool(source_abstract and cleaned_abstract != source_abstract),
-            }
+            enriched["abstract_cleaning"]={"workflow":"01B","method":"html_jats_plaintext_v1","source_chars":len(source_abstract or ""),"cleaned_chars":len(cleaned_abstract or ""),"changed":bool(source_abstract and cleaned_abstract != source_abstract)}
         else:
-            enriched["abstract_enrichment"]={
-                "workflow":"01B","provider":"europe_pmc","status":status,"doi":d,
-                "retrieved_at":now() if recovered else None,"attempts":attempts,
-                "cleaning":{
-                    "method":"html_jats_plaintext_v1",
-                    "source_chars":len(source_abstract or ""),
-                    "cleaned_chars":len(cleaned_abstract or ""),
-                    "changed":bool(source_abstract and cleaned_abstract != source_abstract),
-                },
-            }
+            enriched["abstract_enrichment"]={"workflow":"01B","provider":"europe_pmc","status":status,"doi":d,"retrieved_at":now() if recovered else None,"attempts":attempts,"cleaning":{"method":"html_jats_plaintext_v1","source_chars":len(source_abstract or ""),"cleaned_chars":len(cleaned_abstract or ""),"changed":bool(source_abstract and cleaned_abstract != source_abstract)}}
         out.append(enriched)
-        audit.append({
-            "lens_id":lens_id(r),"doi":d,"status":status,
-            "abstract_chars":len(cleaned_abstract or ""),
-            "abstract_source_chars":len(source_abstract or ""),
-            "abstract_cleaned":bool(source_abstract and cleaned_abstract != source_abstract),
-            "attempts":attempts,
-        })
+        audit.append({"lens_id":lens_id(r),"doi":d,"status":status,"abstract_chars":len(cleaned_abstract or ""),"abstract_source_chars":len(source_abstract or ""),"abstract_cleaned":bool(source_abstract and cleaned_abstract != source_abstract),"attempts":attempts})
         if d and not old and not args.clean_only: time.sleep(args.delay)
-    for path in (Path(args.output),Path(args.audit),Path(args.report)):
-        path.parent.mkdir(parents=True,exist_ok=True)
+    for path in (Path(args.output),Path(args.audit),Path(args.report)): path.parent.mkdir(parents=True,exist_ok=True)
     Path(args.output).write_text("".join(json.dumps(x,ensure_ascii=True,separators=(",",":"))+"\n" for x in out),encoding="utf-8")
     Path(args.audit).write_text("".join(json.dumps(x,ensure_ascii=True,separators=(",",":"))+"\n" for x in audit),encoding="utf-8")
     counts={}
     for x in audit: counts[x["status"]]=counts.get(x["status"],0)+1
-    report={
-        "workflow":"01B_abstract_enrichment","provider":"europe_pmc","created_at":now(),
-        "mode":"clean_only" if args.clean_only else "enrich_and_clean",
-        "total_records":len(rows),"status_counts":counts,
-        "doi_missing_abstract_targets":sum(bool(x["doi"]) and x["status"] not in {"existing_abstract","missing_clean_only"} for x in audit),
-        "abstracts_recovered":counts.get("abstract_recovered",0),
-        "abstracts_cleaned":sum(bool(x["abstract_cleaned"]) for x in audit),
-        "abstract_cleaning_method":"html_jats_plaintext_v1",
-        "output":"deduplication_ready",
-    }
+    report={"workflow":"01B_abstract_enrichment","provider":"europe_pmc","created_at":now(),"mode":"clean_only" if args.clean_only else "enrich_and_clean","total_records":len(rows),"expected_records":args.expected_records,"status_counts":counts,"doi_missing_abstract_targets":sum(bool(x["doi"]) and x["status"] not in {"existing_abstract","missing_clean_only"} for x in audit),"abstracts_recovered":counts.get("abstract_recovered",0),"abstracts_cleaned":sum(bool(x["abstract_cleaned"]) for x in audit),"abstract_cleaning_method":"html_jats_plaintext_v1","output":"deduplication_ready"}
     Path(args.report).write_text(json.dumps(report,indent=2,ensure_ascii=True)+"\n",encoding="utf-8")
     print(json.dumps(report,indent=2))
 if __name__=="__main__": raise SystemExit(main())
