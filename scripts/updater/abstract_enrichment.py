@@ -91,21 +91,24 @@ def existing_abstract(r):
         if isinstance(v,str) and v.strip(): return v
     return None
 
-def canonicalise(r, abstract_value):
-    p=payload(r); old=r.get("canonical") if isinstance(r.get("canonical"),dict) else {}
-    src=p.get("source"); src_title=src.get("title") if isinstance(src,dict) else src
+def canonicalise(r, abstract_value, fill_defaults=True):
+    """Return canonical metadata with only the requested abstract change in clean-only mode."""
+    old=r.get("canonical") if isinstance(r.get("canonical"),dict) else {}
     result=dict(old)
-    defaults={
-        "record_id":r.get("identity",{}).get("record_id") or lens_id(r),
-        "lens_id":lens_id(r),
-        "title":p.get("title"),
-        "authors":p.get("authors"),
-        "year":p.get("year_published") or p.get("date_published"),
-        "source":src_title,
-        "doi":doi(r),
-    }
-    for key,value in defaults.items():
-        if result.get(key) in (None,"") and value not in (None,""): result[key]=value
+    if fill_defaults:
+        p=payload(r)
+        src=p.get("source"); src_title=src.get("title") if isinstance(src,dict) else src
+        defaults={
+            "record_id":r.get("identity",{}).get("record_id") or lens_id(r),
+            "lens_id":lens_id(r),
+            "title":p.get("title"),
+            "authors":p.get("authors"),
+            "year":p.get("year_published") or p.get("date_published"),
+            "source":src_title,
+            "doi":doi(r),
+        }
+        for key,value in defaults.items():
+            if result.get(key) in (None,"") and value not in (None,""): result[key]=value
     result["abstract"]=clean_abstract(abstract_value)
     return result
 
@@ -157,10 +160,8 @@ def main():
         source_abstract=old or recovered
         cleaned_abstract=clean_abstract(source_abstract)
         enriched=dict(r)
-        enriched["canonical"]=canonicalise(r,source_abstract)
-        if args.clean_only:
-            enriched["abstract_cleaning"]={"workflow":"01B","method":"html_jats_plaintext_v1","source_chars":len(source_abstract or ""),"cleaned_chars":len(cleaned_abstract or ""),"changed":bool(source_abstract and cleaned_abstract != source_abstract)}
-        else:
+        enriched["canonical"]=canonicalise(r,source_abstract,fill_defaults=not args.clean_only)
+        if not args.clean_only:
             enriched["abstract_enrichment"]={"workflow":"01B","provider":"europe_pmc","status":status,"doi":d,"retrieved_at":now() if recovered else None,"attempts":attempts,"cleaning":{"method":"html_jats_plaintext_v1","source_chars":len(source_abstract or ""),"cleaned_chars":len(cleaned_abstract or ""),"changed":bool(source_abstract and cleaned_abstract != source_abstract)}}
         out.append(enriched)
         audit.append({"lens_id":lens_id(r),"doi":d,"status":status,"abstract_chars":len(cleaned_abstract or ""),"abstract_source_chars":len(source_abstract or ""),"abstract_cleaned":bool(source_abstract and cleaned_abstract != source_abstract),"attempts":attempts})
