@@ -148,6 +148,7 @@ def main():
     out=[]; audit=[]
     for r in rows:
         d=doi(r); old=existing_abstract(r); recovered=None; attempts=[]
+        original_canonical=(r.get("canonical") or {}).get("abstract") if isinstance(r.get("canonical"),dict) else None
         if old: status="existing_abstract"
         elif args.clean_only: status="missing_clean_only"
         elif not d: status="missing_no_doi"
@@ -163,15 +164,25 @@ def main():
         enriched["canonical"]=canonicalise(r,source_abstract,fill_defaults=not args.clean_only)
         if not args.clean_only:
             enriched["abstract_enrichment"]={"workflow":"01B","provider":"europe_pmc","status":status,"doi":d,"retrieved_at":now() if recovered else None,"attempts":attempts,"cleaning":{"method":"html_jats_plaintext_v1","source_chars":len(source_abstract or ""),"cleaned_chars":len(cleaned_abstract or ""),"changed":bool(source_abstract and cleaned_abstract != source_abstract)}}
+        canonical_changed=original_canonical != enriched["canonical"].get("abstract")
         out.append(enriched)
-        audit.append({"lens_id":lens_id(r),"doi":d,"status":status,"abstract_chars":len(cleaned_abstract or ""),"abstract_source_chars":len(source_abstract or ""),"abstract_cleaned":bool(source_abstract and cleaned_abstract != source_abstract),"attempts":attempts})
+        audit.append({"lens_id":lens_id(r),"doi":d,"status":status,"abstract_chars":len(cleaned_abstract or ""),"abstract_source_chars":len(source_abstract or ""),"abstract_text_normalised":bool(source_abstract and cleaned_abstract != source_abstract),"canonical_abstract_changed":canonical_changed,"attempts":attempts})
         if d and not old and not args.clean_only: time.sleep(args.delay)
     for path in (Path(args.output),Path(args.audit),Path(args.report)): path.parent.mkdir(parents=True,exist_ok=True)
     Path(args.output).write_text("".join(json.dumps(x,ensure_ascii=True,separators=(",",":"))+"\n" for x in out),encoding="utf-8")
     Path(args.audit).write_text("".join(json.dumps(x,ensure_ascii=True,separators=(",",":"))+"\n" for x in audit),encoding="utf-8")
     counts={}
     for x in audit: counts[x["status"]]=counts.get(x["status"],0)+1
-    report={"workflow":"01B_abstract_enrichment","provider":"europe_pmc","created_at":now(),"mode":"clean_only" if args.clean_only else "enrich_and_clean","total_records":len(rows),"expected_records":args.expected_records,"status_counts":counts,"doi_missing_abstract_targets":sum(bool(x["doi"]) and x["status"] not in {"existing_abstract","missing_clean_only"} for x in audit),"abstracts_recovered":counts.get("abstract_recovered",0),"abstracts_cleaned":sum(bool(x["abstract_cleaned"]) for x in audit),"abstract_cleaning_method":"html_jats_plaintext_v1","output":"deduplication_ready"}
+    report={
+        "workflow":"01B_abstract_enrichment","provider":"europe_pmc","created_at":now(),
+        "mode":"clean_only" if args.clean_only else "enrich_and_clean",
+        "total_records":len(rows),"expected_records":args.expected_records,"status_counts":counts,
+        "doi_missing_abstract_targets":sum(bool(x["doi"]) and x["status"] not in {"existing_abstract","missing_clean_only"} for x in audit),
+        "abstracts_recovered":counts.get("abstract_recovered",0),
+        "abstract_texts_normalised":sum(bool(x["abstract_text_normalised"]) for x in audit),
+        "canonical_abstracts_changed":sum(bool(x["canonical_abstract_changed"]) for x in audit),
+        "abstract_cleaning_method":"html_jats_plaintext_v1","output":"deduplication_ready"
+    }
     Path(args.report).write_text(json.dumps(report,indent=2,ensure_ascii=True)+"\n",encoding="utf-8")
     print(json.dumps(report,indent=2))
 if __name__=="__main__": raise SystemExit(main())
