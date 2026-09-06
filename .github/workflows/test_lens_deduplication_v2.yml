@@ -2,69 +2,200 @@ name: Test updater Workflow 02 - JSONL deduplication
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Validation, canonical dedup audit/apply, or explicit screening reset'
+        required: true
+        default: validation_test
+        type: choice
+        options: [validation_test, canonical_audit, canonical_apply, reset_screening]
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
   deduplication-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Workflow 02 development branch
+      - name: Checkout Workflow 02 branch
         uses: actions/checkout@v4
         with:
           ref: updater-workflow-02-deduplication
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Download successful Workflow 01 Lens artefact
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: 33107953267
-          name: updater-workflow-01-lens-ingestion-33107953267
-          path: workflow01_artifact
-      - name: Prepare real Lens test fixture
-        run: |
-          python - <<'PY'
-          import copy,json
-          from pathlib import Path
-          rows=[json.loads(x) for x in Path('workflow01_artifact/records.jsonl').open(encoding='utf-8') if x.strip()][:50]
-          assert len(rows)==50; rows.append(copy.deepcopy(rows[0])); doi_row=next(r for r in rows[:50] if any(i.get('type')=='doi' for i in r['lens']['raw_payload'].get('external_ids',[])))
-          different=copy.deepcopy(doi_row); different['identity']['lens_id']=different['identity']['record_id']='fixture-different-doi'; different['lens']['raw_payload']['lens_id']='fixture-different-doi'
-          for i in different['lens']['raw_payload'].get('external_ids',[]):
-              if i.get('type')=='doi':i['value']='10.0000/different-test'
-          rows.append(different); wrong=copy.deepcopy(doi_row); wrong['identity']['lens_id']=wrong['identity']['record_id']='fixture-wrong-doi'; wrong['lens']['raw_payload']['lens_id']='fixture-wrong-doi'; wrong['lens']['raw_payload']['title']='Deliberately unrelated publication used to test DOI safety'; wrong['lens']['raw_payload']['authors']=[{'first_name':'Different','last_name':'Author'}]; rows.append(wrong)
-          with open('fixture.jsonl','w',encoding='utf-8') as f:
-              for r in rows:f.write(json.dumps(r,ensure_ascii=False)+'\n')
-          PY
-      - name: Convert current master CSV to lossless JSONL view
-        run: |
-          mkdir -p outputs/updater/legacy_master_adapter
-          python scripts/legacy_master_adapter.py --input 'data/master/current/living_evidence_map_master CORRECTED.csv' --output outputs/updater/legacy_master_adapter/master_legacy_view.jsonl > outputs/updater/legacy_master_adapter/adapter_summary.json
-          python -c "import json; assert json.load(open('outputs/updater/legacy_master_adapter/adapter_summary.json'))['rows']==13389"
-      - name: Run Workflow 02 with frequent checkpoints
-        run: |
-          mkdir -p outputs/updater/deduplication_test
-          python scripts/updater/deduplicate_jsonl.py --input fixture.jsonl --master outputs/updater/legacy_master_adapter/master_legacy_view.jsonl --output outputs/updater/deduplication_test/records_after_dedup.jsonl --audit outputs/updater/deduplication_test/dedup_audit.jsonl --checkpoint outputs/updater/deduplication_test/checkpoint.json --chunk-size 10
-      - name: Validate checkpoint and outputs
+
+      - name: Build validation fixture
+        if: ${{ inputs.mode == 'validation_test' }}
         run: |
           python - <<'PY'
           import json
-          rows=[json.loads(x) for x in open('outputs/updater/deduplication_test/records_after_dedup.jsonl',encoding='utf-8') if x.strip()]; cp=json.load(open('outputs/updater/deduplication_test/checkpoint.json'))
-          assert len(rows)==53 and cp['completed_records']==53 and cp['next_record_index']==53 and cp['chunk_size']==10
-          assert any(r['deduplication']['status']=='identity_match' for r in rows); wrong=next(r for r in rows if r['identity']['lens_id']=='fixture-wrong-doi'); assert wrong['deduplication']['status']!='duplicate'
+          p={'identity':{'lens_id':'preprint','record_id':'preprint'},'canonical':{'record_id':'preprint','lens_id':'preprint','title':'Minimizing marine resource utilization in diets of farmed Atlantic salmon: effects on growth and tissue composition','authors':'Foroutani, M. B.','year':2017,'source':'','doi':'','abstract':'Due to limited fish meal and fish oil resources and high costs for aquaculture, seven diets containing different protein and lipid sources were formulated for farmed Atlantic salmon. Growth performance, tissue lipid class and fatty acid composition were examined. The diet with the lowest fish meal and fish oil produced the lowest weight gain. Fish meal could be reduced to 5 percent without affecting growth provided at least 5 percent fish oil remained.'}}
+          j={'identity':{'lens_id':'journal','record_id':'journal'},'canonical':{'record_id':'journal','lens_id':'journal','title':'Minimizing marine ingredients in diets of farmed Atlantic salmon (Salmo salar): Effects on growth performance and muscle lipid and fatty acid composition','authors':'Foroutani, M. B. | Parrish, C. C. | Wells, J.','year':2018,'source':'Journal of Aquaculture Nutrition','doi':'10.1101/328716','abstract':'Due to limited fish meal and fish oil resources and high costs for the aquaculture industry, seven diets with different protein and lipid sources were formulated for farmed Atlantic salmon. Growth performance, muscle lipid class and fatty acid composition were examined. The diet containing the lowest fish meal and fish oil resulted in the lowest weight gain. Fish meal could be reduced to 5 percent without affecting growth provided a minimum 5 percent fish oil remained.'}}
+          with open('fixture.jsonl','w') as f:
+              for r in (p,j): f.write(json.dumps(r)+'\n')
           PY
-      - name: Test Workflow 02 resume is idempotent at completed checkpoint
+
+      - name: Validate classification and lossless resolution annotations
+        if: ${{ inputs.mode == 'validation_test' }}
         run: |
-          python scripts/updater/deduplicate_jsonl.py --input fixture.jsonl --master outputs/updater/legacy_master_adapter/master_legacy_view.jsonl --output outputs/updater/deduplication_test/records_after_dedup.jsonl --audit outputs/updater/deduplication_test/dedup_audit.jsonl --checkpoint outputs/updater/deduplication_test/checkpoint.json --chunk-size 10 --resume
-          test "$(grep -c . outputs/updater/deduplication_test/records_after_dedup.jsonl)" -eq 53
+          mkdir -p outputs/workflow02
+          python scripts/updater/audit_canonical_duplicates.py --input fixture.jsonl --output outputs/workflow02/candidates.jsonl --summary outputs/workflow02/classification_summary.json
+          python scripts/updater/resolve_canonical_duplicates.py --canonical fixture.jsonl --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/annotated_records.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
+          python - <<'PY'
+          import json
+          c=[json.loads(x) for x in open('outputs/workflow02/candidates.jsonl') if x.strip()]
+          r=[json.loads(x) for x in open('outputs/workflow02/annotated_records.jsonl') if x.strip()]
+          q=[json.loads(x) for x in open('outputs/workflow02/adjudication_queue.jsonl') if x.strip()]
+          assert len(c)==1 and c[0]['status']=='probable_duplicate', c
+          assert c[0]['manifestation_pattern']=='preprint_or_repository_to_later_manifestation', c
+          assert len(r)==2 and not q, (r,q)
+          by={x['canonical']['lens_id']:x for x in r}
+          assert by['journal']['deduplication']['status']=='canonical'
+          assert by['journal']['deduplication']['downstream_eligible'] is True
+          assert by['journal']['deduplication']['duplicate_members']==['preprint']
+          assert by['preprint']['deduplication']['status']=='duplicate'
+          assert by['preprint']['deduplication']['downstream_eligible'] is False
+          assert by['preprint']['deduplication']['duplicate_of']=='journal'
+          assert 'merged_records' not in by['journal']['deduplication']
+          assert 'merged_records' not in by['preprint']['deduplication']
+          s=json.load(open('outputs/workflow02/resolution_summary.json'))
+          assert s['input_records']==2 and s['output_records']==2
+          assert s['records_removed']==0 and s['records_nested']==0
+          print('Workflow 02 lossless single-JSON architecture validated')
+          PY
+
+      - name: Checkout canonical JSON with LFS
+        if: ${{ inputs.mode == 'canonical_audit' || inputs.mode == 'canonical_apply' || inputs.mode == 'reset_screening' }}
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          path: canonical_store
+
+      - name: Run canonical classification and annotation
+        if: ${{ inputs.mode == 'canonical_audit' || inputs.mode == 'canonical_apply' }}
+        run: |
+          mkdir -p outputs/workflow02
+          SRC=canonical_store/data/canonical/current/repair/records.jsonl
+          test -f "$SRC"
+          python scripts/updater/audit_canonical_duplicates.py --input "$SRC" --output outputs/workflow02/candidates.jsonl --summary outputs/workflow02/classification_summary.json
+          python scripts/updater/resolve_canonical_duplicates.py --canonical "$SRC" --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/annotated_records.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
+          python - <<'PY'
+          import json
+          ids={'154-579-994-777-836','011-403-740-852-889'}
+          c=[json.loads(x) for x in open('outputs/workflow02/candidates.jsonl') if x.strip()]
+          assert any({r.get('lens_id'),r.get('matched_master_lens_id')}==ids for r in c)
+          s=json.load(open('outputs/workflow02/resolution_summary.json'))
+          assert s['output_is_annotated_single_jsonl'] is True
+          assert s['output_records']==s['input_records']==20488
+          assert s['records_removed']==0 and s['records_nested']==0
+          print(json.dumps(s,indent=2))
+          PY
+
+      - name: Persist deduplication annotations into canonical JSON
+        if: ${{ inputs.mode == 'canonical_apply' }}
+        run: |
+          SRC=canonical_store/data/canonical/current/repair/records.jsonl
+          OUT=outputs/workflow02/annotated_records.jsonl
+          cp "$OUT" "$SRC"
+          python - <<'PY'
+          import json, collections
+          path='canonical_store/data/canonical/current/repair/records.jsonl'
+          records=[json.loads(x) for x in open(path) if x.strip()]
+          assert len(records)==20488, len(records)
+          counts=collections.Counter()
+          bad=[]
+          for i,r in enumerate(records):
+              d=r.get('deduplication')
+              if not isinstance(d,dict) or not d.get('status'):
+                  bad.append(i)
+                  continue
+              counts[d['status']]+=1
+              if d['status']=='duplicate':
+                  assert d.get('duplicate_of')
+                  assert d.get('downstream_eligible') is False
+              elif d['status'] in {'canonical','unique'}:
+                  assert d.get('downstream_eligible') is True
+              elif d['status']=='adjudication_required':
+                  assert d.get('downstream_eligible') is False
+          assert not bad, f'missing deduplication annotations: {bad[:20]}'
+          assert sum(counts.values())==20488
+          print(json.dumps({'records':len(records),'deduplication_status_counts':dict(counts)},indent=2))
+          PY
+
+      - name: Commit deduplication state to canonical branch
+        if: ${{ inputs.mode == 'canonical_apply' }}
+        working-directory: canonical_store
+        run: |
+          git status --short
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl
+          git diff --cached --quiet && { echo 'No canonical deduplication changes detected'; exit 1; }
+          git commit -m 'Persist Workflow 02 deduplication state in canonical JSON'
+          git push origin HEAD:canonical-repair-store
+
+      - name: Verify committed canonical deduplication state
+        if: ${{ inputs.mode == 'canonical_apply' }}
+        working-directory: canonical_store
+        run: |
+          git fetch origin canonical-repair-store
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/canonical-repair-store)"
+          python - <<'PY'
+          import json, collections
+          path='data/canonical/current/repair/records.jsonl'
+          records=[json.loads(x) for x in open(path) if x.strip()]
+          counts=collections.Counter((r.get('deduplication') or {}).get('status') for r in records)
+          assert len(records)==20488
+          assert None not in counts
+          assert sum(counts.values())==20488
+          print(json.dumps({'committed_records':len(records),'committed_deduplication_status_counts':dict(counts)},indent=2))
+          PY
+
+      - name: Reset all canonical screening decisions
+        if: ${{ inputs.mode == 'reset_screening' }}
+        run: |
+          mkdir -p outputs/workflow02
+          SRC=canonical_store/data/canonical/current/repair/records.jsonl
+          TMP=canonical_store/data/canonical/current/repair/records.screening-reset.jsonl
+          test -f "$SRC"
+          python scripts/updater/strip_screening_from_canonical.py \
+            --input "$SRC" \
+            --output "$TMP" \
+            --summary outputs/workflow02/screening_reset_summary.json
+          python - <<'PY'
+          import json
+          s=json.load(open('outputs/workflow02/screening_reset_summary.json'))
+          assert s['records_in']==s['records_out']
+          assert s['records_with_screening_removed']==s['records_in']
+          assert s['verification']['remaining_screening_objects']==0
+          assert not any(s['verification']['remaining_screening_provenance'].values())
+          assert s['verification']['records_removed']==0
+          print(json.dumps(s,indent=2))
+          PY
+          mv "$TMP" "$SRC"
+
+      - name: Commit screening reset to canonical branch
+        if: ${{ inputs.mode == 'reset_screening' }}
+        working-directory: canonical_store
+        run: |
+          git status --short
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/canonical/current/repair/records.jsonl
+          git diff --cached --quiet && { echo 'No canonical screening changes detected'; exit 1; }
+          git commit -m 'Reset canonical screening decisions for fresh reassessment'
+          git push origin HEAD:canonical-repair-store
+
       - name: Upload Workflow 02 artefacts
         uses: actions/upload-artifact@v4
         with:
-          name: updater-workflow-02-deduplication-${{ github.run_id }}
-          path: outputs/updater/
+          name: workflow02-${{ inputs.mode }}-${{ github.run_id }}
+          path: outputs/workflow02/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 30
