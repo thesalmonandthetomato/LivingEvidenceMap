@@ -1,0 +1,147 @@
+name: Workflow 04 - Relevance screening
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Validate Workflow 04 input contract before fresh relevance screening'
+        required: true
+        default: canonical_audit
+        type: choice
+        options:
+          - canonical_audit
+          - validation_test
+
+permissions:
+  contents: read
+
+jobs:
+  relevance-screening-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Workflow 04 development branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-04-relevance-screening
+
+      - name: Checkout canonical JSON with LFS
+        if: ${{ inputs.mode == 'canonical_audit' }}
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          path: canonical_store
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate screening prompt and script
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/updater/relevance_screen_jsonl.py')
+          text=p.read_text(encoding='utf-8')
+          assert 'Atlantic salmon' in text
+          assert 'rainbow trout' in text
+          assert 'HATCHERY / STOCK ENHANCEMENT' in text
+          assert 'WILD POPULATIONS' in text
+          assert 'GENERIC SALMONIDS' in text
+          assert 'fishmeal' in text.lower()
+          assert 'historic' not in text.lower(), 'Screening implementation must not depend on historical decisions'
+          print('Workflow 04 screening prompt/script contract validated')
+          PY
+
+      - name: Audit current canonical input
+        if: ${{ inputs.mode == 'canonical_audit' }}
+        run: |
+          mkdir -p outputs/workflow04
+          python - <<'PY'
+          import collections, json
+          from pathlib import Path
+
+          path=Path('canonical_store/data/canonical/current/repair/records.jsonl')
+          records=[json.loads(x) for x in path.read_text(encoding='utf-8').splitlines() if x.strip()]
+          assert len(records)==20488, len(records)
+
+          status=collections.Counter()
+          eligible=[]
+          inherited_screening=[]
+          bad_dedup=[]
+          for i,r in enumerate(records):
+              d=r.get('deduplication')
+              if not isinstance(d,dict) or not d.get('status'):
+                  bad_dedup.append(i)
+                  continue
+              status[d['status']]+=1
+              if d.get('downstream_eligible') is True:
+                  eligible.append(r)
+              if 'screening' in r:
+                  inherited_screening.append(i)
+              prov=r.get('provenance')
+              if isinstance(prov,dict) and any(k in prov for k in (
+                  'historical_screening','historical_excludes_reconciliation',
+                  'residual_screening_assignment','screening_decision_history')):
+                  inherited_screening.append(i)
+
+          assert not bad_dedup, bad_dedup[:20]
+          assert status==collections.Counter({'unique':18379,'duplicate':1170,'canonical':939}), status
+          assert len(eligible)==19318, len(eligible)
+          assert not inherited_screening, f'Inherited screening state remains on records: {sorted(set(inherited_screening))[:20]}'
+          assert all((r.get('deduplication') or {}).get('status') in {'unique','canonical'} for r in eligible)
+          assert all((r.get('deduplication') or {}).get('downstream_eligible') is False for r in records if (r.get('deduplication') or {}).get('status')=='duplicate')
+
+          missing_title=sum(not ((r.get('canonical') or {}).get('title')) for r in eligible)
+          missing_abstract=sum(not ((r.get('canonical') or {}).get('abstract')) for r in eligible)
+          summary={
+              'workflow':'04_relevance_screening',
+              'mode':'canonical_audit',
+              'canonical_records':len(records),
+              'deduplication_status_counts':dict(status),
+              'screening_input_records':len(eligible),
+              'duplicate_records_skipped':status['duplicate'],
+              'inherited_screening_records':0,
+              'eligible_records_missing_title':missing_title,
+              'eligible_records_missing_abstract':missing_abstract,
+              'canonical_modified':False,
+              'ready_for_fresh_screening':True
+          }
+          Path('outputs/workflow04/input_audit_summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          with Path('outputs/workflow04/screening_input.jsonl').open('w',encoding='utf-8') as f:
+              for r in eligible:
+                  f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Validation fixture
+        if: ${{ inputs.mode == 'validation_test' }}
+        run: |
+          python - <<'PY'
+          import json, subprocess, tempfile
+          from pathlib import Path
+          rows=[
+            {'identity':{'lens_id':'retain'},'canonical':{'title':'Farmed Atlantic salmon aquaculture trial','abstract':'Atlantic salmon were reared under commercial farm conditions.'},'deduplication':{'status':'unique','downstream_eligible':True}},
+            {'identity':{'lens_id':'wild'},'canonical':{'title':'Wild Atlantic salmon migration','abstract':'Migration of wild salmon was studied with no aquaculture context.'},'deduplication':{'status':'unique','downstream_eligible':True}},
+            {'identity':{'lens_id':'dup'},'canonical':{'title':'Duplicate'},'deduplication':{'status':'duplicate','downstream_eligible':False,'duplicate_of':'retain'}}
+          ]
+          root=Path(tempfile.mkdtemp())
+          inp=root/'in.jsonl'; out=root/'out.jsonl'; aud=root/'audit.jsonl'; chk=root/'checkpoint.json'
+          inp.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
+          subprocess.run(['python','scripts/updater/relevance_screen_jsonl.py','--input',str(inp),'--output',str(out),'--audit',str(aud),'--checkpoint',str(chk),'--mode','mock'],check=True)
+          screened=[json.loads(x) for x in out.read_text().splitlines() if x.strip()]
+          assert len(screened)==3
+          by={r['identity']['lens_id']:r for r in screened}
+          assert by['retain']['screening']['decision']=='retain'
+          assert by['wild']['screening']['decision']=='exclude'
+          assert 'screening' not in by['dup']
+          print('Workflow 04 duplicate skipping and mock decisions validated')
+          PY
+
+      - name: Upload Workflow 04 audit artefacts
+        if: ${{ inputs.mode == 'canonical_audit' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-canonical-audit-${{ github.run_id }}
+          path: outputs/workflow04/
+          retention-days: 30
+          if-no-files-found: error
