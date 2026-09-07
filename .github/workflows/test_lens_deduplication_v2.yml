@@ -38,16 +38,17 @@ jobs:
               for r in (p,j): f.write(json.dumps(r)+'\n')
           PY
 
-      - name: Validate classification, augmentation and lossless resolution annotations
+      - name: Validate classification, reviewed decisions and lossless resolution annotations
         if: ${{ inputs.mode == 'validation_test' }}
         run: |
           mkdir -p outputs/workflow02
           python scripts/updater/audit_canonical_duplicates.py --input fixture.jsonl --output outputs/workflow02/candidates.jsonl --summary outputs/workflow02/classification_summary.json
           python scripts/updater/augment_duplicate_candidates.py --canonical fixture.jsonl --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/candidates_augmented.jsonl --summary outputs/workflow02/augmentation_summary.json --reviewed data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-07.jsonl
-          python scripts/updater/resolve_canonical_duplicates.py --canonical fixture.jsonl --candidates outputs/workflow02/candidates_augmented.jsonl --output outputs/workflow02/annotated_records.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
+          python scripts/updater/filter_reviewed_not_duplicates.py --candidates outputs/workflow02/candidates_augmented.jsonl --reviewed data/adjudication/workflow02_reviewed_not_duplicate_hashes_2026-09-07.json --output outputs/workflow02/candidates_reviewed.jsonl --removed-audit outputs/workflow02/reviewed_not_duplicate_audit.jsonl --summary outputs/workflow02/not_duplicate_filter_summary.json
+          python scripts/updater/resolve_canonical_duplicates.py --canonical fixture.jsonl --candidates outputs/workflow02/candidates_reviewed.jsonl --output outputs/workflow02/annotated_records.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
           python - <<'PY'
           import json
-          c=[json.loads(x) for x in open('outputs/workflow02/candidates_augmented.jsonl') if x.strip()]
+          c=[json.loads(x) for x in open('outputs/workflow02/candidates_reviewed.jsonl') if x.strip()]
           r=[json.loads(x) for x in open('outputs/workflow02/annotated_records.jsonl') if x.strip()]
           q=[json.loads(x) for x in open('outputs/workflow02/adjudication_queue.jsonl') if x.strip()]
           assert len(c)==1 and c[0]['status']=='probable_duplicate', c
@@ -56,6 +57,10 @@ jobs:
           assert a['input_candidates']==a['output_candidates']==1
           assert a['reviewed_duplicate_pairs_loaded']==37
           assert a['canonical_modified'] is False
+          f=json.load(open('outputs/workflow02/not_duplicate_filter_summary.json'))
+          assert f['reviewed_not_duplicate_pairs_loaded']==140
+          assert f['reviewed_not_duplicate_pairs_removed']==0
+          assert f['canonical_modified'] is False
           assert len(r)==2 and not q, (r,q)
           by={x['canonical']['lens_id']:x for x in r}
           assert by['journal']['deduplication']['status']=='canonical'
@@ -69,7 +74,7 @@ jobs:
           s=json.load(open('outputs/workflow02/resolution_summary.json'))
           assert s['input_records']==2 and s['output_records']==2
           assert s['records_removed']==0 and s['records_nested']==0
-          print('Workflow 02 lossless single-JSON architecture with augmentation validated')
+          print('Workflow 02 reviewed decisions and lossless single-JSON architecture validated')
           PY
 
       - name: Checkout canonical JSON with LFS
@@ -80,7 +85,7 @@ jobs:
           lfs: true
           path: canonical_store
 
-      - name: Run canonical classification, augmentation and annotation
+      - name: Run canonical classification, reviewed decisions and annotation
         if: ${{ inputs.mode == 'canonical_audit' || inputs.mode == 'canonical_apply' }}
         run: |
           mkdir -p outputs/workflow02
@@ -88,21 +93,29 @@ jobs:
           test -f "$SRC"
           python scripts/updater/audit_canonical_duplicates.py --input "$SRC" --output outputs/workflow02/candidates.jsonl --summary outputs/workflow02/classification_summary.json
           python scripts/updater/augment_duplicate_candidates.py --canonical "$SRC" --candidates outputs/workflow02/candidates.jsonl --output outputs/workflow02/candidates_augmented.jsonl --summary outputs/workflow02/augmentation_summary.json --reviewed data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-07.jsonl
-          python scripts/updater/resolve_canonical_duplicates.py --canonical "$SRC" --candidates outputs/workflow02/candidates_augmented.jsonl --output outputs/workflow02/annotated_records.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
+          python scripts/updater/filter_reviewed_not_duplicates.py --candidates outputs/workflow02/candidates_augmented.jsonl --reviewed data/adjudication/workflow02_reviewed_not_duplicate_hashes_2026-09-07.json --output outputs/workflow02/candidates_reviewed.jsonl --removed-audit outputs/workflow02/reviewed_not_duplicate_audit.jsonl --summary outputs/workflow02/not_duplicate_filter_summary.json
+          python scripts/updater/resolve_canonical_duplicates.py --canonical "$SRC" --candidates outputs/workflow02/candidates_reviewed.jsonl --output outputs/workflow02/annotated_records.jsonl --queue outputs/workflow02/adjudication_queue.jsonl --audit outputs/workflow02/resolution_audit.json --summary outputs/workflow02/resolution_summary.json
           python - <<'PY'
           import json
           ids={'154-579-994-777-836','011-403-740-852-889'}
-          c=[json.loads(x) for x in open('outputs/workflow02/candidates_augmented.jsonl') if x.strip()]
+          c=[json.loads(x) for x in open('outputs/workflow02/candidates_reviewed.jsonl') if x.strip()]
           assert any({r.get('lens_id'),r.get('matched_master_lens_id')}==ids for r in c)
           a=json.load(open('outputs/workflow02/augmentation_summary.json'))
           assert a['input_candidates']==a['output_candidates']
           assert a['reviewed_duplicate_pairs_loaded']==37
           assert a['canonical_modified'] is False
+          f=json.load(open('outputs/workflow02/not_duplicate_filter_summary.json'))
+          assert f['reviewed_not_duplicate_pairs_loaded']==140
+          assert f['reviewed_not_duplicate_pairs_removed']==140
+          assert f['reviewed_hashes_not_present_in_current_candidates']==0
+          assert f['canonical_modified'] is False
           s=json.load(open('outputs/workflow02/resolution_summary.json'))
           assert s['output_is_annotated_single_jsonl'] is True
           assert s['output_records']==s['input_records']==20488
           assert s['records_removed']==0 and s['records_nested']==0
+          assert s['adjudication_pairs']==1, s
           print(json.dumps(a,indent=2))
+          print(json.dumps(f,indent=2))
           print(json.dumps(s,indent=2))
           PY
 
