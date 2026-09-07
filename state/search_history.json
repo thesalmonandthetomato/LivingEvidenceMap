@@ -16,5 +16,14 @@
     "raw_records_retrieved": 0,
     "unique_records_written": 0,
     "status": "no_records"
+  },
+  {
+    "retrieved_at": "2026-09-07T07:53:59.524468+00:00",
+    "window_start": "2026-08-24T09:17:48Z",
+    "window_end": "2026-09-07T07:53:59Z",
+    "candidate_results": 48,
+    "raw_records_retrieved": 48,
+    "unique_records_written": 48,
+    "status": "records_found"
   }
 ]
