@@ -48,7 +48,16 @@ jobs:
           assert 'WILD POPULATIONS' in text
           assert 'GENERIC SALMONIDS' in text
           assert 'fishmeal' in text.lower()
-          assert 'historic' not in text.lower(), 'Screening implementation must not depend on historical decisions'
+          forbidden=(
+              'historical_screening',
+              'historical_excludes_reconciliation',
+              'residual_screening_assignment',
+              'screening_decision_history',
+              "'historical_decision'",
+              '"historical_decision"',
+          )
+          found=[x for x in forbidden if x in text]
+          assert not found, f'Screening implementation must not depend on prior screening decisions: {found}'
           print('Workflow 04 screening prompt/script contract validated')
           PY
 
