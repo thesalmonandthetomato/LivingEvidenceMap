@@ -55,7 +55,7 @@ jobs:
           assert c[0]['manifestation_pattern']=='preprint_or_repository_to_later_manifestation', c
           a=json.load(open('outputs/workflow02/augmentation_summary.json'))
           assert a['input_candidates']==a['output_candidates']==1
-          assert a['reviewed_duplicate_pairs_loaded']==37
+          assert a['reviewed_duplicate_pairs_loaded']==38
           assert a['canonical_modified'] is False
           f=json.load(open('outputs/workflow02/not_duplicate_filter_summary.json'))
           assert f['reviewed_not_duplicate_pairs_loaded']==140
@@ -102,7 +102,7 @@ jobs:
           assert any({r.get('lens_id'),r.get('matched_master_lens_id')}==ids for r in c)
           a=json.load(open('outputs/workflow02/augmentation_summary.json'))
           assert a['input_candidates']==a['output_candidates']
-          assert a['reviewed_duplicate_pairs_loaded']==37
+          assert a['reviewed_duplicate_pairs_loaded']==38
           assert a['canonical_modified'] is False
           f=json.load(open('outputs/workflow02/not_duplicate_filter_summary.json'))
           assert f['reviewed_not_duplicate_pairs_loaded']==140
@@ -113,7 +113,7 @@ jobs:
           assert s['output_is_annotated_single_jsonl'] is True
           assert s['output_records']==s['input_records']==20488
           assert s['records_removed']==0 and s['records_nested']==0
-          assert s['adjudication_pairs']==1, s
+          assert s['adjudication_pairs']==0, s
           print(json.dumps(a,indent=2))
           print(json.dumps(f,indent=2))
           print(json.dumps(s,indent=2))
@@ -147,6 +147,7 @@ jobs:
                   assert d.get('downstream_eligible') is False
           assert not bad, f'missing deduplication annotations: {bad[:20]}'
           assert sum(counts.values())==20488
+          assert counts.get('adjudication_required',0)==0, counts
           print(json.dumps({'records':len(records),'deduplication_status_counts':dict(counts)},indent=2))
           PY
 
@@ -177,6 +178,7 @@ jobs:
           assert len(records)==20488
           assert None not in counts
           assert sum(counts.values())==20488
+          assert counts.get('adjudication_required',0)==0, counts
           print(json.dumps({'committed_records':len(records),'committed_deduplication_status_counts':dict(counts)},indent=2))
           PY
 
