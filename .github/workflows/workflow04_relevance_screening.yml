@@ -69,8 +69,24 @@ jobs:
           import collections, json
           from pathlib import Path
 
+          def load_json_stream(path):
+              text=path.read_text(encoding='utf-8')
+              decoder=json.JSONDecoder()
+              records=[]
+              pos=0
+              n=len(text)
+              while pos < n:
+                  while pos < n and text[pos].isspace():
+                      pos += 1
+                  if pos >= n:
+                      break
+                  obj,end=decoder.raw_decode(text,pos)
+                  records.append(obj)
+                  pos=end
+              return records
+
           path=Path('canonical_store/data/canonical/current/repair/records.jsonl')
-          records=[json.loads(x) for x in path.read_text(encoding='utf-8').splitlines() if x.strip()]
+          records=load_json_stream(path)
           assert len(records)==20488, len(records)
 
           status=collections.Counter()
