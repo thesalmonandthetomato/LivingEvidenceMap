@@ -38,7 +38,7 @@ jobs:
         run: |
           mkdir -p outputs/workflow04a
           python - <<'PY'
-          import collections, csv, hashlib, json, os, re
+          import collections, csv, hashlib, json, os, re, unicodedata
           from pathlib import Path
 
           MODE=os.environ['MODE']
@@ -51,14 +51,10 @@ jobs:
           EXPECTED_MASTER_FINGERPRINT='17c3843195efa6238768fa578d2d75bbb337ab48ae78932d04d8d01da38bcb04'
           EXPECTED_CANONICAL_ROWS=20488
           EXPECTED_EXACT_LENS_MATCHES=12883
-          EXPECTED_IMPORTED_ROWS=12884
-          EXPECTED_TARGET_REPRESENTATIVES=12686
-          EXPECTED_UNMATCHED_ROWS=505
-          EXTRA_MATCH_RECORD_ID='73181'
-          EXTRA_MATCH_TARGET='143-313-545-943-15X'
-          EXTRA_MATCH_DOI='10.15421/nvlvet7916'
-          EXTRA_MATCH_TITLE='Сезонні зміни абіотичних показників води при вирощуванні лососевих риб'
-          EXTRA_MATCH_YEAR='2017'
+          EXPECTED_EXACT_TITLE_MATCHES=11
+          EXPECTED_IMPORTED_ROWS=12894
+          EXPECTED_TARGET_REPRESENTATIVES=12697
+          EXPECTED_UNMATCHED_ROWS=495
 
           def load_json_stream(path):
               text=path.read_text(encoding='utf-8')
@@ -82,6 +78,13 @@ jobs:
               m=re.search(r'lens\.org/(\d{3}-\d{3}-\d{3}-\d{3}-[0-9X]{3})',text,re.I)
               return m.group(1) if m else ''
 
+          def norm_title(text):
+              s=unicodedata.normalize('NFKC',str(text or '')).casefold()
+              s=re.sub(r'<[^>]+>',' ',s)
+              s=s.replace('‐','-').replace('‑','-').replace('–','-').replace('—','-')
+              s=re.sub(r'[^\w]+',' ',s,flags=re.UNICODE)
+              return re.sub(r'\s+',' ',s).strip()
+
           with MASTER.open(encoding='utf-8-sig',newline='') as f:
               master=list(csv.DictReader(f))
           assert len(master)==EXPECTED_MASTER_ROWS, len(master)
@@ -96,13 +99,22 @@ jobs:
           assert status==collections.Counter({'unique':18379,'duplicate':1170,'canonical':939}), status
           assert all('screening' not in r for r in records), 'Fresh Workflow 04 screening state must remain empty before history import'
 
-          imports=[]; unmatched=[]
-          exact=0
+          title_to_reps=collections.defaultdict(set)
+          for r in records:
+              lid=str((r.get('identity') or {}).get('lens_id') or '')
+              d=r.get('deduplication') or {}
+              rep=str(d.get('duplicate_of') or '') if d.get('status')=='duplicate' else lid
+              title=norm_title((r.get('canonical') or {}).get('title'))
+              if title:
+                  title_to_reps[title].add(rep)
+
+          imports=[]; unmatched=[]; exact_lens=0; exact_title=0
           for row_number,m in enumerate(master,start=1):
               source_lens=extract_lens_id(m.get('url_raw',''))
               target=''; method=''
+
               if source_lens and source_lens in by_lens:
-                  exact += 1
+                  exact_lens += 1
                   sr=by_lens[source_lens]
                   d=sr.get('deduplication') or {}
                   if d.get('status')=='duplicate':
@@ -113,29 +125,23 @@ jobs:
                   else:
                       target=source_lens
                       method='lens_id_exact'
-              elif (str(m.get('record_id') or '')==EXTRA_MATCH_RECORD_ID
-                    and str(m.get('doi') or '').strip().lower()==EXTRA_MATCH_DOI
-                    and str(m.get('title') or '').strip()==EXTRA_MATCH_TITLE
-                    and str(m.get('year') or '').strip()==EXTRA_MATCH_YEAR):
-                  assert EXTRA_MATCH_TARGET in by_lens
-                  tr=by_lens[EXTRA_MATCH_TARGET]
-                  tc=tr.get('canonical') or {}
-                  assert str(tc.get('doi') or '').strip().lower()==EXTRA_MATCH_DOI
-                  assert str(tc.get('title') or '').strip()==EXTRA_MATCH_TITLE
-                  assert str(tc.get('year') or '').strip()==EXTRA_MATCH_YEAR
-                  target=EXTRA_MATCH_TARGET
-                  method='doi_title_year_exact'
               else:
-                  unmatched.append({
-                      'master_row':row_number,
-                      'source_record_id':m.get('record_id',''),
-                      'source_lens_id':source_lens,
-                      'title':m.get('title',''),
-                      'doi':m.get('doi',''),
-                      'year':m.get('year',''),
-                      'authors':m.get('authors','')
-                  })
-                  continue
+                  reps=title_to_reps.get(norm_title(m.get('title')),set()) if m.get('title') else set()
+                  if len(reps)==1:
+                      exact_title += 1
+                      target=next(iter(reps))
+                      method='title_exact_unique_representative'
+                  else:
+                      unmatched.append({
+                          'master_row':row_number,
+                          'source_record_id':m.get('record_id',''),
+                          'source_lens_id':source_lens,
+                          'title':m.get('title',''),
+                          'doi':m.get('doi',''),
+                          'year':m.get('year',''),
+                          'authors':m.get('authors','')
+                      })
+                      continue
 
               imports.append({
                   'master_row':row_number,
@@ -145,7 +151,8 @@ jobs:
                   'match_method':method,
               })
 
-          assert exact==EXPECTED_EXACT_LENS_MATCHES, exact
+          assert exact_lens==EXPECTED_EXACT_LENS_MATCHES, exact_lens
+          assert exact_title==EXPECTED_EXACT_TITLE_MATCHES, exact_title
           assert len(imports)==EXPECTED_IMPORTED_ROWS, len(imports)
           assert len({x['representative_lens_id'] for x in imports})==EXPECTED_TARGET_REPRESENTATIVES
           assert len(unmatched)==EXPECTED_UNMATCHED_ROWS, len(unmatched)
@@ -162,7 +169,6 @@ jobs:
               if existing is None:
                   existing=[]
               assert isinstance(existing,list), f'Unexpected screening_history type on {target}'
-              # Idempotent replacement of only this named provenance source.
               existing=[e for e in existing if not (isinstance(e,dict) and e.get('history_label')=='manual_historical_includes' and e.get('source_dataset')=='living_evidence_map_master_CORRECTED(6)')]
               for x in sorted(items,key=lambda z:z['master_row']):
                   existing.append({
@@ -192,7 +198,7 @@ jobs:
           with (OUT/'matched_import_manifest.csv').open('w',encoding='utf-8',newline='') as f:
               w=csv.DictWriter(f,fieldnames=['master_row','source_record_id','source_lens_id','representative_lens_id','match_method'])
               w.writeheader(); w.writerows(imports)
-          with (OUT/'unmatched_505.csv').open('w',encoding='utf-8-sig',newline='') as f:
+          with (OUT/'unmatched_495.csv').open('w',encoding='utf-8-sig',newline='') as f:
               w=csv.DictWriter(f,fieldnames=['master_row','source_record_id','source_lens_id','title','doi','year','authors'])
               w.writeheader(); w.writerows(unmatched)
 
@@ -202,7 +208,8 @@ jobs:
               'master_rows':len(master),
               'master_fingerprint':fp,
               'canonical_records':len(records),
-              'exact_lens_matches':exact,
+              'exact_lens_matches':exact_lens,
+              'exact_title_matches':exact_title,
               'historical_manual_include_entries':len(imports),
               'target_representatives':len(grouped),
               'unmatched_records':len(unmatched),
