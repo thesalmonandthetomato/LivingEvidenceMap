@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Validate Workflow 04 input contract before fresh relevance screening'
+        description: 'Workflow 04 mode'
         required: true
         default: canonical_audit
         type: choice
         options:
           - canonical_audit
           - validation_test
+          - live_validation_200
 
 permissions:
   contents: read
@@ -18,6 +19,7 @@ permissions:
 jobs:
   relevance-screening-audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - name: Checkout Workflow 04 development branch
         uses: actions/checkout@v4
@@ -25,7 +27,7 @@ jobs:
           ref: updater-workflow-04-relevance-screening
 
       - name: Checkout canonical JSON with LFS
-        if: ${{ inputs.mode == 'canonical_audit' }}
+        if: ${{ inputs.mode == 'canonical_audit' || inputs.mode == 'live_validation_200' }}
         uses: actions/checkout@v4
         with:
           ref: canonical-repair-store
@@ -35,6 +37,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install OpenAI client
+        if: ${{ inputs.mode == 'live_validation_200' }}
+        run: python -m pip install --upgrade openai
 
       - name: Validate screening prompt and script
         run: |
@@ -71,70 +77,39 @@ jobs:
 
           def load_json_stream(path):
               text=path.read_text(encoding='utf-8')
-              decoder=json.JSONDecoder()
-              records=[]
-              pos=0
-              n=len(text)
+              decoder=json.JSONDecoder(); records=[]; pos=0; n=len(text)
               while pos < n:
-                  while pos < n and text[pos].isspace():
-                      pos += 1
-                  if pos >= n:
-                      break
-                  obj,end=decoder.raw_decode(text,pos)
-                  records.append(obj)
-                  pos=end
+                  while pos < n and text[pos].isspace(): pos += 1
+                  if pos >= n: break
+                  obj,end=decoder.raw_decode(text,pos); records.append(obj); pos=end
               return records
 
           path=Path('canonical_store/data/canonical/current/repair/records.jsonl')
           records=load_json_stream(path)
           assert len(records)==20488, len(records)
-
-          status=collections.Counter()
-          eligible=[]
-          inherited_screening=[]
-          bad_dedup=[]
+          status=collections.Counter(); eligible=[]; inherited_screening=[]; bad_dedup=[]
           for i,r in enumerate(records):
               d=r.get('deduplication')
               if not isinstance(d,dict) or not d.get('status'):
-                  bad_dedup.append(i)
-                  continue
+                  bad_dedup.append(i); continue
               status[d['status']]+=1
-              if d.get('downstream_eligible') is True:
-                  eligible.append(r)
-              if 'screening' in r:
-                  inherited_screening.append(i)
+              if d.get('downstream_eligible') is True: eligible.append(r)
+              if 'screening' in r: inherited_screening.append(i)
               prov=r.get('provenance')
-              if isinstance(prov,dict) and any(k in prov for k in (
-                  'historical_screening','historical_excludes_reconciliation',
-                  'residual_screening_assignment','screening_decision_history')):
+              if isinstance(prov,dict) and any(k in prov for k in ('historical_screening','historical_excludes_reconciliation','residual_screening_assignment','screening_decision_history')):
                   inherited_screening.append(i)
-
           assert not bad_dedup, bad_dedup[:20]
           assert status==collections.Counter({'unique':18379,'duplicate':1170,'canonical':939}), status
           assert len(eligible)==19318, len(eligible)
           assert not inherited_screening, f'Inherited screening state remains on records: {sorted(set(inherited_screening))[:20]}'
           assert all((r.get('deduplication') or {}).get('status') in {'unique','canonical'} for r in eligible)
           assert all((r.get('deduplication') or {}).get('downstream_eligible') is False for r in records if (r.get('deduplication') or {}).get('status')=='duplicate')
-
           missing_title=sum(not ((r.get('canonical') or {}).get('title')) for r in eligible)
           missing_abstract=sum(not ((r.get('canonical') or {}).get('abstract')) for r in eligible)
-          summary={
-              'workflow':'04_relevance_screening',
-              'mode':'canonical_audit',
-              'canonical_records':len(records),
-              'deduplication_status_counts':dict(status),
-              'screening_input_records':len(eligible),
-              'duplicate_records_skipped':status['duplicate'],
-              'inherited_screening_records':0,
-              'eligible_records_missing_title':missing_title,
-              'eligible_records_missing_abstract':missing_abstract,
-              'canonical_modified':False,
-              'ready_for_fresh_screening':True
-          }
+          summary={'workflow':'04_relevance_screening','mode':'canonical_audit','canonical_records':len(records),'deduplication_status_counts':dict(status),'screening_input_records':len(eligible),'duplicate_records_skipped':status['duplicate'],'inherited_screening_records':0,'eligible_records_missing_title':missing_title,'eligible_records_missing_abstract':missing_abstract,'canonical_modified':False,'ready_for_fresh_screening':True}
           Path('outputs/workflow04/input_audit_summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
           with Path('outputs/workflow04/screening_input.jsonl').open('w',encoding='utf-8') as f:
-              for r in eligible:
-                  f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+              for r in eligible: f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
           print(json.dumps(summary,indent=2))
           PY
 
@@ -144,22 +119,102 @@ jobs:
           python - <<'PY'
           import json, subprocess, tempfile
           from pathlib import Path
-          rows=[
-            {'identity':{'lens_id':'retain'},'canonical':{'title':'Farmed Atlantic salmon aquaculture trial','abstract':'Atlantic salmon were reared under commercial farm conditions.'},'deduplication':{'status':'unique','downstream_eligible':True}},
-            {'identity':{'lens_id':'wild'},'canonical':{'title':'Wild Atlantic salmon migration','abstract':'Migration of wild salmon was studied with no aquaculture context.'},'deduplication':{'status':'unique','downstream_eligible':True}},
-            {'identity':{'lens_id':'dup'},'canonical':{'title':'Duplicate'},'deduplication':{'status':'duplicate','downstream_eligible':False,'duplicate_of':'retain'}}
-          ]
-          root=Path(tempfile.mkdtemp())
-          inp=root/'in.jsonl'; out=root/'out.jsonl'; aud=root/'audit.jsonl'; chk=root/'checkpoint.json'
+          rows=[{'identity':{'lens_id':'retain'},'canonical':{'title':'Farmed Atlantic salmon aquaculture trial','abstract':'Atlantic salmon were reared under commercial farm conditions.'},'deduplication':{'status':'unique','downstream_eligible':True}},{'identity':{'lens_id':'wild'},'canonical':{'title':'Wild Atlantic salmon migration','abstract':'Migration of wild salmon was studied with no aquaculture context.'},'deduplication':{'status':'unique','downstream_eligible':True}},{'identity':{'lens_id':'dup'},'canonical':{'title':'Duplicate'},'deduplication':{'status':'duplicate','downstream_eligible':False,'duplicate_of':'retain'}}]
+          root=Path(tempfile.mkdtemp()); inp=root/'in.jsonl'; out=root/'out.jsonl'; aud=root/'audit.jsonl'; chk=root/'checkpoint.json'
           inp.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
           subprocess.run(['python','scripts/updater/relevance_screen_jsonl.py','--input',str(inp),'--output',str(out),'--audit',str(aud),'--checkpoint',str(chk),'--mode','mock'],check=True)
-          screened=[json.loads(x) for x in out.read_text().splitlines() if x.strip()]
+          screened=[json.loads(x) for x in out.read_text().splitlines() if x.strip()]; by={r['identity']['lens_id']:r for r in screened}
           assert len(screened)==3
-          by={r['identity']['lens_id']:r for r in screened}
           assert by['retain']['screening']['decision']=='retain'
           assert by['wild']['screening']['decision']=='exclude'
           assert 'screening' not in by['dup']
           print('Workflow 04 duplicate skipping and mock decisions validated')
+          PY
+
+      - name: Select deterministic live validation sample
+        if: ${{ inputs.mode == 'live_validation_200' }}
+        run: |
+          mkdir -p outputs/workflow04_live_200
+          python - <<'PY'
+          import collections, hashlib, json
+          from pathlib import Path
+
+          def load_json_stream(path):
+              text=path.read_text(encoding='utf-8')
+              decoder=json.JSONDecoder(); records=[]; pos=0; n=len(text)
+              while pos < n:
+                  while pos < n and text[pos].isspace(): pos += 1
+                  if pos >= n: break
+                  obj,end=decoder.raw_decode(text,pos); records.append(obj); pos=end
+              return records
+
+          source=Path('canonical_store/data/canonical/current/repair/records.jsonl')
+          records=load_json_stream(source)
+          assert len(records)==20488, len(records)
+          status=collections.Counter((r.get('deduplication') or {}).get('status') for r in records)
+          assert status==collections.Counter({'unique':18379,'duplicate':1170,'canonical':939}), status
+          eligible=[r for r in records if (r.get('deduplication') or {}).get('downstream_eligible') is True]
+          assert len(eligible)==19318, len(eligible)
+          assert all('screening' not in r for r in records)
+          ranked=[]
+          for r in eligible:
+              lid=str((r.get('identity') or {}).get('lens_id') or '')
+              assert lid
+              key=hashlib.sha256(('workflow04-live-validation-200-v1:'+lid).encode()).hexdigest()
+              ranked.append((key,lid,r))
+          ranked.sort(key=lambda x:x[0]); selected=ranked[:200]
+          assert len(selected)==200 and len({x[1] for x in selected})==200
+          root=Path('outputs/workflow04_live_200')
+          with (root/'input_200.jsonl').open('w',encoding='utf-8') as f:
+              for _,_,r in selected: f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+          (root/'lens_ids.txt').write_text('\n'.join(x[1] for x in selected)+'\n',encoding='utf-8')
+          manifest={'sample_records':200,'canonical_records':20488,'eligible_records':19318,'duplicate_records_skipped':1170,'selection_seed':'workflow04-live-validation-200-v1','canonical_modified':False}
+          (root/'input_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Run live screening on 200 records
+        if: ${{ inputs.mode == 'live_validation_200' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/updater/relevance_screen_jsonl.py \
+            --input outputs/workflow04_live_200/input_200.jsonl \
+            --output outputs/workflow04_live_200/screened_200.jsonl \
+            --audit outputs/workflow04_live_200/screening_audit_200.jsonl \
+            --checkpoint outputs/workflow04_live_200/checkpoint.json \
+            --chunk-size 25 \
+            --mode openai \
+            --model gpt-5-mini
+
+      - name: Build live validation review table
+        if: ${{ inputs.mode == 'live_validation_200' }}
+        run: |
+          python - <<'PY'
+          import collections, csv, json
+          from pathlib import Path
+          root=Path('outputs/workflow04_live_200')
+          rows=[json.loads(x) for x in (root/'screened_200.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
+          assert len(rows)==200, len(rows)
+          counts=collections.Counter(); technical=[]; review=[]
+          for i,r in enumerate(rows,1):
+              c=r.get('canonical') or {}; p=((r.get('lens') or {}).get('raw_payload') or {}); s=r.get('screening') or {}
+              lid=str((r.get('identity') or {}).get('lens_id') or p.get('lens_id') or '')
+              decision=str(s.get('decision') or '').lower(); counts[decision]+=1
+              if s.get('technical_error'): technical.append((lid,s.get('technical_error')))
+              source=c.get('source') or p.get('source') or ''
+              if isinstance(source,dict): source=source.get('title') or source.get('name') or ''
+              keywords=c.get('keywords') or p.get('keywords') or p.get('keyword') or p.get('author_keywords') or ''
+              if isinstance(keywords,list): keywords='; '.join(str(x) for x in keywords)
+              review.append({'order':i,'lens_id':lid,'title':c.get('title') or p.get('title') or '','abstract':c.get('abstract') or p.get('abstract') or '','keywords':keywords,'journal_source_title':c.get('source_title') or c.get('journal') or p.get('source_title') or p.get('journal') or source,'model_decision':decision.upper(),'model_reason':s.get('reason') or '','human_decision':'','review_note':'','technical_error':s.get('technical_error') or ''})
+          assert sum(counts.values())==200
+          assert set(counts) <= {'retain','exclude','uncertain'}, counts
+          assert not technical, f'Technical screening errors: {technical[:10]}'
+          with (root/'human_review_200.csv').open('w',newline='',encoding='utf-8-sig') as f:
+              w=csv.DictWriter(f,fieldnames=list(review[0])); w.writeheader(); w.writerows(review)
+          summary={'records':200,'decision_counts':dict(counts),'technical_errors':0,'canonical_modified':False,'purpose':'human validation before full Workflow 04 screening'}
+          (root/'screening_summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
           PY
 
       - name: Upload Workflow 04 audit artefacts
@@ -169,4 +224,13 @@ jobs:
           name: workflow04-canonical-audit-${{ github.run_id }}
           path: outputs/workflow04/
           retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload Workflow 04 live validation artefacts
+        if: ${{ inputs.mode == 'live_validation_200' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-live-validation-200-${{ github.run_id }}
+          path: outputs/workflow04_live_200/
+          retention-days: 90
           if-no-files-found: error
