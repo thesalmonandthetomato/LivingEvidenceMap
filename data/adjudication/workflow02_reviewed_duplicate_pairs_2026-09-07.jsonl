@@ -31,6 +31,7 @@
 {"lens_id_a":"088-781-911-922-311","lens_id_b":"073-514-199-866-043","decision":"duplicate","source_queue_row":153,"pattern":"same_study_possible"}
 {"lens_id_a":"064-132-949-639-692","lens_id_b":"052-123-803-097-376","decision":"duplicate","source_queue_row":159,"pattern":"working_paper_to_book_chapter"}
 {"lens_id_a":"148-165-990-875-490","lens_id_b":"016-663-447-761-892","decision":"duplicate","source_queue_row":160,"pattern":"preprint_to_publication"}
+{"lens_id_a":"018-795-804-696-863","lens_id_b":"025-014-841-258-677","decision":"duplicate","source_queue_row":165,"pattern":"thesis_repository_manifestation"}
 {"lens_id_a":"020-114-261-196-912","lens_id_b":"095-613-953-404-804","decision":"duplicate","source_queue_row":166,"pattern":"translated_journal_manifestation"}
 {"lens_id_a":"092-415-431-418-516","lens_id_b":"183-592-157-356-039","decision":"duplicate","source_queue_row":168,"pattern":"preprint_to_publication"}
 {"lens_id_a":"110-974-966-793-461","lens_id_b":"180-312-876-125-423","decision":"duplicate","source_queue_row":169,"pattern":"working_paper_to_publication"}
