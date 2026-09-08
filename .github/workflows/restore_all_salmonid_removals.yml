@@ -1,0 +1,189 @@
+name: Restore all salmonid* removals
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/restore_all_salmonid_removals.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout canonical store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          path: canonical_store
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore all 1,660 removed records
+        run: |
+          python - <<'PY'
+          import copy, json
+          from pathlib import Path
+
+          ROOT=Path('canonical_store')
+          CANON=ROOT/'data/canonical/current/repair/records.jsonl'
+          REMOVED=ROOT/'data/canonical/audit/search_query_corrections/2026-09-02_salmonid_only_removed.jsonl'
+          OUTDIR=ROOT/'data/canonical/audit/search_query_corrections'
+          MANIFEST=OUTDIR/'2026-09-08_restore_all_salmonid_removals_manifest.json'
+
+          EXPECT_CURRENT=20488
+          EXPECT_REMOVED=1660
+          EXPECT_RESTORED=22148
+          EXPECT_CANONICAL_SHA='0ea908be8f710e0970fa03bf747143aec06c488c'
+
+          def load_stream(path):
+              text=path.read_text(encoding='utf-8')
+              dec=json.JSONDecoder(); out=[]; p=0
+              while p < len(text):
+                  while p < len(text) and text[p].isspace(): p += 1
+                  if p >= len(text): break
+                  obj,end=dec.raw_decode(text,p); out.append(obj); p=end
+              return out
+
+          def lens_id(rec):
+              ident=rec.get('identity') or {}
+              return str(ident.get('lens_id') or rec.get('lens_id') or rec.get('id') or '')
+
+          current=load_stream(CANON)
+          removed=load_stream(REMOVED)
+          assert len(current)==EXPECT_CURRENT, len(current)
+          assert len(removed)==EXPECT_REMOVED, len(removed)
+
+          current_ids=[lens_id(r) for r in current]
+          assert all(current_ids), 'Current canonical contains blank Lens IDs'
+          assert len(current_ids)==len(set(current_ids)), 'Duplicate Lens IDs in current canonical'
+
+          removed_ids=[str(x.get('lens_id') or '') for x in removed]
+          assert all(removed_ids), 'Removal archive contains blank Lens IDs'
+          assert len(removed_ids)==len(set(removed_ids)), 'Duplicate Lens IDs in removal archive'
+          overlap=set(current_ids).intersection(removed_ids)
+          assert not overlap, f'Removed records already present in current canonical: {sorted(overlap)[:20]}'
+
+          by_position={}
+          for x in removed:
+              pos=int(x['original_line_number'])
+              assert 1 <= pos <= EXPECT_RESTORED
+              assert pos not in by_position
+              rec=copy.deepcopy(x['record'])
+
+              # The 2 September archive predates the later global screening reset and
+              # final deduplication pass. Restore bibliographic/Lens content only;
+              # do not reintroduce stale screening or stale dedup state.
+              rec.pop('screening',None)
+              rec.pop('screening_history',None)
+              rec.pop('deduplication',None)
+              prov=rec.get('provenance')
+              if isinstance(prov,dict):
+                  for key in (
+                      'historical_screening',
+                      'historical_excludes_reconciliation',
+                      'residual_screening_assignment',
+                      'screening_decision_history',
+                  ):
+                      prov.pop(key,None)
+                  prov['search_query_correction_restoration']={
+                      'restored_at':'2026-09-08',
+                      'source_archive':'data/canonical/audit/search_query_corrections/2026-09-02_salmonid_only_removed.jsonl',
+                      'reason':'restore_all_records_removed_by_invalid_salmonid_star_cleanup',
+                      'deduplication_required':True,
+                  }
+              else:
+                  rec['provenance']={
+                      'search_query_correction_restoration':{
+                          'restored_at':'2026-09-08',
+                          'source_archive':'data/canonical/audit/search_query_corrections/2026-09-02_salmonid_only_removed.jsonl',
+                          'reason':'restore_all_records_removed_by_invalid_salmonid_star_cleanup',
+                          'deduplication_required':True,
+                      }
+                  }
+              by_position[pos]=rec
+
+          # Reconstruct the original 22,148-record ordering, preserving every current
+          # record object exactly as it exists now and inserting each archived record
+          # at its recorded pre-removal line position.
+          restored=[]; current_iter=iter(current)
+          for pos in range(1,EXPECTED_RESTORED+1):
+              if pos in by_position:
+                  restored.append(by_position[pos])
+              else:
+                  restored.append(next(current_iter))
+          try:
+              next(current_iter)
+              raise AssertionError('Current canonical contained more records than expected while reconstructing order')
+          except StopIteration:
+              pass
+
+          assert len(restored)==EXPECTED_RESTORED
+          restored_ids=[lens_id(r) for r in restored]
+          assert all(restored_ids)
+          assert len(restored_ids)==len(set(restored_ids)), 'Duplicate Lens IDs after restoration'
+          assert set(removed_ids).issubset(restored_ids)
+          assert set(current_ids).issubset(restored_ids)
+          assert sum('screening' in r for r in restored)==0, 'Screening state unexpectedly present after restore'
+
+          # Restored records intentionally have no final deduplication state yet.
+          no_dedup=[lens_id(r) for r in restored if not isinstance(r.get('deduplication'),dict)]
+          assert set(no_dedup)==set(removed_ids), (len(no_dedup), len(removed_ids))
+
+          tmp=CANON.with_suffix('.jsonl.tmp')
+          with tmp.open('w',encoding='utf-8') as f:
+              for r in restored:
+                  f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+          tmp.replace(CANON)
+
+          manifest={
+              'date':'2026-09-08',
+              'operation':'restore_all_records_removed_by_2026-09-02_salmonid_only_search_correction',
+              'canonical_commit_before':EXPECTED_CANONICAL_SHA,
+              'records_before':EXPECT_CURRENT,
+              'records_restored':EXPECT_REMOVED,
+              'records_after':EXPECT_RESTORED,
+              'source_archive':'data/canonical/audit/search_query_corrections/2026-09-02_salmonid_only_removed.jsonl',
+              'restoration_method':'reinsert archived record objects at original_line_number while preserving current records',
+              'stale_state_handling':{
+                  'screening_removed_from_restored_records':True,
+                  'screening_history_removed_from_restored_records':True,
+                  'known_old_screening_provenance_removed':True,
+                  'deduplication_removed_from_restored_records':True,
+                  'fresh_deduplication_required_before_workflow04':True,
+              },
+              'validation':{
+                  'all_1660_removed_lens_ids_restored':True,
+                  'all_20488_current_lens_ids_preserved':True,
+                  'unique_lens_ids_after_restore':True,
+                  'screening_records_after_restore':0,
+                  'restored_records_without_final_deduplication':EXPECT_REMOVED,
+              },
+          }
+          MANIFEST.write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Commit restored canonical store
+        working-directory: canonical_store
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          test "$(git rev-parse HEAD)" = "0ea908be8f710e0970fa03bf747143aec06c488c"
+          git add data/canonical/current/repair/records.jsonl \
+                  data/canonical/audit/search_query_corrections/2026-09-08_restore_all_salmonid_removals_manifest.json
+          git diff --cached --quiet && { echo 'No restoration changes to commit'; exit 1; }
+          git commit -m 'Restore all 1660 salmonid correction removals'
+          git lfs push origin canonical-repair-store
+          git push origin HEAD:canonical-repair-store
+          git log -1 --format='canonical_commit=%H'
