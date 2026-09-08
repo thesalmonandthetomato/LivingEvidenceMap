@@ -1,4 +1,4 @@
-name: Fresh rebuild 02 - Deduplication
+name: Workflow 02 - Deduplication
 
 on:
   workflow_dispatch:
@@ -142,7 +142,7 @@ jobs:
           manifest=json.loads(mpath.read_text(encoding='utf-8'))
           summary=json.loads(Path('outputs/fresh_workflow02/resolution_summary.json').read_text(encoding='utf-8'))
           manifest['deduplication']={
-              'workflow':'fresh_rebuild_02_deduplication',
+              'workflow':'workflow_02_deduplication',
               'completed_at':datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00','Z'),
               'summary':summary
           }
@@ -150,7 +150,7 @@ jobs:
           mpath.write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
           PY
 
-      - name: Commit fresh deduplication state
+      - name: Commit Workflow 02 deduplication state
         if: ${{ inputs.mode == 'apply' }}
         working-directory: canonical_store
         run: |
@@ -159,16 +159,16 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git lfs install --local
           git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
-          git diff --cached --quiet && { echo 'No fresh deduplication changes detected'; exit 1; }
-          git commit -m 'Persist fresh Workflow 02 deduplication state'
+          git diff --cached --quiet && { echo 'No deduplication changes detected'; exit 1; }
+          git commit -m 'Persist Workflow 02 deduplication state'
           git lfs push origin "$FRESH_CANONICAL_BRANCH"
           git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
-          git log -1 --format='fresh_deduplication_commit=%H'
+          git log -1 --format='deduplication_commit=%H'
 
-      - name: Upload fresh Workflow 02 artefacts
+      - name: Upload Workflow 02 artefacts
         uses: actions/upload-artifact@v4
         with:
-          name: fresh-workflow02-${{ inputs.mode }}-${{ github.run_id }}
+          name: workflow02-${{ inputs.mode }}-${{ github.run_id }}
           path: outputs/fresh_workflow02/
           retention-days: 90
           if-no-files-found: error
