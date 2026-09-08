@@ -116,7 +116,7 @@ jobs:
           # record object exactly as it exists now and inserting each archived record
           # at its recorded pre-removal line position.
           restored=[]; current_iter=iter(current)
-          for pos in range(1,EXPECTED_RESTORED+1):
+          for pos in range(1,EXPECT_RESTORED+1):
               if pos in by_position:
                   restored.append(by_position[pos])
               else:
@@ -127,7 +127,7 @@ jobs:
           except StopIteration:
               pass
 
-          assert len(restored)==EXPECTED_RESTORED
+          assert len(restored)==EXPECT_RESTORED
           restored_ids=[lens_id(r) for r in restored]
           assert all(restored_ids)
           assert len(restored_ids)==len(set(restored_ids)), 'Duplicate Lens IDs after restoration'
@@ -148,7 +148,7 @@ jobs:
           manifest={
               'date':'2026-09-08',
               'operation':'restore_all_records_removed_by_2026-09-02_salmonid_only_search_correction',
-              'canonical_commit_before':EXPECTED_CANONICAL_SHA,
+              'canonical_commit_before':EXPECT_CANONICAL_SHA,
               'records_before':EXPECT_CURRENT,
               'records_restored':EXPECT_REMOVED,
               'records_after':EXPECT_RESTORED,
