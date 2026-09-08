@@ -44,5 +44,36 @@
       "output": "deduplication_ready"
     }
   },
-  "pipeline_stage": "abstract_enriched_deduplication_ready"
+  "pipeline_stage": "deduplicated",
+  "deduplication": {
+    "workflow": "workflow_02_deduplication",
+    "completed_at": "2026-09-08T15:37:19Z",
+    "summary": {
+      "input_records": 20132,
+      "output_records": 20132,
+      "candidate_pairs": 1223,
+      "auto_candidate_pairs": 1136,
+      "auto_resolution_rule_counts": {
+        "deterministic_duplicate": 974,
+        "high_confidence_preprint_version": 145,
+        "very_high_confidence_same_work_version": 17
+      },
+      "bibliographically_rejected_pairs": 87,
+      "bibliographic_rejection_reason_counts": {
+        "reject_different_journal_doi_title": 60,
+        "reject_distinct_pagination": 16,
+        "reject_same_issue_distinct_article": 11
+      },
+      "resolved_groups": 912,
+      "canonical_representatives": 912,
+      "duplicates_flagged": 1136,
+      "unique_records": 18084,
+      "adjudication_records": 0,
+      "adjudication_pairs": 0,
+      "records_removed": 0,
+      "records_nested": 0,
+      "canonical_source_modified": false,
+      "output_is_annotated_single_jsonl": true
+    }
+  }
 }
