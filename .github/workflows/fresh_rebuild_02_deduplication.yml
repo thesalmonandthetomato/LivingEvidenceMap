@@ -1,0 +1,174 @@
+name: Fresh rebuild 02 - Deduplication
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Audit first; apply only after audit review'
+        required: true
+        default: audit
+        type: choice
+        options: [audit, apply]
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+  EXPECTED_RECORDS: '20132'
+
+jobs:
+  deduplication:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main orchestration branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Load tested Workflow 02 implementation
+        run: |
+          set -euo pipefail
+          git fetch origin updater-workflow-02-deduplication
+          mkdir -p /tmp/workflow02 data/adjudication
+          for f in audit_canonical_duplicates.py augment_duplicate_candidates.py filter_reviewed_not_duplicates.py resolve_canonical_duplicates.py; do
+            git show origin/updater-workflow-02-deduplication:scripts/updater/$f > /tmp/workflow02/$f
+            python -m py_compile /tmp/workflow02/$f
+          done
+          git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-07.jsonl > /tmp/workflow02/reviewed_duplicates.jsonl
+          git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_not_duplicate_hashes_2026-09-07.json > /tmp/workflow02/reviewed_not_duplicates.json
+
+      - name: Checkout fresh canonical JSON with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-2026-09-08-v1
+          fetch-depth: 0
+          lfs: true
+          path: canonical_store
+
+      - name: Validate fresh deduplication input
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('canonical_store/data/canonical/current/repair/records.jsonl')
+          expected=int(os.environ['EXPECTED_RECORDS'])
+          rows=[json.loads(x) for x in p.open(encoding='utf-8') if x.strip()]
+          assert len(rows)==expected, (len(rows), expected)
+          ids=[(r.get('identity') or {}).get('lens_id') for r in rows]
+          assert all(ids), 'missing Lens IDs'
+          assert len(ids)==len(set(ids)), 'duplicate Lens IDs at ingestion boundary'
+          assert all('deduplication' not in r for r in rows), 'pre-existing deduplication state found'
+          assert all('screening' not in r for r in rows), 'screening state found before deduplication'
+          assert all('screening_history' not in r for r in rows), 'screening history found before deduplication'
+          manifest=json.loads(Path('canonical_store/data/canonical/current/repair/manifest.json').read_text(encoding='utf-8'))
+          assert manifest.get('pipeline_stage')=='abstract_enriched_deduplication_ready', manifest.get('pipeline_stage')
+          print(f'PASS: {len(rows)} fresh abstract-enriched records, no inherited deduplication/screening state')
+          PY
+
+      - name: Run fresh duplicate classification and resolution
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/fresh_workflow02
+          SRC=canonical_store/data/canonical/current/repair/records.jsonl
+          python /tmp/workflow02/audit_canonical_duplicates.py \
+            --input "$SRC" \
+            --output outputs/fresh_workflow02/candidates.jsonl \
+            --summary outputs/fresh_workflow02/classification_summary.json
+          python /tmp/workflow02/augment_duplicate_candidates.py \
+            --canonical "$SRC" \
+            --candidates outputs/fresh_workflow02/candidates.jsonl \
+            --output outputs/fresh_workflow02/candidates_augmented.jsonl \
+            --summary outputs/fresh_workflow02/augmentation_summary.json \
+            --reviewed /tmp/workflow02/reviewed_duplicates.jsonl
+          python /tmp/workflow02/filter_reviewed_not_duplicates.py \
+            --candidates outputs/fresh_workflow02/candidates_augmented.jsonl \
+            --reviewed /tmp/workflow02/reviewed_not_duplicates.json \
+            --output outputs/fresh_workflow02/candidates_reviewed.jsonl \
+            --removed-audit outputs/fresh_workflow02/reviewed_not_duplicate_audit.jsonl \
+            --summary outputs/fresh_workflow02/not_duplicate_filter_summary.json
+          python /tmp/workflow02/resolve_canonical_duplicates.py \
+            --canonical "$SRC" \
+            --candidates outputs/fresh_workflow02/candidates_reviewed.jsonl \
+            --output outputs/fresh_workflow02/annotated_records.jsonl \
+            --queue outputs/fresh_workflow02/adjudication_queue.jsonl \
+            --audit outputs/fresh_workflow02/resolution_audit.json \
+            --summary outputs/fresh_workflow02/resolution_summary.json
+
+      - name: Validate fresh deduplication output
+        run: |
+          python - <<'PY'
+          import json, os, collections
+          from pathlib import Path
+          expected=int(os.environ['EXPECTED_RECORDS'])
+          rows=[json.loads(x) for x in open('outputs/fresh_workflow02/annotated_records.jsonl',encoding='utf-8') if x.strip()]
+          assert len(rows)==expected, (len(rows),expected)
+          assert len({r['identity']['lens_id'] for r in rows})==expected
+          assert all('screening' not in r for r in rows)
+          assert all('screening_history' not in r for r in rows)
+          counts=collections.Counter((r.get('deduplication') or {}).get('status') for r in rows)
+          assert None not in counts, counts
+          for r in rows:
+              d=r['deduplication']
+              if d['status']=='duplicate':
+                  assert d.get('duplicate_of')
+                  assert d.get('downstream_eligible') is False
+              elif d['status'] in {'canonical','unique'}:
+                  assert d.get('downstream_eligible') is True
+              elif d['status']=='adjudication_required':
+                  assert d.get('downstream_eligible') is False
+          summary=json.loads(Path('outputs/fresh_workflow02/resolution_summary.json').read_text())
+          assert summary['input_records']==summary['output_records']==expected
+          assert summary['records_removed']==0
+          print(json.dumps({'records':len(rows),'deduplication_status_counts':dict(counts),'resolution_summary':summary},indent=2))
+          PY
+
+      - name: Persist fresh deduplication annotations
+        if: ${{ inputs.mode == 'apply' }}
+        run: |
+          set -euo pipefail
+          cp outputs/fresh_workflow02/annotated_records.jsonl canonical_store/data/canonical/current/repair/records.jsonl
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          mpath=Path('canonical_store/data/canonical/current/repair/manifest.json')
+          manifest=json.loads(mpath.read_text(encoding='utf-8'))
+          summary=json.loads(Path('outputs/fresh_workflow02/resolution_summary.json').read_text(encoding='utf-8'))
+          manifest['deduplication']={
+              'workflow':'fresh_rebuild_02_deduplication',
+              'completed_at':datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00','Z'),
+              'summary':summary
+          }
+          manifest['pipeline_stage']='deduplicated'
+          mpath.write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          PY
+
+      - name: Commit fresh deduplication state
+        if: ${{ inputs.mode == 'apply' }}
+        working-directory: canonical_store
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git lfs install --local
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git diff --cached --quiet && { echo 'No fresh deduplication changes detected'; exit 1; }
+          git commit -m 'Persist fresh Workflow 02 deduplication state'
+          git lfs push origin "$FRESH_CANONICAL_BRANCH"
+          git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
+          git log -1 --format='fresh_deduplication_commit=%H'
+
+      - name: Upload fresh Workflow 02 artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-workflow02-${{ inputs.mode }}-${{ github.run_id }}
+          path: outputs/fresh_workflow02/
+          retention-days: 90
+          if-no-files-found: error
