@@ -1,0 +1,24 @@
+{
+  "date": "2026-09-08",
+  "operation": "restore_all_records_removed_by_2026-09-02_salmonid_only_search_correction",
+  "canonical_commit_before": "0ea908be8f710e0970fa03bf747143aec06c488c",
+  "records_before": 20488,
+  "records_restored": 1660,
+  "records_after": 22148,
+  "source_archive": "data/canonical/audit/search_query_corrections/2026-09-02_salmonid_only_removed.jsonl",
+  "restoration_method": "reinsert archived record objects at original_line_number while preserving current records",
+  "stale_state_handling": {
+    "screening_removed_from_restored_records": true,
+    "screening_history_removed_from_restored_records": true,
+    "known_old_screening_provenance_removed": true,
+    "deduplication_removed_from_restored_records": true,
+    "fresh_deduplication_required_before_workflow04": true
+  },
+  "validation": {
+    "all_1660_removed_lens_ids_restored": true,
+    "all_20488_current_lens_ids_preserved": true,
+    "unique_lens_ids_after_restore": true,
+    "screening_records_after_restore": 0,
+    "restored_records_without_final_deduplication": 1660
+  }
+}
