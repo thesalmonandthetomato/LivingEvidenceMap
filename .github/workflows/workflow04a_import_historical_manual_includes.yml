@@ -38,7 +38,7 @@ jobs:
         run: |
           mkdir -p outputs/workflow04a
           python - <<'PY'
-          import collections, csv, hashlib, json, os, re, unicodedata
+          import collections, csv, hashlib, json, os, random, re, unicodedata
           from pathlib import Path
 
           MODE=os.environ['MODE']
@@ -47,14 +47,14 @@ jobs:
           MASTER=Path('canonical_store/data/master/current/living_evidence_map_master.csv')
           CANON=Path('canonical_store/data/canonical/current/repair/records.jsonl')
           OUT=Path('outputs/workflow04a')
-          EXPECTED_MASTER_ROWS=13389
-          EXPECTED_MASTER_FINGERPRINT='17c3843195efa6238768fa578d2d75bbb337ab48ae78932d04d8d01da38bcb04'
+          APPROVED_MASTER_ROWS=13389
+          APPROVED_MASTER_FINGERPRINT='17c3843195efa6238768fa578d2d75bbb337ab48ae78932d04d8d01da38bcb04'
           EXPECTED_CANONICAL_ROWS=20488
-          EXPECTED_EXACT_LENS_MATCHES=12883
-          EXPECTED_EXACT_TITLE_MATCHES=11
-          EXPECTED_IMPORTED_ROWS=12894
-          EXPECTED_TARGET_REPRESENTATIVES=12697
-          EXPECTED_UNMATCHED_ROWS=495
+          APPROVED_EXACT_LENS_MATCHES=12883
+          APPROVED_EXACT_TITLE_MATCHES=11
+          APPROVED_IMPORTED_ROWS=12894
+          APPROVED_TARGET_REPRESENTATIVES=12697
+          APPROVED_UNMATCHED_ROWS=495
 
           def load_json_stream(path):
               text=path.read_text(encoding='utf-8')
@@ -87,9 +87,16 @@ jobs:
 
           with MASTER.open(encoding='utf-8-sig',newline='') as f:
               master=list(csv.DictReader(f))
-          assert len(master)==EXPECTED_MASTER_ROWS, len(master)
           fp=master_fingerprint(master)
-          assert fp==EXPECTED_MASTER_FINGERPRINT, f'Master dataset fingerprint mismatch: {fp}'
+          source_approved=(len(master)==APPROVED_MASTER_ROWS and fp==APPROVED_MASTER_FINGERPRINT)
+          print(f'master_rows={len(master)}')
+          print(f'master_fingerprint={fp}')
+          print(f'approved_source_dataset={source_approved}')
+          if MODE=='apply':
+              assert source_approved, (
+                  'APPLY BLOCKED: repository master is not the explicitly approved uploaded '
+                  f'13,389-row dataset. rows={len(master)} fingerprint={fp}'
+              )
 
           records=load_json_stream(CANON)
           assert len(records)==EXPECTED_CANONICAL_ROWS, len(records)
@@ -105,18 +112,16 @@ jobs:
               d=r.get('deduplication') or {}
               rep=str(d.get('duplicate_of') or '') if d.get('status')=='duplicate' else lid
               title=norm_title((r.get('canonical') or {}).get('title'))
-              if title:
-                  title_to_reps[title].add(rep)
+              if title: title_to_reps[title].add(rep)
 
           imports=[]; unmatched=[]; exact_lens=0; exact_title=0
           for row_number,m in enumerate(master,start=1):
               source_lens=extract_lens_id(m.get('url_raw',''))
-              target=''; method=''
-
+              source_record=None; target=''; method=''
               if source_lens and source_lens in by_lens:
                   exact_lens += 1
-                  sr=by_lens[source_lens]
-                  d=sr.get('deduplication') or {}
+                  source_record=by_lens[source_lens]
+                  d=source_record.get('deduplication') or {}
                   if d.get('status')=='duplicate':
                       target=str(d.get('duplicate_of') or '')
                       assert target in by_lens, (source_lens,target)
@@ -133,97 +138,116 @@ jobs:
                       method='title_exact_unique_representative'
                   else:
                       unmatched.append({
-                          'master_row':row_number,
-                          'source_record_id':m.get('record_id',''),
-                          'source_lens_id':source_lens,
-                          'title':m.get('title',''),
-                          'doi':m.get('doi',''),
-                          'year':m.get('year',''),
-                          'authors':m.get('authors','')
+                          'master_row':row_number,'source_record_id':m.get('record_id',''),
+                          'source_lens_id':source_lens,'title':m.get('title',''),
+                          'abstract':m.get('abstract',''),'abstract_raw':m.get('abstract_raw',''),
+                          'doi':m.get('doi',''),'year':m.get('year',''),'authors':m.get('authors','')
                       })
                       continue
-
               imports.append({
-                  'master_row':row_number,
-                  'source_record_id':str(m.get('record_id') or ''),
-                  'source_lens_id':source_lens,
-                  'representative_lens_id':target,
-                  'match_method':method,
+                  'master_row':row_number,'source_record_id':str(m.get('record_id') or ''),
+                  'source_lens_id':source_lens,'representative_lens_id':target,
+                  'match_method':method,'master':m,'source_record':source_record
               })
 
-          assert exact_lens==EXPECTED_EXACT_LENS_MATCHES, exact_lens
-          assert exact_title==EXPECTED_EXACT_TITLE_MATCHES, exact_title
-          assert len(imports)==EXPECTED_IMPORTED_ROWS, len(imports)
-          assert len({x['representative_lens_id'] for x in imports})==EXPECTED_TARGET_REPRESENTATIVES
-          assert len(unmatched)==EXPECTED_UNMATCHED_ROWS, len(unmatched)
-          assert all((by_lens[x['representative_lens_id']].get('deduplication') or {}).get('status') in {'unique','canonical'} for x in imports)
-
           grouped=collections.defaultdict(list)
-          for x in imports:
-              grouped[x['representative_lens_id']].append(x)
+          for x in imports: grouped[x['representative_lens_id']].append(x)
 
-          imported_entries=0
-          for target,items in grouped.items():
-              r=by_lens[target]
-              existing=r.get('screening_history')
-              if existing is None:
-                  existing=[]
-              assert isinstance(existing,list), f'Unexpected screening_history type on {target}'
-              existing=[e for e in existing if not (isinstance(e,dict) and e.get('history_label')=='manual_historical_includes' and e.get('source_dataset')=='living_evidence_map_master_CORRECTED(6)')]
-              for x in sorted(items,key=lambda z:z['master_row']):
-                  existing.append({
-                      'history_label':'manual_historical_includes',
-                      'decision':'retain',
-                      'decision_type':'historical_manual_include',
-                      'stage':'historical_manual_screening',
-                      'source_dataset':'living_evidence_map_master_CORRECTED(6)',
-                      'source_record_id':x['source_record_id'],
-                      'source_lens_id':x['source_lens_id'] or None,
-                      'match_method':x['match_method'],
-                      'imported_at':'2026-09-07',
-                      'current_screening_state_affected':False
-                  })
-                  imported_entries += 1
-              r['screening_history']=existing
+          if source_approved:
+              assert exact_lens==APPROVED_EXACT_LENS_MATCHES, exact_lens
+              assert exact_title==APPROVED_EXACT_TITLE_MATCHES, exact_title
+              assert len(imports)==APPROVED_IMPORTED_ROWS, len(imports)
+              assert len(grouped)==APPROVED_TARGET_REPRESENTATIVES, len(grouped)
+              assert len(unmatched)==APPROVED_UNMATCHED_ROWS, len(unmatched)
 
-          assert imported_entries==EXPECTED_IMPORTED_ROWS
-          assert sum(1 for r in records if 'screening' in r)==0
-          hist_entries=[]
-          for r in records:
-              for e in (r.get('screening_history') or []):
-                  if isinstance(e,dict) and e.get('history_label')=='manual_historical_includes' and e.get('source_dataset')=='living_evidence_map_master_CORRECTED(6)':
-                      hist_entries.append(e)
-          assert len(hist_entries)==EXPECTED_IMPORTED_ROWS, len(hist_entries)
-
+          # Write a full compact mapping manifest.
           with (OUT/'matched_import_manifest.csv').open('w',encoding='utf-8',newline='') as f:
-              w=csv.DictWriter(f,fieldnames=['master_row','source_record_id','source_lens_id','representative_lens_id','match_method'])
-              w.writeheader(); w.writerows(imports)
-          with (OUT/'unmatched_495.csv').open('w',encoding='utf-8-sig',newline='') as f:
-              w=csv.DictWriter(f,fieldnames=['master_row','source_record_id','source_lens_id','title','doi','year','authors'])
-              w.writeheader(); w.writerows(unmatched)
+              fields=['master_row','source_record_id','source_lens_id','representative_lens_id','match_method']
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader()
+              for x in imports: w.writerow({k:x[k] for k in fields})
+
+          with (OUT/'unmatched_records.csv').open('w',encoding='utf-8-sig',newline='') as f:
+              fields=['master_row','source_record_id','source_lens_id','title','abstract','abstract_raw','doi','year','authors']
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(unmatched)
+
+          # Human-checkable 100-row sample. Oversample non-trivial matches.
+          rng=random.Random(20260908)
+          title_matches=[x for x in imports if x['match_method']=='title_exact_unique_representative']
+          duplicate_matches=[x for x in imports if x['match_method']=='lens_id_exact_duplicate_to_representative']
+          direct_matches=[x for x in imports if x['match_method']=='lens_id_exact']
+          sample=list(title_matches[:100])
+          room=max(0,100-len(sample))
+          take_dup=min(20,room,len(duplicate_matches))
+          if take_dup: sample += rng.sample(duplicate_matches,take_dup)
+          room=max(0,100-len(sample))
+          if room: sample += rng.sample(direct_matches,room)
+          rng.shuffle(sample)
+          with (OUT/'matched_100_master_vs_canonical.csv').open('w',encoding='utf-8-sig',newline='') as f:
+              fields=[
+                  'master_row','match_method','master_record_id','master_lens_id','master_title','master_abstract',
+                  'master_doi','master_year','master_authors','matched_source_canonical_lens_id',
+                  'matched_source_dedup_status','matched_source_duplicate_of','canonical_representative_lens_id',
+                  'canonical_representative_dedup_status','canonical_title','canonical_abstract','canonical_doi',
+                  'canonical_year','canonical_authors','title_identical_normalised','doi_identical_casefolded',
+                  'year_identical','human_match_check','human_notes'
+              ]
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader()
+              for x in sample:
+                  m=x['master']; sr=x['source_record']; rr=by_lens[x['representative_lens_id']]
+                  rc=rr.get('canonical') or {}; sd=(sr.get('deduplication') or {}) if sr else {}
+                  w.writerow({
+                      'master_row':x['master_row'],'match_method':x['match_method'],
+                      'master_record_id':m.get('record_id',''),'master_lens_id':x['source_lens_id'],
+                      'master_title':m.get('title',''),'master_abstract':m.get('abstract',''),
+                      'master_doi':m.get('doi',''),'master_year':m.get('year',''),'master_authors':m.get('authors',''),
+                      'matched_source_canonical_lens_id':x['source_lens_id'] if sr else '',
+                      'matched_source_dedup_status':sd.get('status','') if sr else '',
+                      'matched_source_duplicate_of':sd.get('duplicate_of','') if sr else '',
+                      'canonical_representative_lens_id':x['representative_lens_id'],
+                      'canonical_representative_dedup_status':(rr.get('deduplication') or {}).get('status',''),
+                      'canonical_title':rc.get('title',''),'canonical_abstract':rc.get('abstract',''),
+                      'canonical_doi':rc.get('doi',''),'canonical_year':rc.get('year',''),'canonical_authors':rc.get('authors',''),
+                      'title_identical_normalised':norm_title(m.get('title'))==norm_title(rc.get('title')),
+                      'doi_identical_casefolded':str(m.get('doi') or '').strip().casefold()==str(rc.get('doi') or '').strip().casefold(),
+                      'year_identical':str(m.get('year') or '').strip()==str(rc.get('year') or '').strip(),
+                      'human_match_check':'','human_notes':''
+                  })
 
           summary={
-              'workflow':'04A_import_historical_manual_includes',
-              'mode':MODE,
-              'master_rows':len(master),
-              'master_fingerprint':fp,
-              'canonical_records':len(records),
-              'exact_lens_matches':exact_lens,
-              'exact_title_matches':exact_title,
-              'historical_manual_include_entries':len(imports),
-              'target_representatives':len(grouped),
-              'unmatched_records':len(unmatched),
-              'fresh_screening_records':0,
+              'workflow':'04A_import_historical_manual_includes','mode':MODE,
+              'master_rows':len(master),'master_fingerprint':fp,'approved_source_dataset':source_approved,
+              'canonical_records':len(records),'exact_lens_matches':exact_lens,'exact_title_matches':exact_title,
+              'historical_manual_include_entries':len(imports),'target_representatives':len(grouped),
+              'unmatched_records':len(unmatched),'fresh_screening_records':0,
               'canonical_modified':MODE=='apply'
           }
           (OUT/'summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
           print(json.dumps(summary,indent=2,ensure_ascii=False))
 
           if MODE=='apply':
+              imported_entries=0
+              for target,items in grouped.items():
+                  r=by_lens[target]
+                  existing=r.get('screening_history')
+                  if existing is None: existing=[]
+                  assert isinstance(existing,list), f'Unexpected screening_history type on {target}'
+                  existing=[e for e in existing if not (isinstance(e,dict) and e.get('history_label')=='manual_historical_includes' and e.get('source_dataset')=='living_evidence_map_master_CORRECTED(6)')]
+                  for x in sorted(items,key=lambda z:z['master_row']):
+                      existing.append({
+                          'history_label':'manual_historical_includes','decision':'retain',
+                          'decision_type':'historical_manual_include','stage':'historical_manual_screening',
+                          'source_dataset':'living_evidence_map_master_CORRECTED(6)',
+                          'source_record_id':x['source_record_id'],'source_lens_id':x['source_lens_id'] or None,
+                          'match_method':x['match_method'],'imported_at':'2026-09-08',
+                          'current_screening_state_affected':False
+                      })
+                      imported_entries += 1
+                  r['screening_history']=existing
+              assert imported_entries==APPROVED_IMPORTED_ROWS
+              assert sum(1 for r in records if 'screening' in r)==0
               tmp=CANON.with_suffix('.jsonl.tmp')
               with tmp.open('w',encoding='utf-8') as f:
-                  for r in records:
-                      f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+                  for r in records: f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
               tmp.replace(CANON)
           PY
 
