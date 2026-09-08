@@ -1,14 +1,14 @@
 {
   "name": "LivingEvidenceMap salmon aquaculture scholarly search",
   "source": "Lens Scholarly API",
-  "lens_ui_query": "(((title:(salmon OR salmonid* OR Salmo OR Oncorhynchus)) OR (abstract:(salmon OR salmonid* OR Salmo OR Oncorhynchus)) OR (keyword:(salmon OR salmonid* OR Salmo OR Oncorhynchus)))) AND ((((title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))))) AND NOT publication_type:(news OR report OR dataset OR libguide)",
+  "lens_ui_query": "(((title:(salmon OR Salmo OR Oncorhynchus)) OR (abstract:(salmon OR Salmo OR Oncorhynchus)) OR (keyword:(salmon OR Salmo OR Oncorhynchus)))) AND ((((title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))))) AND NOT publication_type:(news OR report OR dataset OR libguide)",
   "api_query": {
     "query": {
       "bool": {
         "must": [
           {
             "query_string": {
-              "query": "((title:(salmon OR salmonid* OR Salmo OR Oncorhynchus) OR abstract:(salmon OR salmonid* OR Salmo OR Oncorhynchus) OR keyword:(salmon OR salmonid* OR Salmo OR Oncorhynchus)) AND (title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))"
+              "query": "((title:(salmon OR Salmo OR Oncorhynchus) OR abstract:(salmon OR Salmo OR Oncorhynchus) OR keyword:(salmon OR Salmo OR Oncorhynchus)) AND (title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))"
             }
           }
         ],
