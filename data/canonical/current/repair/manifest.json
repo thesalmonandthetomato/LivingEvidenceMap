@@ -1,0 +1,22 @@
+{
+  "workflow": "fresh_rebuild_00_full_lens_search",
+  "status": "success",
+  "created_at": "2026-09-08T07:52:06Z",
+  "source": "Lens Scholarly API",
+  "query_config": "config/lens_search.json",
+  "query_string": "((title:(salmon OR Salmo OR Oncorhynchus) OR abstract:(salmon OR Salmo OR Oncorhynchus) OR keyword:(salmon OR Salmo OR Oncorhynchus)) AND (title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))",
+  "query_sha256": "deae3632415fab1f4867fb904661c6fc8b05a60c74f641dc7fe71e820388cbcf",
+  "salmonid_present_in_query": false,
+  "lens_reported_total": 20132,
+  "raw_records_retrieved": 20132,
+  "unique_records_written": 20132,
+  "duplicate_lens_ids_suppressed": 0,
+  "records_without_lens_id": 0,
+  "batches": 41,
+  "canonical_path": "data/canonical/current/repair/records.jsonl",
+  "fresh_state": {
+    "deduplication_present": false,
+    "screening_present": false,
+    "screening_history_present": false
+  }
+}
