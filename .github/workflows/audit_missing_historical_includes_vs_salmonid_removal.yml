@@ -1,0 +1,168 @@
+name: Audit missing historical includes vs salmonid removal
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/audit_missing_historical_includes_vs_salmonid_removal.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout canonical store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          lfs: true
+          path: canonical_store
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Match 495 missing historical includes to removal archive
+        run: |
+          mkdir -p outputs/missing_include_audit
+          python - <<'PY'
+          import collections, csv, hashlib, json, re, unicodedata
+          from pathlib import Path
+
+          ROOT=Path('canonical_store')
+          MASTER=ROOT/'data/master/current/living_evidence_map_master.csv'
+          CANON=ROOT/'data/canonical/current/repair/records.jsonl'
+          REMOVED=ROOT/'data/canonical/audit/search_query_corrections/2026-09-02_salmonid_only_removed.jsonl'
+          OUT=Path('outputs/missing_include_audit')
+          EXPECTED_UNMATCHED=495
+          EXPECTED_ID_COUNT=494
+          EXPECTED_ID_HASH='19d07d1dc4acd4c112bd6ba7a09cd3ded03fc2579746177ab7dbc6a8d8785eaa'
+
+          def load_stream(path):
+              text=path.read_text(encoding='utf-8')
+              dec=json.JSONDecoder(); out=[]; p=0
+              while p < len(text):
+                  while p < len(text) and text[p].isspace(): p+=1
+                  if p>=len(text): break
+                  x,e=dec.raw_decode(text,p); out.append(x); p=e
+              return out
+          def norm_title(x):
+              s=unicodedata.normalize('NFKC',str(x or '')).casefold()
+              s=re.sub(r'<[^>]+>',' ',s); s=re.sub(r'[^\w]+',' ',s,flags=re.UNICODE)
+              return re.sub(r'\s+',' ',s).strip()
+          def norm_doi(x):
+              s=str(x or '').strip().casefold()
+              s=re.sub(r'^https?://(dx\.)?doi\.org/','',s); s=re.sub(r'^doi:\s*','',s)
+              return s.rstrip('.')
+          def extract_lens(x):
+              m=re.search(r'lens\.org/(\d{3}-\d{3}-\d{3}-\d{3}-[0-9X]{3})',str(x or ''),re.I)
+              return m.group(1) if m else ''
+          def textify(v):
+              if v is None: return ''
+              if isinstance(v,str): return v
+              if isinstance(v,list): return ' '.join(textify(x) for x in v)
+              if isinstance(v,dict): return ' '.join(textify(x) for x in v.values())
+              return str(v)
+
+          current=load_stream(CANON)
+          by_lens={str((r.get('identity') or {}).get('lens_id') or ''):r for r in current}
+          title_to_reps=collections.defaultdict(set)
+          for r in current:
+              lid=str((r.get('identity') or {}).get('lens_id') or '')
+              d=r.get('deduplication') or {}
+              rep=str(d.get('duplicate_of') or '') if d.get('status')=='duplicate' else lid
+              t=norm_title((r.get('canonical') or {}).get('title'))
+              if t: title_to_reps[t].add(rep)
+
+          with MASTER.open(encoding='utf-8-sig',newline='') as f: master=list(csv.DictReader(f))
+          unmatched=[]
+          for i,m in enumerate(master,1):
+              lid=extract_lens(m.get('url_raw',''))
+              if lid and lid in by_lens: continue
+              reps=title_to_reps.get(norm_title(m.get('title')),set()) if m.get('title') else set()
+              if len(reps)==1: continue
+              unmatched.append({'master_row':i,'record_id':m.get('record_id',''),'source_lens_id':lid,
+                                'title':m.get('title',''),'abstract':m.get('abstract',''),'doi':m.get('doi',''),
+                                'year':m.get('year',''),'authors':m.get('authors','')})
+          assert len(unmatched)==EXPECTED_UNMATCHED, len(unmatched)
+          ids=sorted(x['source_lens_id'] for x in unmatched if x['source_lens_id'])
+          assert len(ids)==EXPECTED_ID_COUNT
+          assert hashlib.sha256(('\n'.join(ids)+'\n').encode()).hexdigest()==EXPECTED_ID_HASH
+
+          removed=load_stream(REMOVED)
+          assert len(removed)==1660, len(removed)
+          removed_by_lens={str(x.get('lens_id') or ''):x for x in removed if x.get('lens_id')}
+          by_title=collections.defaultdict(list); by_doi=collections.defaultdict(list)
+          for x in removed:
+              c=(x.get('record') or {}).get('canonical') or {}
+              if norm_title(c.get('title')): by_title[norm_title(c.get('title'))].append(x)
+              if norm_doi(c.get('doi')): by_doi[norm_doi(c.get('doi'))].append(x)
+
+          salmonid_re=re.compile(r'\bsalmonid\w*\b',re.I)
+          allowed_re=re.compile(r'\b(?:salmon|salmo|oncorhynchus)\b',re.I)
+          rows=[]
+          for u in unmatched:
+              x=removed_by_lens.get(u['source_lens_id']) if u['source_lens_id'] else None
+              method='lens_id_exact' if x else ''
+              if not x:
+                  cand={id(v):v for v in by_title.get(norm_title(u['title']),[])}
+                  nd=norm_doi(u['doi'])
+                  if nd:
+                      for v in by_doi.get(nd,[]): cand[id(v)]=v
+                  if len(cand)==1:
+                      x=next(iter(cand.values())); method='unique_title_or_doi'
+              rec=(x or {}).get('record') or {}; c=rec.get('canonical') or {}; lens=rec.get('lens') or {}
+              raw=lens.get('raw_payload') if isinstance(lens,dict) else None
+              if not isinstance(raw,dict): raw={}
+              searchable='\n'.join([textify(c.get('title')),textify(c.get('abstract')),textify(c.get('keywords'))])
+              raw_searchable='\n'.join([textify(raw.get('title')),textify(raw.get('abstract')),textify(raw.get('keywords'))])
+              rows.append({
+                  **u,
+                  'found_in_removed_1660':bool(x),'archive_match_method':method,
+                  'removed_lens_id':(x or {}).get('lens_id',''),'removed_reason':(x or {}).get('reason',''),
+                  'removed_criterion':(x or {}).get('criterion',''),'original_line_number':(x or {}).get('original_line_number',''),
+                  'removed_title':c.get('title',''),'removed_abstract':c.get('abstract',''),'removed_keywords':textify(c.get('keywords')),
+                  'removed_doi':c.get('doi',''),'removed_year':c.get('year',''),
+                  'title_exact':bool(x) and norm_title(u['title'])==norm_title(c.get('title')),
+                  'doi_exact':bool(x) and bool(norm_doi(u['doi'])) and norm_doi(u['doi'])==norm_doi(c.get('doi')),
+                  'year_exact':bool(x) and str(u['year']).strip()==str(c.get('year','')).strip(),
+                  'original_filter_has_salmonid':bool(salmonid_re.search(searchable)) if x else '',
+                  'original_filter_has_allowed_token':bool(allowed_re.search(searchable)) if x else '',
+                  'raw_lens_title':textify(raw.get('title')),'raw_lens_abstract':textify(raw.get('abstract')),
+                  'raw_lens_keywords':textify(raw.get('keywords')),
+                  'raw_lens_has_salmonid':bool(salmonid_re.search(raw_searchable)) if raw else '',
+                  'raw_lens_has_allowed_token':bool(allowed_re.search(raw_searchable)) if raw else '',
+                  'provenance_json':json.dumps(rec.get('provenance') or {},ensure_ascii=False,separators=(',',':')),
+                  'lens_metadata_json':json.dumps({k:v for k,v in lens.items() if k!='raw_payload'},ensure_ascii=False,separators=(',',':')) if isinstance(lens,dict) else '',
+              })
+
+          fields=list(rows[0].keys())
+          with (OUT/'missing_495_vs_removed_1660.csv').open('w',encoding='utf-8-sig',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
+          matched=[r for r in rows if r['found_in_removed_1660']]
+          with (OUT/'matched_removed_records.csv').open('w',encoding='utf-8-sig',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(matched)
+          summary={
+              'master_rows':len(master),'current_canonical_records':len(current),'unmatched_historical_includes':len(unmatched),
+              'removed_archive_records':len(removed),'matched_to_removed_archive':len(matched),
+              'matched_by_lens_id':sum(r['archive_match_method']=='lens_id_exact' for r in rows),
+              'matched_by_unique_title_or_doi':sum(r['archive_match_method']=='unique_title_or_doi' for r in rows),
+              'not_in_removed_archive':sum(not r['found_in_removed_1660'] for r in rows),
+              'matched_filter_reproduced':sum(r['found_in_removed_1660'] and r['original_filter_has_salmonid'] is True and r['original_filter_has_allowed_token'] is False for r in rows),
+              'matched_raw_lens_allowed_but_canonical_not':sum(r['found_in_removed_1660'] and r['raw_lens_has_allowed_token'] is True and r['original_filter_has_allowed_token'] is False for r in rows),
+          }
+          (OUT/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: missing-historical-includes-vs-salmonid-removal-${{ github.run_id }}
+          path: outputs/missing_include_audit/
+          retention-days: 90
+          if-no-files-found: error
