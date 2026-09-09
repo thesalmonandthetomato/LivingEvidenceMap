@@ -64,7 +64,7 @@ screen_salmon_record <- function(llm_record_key, record_id, title, abstract, api
   tibble::tibble(llm_record_key=llm_record_key,record_id=record_id,llm_decision=parsed$decision,llm_reason=parsed$reason,llm_failed=FALSE,llm_error=NA_character_)
 }
 
-screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5.6-luna") {
+screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5.6-luna", fallback_model="gpt-5-mini") {
   if (!nzchar(api_key)) stop("OPENAI_API_KEY was not found.")
   if (!nrow(records)) return(tibble::tibble())
 
@@ -101,7 +101,7 @@ screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), m
     )
   )
 
-  tryCatch({
+  result <- tryCatch({
     response <- httr2::request("https://api.openai.com/v1/responses") |>
       httr2::req_auth_bearer_token(api_key) |>
       httr2::req_body_json(body, auto_unbox=TRUE) |>
@@ -140,4 +140,17 @@ screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), m
       llm_error = conditionMessage(e)
     )
   })
+
+  if (nrow(result) && all(result$llm_failed) && !is.null(fallback_model) && nzchar(fallback_model) && !identical(model, fallback_model)) {
+    primary_error <- unique(stats::na.omit(result$llm_error))
+    message(sprintf(
+      "LLM screening: model %s failed for the whole batch (%s); retrying with fallback model %s.",
+      model,
+      if (length(primary_error)) primary_error[[1]] else "unknown error",
+      fallback_model
+    ))
+    return(screen_salmon_batch(records, api_key = api_key, model = fallback_model, fallback_model = NULL))
+  }
+
+  result
 }
