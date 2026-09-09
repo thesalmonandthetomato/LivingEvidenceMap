@@ -9,6 +9,7 @@ HTML = Path('docs/index.html')
 DATA = Path('docs/dashboard.json')
 MARKER = '<div id="lem-update-status"'
 INSERT_AFTER = '<div id="kpis" class="kpis"></div>'
+HIDE_DUPLICATE_KPI = '<style id="lem-hide-duplicate-update-kpi">#kpis .kpi:first-child{display:none}.kpis{grid-template-columns:repeat(5,1fr)}@media(max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}}@media(max-width:600px){.kpis{grid-template-columns:1fr 1fr}}</style>'
 
 
 def display_date(value):
@@ -43,6 +44,8 @@ status = (
 )
 
 html = HTML.read_text(encoding='utf-8')
+if 'lem-hide-duplicate-update-kpi' not in html:
+    html = html.replace('</head>', HIDE_DUPLICATE_KPI + '</head>', 1)
 if MARKER in html:
     html = re.sub(r'<div id="lem-update-status".*?</div>\s*</div>', status, html, count=1, flags=re.DOTALL)
 elif INSERT_AFTER in html:
@@ -50,4 +53,4 @@ elif INSERT_AFTER in html:
 else:
     raise SystemExit('Dashboard KPI anchor not found; presentation was not modified.')
 HTML.write_text(html, encoding='utf-8')
-print(f"Dashboard status patched: last_search={display_date(last_search)}, last_evidence_update={display_date(last_evidence)}, screened={screened_text}")
+print(f"Dashboard status patched: duplicate Last update KPI hidden; last_search={display_date(last_search)}, last_evidence_update={display_date(last_evidence)}, screened={screened_text}")
