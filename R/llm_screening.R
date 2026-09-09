@@ -144,12 +144,25 @@ screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), m
   if (nrow(result) && all(result$llm_failed) && !is.null(fallback_model) && nzchar(fallback_model) && !identical(model, fallback_model)) {
     primary_error <- unique(stats::na.omit(result$llm_error))
     message(sprintf(
-      "LLM screening: model %s failed for the whole batch (%s); retrying with fallback model %s.",
+      "LLM screening: model %s batch failed for the whole batch (%s); retrying %d records individually with fallback model %s.",
       model,
       if (length(primary_error)) primary_error[[1]] else "unknown error",
+      nrow(records),
       fallback_model
     ))
-    return(screen_salmon_batch(records, api_key = api_key, model = fallback_model, fallback_model = NULL))
+    return(purrr::pmap_dfr(
+      records |> dplyr::select(llm_record_key, record_id, title, abstract),
+      function(llm_record_key, record_id, title, abstract) {
+        screen_salmon_record(
+          llm_record_key = llm_record_key,
+          record_id = record_id,
+          title = title,
+          abstract = abstract,
+          api_key = api_key,
+          model = fallback_model
+        )
+      }
+    ))
   }
 
   result
