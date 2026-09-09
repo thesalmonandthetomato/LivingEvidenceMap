@@ -92,12 +92,13 @@ def main():
             val=dec['geography']
             if isinstance(val,list): val='; '.join(val)
             r['human_geography_decision']=str(val)
-            for k in ('geography','geography_iso3','country_iso3'):
+            for k in ('geography','geography_iso3','country_iso3','deterministic_primary_iso3c'):
                 if k in r: r[k]=str(val)
         if 'species' in dec:
             val=dec['species']
             if isinstance(val,list): val='; '.join(val)
             r['human_species_decision']=str(val)
+            if 'deterministic_species' in r: r['deterministic_species']=str(val)
         if 'topic' in dec:
             val=dec['topic']
             if isinstance(val,list): val='; '.join(val)
