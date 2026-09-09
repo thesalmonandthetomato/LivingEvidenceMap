@@ -1,0 +1,29 @@
+{
+  "issue_number": 9,
+  "update_date": "2026-09-09",
+  "decisions": [
+    {
+      "record_id": "007-888-105-974-856",
+      "relevance": "retain",
+      "species": "Rainbow trout",
+      "reason": "Human review retained the study; the title explicitly identifies rainbow trout (Oncorhynchus mykiss)."
+    },
+    {
+      "record_id": "126-877-219-150-602",
+      "relevance": "retain",
+      "species": "Rainbow trout",
+      "reason": "Human review retained the study because its abstract explicitly identifies rainbow trout (Oncorhynchus mykiss) in the aquaponic system."
+    },
+    {
+      "record_id": "178-173-638-093-623",
+      "relevance": "retain",
+      "species": "Rainbow trout",
+      "reason": "Human review retained the study; the title explicitly identifies rainbow trout (Oncorhynchus mykiss)."
+    },
+    {
+      "record_id": "112-732-189-061-768",
+      "geography": ["CAN", "CHL", "USA"],
+      "reason": "Human review confirmed the record is substantively multinational, covering Canada, Chile and the United States."
+    }
+  ]
+}
