@@ -1,0 +1,163 @@
+name: Workflow 03 - Publication status
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fresh_rebuild_03_publication_status.yml'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Audit first; apply only after audit review'
+        required: true
+        default: audit
+        type: choice
+        options: [audit, apply]
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+  EXPECTED_RECORDS: '20132'
+
+jobs:
+  publication-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout main orchestration branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Load Workflow 03 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/workflow03
+          cp scripts/updater/canonical_publication_status.py /tmp/workflow03/canonical_publication_status.py
+          python -m py_compile /tmp/workflow03/canonical_publication_status.py
+
+      - name: Checkout fresh canonical JSON with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-2026-09-08-v1
+          fetch-depth: 0
+          lfs: true
+          path: canonical_store
+
+      - name: Validate Workflow 03 input
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+          p=Path('canonical_store/data/canonical/current/repair/records.jsonl')
+          expected=int(os.environ['EXPECTED_RECORDS'])
+          rows=[json.loads(x) for x in p.open(encoding='utf-8') if x.strip()]
+          assert len(rows)==expected, (len(rows),expected)
+          ids=[(r.get('identity') or {}).get('lens_id') for r in rows]
+          assert all(ids) and len(ids)==len(set(ids))
+          assert all('deduplication' in r for r in rows), 'Workflow 02 annotations missing'
+          assert all('screening' not in r for r in rows), 'relevance screening already present unexpectedly'
+          manifest=json.loads(Path('canonical_store/data/canonical/current/repair/manifest.json').read_text(encoding='utf-8'))
+          assert manifest.get('pipeline_stage')=='deduplicated', manifest.get('pipeline_stage')
+          print(f'PASS: {len(rows)} deduplicated canonical records ready for publication-status screening')
+
+      - name: Run publication-status audit
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/fresh_workflow03
+          MODE='${{ inputs.mode }}'
+          if [ -z "$MODE" ]; then MODE='audit'; fi
+          python /tmp/workflow03/canonical_publication_status.py \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --output outputs/fresh_workflow03/annotated_records.jsonl \
+            --audit outputs/fresh_workflow03/publication_status_audit.jsonl \
+            --summary outputs/fresh_workflow03/publication_status_summary.json \
+            --mode "$MODE" \
+            --expected-records "$EXPECTED_RECORDS" \
+            --batch-size 25
+
+      - name: Validate Workflow 03 audit
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+          expected=int(os.environ['EXPECTED_RECORDS'])
+          audit=[json.loads(x) for x in open('outputs/fresh_workflow03/publication_status_audit.jsonl',encoding='utf-8') if x.strip()]
+          summary=json.loads(Path('outputs/fresh_workflow03/publication_status_summary.json').read_text(encoding='utf-8'))
+          assert len(audit)==expected, (len(audit),expected)
+          assert summary['input_records']==expected
+          assert summary['openalex_failed_records']==0, summary
+          assert summary['records_removed']==0, summary
+          print(json.dumps(summary,indent=2))
+
+      - name: Validate apply output
+        if: ${{ inputs.mode == 'apply' }}
+        shell: python
+        run: |
+          import json, os
+          expected=int(os.environ['EXPECTED_RECORDS'])
+          rows=[json.loads(x) for x in open('outputs/fresh_workflow03/annotated_records.jsonl',encoding='utf-8') if x.strip()]
+          assert len(rows)==expected
+          ids=[r['identity']['lens_id'] for r in rows]
+          assert len(ids)==len(set(ids))==expected
+          assert all('publication_status' in r for r in rows)
+          assert all('screening' not in r for r in rows)
+          for r in rows:
+              ps=r['publication_status']
+              assert ps.get('downstream_eligible') in (True,False)
+              if (r.get('deduplication') or {}).get('downstream_eligible') is not True:
+                  assert ps['downstream_eligible'] is False
+          print('PASS: publication-status annotations preserve cardinality and downstream eligibility invariants')
+
+      - name: Persist Workflow 03 publication-status annotations
+        if: ${{ inputs.mode == 'apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp outputs/fresh_workflow03/annotated_records.jsonl canonical_store/data/canonical/current/repair/records.jsonl
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          mpath=Path('canonical_store/data/canonical/current/repair/manifest.json')
+          manifest=json.loads(mpath.read_text(encoding='utf-8'))
+          summary=json.loads(Path('outputs/fresh_workflow03/publication_status_summary.json').read_text(encoding='utf-8'))
+          manifest['publication_status']={
+              'workflow':'fresh_rebuild_03_publication_status',
+              'completed_at':summary['checked_at'],
+              'provider':'openalex',
+              'summary':summary
+          }
+          manifest['pipeline_stage']='publication_status_screened'
+          mpath.write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          PY
+          cd canonical_store
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git lfs install --local
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git diff --cached --quiet && { echo 'No publication-status changes detected'; exit 1; }
+          git commit -m 'Persist Workflow 03 publication-status state'
+          git lfs push origin "$FRESH_CANONICAL_BRANCH"
+          git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
+          git log -1 --format='publication_status_commit=%H'
+
+      - name: Upload Workflow 03 artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow03-${{ inputs.mode || 'audit' }}-${{ github.run_id }}
+          path: outputs/fresh_workflow03/
+          retention-days: 90
+          if-no-files-found: error
