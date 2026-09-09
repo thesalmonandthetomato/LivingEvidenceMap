@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f data/adjudications/weekly/2026-09-09.json
-          python3 scripts/validate_weekly_adjudication.py data/adjudications/weekly/2026-09-09.json
+          python3 scripts/validate_weekly_adjudication.py --file data/adjudications/weekly/2026-09-09.json --update-date 2026-09-09 --issue-number 9
 
       - name: Locate held weekly audit artifact
         uses: actions/github-script@v7
