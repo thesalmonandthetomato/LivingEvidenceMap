@@ -42,21 +42,6 @@ jobs:
           OVERLAP_DAYS: '7'
         run: python3 scripts/lens_weekly_harvest.py
 
-      - name: Persist successful Lens search state
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add state/lens_weekly_harvest.json state/search_history.json
-          if git diff --cached --quiet; then
-            echo 'No new tracked harvest state to commit.'
-          else
-            git commit -m 'chore: persist weekly Lens search state'
-            git push origin HEAD:main
-          fi
-
       - name: Prepare update input
         shell: bash
         env:
@@ -78,7 +63,9 @@ jobs:
             echo "no_records=true" >> "$GITHUB_ENV"
             exit 0
           fi
-          JSON=$(ls -1t outputs/lens_harvest/lens_increment_*.json | head -1)
+          JSON=$(find outputs/lens_harvest -maxdepth 1 -type f -name 'lens_increment_*.json' ! -name '*_manifest.json' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
+          test -n "$JSON"
+          test -f "$JSON"
           python3 scripts/lens_json_to_ris.py "$JSON" "$UPDATE_DIR/lens-export.ris"
           test -s "$UPDATE_DIR/lens-export.ris"
 
@@ -211,6 +198,21 @@ jobs:
             if (!existing.data.some(i => i.title === title)) {
               await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body, labels: []});
             }
+
+      - name: Persist successful Lens search state
+        if: success() && (github.event.inputs.ris_path == '' || github.event.inputs.ris_path == null)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add state/lens_weekly_harvest.json state/search_history.json
+          if git diff --cached --quiet; then
+            echo 'No new tracked harvest state to commit.'
+          else
+            git commit -m 'chore: persist weekly Lens search state'
+            git push origin HEAD:main
+          fi
 
       - name: Upload weekly update audit
         if: always()
