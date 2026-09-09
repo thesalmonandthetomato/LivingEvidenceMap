@@ -1,0 +1,15 @@
+metric,value
+master_records_original,13389
+master_records_after_known_duplicate_resolution,13389
+master_duplicate_decisions,0
+update_records,37
+final_records,13426
+topic_assignment_rows,237
+topic_records_with_output,37
+records_missing_topic_assignment,0
+within_update_duplicates_detected,0
+update_vs_master_duplicates_detected,0
+candidate_duplicate_identity_keys,0
+source_master,data/master/current/living_evidence_map_master.csv
+source_update,data/updates/2026-09-09_lens/records_after_species_geography_adjudication.csv
+source_topics,topic_artifact/topic_assignments.csv
