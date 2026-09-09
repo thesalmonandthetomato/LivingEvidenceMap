@@ -1,0 +1,170 @@
+name: Resume weekly update after adjudication
+
+on:
+  workflow_dispatch:
+    inputs:
+      update_date:
+        description: 'Held weekly update date (YYYY-MM-DD)'
+        required: true
+        type: string
+      issue_number:
+        description: 'GitHub human-review issue number'
+        required: true
+        type: string
+      adjudication_path:
+        description: 'Committed adjudication JSON path'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ '${{ inputs.update_date }}' =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
+          [[ '${{ inputs.issue_number }}' =~ ^[0-9]+$ ]]
+          test -f '${{ inputs.adjudication_path }}'
+
+      - name: Download held weekly audit artifact
+        uses: actions/github-script@v7
+        id: locate
+        env:
+          UPDATE_DATE: ${{ inputs.update_date }}
+        with:
+          script: |
+            const runs = await github.rest.actions.listWorkflowRuns({owner: context.repo.owner, repo: context.repo.repo, workflow_id: 'weekly_update_pipeline.yml', event: 'workflow_dispatch', per_page: 100});
+            const target = runs.data.workflow_runs.find(r => r.created_at.startsWith(process.env.UPDATE_DATE));
+            if (!target) core.setFailed(`No weekly update run found for ${process.env.UPDATE_DATE}`);
+            core.setOutput('run_id', target.id);
+            const arts = await github.rest.actions.listWorkflowRunArtifacts({owner: context.repo.owner, repo: context.repo.repo, run_id: target.id, per_page: 100});
+            const name = `weekly-update-${process.env.UPDATE_DATE}`;
+            const art = arts.data.artifacts.find(a => a.name === name && !a.expired);
+            if (!art) core.setFailed(`No non-expired ${name} artifact found on run ${target.id}`);
+            core.setOutput('artifact_id', art.id);
+
+      - name: Download held artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: weekly-update-${{ inputs.update_date }}
+          run-id: ${{ steps.locate.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: held
+
+      - name: Rehydrate held update directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data/updates/${{ inputs.update_date }}_lens
+          src=$(find held -type f -name 'records_after_species_geography_adjudication.csv' -print -quit)
+          test -n "$src"
+          base=$(dirname "$src")
+          cp -a "$base"/. data/updates/${{ inputs.update_date }}_lens/
+
+      - name: Apply and validate human adjudications
+        run: |
+          python3 scripts/apply_weekly_adjudications.py \
+            --update-dir data/updates/${{ inputs.update_date }}_lens \
+            --adjudications '${{ inputs.adjudication_path }}' \
+            --out-dir data/updates/${{ inputs.update_date }}_lens
+
+      - name: Prepare adjudicated input for existing merger
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp data/updates/${{ inputs.update_date }}_lens/records_after_human_adjudication.csv \
+             data/updates/${{ inputs.update_date }}_lens/records_after_species_geography_adjudication.csv
+
+      - name: Make legacy merger dynamic for held update
+        shell: bash
+        run: |
+          set -euo pipefail
+          d='${{ inputs.update_date }}'
+          n=$(date -u -d "$d +1 day" +%F)
+          sed -i "s/2026-08-13/${d}/g; s/2026-08-14/${n}/g" scripts/merge_master_update.py
+          echo "next_date=$n" >> "$GITHUB_ENV"
+
+      - name: Build and validate candidate master
+        run: python3 scripts/merge_master_update.py
+
+      - name: Promote validated candidate master
+        shell: bash
+        run: |
+          set -euo pipefail
+          d='${{ env.next_date }}'
+          test -s "data/master/candidates/living_evidence_map_master_${d}.csv"
+          test -s "data/master/candidates/living_evidence_map_master_${d}_manifest.csv"
+          mkdir -p data/master/archive data/master/current
+          cp data/master/current/living_evidence_map_master.csv "data/master/archive/living_evidence_map_master_${d}_premerge.csv"
+          cp "data/master/candidates/living_evidence_map_master_${d}.csv" data/master/current/living_evidence_map_master.csv
+          cp "data/master/candidates/living_evidence_map_master_${d}_manifest.csv" "data/master/archive/living_evidence_map_master_${d}_manifest.csv"
+
+      - name: Persist held Lens checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=$(find held -type f -path '*outputs/lens_harvest/*_manifest.json' -print | sort | tail -1)
+          if [ -z "$manifest" ]; then
+            manifest=$(find held -type f -name '*_manifest.json' -path '*lens_harvest*' -print | sort | tail -1)
+          fi
+          test -n "$manifest"
+          python3 - "$manifest" <<'PY'
+          import json,sys
+          from pathlib import Path
+          m=json.load(open(sys.argv[1]))
+          p=Path('state/lens_weekly_harvest.json')
+          s=json.loads(p.read_text()) if p.exists() else {}
+          end=m.get('window_end') or m.get('retrieved_at')
+          if not end: raise SystemExit('Held harvest manifest lacks window_end/retrieved_at')
+          s['last_successful_created']=end
+          s['updated_at']=m.get('retrieved_at',end)
+          s['last_status']='records_found_promoted_after_human_review'
+          p.write_text(json.dumps(s,indent=2)+'\n')
+          PY
+
+      - name: Commit promoted master, checkpoint and adjudication record
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/master state/lens_weekly_harvest.json '${{ inputs.adjudication_path }}'
+          git commit -m "Promote adjudicated weekly master ${{ inputs.update_date }}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Close human-review issue
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          UPDATE_DATE: ${{ inputs.update_date }}
+        with:
+          script: |
+            const issue_number = Number(process.env.ISSUE_NUMBER);
+            const body = `Adjudication applied and validated for weekly update ${process.env.UPDATE_DATE}. The master has been promoted. The dashboard rebuild is triggered by the master-file push.`;
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number, body});
+            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number, state: 'closed', state_reason: 'completed'});
+
+      - name: Upload adjudication audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-adjudication-${{ inputs.update_date }}
+          path: |
+            ${{ inputs.adjudication_path }}
+            data/updates/${{ inputs.update_date }}_lens/human_adjudication_summary.json
+            data/updates/${{ inputs.update_date }}_lens/records_after_human_adjudication.csv
+            data/master/candidates/
+          if-no-files-found: warn
+          retention-days: 90
