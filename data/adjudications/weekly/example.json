@@ -1,0 +1,11 @@
+{
+  "issue_number": 9,
+  "update_date": "2026-09-09",
+  "decisions": [
+    {
+      "record_id": "EXAMPLE",
+      "relevance": "retain",
+      "reason": "Replace this example with the actual adjudications before running the resume workflow."
+    }
+  ]
+}
