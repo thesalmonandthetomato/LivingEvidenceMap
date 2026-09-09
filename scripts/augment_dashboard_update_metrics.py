@@ -47,13 +47,20 @@ def load_json(path, default):
 data = load_json(DASHBOARD, {})
 metrics = data.setdefault('metrics', {})
 
-# The master-derived date remains the evidence update date.
-metrics['last_evidence_update'] = metrics.get('last_update')
-
 # The Lens checkpoint is the authoritative successful-search timestamp.
 search_state = load_json(SEARCH_STATE, {})
 last_search = search_state.get('updated_at') or search_state.get('last_successful_created')
 metrics['last_search'] = last_search
+
+# For a weekly batch that has been promoted into the canonical master, the
+# successful weekly checkpoint is the authoritative evidence-update date. This
+# avoids carrying forward stale row-level update dates from historical master
+# records after a successful human-reviewed promotion.
+status = str(search_state.get('last_status') or '')
+if 'promoted' in status and last_search:
+    metrics['last_evidence_update'] = last_search
+else:
+    metrics['last_evidence_update'] = metrics.get('last_update')
 
 # Count the complete current Lens search corpus at the supplied baseline, then
 # add raw results retrieved by searches after that baseline. This intentionally
