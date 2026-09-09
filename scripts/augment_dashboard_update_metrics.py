@@ -3,7 +3,7 @@
 
 The evidence-map dashboard distinguishes:
 - last_search: the most recent successful Lens search;
-- last_evidence_update: the most recent master-data update; and
+- last_evidence_update: the most recent promoted master-data update; and
 - candidate_search_results_screened: the baseline Lens result count plus raw
   records retrieved by subsequent weekly searches.
 
@@ -53,11 +53,12 @@ last_search = search_state.get('updated_at') or search_state.get('last_successfu
 metrics['last_search'] = last_search
 
 # For a weekly batch that has been promoted into the canonical master, the
-# successful weekly checkpoint is the authoritative evidence-update date. This
-# avoids carrying forward stale row-level update dates from historical master
-# records after a successful human-reviewed promotion.
+# successful weekly checkpoint is the authoritative evidence-update date. Use
+# it for both the legacy/canonical last_update metric and last_evidence_update,
+# so the dashboard cannot display a stale row-level master date.
 status = str(search_state.get('last_status') or '')
 if 'promoted' in status and last_search:
+    metrics['last_update'] = last_search
     metrics['last_evidence_update'] = last_search
 else:
     metrics['last_evidence_update'] = metrics.get('last_update')
@@ -97,5 +98,6 @@ data['search_metrics'] = {
 
 DASHBOARD.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
 print(f"Last successful search: {last_search}")
+print(f"Last update: {metrics.get('last_update')}")
 print(f"Last evidence update: {metrics.get('last_evidence_update')}")
 print(f"Search results screened: {BASELINE_RESULTS + increment:,} ({BASELINE_RESULTS:,} baseline + {increment:,} subsequent raw results)")
