@@ -52,7 +52,7 @@ extract_openai_output_text <- function(response) {
   text_items[[1]]$text
 }
 
-screen_salmon_record <- function(llm_record_key, record_id, title, abstract, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5-mini") {
+screen_salmon_record <- function(llm_record_key, record_id, title, abstract, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5.6-luna") {
   if (!nzchar(api_key)) stop("OPENAI_API_KEY was not found.")
   user_prompt <- paste0("TITLE\n", dplyr::coalesce(as.character(title),""), "\n\nABSTRACT\n", dplyr::coalesce(as.character(abstract),""), "\n\nDecide whether this record meets the salmon-farming eligibility criteria.")
   body <- list(model=model, store=FALSE, reasoning=list(effort="low"), input=list(list(role="system",content=list(list(type="input_text",text=salmon_llm_system_prompt()))),list(role="user",content=list(list(type="input_text",text=user_prompt)))), text=list(verbosity="low",format=list(type="json_schema",name="salmon_farming_relevance_screen",strict=TRUE,schema=salmon_llm_response_schema())))
@@ -64,7 +64,7 @@ screen_salmon_record <- function(llm_record_key, record_id, title, abstract, api
   tibble::tibble(llm_record_key=llm_record_key,record_id=record_id,llm_decision=parsed$decision,llm_reason=parsed$reason,llm_failed=FALSE,llm_error=NA_character_)
 }
 
-screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5-mini") {
+screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5.6-luna") {
   if (!nzchar(api_key)) stop("OPENAI_API_KEY was not found.")
   if (!nrow(records)) return(tibble::tibble())
 
