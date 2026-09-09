@@ -44,7 +44,7 @@
       "output": "deduplication_ready"
     }
   },
-  "pipeline_stage": "deduplicated",
+  "pipeline_stage": "publication_status_screened",
   "deduplication": {
     "workflow": "workflow_02_deduplication",
     "completed_at": "2026-09-08T15:37:19Z",
@@ -74,6 +74,26 @@
       "records_nested": 0,
       "canonical_source_modified": false,
       "output_is_annotated_single_jsonl": true
+    }
+  },
+  "publication_status": {
+    "workflow": "fresh_rebuild_03_publication_status",
+    "completed_at": "2026-09-09T14:59:41Z",
+    "provider": "openalex",
+    "summary": {
+      "workflow": "fresh_rebuild_03_publication_status",
+      "mode": "apply",
+      "checked_at": "2026-09-09T14:59:41Z",
+      "input_records": 20132,
+      "dedup_downstream_eligible_records": 18996,
+      "unique_dois_queried": 15950,
+      "publication_notices": 15,
+      "openalex_retracted_originals": 1,
+      "publication_status_excluded": 16,
+      "openalex_not_found": 46,
+      "openalex_failed_records": 0,
+      "failed_batches": [],
+      "records_removed": 0
     }
   }
 }
