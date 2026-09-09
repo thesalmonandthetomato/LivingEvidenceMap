@@ -107,6 +107,10 @@ jobs:
             echo 'Dashboard data unchanged.'
             exit 0
           fi
+          # docs/index.html is deliberately patched only in the Pages artifact,
+          # not committed. Hide any such unstaged presentation changes while
+          # rebasing the generated-data commit onto a concurrently advanced main.
+          git stash push --keep-index --include-untracked -m 'dashboard-artifact-only' || true
           git commit -m 'Update evidence-map dashboard data'
           git fetch origin main
           git rebase origin/main
