@@ -1,1 +1,142 @@
 record_id,field,finding,path,path_id
+007-888-105-974-856,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Water and ocean conditions,V3_113
+007-888-105-974-856,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_128
+007-888-105-974-856,topic_path_ids,path_id_text_mismatch,Production > Stress and mortality > Stress,V3_132
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,"Industry and governance > Economics and performance > Economic risk, valuation and impact",V3_021
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,Industry and governance > Firms and industry structure > Business strategy and investment,V3_023
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,"Industry and governance > Firms and industry structure > Companies, ownership and concentration",V3_024
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Licensing and spatial governance,V3_027
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_028
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Supply, demand and prices",V3_030
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,"Industry and governance > Markets, trade and value chains > Value chains and supply chains",V3_032
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_033
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,People and society > Communities and livelihoods > Livelihoods and income,V3_053
+017-694-233-138-585,topic_path_ids,path_id_text_mismatch,People and society > Labour and employment > Employment and job creation,V3_056
+017-868-173-388-589,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_105
+017-868-173-388-589,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_113
+017-868-173-388-589,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_121
+017-868-173-388-589,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_122
+017-868-173-388-589,topic_path_ids,path_id_text_mismatch,Production > Husbandry and farm management > Biosecurity and farm hygiene,V3_123
+020-679-699-324-462,topic_path_ids,path_id_text_mismatch,"Environment > Resource use and footprint > Energy, greenhouse gases and life-cycle footprint",V3_002
+020-679-699-324-462,topic_path_ids,path_id_text_mismatch,Environment > Resource use and footprint > Marine-resource use,V3_004
+020-679-699-324-462,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feed efficiency and conversion,V3_098
+020-679-699-324-462,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Nutrient requirements and feed formulation,V3_101
+022-354-473-357-939,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Water and ocean conditions,V3_047
+022-354-473-357-939,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Monitoring and sampling methods,V3_089
+022-354-473-357-939,topic_path_ids,path_id_text_mismatch,Production > Breeding and reproduction > Selective breeding and genetic improvement,V3_113
+022-354-473-357-939,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_128
+022-354-473-357-939,topic_path_ids,path_id_text_mismatch,Production > Stress and mortality > Stress,V3_132
+051-006-201-009-456,topic_path_ids,path_id_text_mismatch,Production > Fish health > Non-infectious disease and disorders,V3_113
+051-006-201-009-456,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_124
+054-410-766-228-166,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_121
+054-410-766-228-166,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_122
+054-410-766-228-166,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_123
+058-538-757-643-833,topic_path_ids,path_id_text_mismatch,Environment > Environmental management > Monitoring and assessment,V3_017
+058-538-757-643-833,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Climate change,V3_019
+058-538-757-643-833,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Water and ocean conditions,V3_021
+058-538-757-643-833,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > History and regional development,V3_047
+058-538-757-643-833,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Monitoring and sampling methods,V3_121
+058-538-757-643-833,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_132
+079-027-149-533-689,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_112
+079-027-149-533-689,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Anatomy and tissues,V3_113
+079-027-149-533-689,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Growth and development,V3_114
+079-027-149-533-689,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_122
+083-099-236-148-874,topic_path_ids,path_id_text_mismatch,Environment > Environmental management > Mitigation and remediation,V3_005
+083-099-236-148-874,topic_path_ids,path_id_text_mismatch,Environment > Environmental management > Monitoring and assessment,V3_010
+083-099-236-148-874,topic_path_ids,path_id_text_mismatch,Environment > Physical environment > Water quality,V3_019
+083-099-236-148-874,topic_path_ids,path_id_text_mismatch,Environment > Waste and emissions > Nutrients and organic waste,V3_020
+083-099-236-148-874,topic_path_ids,path_id_text_mismatch,Inputs and resources > Circularity > Resource efficiency,V3_042
+083-099-236-148-874,topic_path_ids,path_id_text_mismatch,Inputs and resources > Farm inputs > Infrastructure and equipment,V3_045
+087-762-072-593-755,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Digestibility and nutrient utilisation,V3_097
+087-762-072-593-755,topic_path_ids,path_id_text_mismatch,Production > Feed and nutrition > Feed additives and supplements,V3_100
+087-762-072-593-755,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_112
+087-762-072-593-755,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Growth and development,V3_113
+087-762-072-593-755,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_122
+095-351-403-133-82X,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Evidence-synthesis and classification methods,V3_047
+095-351-403-133-82X,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Monitoring and sampling methods,V3_051
+095-351-403-133-82X,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_105
+095-351-403-133-82X,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_120
+095-351-403-133-82X,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - General,V3_121
+095-351-403-133-82X,topic_path_ids,path_id_text_mismatch,Production > Husbandry and farm management > Biosecurity and farm hygiene,V3_123
+110-865-956-750-596,topic_path_ids,path_id_text_mismatch,Production > Fish health > Non-infectious disease and disorders,V3_113
+110-865-956-750-596,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_124
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,Environment > Escapes > Escape occurrence and causes,V3_001
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,Environment > Escapes > Post-escape ecology and impacts,V3_002
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,Environment > General environmental issues > Multiple or general environmental impacts,V3_005
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,Environment > Resource use and footprint > Marine-resource use,V3_006
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,Environment > Waste and emissions > Chemicals and therapeutants,V3_011
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,Environment > Waste and emissions > Nutrients and organic waste,V3_013
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,Environment > Wild populations and ecosystems > Biodiversity and ecosystem effects,V3_014
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,Environment > Wild populations and ecosystems > Parasite and pathogen transmission,V3_016
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,People and society > Culture and knowledge > Public discourse and representation,V3_065
+112-732-189-061-768,topic_path_ids,path_id_text_mismatch,People and society > Food security and access > Competition with other food uses,V3_068
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Water and ocean conditions,V3_022
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,Industry and governance > Economics and performance > Costs and profitability,V3_024
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,Industry and governance > Firms and industry structure > Business strategy and investment,V3_025
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,Industry and governance > Sector development > Innovation and technological transition,V3_041
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,Inputs and resources > Farm inputs > Therapeutants and chemicals,V3_046
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Diagnostic and laboratory methods,V3_049
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Statistical and modelling methods,V3_063
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,People and society > Food security and access > Food availability and nutritional security,V3_069
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,People and society > Public health > Antimicrobial resistance and One Health,V3_122
+113-350-847-393-194,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_132
+122-006-219-661-577,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Anatomy and tissues,V3_112
+122-006-219-661-577,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Growth and development,V3_113
+122-006-219-661-577,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_114
+126-877-219-150-602,topic_path_ids,path_id_text_mismatch,Production > Production systems and technology > Integrated multi-trophic aquaculture,V3_108
+126-877-219-150-602,topic_path_ids,path_id_text_mismatch,Production > Production systems and technology > Recirculating aquaculture systems,V3_110
+130-051-571-555-59X,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Evidence-synthesis and classification methods,V3_048
+130-051-571-555-59X,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Experimental design methods,V3_049
+130-051-571-555-59X,topic_path_ids,path_id_text_mismatch,"Methods > Methodological research > Sensors, imaging and measurement methods",V3_050
+130-051-571-555-59X,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Statistical and modelling methods,V3_051
+130-051-571-555-59X,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - General,V3_113
+130-051-571-555-59X,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_120
+134-721-759-387-001,topic_path_ids,path_id_text_mismatch,Environment > Wild populations and ecosystems > Biodiversity and ecosystem effects,V3_014
+134-721-759-387-001,topic_path_ids,path_id_text_mismatch,Environment > Wild populations and ecosystems > Parasite and pathogen transmission,V3_016
+137-565-925-689-855,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_121
+137-565-925-689-855,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_123
+140-104-320-905-275,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_120
+140-104-320-905-275,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - General,V3_122
+140-104-320-905-275,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_123
+141-814-290-758-587,topic_path_ids,path_id_text_mismatch,Production > Fish health > Non-infectious disease and disorders,V3_113
+141-814-290-758-587,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_124
+153-619-376-496-372,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Anatomy and tissues,V3_102
+153-619-376-496-372,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Growth and development,V3_108
+153-619-376-496-372,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_112
+153-619-376-496-372,topic_path_ids,path_id_text_mismatch,Production > Husbandry and farm management > Stocking density and crowding,V3_113
+153-619-376-496-372,topic_path_ids,path_id_text_mismatch,Production > Production systems and technology > Recirculating aquaculture systems,V3_114
+161-597-734-223-741,topic_path_ids,path_id_text_mismatch,Environment > Climate change > Adaptation and mitigation,V3_017
+161-597-734-223-741,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Climate change,V3_018
+161-597-734-223-741,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Water and ocean conditions,V3_051
+161-597-734-223-741,topic_path_ids,path_id_text_mismatch,Methods > Methodological research > Evidence-synthesis and classification methods,V3_090
+161-597-734-223-741,topic_path_ids,path_id_text_mismatch,Production > Breeding and reproduction > Broodstock and reproductive performance,V3_112
+161-597-734-223-741,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Growth and development,V3_113
+161-597-734-223-741,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_128
+161-597-734-223-741,topic_path_ids,path_id_text_mismatch,Production > Stress and mortality > Stress,V3_132
+162-966-605-124-592,topic_path_ids,path_id_text_mismatch,Production > Fish health > Fish response to sea lice,V3_113
+162-966-605-124-592,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_117
+162-966-605-124-592,topic_path_ids,path_id_text_mismatch,Production > Fish health > Sea lice control and treatment,V3_118
+162-966-605-124-592,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_122
+166-777-675-844-66X,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_120
+166-777-675-844-66X,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - General,V3_123
+171-310-410-629-931,topic_path_ids,path_id_text_mismatch,Environment > Environmental management > Monitoring and assessment,V3_014
+171-310-410-629-931,topic_path_ids,path_id_text_mismatch,Environment > Wild populations and ecosystems > Parasite and pathogen transmission,V3_019
+171-310-410-629-931,topic_path_ids,path_id_text_mismatch,"Industry and governance > Governance and policy > Compliance, enforcement and participation",V3_032
+171-310-410-629-931,topic_path_ids,path_id_text_mismatch,Industry and governance > Governance and policy > Policy and regulation,V3_035
+171-310-410-629-931,topic_path_ids,path_id_text_mismatch,Production > Fish health > Sea lice control and treatment,V3_107
+171-310-410-629-931,topic_path_ids,path_id_text_mismatch,Production > Production systems and technology > Land-based and flow-through systems,V3_108
+171-310-410-629-931,topic_path_ids,path_id_text_mismatch,Production > Production systems and technology > Recirculating aquaculture systems,V3_117
+171-455-002-907-143,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Prevention and treatment,V3_113
+171-455-002-907-143,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_122
+173-526-465-433-579,topic_path_ids,path_id_text_mismatch,"Product > Processing and preservation > Storage, packaging and shelf life",V3_076
+173-526-465-433-579,topic_path_ids,path_id_text_mismatch,Product > Sensory quality > Sensory properties,V3_079
+178-173-638-093-623,topic_path_ids,path_id_text_mismatch,Production > Fish performance and biology > Anatomy and tissues,V3_113
+178-173-638-093-623,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_114
+181-282-713-255-882,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Natural biological hazards,V3_113
+181-282-713-255-882,topic_path_ids,path_id_text_mismatch,Environment > Environmental stressors > Water and ocean conditions,V3_124
+181-282-713-255-882,topic_path_ids,path_id_text_mismatch,Production > Fish health > Non-infectious disease and disorders,V3_132
+181-282-713-255-882,topic_path_ids,path_id_text_mismatch,"Production > Fish performance and biology > Physiology, metabolism and biological responses",V3_133
+184-944-661-179-679,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_121
+184-944-661-179-679,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_123
+188-138-616-151-764,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Diagnosis and detection,V3_121
+188-138-616-151-764,topic_path_ids,path_id_text_mismatch,Production > Fish health > Other diseases - Epidemiology,V3_123
