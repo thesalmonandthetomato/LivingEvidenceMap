@@ -148,16 +148,19 @@ jobs:
           if [ -f "$d/topic_classification.csv" ]; then review=$((review+$(tail -n +2 "$d/topic_classification.csv" | grep -E ',(TRUE|UNCERTAIN|UNRESOLVED),' | wc -l || true))); fi
           echo "review_count=$review" >> "$GITHUB_OUTPUT"
           if [ "$review" -gt 0 ]; then
-            echo "Human review required for $review exception rows; master promotion is held."
-            exit 2
+            echo "needs_review=true" >> "$GITHUB_OUTPUT"
+            echo "Human review required for $review exception rows; master promotion and checkpoint advancement are held."
+          else
+            echo "needs_review=false" >> "$GITHUB_OUTPUT"
+            echo "No human review required."
           fi
 
       - name: Build and validate candidate master
-        if: env.no_records != 'true' && steps.review_gate.outcome == 'success'
+        if: env.no_records != 'true' && steps.review_gate.outputs.needs_review != 'true'
         run: python3 scripts/merge_master_update.py
 
       - name: Promote validated candidate master
-        if: env.no_records != 'true' && steps.review_gate.outcome == 'success'
+        if: env.no_records != 'true' && steps.review_gate.outputs.needs_review != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -173,7 +176,8 @@ jobs:
           git push
 
       - name: Open GitHub human-review issue
-        if: failure() && steps.review_gate.outcome == 'failure'
+        id: review_issue
+        if: env.no_records != 'true' && steps.review_gate.outputs.needs_review == 'true'
         uses: actions/github-script@v7
         env:
           REVIEW_DATE: ${{ steps.dates.outputs.update_date }}
@@ -188,19 +192,40 @@ jobs:
               ``,
               `**Master:** unchanged`,
               ``,
+              `**Lens checkpoint:** unchanged until review is resolved`,
+              ``,
               `**Workflow:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               ``,
-              `Review the candidate update in ChatGPT/GitHub, record the structured judgements, then resume the promotion step.`,
+              `Bring this issue into ChatGPT to adjudicate the outstanding records, record the structured judgements, then resume promotion.`,
               ``,
               `Technical/API failures must not be treated as substantive uncertainty.`
             ].join('\n');
             const existing = await github.rest.issues.listForRepo({owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100});
-            if (!existing.data.some(i => i.title === title)) {
-              await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body, labels: []});
+            let issue = existing.data.find(i => i.title === title);
+            if (!issue) {
+              const created = await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body, labels: []});
+              issue = created.data;
             }
+            core.setOutput('issue_url', issue.html_url);
+            core.info(`Human-review issue: ${issue.html_url}`);
+
+      - name: Email human-review issue
+        if: env.no_records != 'true' && steps.review_gate.outputs.needs_review == 'true'
+        env:
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          REVIEW_EMAIL: ${{ secrets.REVIEW_EMAIL }}
+        run: |
+          python3 scripts/updater/send_review_issue_email.py \
+            --issue-url '${{ steps.review_issue.outputs.issue_url }}' \
+            --review-count '${{ steps.review_gate.outputs.review_count }}' \
+            --review-date '${{ steps.dates.outputs.update_date }}' \
+            --workflow-url '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
 
       - name: Persist successful Lens search state
-        if: success() && (github.event.inputs.ris_path == '' || github.event.inputs.ris_path == null)
+        if: success() && steps.review_gate.outputs.needs_review != 'true' && (github.event.inputs.ris_path == '' || github.event.inputs.ris_path == null)
         shell: bash
         run: |
           set -euo pipefail
