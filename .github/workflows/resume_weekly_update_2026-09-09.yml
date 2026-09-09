@@ -1,0 +1,135 @@
+name: Resume held weekly update 2026-09-09
+
+on:
+  push:
+    paths:
+      - 'data/adjudications/weekly/2026-09-09.json'
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate adjudication file
+        run: |
+          set -euo pipefail
+          test -f data/adjudications/weekly/2026-09-09.json
+          python3 scripts/validate_weekly_adjudication.py data/adjudications/weekly/2026-09-09.json
+
+      - name: Locate held weekly audit artifact
+        uses: actions/github-script@v7
+        id: locate
+        with:
+          script: |
+            const runs = await github.rest.actions.listWorkflowRuns({owner: context.repo.owner, repo: context.repo.repo, workflow_id: 'weekly_update_pipeline.yml', event: 'workflow_dispatch', per_page: 100});
+            const target = runs.data.workflow_runs.find(r => r.id === 34343627082);
+            if (!target) core.setFailed('Held weekly update run 34343627082 not found');
+            core.setOutput('run_id', target.id);
+            const arts = await github.rest.actions.listWorkflowRunArtifacts({owner: context.repo.owner, repo: context.repo.repo, run_id: target.id, per_page: 100});
+            const art = arts.data.artifacts.find(a => a.name === 'weekly-update-2026-09-09' && !a.expired);
+            if (!art) core.setFailed('No non-expired weekly-update-2026-09-09 artifact found');
+
+      - name: Download held artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: weekly-update-2026-09-09
+          run-id: ${{ steps.locate.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: held
+
+      - name: Rehydrate held update and topics
+        run: |
+          set -euo pipefail
+          mkdir -p data/updates/2026-09-09_lens
+          src=$(find held -type f -name 'records_after_species_geography_adjudication.csv' -print -quit)
+          test -n "$src"
+          base=$(dirname "$src")
+          cp -a "$base"/. data/updates/2026-09-09_lens/
+          test -s data/updates/2026-09-09_lens/topic_classification_v3/topic_assignments.csv
+          mkdir -p topic_artifact
+          cp data/updates/2026-09-09_lens/topic_classification_v3/topic_assignments.csv topic_artifact/topic_assignments.csv
+
+      - name: Apply and validate human adjudications
+        run: |
+          python3 scripts/apply_weekly_adjudications.py \
+            --update-dir data/updates/2026-09-09_lens \
+            --adjudications data/adjudications/weekly/2026-09-09.json \
+            --out-dir data/updates/2026-09-09_lens
+
+      - name: Prepare adjudicated input for merger
+        run: |
+          set -euo pipefail
+          cp data/updates/2026-09-09_lens/records_after_human_adjudication.csv \
+             data/updates/2026-09-09_lens/records_after_species_geography_adjudication.csv
+          sed -i 's/2026-08-13/2026-09-09/g; s/2026-08-14/2026-09-10/g' scripts/merge_master_update.py
+
+      - name: Build and validate candidate master
+        run: python3 scripts/merge_master_update.py
+
+      - name: Promote validated candidate master
+        run: |
+          set -euo pipefail
+          test -s data/master/candidates/living_evidence_map_master_2026-09-10.csv
+          test -s data/master/candidates/living_evidence_map_master_2026-09-10_manifest.csv
+          mkdir -p data/master/archive data/master/current
+          cp data/master/current/living_evidence_map_master.csv data/master/archive/living_evidence_map_master_2026-09-10_premerge.csv
+          cp data/master/candidates/living_evidence_map_master_2026-09-10.csv data/master/current/living_evidence_map_master.csv
+          cp data/master/candidates/living_evidence_map_master_2026-09-10_manifest.csv data/master/archive/living_evidence_map_master_2026-09-10_manifest.csv
+
+      - name: Persist held Lens checkpoint
+        run: |
+          set -euo pipefail
+          manifest=$(find held -type f -path '*outputs/lens_harvest/*_manifest.json' -print | sort | tail -1)
+          test -n "$manifest"
+          python3 - "$manifest" <<'PY'
+          import json,sys
+          from pathlib import Path
+          m=json.load(open(sys.argv[1]))
+          p=Path('state/lens_weekly_harvest.json')
+          s=json.loads(p.read_text()) if p.exists() else {}
+          end=m.get('window_end') or m.get('retrieved_at')
+          if not end: raise SystemExit('Held harvest manifest lacks window_end/retrieved_at')
+          s['last_successful_created']=end
+          s['updated_at']=m.get('retrieved_at',end)
+          s['last_status']='records_found_promoted_after_human_review'
+          p.write_text(json.dumps(s,indent=2)+'\n')
+          PY
+
+      - name: Commit promoted master and checkpoint
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/master state/lens_weekly_harvest.json data/adjudications/weekly/2026-09-09.json
+          git commit -m 'Promote adjudicated weekly master 2026-09-09'
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Close human-review issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = 'Adjudication applied and validated for weekly update 2026-09-09. The master has been promoted. The dashboard rebuild is triggered by the master-file push.';
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 9, body});
+            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: 9, state: 'closed', state_reason: 'completed'});
+
+      - name: Upload adjudication audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-adjudication-2026-09-09
+          path: |
+            data/adjudications/weekly/2026-09-09.json
+            data/updates/2026-09-09_lens/human_adjudication_summary.json
+            data/updates/2026-09-09_lens/records_after_human_adjudication.csv
+            data/master/candidates/
+          if-no-files-found: warn
+          retention-days: 90
