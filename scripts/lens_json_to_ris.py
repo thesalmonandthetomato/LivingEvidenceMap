@@ -15,6 +15,10 @@ def first_doi(rec):
     if isinstance(ids, dict): ids = [ids]
     for item in ids:
         if isinstance(item, dict):
+            # Lens harvests use {"type":"doi", "value":"10..."}; retain
+            # compatibility with older dictionary-shaped DOI fields too.
+            if text(item.get("type")).lower() == "doi" and text(item.get("value")):
+                return text(item["value"])
             for k in ("doi", "DOI"):
                 if text(item.get(k)): return text(item[k])
         elif isinstance(item, str) and item.lower().startswith("10."):
@@ -34,6 +38,11 @@ def authors(rec):
 
 def main(src, dst):
     records = json.loads(Path(src).read_text(encoding="utf-8"))
+    if not isinstance(records, list):
+        raise TypeError(f"Expected a JSON list of Lens records, got {type(records).__name__}: {src}")
+    bad = [i for i, r in enumerate(records, 1) if not isinstance(r, dict)]
+    if bad:
+        raise TypeError(f"Expected record objects in {src}; non-object rows at positions {bad[:10]}")
     with Path(dst).open("w", encoding="utf-8", newline="") as f:
         for i, r in enumerate(records, 1):
             f.write("TY  - JOUR\n")
