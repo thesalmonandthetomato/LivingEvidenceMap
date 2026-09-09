@@ -50,11 +50,6 @@ metrics = data.get('metrics', {})
 search_metrics = data.get('search_metrics', {})
 last_search = metrics.get('last_search') or search_metrics.get('last_search')
 last_evidence = metrics.get('last_evidence_update') or metrics.get('last_update')
-total_screened = metrics.get('candidate_search_results_screened')
-try:
-    screened_text = f"{int(total_screened):,}"
-except (TypeError, ValueError):
-    screened_text = 'Not available'
 
 pipeline_model = primary_pipeline_model()
 pipeline_model_label = model_display_name(pipeline_model)
@@ -64,7 +59,6 @@ status = (
     '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:baseline">'
     f'<span><b>Last search</b> {display_date(last_search)}</span>'
     f'<span><b>Last evidence update</b> {display_date(last_evidence)}</span>'
-    f'<span><b>Search results screened</b> {screened_text}</span>'
     '</div>'
     '</div>'
 )
@@ -92,5 +86,5 @@ HTML.write_text(html, encoding='utf-8')
 print(
     f"Dashboard status patched: duplicate Last update KPI hidden; "
     f"model={pipeline_model_label}; last_search={display_date(last_search)}, "
-    f"last_evidence_update={display_date(last_evidence)}, screened={screened_text}"
+    f"last_evidence_update={display_date(last_evidence)}"
 )
