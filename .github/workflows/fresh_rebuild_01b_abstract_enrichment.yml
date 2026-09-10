@@ -1,4 +1,4 @@
-name: Fresh rebuild 01B - Abstract enrichment
+name: Workflow 01 - Abstract enrichment
 
 on:
   push:
