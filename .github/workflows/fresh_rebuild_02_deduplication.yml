@@ -59,6 +59,7 @@ jobs:
         shell: Rscript {0}
         run: |
           library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
           p <- 'canonical_store/data/canonical/current/repair/records.jsonl'
           m <- fromJSON('canonical_store/data/canonical/current/repair/manifest.json', simplifyVector=FALSE)
           stopifnot(identical(m$pipeline_stage, 'abstract_enriched_deduplication_ready'))
