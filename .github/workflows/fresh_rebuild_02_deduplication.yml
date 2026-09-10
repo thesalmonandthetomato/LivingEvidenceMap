@@ -43,7 +43,8 @@ jobs:
           git fetch origin main updater-workflow-02-deduplication
           mkdir -p /tmp/workflow02
           git show origin/main:scripts/updater/workflow_02_deduplication.R > /tmp/workflow02/workflow_02_deduplication.R
-          Rscript -e "parse(file='/tmp/workflow02/workflow_02_deduplication.R'); cat('PASS: Workflow 02 R script parses successfully\n')"
+          git show origin/main:scripts/updater/workflow_02_resolution_guard.R > /tmp/workflow02/workflow_02_resolution_guard.R
+          Rscript -e "parse(file='/tmp/workflow02/workflow_02_deduplication.R'); parse(file='/tmp/workflow02/workflow_02_resolution_guard.R'); cat('PASS: Workflow 02 R scripts parse successfully\n')"
           git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-07.jsonl > /tmp/workflow02/reviewed_duplicates.jsonl
           git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_not_duplicate_hashes_2026-09-07.json > /tmp/workflow02/reviewed_not_duplicates.json
 
@@ -77,7 +78,7 @@ jobs:
         env:
           R_PROFILE_USER: /dev/null
 
-      - name: Run Workflow 02 R deduplication
+      - name: Generate Workflow 02 candidates in R
         run: |
           set -euo pipefail
           mkdir -p outputs/fresh_workflow02
@@ -86,6 +87,15 @@ jobs:
             --output-dir outputs/fresh_workflow02 \
             --reviewed-duplicates /tmp/workflow02/reviewed_duplicates.jsonl \
             --reviewed-not-duplicates /tmp/workflow02/reviewed_not_duplicates.json \
+            --checkpoint-every 5000
+
+      - name: Apply guarded Workflow 02 resolution in R
+        run: |
+          set -euo pipefail
+          Rscript /tmp/workflow02/workflow_02_resolution_guard.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --candidates outputs/fresh_workflow02/candidates_reviewed.jsonl \
+            --output-dir outputs/fresh_workflow02 \
             --checkpoint-every 250
 
       - name: Validate Workflow 02 output in R
@@ -111,6 +121,8 @@ jobs:
           stopifnot(!anyDuplicated(ids))
           s <- fromJSON('outputs/fresh_workflow02/resolution_summary.json', simplifyVector=FALSE)
           stopifnot(s$input_records == expected, s$output_records == expected, s$records_removed == 0)
+          stopifnot(is.numeric(s$unique), is.numeric(s$canonical), is.numeric(s$duplicates), is.numeric(s$adjudication_required))
+          stopifnot(s$unique + s$canonical + s$duplicates + s$adjudication_required == expected)
           print(table(statuses))
           print(s)
 
@@ -119,7 +131,6 @@ jobs:
         shell: Rscript {0}
         run: |
           library(jsonlite)
-          `%||%` <- function(x,y) if (is.null(x)) y else x
           file.copy('outputs/fresh_workflow02/annotated_records.jsonl','canonical_store/data/canonical/current/repair/records.jsonl',overwrite=TRUE)
           mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
           m <- fromJSON(mp,simplifyVector=FALSE)
