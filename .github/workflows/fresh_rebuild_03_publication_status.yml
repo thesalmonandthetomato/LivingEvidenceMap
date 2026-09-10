@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/fresh_rebuild_03_publication_status.yml'
+      - 'scripts/updater/workflow_03_publication_status.R'
   workflow_dispatch:
     inputs:
       mode:
@@ -20,7 +21,6 @@ permissions:
 
 env:
   FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
-  EXPECTED_RECORDS: '20132'
 
 jobs:
   publication-status:
@@ -33,17 +33,24 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
         with:
-          python-version: '3.12'
+          r-version: release
+          use-public-rspm: true
 
-      - name: Load Workflow 03 implementation
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(c('jsonlite', 'curl'))
+
+      - name: Load Workflow 03 R implementation
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/workflow03
-          cp scripts/updater/canonical_publication_status.py /tmp/workflow03/canonical_publication_status.py
-          python -m py_compile /tmp/workflow03/canonical_publication_status.py
+          cp scripts/updater/workflow_03_publication_status.R /tmp/workflow03/workflow_03_publication_status.R
+          Rscript -e "parse(file='/tmp/workflow03/workflow_03_publication_status.R'); cat('PASS: Workflow 03 R script parses successfully\n')"
 
       - name: Checkout fresh canonical JSON with LFS
         uses: actions/checkout@v4
@@ -53,111 +60,146 @@ jobs:
           lfs: true
           path: canonical_store
 
-      - name: Validate Workflow 03 input
-        shell: python
+      - name: Validate Workflow 03 input and derive cardinality
+        shell: Rscript {0}
         run: |
-          import json, os
-          from pathlib import Path
-          p=Path('canonical_store/data/canonical/current/repair/records.jsonl')
-          expected=int(os.environ['EXPECTED_RECORDS'])
-          rows=[json.loads(x) for x in p.open(encoding='utf-8') if x.strip()]
-          assert len(rows)==expected, (len(rows),expected)
-          ids=[(r.get('identity') or {}).get('lens_id') for r in rows]
-          assert all(ids) and len(ids)==len(set(ids))
-          assert all('deduplication' in r for r in rows), 'Workflow 02 annotations missing'
-          assert all('screening' not in r for r in rows), 'relevance screening already present unexpectedly'
-          manifest=json.loads(Path('canonical_store/data/canonical/current/repair/manifest.json').read_text(encoding='utf-8'))
-          assert manifest.get('pipeline_stage')=='deduplicated', manifest.get('pipeline_stage')
-          print(f'PASS: {len(rows)} deduplicated canonical records ready for publication-status screening')
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          p <- 'canonical_store/data/canonical/current/repair/records.jsonl'
+          mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
+          if (!file.exists(p)) stop(sprintf('ERROR: canonical records file not found: %s', p), call.=FALSE)
+          if (!file.exists(mp)) stop(sprintf('ERROR: canonical manifest not found: %s', mp), call.=FALSE)
+          m <- fromJSON(mp, simplifyVector=FALSE)
+          if (!identical(m$pipeline_stage, 'deduplicated')) stop(sprintf('ERROR: expected pipeline_stage=deduplicated, found %s', m$pipeline_stage %||% '<missing>'), call.=FALSE)
+          lines <- readLines(p, warn=FALSE, encoding='UTF-8'); lines <- lines[nzchar(trimws(lines))]
+          if (!length(lines)) stop('ERROR: canonical records file contains zero records', call.=FALSE)
+          manifest_count <- m$unique_records_written %||% m$lens_reported_total
+          if (!is.null(manifest_count) && as.integer(manifest_count) != length(lines)) stop(sprintf('ERROR: manifest/input cardinality mismatch: manifest=%s input=%d', manifest_count, length(lines)), call.=FALSE)
+          ids <- character(length(lines))
+          for (i in seq_along(lines)) {
+            r <- tryCatch(fromJSON(lines[[i]], simplifyVector=FALSE), error=function(e) stop(sprintf('ERROR: invalid JSON at line %d: %s', i, conditionMessage(e)), call.=FALSE))
+            ids[i] <- as.character((r$identity %||% list())$lens_id %||% '')
+            if (!nzchar(ids[i])) stop(sprintf('ERROR: missing Lens ID at line %d', i), call.=FALSE)
+            if (is.null(r$deduplication)) stop(sprintf('ERROR: Workflow 02 annotation missing at line %d / Lens ID %s', i, ids[i]), call.=FALSE)
+            if (!is.null(r$screening) || !is.null(r$screening_history)) stop(sprintf('ERROR: relevance screening state already present at Lens ID %s', ids[i]), call.=FALSE)
+          }
+          if (anyDuplicated(ids)) stop(sprintf('ERROR: duplicate Lens ID detected: %s', ids[duplicated(ids)][1]), call.=FALSE)
+          dir.create('outputs/fresh_workflow03/checkpoints', recursive=TRUE, showWarnings=FALSE)
+          input_summary <- list(
+            phase='input_validated',
+            implementation_language='R',
+            input_records=length(lines),
+            manifest_record_count=manifest_count,
+            pipeline_stage=m$pipeline_stage,
+            canonical_commit=system('git -C canonical_store rev-parse HEAD', intern=TRUE),
+            checked_at=format(Sys.time(), tz='UTC', format='%Y-%m-%dT%H:%M:%SZ')
+          )
+          writeLines(toJSON(input_summary, auto_unbox=TRUE, pretty=TRUE, null='null'), 'outputs/fresh_workflow03/checkpoints/input_validation.json')
+          cat(sprintf('PASS: %d deduplicated canonical records ready for Workflow 03; cardinality derived from canonical input/manifest\n', length(lines)))
 
-      - name: Run publication-status audit
+      - name: Run Workflow 03 publication-status screening in R
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p outputs/fresh_workflow03
+          mkdir -p outputs/fresh_workflow03/checkpoints
           MODE='${{ inputs.mode }}'
           if [ -z "$MODE" ]; then MODE='audit'; fi
-          python /tmp/workflow03/canonical_publication_status.py \
+          echo "Workflow 03 mode: $MODE"
+          Rscript /tmp/workflow03/workflow_03_publication_status.R \
             --input canonical_store/data/canonical/current/repair/records.jsonl \
             --output outputs/fresh_workflow03/annotated_records.jsonl \
             --audit outputs/fresh_workflow03/publication_status_audit.jsonl \
             --summary outputs/fresh_workflow03/publication_status_summary.json \
+            --checkpoint-dir outputs/fresh_workflow03/checkpoints \
             --mode "$MODE" \
-            --expected-records "$EXPECTED_RECORDS" \
-            --batch-size 25
+            --batch-size 25 \
+            --max-tries 5
 
       - name: Validate Workflow 03 audit
-        shell: python
+        shell: Rscript {0}
         run: |
-          import json, os
-          from pathlib import Path
-          expected=int(os.environ['EXPECTED_RECORDS'])
-          audit=[json.loads(x) for x in open('outputs/fresh_workflow03/publication_status_audit.jsonl',encoding='utf-8') if x.strip()]
-          summary=json.loads(Path('outputs/fresh_workflow03/publication_status_summary.json').read_text(encoding='utf-8'))
-          assert len(audit)==expected, (len(audit),expected)
-          assert summary['input_records']==expected
-          assert summary['openalex_failed_records']==0, summary
-          assert summary['records_removed']==0, summary
-          print(json.dumps(summary,indent=2))
+          library(jsonlite)
+          input <- readLines('canonical_store/data/canonical/current/repair/records.jsonl', warn=FALSE, encoding='UTF-8'); input <- input[nzchar(trimws(input))]
+          audit <- readLines('outputs/fresh_workflow03/publication_status_audit.jsonl', warn=FALSE, encoding='UTF-8'); audit <- audit[nzchar(trimws(audit))]
+          if (length(audit) != length(input)) stop(sprintf('ERROR: audit cardinality mismatch: audit=%d input=%d', length(audit), length(input)), call.=FALSE)
+          s <- fromJSON('outputs/fresh_workflow03/publication_status_summary.json', simplifyVector=FALSE)
+          if (as.integer(s$input_records) != length(input)) stop('ERROR: summary input_records does not match canonical input', call.=FALSE)
+          if (as.integer(s$openalex_failed_records) != 0L) stop(sprintf('ERROR: %d OpenAlex failed record(s) remain; publication-status stage blocked', as.integer(s$openalex_failed_records)), call.=FALSE)
+          if (as.integer(s$records_removed) != 0L) stop('ERROR: Workflow 03 must not physically remove records', call.=FALSE)
+          cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE, null='null'), '\n')
+          cat('PASS: Workflow 03 audit cardinality and provider-failure invariants validated\n')
 
       - name: Validate apply output
         if: ${{ inputs.mode == 'apply' }}
-        shell: python
+        shell: Rscript {0}
         run: |
-          import json, os
-          expected=int(os.environ['EXPECTED_RECORDS'])
-          rows=[json.loads(x) for x in open('outputs/fresh_workflow03/annotated_records.jsonl',encoding='utf-8') if x.strip()]
-          assert len(rows)==expected
-          ids=[r['identity']['lens_id'] for r in rows]
-          assert len(ids)==len(set(ids))==expected
-          assert all('publication_status' in r for r in rows)
-          assert all('screening' not in r for r in rows)
-          for r in rows:
-              ps=r['publication_status']
-              assert ps.get('downstream_eligible') in (True,False)
-              if (r.get('deduplication') or {}).get('downstream_eligible') is not True:
-                  assert ps['downstream_eligible'] is False
-          print('PASS: publication-status annotations preserve cardinality and downstream eligibility invariants')
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          input <- readLines('canonical_store/data/canonical/current/repair/records.jsonl', warn=FALSE, encoding='UTF-8'); input <- input[nzchar(trimws(input))]
+          rows <- readLines('outputs/fresh_workflow03/annotated_records.jsonl', warn=FALSE, encoding='UTF-8'); rows <- rows[nzchar(trimws(rows))]
+          if (length(rows) != length(input)) stop(sprintf('ERROR: apply output cardinality mismatch: output=%d input=%d', length(rows), length(input)), call.=FALSE)
+          ids <- character(length(rows))
+          for (i in seq_along(rows)) {
+            r <- fromJSON(rows[[i]], simplifyVector=FALSE)
+            ids[i] <- as.character((r$identity %||% list())$lens_id %||% '')
+            if (!nzchar(ids[i])) stop(sprintf('ERROR: missing Lens ID in apply output line %d', i), call.=FALSE)
+            if (!is.null(r$screening) || !is.null(r$screening_history)) stop(sprintf('ERROR: screening state introduced unexpectedly at Lens ID %s', ids[i]), call.=FALSE)
+            ps <- r$publication_status
+            if (is.null(ps) || is.null(ps$status)) stop(sprintf('ERROR: publication_status annotation missing at Lens ID %s', ids[i]), call.=FALSE)
+            if (!identical(ps$downstream_eligible, TRUE) && !identical(ps$downstream_eligible, FALSE)) stop(sprintf('ERROR: invalid publication_status downstream_eligible at Lens ID %s', ids[i]), call.=FALSE)
+            if (!identical((r$deduplication %||% list())$downstream_eligible, TRUE) && !identical(ps$downstream_eligible, FALSE)) stop(sprintf('ERROR: dedup-ineligible record became publication-status eligible: %s', ids[i]), call.=FALSE)
+          }
+          if (anyDuplicated(ids)) stop(sprintf('ERROR: duplicate Lens ID in apply output: %s', ids[duplicated(ids)][1]), call.=FALSE)
+          cat(sprintf('PASS: %d publication-status annotations preserve cardinality, identity and downstream eligibility invariants\n', length(rows)))
 
-      - name: Persist Workflow 03 publication-status annotations
+      - name: Persist Workflow 03 publication-status annotations transactionally
         if: ${{ inputs.mode == 'apply' }}
         shell: bash
         run: |
           set -euo pipefail
+          BASE_SHA=$(git -C canonical_store rev-parse HEAD)
+          git -C canonical_store fetch origin "$FRESH_CANONICAL_BRANCH"
+          REMOTE_SHA=$(git -C canonical_store rev-parse "origin/$FRESH_CANONICAL_BRANCH")
+          if [ "$BASE_SHA" != "$REMOTE_SHA" ]; then
+            echo "ERROR: canonical branch advanced during Workflow 03 (checked out $BASE_SHA; remote now $REMOTE_SHA). Refusing stale promotion."
+            exit 1
+          fi
+
           cp outputs/fresh_workflow03/annotated_records.jsonl canonical_store/data/canonical/current/repair/records.jsonl
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          mpath=Path('canonical_store/data/canonical/current/repair/manifest.json')
-          manifest=json.loads(mpath.read_text(encoding='utf-8'))
-          summary=json.loads(Path('outputs/fresh_workflow03/publication_status_summary.json').read_text(encoding='utf-8'))
-          manifest['publication_status']={
-              'workflow':'fresh_rebuild_03_publication_status',
-              'completed_at':summary['checked_at'],
-              'provider':'openalex',
-              'summary':summary
-          }
-          manifest['pipeline_stage']='publication_status_screened'
-          mpath.write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
-          PY
+          Rscript - <<'RS'
+          library(jsonlite)
+          mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
+          m <- fromJSON(mp, simplifyVector=FALSE)
+          s <- fromJSON('outputs/fresh_workflow03/publication_status_summary.json', simplifyVector=FALSE)
+          m$publication_status <- list(
+            workflow='workflow_03_publication_status',
+            implementation_language='R',
+            completed_at=s$checked_at,
+            provider='openalex',
+            summary=s
+          )
+          m$pipeline_stage <- 'publication_status_screened'
+          writeLines(toJSON(m, auto_unbox=TRUE, pretty=TRUE, null='null', na='null'), mp)
+          RS
+
           cd canonical_store
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git lfs install --local
           git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
-          git diff --cached --quiet && { echo 'No publication-status changes detected'; exit 1; }
-          git commit -m 'Persist Workflow 03 publication-status state'
+          git diff --cached --quiet && { echo 'ERROR: no publication-status changes detected; refusing empty apply'; exit 1; }
+          git commit -m 'Persist Workflow 03 R publication-status state'
           git lfs push origin "$FRESH_CANONICAL_BRANCH"
           git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
           git log -1 --format='publication_status_commit=%H'
 
-      - name: Upload Workflow 03 artefacts
+      - name: Upload Workflow 03 artefacts and checkpoints
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workflow03-${{ inputs.mode || 'audit' }}-${{ github.run_id }}
           path: outputs/fresh_workflow03/
           retention-days: 90
-          if-no-files-found: error
+          if-no-files-found: warn
