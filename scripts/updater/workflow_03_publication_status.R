@@ -59,11 +59,23 @@ normalise_doi <- function(value) {
   trimws(s)
 }
 
-notice_type <- function(title) {
+notice_from_title <- function(title) {
   x <- as.character(title %||% "")
-  if (grepl("^\\s*(retraction(?:\\s+notice)?|retracted)\\s*[:\\-—.]", x, ignore.case = TRUE, perl = TRUE)) return("retraction_notice")
-  if (grepl("^\\s*(withdrawn|withdrawal)\\s*[:\\-—.]", x, ignore.case = TRUE, perl = TRUE)) return("withdrawal_notice")
-  if (grepl("^\\s*(correction|corrigendum|erratum)\\s*[:\\-—.]", x, ignore.case = TRUE, perl = TRUE)) return("correction_notice")
+  if (grepl("^\\s*(retraction(?:\\s+notice)?|retracted)\\s*[:\\-—.]", x, ignore.case = TRUE, perl = TRUE)) {
+    return(list(type = "retraction", downstream_eligible = FALSE))
+  }
+  if (grepl("^\\s*(withdrawn|withdrawal)\\s*[:\\-—.]", x, ignore.case = TRUE, perl = TRUE)) {
+    return(list(type = "withdrawal", downstream_eligible = FALSE))
+  }
+  if (grepl("^\\s*correction\\s*[:\\-—.]", x, ignore.case = TRUE, perl = TRUE)) {
+    return(list(type = "correction", downstream_eligible = TRUE))
+  }
+  if (grepl("^\\s*corrigendum\\s*[:\\-—.]", x, ignore.case = TRUE, perl = TRUE)) {
+    return(list(type = "corrigendum", downstream_eligible = TRUE))
+  }
+  if (grepl("^\\s*erratum\\s*[:\\-—.]", x, ignore.case = TRUE, perl = TRUE)) {
+    return(list(type = "erratum", downstream_eligible = TRUE))
+  }
   NULL
 }
 
@@ -134,9 +146,7 @@ openalex_batch <- function(dois, api_key, max_tries = 5L) {
           found[[doi]] <- list(
             openalex_id = work$id %||% NULL,
             openalex_title = work$display_name %||% NULL,
-            openalex_is_retracted = isTRUE(work$is_retracted),
-            openalex_lookup_status = "matched",
-            openalex_error = NULL
+            openalex_is_retracted = isTRUE(work$is_retracted)
           )
         }
       }
@@ -159,7 +169,6 @@ dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
 dir.create(dirname(audit_path), recursive = TRUE, showWarnings = FALSE)
 dir.create(dirname(summary_path), recursive = TRUE, showWarnings = FALSE)
 dir.create(checkpoint_dir, recursive = TRUE, showWarnings = FALSE)
-
 if (!file.exists(input_path)) stop(sprintf("ERROR: input file not found: %s", input_path), call. = FALSE)
 
 message("Workflow 03: loading canonical JSONL and validating record identities")
@@ -170,7 +179,6 @@ if (!length(lines)) stop("ERROR: canonical input contains zero records", call. =
 n <- length(lines)
 ids <- character(n)
 audits <- vector("list", n)
-names(audits) <- NULL
 doi_to_indices <- new.env(hash = TRUE, parent = emptyenv())
 eligible_indices <- integer()
 
@@ -188,52 +196,35 @@ for (i in seq_len(n)) {
 
   if (!identical(dedup$downstream_eligible, TRUE)) {
     audits[[i]] <- list(
-      record_id = rid,
-      title = title,
-      doi = doi,
-      notice_type = NULL,
-      openalex_id = NULL,
-      openalex_title = NULL,
-      openalex_is_retracted = FALSE,
-      openalex_lookup_status = "not_queried_dedup_ineligible",
-      openalex_error = NULL,
-      remove_publication_status = FALSE,
-      removal_reason = NULL,
-      downstream_eligible = FALSE
+      record_id = rid, title = title, doi = doi,
+      notice_type = NULL, notice_source = NULL,
+      openalex_id = NULL, openalex_title = NULL, openalex_is_retracted = FALSE,
+      openalex_lookup_status = "not_queried_dedup_ineligible", openalex_error = NULL,
+      notice_present = FALSE, downstream_eligible = FALSE
     )
   } else {
     eligible_indices <- c(eligible_indices, i)
-    notice <- notice_type(title)
+    title_notice <- notice_from_title(title)
     audits[[i]] <- list(
-      record_id = rid,
-      title = title,
-      doi = doi,
-      notice_type = notice,
-      openalex_id = NULL,
-      openalex_title = NULL,
-      openalex_is_retracted = FALSE,
-      openalex_lookup_status = if (!is.null(notice)) "not_queried_notice" else if (nzchar(doi)) "pending" else "not_queried_no_doi",
+      record_id = rid, title = title, doi = doi,
+      notice_type = if (is.null(title_notice)) NULL else title_notice$type,
+      notice_source = if (is.null(title_notice)) NULL else "title_rule",
+      openalex_id = NULL, openalex_title = NULL, openalex_is_retracted = FALSE,
+      openalex_lookup_status = if (!is.null(title_notice)) "not_queried_notice" else if (nzchar(doi)) "pending" else "not_queried_no_doi",
       openalex_error = NULL,
-      remove_publication_status = !is.null(notice),
-      removal_reason = notice,
-      downstream_eligible = is.null(notice)
+      notice_present = !is.null(title_notice),
+      downstream_eligible = if (is.null(title_notice)) TRUE else isTRUE(title_notice$downstream_eligible)
     )
-    if (is.null(notice) && nzchar(doi)) {
+    if (is.null(title_notice) && nzchar(doi)) {
       old <- if (exists(doi, doi_to_indices, inherits = FALSE)) get(doi, doi_to_indices) else integer()
       assign(doi, c(old, i), doi_to_indices)
     }
   }
 
-  if (i %% 1000L == 0L || i == n) {
-    message(sprintf("Workflow 03 input scan: %d/%d records", i, n))
-  }
+  if (i %% 1000L == 0L || i == n) message(sprintf("Workflow 03 input scan: %d/%d records", i, n))
 }
 
-if (anyDuplicated(ids)) {
-  dup <- ids[duplicated(ids)][1]
-  stop(sprintf("ERROR: duplicate Lens ID detected before Workflow 03: %s", dup), call. = FALSE)
-}
-
+if (anyDuplicated(ids)) stop(sprintf("ERROR: duplicate Lens ID detected before Workflow 03: %s", ids[duplicated(ids)][1]), call. = FALSE)
 message(sprintf("Workflow 03 input validation PASS: %d records; %d dedup-downstream-eligible", n, length(eligible_indices)))
 
 dois <- sort(ls(doi_to_indices, all.names = TRUE))
@@ -251,7 +242,6 @@ on.exit(try(close(lookup_con), silent = TRUE), add = TRUE)
 on.exit(try(close(failed_con), silent = TRUE), add = TRUE)
 
 failed_batches <- list()
-processed_dois <- 0L
 write_checkpoint_manifest("doi_lookup", 0L, total_batches, 0L, total_dois, 0L)
 
 if (total_dois) {
@@ -261,18 +251,13 @@ if (total_dois) {
     batch <- dois[start:end]
     message(sprintf("OpenAlex publication-status check: batch %d/%d (%d DOIs; %d/%d DOI positions)", batch_no, total_batches, length(batch), end, total_dois))
 
-    result <- tryCatch(
-      openalex_batch(batch, api_key, max_tries = max_tries),
-      error = function(e) list(error = conditionMessage(e))
-    )
-
+    result <- tryCatch(openalex_batch(batch, api_key, max_tries = max_tries), error = function(e) list(error = conditionMessage(e)))
     if (!is.null(result$error)) {
       fail_row <- list(batch = batch_no, dois = batch, error = result$error, failed_at = now_utc())
       failed_batches[[length(failed_batches) + 1L]] <- fail_row
       write_json_line(fail_row, failed_con)
       for (doi in batch) {
-        idxs <- get(doi, doi_to_indices, inherits = FALSE)
-        for (i in idxs) {
+        for (i in get(doi, doi_to_indices, inherits = FALSE)) {
           audits[[i]]$openalex_lookup_status <- "failed"
           audits[[i]]$openalex_error <- result$error
         }
@@ -282,8 +267,7 @@ if (total_dois) {
       found <- result$found
       for (doi in batch) {
         row <- found[[doi]]
-        idxs <- get(doi, doi_to_indices, inherits = FALSE)
-        for (i in idxs) {
+        for (i in get(doi, doi_to_indices, inherits = FALSE)) {
           if (is.null(row)) {
             audits[[i]]$openalex_lookup_status <- "not_found"
           } else {
@@ -293,8 +277,9 @@ if (total_dois) {
             audits[[i]]$openalex_lookup_status <- "matched"
             audits[[i]]$openalex_error <- NULL
             if (isTRUE(row$openalex_is_retracted)) {
-              audits[[i]]$remove_publication_status <- TRUE
-              audits[[i]]$removal_reason <- "retracted_original"
+              audits[[i]]$notice_type <- "retracted_original"
+              audits[[i]]$notice_source <- "openalex"
+              audits[[i]]$notice_present <- TRUE
               audits[[i]]$downstream_eligible <- FALSE
             }
           }
@@ -304,26 +289,13 @@ if (total_dois) {
           lookup_status = if (is.null(row)) "not_found" else "matched",
           openalex_id = if (is.null(row)) NULL else row$openalex_id,
           openalex_is_retracted = if (is.null(row)) FALSE else isTRUE(row$openalex_is_retracted),
-          batch = batch_no,
-          attempts = result$attempts,
-          checked_at = now_utc()
+          batch = batch_no, attempts = result$attempts, checked_at = now_utc()
         ), lookup_con)
       }
     }
-
-    processed_dois <- end
-    write_checkpoint_manifest(
-      "doi_lookup",
-      batch_no,
-      total_batches,
-      processed_dois,
-      total_dois,
-      length(failed_batches),
-      list(last_completed_batch = batch_no)
-    )
+    write_checkpoint_manifest("doi_lookup", batch_no, total_batches, end, total_dois, length(failed_batches), list(last_completed_batch = batch_no))
   }
 }
-
 close(lookup_con)
 close(failed_con)
 
@@ -336,9 +308,8 @@ if (!file.rename(audit_tmp, audit_path)) stop("ERROR: could not atomically promo
 
 checked_at <- now_utc()
 eligible_rows <- audits[eligible_indices]
-count_true <- function(field, value = TRUE) sum(vapply(eligible_rows, function(x) identical(x[[field]], value), logical(1)))
-count_value <- function(field, value) sum(vapply(eligible_rows, function(x) identical(x[[field]], value), logical(1)))
-
+count_type <- function(type) sum(vapply(eligible_rows, function(x) identical(x$notice_type, type), logical(1)))
+count_status <- function(status) sum(vapply(eligible_rows, function(x) identical(x$openalex_lookup_status, status), logical(1)))
 summary <- list(
   workflow = "workflow_03_publication_status",
   implementation_language = "R",
@@ -347,26 +318,23 @@ summary <- list(
   input_records = n,
   dedup_downstream_eligible_records = length(eligible_indices),
   unique_dois_queried = total_dois,
-  publication_notices = sum(vapply(eligible_rows, function(x) !is.null(x$notice_type), logical(1))),
-  openalex_retracted_originals = count_value("removal_reason", "retracted_original"),
-  publication_status_excluded = count_true("remove_publication_status", TRUE),
-  openalex_not_found = count_value("openalex_lookup_status", "not_found"),
-  openalex_failed_records = count_value("openalex_lookup_status", "failed"),
+  notices_total = sum(vapply(eligible_rows, function(x) isTRUE(x$notice_present), logical(1))),
+  retraction_notices = count_type("retraction"),
+  withdrawal_notices = count_type("withdrawal"),
+  correction_notices = count_type("correction"),
+  corrigendum_notices = count_type("corrigendum"),
+  erratum_notices = count_type("erratum"),
+  openalex_retracted_originals = count_type("retracted_original"),
+  downstream_excluded_by_notice = sum(vapply(eligible_rows, function(x) isTRUE(x$notice_present) && !isTRUE(x$downstream_eligible), logical(1))),
+  retained_notice_records = sum(vapply(eligible_rows, function(x) isTRUE(x$notice_present) && isTRUE(x$downstream_eligible), logical(1))),
+  openalex_not_found = count_status("not_found"),
+  openalex_failed_records = count_status("failed"),
   failed_batches = failed_batches,
   records_removed = 0L,
   checkpoint_dir = checkpoint_dir
 )
 writeLines(toJSON(summary, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"), summary_path)
-
-write_checkpoint_manifest(
-  "audit_complete",
-  total_batches,
-  total_batches,
-  total_dois,
-  total_dois,
-  length(failed_batches),
-  list(summary_path = summary_path, audit_path = audit_path)
-)
+write_checkpoint_manifest("audit_complete", total_batches, total_batches, total_dois, total_dois, length(failed_batches), list(summary_path = summary_path, audit_path = audit_path))
 
 if (length(failed_batches)) {
   message(toJSON(summary, auto_unbox = TRUE, pretty = TRUE, null = "null"))
@@ -374,48 +342,29 @@ if (length(failed_batches)) {
 }
 
 if (mode == "apply") {
-  message("Workflow 03: all provider checks cleared; building annotated canonical output")
+  message("Workflow 03: provider checks cleared; building canonical notices annotations")
   out_tmp <- paste0(output_path, ".tmp")
   out_con <- file(out_tmp, "wt", encoding = "UTF-8")
   for (i in seq_len(n)) {
     rec <- fromJSON(lines[[i]], simplifyVector = FALSE)
     row <- audits[[i]]
-    if (identical((rec$deduplication %||% list())$downstream_eligible, TRUE)) {
-      rec$publication_status <- list(
-        workflow = "03_publication_status",
-        implementation_language = "R",
-        status = if (isTRUE(row$remove_publication_status)) "excluded" else "cleared",
-        reason = row$removal_reason,
-        notice_type = row$notice_type,
-        doi_for_lookup = row$doi,
-        openalex_id = row$openalex_id,
-        openalex_is_retracted = isTRUE(row$openalex_is_retracted),
-        openalex_lookup_status = row$openalex_lookup_status,
+    rec$publication_status <- NULL
+    rec$notices <- NULL
+    if (identical((rec$deduplication %||% list())$downstream_eligible, TRUE) && isTRUE(row$notice_present)) {
+      rec$notices <- list(
+        type = row$notice_type,
+        status = if (isTRUE(row$downstream_eligible)) "retained" else "excluded_from_downstream",
+        source = row$notice_source,
         downstream_eligible = isTRUE(row$downstream_eligible),
-        checked_at = checked_at
-      )
-    } else {
-      rec$publication_status <- list(
-        workflow = "03_publication_status",
-        implementation_language = "R",
-        status = "not_applicable_dedup_ineligible",
-        reason = NULL,
-        downstream_eligible = FALSE,
+        doi_for_lookup = if (identical(row$notice_source, "openalex")) row$doi else NULL,
+        openalex_id = if (identical(row$notice_source, "openalex")) row$openalex_id else NULL,
         checked_at = checked_at
       )
     }
     write_json_line(rec, out_con)
     if (i %% 1000L == 0L || i == n) {
       message(sprintf("Workflow 03 apply output: %d/%d records", i, n))
-      write_checkpoint_manifest(
-        "apply_output",
-        total_batches,
-        total_batches,
-        total_dois,
-        total_dois,
-        0L,
-        list(processed_records = i, total_records = n)
-      )
+      write_checkpoint_manifest("apply_output", total_batches, total_batches, total_dois, total_dois, 0L, list(processed_records = i, total_records = n))
     }
   }
   close(out_con)
@@ -426,4 +375,4 @@ if (mode == "apply") {
 }
 
 message(toJSON(summary, auto_unbox = TRUE, pretty = TRUE, null = "null"))
-message("PASS: Workflow 03 R publication-status stage completed; no records physically removed; provider failures = 0.")
+message("PASS: Workflow 03 R notice stage completed; retractions/withdrawals block downstream work, corrections/corrigenda/errata remain eligible; provider failures = 0.")
