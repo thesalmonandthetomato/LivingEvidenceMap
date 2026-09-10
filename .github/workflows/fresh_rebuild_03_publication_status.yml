@@ -86,11 +86,8 @@ jobs:
           if (anyDuplicated(ids)) stop(sprintf('ERROR: duplicate Lens ID detected: %s', ids[duplicated(ids)][1]), call.=FALSE)
           dir.create('outputs/fresh_workflow03/checkpoints', recursive=TRUE, showWarnings=FALSE)
           input_summary <- list(
-            phase='input_validated',
-            implementation_language='R',
-            input_records=length(lines),
-            manifest_record_count=manifest_count,
-            pipeline_stage=m$pipeline_stage,
+            phase='input_validated', implementation_language='R', input_records=length(lines),
+            manifest_record_count=manifest_count, pipeline_stage=m$pipeline_stage,
             canonical_commit=system('git -C canonical_store rev-parse HEAD', intern=TRUE),
             checked_at=format(Sys.time(), tz='UTC', format='%Y-%m-%dT%H:%M:%SZ')
           )
@@ -126,10 +123,14 @@ jobs:
           if (length(audit) != length(input)) stop(sprintf('ERROR: audit cardinality mismatch: audit=%d input=%d', length(audit), length(input)), call.=FALSE)
           s <- fromJSON('outputs/fresh_workflow03/publication_status_summary.json', simplifyVector=FALSE)
           if (as.integer(s$input_records) != length(input)) stop('ERROR: summary input_records does not match canonical input', call.=FALSE)
-          if (as.integer(s$openalex_failed_records) != 0L) stop(sprintf('ERROR: %d OpenAlex failed record(s) remain; publication-status stage blocked', as.integer(s$openalex_failed_records)), call.=FALSE)
+          if (as.integer(s$openalex_failed_records) != 0L) stop(sprintf('ERROR: %d OpenAlex failed record(s) remain; Workflow 03 blocked', as.integer(s$openalex_failed_records)), call.=FALSE)
           if (as.integer(s$records_removed) != 0L) stop('ERROR: Workflow 03 must not physically remove records', call.=FALSE)
+          expected_notices <- sum(as.integer(c(s$retraction_notices, s$withdrawal_notices, s$correction_notices, s$corrigendum_notices, s$erratum_notices, s$openalex_retracted_originals)))
+          if (as.integer(s$notices_total) != expected_notices) stop(sprintf('ERROR: notice-type totals do not sum to notices_total: types=%d notices_total=%d', expected_notices, as.integer(s$notices_total)), call.=FALSE)
+          if (as.integer(s$downstream_excluded_by_notice) != as.integer(s$retraction_notices) + as.integer(s$withdrawal_notices) + as.integer(s$openalex_retracted_originals)) stop('ERROR: downstream notice exclusions are inconsistent with retraction/withdrawal rules', call.=FALSE)
+          if (as.integer(s$retained_notice_records) != as.integer(s$correction_notices) + as.integer(s$corrigendum_notices) + as.integer(s$erratum_notices)) stop('ERROR: retained notice count is inconsistent with correction/corrigendum/erratum rules', call.=FALSE)
           cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE, null='null'), '\n')
-          cat('PASS: Workflow 03 audit cardinality and provider-failure invariants validated\n')
+          cat('PASS: Workflow 03 notice classification, cardinality and provider-failure invariants validated\n')
 
       - name: Validate apply output
         if: ${{ inputs.mode == 'apply' }}
@@ -140,21 +141,35 @@ jobs:
           input <- readLines('canonical_store/data/canonical/current/repair/records.jsonl', warn=FALSE, encoding='UTF-8'); input <- input[nzchar(trimws(input))]
           rows <- readLines('outputs/fresh_workflow03/annotated_records.jsonl', warn=FALSE, encoding='UTF-8'); rows <- rows[nzchar(trimws(rows))]
           if (length(rows) != length(input)) stop(sprintf('ERROR: apply output cardinality mismatch: output=%d input=%d', length(rows), length(input)), call.=FALSE)
-          ids <- character(length(rows))
+          ids <- character(length(rows)); notice_count <- 0L; blocking_count <- 0L; retained_notice_count <- 0L
+          allowed <- c('retraction','withdrawal','correction','corrigendum','erratum','retracted_original')
           for (i in seq_along(rows)) {
             r <- fromJSON(rows[[i]], simplifyVector=FALSE)
             ids[i] <- as.character((r$identity %||% list())$lens_id %||% '')
             if (!nzchar(ids[i])) stop(sprintf('ERROR: missing Lens ID in apply output line %d', i), call.=FALSE)
             if (!is.null(r$screening) || !is.null(r$screening_history)) stop(sprintf('ERROR: screening state introduced unexpectedly at Lens ID %s', ids[i]), call.=FALSE)
-            ps <- r$publication_status
-            if (is.null(ps) || is.null(ps$status)) stop(sprintf('ERROR: publication_status annotation missing at Lens ID %s', ids[i]), call.=FALSE)
-            if (!identical(ps$downstream_eligible, TRUE) && !identical(ps$downstream_eligible, FALSE)) stop(sprintf('ERROR: invalid publication_status downstream_eligible at Lens ID %s', ids[i]), call.=FALSE)
-            if (!identical((r$deduplication %||% list())$downstream_eligible, TRUE) && !identical(ps$downstream_eligible, FALSE)) stop(sprintf('ERROR: dedup-ineligible record became publication-status eligible: %s', ids[i]), call.=FALSE)
+            if (!is.null(r$publication_status)) stop(sprintf('ERROR: obsolete publication_status field present at Lens ID %s; notices must be the single publication-notice location', ids[i]), call.=FALSE)
+            dedup_ok <- identical((r$deduplication %||% list())$downstream_eligible, TRUE)
+            if (!is.null(r$notices)) {
+              notice_count <- notice_count + 1L
+              n <- r$notices
+              if (!n$type %in% allowed) stop(sprintf('ERROR: invalid notices.type=%s at Lens ID %s', n$type %||% '<missing>', ids[i]), call.=FALSE)
+              if (!identical(n$downstream_eligible, TRUE) && !identical(n$downstream_eligible, FALSE)) stop(sprintf('ERROR: invalid notices.downstream_eligible at Lens ID %s', ids[i]), call.=FALSE)
+              if (!dedup_ok) stop(sprintf('ERROR: notice annotation attached to dedup-ineligible record %s', ids[i]), call.=FALSE)
+              blocking_type <- n$type %in% c('retraction','withdrawal','retracted_original')
+              if (blocking_type && !identical(n$downstream_eligible, FALSE)) stop(sprintf('ERROR: blocking notice remained downstream eligible at Lens ID %s', ids[i]), call.=FALSE)
+              if (!blocking_type && !identical(n$downstream_eligible, TRUE)) stop(sprintf('ERROR: correction/corrigendum/erratum was blocked at Lens ID %s', ids[i]), call.=FALSE)
+              if (blocking_type) blocking_count <- blocking_count + 1L else retained_notice_count <- retained_notice_count + 1L
+            }
           }
           if (anyDuplicated(ids)) stop(sprintf('ERROR: duplicate Lens ID in apply output: %s', ids[duplicated(ids)][1]), call.=FALSE)
-          cat(sprintf('PASS: %d publication-status annotations preserve cardinality, identity and downstream eligibility invariants\n', length(rows)))
+          s <- fromJSON('outputs/fresh_workflow03/publication_status_summary.json', simplifyVector=FALSE)
+          if (notice_count != as.integer(s$notices_total)) stop(sprintf('ERROR: apply notices count=%d but summary notices_total=%d', notice_count, as.integer(s$notices_total)), call.=FALSE)
+          if (blocking_count != as.integer(s$downstream_excluded_by_notice)) stop('ERROR: apply blocking-notice count does not match summary', call.=FALSE)
+          if (retained_notice_count != as.integer(s$retained_notice_records)) stop('ERROR: apply retained-notice count does not match summary', call.=FALSE)
+          cat(sprintf('PASS: %d records preserve cardinality; notices=%d, blocking=%d, retained=%d\n', length(rows), notice_count, blocking_count, retained_notice_count))
 
-      - name: Persist Workflow 03 publication-status annotations transactionally
+      - name: Persist Workflow 03 notice annotations transactionally
         if: ${{ inputs.mode == 'apply' }}
         shell: bash
         run: |
@@ -173,7 +188,8 @@ jobs:
           mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
           m <- fromJSON(mp, simplifyVector=FALSE)
           s <- fromJSON('outputs/fresh_workflow03/publication_status_summary.json', simplifyVector=FALSE)
-          m$publication_status <- list(
+          m$publication_status <- NULL
+          m$notices <- list(
             workflow='workflow_03_publication_status',
             implementation_language='R',
             completed_at=s$checked_at,
@@ -189,11 +205,11 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git lfs install --local
           git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
-          git diff --cached --quiet && { echo 'ERROR: no publication-status changes detected; refusing empty apply'; exit 1; }
-          git commit -m 'Persist Workflow 03 R publication-status state'
+          git diff --cached --quiet && { echo 'ERROR: no Workflow 03 notice changes detected; refusing empty apply'; exit 1; }
+          git commit -m 'Persist Workflow 03 R notice state'
           git lfs push origin "$FRESH_CANONICAL_BRANCH"
           git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
-          git log -1 --format='publication_status_commit=%H'
+          git log -1 --format='workflow03_notice_commit=%H'
 
       - name: Upload Workflow 03 artefacts and checkpoints
         if: always()
