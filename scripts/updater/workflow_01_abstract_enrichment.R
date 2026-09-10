@@ -16,7 +16,10 @@ output_path <- arg('--output', 'fresh_rebuild_01/enriched_records.jsonl')
 audit_path <- arg('--audit', 'fresh_rebuild_01/abstract_enrichment_audit.jsonl')
 report_path <- arg('--report', 'fresh_rebuild_01/abstract_enrichment_report.json')
 manifest_path <- arg('--manifest', 'data/canonical/current/repair/manifest.json')
+checkpoint_dir <- arg('--checkpoint-dir', 'fresh_rebuild_01/checkpoints')
+checkpoint_every <- as.integer(arg('--checkpoint-every', '250'))
 delay <- as.numeric(arg('--delay', '0.08'))
+if (is.na(checkpoint_every) || checkpoint_every < 1L) stop('--checkpoint-every must be a positive integer')
 
 base <- 'https://www.ebi.ac.uk/europepmc/webservices/rest/search'
 max_chars <- 12000L
@@ -104,7 +107,11 @@ epmc_lookup <- function(d) {
       retry_errors <- c(retry_errors, sprintf('HTTP %d', status))
       if (!transient_status(status)) stop(sprintf('Europe PMC HTTP %d', status))
     } else retry_errors <- c(retry_errors, conditionMessage(resp))
-    if (attempt < 4L) Sys.sleep(c(1,2,4)[attempt])
+    if (attempt < 4L) {
+      wait <- c(1,2,4)[attempt]
+      message(sprintf('Europe PMC request for DOI %s failed on attempt %d (%s); retrying in %ss', d, attempt, tail(retry_errors, 1), wait))
+      Sys.sleep(wait)
+    }
   }
   stop(sprintf('Europe PMC failed after 4 attempts: %s', paste(retry_errors, collapse=' | ')))
 }
@@ -118,9 +125,43 @@ ids <- vapply(rows, lens_id, character(1))
 if (any(!nzchar(ids)) || anyDuplicated(ids)) stop('Lens-ID invariant failed before abstract enrichment')
 if (any(vapply(rows, function(r) !is.null(r$deduplication) || !is.null(r$screening) || !is.null(r$screening_history), logical(1)))) stop('Unexpected downstream state exists before Workflow 01')
 
+# Checkpoint files are deliberately separate from the canonical output. They are
+# uploaded by the workflow even when this script fails, but are never promoted
+# to the canonical branch unless the whole stage passes its invariants.
+dir.create(checkpoint_dir, recursive = TRUE, showWarnings = FALSE)
+checkpoint_records_path <- file.path(checkpoint_dir, 'enriched_records.partial.jsonl')
+checkpoint_audit_path <- file.path(checkpoint_dir, 'abstract_enrichment_audit.partial.jsonl')
+checkpoint_manifest_path <- file.path(checkpoint_dir, 'checkpoint_manifest.json')
+records_con <- file(checkpoint_records_path, 'wt', encoding='UTF-8')
+audit_con <- file(checkpoint_audit_path, 'wt', encoding='UTF-8')
+on.exit({
+  try(close(records_con), silent = TRUE)
+  try(close(audit_con), silent = TRUE)
+}, add = TRUE)
+
+write_checkpoint_manifest <- function(processed, last_id, status_counts, technical_errors, complete = FALSE) {
+  cp <- list(
+    workflow = 'workflow_01_abstract_enrichment',
+    implementation_language = 'R',
+    checkpoint_created_at = now_utc(),
+    expected_records = expected,
+    processed_records = processed,
+    last_processed_lens_id = last_id,
+    checkpoint_every = checkpoint_every,
+    status_counts = status_counts,
+    technical_errors = technical_errors,
+    complete = complete,
+    partial_records_path = checkpoint_records_path,
+    partial_audit_path = checkpoint_audit_path
+  )
+  writeLines(toJSON(cp, auto_unbox=TRUE, pretty=TRUE, null='null', na='null'), checkpoint_manifest_path)
+  message(sprintf('Workflow 01 checkpoint: %d/%d processed; last Lens ID=%s; technical errors=%d', processed, expected, last_id, technical_errors))
+}
+
 out <- vector('list', length(rows))
 audit <- vector('list', length(rows))
 status_counts <- list()
+technical_errors <- 0L
 for (i in seq_along(rows)) {
   r <- rows[[i]]
   d <- doi(r)
@@ -136,6 +177,8 @@ for (i in seq_along(rows)) {
     if (inherits(result, 'error')) {
       attempts <- list(list(method='europe_pmc_exact_doi', outcome='technical_error', error=conditionMessage(result)))
       status <- 'technical_error'
+      technical_errors <- technical_errors + 1L
+      message(sprintf('Workflow 01 technical error at %d/%d, Lens ID %s, DOI %s: %s', i, expected, lens_id(r), d, conditionMessage(result)))
     } else {
       recovered <- result$abstract
       attempts <- list(result$attempt)
@@ -154,28 +197,47 @@ for (i in seq_along(rows)) {
     cleaning = list(method='html_jats_plaintext_v1_R', source_chars=nchar(source_abstract %||% '', type='chars'), cleaned_chars=nchar(cleaned %||% '', type='chars'), changed=!is.null(source_abstract) && !identical(source_abstract, cleaned))
   )
   if (!identical(payload(r), payload(enriched))) stop(sprintf('Lens raw payload changed at record %s', lens_id(r)))
+  audit_row <- list(lens_id=lens_id(r), doi=d, status=status, abstract_chars=nchar(cleaned %||% '', type='chars'), abstract_source_chars=nchar(source_abstract %||% '', type='chars'), abstract_text_normalised=!is.null(source_abstract) && !identical(source_abstract, cleaned), attempts=attempts)
   out[[i]] <- enriched
-  audit[[i]] <- list(lens_id=lens_id(r), doi=d, status=status, abstract_chars=nchar(cleaned %||% '', type='chars'), abstract_source_chars=nchar(source_abstract %||% '', type='chars'), abstract_text_normalised=!is.null(source_abstract) && !identical(source_abstract, cleaned), attempts=attempts)
+  audit[[i]] <- audit_row
   status_counts[[status]] <- (status_counts[[status]] %||% 0L) + 1L
-  if (i %% 250L == 0L || i == length(rows)) message(sprintf('Workflow 01 progress: %d/%d records processed', i, length(rows)))
+
+  # Append each completed record immediately so work survives a later script error.
+  writeLines(toJSON(enriched, auto_unbox=TRUE, null='null', na='null', digits=NA), records_con)
+  writeLines(toJSON(audit_row, auto_unbox=TRUE, null='null', na='null', digits=NA), audit_con)
+  flush(records_con)
+  flush(audit_con)
+
+  if (i %% checkpoint_every == 0L || i == length(rows)) {
+    write_checkpoint_manifest(i, lens_id(r), status_counts, technical_errors, complete = i == length(rows))
+  }
 }
 
-dir.create(dirname(audit_path), recursive = TRUE, showWarnings = FALSE)
-write_jsonl <- function(xs, path) { con <- file(path, 'wt', encoding='UTF-8'); on.exit(close(con)); for (x in xs) writeLines(toJSON(x, auto_unbox=TRUE, null='null', na='null', digits=NA), con) }
-write_jsonl(audit, audit_path)
-if (any(vapply(audit, function(x) identical(x$status, 'technical_error'), logical(1)))) stop('Workflow 01 blocked: one or more Europe PMC requests ended in technical_error; canonical output was not promoted')
+close(records_con)
+close(audit_con)
 
+# The partial audit is now complete. Copy it to the stage-level audit path so
+# downstream inspection uses the same evidence that was checkpointed.
+dir.create(dirname(audit_path), recursive = TRUE, showWarnings = FALSE)
+if (!file.copy(checkpoint_audit_path, audit_path, overwrite = TRUE)) stop('Failed to promote completed audit from checkpoint file')
+if (technical_errors > 0L) stop(sprintf('Workflow 01 blocked: %d Europe PMC request(s) ended in technical_error; canonical output was not promoted. Recoverable partial outputs are in %s', technical_errors, checkpoint_dir))
+
+# Only after all records are processed without technical errors do we promote
+# the complete checkpointed records to the stage output.
 dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
-write_jsonl(out, output_path)
+if (!file.copy(checkpoint_records_path, output_path, overwrite = TRUE)) stop('Failed to promote completed records from checkpoint file')
 report <- list(
   workflow='workflow_01_abstract_enrichment', implementation_language='R', provider='europe_pmc', created_at=now_utc(),
   total_records=length(rows), expected_records=expected, status_counts=status_counts,
   abstracts_recovered=status_counts[['abstract_recovered']] %||% 0L,
-  abstract_texts_normalised=sum(vapply(audit, function(x) isTRUE(x$abstract_text_normalised), logical(1))), output='deduplication_ready'
+  abstract_texts_normalised=sum(vapply(audit, function(x) isTRUE(x$abstract_text_normalised), logical(1))),
+  checkpoint_every=checkpoint_every,
+  checkpoint_dir=checkpoint_dir,
+  output='deduplication_ready'
 )
 writeLines(toJSON(report, auto_unbox=TRUE, pretty=TRUE, null='null', na='null'), report_path)
 manifest$abstract_enrichment <- list(workflow='workflow_01_abstract_enrichment', implementation_language='R', completed_at=now_utc(), provider='europe_pmc', report=report)
 manifest$pipeline_stage <- 'abstract_enriched_deduplication_ready'
 writeLines(toJSON(manifest, auto_unbox=TRUE, pretty=TRUE, null='null', na='null'), manifest_path)
 message(toJSON(report, auto_unbox=TRUE, pretty=TRUE, null='null', na='null'))
-message('PASS: Workflow 01 complete; cardinality and Lens raw payload preserved.')
+message('PASS: Workflow 01 complete; cardinality and Lens raw payload preserved; checkpointed outputs promoted.')
