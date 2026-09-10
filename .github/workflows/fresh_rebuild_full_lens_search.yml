@@ -1,11 +1,6 @@
 name: Workflow 00 - Full Lens search
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/fresh_rebuild_full_lens_search.yml
   workflow_dispatch:
 
 permissions:
@@ -20,242 +15,59 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout main
+      - name: Checkout fresh canonical branch
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: canonical-fresh-2026-09-08-v1
           fetch-depth: 0
           lfs: true
 
-      - uses: actions/setup-python@v5
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
         with:
-          python-version: '3.12'
+          use-public-rspm: true
 
-      - name: Validate corrected Lens query
-        shell: python
+      - name: Install R dependencies
+        shell: Rscript {0}
         run: |
-          import json
-          from pathlib import Path
-          cfg=json.loads(Path('config/lens_search.json').read_text(encoding='utf-8'))
-          ui=cfg['lens_ui_query']
-          api=cfg['api_query']['query']['bool']['must'][0]['query_string']['query']
-          assert 'salmonid' not in ui.casefold(), ui
-          assert 'salmonid' not in api.casefold(), api
-          assert 'salmon' in api.casefold()
-          assert 'salmo' in api.casefold()
-          assert 'oncorhynchus' in api.casefold()
-          print('Corrected Lens query validated: salmonid* absent.')
+          install.packages(c('jsonlite', 'httr2', 'digest'))
 
-      - name: Run complete Lens search and build fresh canonical JSON
-        shell: python
+      - name: Load current R implementation and search config from main
+        shell: bash
         run: |
-          import hashlib, json, os, re, time, urllib.error, urllib.request
-          from datetime import datetime, timezone
-          from pathlib import Path
+          set -euo pipefail
+          git fetch origin main
+          git show origin/main:scripts/updater/workflow_00_full_lens_search.R > /tmp/workflow_00_full_lens_search.R
+          git show origin/main:config/lens_search.json > config/lens_search.json
 
-          API='https://api.lens.org/scholarly/search'
-          PAGE_SIZE=500
-          SCROLL='1m'
-          token=os.environ.get('LENS_API_TOKEN')
-          if not token:
-              raise RuntimeError('LENS_API_TOKEN is required')
-
-          cfg_path=Path('config/lens_search.json')
-          cfg=json.loads(cfg_path.read_text(encoding='utf-8'))
-          base_query=cfg['api_query']['query']
-          query_string=base_query['bool']['must'][0]['query_string']['query']
-          if 'salmonid' in query_string.casefold():
-              raise RuntimeError('Refusing full rebuild: salmonid still present in API query')
-
-          out=Path('fresh_rebuild')
-          out.mkdir(parents=True,exist_ok=True)
-          canonical_path=Path('data/canonical/current/repair/records.jsonl')
-          canonical_path.parent.mkdir(parents=True,exist_ok=True)
-          manifest_path=Path('data/canonical/current/repair/manifest.json')
-
-          def now():
-              return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00','Z')
-
-          def request(payload):
-              req=urllib.request.Request(
-                  API,
-                  data=json.dumps(payload).encode('utf-8'),
-                  headers={'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'application/json'},
-                  method='POST'
-              )
-              last=None
-              for attempt in range(6):
-                  try:
-                      with urllib.request.urlopen(req,timeout=120) as resp:
-                          return json.load(resp)
-                  except urllib.error.HTTPError as e:
-                      detail=e.read().decode('utf-8',errors='replace')
-                      last=RuntimeError(f'Lens HTTP {e.code}: {detail[:1000]}')
-                      if e.code==429 or 500 <= e.code < 600:
-                          if attempt < 5:
-                              raw=e.headers.get('x-rate-limit-retry-after-seconds') or e.headers.get('Retry-After') or str(min(60,2**attempt))
-                              try: delay=max(2,float(raw))
-                              except Exception: delay=min(60,2**attempt)
-                              time.sleep(delay); continue
-                      raise last
-                  except Exception as e:
-                      last=e
-                      if attempt < 5:
-                          time.sleep(min(60,2**attempt)); continue
-                      raise
-              raise RuntimeError(f'Lens request failed: {last}')
-
-          def text(v):
-              return '' if v is None else str(v)
-
-          def doi_from(raw):
-              for x in raw.get('external_ids') or []:
-                  if isinstance(x,dict) and str(x.get('type','')).casefold()=='doi' and x.get('value'):
-                      return str(x['value']).strip()
-              d=raw.get('doi')
-              return str(d).strip() if d else None
-
-          def source_title(raw):
-              src=raw.get('source')
-              if isinstance(src,dict):
-                  return src.get('title') or src.get('name')
-              return src
-
-          retrieved_at=now()
-          payload={'query':base_query,'size':PAGE_SIZE,'scroll':SCROLL}
-          all_seen=set(); rows=[]; raw_count=0; duplicate_ids=0; no_lens_id=0; batches=0; reported_total=None
-
-          while True:
-              body=request(payload)
-              batches += 1
-              if reported_total is None:
-                  reported_total=int(body.get('total',0) or 0)
-                  print(f'Lens reported total: {reported_total}',flush=True)
-              data=body.get('data') or []
-              raw_count += len(data)
-              for raw in data:
-                  lid=str(raw.get('lens_id') or '').strip()
-                  if not lid:
-                      no_lens_id += 1
-                      continue
-                  if lid in all_seen:
-                      duplicate_ids += 1
-                      continue
-                  all_seen.add(lid)
-                  year=raw.get('year_published') or raw.get('date_published')
-                  rec={
-                      'identity':{'lens_id':lid,'record_id':lid,'record_id_type':'lens_id'},
-                      'source':{'provider':'lens','source_format':'lens_api_json'},
-                      'lens':{'raw_payload':raw},
-                      'canonical':{
-                          'record_id':lid,
-                          'lens_id':lid,
-                          'title':raw.get('title'),
-                          'abstract':raw.get('abstract'),
-                          'authors':raw.get('authors'),
-                          'year':year,
-                          'source':source_title(raw),
-                          'doi':doi_from(raw),
-                          'keywords':raw.get('keywords'),
-                          'publication_type':raw.get('publication_type')
-                      },
-                      'provenance':{
-                          'ingestion_workflow':'fresh_rebuild_00_full_lens_search',
-                          'retrieved_at':retrieved_at,
-                          'query_config':'config/lens_search.json',
-                          'query_sha256':hashlib.sha256(query_string.encode('utf-8')).hexdigest(),
-                          'fresh_rebuild':True
-                      }
-                  }
-                  rows.append(rec)
-              print(f'Fetched raw={raw_count}; unique Lens IDs={len(rows)}',flush=True)
-              if not data or (reported_total is not None and raw_count >= reported_total):
-                  break
-              scroll_id=body.get('scroll_id')
-              if not scroll_id:
-                  raise RuntimeError(f'Lens reported {reported_total} records but returned no scroll_id after {raw_count}')
-              payload={'scroll_id':scroll_id,'scroll':SCROLL}
-
-          if not rows:
-              raise RuntimeError('Fresh Lens search returned zero records')
-          if len(all_seen)!=len(rows):
-              raise RuntimeError('Internal Lens-ID uniqueness failure')
-          if reported_total is not None and raw_count < reported_total:
-              raise RuntimeError(f'Incomplete Lens harvest: {raw_count} < reported total {reported_total}')
-
-          with canonical_path.open('w',encoding='utf-8') as f:
-              for r in rows:
-                  f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
-
-          manifest={
-              'workflow':'fresh_rebuild_00_full_lens_search',
-              'status':'success',
-              'created_at':retrieved_at,
-              'source':'Lens Scholarly API',
-              'query_config':'config/lens_search.json',
-              'query_string':query_string,
-              'query_sha256':hashlib.sha256(query_string.encode('utf-8')).hexdigest(),
-              'salmonid_present_in_query':False,
-              'lens_reported_total':reported_total,
-              'raw_records_retrieved':raw_count,
-              'unique_records_written':len(rows),
-              'duplicate_lens_ids_suppressed':duplicate_ids,
-              'records_without_lens_id':no_lens_id,
-              'batches':batches,
-              'canonical_path':str(canonical_path),
-              'fresh_state':{
-                  'deduplication_present':False,
-                  'screening_present':False,
-                  'screening_history_present':False
-              }
-          }
-          manifest_path.write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
-          Path('fresh_rebuild/search_manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
-          print(json.dumps(manifest,indent=2,ensure_ascii=False))
-
-      - name: Validate fresh canonical has no inherited pipeline state
-        shell: python
+      - name: Run complete Lens search and rebuild fresh canonical JSON
+        shell: bash
         run: |
-          import json
-          from pathlib import Path
-          p=Path('data/canonical/current/repair/records.jsonl')
-          n=0; ids=set()
-          with p.open(encoding='utf-8') as f:
-              for line in f:
-                  if not line.strip(): continue
-                  r=json.loads(line); n+=1
-                  lid=str((r.get('identity') or {}).get('lens_id') or '')
-                  assert lid and lid not in ids
-                  ids.add(lid)
-                  assert 'deduplication' not in r
-                  assert 'screening' not in r
-                  assert 'screening_history' not in r
-          assert n>0
-          print(f'Fresh canonical validated: {n} records; no inherited deduplication/screening state.')
+          set -euo pipefail
+          Rscript /tmp/workflow_00_full_lens_search.R \
+            --config config/lens_search.json \
+            --output data/canonical/current/repair/records.jsonl \
+            --manifest data/canonical/current/repair/manifest.json \
+            --audit-dir fresh_rebuild
 
-      - name: Commit fresh canonical lineage
+      - name: Persist fresh canonical search output
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git lfs install --local
-          if git ls-remote --exit-code --heads origin "$FRESH_CANONICAL_BRANCH" >/dev/null 2>&1; then
-            echo "Fresh canonical branch already exists: $FRESH_CANONICAL_BRANCH" >&2
-            exit 1
-          fi
-          git checkout -b "$FRESH_CANONICAL_BRANCH"
           git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json config/lens_search.json
-          git commit -m 'Create fresh canonical JSON from corrected Lens search'
+          git commit -m 'Rebuild canonical JSON from corrected Lens search in R'
           git lfs push origin "$FRESH_CANONICAL_BRANCH"
           git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
           git log -1 --format='fresh_canonical_commit=%H'
 
-      - name: Upload fresh-search audit
+      - name: Upload Workflow 00 audit
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fresh-rebuild-full-lens-search-${{ github.run_id }}
+          name: workflow-00-full-lens-search-${{ github.run_id }}
           path: fresh_rebuild/
-          if-no-files-found: warn
           retention-days: 90
+          if-no-files-found: warn
