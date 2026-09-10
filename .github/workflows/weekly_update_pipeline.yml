@@ -110,6 +110,7 @@ jobs:
           n='${{ steps.dates.outputs.next_date }}'
           sed -i "s/2026-08-13/${d}/g; s/2026-08-14/${n}/g" scripts/run_lens_update.R R/run_update_topic_classification.R scripts/merge_master_update.py scripts/annotate_lens_update.R
           sed -i 's/final_screening_decision == "retain"/final_screening_decision %in% c("retain", "uncertain")/' scripts/run_lens_update.R
+          sed -i 's/if (any(adjudication$decision == "uncertain")) stop("Duplicate adjudication returned uncertain decision(s); update halted for review.")/if (any(adjudication$decision == "uncertain")) message("Duplicate adjudication contains uncertain decision(s); records held for combined human review.")/' scripts/run_lens_update.R
 
       - name: Run deduplication, relevance, screening, species and geography
         if: env.no_records != 'true'
@@ -142,6 +143,7 @@ jobs:
           set -euo pipefail
           d="data/updates/${{ steps.dates.outputs.update_date }}_lens"
           review=0
+          if [ -f "$d/duplicate_adjudication.csv" ]; then review=$((review+$(tail -n +2 "$d/duplicate_adjudication.csv" | grep -E ',uncertain,' | wc -l || true))); fi
           if [ -f "$d/screening_uncertain.csv" ]; then review=$((review+$(tail -n +2 "$d/screening_uncertain.csv" | wc -l))); fi
           if [ -f "$d/geography_review_queue.csv" ]; then review=$((review+$(tail -n +2 "$d/geography_review_queue.csv" | wc -l))); fi
           if [ -f "$d/annotation_adjudication.csv" ]; then review=$((review+$(tail -n +2 "$d/annotation_adjudication.csv" | grep -E ',(UNRESOLVED|TRUE),' | wc -l || true))); fi
