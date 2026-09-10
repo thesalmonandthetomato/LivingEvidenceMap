@@ -1,4 +1,4 @@
-name: Fresh rebuild 00 - Full Lens search
+name: Workflow 00 - Full Lens search
 
 on:
   push:
