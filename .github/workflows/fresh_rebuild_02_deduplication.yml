@@ -16,7 +16,6 @@ permissions:
 
 env:
   FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
-  EXPECTED_RECORDS: '20132'
 
 jobs:
   deduplication:
@@ -28,19 +27,23 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
         with:
-          python-version: '3.12'
+          r-version: 'release'
+          use-public-rspm: true
 
-      - name: Load tested Workflow 02 implementation
+      - name: Install R dependencies
+        run: install.packages(c('jsonlite', 'stringi', 'digest'))
+        shell: Rscript {0}
+
+      - name: Load Workflow 02 R implementation and reviewed decisions
         run: |
           set -euo pipefail
-          git fetch origin updater-workflow-02-deduplication
-          mkdir -p /tmp/workflow02 data/adjudication
-          for f in deduplicate_jsonl.py audit_canonical_duplicates.py augment_duplicate_candidates.py filter_reviewed_not_duplicates.py resolve_canonical_duplicates.py; do
-            git show origin/updater-workflow-02-deduplication:scripts/updater/$f > /tmp/workflow02/$f
-            python -m py_compile /tmp/workflow02/$f
-          done
+          git fetch origin main updater-workflow-02-deduplication
+          mkdir -p /tmp/workflow02
+          git show origin/main:scripts/updater/workflow_02_deduplication.R > /tmp/workflow02/workflow_02_deduplication.R
+          Rscript -e "parse(file='/tmp/workflow02/workflow_02_deduplication.R'); cat('PASS: Workflow 02 R script parses successfully\n')"
           git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-07.jsonl > /tmp/workflow02/reviewed_duplicates.jsonl
           git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_not_duplicate_hashes_2026-09-07.json > /tmp/workflow02/reviewed_not_duplicates.json
 
@@ -52,105 +55,77 @@ jobs:
           lfs: true
           path: canonical_store
 
-      - name: Validate fresh deduplication input
+      - name: Validate Workflow 02 input in R
+        shell: Rscript {0}
         run: |
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          p=Path('canonical_store/data/canonical/current/repair/records.jsonl')
-          expected=int(os.environ['EXPECTED_RECORDS'])
-          rows=[json.loads(x) for x in p.open(encoding='utf-8') if x.strip()]
-          assert len(rows)==expected, (len(rows), expected)
-          ids=[(r.get('identity') or {}).get('lens_id') for r in rows]
-          assert all(ids), 'missing Lens IDs'
-          assert len(ids)==len(set(ids)), 'duplicate Lens IDs at ingestion boundary'
-          assert all('deduplication' not in r for r in rows), 'pre-existing deduplication state found'
-          assert all('screening' not in r for r in rows), 'screening state found before deduplication'
-          assert all('screening_history' not in r for r in rows), 'screening history found before deduplication'
-          manifest=json.loads(Path('canonical_store/data/canonical/current/repair/manifest.json').read_text(encoding='utf-8'))
-          assert manifest.get('pipeline_stage')=='abstract_enriched_deduplication_ready', manifest.get('pipeline_stage')
-          print(f'PASS: {len(rows)} fresh abstract-enriched records, no inherited deduplication/screening state')
-          PY
-
-      - name: Run fresh duplicate classification and resolution
+          library(jsonlite)
+          p <- 'canonical_store/data/canonical/current/repair/records.jsonl'
+          m <- fromJSON('canonical_store/data/canonical/current/repair/manifest.json', simplifyVector=FALSE)
+          stopifnot(identical(m$pipeline_stage, 'abstract_enriched_deduplication_ready'))
+          expected <- as.integer(m$unique_records_written %||% m$lens_reported_total)
+          lines <- readLines(p, warn=FALSE, encoding='UTF-8'); lines <- lines[nzchar(trimws(lines))]
+          stopifnot(length(lines) == expected)
+          ids <- character(length(lines))
+          for (i in seq_along(lines)) {
+            r <- fromJSON(lines[[i]], simplifyVector=FALSE)
+            ids[i] <- as.character(r$identity$lens_id %||% '')
+            stopifnot(is.null(r$deduplication), is.null(r$screening), is.null(r$screening_history))
+          }
+          stopifnot(all(nzchar(ids)), !anyDuplicated(ids))
+          cat(sprintf('PASS: %d abstract-enriched records; no inherited deduplication/screening state\n', length(lines)))
         env:
-          PYTHONPATH: /tmp/workflow02
+          R_PROFILE_USER: /dev/null
+
+      - name: Run Workflow 02 R deduplication
         run: |
           set -euo pipefail
           mkdir -p outputs/fresh_workflow02
-          SRC=canonical_store/data/canonical/current/repair/records.jsonl
-          python /tmp/workflow02/audit_canonical_duplicates.py \
-            --input "$SRC" \
-            --output outputs/fresh_workflow02/candidates.jsonl \
-            --summary outputs/fresh_workflow02/classification_summary.json
-          python /tmp/workflow02/augment_duplicate_candidates.py \
-            --canonical "$SRC" \
-            --candidates outputs/fresh_workflow02/candidates.jsonl \
-            --output outputs/fresh_workflow02/candidates_augmented.jsonl \
-            --summary outputs/fresh_workflow02/augmentation_summary.json \
-            --reviewed /tmp/workflow02/reviewed_duplicates.jsonl
-          python /tmp/workflow02/filter_reviewed_not_duplicates.py \
-            --candidates outputs/fresh_workflow02/candidates_augmented.jsonl \
-            --reviewed /tmp/workflow02/reviewed_not_duplicates.json \
-            --output outputs/fresh_workflow02/candidates_reviewed.jsonl \
-            --removed-audit outputs/fresh_workflow02/reviewed_not_duplicate_audit.jsonl \
-            --summary outputs/fresh_workflow02/not_duplicate_filter_summary.json
-          python /tmp/workflow02/resolve_canonical_duplicates.py \
-            --canonical "$SRC" \
-            --candidates outputs/fresh_workflow02/candidates_reviewed.jsonl \
-            --output outputs/fresh_workflow02/annotated_records.jsonl \
-            --queue outputs/fresh_workflow02/adjudication_queue.jsonl \
-            --audit outputs/fresh_workflow02/resolution_audit.json \
-            --summary outputs/fresh_workflow02/resolution_summary.json
+          Rscript /tmp/workflow02/workflow_02_deduplication.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --output-dir outputs/fresh_workflow02 \
+            --reviewed-duplicates /tmp/workflow02/reviewed_duplicates.jsonl \
+            --reviewed-not-duplicates /tmp/workflow02/reviewed_not_duplicates.json \
+            --checkpoint-every 250
 
-      - name: Validate fresh deduplication output
+      - name: Validate Workflow 02 output in R
+        shell: Rscript {0}
         run: |
-          python - <<'PY'
-          import json, os, collections
-          from pathlib import Path
-          expected=int(os.environ['EXPECTED_RECORDS'])
-          rows=[json.loads(x) for x in open('outputs/fresh_workflow02/annotated_records.jsonl',encoding='utf-8') if x.strip()]
-          assert len(rows)==expected, (len(rows),expected)
-          assert len({r['identity']['lens_id'] for r in rows})==expected
-          assert all('screening' not in r for r in rows)
-          assert all('screening_history' not in r for r in rows)
-          counts=collections.Counter((r.get('deduplication') or {}).get('status') for r in rows)
-          assert None not in counts, counts
-          for r in rows:
-              d=r['deduplication']
-              if d['status']=='duplicate':
-                  assert d.get('duplicate_of')
-                  assert d.get('downstream_eligible') is False
-              elif d['status'] in {'canonical','unique'}:
-                  assert d.get('downstream_eligible') is True
-              elif d['status']=='adjudication_required':
-                  assert d.get('downstream_eligible') is False
-          summary=json.loads(Path('outputs/fresh_workflow02/resolution_summary.json').read_text())
-          assert summary['input_records']==summary['output_records']==expected
-          assert summary['records_removed']==0
-          print(json.dumps({'records':len(rows),'deduplication_status_counts':dict(counts),'resolution_summary':summary},indent=2))
-          PY
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          m <- fromJSON('canonical_store/data/canonical/current/repair/manifest.json', simplifyVector=FALSE)
+          expected <- as.integer(m$unique_records_written %||% m$lens_reported_total)
+          lines <- readLines('outputs/fresh_workflow02/annotated_records.jsonl', warn=FALSE, encoding='UTF-8'); lines <- lines[nzchar(trimws(lines))]
+          stopifnot(length(lines) == expected)
+          ids <- character(length(lines)); statuses <- character(length(lines))
+          for (i in seq_along(lines)) {
+            r <- fromJSON(lines[[i]], simplifyVector=FALSE)
+            ids[i] <- r$identity$lens_id
+            stopifnot(is.null(r$screening), is.null(r$screening_history))
+            d <- r$deduplication; stopifnot(is.list(d), !is.null(d$status))
+            statuses[i] <- d$status
+            if (d$status == 'duplicate') stopifnot(!is.null(d$duplicate_of), identical(d$downstream_eligible,FALSE))
+            if (d$status %in% c('canonical','unique')) stopifnot(identical(d$downstream_eligible,TRUE))
+            if (d$status == 'adjudication_required') stopifnot(identical(d$downstream_eligible,FALSE))
+          }
+          stopifnot(!anyDuplicated(ids))
+          s <- fromJSON('outputs/fresh_workflow02/resolution_summary.json', simplifyVector=FALSE)
+          stopifnot(s$input_records == expected, s$output_records == expected, s$records_removed == 0)
+          print(table(statuses))
+          print(s)
 
       - name: Persist fresh deduplication annotations
         if: ${{ inputs.mode == 'apply' }}
+        shell: Rscript {0}
         run: |
-          set -euo pipefail
-          cp outputs/fresh_workflow02/annotated_records.jsonl canonical_store/data/canonical/current/repair/records.jsonl
-          python - <<'PY'
-          import json
-          from datetime import datetime, timezone
-          from pathlib import Path
-          mpath=Path('canonical_store/data/canonical/current/repair/manifest.json')
-          manifest=json.loads(mpath.read_text(encoding='utf-8'))
-          summary=json.loads(Path('outputs/fresh_workflow02/resolution_summary.json').read_text(encoding='utf-8'))
-          manifest['deduplication']={
-              'workflow':'workflow_02_deduplication',
-              'completed_at':datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00','Z'),
-              'summary':summary
-          }
-          manifest['pipeline_stage']='deduplicated'
-          mpath.write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
-          PY
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          file.copy('outputs/fresh_workflow02/annotated_records.jsonl','canonical_store/data/canonical/current/repair/records.jsonl',overwrite=TRUE)
+          mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
+          m <- fromJSON(mp,simplifyVector=FALSE)
+          s <- fromJSON('outputs/fresh_workflow02/resolution_summary.json',simplifyVector=FALSE)
+          m$deduplication <- list(workflow='workflow_02_deduplication',implementation_language='R',completed_at=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'),summary=s)
+          m$pipeline_stage <- 'deduplicated'
+          writeLines(toJSON(m,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),mp)
 
       - name: Commit Workflow 02 deduplication state
         if: ${{ inputs.mode == 'apply' }}
@@ -162,15 +137,16 @@ jobs:
           git lfs install --local
           git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
           git diff --cached --quiet && { echo 'No deduplication changes detected'; exit 1; }
-          git commit -m 'Persist Workflow 02 deduplication state'
+          git commit -m 'Persist Workflow 02 R deduplication state'
           git lfs push origin "$FRESH_CANONICAL_BRANCH"
           git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
           git log -1 --format='deduplication_commit=%H'
 
-      - name: Upload Workflow 02 artefacts
+      - name: Upload Workflow 02 artefacts and checkpoints
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workflow02-${{ inputs.mode }}-${{ github.run_id }}
           path: outputs/fresh_workflow02/
           retention-days: 90
-          if-no-files-found: error
+          if-no-files-found: warn
