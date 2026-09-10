@@ -17,7 +17,7 @@
   "records_without_lens_id": 0,
   "batches": 45,
   "canonical_path": "data/canonical/current/repair/records.jsonl",
-  "pipeline_stage": "deduplicated",
+  "pipeline_stage": "publication_status_screened",
   "fresh_state": {
     "deduplication_present": false,
     "publication_status_present": false,
@@ -77,6 +77,35 @@
         "reject_distinct_pagination": 19
       },
       "implementation_language": "R"
+    }
+  },
+  "notices": {
+    "workflow": "workflow_03_publication_status",
+    "implementation_language": "R",
+    "completed_at": "2026-09-10T14:27:59Z",
+    "provider": "openalex",
+    "summary": {
+      "workflow": "workflow_03_publication_status",
+      "implementation_language": "R",
+      "mode": "apply",
+      "checked_at": "2026-09-10T14:27:59Z",
+      "input_records": 22293,
+      "dedup_downstream_eligible_records": 21036,
+      "unique_dois_queried": 17558,
+      "notices_total": 17,
+      "retraction_notices": 1,
+      "withdrawal_notices": 2,
+      "correction_notices": 10,
+      "corrigendum_notices": 1,
+      "erratum_notices": 2,
+      "openalex_retracted_originals": 1,
+      "downstream_excluded_by_notice": 4,
+      "retained_notice_records": 13,
+      "openalex_not_found": 54,
+      "openalex_failed_records": 0,
+      "failed_batches": [],
+      "records_removed": 0,
+      "checkpoint_dir": "outputs/fresh_workflow03/checkpoints"
     }
   }
 }
