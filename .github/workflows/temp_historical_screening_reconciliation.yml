@@ -1,0 +1,225 @@
+name: TEMP - Historical screening reconciliation audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      includes_ris_url:
+        description: 'Optional URL for exact INCLUDES RIS export. If blank, data/updates/historical_reconciliation/INCLUDES.ris must exist.'
+        required: false
+        type: string
+      excludes_ris_url:
+        description: 'Optional URL for exact EXCLUDES RIS export. If blank, data/updates/historical_reconciliation/EXCLUDES.ris must exist.'
+        required: false
+        type: string
+      includes_sha256:
+        description: 'Expected SHA256 for INCLUDES RIS; blank disables hash assertion.'
+        required: false
+        default: '38c17c1fe6c339b02b5e60dca46455ef5174559f2c1007d82f1c4beaa53f7fb4'
+        type: string
+      excludes_sha256:
+        description: 'Expected SHA256 for EXCLUDES RIS; blank disables hash assertion.'
+        required: false
+        default: '669529fbb20bbf05dca26ba204b5723c234153469179d9fa30e7ef0e293e65a8'
+        type: string
+      checkpoint_every:
+        description: 'Historical records between checkpoint updates.'
+        required: false
+        default: '500'
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+  MASTER_PATH: data/master/current/living_evidence_map_master.csv
+  LOCAL_INCLUDES_PATH: data/updates/historical_reconciliation/INCLUDES.ris
+  LOCAL_EXCLUDES_PATH: data/updates/historical_reconciliation/EXCLUDES.ris
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout workflow and historical master
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(c('jsonlite', 'data.table', 'stringdist'))
+
+      - name: Parse-check reconciliation R script
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e "parse(file='scripts/temporary/historical_screening_reconciliation.R'); cat('PASS: reconciliation R script parses successfully\n')"
+
+      - name: Checkout canonical publication-status-screened store
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FRESH_CANONICAL_BRANCH }}
+          fetch-depth: 0
+          lfs: true
+          path: canonical_store
+
+      - name: Validate canonical stage and capture immutable run inputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
+          rp <- 'canonical_store/data/canonical/current/repair/records.jsonl'
+          if (!file.exists(mp)) stop(sprintf('ERROR: canonical manifest not found: %s', mp), call.=FALSE)
+          if (!file.exists(rp)) stop(sprintf('ERROR: canonical records not found: %s', rp), call.=FALSE)
+          m <- fromJSON(mp, simplifyVector=FALSE)
+          if (!identical(m$pipeline_stage, 'publication_status_screened')) {
+            stop(sprintf('ERROR: expected canonical pipeline_stage=publication_status_screened; found %s', m$pipeline_stage %||% '<missing>'), call.=FALSE)
+          }
+          lines <- readLines(rp, warn=FALSE, encoding='UTF-8'); lines <- lines[nzchar(trimws(lines))]
+          if (!length(lines)) stop('ERROR: canonical records file contains zero records', call.=FALSE)
+          manifest_count <- m$unique_records_written %||% m$lens_reported_total
+          if (!is.null(manifest_count) && as.integer(manifest_count) != length(lines)) {
+            stop(sprintf('ERROR: manifest/input cardinality mismatch: manifest=%s canonical=%d', manifest_count, length(lines)), call.=FALSE)
+          }
+          if (!file.exists(Sys.getenv('MASTER_PATH'))) stop(sprintf('ERROR: production master not found: %s', Sys.getenv('MASTER_PATH')), call.=FALSE)
+          dir.create('outputs/historical_reconciliation/checkpoints', recursive=TRUE, showWarnings=FALSE)
+          inp <- list(
+            audit_only=TRUE,
+            canonical_branch=Sys.getenv('FRESH_CANONICAL_BRANCH'),
+            canonical_commit=system('git -C canonical_store rev-parse HEAD', intern=TRUE),
+            canonical_records=length(lines),
+            canonical_pipeline_stage=m$pipeline_stage,
+            master_path=Sys.getenv('MASTER_PATH'),
+            master_commit=system('git rev-parse HEAD', intern=TRUE),
+            captured_at=format(Sys.time(), tz='UTC', format='%Y-%m-%dT%H:%M:%SZ')
+          )
+          writeLines(toJSON(inp, auto_unbox=TRUE, pretty=TRUE, null='null'), 'outputs/historical_reconciliation/checkpoints/run_inputs_pre_ris.json')
+          cat(sprintf('PASS: canonical stage validated at %s with %d records\n', inp$canonical_commit, length(lines)))
+
+      - name: Acquire and verify RIS screening exports
+        shell: bash
+        env:
+          INCLUDES_URL: ${{ inputs.includes_ris_url }}
+          EXCLUDES_URL: ${{ inputs.excludes_ris_url }}
+          EXPECTED_INCLUDES_SHA: ${{ inputs.includes_sha256 }}
+          EXPECTED_EXCLUDES_SHA: ${{ inputs.excludes_sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/historical_reconciliation outputs/historical_reconciliation/checkpoints
+
+          acquire() {
+            local label="$1" url="$2" repo_path="$3" dest="$4"
+            if [ -n "$url" ]; then
+              echo "Downloading $label RIS from supplied workflow URL"
+              curl --fail --location --retry 3 --retry-delay 3 --connect-timeout 30 --max-time 600 "$url" -o "$dest"
+            elif [ -f "$repo_path" ]; then
+              echo "Using repository copy for $label RIS: $repo_path"
+              cp "$repo_path" "$dest"
+            else
+              echo "ERROR: $label RIS is unavailable. Supply the workflow URL input or place the exact file at $repo_path."
+              exit 1
+            fi
+            test -s "$dest" || { echo "ERROR: acquired $label RIS is empty"; exit 1; }
+          }
+
+          acquire "INCLUDES" "$INCLUDES_URL" "$LOCAL_INCLUDES_PATH" inputs/historical_reconciliation/INCLUDES.ris
+          acquire "EXCLUDES" "$EXCLUDES_URL" "$LOCAL_EXCLUDES_PATH" inputs/historical_reconciliation/EXCLUDES.ris
+
+          INC_SHA=$(sha256sum inputs/historical_reconciliation/INCLUDES.ris | awk '{print $1}')
+          EXC_SHA=$(sha256sum inputs/historical_reconciliation/EXCLUDES.ris | awk '{print $1}')
+          echo "INCLUDES SHA256: $INC_SHA"
+          echo "EXCLUDES SHA256: $EXC_SHA"
+          if [ -n "$EXPECTED_INCLUDES_SHA" ] && [ "$INC_SHA" != "$EXPECTED_INCLUDES_SHA" ]; then
+            echo "ERROR: INCLUDES RIS SHA256 mismatch. Expected $EXPECTED_INCLUDES_SHA, got $INC_SHA"
+            exit 1
+          fi
+          if [ -n "$EXPECTED_EXCLUDES_SHA" ] && [ "$EXC_SHA" != "$EXPECTED_EXCLUDES_SHA" ]; then
+            echo "ERROR: EXCLUDES RIS SHA256 mismatch. Expected $EXPECTED_EXCLUDES_SHA, got $EXC_SHA"
+            exit 1
+          fi
+          python - <<PY
+          import json, os
+          with open('outputs/historical_reconciliation/checkpoints/ris_inputs.json','w') as f:
+              json.dump({
+                  'includes_sha256': '$INC_SHA',
+                  'excludes_sha256': '$EXC_SHA',
+                  'includes_bytes': os.path.getsize('inputs/historical_reconciliation/INCLUDES.ris'),
+                  'excludes_bytes': os.path.getsize('inputs/historical_reconciliation/EXCLUDES.ris')
+              }, f, indent=2)
+          PY
+
+      - name: Reconcile historical decisions to canonical records
+        shell: bash
+        env:
+          CHECKPOINT_EVERY: ${{ inputs.checkpoint_every }}
+        run: |
+          set -euo pipefail
+          echo "Starting audit-only historical reconciliation; canonical JSON will not be written"
+          Rscript scripts/temporary/historical_screening_reconciliation.R \
+            --master "$MASTER_PATH" \
+            --canonical canonical_store/data/canonical/current/repair/records.jsonl \
+            --includes-ris inputs/historical_reconciliation/INCLUDES.ris \
+            --excludes-ris inputs/historical_reconciliation/EXCLUDES.ris \
+            --out-dir outputs/historical_reconciliation \
+            --checkpoint-every "${CHECKPOINT_EVERY:-500}"
+
+      - name: Validate reconciliation outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- 'outputs/historical_reconciliation/match_summary.json'
+          if (!file.exists(p)) stop('ERROR: reconciliation summary was not produced', call.=FALSE)
+          s <- fromJSON(p, simplifyVector=FALSE)
+          sc <- s$source_counts
+          rc <- s$reconciliation
+          total <- as.integer(rc$matched) + as.integer(rc$unmatched) + as.integer(rc$ambiguous) + as.integer(rc$conflict)
+          if (!isTRUE(s$audit_only)) stop('ERROR: reconciliation was not marked audit_only', call.=FALSE)
+          if (total != as.integer(sc$historical_decision_rows)) stop(sprintf('ERROR: status totals=%d but historical decision rows=%d', total, as.integer(sc$historical_decision_rows)), call.=FALSE)
+          if (as.integer(s$invariants$canonical_records_modified) != 0L || as.integer(s$invariants$canonical_records_removed) != 0L) stop('ERROR: audit reported canonical mutation', call.=FALSE)
+          required <- c('matched_records.jsonl','unmatched_historical_records.jsonl','ambiguous_matches.jsonl','conflicts.jsonl','candidate_screening_history.jsonl','canonical_decision_conflicts.jsonl','match_method_counts.csv')
+          missing <- required[!file.exists(file.path('outputs/historical_reconciliation', required))]
+          if (length(missing)) stop(sprintf('ERROR: missing expected reconciliation artefacts: %s', paste(missing, collapse=', ')), call.=FALSE)
+          cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE, null='null'), '\n')
+          cat('PASS: reconciliation output cardinality and audit-only invariants validated\n')
+
+      - name: Confirm canonical branch was not modified or superseded during audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA=$(python -c "import json; print(json.load(open('outputs/historical_reconciliation/checkpoints/run_inputs_pre_ris.json'))['canonical_commit'])")
+          git -C canonical_store fetch origin "$FRESH_CANONICAL_BRANCH"
+          REMOTE_SHA=$(git -C canonical_store rev-parse "origin/$FRESH_CANONICAL_BRANCH")
+          LOCAL_SHA=$(git -C canonical_store rev-parse HEAD)
+          if [ "$LOCAL_SHA" != "$BASE_SHA" ]; then
+            echo "ERROR: local canonical checkout changed during audit: start=$BASE_SHA current=$LOCAL_SHA"
+            exit 1
+          fi
+          if [ "$REMOTE_SHA" != "$BASE_SHA" ]; then
+            echo "ERROR: canonical branch advanced during reconciliation: start=$BASE_SHA remote=$REMOTE_SHA. Audit outputs are stale and must not be applied."
+            exit 1
+          fi
+          if ! git -C canonical_store diff --quiet || ! git -C canonical_store diff --cached --quiet; then
+            echo "ERROR: canonical working tree was modified during audit"
+            git -C canonical_store status --short
+            exit 1
+          fi
+          echo "PASS: canonical remained unchanged at $BASE_SHA"
+
+      - name: Upload reconciliation audit and checkpoints
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-reconciliation-audit-${{ github.run_id }}
+          path: outputs/historical_reconciliation/
+          retention-days: 90
+          if-no-files-found: warn
