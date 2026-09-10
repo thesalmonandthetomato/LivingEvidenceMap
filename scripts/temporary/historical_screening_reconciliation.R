@@ -68,7 +68,7 @@ normalise_doi <- function(x) {
   x <- tolower(trimws(x))
   x <- sub("^https?://(dx\\.)?doi\\.org/", "", x, perl = TRUE)
   x <- sub("^doi:\\s*", "", x, perl = TRUE)
-  x <- sub("[[:space:][:punct:]]+$", "", x, perl = TRUE)
+  x <- sub("[[:space:].,;:]+$", "", x, perl = TRUE)
   x
 }
 
@@ -527,7 +527,7 @@ for (lens in sort(ls(by_canonical))) {
     history <- lapply(rows, function(x) list(
       decision = x$decision,
       decided_at = NULL,
-      decider_type = "human",
+      decider_type = NULL,
       source = x$historical_source,
       match_method = x$method,
       match_confidence = x$confidence,
