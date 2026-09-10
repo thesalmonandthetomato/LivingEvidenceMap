@@ -17,11 +17,37 @@
   "records_without_lens_id": 0,
   "batches": 45,
   "canonical_path": "data/canonical/current/repair/records.jsonl",
-  "pipeline_stage": "lens_search_complete",
+  "pipeline_stage": "abstract_enriched_deduplication_ready",
   "fresh_state": {
     "deduplication_present": false,
     "publication_status_present": false,
     "screening_present": false,
     "screening_history_present": false
+  },
+  "abstract_enrichment": {
+    "workflow": "workflow_01_abstract_enrichment",
+    "implementation_language": "R",
+    "completed_at": "2026-09-10T08:09:20Z",
+    "provider": "europe_pmc",
+    "report": {
+      "workflow": "workflow_01_abstract_enrichment",
+      "implementation_language": "R",
+      "provider": "europe_pmc",
+      "created_at": "2026-09-10T08:09:20Z",
+      "total_records": 22293,
+      "expected_records": 22293,
+      "status_counts": {
+        "existing_abstract": 17465,
+        "abstract_recovered": 2046,
+        "no_abstract_recovered": 1815,
+        "missing_no_doi": 967
+      },
+      "abstracts_recovered": 2046,
+      "abstract_texts_normalised": 5858,
+      "provider_errors_remaining": 0,
+      "checkpoint_every": 250,
+      "checkpoint_dir": "fresh_rebuild_01/checkpoints",
+      "output": "deduplication_ready"
+    }
   }
 }
