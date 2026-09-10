@@ -1,99 +1,27 @@
 {
-  "workflow": "fresh_rebuild_00_full_lens_search",
+  "workflow": "workflow_00_full_lens_search",
+  "implementation_language": "R",
   "status": "success",
-  "created_at": "2026-09-08T07:52:06Z",
+  "created_at": "2026-09-10T06:41:38Z",
   "source": "Lens Scholarly API",
   "query_config": "config/lens_search.json",
-  "query_string": "((title:(salmon OR Salmo OR Oncorhynchus) OR abstract:(salmon OR Salmo OR Oncorhynchus) OR keyword:(salmon OR Salmo OR Oncorhynchus)) AND (title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))",
-  "query_sha256": "deae3632415fab1f4867fb904661c6fc8b05a60c74f641dc7fe71e820388cbcf",
-  "salmonid_present_in_query": false,
-  "lens_reported_total": 20132,
-  "raw_records_retrieved": 20132,
-  "unique_records_written": 20132,
+  "query_string": "((title:(salmon OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR abstract:(salmon OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR keyword:(salmon OR Salmo OR Oncorhynchus OR \"rainbow trout\")) AND (title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))",
+  "query_sha256": "a913311e03f40084025a841fa3fd7feadafaaa05513284bc36324ec07b4fdaeb",
+  "rainbow_trout_present_in_query": true,
+  "regression_sentinel_lens_id": "033-262-857-738-715",
+  "regression_sentinel_present": true,
+  "lens_reported_total": 22293,
+  "raw_records_retrieved": 22293,
+  "unique_records_written": 22293,
   "duplicate_lens_ids_suppressed": 0,
   "records_without_lens_id": 0,
-  "batches": 41,
+  "batches": 45,
   "canonical_path": "data/canonical/current/repair/records.jsonl",
+  "pipeline_stage": "lens_search_complete",
   "fresh_state": {
     "deduplication_present": false,
+    "publication_status_present": false,
     "screening_present": false,
     "screening_history_present": false
-  },
-  "abstract_enrichment": {
-    "workflow": "fresh_rebuild_01b_abstract_enrichment",
-    "completed_at": "2026-09-08T08:41:14Z",
-    "provider": "europe_pmc",
-    "report": {
-      "workflow": "01B_abstract_enrichment",
-      "provider": "europe_pmc",
-      "created_at": "2026-09-08T08:41:06.407110+00:00",
-      "mode": "enrich_and_clean",
-      "total_records": 20132,
-      "expected_records": 20132,
-      "status_counts": {
-        "existing_abstract": 15802,
-        "abstract_recovered": 1831,
-        "no_abstract_recovered": 1654,
-        "missing_no_doi": 845
-      },
-      "doi_missing_abstract_targets": 3485,
-      "abstracts_recovered": 1831,
-      "abstract_texts_normalised": 7069,
-      "canonical_abstracts_changed": 8410,
-      "abstract_cleaning_method": "html_jats_plaintext_v1",
-      "output": "deduplication_ready"
-    }
-  },
-  "pipeline_stage": "publication_status_screened",
-  "deduplication": {
-    "workflow": "workflow_02_deduplication",
-    "completed_at": "2026-09-08T15:37:19Z",
-    "summary": {
-      "input_records": 20132,
-      "output_records": 20132,
-      "candidate_pairs": 1223,
-      "auto_candidate_pairs": 1136,
-      "auto_resolution_rule_counts": {
-        "deterministic_duplicate": 974,
-        "high_confidence_preprint_version": 145,
-        "very_high_confidence_same_work_version": 17
-      },
-      "bibliographically_rejected_pairs": 87,
-      "bibliographic_rejection_reason_counts": {
-        "reject_different_journal_doi_title": 60,
-        "reject_distinct_pagination": 16,
-        "reject_same_issue_distinct_article": 11
-      },
-      "resolved_groups": 912,
-      "canonical_representatives": 912,
-      "duplicates_flagged": 1136,
-      "unique_records": 18084,
-      "adjudication_records": 0,
-      "adjudication_pairs": 0,
-      "records_removed": 0,
-      "records_nested": 0,
-      "canonical_source_modified": false,
-      "output_is_annotated_single_jsonl": true
-    }
-  },
-  "publication_status": {
-    "workflow": "fresh_rebuild_03_publication_status",
-    "completed_at": "2026-09-09T14:59:41Z",
-    "provider": "openalex",
-    "summary": {
-      "workflow": "fresh_rebuild_03_publication_status",
-      "mode": "apply",
-      "checked_at": "2026-09-09T14:59:41Z",
-      "input_records": 20132,
-      "dedup_downstream_eligible_records": 18996,
-      "unique_dois_queried": 15950,
-      "publication_notices": 15,
-      "openalex_retracted_originals": 1,
-      "publication_status_excluded": 16,
-      "openalex_not_found": 46,
-      "openalex_failed_records": 0,
-      "failed_batches": [],
-      "records_removed": 0
-    }
   }
 }
