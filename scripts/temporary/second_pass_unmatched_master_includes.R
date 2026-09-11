@@ -32,9 +32,11 @@ norm_doi <- function(x) {
   x <- tolower(trimws(as.character(or_else(x, ""))))
   x <- sub("^https?://(dx\\.)?doi\\.org/", "", x)
   x <- sub("^doi:[[:space:]]*", "", x)
-  m <- regexpr("10\\.[0-9]{4,9}/[^[:space:]\"<>]+", x, perl = TRUE)
+  # Preserve valid DOI punctuation, including angle brackets and semicolons
+  # found in older SICI-style DOIs such as 10.1577/...<...>...;2.
+  m <- regexpr("10\\.[0-9]{4,9}/[^[:space:]\"']+", x, perl = TRUE)
   if (m[1] > 0) x <- regmatches(x, m)
-  sub("[\\.,;:\\)\\]\\}]+$", "", x)
+  sub("[\\.,]+$", "", x)
 }
 token_jaccard <- function(a, b) {
   A <- unique(strsplit(norm_text(a), " ", fixed = TRUE)[[1]])
