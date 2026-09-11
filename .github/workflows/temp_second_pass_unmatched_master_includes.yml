@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - '.github/workflows/temp_second_pass_unmatched_master_includes.yml'
+      - 'scripts/temporary/second_pass_unmatched_master_includes.R'
 
 permissions:
   contents: read
