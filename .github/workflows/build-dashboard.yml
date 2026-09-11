@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/build-dashboard.yml'
       - '.github/dashboard_rebuild_trigger.txt'
+      - 'docs/index.html'
       - 'scripts/build_dashboard.py'
       - 'scripts/augment_dashboard_update_metrics.py'
       - 'scripts/patch_dashboard_update_status.py'
