@@ -45,7 +45,7 @@ jobs:
           use-public-rspm: true
 
       - name: Install R dependencies
-        run: install.packages(c('jsonlite','data.table','stringdist'))
+        run: install.packages(c('jsonlite','data.table','stringdist','digest'))
         shell: Rscript {0}
 
       - name: Validate canonical stage
