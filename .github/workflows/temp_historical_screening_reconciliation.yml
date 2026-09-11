@@ -52,7 +52,7 @@ jobs:
       - name: Install R dependencies
         shell: Rscript {0}
         run: |
-          install.packages(c('jsonlite', 'data.table', 'stringdist'))
+          install.packages(c('jsonlite', 'data.table', 'stringdist', 'digest'))
 
       - name: Parse-check reconciliation R script
         shell: bash
