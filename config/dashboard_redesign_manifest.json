@@ -1,0 +1,216 @@
+{
+  "schema_version": "1.0",
+  "document_type": "living_evidence_map_dashboard_manifest",
+  "status": "preview_pending_promotion",
+  "last_updated": "2026-09-11",
+  "purpose": "Machine-readable description of dashboard presentation, data dependencies, filter semantics, build/deploy workflow, validation and promotion.",
+  "paths": {
+    "production_html": "docs/index.html",
+    "production_data": "docs/dashboard.json",
+    "preview_html": "docs/dashboard-redesign-temp.html",
+    "preview_data": "docs/dashboard-redesign-temp.json",
+    "canonical_master": "data/master/current/living_evidence_map_master.csv",
+    "preview_master_override": "data/master/current/living_evidence_map_master CORRECTED.csv",
+    "topic_ontology": "data/reference/topic_ontology_v3.csv",
+    "production_build_workflow": ".github/workflows/build-dashboard.yml",
+    "production_deploy_workflow": ".github/workflows/deploy-dashboard-pages.yml",
+    "preview_deploy_workflow": ".github/workflows/temp-dashboard-preview-deploy.yml",
+    "promotion_script": "scripts/promote_dashboard_redesign.py",
+    "validation_script": "scripts/validate_dashboard_redesign.py"
+  },
+  "data_contract": {
+    "dashboard_builder": "scripts/build_dashboard.py",
+    "authoritative_preview_source": "data/master/current/living_evidence_map_master CORRECTED.csv",
+    "authoritative_future_source": "data/master/current/living_evidence_map_master.csv",
+    "required_semantics": {
+      "species": "Use consolidated final species values; multi-valued records are allowed.",
+      "geography": "Use consolidated final primary country / ISO3 values; multi-valued records are allowed.",
+      "topics": "Use authoritative V3 hierarchical topic paths.",
+      "publication_year": "Exact publication year from the record."
+    },
+    "build_steps": [
+      "python scripts/build_dashboard.py",
+      "python scripts/enforce_v3_dashboard_topics.py",
+      "python scripts/augment_dashboard_citations.py",
+      "python scripts/normalise_dashboard_data.py",
+      "python scripts/augment_dashboard_data.py",
+      "python scripts/patch_dashboard_feedback_data.py",
+      "python scripts/augment_dashboard_update_metrics.py",
+      "python scripts/validate_dashboard_data.py"
+    ],
+    "updater_integration": {
+      "target_state": "When updater workflows are finalised, they should promote the validated updated master to data/master/current/living_evidence_map_master.csv. The production dashboard workflow then rebuilds docs/dashboard.json automatically.",
+      "presentation_independence": "Routine evidence updates must not rewrite dashboard presentation HTML.",
+      "no_llm_rerun_for_dashboard": "Dashboard refresh consumes the promoted master and existing topic annotations; it must not rerun topic classification merely to render the dashboard."
+    }
+  },
+  "presentation": {
+    "section_order": [
+      "geographic_distribution",
+      "records_by_publication_year",
+      "topic_assignment_frequency_by_species",
+      "species_topic_heatmap",
+      "topic_hierarchy",
+      "database"
+    ],
+    "palette": [
+      "#2c454a",
+      "#577c84",
+      "#a8bdbe",
+      "#e2b8a2",
+      "#ff9d78",
+      "#e55634"
+    ],
+    "charts": {
+      "geographic_distribution": {
+        "type": "choropleth",
+        "first_visualisation": true,
+        "species_selector": true,
+        "click_action": {
+          "database_filter": [
+            "country"
+          ],
+          "retain_chart_species_if_selected": true,
+          "filter_mode": "replace_existing"
+        }
+      },
+      "records_by_publication_year": {
+        "type": "stacked_or_unstacked_bar",
+        "exclude_current_calendar_year": true,
+        "horizontal_scroll": false,
+        "grouping_options": [
+          "nothing",
+          "species",
+          "high_level_topic"
+        ],
+        "click_actions": {
+          "nothing": [
+            "publication_year"
+          ],
+          "species": [
+            "publication_year",
+            "species"
+          ],
+          "high_level_topic": [
+            "publication_year",
+            "high_level_topic"
+          ]
+        },
+        "filter_mode": "replace_existing"
+      },
+      "topic_assignment_frequency_by_species": {
+        "type": "horizontal_stacked_bar",
+        "counting_unit": "unique_record_within_species_x_high_level_topic",
+        "click_action": {
+          "database_filter": [
+            "species",
+            "high_level_topic"
+          ],
+          "filter_mode": "replace_existing"
+        }
+      },
+      "species_topic_heatmap": {
+        "type": "hierarchical_heatmap",
+        "species_selector": true,
+        "topic_axis_click": "drill_down_one_topic_level",
+        "topic_axis_filter_link": "filter database to clicked topic and selected species if species is not All species",
+        "cell_click": {
+          "database_filter": [
+            "species",
+            "topic_path"
+          ],
+          "filter_mode": "replace_existing"
+        },
+        "reset_button": "return to high-level topics"
+      },
+      "topic_hierarchy": {
+        "type": "radial_partition",
+        "maximum_display_size_px": 520,
+        "colour_rule": "High-level branches span full project palette; descendants inherit and lighten parent/root hue.",
+        "click_action": {
+          "database_filter": [
+            "topic_path"
+          ],
+          "filter_mode": "replace_existing"
+        }
+      }
+    }
+  },
+  "database": {
+    "filters": [
+      {
+        "id": "q",
+        "label": "Search title or abstract",
+        "type": "text"
+      },
+      {
+        "id": "tableSpecies",
+        "label": "Species",
+        "type": "dropdown"
+      },
+      {
+        "id": "tableCountry",
+        "label": "Country",
+        "type": "dropdown"
+      },
+      {
+        "id": "tableYear",
+        "label": "Publication year",
+        "type": "dropdown",
+        "sort": "descending"
+      },
+      {
+        "id": "tableTopic",
+        "label": "Topic",
+        "type": "hierarchical_dropdown"
+      },
+      {
+        "id": "pageSize",
+        "label": "Records",
+        "type": "page_size"
+      }
+    ],
+    "filter_semantics": {
+      "dropdown_changes": "cumulative",
+      "figure_clicks": "replace all existing database filters before applying the figure-specific filter",
+      "clear_filters": "reset species, country, publication year, topic and text query",
+      "topic_matching": "A selected topic path matches the exact path and all descendant paths.",
+      "top_level_topic": "Top-level topic values are valid database filter values and match all descendants."
+    },
+    "columns": [
+      "title_and_summary",
+      "species",
+      "year",
+      "authors",
+      "journal_volume_pages",
+      "country",
+      "topics"
+    ]
+  },
+  "maintenance": {
+    "routine_update": {
+      "precondition": "Validated updater has promoted a new canonical master.",
+      "automatic_sequence": [
+        "Build evidence-map dashboard workflow runs.",
+        "docs/dashboard.json is rebuilt and validated.",
+        "Dynamic last-search / last-evidence-update status is patched into the Pages artifact.",
+        "Deploy dashboard to GitHub Pages workflow publishes docs."
+      ],
+      "presentation_change_required": false
+    },
+    "preview_refresh": {
+      "workflow": ".github/workflows/temp-dashboard-preview-deploy.yml",
+      "note": "Preview workflow temporarily substitutes the CORRECTED master while building preview JSON, then restores production dashboard.json before deployment."
+    },
+    "promotion": {
+      "check_command": "python scripts/promote_dashboard_redesign.py --check",
+      "apply_command": "python scripts/promote_dashboard_redesign.py --apply",
+      "effect": "Copies the approved preview presentation to docs/index.html, removes preview-only banner, switches data fetch from dashboard-redesign-temp.json to dashboard.json, and validates the result.",
+      "safety": "--check is non-destructive; --apply is explicit."
+    },
+    "validation": {
+      "command": "python scripts/validate_dashboard_redesign.py",
+      "intent": "Detect accidental loss of required controls, chart interactions, source paths or filter semantics before deployment."
+    }
+  }
+}
