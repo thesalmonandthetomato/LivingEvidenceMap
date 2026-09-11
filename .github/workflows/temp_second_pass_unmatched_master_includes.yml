@@ -1,0 +1,110 @@
+name: Temporary second-pass unmatched master include audit
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/temp_second_pass_unmatched_master_includes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+      SCREENING_SOURCE_REPO: thesalmonandthetomato/scoping_review
+      SCREENING_SOURCE_COMMIT: 1116ced4acece0575fca763e856cc968b6e5785b
+    steps:
+      - name: Checkout workflow and historical master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          lfs: true
+
+      - name: Checkout immutable historical screening source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SCREENING_SOURCE_REPO }}
+          ref: ${{ env.SCREENING_SOURCE_COMMIT }}
+          path: screening_source
+          lfs: true
+
+      - name: Checkout canonical publication-status-screened store
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FRESH_CANONICAL_BRANCH }}
+          path: canonical_store
+          lfs: true
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        run: install.packages(c('jsonlite','data.table','stringdist'))
+        shell: Rscript {0}
+
+      - name: Validate canonical stage
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          m <- fromJSON('canonical_store/data/canonical/current/repair/manifest.json')
+          stopifnot(identical(m$pipeline_stage, 'publication_status_screened'))
+          rp <- 'canonical_store/data/canonical/current/repair/records.jsonl'
+          stopifnot(file.exists(rp), file.info(rp)$size > 100000000)
+          cat(sprintf('PASS: canonical stage validated; records size %.1f MB\n', file.info(rp)$size/1e6))
+
+      - name: Recreate first-pass reconciliation audit
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/historical_reconciliation
+          Rscript scripts/temporary/historical_screening_reconciliation.R \
+            --master data/master/current/living_evidence_map_master.csv \
+            --canonical canonical_store/data/canonical/current/repair/records.jsonl \
+            --includes-ris screening_source/data_raw/INCLUDES\ fixed\ abstracts.ris \
+            --excludes-ris screening_source/data_raw/EXCLUDES.ris \
+            --outdir outputs/historical_reconciliation \
+            --checkpoint-every 1000
+        shell: bash
+
+      - name: Run second-pass unmatched INCLUDE matching
+        run: |
+          Rscript scripts/temporary/second_pass_unmatched_master_includes.R \
+            --canonical=canonical_store/data/canonical/current/repair/records.jsonl \
+            --unmatched=outputs/historical_reconciliation/unmatched_historical_records.jsonl \
+            --matched=outputs/historical_reconciliation/matched_records.jsonl \
+            --outdir=outputs/second_pass_unmatched_includes
+        shell: bash
+
+      - name: Validate audit-only outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/second_pass_unmatched_includes/summary.json')
+          stopifnot(s$audit_only, !s$canonical_modified, s$targets == 690)
+          stopifnot(s$high_confidence_matches + s$ambiguous_for_review + s$still_unmatched == 690)
+          cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE), '\n')
+          cat('PASS: second-pass output cardinality and audit-only invariants validated\n')
+
+      - name: Confirm canonical working tree unchanged
+        run: |
+          set -euo pipefail
+          if ! git -C canonical_store diff --quiet || ! git -C canonical_store diff --cached --quiet; then
+            echo "ERROR: canonical working tree modified"
+            git -C canonical_store status --short
+            exit 1
+          fi
+          echo "PASS: canonical working tree unchanged"
+        shell: bash
+
+      - name: Upload second-pass audit artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: second-pass-unmatched-master-includes-${{ github.run_id }}
+          path: outputs/second_pass_unmatched_includes/
+          retention-days: 90
+          if-no-files-found: error
