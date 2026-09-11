@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - "docs/dashboard-redesign-temp.html"
+      - "config/dashboard_redesign_manifest.json"
+      - "scripts/validate_dashboard_redesign.py"
+      - "scripts/promote_dashboard_redesign.py"
       - "data/master/current/living_evidence_map_master CORRECTED.csv"
       - ".github/workflows/temp-dashboard-preview-deploy.yml"
       - "scripts/build_dashboard.py"
@@ -78,6 +81,9 @@ jobs:
           Path('/tmp/temp-dashboard.js').write_text('\n'.join(scripts),encoding='utf-8')
           PY
           node --check /tmp/temp-dashboard.js
+
+      - name: Validate dashboard redesign contract
+        run: python scripts/validate_dashboard_redesign.py
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
