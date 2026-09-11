@@ -65,8 +65,8 @@ jobs:
           Rscript scripts/temporary/historical_screening_reconciliation.R \
             --master data/master/current/living_evidence_map_master.csv \
             --canonical canonical_store/data/canonical/current/repair/records.jsonl \
-            --includes-ris screening_source/data_raw/INCLUDES\ fixed\ abstracts.ris \
-            --excludes-ris screening_source/data_raw/EXCLUDES.ris \
+            --includes-ris screening_source/screening/INCLUDES.ris \
+            --excludes-ris screening_source/screening/EXCLUDES.ris \
             --outdir outputs/historical_reconciliation \
             --checkpoint-every 1000
         shell: bash
