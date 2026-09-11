@@ -11,7 +11,7 @@
 #topicRadial{width:100%!important;height:auto!important;min-height:0!important;max-width:520px!important;max-height:none!important;overflow:visible!important;flex:0 1 520px!important;margin:0 auto}
 #topicRadial svg{width:100%!important;height:auto!important;max-width:520px!important;max-height:520px!important}
 .database-species-cell{white-space:normal;min-width:150px}.database-species-cell .pill{margin:2px 2px 2px 0}
-</style></head><body><header><div class="wrap"><div>Living Evidence Map</div><h1>Research evidence on salmon farming, at a glance</h1><p class="project-description">The Living Evidence Map is a scoping review of research articles on aquaculture of all salmon species, including Atlantic and Pacific salmon and rainbow trout, across all production stages. The map was originally populated by manual screening of &gt;19,000 records and is now maintained using validated machine screening and content annotation, supported by LLMs (OpenAI GPT-5-mini). For further information on the wider project, see <a href="https://www.thesalmonandthetomato.org" style="color:#fff">The Salmon and the Tomato</a>. This project was coordinated by Dr Neal Haddaway.</p></div></header><div class="temp-banner"><b>Temporary redesign preview.</b> Built from the current dashboard presentation and the corrected master CSV. The production dashboard is unchanged.</div><main class="wrap"><div id="kpis" class="kpis"></div>
+</style><style id="lem-hide-duplicate-update-kpi">#kpis .kpi:first-child{display:none}.kpis{grid-template-columns:repeat(5,1fr)}@media(max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}}@media(max-width:600px){.kpis{grid-template-columns:1fr 1fr}}</style></head><body><header><div class="wrap"><div>Living Evidence Map</div><h1>Research evidence on salmon farming, at a glance</h1><p class="project-description">The Living Evidence Map is a scoping review of research articles on aquaculture of all salmon species, including Atlantic and Pacific salmon and rainbow trout, across all production stages. The map was originally populated by manual screening of &gt;19,000 records and is now maintained using validated machine screening and content annotation, supported by LLMs (OpenAI GPT-5.6 Luna). For further information on the wider project, see <a href="https://www.thesalmonandthetomato.org" style="color:#fff">The Salmon and the Tomato</a>. This project was coordinated by Dr Neal Haddaway.</p></div></header><div class="temp-banner"><b>Temporary redesign preview.</b> Built from the current dashboard presentation and the corrected master CSV. The production dashboard is unchanged.</div><main class="wrap"><div id="kpis" class="kpis"></div><div id="lem-update-status" class="section" style="padding:12px 16px;margin:0 0 18px"><div style="display:flex;gap:24px;flex-wrap:wrap;align-items:baseline"><span><b>Last search</b> 09/09/26</span><span><b>Last evidence update</b> 09/09/26</span></div></div>
 <section class="section"><h2>Geographic distribution</h2><p class="sub">Click a country to filter the database. The selected species is retained.</p><div class="controls"><label>Species <select id="mapSpecies"><option value="__all__">All species</option></select></label></div><div id="map" class="map"></div></section>
 <section class="section"><h2>Records by publication year</h2><p class="sub">Annual record count. Use the selector to show total records, or split each year by focal farmed species or high-level topic.</p><div class="controls"><label>Block bars by <select id="yearGroup"><option value="none">Nothing</option><option value="species">Species</option><option value="topic">High-level topic</option></select></label></div><div id="yearChart" class="chart-host"></div><div id="yearLegend" class="legend"></div></section>
 <section class="section"><h2>Topic-assignment frequency by species</h2><p class="sub">High-level topic assignments split by focal farmed species. Click a segment to jump to the database filtered only to that species and high-level topic.</p><div id="topicSpeciesChart" class="chart-host"></div><div id="topicSpeciesLegend" class="legend"></div></section>
@@ -178,7 +178,7 @@ function tree(){
   document.getElementById('topicRadialReset')?.addEventListener('click',reset);
 }
 
-</script><script src="./topic-radial.js"></script><script>
+</script><script>
 (function(){
 'use strict';
 var SPECIES_COLOURS={
@@ -265,7 +265,8 @@ function renderHeat(){
    .on('click',function(){window.figureFilter({species:s,topic:n.key});}).on('mousemove',function(e){showTip(e,'<b>'+esc(s==='Unspecified species'?'Unspecified salmon':s)+'</b><br>'+esc(n.key)+'<br>'+fmt(v)+' unique records');}).on('mouseleave',hideTip);});});
  svg.selectAll('.slabel').data(species).join('text').attr('x',left-8).attr('y',function(s,i){return 40+i*ch+23;}).attr('text-anchor','end').attr('class','axis').text(function(s){return s==='Unspecified species'?'Unspecified salmon':s;});
  svg.selectAll('.tlabel').data(nodes).join('text').attr('transform',function(n,i){return 'translate('+(left+i*cw+cw/2)+','+(48+species.length*ch)+') rotate(-55)';}).attr('text-anchor','end').attr('class',function(n){return 'heat-label'+(n.children.size?' has-children':'');})
-   .text(function(n){return n.name+(n.children.size?' ▾':'');}).on('click',function(e,n){if(n.children.size){heatBranch=n.key;renderHeat();}}).on('mousemove',function(e,n){showTip(e,n.children.size?'<b>'+esc(n.name)+'</b><br>Click to show the next hierarchy level':'<b>'+esc(n.name)+'</b><br>No lower level');}).on('mouseleave',hideTip);
+   .text(function(n){return n.name+(n.children.size?' ▾':'');}).on('click',function(e,n){if(n.children.size){heatBranch=n.key;renderHeat();}}).on('mousemove',function(e,n){showTip(e,n.children.size?'<b>'+esc(n.name)+'</b><br>Click topic name to show the next hierarchy level':'<b>'+esc(n.name)+'</b><br>No lower level');}).on('mouseleave',hideTip);
+ svg.selectAll('.tfilter').data(nodes).join('text').attr('x',function(n,i){return left+i*cw+cw/2;}).attr('y',function(){return 68+species.length*ch;}).attr('text-anchor','middle').attr('font-size',10).attr('fill','#577c84').attr('text-decoration','underline').style('cursor','pointer').text('filter database').on('click',function(e,n){e.stopPropagation();var chosen=document.getElementById('heatSpecies').value;var f={topic:n.key};if(chosen!=='__all__')f.species=chosen;window.figureFilter(f);}).on('mousemove',function(e,n){showTip(e,'<b>'+esc(n.name)+'</b><br>Filter the database to this topic'+(document.getElementById('heatSpecies').value==='__all__'?'':' and selected species'));}).on('mouseleave',hideTip);
  document.getElementById('heatContext').textContent=heatBranch?'Showing children of: '+heatBranch:'Showing high-level topics';
 }
 
@@ -299,7 +300,7 @@ function boot(){
  document.getElementById('yearGroup').onchange=renderYear;
  document.getElementById('heatSpecies').onchange=renderHeat;
  document.getElementById('heatReset').onclick=function(){heatBranch=null;renderHeat();};
- renderYear();renderTopicSpecies();renderHeat();renderRadial();installSpeciesColumn();
+ renderYear();renderTopicSpecies();renderHeat();renderRadial();installSpeciesColumn();setTimeout(renderRadial,700);
 }
 setTimeout(boot,250);
 })();
