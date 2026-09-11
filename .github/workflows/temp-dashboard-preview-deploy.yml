@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "docs/dashboard-redesign-temp.html"
+      - "scripts/build_dashboard_redesign_temp.py"
+      - "data/master/current/living_evidence_map_master CORRECTED.csv"
       - ".github/workflows/temp-dashboard-preview-deploy.yml"
   workflow_dispatch:
 
@@ -18,19 +19,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout site files
+      - name: Checkout current main
         uses: actions/checkout@v4
         with:
           ref: main
-          sparse-checkout: |
-            docs
-          sparse-checkout-cone-mode: true
+          fetch-depth: 1
+
+      - name: Build temporary data from corrected master
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "data/master/current/living_evidence_map_master CORRECTED.csv"
+          cp "data/master/current/living_evidence_map_master CORRECTED.csv" "data/master/current/living_evidence_map_master.csv"
+          python scripts/build_dashboard.py
+          python scripts/enforce_v3_dashboard_topics.py
+          python scripts/augment_dashboard_citations.py
+          python scripts/normalise_dashboard_data.py
+          python scripts/augment_dashboard_data.py
+          python scripts/patch_dashboard_feedback_data.py
+          python scripts/augment_dashboard_update_metrics.py
+          python scripts/validate_dashboard_data.py
+          cp docs/dashboard.json docs/dashboard-redesign-temp.json
+          git checkout -- docs/dashboard.json data/master/current/living_evidence_map_master.csv || true
+
+      - name: Build temporary HTML from latest approved dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/patch_dashboard_update_status.py
+          python scripts/build_dashboard_redesign_temp.py
+          git checkout -- docs/index.html
+
+      - name: Validate temporary dashboard JavaScript
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path('docs/dashboard-redesign-temp.html').read_text(encoding='utf-8')
+          blocks=re.findall(r'<script>(.*?)</script>',html,flags=re.S)
+          Path('/tmp/temp-dashboard.js').write_text('\n'.join(blocks),encoding='utf-8')
+          PY
+          node --check /tmp/temp-dashboard.js
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
