@@ -2,6 +2,7 @@
 suppressPackageStartupMessages({
   library(jsonlite)
   library(stringdist)
+  library(digest)
 })
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -115,6 +116,7 @@ idx_lens <- new.env(hash = TRUE, parent = emptyenv())
 idx_doi <- new.env(hash = TRUE, parent = emptyenv())
 idx_title <- new.env(hash = TRUE, parent = emptyenv())
 idx_abs <- new.env(hash = TRUE, parent = emptyenv())
+text_key <- function(x) digest(as.character(x), algo = "sha256", serialize = FALSE)
 by_year <- new.env(hash = TRUE, parent = emptyenv())
 add_idx <- function(env, key, value) {
   if (!nzchar(key)) return()
@@ -125,8 +127,8 @@ for (j in seq_along(canon)) {
   cc <- canon[[j]]
   add_idx(idx_lens, cc$lens_id, j)
   add_idx(idx_doi, cc$doi, j)
-  add_idx(idx_title, cc$title_norm, j)
-  if (nchar(cc$abstract_norm) >= 200) add_idx(idx_abs, cc$abstract_norm, j)
+  if (nzchar(cc$title_norm)) add_idx(idx_title, text_key(cc$title_norm), j)
+  if (nchar(cc$abstract_norm) >= 200) add_idx(idx_abs, text_key(cc$abstract_norm), j)
   add_idx(by_year, cc$year, j)
 }
 
@@ -173,10 +175,14 @@ for (k in seq_along(targets)) {
     candidates <- get(lens, idx_lens); method <- "lens_id"
   } else if (nzchar(doi) && exists(doi, idx_doi, inherits = FALSE)) {
     candidates <- get(doi, idx_doi); method <- "doi"
-  } else if (nzchar(title) && exists(title, idx_title, inherits = FALSE)) {
-    candidates <- get(title, idx_title); method <- "exact_title"
-  } else if (nchar(absn) >= 200 && exists(absn, idx_abs, inherits = FALSE)) {
-    candidates <- get(absn, idx_abs); method <- "exact_abstract"
+  } else if (nzchar(title) && exists(text_key(title), idx_title, inherits = FALSE)) {
+    candidates <- get(text_key(title), idx_title)
+    candidates <- candidates[vapply(canon[candidates], function(x) identical(x$title_norm, title), logical(1))]
+    method <- "exact_title"
+  } else if (nchar(absn) >= 200 && exists(text_key(absn), idx_abs, inherits = FALSE)) {
+    candidates <- get(text_key(absn), idx_abs)
+    candidates <- candidates[vapply(canon[candidates], function(x) identical(x$abstract_norm, absn), logical(1))]
+    method <- "exact_abstract"
   }
 
   if (length(candidates) == 1L) {
