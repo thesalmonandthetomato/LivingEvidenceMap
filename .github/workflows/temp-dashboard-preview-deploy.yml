@@ -4,9 +4,17 @@ on:
   push:
     branches: [main]
     paths:
-      - "scripts/build_dashboard_redesign_temp.py"
+      - "docs/dashboard-redesign-temp.html"
       - "data/master/current/living_evidence_map_master CORRECTED.csv"
       - ".github/workflows/temp-dashboard-preview-deploy.yml"
+      - "scripts/build_dashboard.py"
+      - "scripts/enforce_v3_dashboard_topics.py"
+      - "scripts/augment_dashboard_citations.py"
+      - "scripts/normalise_dashboard_data.py"
+      - "scripts/augment_dashboard_data.py"
+      - "scripts/patch_dashboard_feedback_data.py"
+      - "scripts/augment_dashboard_update_metrics.py"
+      - "scripts/patch_dashboard_update_status.py"
   workflow_dispatch:
 
 permissions:
@@ -19,11 +27,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Checkout current main
         uses: actions/checkout@v4
@@ -31,12 +40,17 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Build temporary data from corrected master
-        shell: bash
+      - name: Preserve production dashboard files
         run: |
-          set -euo pipefail
+          cp docs/dashboard.json /tmp/production-dashboard.json
+
+      - name: Use corrected master for preview data only
+        run: |
           test -f "data/master/current/living_evidence_map_master CORRECTED.csv"
-          cp "data/master/current/living_evidence_map_master CORRECTED.csv" "data/master/current/living_evidence_map_master.csv"
+          cp "data/master/current/living_evidence_map_master CORRECTED.csv" data/master/current/living_evidence_map_master.csv
+
+      - name: Build preview data through current dashboard pipeline
+        run: |
           python scripts/build_dashboard.py
           python scripts/enforce_v3_dashboard_topics.py
           python scripts/augment_dashboard_citations.py
@@ -45,26 +59,23 @@ jobs:
           python scripts/patch_dashboard_feedback_data.py
           python scripts/augment_dashboard_update_metrics.py
           python scripts/validate_dashboard_data.py
-          cp docs/dashboard.json docs/dashboard-redesign-temp.json
-          git checkout -- docs/dashboard.json data/master/current/living_evidence_map_master.csv || true
 
-      - name: Build temporary HTML from latest approved dashboard
-        shell: bash
+      - name: Save corrected preview data and restore production data
         run: |
-          set -euo pipefail
-          python scripts/patch_dashboard_update_status.py
-          python scripts/build_dashboard_redesign_temp.py
-          git checkout -- docs/index.html
+          cp docs/dashboard.json docs/dashboard-redesign-temp.json
+          cp /tmp/production-dashboard.json docs/dashboard.json
+
+      - name: Reproduce current production status text
+        run: python scripts/patch_dashboard_update_status.py
 
       - name: Validate temporary dashboard JavaScript
-        shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
           html=Path('docs/dashboard-redesign-temp.html').read_text(encoding='utf-8')
-          blocks=re.findall(r'<script>(.*?)</script>',html,flags=re.S)
-          Path('/tmp/temp-dashboard.js').write_text('\n'.join(blocks),encoding='utf-8')
+          scripts=re.findall(r'<script>(.*?)</script>',html,re.S)
+          Path('/tmp/temp-dashboard.js').write_text('\n'.join(scripts),encoding='utf-8')
           PY
           node --check /tmp/temp-dashboard.js
 
