@@ -2,6 +2,7 @@ suppressPackageStartupMessages({
   library(jsonlite)
   library(data.table)
   library(stringdist)
+  library(digest)
 })
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -76,6 +77,12 @@ normalise_year <- function(x) {
   x <- as.character(x %||% "")
   m <- regmatches(x, regexpr("(18|19|20|21)[0-9]{2}", x, perl = TRUE))
   ifelse(length(m) && nzchar(m), m, "")
+}
+
+index_key <- function(x) {
+  x <- as.character(x %||% "")
+  if (!length(x) || !nzchar(x[1])) return("")
+  paste0("sha256:", digest(x[1], algo = "sha256", serialize = FALSE))
 }
 
 extract_lens_id <- function(x) {
@@ -243,8 +250,9 @@ write_checkpoint("ris_loaded", length(includes) + length(excludes), length(inclu
 make_index <- function(records, field) {
   env <- new.env(hash = TRUE, parent = emptyenv())
   for (i in seq_along(records)) {
-    key <- as.character(records[[i]][[field]] %||% "")
-    if (!nzchar(key)) next
+    raw_key <- as.character(records[[i]][[field]] %||% "")
+    if (!nzchar(raw_key)) next
+    key <- index_key(raw_key)
     old <- if (exists(key, env, inherits = FALSE)) get(key, env) else integer()
     assign(key, c(old, i), env)
   }
@@ -256,7 +264,7 @@ inc_title_year <- new.env(hash = TRUE, parent = emptyenv())
 for (i in seq_along(includes)) {
   r <- includes[[i]]
   if (!nzchar(r$title_norm) || !nzchar(r$year)) next
-  key <- paste(r$title_norm, r$year, sep = "\u241F")
+  key <- index_key(paste(r$title_norm, r$year, sep = "\u241F"))
   old <- if (exists(key, inc_title_year, inherits = FALSE)) get(key, inc_title_year) else integer()
   assign(key, c(old, i), inc_title_year)
 }
@@ -270,13 +278,21 @@ for (i in seq_along(master_rows)) {
   m <- master_rows[[i]]
   candidates <- integer()
   method <- NULL
-  if (nzchar(m$lens_id) && exists(m$lens_id, inc_lens, inherits = FALSE)) {
-    candidates <- get(m$lens_id, inc_lens); method <- "lens_id"
-  } else if (nzchar(m$doi) && exists(m$doi, inc_doi, inherits = FALSE)) {
-    candidates <- get(m$doi, inc_doi); method <- "doi"
+  if (nzchar(m$lens_id) && exists(index_key(m$lens_id), inc_lens, inherits = FALSE)) {
+    candidates <- get(index_key(m$lens_id), inc_lens)
+    candidates <- candidates[vapply(includes[candidates], function(x) identical(x$lens_id, m$lens_id), logical(1))]
+    if (length(candidates)) method <- "lens_id"
+  } else if (nzchar(m$doi) && exists(index_key(m$doi), inc_doi, inherits = FALSE)) {
+    candidates <- get(index_key(m$doi), inc_doi)
+    candidates <- candidates[vapply(includes[candidates], function(x) identical(x$doi, m$doi), logical(1))]
+    if (length(candidates)) method <- "doi"
   } else if (nzchar(m$title_norm) && nzchar(m$year)) {
-    key <- paste(m$title_norm, m$year, sep = "\u241F")
-    if (exists(key, inc_title_year, inherits = FALSE)) { candidates <- get(key, inc_title_year); method <- "title_year" }
+    key <- index_key(paste(m$title_norm, m$year, sep = "\u241F"))
+    if (exists(key, inc_title_year, inherits = FALSE)) {
+      candidates <- get(key, inc_title_year)
+      candidates <- candidates[vapply(includes[candidates], function(x) identical(x$title_norm, m$title_norm) && identical(x$year, m$year), logical(1))]
+      if (length(candidates)) method <- "title_year"
+    }
   }
   if (length(candidates) == 1L) {
     r <- includes[[candidates]]
@@ -353,7 +369,7 @@ c_title_year_journal <- new.env(hash = TRUE, parent = emptyenv())
 for (j in seq_along(canonical)) {
   r <- canonical[[j]]
   if (!nzchar(r$title_norm) || !nzchar(r$year) || !nzchar(r$journal_norm)) next
-  key <- paste(r$title_norm, r$year, r$journal_norm, sep = "\u241F")
+  key <- index_key(paste(r$title_norm, r$year, r$journal_norm, sep = "\u241F"))
   old <- if (exists(key, c_title_year_journal, inherits = FALSE)) get(key, c_title_year_journal) else integer()
   assign(key, c(old, j), c_title_year_journal)
 }
@@ -390,12 +406,15 @@ for (hi in seq_along(historical)) {
   if (is.null(h$source_row)) h$source_row <- hi
   candidates <- integer(); method <- NULL; metrics <- NULL
 
-  if (nzchar(h$lens_id) && exists(h$lens_id, c_lens, inherits = FALSE)) {
-    candidates <- get(h$lens_id, c_lens); method <- "lens_id"
+  if (nzchar(h$lens_id) && exists(index_key(h$lens_id), c_lens, inherits = FALSE)) {
+    candidates <- get(index_key(h$lens_id), c_lens)
+    candidates <- candidates[vapply(canonical[candidates], function(x) identical(x$lens_id, h$lens_id), logical(1))]
+    if (length(candidates)) method <- "lens_id"
   }
 
-  if (!length(candidates) && nzchar(h$doi) && nzchar(h$title_norm) && exists(h$doi, c_doi, inherits = FALSE)) {
-    doi_candidates <- get(h$doi, c_doi)
+  if (!length(candidates) && nzchar(h$doi) && nzchar(h$title_norm) && exists(index_key(h$doi), c_doi, inherits = FALSE)) {
+    doi_candidates <- get(index_key(h$doi), c_doi)
+    doi_candidates <- doi_candidates[vapply(canonical[doi_candidates], function(x) identical(x$doi, h$doi), logical(1))]
     exact_title <- doi_candidates[vapply(canonical[doi_candidates], function(x) identical(x$title_norm, h$title_norm), logical(1))]
     if (length(exact_title)) { candidates <- exact_title; method <- "doi_title" }
     else {
@@ -409,8 +428,9 @@ for (hi in seq_along(historical)) {
     }
   }
 
-  if (!length(candidates) && nzchar(h$abstract_norm) && exists(h$abstract_norm, c_abs, inherits = FALSE)) {
-    abs_candidates <- get(h$abstract_norm, c_abs)
+  if (!length(candidates) && nzchar(h$abstract_norm) && exists(index_key(h$abstract_norm), c_abs, inherits = FALSE)) {
+    abs_candidates <- get(index_key(h$abstract_norm), c_abs)
+    abs_candidates <- abs_candidates[vapply(canonical[abs_candidates], function(x) identical(x$abstract_norm, h$abstract_norm), logical(1))]
     contradictions <- abs_candidates[vapply(canonical[abs_candidates], function(x) nzchar(h$doi) && nzchar(x$doi) && !identical(h$doi, x$doi), logical(1))]
     clean <- setdiff(abs_candidates, contradictions)
     if (length(contradictions) && !length(clean)) {
@@ -422,9 +442,11 @@ for (hi in seq_along(historical)) {
   }
 
   if (!length(candidates) && nzchar(h$title_norm) && nzchar(h$year) && nzchar(h$journal_norm)) {
-    key <- paste(h$title_norm, h$year, h$journal_norm, sep = "\u241F")
+    key <- index_key(paste(h$title_norm, h$year, h$journal_norm, sep = "\u241F"))
     if (exists(key, c_title_year_journal, inherits = FALSE)) {
       tyj_candidates <- get(key, c_title_year_journal)
+      tyj_candidates <- tyj_candidates[vapply(canonical[tyj_candidates], function(x)
+        identical(x$title_norm, h$title_norm) && identical(x$year, h$year) && identical(x$journal_norm, h$journal_norm), logical(1))]
       contradictions <- tyj_candidates[vapply(canonical[tyj_candidates], function(x) nzchar(h$doi) && nzchar(x$doi) && !identical(h$doi, x$doi), logical(1))]
       clean <- setdiff(tyj_candidates, contradictions)
       if (length(contradictions) && !length(clean)) {
@@ -436,8 +458,9 @@ for (hi in seq_along(historical)) {
     }
   }
 
-  if (!length(candidates) && nzchar(h$title_norm) && nzchar(h$abstract_norm) && exists(h$title_norm, c_title, inherits = FALSE)) {
-    title_candidates <- get(h$title_norm, c_title)
+  if (!length(candidates) && nzchar(h$title_norm) && nzchar(h$abstract_norm) && exists(index_key(h$title_norm), c_title, inherits = FALSE)) {
+    title_candidates <- get(index_key(h$title_norm), c_title)
+    title_candidates <- title_candidates[vapply(canonical[title_candidates], function(x) identical(x$title_norm, h$title_norm), logical(1))]
     contradiction_mask <- vapply(canonical[title_candidates], function(x) nzchar(h$doi) && nzchar(x$doi) && !identical(h$doi, x$doi), logical(1))
     clean <- title_candidates[!contradiction_mask]
     contradicted <- title_candidates[contradiction_mask]
