@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/temp_second_pass_unmatched_master_includes.yml'
       - 'scripts/temporary/second_pass_unmatched_master_includes.R'
+      - 'scripts/temporary/third_pass_unmatched_master_includes.R'
 
 permissions:
   contents: read
@@ -81,15 +82,34 @@ jobs:
             --outdir=outputs/second_pass_unmatched_includes
         shell: bash
 
-      - name: Validate audit-only outputs
+      - name: Validate second-pass audit-only outputs
         shell: Rscript {0}
         run: |
           library(jsonlite)
           s <- fromJSON('outputs/second_pass_unmatched_includes/summary.json')
           stopifnot(s$audit_only, !s$canonical_modified, s$targets == 690)
           stopifnot(s$high_confidence_matches + s$ambiguous_for_review + s$still_unmatched == 690)
+          stopifnot(s$still_unmatched == 609)
           cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE), '\n')
           cat('PASS: second-pass output cardinality and audit-only invariants validated\n')
+
+      - name: Run third-pass abstract-first unmatched INCLUDE matching
+        run: |
+          Rscript scripts/temporary/third_pass_unmatched_master_includes.R \
+            --canonical=canonical_store/data/canonical/current/repair/records.jsonl \
+            --still=outputs/second_pass_unmatched_includes/still_unmatched.jsonl \
+            --outdir=outputs/third_pass_unmatched_includes
+        shell: bash
+
+      - name: Validate third-pass audit-only outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/third_pass_unmatched_includes/summary.json')
+          stopifnot(s$audit_only, !s$canonical_modified, s$targets == 609)
+          stopifnot(s$high_confidence_matches + s$review_candidates + s$still_unmatched == 609)
+          cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE), '\n')
+          cat('PASS: third-pass output cardinality and audit-only invariants validated\n')
 
       - name: Confirm canonical working tree unchanged
         run: |
@@ -107,5 +127,13 @@ jobs:
         with:
           name: second-pass-unmatched-master-includes-${{ github.run_id }}
           path: outputs/second_pass_unmatched_includes/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload third-pass audit artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: third-pass-unmatched-master-includes-${{ github.run_id }}
+          path: outputs/third_pass_unmatched_includes/
           retention-days: 90
           if-no-files-found: error
