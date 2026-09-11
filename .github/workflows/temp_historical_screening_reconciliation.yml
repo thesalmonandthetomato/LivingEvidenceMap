@@ -3,24 +3,6 @@ name: TEMP - Historical screening reconciliation audit
 on:
   workflow_dispatch:
     inputs:
-      includes_ris_url:
-        description: 'Optional URL for exact INCLUDES RIS export. If blank, data/updates/historical_reconciliation/INCLUDES.ris must exist.'
-        required: false
-        type: string
-      excludes_ris_url:
-        description: 'Optional URL for exact EXCLUDES RIS export. If blank, data/updates/historical_reconciliation/EXCLUDES.ris must exist.'
-        required: false
-        type: string
-      includes_sha256:
-        description: 'Expected SHA256 for INCLUDES RIS; blank disables hash assertion.'
-        required: false
-        default: '38c17c1fe6c339b02b5e60dca46455ef5174559f2c1007d82f1c4beaa53f7fb4'
-        type: string
-      excludes_sha256:
-        description: 'Expected SHA256 for EXCLUDES RIS; blank disables hash assertion.'
-        required: false
-        default: '669529fbb20bbf05dca26ba204b5723c234153469179d9fa30e7ef0e293e65a8'
-        type: string
       checkpoint_every:
         description: 'Historical records between checkpoint updates.'
         required: false
@@ -33,8 +15,10 @@ permissions:
 env:
   FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
   MASTER_PATH: data/master/current/living_evidence_map_master.csv
-  LOCAL_INCLUDES_PATH: data/updates/historical_reconciliation/INCLUDES.ris
-  LOCAL_EXCLUDES_PATH: data/updates/historical_reconciliation/EXCLUDES.ris
+  SCREENING_SOURCE_REPO: thesalmonandthetomato/scoping_review
+  SCREENING_SOURCE_COMMIT: 1116ced4acece0575fca763e856cc968b6e5785b
+  SCREENING_INCLUDES_BLOB: 2bf0a316f6de9879cb0cc10f8a97fcb4423789ca
+  SCREENING_EXCLUDES_BLOB: 87725dc8f96b66fbcf399b817ec5a0a4fb57be28
 
 jobs:
   reconcile:
@@ -46,6 +30,18 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+
+      - name: Checkout immutable historical screening source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SCREENING_SOURCE_REPO }}
+          ref: ${{ env.SCREENING_SOURCE_COMMIT }}
+          fetch-depth: 1
+          path: screening_source
+          sparse-checkout: |
+            screening/INCLUDES.ris
+            screening/EXCLUDES.ris
+          sparse-checkout-cone-mode: false
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
@@ -106,51 +102,53 @@ jobs:
           writeLines(toJSON(inp, auto_unbox=TRUE, pretty=TRUE, null='null'), 'outputs/historical_reconciliation/checkpoints/run_inputs_pre_ris.json')
           cat(sprintf('PASS: canonical stage validated at %s with %d records\n', inp$canonical_commit, length(lines)))
 
-      - name: Acquire and verify RIS screening exports
+      - name: Verify immutable RIS screening exports
         shell: bash
-        env:
-          INCLUDES_URL: ${{ inputs.includes_ris_url }}
-          EXCLUDES_URL: ${{ inputs.excludes_ris_url }}
-          EXPECTED_INCLUDES_SHA: ${{ inputs.includes_sha256 }}
-          EXPECTED_EXCLUDES_SHA: ${{ inputs.excludes_sha256 }}
         run: |
           set -euo pipefail
           mkdir -p inputs/historical_reconciliation outputs/historical_reconciliation/checkpoints
 
-          acquire() {
-            local label="$1" url="$2" repo_path="$3" dest="$4"
-            if [ -n "$url" ]; then
-              echo "Downloading $label RIS from supplied workflow URL"
-              curl --fail --location --retry 3 --retry-delay 3 --connect-timeout 30 --max-time 600 "$url" -o "$dest"
-            elif [ -f "$repo_path" ]; then
-              echo "Using repository copy for $label RIS: $repo_path"
-              cp "$repo_path" "$dest"
-            else
-              echo "ERROR: $label RIS is unavailable. Supply the workflow URL input or place the exact file at $repo_path."
-              exit 1
-            fi
-            test -s "$dest" || { echo "ERROR: acquired $label RIS is empty"; exit 1; }
-          }
+          SOURCE_COMMIT=$(git -C screening_source rev-parse HEAD)
+          if [ "$SOURCE_COMMIT" != "$SCREENING_SOURCE_COMMIT" ]; then
+            echo "ERROR: screening source checkout mismatch. Expected $SCREENING_SOURCE_COMMIT, got $SOURCE_COMMIT"
+            exit 1
+          fi
 
-          acquire "INCLUDES" "$INCLUDES_URL" "$LOCAL_INCLUDES_PATH" inputs/historical_reconciliation/INCLUDES.ris
-          acquire "EXCLUDES" "$EXCLUDES_URL" "$LOCAL_EXCLUDES_PATH" inputs/historical_reconciliation/EXCLUDES.ris
+          INC_SOURCE="screening_source/screening/INCLUDES.ris"
+          EXC_SOURCE="screening_source/screening/EXCLUDES.ris"
+          test -s "$INC_SOURCE" || { echo "ERROR: INCLUDES RIS missing or empty at $INC_SOURCE"; exit 1; }
+          test -s "$EXC_SOURCE" || { echo "ERROR: EXCLUDES RIS missing or empty at $EXC_SOURCE"; exit 1; }
+
+          INC_BLOB=$(git -C screening_source hash-object screening/INCLUDES.ris)
+          EXC_BLOB=$(git -C screening_source hash-object screening/EXCLUDES.ris)
+          echo "INCLUDES Git blob: $INC_BLOB"
+          echo "EXCLUDES Git blob: $EXC_BLOB"
+
+          if [ "$INC_BLOB" != "$SCREENING_INCLUDES_BLOB" ]; then
+            echo "ERROR: INCLUDES Git blob mismatch. Expected $SCREENING_INCLUDES_BLOB, got $INC_BLOB"
+            exit 1
+          fi
+          if [ "$EXC_BLOB" != "$SCREENING_EXCLUDES_BLOB" ]; then
+            echo "ERROR: EXCLUDES Git blob mismatch. Expected $SCREENING_EXCLUDES_BLOB, got $EXC_BLOB"
+            exit 1
+          fi
+
+          cp "$INC_SOURCE" inputs/historical_reconciliation/INCLUDES.ris
+          cp "$EXC_SOURCE" inputs/historical_reconciliation/EXCLUDES.ris
 
           INC_SHA=$(sha256sum inputs/historical_reconciliation/INCLUDES.ris | awk '{print $1}')
           EXC_SHA=$(sha256sum inputs/historical_reconciliation/EXCLUDES.ris | awk '{print $1}')
           echo "INCLUDES SHA256: $INC_SHA"
           echo "EXCLUDES SHA256: $EXC_SHA"
-          if [ -n "$EXPECTED_INCLUDES_SHA" ] && [ "$INC_SHA" != "$EXPECTED_INCLUDES_SHA" ]; then
-            echo "ERROR: INCLUDES RIS SHA256 mismatch. Expected $EXPECTED_INCLUDES_SHA, got $INC_SHA"
-            exit 1
-          fi
-          if [ -n "$EXPECTED_EXCLUDES_SHA" ] && [ "$EXC_SHA" != "$EXPECTED_EXCLUDES_SHA" ]; then
-            echo "ERROR: EXCLUDES RIS SHA256 mismatch. Expected $EXPECTED_EXCLUDES_SHA, got $EXC_SHA"
-            exit 1
-          fi
+
           python - <<PY
           import json, os
           with open('outputs/historical_reconciliation/checkpoints/ris_inputs.json','w') as f:
               json.dump({
+                  'source_repository': '$SCREENING_SOURCE_REPO',
+                  'source_commit': '$SOURCE_COMMIT',
+                  'includes_git_blob': '$INC_BLOB',
+                  'excludes_git_blob': '$EXC_BLOB',
                   'includes_sha256': '$INC_SHA',
                   'excludes_sha256': '$EXC_SHA',
                   'includes_bytes': os.path.getsize('inputs/historical_reconciliation/INCLUDES.ris'),
