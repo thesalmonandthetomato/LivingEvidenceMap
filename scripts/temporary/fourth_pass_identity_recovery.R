@@ -97,7 +97,19 @@ repeat {
     doi=as.character(or_else(can$doi,""))
   )
   vals <- collect_scalars(rec)
+  is_identity_path <- function(p) {
+    # Exclude bibliographic neighbourhoods where an identifier belongs to a cited/reference work,
+    # not to the canonical record or one of its duplicate/version manifestations.
+    bad <- grepl("raw_payload\\.(references|scholarly_citations|citations)|references\\[|scholarly_citations\\[|cited_by|bibliography", p, ignore.case=TRUE, perl=TRUE)
+    if (bad) return(FALSE)
+
+    # Retain identifiers only from canonical identity/provenance/dedup/version/source-record areas
+    # or direct canonical/identity fields.
+    grepl("^(identity|canonical|provenance|dedup|duplicate|duplicates|publication_status|versions|version|source_records|records|record_id)|(^|\\.)(lens_id|doi|record_id|source_id|alternate_ids|identifiers)(\\.|\\[|$)",
+          p, ignore.case=TRUE, perl=TRUE)
+  }
   for (v in vals) {
+    if (!is_identity_path(v$path)) next
     vv <- trimws(v$value)
     if (grepl(lens_re,vv,perl=TRUE)) add_idx(lens_index,toupper(vv),i,v$path)
     d <- norm_doi(vv)
