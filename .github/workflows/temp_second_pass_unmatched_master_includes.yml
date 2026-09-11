@@ -7,6 +7,7 @@ on:
       - '.github/workflows/temp_second_pass_unmatched_master_includes.yml'
       - 'scripts/temporary/second_pass_unmatched_master_includes.R'
       - 'scripts/temporary/third_pass_unmatched_master_includes.R'
+      - 'scripts/temporary/fourth_pass_identity_recovery.R'
 
 permissions:
   contents: read
@@ -111,6 +112,24 @@ jobs:
           cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE), '\n')
           cat('PASS: third-pass output cardinality and audit-only invariants validated\n')
 
+      - name: Run fourth-pass Lens ID and DOI recovery
+        run: |
+          Rscript scripts/temporary/fourth_pass_identity_recovery.R \
+            --canonical=canonical_store/data/canonical/current/repair/records.jsonl \
+            --still=outputs/third_pass_unmatched_includes/still_unmatched.jsonl \
+            --outdir=outputs/fourth_pass_identity_recovery
+        shell: bash
+
+      - name: Validate fourth-pass audit-only outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/fourth_pass_identity_recovery/summary.json')
+          stopifnot(s$audit_only, !s$canonical_modified, s$targets == 607)
+          stopifnot(s$unique_identity_matches + s$ambiguous_identity_matches + s$still_unmatched == 607)
+          cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE), '\n')
+          cat('PASS: fourth-pass identity audit cardinality and audit-only invariants validated\n')
+
       - name: Confirm canonical working tree unchanged
         run: |
           set -euo pipefail
@@ -135,5 +154,13 @@ jobs:
         with:
           name: third-pass-unmatched-master-includes-${{ github.run_id }}
           path: outputs/third_pass_unmatched_includes/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload fourth-pass audit artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fourth-pass-identity-recovery-${{ github.run_id }}
+          path: outputs/fourth_pass_identity_recovery/
           retention-days: 90
           if-no-files-found: error
