@@ -8,6 +8,7 @@ on:
       - 'scripts/temporary/second_pass_unmatched_master_includes.R'
       - 'scripts/temporary/third_pass_unmatched_master_includes.R'
       - 'scripts/temporary/fourth_pass_identity_recovery.R'
+      - 'scripts/temporary/fifth_pass_trace_historical_lens_ids.R'
 
 permissions:
   contents: read
@@ -130,6 +131,51 @@ jobs:
           cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE), '\n')
           cat('PASS: fourth-pass identity audit cardinality and audit-only invariants validated\n')
 
+      - name: Materialize canonical stage snapshots for Lens-ID trace
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/canonical_stage_snapshots
+          STAGES=(
+            "workflow00:323b631925479212bb4863461bf62847451d0546"
+            "abstract_enriched:5e6e850d7ca2be51d4818c494b5e2889b40780cc"
+            "deduplicated:9230802aab1ef1a445087c42c5813d6d23b955db"
+            "publication_status:3943ce56277eb5ef1484b33737087dba000fdc09"
+          )
+          for item in "${STAGES[@]}"; do
+            name="${item%%:*}"
+            sha="${item##*:}"
+            git -C canonical_store fetch --no-tags origin "$sha"
+            git -C canonical_store lfs fetch origin "$sha" --include="data/canonical/current/repair/records.jsonl"
+            git -C canonical_store show "$sha:data/canonical/current/repair/records.jsonl" | git -C canonical_store lfs smudge > "outputs/canonical_stage_snapshots/${name}.jsonl"
+            test -s "outputs/canonical_stage_snapshots/${name}.jsonl"
+            echo "PASS: materialized $name at $sha ($(wc -l < "outputs/canonical_stage_snapshots/${name}.jsonl") lines)"
+          done
+        shell: bash
+
+      - name: Run fifth-pass historical Lens-ID stage trace
+        run: |
+          Rscript scripts/temporary/fifth_pass_trace_historical_lens_ids.R \
+            --residual=outputs/fourth_pass_identity_recovery/still_unmatched.jsonl \
+            --historical-root=screening_source \
+            --stage00=outputs/canonical_stage_snapshots/workflow00.jsonl \
+            --enriched=outputs/canonical_stage_snapshots/abstract_enriched.jsonl \
+            --dedup=outputs/canonical_stage_snapshots/deduplicated.jsonl \
+            --publication=outputs/canonical_stage_snapshots/publication_status.jsonl \
+            --outdir=outputs/fifth_pass_trace
+        shell: bash
+
+      - name: Validate fifth-pass trace
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/fifth_pass_trace/summary.json')
+          stopifnot(s$audit_only, !s$canonical_modified)
+          stopifnot(s$residual_input == 607, s$manual_excluded_ignored == 321)
+          stopifnot(s$relevance_review_set == 286, s$lens_id_trace_targets == 262, s$no_lens_id_in_review_set == 24)
+          stopifnot(sum(unlist(s$earliest_loss_counts)) == 262)
+          cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE), '\n')
+          cat('PASS: fifth-pass trace invariants validated\n')
+
       - name: Confirm canonical working tree unchanged
         run: |
           set -euo pipefail
@@ -162,5 +208,13 @@ jobs:
         with:
           name: fourth-pass-identity-recovery-${{ github.run_id }}
           path: outputs/fourth_pass_identity_recovery/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload fifth-pass trace artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fifth-pass-historical-lens-id-trace-${{ github.run_id }}
+          path: outputs/fifth_pass_trace/
           retention-days: 90
           if-no-files-found: error
