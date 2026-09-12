@@ -1,0 +1,173 @@
+name: Workflow 01C - Post-enrichment species-term filter
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Audit first; apply only after audit review'
+        required: true
+        default: audit
+        type: choice
+        options: [audit, apply]
+      source_ref:
+        description: 'Canonical ref/commit to inspect; use branch for apply'
+        required: true
+        default: '5e6e850d7ca2be51d4818c494b5e2889b40780cc'
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+
+jobs:
+  species-term-filter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout orchestration branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Checkout requested canonical source
+        uses: actions/checkout@v4
+        with:
+          ref: \${{ inputs.source_ref }}
+          fetch-depth: 0
+          lfs: true
+          path: canonical_store
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Parse filter implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_01c_species_term_filter.R')
+          cat('PASS: Workflow 01C script parses successfully\n')
+
+      - name: Run post-enrichment species-term filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow01c_species_term_filter
+          Rscript scripts/updater/workflow_01c_species_term_filter.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --manifest canonical_store/data/canonical/current/repair/manifest.json \
+            --outdir outputs/workflow01c_species_term_filter \
+            --mode "\${{ inputs.mode }}"
+
+      - name: Validate partition and term rule
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/workflow01c_species_term_filter/summary.json')
+          stopifnot(s$input_records == s$retained_records + s$removed_records)
+          a <- read.csv('outputs/workflow01c_species_term_filter/species_term_filter_audit.csv',
+                        stringsAsFactors=FALSE, check.names=FALSE)
+          stopifnot(nrow(a) == s$input_records)
+          stopifnot(sum(a$retained) == s$retained_records)
+          stopifnot(sum(!a$retained) == s$removed_records)
+          bad_removed <- subset(a, !retained & (nzchar(title_hits) | nzchar(abstract_hits) | nzchar(keyword_hits)))
+          bad_retained <- subset(a, retained & !(nzchar(title_hits) | nzchar(abstract_hits) | nzchar(keyword_hits)))
+          stopifnot(nrow(bad_removed) == 0, nrow(bad_retained) == 0)
+          cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE), '\n')
+          cat('PASS: every removed record lacks all four permitted species terms in title, enriched abstract and keywords\n')
+
+      - name: Guard apply target
+        if: \${{ inputs.mode == 'apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "\${{ inputs.source_ref }}" != "$FRESH_CANONICAL_BRANCH" ]; then
+            echo "ERROR: apply is permitted only when source_ref=$FRESH_CANONICAL_BRANCH"
+            exit 1
+          fi
+          BASE_SHA=$(git -C canonical_store rev-parse HEAD)
+          git -C canonical_store fetch origin "$FRESH_CANONICAL_BRANCH"
+          REMOTE_SHA=$(git -C canonical_store rev-parse "origin/$FRESH_CANONICAL_BRANCH")
+          if [ "$BASE_SHA" != "$REMOTE_SHA" ]; then
+            echo "ERROR: canonical branch advanced during Workflow 01C; refusing stale apply"
+            exit 1
+          fi
+
+      - name: Promote retained records and update manifest
+        if: \${{ inputs.mode == 'apply' }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          records_path <- 'canonical_store/data/canonical/current/repair/records.jsonl'
+          manifest_path <- 'canonical_store/data/canonical/current/repair/manifest.json'
+          retained_path <- 'outputs/workflow01c_species_term_filter/retained_records.jsonl'
+          summary_path <- 'outputs/workflow01c_species_term_filter/summary.json'
+
+          s <- fromJSON(summary_path, simplifyVector=FALSE)
+          m <- fromJSON(manifest_path, simplifyVector=FALSE)
+          if (!identical(m$pipeline_stage, 'abstract_enriched_deduplication_ready')) {
+            stop(sprintf('ERROR: apply requires post-enrichment pre-dedup stage; found %s', m$pipeline_stage))
+          }
+
+          file.copy(retained_path, records_path, overwrite=TRUE)
+          m$species_term_filter <- list(
+            workflow='workflow_01c_species_term_filter',
+            implementation_language='R',
+            completed_at=format(Sys.time(), tz='UTC', format='%Y-%m-%dT%H:%M:%SZ'),
+            rule='title OR enriched abstract OR keywords contains standalone salmon, Salmo, Oncorhynchus, or rainbow trout',
+            input_records=s$input_records,
+            retained_records=s$retained_records,
+            removed_records=s$removed_records
+          )
+          m$unique_records_written <- as.integer(s$retained_records)
+          m$post_filter_record_count <- as.integer(s$retained_records)
+          m$pre_filter_record_count <- as.integer(s$input_records)
+          # Keep the stage name expected by Workflow 02: this remains enriched and deduplication-ready.
+          m$pipeline_stage <- 'abstract_enriched_deduplication_ready'
+          writeLines(toJSON(m, auto_unbox=TRUE, pretty=TRUE, null='null', na='null'), manifest_path)
+          cat(sprintf('Prepared apply: %d -> %d records\n', s$input_records, s$retained_records))
+
+      - name: Validate apply output
+        if: \${{ inputs.mode == 'apply' }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          m <- fromJSON('canonical_store/data/canonical/current/repair/manifest.json')
+          lines <- readLines('canonical_store/data/canonical/current/repair/records.jsonl', warn=FALSE, encoding='UTF-8')
+          lines <- lines[nzchar(trimws(lines))]
+          stopifnot(length(lines) == as.integer(m$unique_records_written))
+          stopifnot(identical(m$pipeline_stage, 'abstract_enriched_deduplication_ready'))
+          stopifnot(!is.null(m$species_term_filter))
+          cat(sprintf('PASS: apply output contains %d filtered deduplication-ready records\n', length(lines)))
+
+      - name: Commit filtered canonical state
+        if: \${{ inputs.mode == 'apply' }}
+        working-directory: canonical_store
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git lfs install --local
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git diff --cached --quiet && { echo 'ERROR: no filter changes detected'; exit 1; }
+          git commit -m 'Apply post-enrichment species-term filter'
+          git lfs push origin "$FRESH_CANONICAL_BRANCH"
+          git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
+          git log -1 --format='species_filter_commit=%H'
+
+      - name: Upload audit and removed records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01c-species-term-filter-\${{ inputs.mode }}-\${{ github.run_id }}
+          path: outputs/workflow01c_species_term_filter/
+          retention-days: 90
+          if-no-files-found: error
