@@ -70,20 +70,17 @@ count_fixed <- function(path, needle) {
 res <- read_jsonl(residual_path)
 if (length(res) != 607L) stop(sprintf("ERROR: expected 607 residual records, found %d",length(res)),call.=FALSE)
 
-targets <- list()
-manual_excluded <- list()
-for (x in res) {
+# Trace the exact 262 Lens-ID records retained for review after the user's
+# 2026-09-12 adjudication. Do not recompute that adjudication here: a previous
+# version did so and drifted from the audited 321/286 split.
+review_rows_2026_09_12 <- c(67,82,84,140,149,171,198,274,444,473,620,626,792,793,891,901,905,988,1008,1028,1106,1149,1291,1292,1303,1390,1430,1478,1579,1596,1665,1696,1701,1709,1710,1713,1715,1718,1770,1953,1968,1979,2061,2089,2090,2091,2092,2093,2120,2229,2232,2233,2282,2291,2292,2400,2406,2433,2613,2615,2654,2660,2693,2698,2741,2754,2758,2849,2906,2966,2980,3075,3122,3227,3240,3242,3260,3322,3386,3395,3397,3602,3681,3711,3759,3761,3798,3826,3844,3847,3853,3906,3929,3930,3936,3941,3952,3957,3959,3969,3994,4010,4156,4217,4247,4286,4336,4353,4553,4571,4579,4605,4704,4746,4773,4776,4853,4856,4912,4919,5052,5068,5370,5408,5447,5561,5679,5714,5768,5879,5985,6060,6137,6169,6199,6205,6215,6222,6258,6313,6329,6366,6376,6400,6421,6495,6509,6692,6715,6808,6871,6973,6997,7010,7032,7114,7134,7205,7230,7240,7242,7244,7344,7416,7482,7483,7505,7510,7522,7528,7532,7535,7536,7551,7555,7685,7695,7767,7874,7972,8042,8043,8081,8139,8222,8230,8236,8357,8428,8472,8557,8581,8584,8622,8645,8676,8689,8724,8734,8758,8866,8927,9102,9189,9247,9255,9340,9456,9472,9479,9480,9484,9498,9556,9596,9616,9641,9643,9697,9725,9774,9828,9855,9988,10180,10210,10211,10234,10256,10283,10302,10355,10432,10461,10636,10702,10708,10736,10798,10956,10970,10971,11049,11120,11157,11297,11408,11419,11424,11469,11535,11613,11638,11649,11698,11783,11804,11832,11848,11904,11913,11998)
+targets <- Filter(function(x) {
   h <- or_else(x$historical,list())
-  lid <- trimws(as.character(or_else(h$lens_id,"")))
-  spec <- contains_specific(h$title,h$abstract)
-  if (!spec) {
-    manual_excluded[[length(manual_excluded)+1L]] <- x
-  } else if (nzchar(lid)) {
-    targets[[length(targets)+1L]] <- x
-  }
-}
-if (length(manual_excluded) != 321L) stop(sprintf("ERROR: expected 321 manual excludes, found %d",length(manual_excluded)),call.=FALSE)
-if (length(targets) != 262L) stop(sprintf("ERROR: expected 262 Lens-ID trace targets, found %d",length(targets)),call.=FALSE)
+  identical(as.character(x$historical_source), "production_master") &&
+    as.integer(x$historical_row) %in% review_rows_2026_09_12 &&
+    nzchar(trimws(as.character(or_else(h$lens_id,""))))
+}, res)
+if (length(targets) != 262L) stop(sprintf("ERROR: expected 262 adjudicated Lens-ID trace targets, found %d",length(targets)),call.=FALSE)
 
 stages <- list(
   workflow00=read_ids(stage00),
