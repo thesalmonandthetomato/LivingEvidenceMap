@@ -1,0 +1,133 @@
+name: Test Workflow 01C species-term filter
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/test_workflow_01c_species_term_filter.yml'
+      - 'scripts/updater/workflow_01c_species_term_filter.R'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Create synthetic post-enrichment records
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create('tmp01c', showWarnings=FALSE)
+
+          rec <- function(id,title='',abstract=NULL,keywords=NULL) {
+            list(
+              identity=list(lens_id=id),
+              canonical=list(title=title,abstract=abstract,keywords=keywords),
+              lens=list(raw_payload=list(lens_id=id,title=title,abstract=abstract,keywords=keywords))
+            )
+          }
+
+          records <- list(
+            rec('001-000-000-000-001','Effects on farmed salmonids'),
+            rec('001-000-000-000-002','Aquaculture health','Study of Salmonidae in farms'),
+            rec('001-000-000-000-003','Salmon farming impacts'),
+            rec('001-000-000-000-004','Aquaculture study','Growth of Atlantic salmon under warming'),
+            rec('001-000-000-000-005','Fish growth','Juvenile Salmo salar were reared in tanks'),
+            rec('001-000-000-000-006','Oncorhynchus mykiss growth'),
+            rec('001-000-000-000-007','Rainbow trout performance'),
+            rec('001-000-000-000-008','Rainbow-trout performance'),
+            rec('001-000-000-000-009','Aquaculture performance','No species stated',c('rainbow trout','feed')),
+            rec('001-000-000-000-010','Salmonella prevalence in aquaculture'),
+            rec('001-000-000-000-011','Farmed salmonids','Rainbow trout were used in trial'),
+            rec('001-000-000-000-012','Trout aquaculture'),
+            rec('001-000-000-000-013','Salmoniformes ecology'),
+            rec('001-000-000-000-014','SALMO SALAR'),
+            rec('001-000-000-000-015','Aquaculture economics','Marine finfish farms',c('feed','cages')),
+            rec('001-000-000-000-016','No abstract but eligible keyword',NULL,c('Atlantic salmon','aquaculture')),
+            rec('001-000-000-000-017','No abstract salmonid only',NULL,c('salmonid','aquaculture')),
+            rec('001-000-000-000-018','P. salmonis study','Piscirickettsia salmonis infection','aquaculture')
+          )
+
+          con <- file('tmp01c/records.jsonl','wt',encoding='UTF-8')
+          for (r in records) writeLines(toJSON(r,auto_unbox=TRUE,null='null'),con)
+          close(con)
+
+          manifest <- list(
+            pipeline_stage='abstract_enriched_deduplication_ready',
+            unique_records_written=length(records)
+          )
+          writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE),'tmp01c/manifest.json')
+          cat(sprintf('Created %d synthetic records\n', length(records)))
+
+      - name: Run actual Workflow 01C implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01c_species_term_filter.R \
+            --input tmp01c/records.jsonl \
+            --manifest tmp01c/manifest.json \
+            --outdir tmp01c/output \
+            --mode audit
+
+      - name: Assert expected decisions
+        shell: Rscript {0}
+        run: |
+          a <- read.csv('tmp01c/output/species_term_filter_audit.csv',
+                        stringsAsFactors=FALSE, check.names=FALSE)
+
+          expected <- c(
+            '001-000-000-000-001'=FALSE,
+            '001-000-000-000-002'=FALSE,
+            '001-000-000-000-003'=TRUE,
+            '001-000-000-000-004'=TRUE,
+            '001-000-000-000-005'=TRUE,
+            '001-000-000-000-006'=TRUE,
+            '001-000-000-000-007'=TRUE,
+            '001-000-000-000-008'=TRUE,
+            '001-000-000-000-009'=TRUE,
+            '001-000-000-000-010'=FALSE,
+            '001-000-000-000-011'=TRUE,
+            '001-000-000-000-012'=FALSE,
+            '001-000-000-000-013'=FALSE,
+            '001-000-000-000-014'=TRUE,
+            '001-000-000-000-015'=FALSE,
+            '001-000-000-000-016'=TRUE,
+            '001-000-000-000-017'=FALSE,
+            '001-000-000-000-018'=FALSE
+          )
+
+          actual <- setNames(a$retained,a$lens_id)
+          wrong <- names(expected)[actual[names(expected)] != expected]
+          if (length(wrong)) {
+            print(a[a$lens_id %in% wrong,])
+            stop(sprintf('Wrong decisions for: %s', paste(wrong,collapse=', ')))
+          }
+
+          stopifnot(a$keyword_hits[a$lens_id=='001-000-000-000-009'] == 'rainbow_trout')
+          stopifnot(a$keyword_hits[a$lens_id=='001-000-000-000-016'] == 'salmon')
+          stopifnot(!a$retained[a$lens_id=='001-000-000-000-001'])
+          stopifnot(!a$retained[a$lens_id=='001-000-000-000-010'])
+          stopifnot(!a$retained[a$lens_id=='001-000-000-000-018'])
+
+          cat('PASS: all 18 synthetic edge cases behaved exactly as expected\n')
+          print(a[,c('lens_id','retained','title_hits','abstract_hits','keyword_hits','reason')], row.names=FALSE)
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01c-synthetic-test-\${{ github.run_id }}
+          path: tmp01c/output/
+          retention-days: 30
+          if-no-files-found: warn
