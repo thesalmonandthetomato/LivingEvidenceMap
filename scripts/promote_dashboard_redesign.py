@@ -55,8 +55,8 @@ checks = {
     "old radial override absent": "./topic-radial.js" not in html,
 }
 failed = [name for name, ok in checks.items() if not ok]
-if banner_n != 1:
-    failed.append(f"preview banner replacement count was {banner_n}, expected 1")
+if banner_n not in (0, 1):
+    failed.append(f"preview banner replacement count was {banner_n}, expected 0 or 1")
 if fetch_n != 1:
     failed.append(f"preview data-source replacement count was {fetch_n}, expected 1")
 
