@@ -51,11 +51,8 @@ doi_from <- function(raw) {
 
 cfg <- fromJSON(config_path, simplifyVector = FALSE)
 query_string <- cfg$api_query$query$bool$must[[1]]$query_string$query
-if (!grepl('Oncorhynchus OR "rainbow trout"', query_string, fixed = TRUE)) {
-  stop('Refusing Workflow 00: corrected species clause is missing "rainbow trout" after Oncorhynchus')
-}
-if (grepl('salmonid', query_string, ignore.case = TRUE)) {
-  stop('Refusing Workflow 00: salmonid remains in the API query')
+if (!grepl('salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout"', query_string, fixed = TRUE)) {
+  stop('Refusing Workflow 00: species clause must contain salmonid*, Salmo, Oncorhynchus and "rainbow trout"')
 }
 base_query <- cfg$api_query$query
 query_sha <- digest(query_string, algo = 'sha256', serialize = FALSE)
