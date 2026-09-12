@@ -1,0 +1,156 @@
+name: Build historical reconciliation crosswalk
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build_historical_reconciliation_crosswalk.yml'
+      - 'scripts/temporary/build_historical_reconciliation_crosswalk.R'
+
+permissions:
+  contents: write
+
+env:
+  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+  SCREENING_SOURCE_REPO: thesalmonandthetomato/scoping_review
+  SCREENING_SOURCE_COMMIT: 1116ced4acece0575fca763e856cc968b6e5785b
+
+jobs:
+  build-crosswalk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          lfs: true
+
+      - name: Checkout immutable historical screening source
+        uses: actions/checkout@v4
+        with:
+          repository: \${{ env.SCREENING_SOURCE_REPO }}
+          ref: \${{ env.SCREENING_SOURCE_COMMIT }}
+          path: screening_source
+          lfs: true
+
+      - name: Checkout current canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: \${{ env.FRESH_CANONICAL_BRANCH }}
+          path: canonical_store
+          lfs: true
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','data.table','stringdist','digest'))
+
+      - name: Recreate first-pass reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/historical_reconciliation
+          Rscript scripts/temporary/historical_screening_reconciliation.R \
+            --master data/master/current/living_evidence_map_master.csv \
+            --canonical canonical_store/data/canonical/current/repair/records.jsonl \
+            --includes-ris screening_source/screening/INCLUDES.ris \
+            --excludes-ris screening_source/screening/EXCLUDES.ris \
+            --outdir outputs/historical_reconciliation \
+            --checkpoint-every 1000
+
+      - name: Recreate corrected second pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/temporary/second_pass_unmatched_master_includes.R \
+            --canonical=canonical_store/data/canonical/current/repair/records.jsonl \
+            --unmatched=outputs/historical_reconciliation/unmatched_historical_records.jsonl \
+            --matched=outputs/historical_reconciliation/matched_records.jsonl \
+            --outdir=outputs/second_pass_unmatched_includes
+
+      - name: Recreate third pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/temporary/third_pass_unmatched_master_includes.R \
+            --canonical=canonical_store/data/canonical/current/repair/records.jsonl \
+            --still=outputs/second_pass_unmatched_includes/still_unmatched.jsonl \
+            --outdir=outputs/third_pass_unmatched_includes
+
+      - name: Recreate corrected fourth pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/temporary/fourth_pass_identity_recovery.R \
+            --canonical=canonical_store/data/canonical/current/repair/records.jsonl \
+            --still=outputs/third_pass_unmatched_includes/still_unmatched.jsonl \
+            --outdir=outputs/fourth_pass_identity_recovery
+
+      - name: Build persistent crosswalk
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/temporary/build_historical_reconciliation_crosswalk.R \
+            --first-matched=outputs/historical_reconciliation/matched_records.jsonl \
+            --first-ambiguous=outputs/historical_reconciliation/ambiguous_matches.jsonl \
+            --first-conflicts=outputs/historical_reconciliation/conflicts.jsonl \
+            --second-high=outputs/second_pass_unmatched_includes/high_confidence_matches.jsonl \
+            --second-ambiguous=outputs/second_pass_unmatched_includes/ambiguous_matches.jsonl \
+            --third-review=outputs/third_pass_unmatched_includes/review_candidates.jsonl \
+            --fourth-residual=outputs/fourth_pass_identity_recovery/still_unmatched.jsonl \
+            --out=data/adjudication/historical_reconciliation_crosswalk_2026-09-12.csv \
+            --summary=data/adjudication/historical_reconciliation_crosswalk_2026-09-12_summary.json
+
+      - name: Validate crosswalk
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- 'data/adjudication/historical_reconciliation_crosswalk_2026-09-12.csv'
+          s <- fromJSON('data/adjudication/historical_reconciliation_crosswalk_2026-09-12_summary.json')
+          x <- read.csv(p, stringsAsFactors=FALSE, check.names=FALSE)
+          stopifnot(nrow(x) == s$rows)
+          stopifnot(sum(x$relationship == 'manual_exclude_no_canonical_match') == 321)
+          stopifnot(sum(x$relationship == 'non_match') >= 2)
+          stopifnot(any(x$historical_source == 'production_master' & x$historical_row == 2172 & x$relationship == 'duplicate_manifestation'))
+          stopifnot(any(x$historical_source == 'production_master' & x$historical_row == 9777 & x$relationship == 'non_match'))
+          stopifnot(any(x$historical_source == 'production_master' & x$historical_row == 9719 & x$relationship == 'non_match'))
+          stopifnot(any(x$historical_source == 'production_master' & x$historical_row == 7486 & x$adjudication_status == 'unresolved'))
+          cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE), '\n')
+          cat('PASS: crosswalk includes positive links, negative pairs, unresolved cases and 321 manual excludes\n')
+
+      - name: Commit persistent crosswalk transactionally
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA=$(git rev-parse HEAD)
+          git fetch origin main
+          REMOTE_SHA=$(git rev-parse origin/main)
+          if [ "$BASE_SHA" != "$REMOTE_SHA" ]; then
+            echo "ERROR: main advanced during crosswalk build ($BASE_SHA -> $REMOTE_SHA); refusing stale commit."
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/adjudication/historical_reconciliation_crosswalk_2026-09-12.csv \
+                  data/adjudication/historical_reconciliation_crosswalk_2026-09-12_summary.json
+          git diff --cached --quiet && { echo 'ERROR: no crosswalk changes to commit'; exit 1; }
+          git commit -m 'Persist historical reconciliation crosswalk'
+          git push origin HEAD:main
+          git log -1 --format='crosswalk_commit=%H'
+
+      - name: Upload crosswalk artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-reconciliation-crosswalk-\${{ github.run_id }}
+          path: |
+            data/adjudication/historical_reconciliation_crosswalk_2026-09-12.csv
+            data/adjudication/historical_reconciliation_crosswalk_2026-09-12_summary.json
+          retention-days: 90
+          if-no-files-found: warn
