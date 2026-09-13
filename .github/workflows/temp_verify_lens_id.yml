@@ -1,0 +1,34 @@
+name: Verify Lens ID in canonical
+
+on:
+  push:
+    paths:
+      - '.github/workflows/temp_verify_lens_id.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical branch with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-2026-09-08-v1
+          lfs: true
+          fetch-depth: 1
+
+      - name: Verify target Lens ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET='075-265-152-590-041'
+          FILE='data/canonical/current/repair/records.jsonl'
+          if grep -Fq "$TARGET" "$FILE"; then
+            echo "FOUND: $TARGET"
+            grep -Fn "$TARGET" "$FILE" | head -1
+          else
+            echo "NOT_FOUND: $TARGET"
+            exit 1
+          fi
