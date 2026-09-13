@@ -30,15 +30,15 @@ jobs:
       - name: Checkout immutable historical screening source
         uses: actions/checkout@v4
         with:
-          repository: \${{ env.SCREENING_SOURCE_REPO }}
-          ref: \${{ env.SCREENING_SOURCE_COMMIT }}
+          repository: ${{ env.SCREENING_SOURCE_REPO }}
+          ref: ${{ env.SCREENING_SOURCE_COMMIT }}
           path: screening_source
           lfs: true
 
       - name: Checkout current canonical store
         uses: actions/checkout@v4
         with:
-          ref: \${{ env.FRESH_CANONICAL_BRANCH }}
+          ref: ${{ env.FRESH_CANONICAL_BRANCH }}
           path: canonical_store
           lfs: true
 
@@ -148,7 +148,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: historical-reconciliation-crosswalk-\${{ github.run_id }}
+          name: historical-reconciliation-crosswalk-${{ github.run_id }}
           path: |
             data/adjudication/historical_reconciliation_crosswalk_2026-09-12.csv
             data/adjudication/historical_reconciliation_crosswalk_2026-09-12_summary.json
