@@ -23,12 +23,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TARGET='075-265-152-590-041'
-          FILE='data/canonical/current/repair/records.jsonl'
-          if grep -Fq "$TARGET" "$FILE"; then
-            echo "FOUND: $TARGET"
-            grep -Fn "$TARGET" "$FILE" | head -1
-          else
-            echo "NOT_FOUND: $TARGET"
-            exit 1
-          fi
+          python - <<'PY'
+          import json
+          target = '075-265-152-590-041'
+          path = 'data/canonical/current/repair/records.jsonl'
+          found = None
+          with open(path, encoding='utf-8') as fh:
+              for n, line in enumerate(fh, 1):
+                  if not line.strip():
+                      continue
+                  rec = json.loads(line)
+                  if ((rec.get('identity') or {}).get('lens_id')) == target:
+                      found = (n, rec)
+                      break
+          if found is None:
+              print(f'NOT_FOUND_IDENTITY: {target}')
+              raise SystemExit(1)
+          n, rec = found
+          canonical = rec.get('canonical') or {}
+          raw = ((rec.get('lens') or {}).get('raw_payload') or {})
+          print(f'FOUND_IDENTITY: {target}')
+          print(f'line={n}')
+          print('title=' + str(canonical.get('title') or raw.get('title') or ''))
+          print('abstract_present=' + str(bool(canonical.get('abstract') or raw.get('abstract'))))
+          print('keywords=' + str(canonical.get('keywords') or raw.get('keywords') or ''))
+          PY
