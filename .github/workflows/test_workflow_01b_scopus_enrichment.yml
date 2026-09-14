@@ -63,8 +63,9 @@ jobs:
         run: |
           Rscript scripts/updater/workflow_01b_scopus_abstract_enrichment.R             --input /tmp/canonical.jsonl             --scopus-ris /tmp/scopus.ris             --output /tmp/out.jsonl             --audit /tmp/audit.csv             --conflicts /tmp/conflicts.csv             --report /tmp/report.json
       - name: Assert expected behaviour
-        shell: Rscript {0}
+        shell: bash
         run: |
+          cat > /tmp/assert_01b.R <<'RSCRIPT'
           library(jsonlite)
           x <- lapply(readLines('/tmp/out.jsonl'), fromJSON)
           stopifnot(x[[1]]$canonical$abstract == 'Recovered DOI abstract.')
@@ -75,4 +76,6 @@ jobs:
           stopifnot(r$abstracts_recovered == 2)
           stopifnot(r$existing_abstracts_overwritten == 0)
           stopifnot(r$doi_title_conflicts_quarantined == 1)
-          cat('PASS: synthetic Workflow 01B test\n')
+          cat('PASS: synthetic Workflow 01B test\\n')
+          RSCRIPT
+          Rscript /tmp/assert_01b.R
