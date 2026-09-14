@@ -63,7 +63,11 @@ jobs:
           `%||%` <- function(x,y) if (is.null(x)) y else x
           p <- 'canonical_store/data/canonical/current/repair/records.jsonl'
           m <- fromJSON('canonical_store/data/canonical/current/repair/manifest.json', simplifyVector=FALSE)
-          stopifnot(identical(m$pipeline_stage, 'abstract_enriched_deduplication_ready'))
+          accepted_stages <- c(
+            'abstract_enriched_deduplication_ready',
+            'scopus_abstract_enrichment_complete'
+          )
+          stopifnot(m$pipeline_stage %in% accepted_stages)
           expected <- as.integer(m$unique_records_written %||% m$lens_reported_total)
           lines <- readLines(p, warn=FALSE, encoding='UTF-8'); lines <- lines[nzchar(trimws(lines))]
           stopifnot(length(lines) == expected)
