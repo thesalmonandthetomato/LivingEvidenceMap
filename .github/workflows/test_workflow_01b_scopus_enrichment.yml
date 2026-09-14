@@ -1,0 +1,78 @@
+name: Test Workflow 01B Scopus enrichment
+
+on:
+  push:
+    paths:
+      - '.github/workflows/test_workflow_01b_scopus_enrichment.yml'
+      - 'scripts/updater/workflow_01b_scopus_abstract_enrichment.R'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - shell: Rscript {0}
+        run: install.packages(c('jsonlite','stringdist'))
+      - name: Build fixtures
+        shell: bash
+        run: |
+          cat > /tmp/canonical.jsonl <<'EOF'
+          {"identity":{"lens_id":"A"},"canonical":{"title":"Example salmon study","abstract":null,"doi":"10.1000/abc","year":2020,"source":"Journal A"}}
+          {"identity":{"lens_id":"B"},"canonical":{"title":"Second study","abstract":"Existing abstract","doi":"10.1000/def","year":2021,"source":"Journal B"}}
+          {"identity":{"lens_id":"C"},"canonical":{"title":"Title match only","abstract":"","doi":null,"year":2022,"source":"Journal C"}}
+          {"identity":{"lens_id":"D"},"canonical":{"title":"Completely different title","abstract":"","doi":"10.1000/conflict","year":2023,"source":"Journal D"}}
+          EOF
+          cat > /tmp/scopus.ris <<'EOF'
+          TY  - JOUR
+          TI  - Example salmon study
+          PY  - 2020
+          T2  - Journal A
+          DO  - 10.1000/abc
+          AB  - Recovered DOI abstract.
+          N1  - EID: 2-s2.0-1
+          ER  -
+
+          TY  - JOUR
+          TI  - Second study
+          PY  - 2021
+          T2  - Journal B
+          DO  - 10.1000/def
+          AB  - Must not overwrite.
+          ER  -
+
+          TY  - JOUR
+          TI  - Title match only
+          PY  - 2022
+          T2  - Journal C
+          AB  - Recovered title-year-journal abstract.
+          ER  -
+
+          TY  - JOUR
+          TI  - Wrong article entirely
+          PY  - 2023
+          T2  - Other Journal
+          DO  - 10.1000/conflict
+          AB  - Must be quarantined.
+          ER  -
+          EOF
+      - name: Run enrichment
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_01b_scopus_abstract_enrichment.R             --input /tmp/canonical.jsonl             --scopus-ris /tmp/scopus.ris             --output /tmp/out.jsonl             --audit /tmp/audit.csv             --conflicts /tmp/conflicts.csv             --report /tmp/report.json
+      - name: Assert expected behaviour
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x <- lapply(readLines('/tmp/out.jsonl'), fromJSON)
+          stopifnot(x[[1]]$canonical$abstract == 'Recovered DOI abstract.')
+          stopifnot(x[[2]]$canonical$abstract == 'Existing abstract')
+          stopifnot(x[[3]]$canonical$abstract == 'Recovered title-year-journal abstract.')
+          stopifnot(is.null(x[[4]]$canonical$abstract) || x[[4]]$canonical$abstract == '')
+          r <- fromJSON('/tmp/report.json')
+          stopifnot(r$abstracts_recovered == 2)
+          stopifnot(r$existing_abstracts_overwritten == 0)
+          stopifnot(r$doi_title_conflicts_quarantined == 1)
+          cat('PASS: synthetic Workflow 01B test\n')
