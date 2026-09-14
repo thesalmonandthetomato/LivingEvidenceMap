@@ -58,7 +58,7 @@ jobs:
       - name: Fill missing abstracts from Scopus
         shell: bash
         env:
-          SCOPUS_RIS_PATH: ${{ inputs.scopus_ris_path }}
+          SCOPUS_RIS_PATH: ${{ inputs.scopus_ris_path || 'data/external/export_bcf8e118-e7ba-47c0-9b69-63f0a98dd2b0_2026-09-14T100754.023402853.ris' }}
         run: |
           set -euo pipefail
           mkdir -p fresh_rebuild_01b
