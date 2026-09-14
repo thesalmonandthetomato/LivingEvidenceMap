@@ -1,16 +1,19 @@
 name: Workflow 01B - Scopus abstract enrichment
 
 on:
+  push:
+    paths:
+      - '.github/workflows/fresh_rebuild_01b_scopus_abstract_enrichment.yml'
   workflow_dispatch:
     inputs:
       scopus_ris_path:
         description: 'Path on main to the Scopus RIS export'
         required: true
-        default: 'data/external/export_512d303c-60dc-47d2-bdc4-f74cf76a335b_2026-09-14T101344.295379711.ris'
+        default: 'data/external/export_bcf8e118-e7ba-47c0-9b69-63f0a98dd2b0_2026-09-14T100754.023402853.ris'
       expected_sha256:
         description: 'Expected SHA256 of the Scopus RIS'
         required: true
-        default: 'f31248e20e7f5d140b29fd0b7852022abd2c8c9b93daa845bcf9e90d8a9a651d'
+        default: '606959ce8d2379d00e2c1e3b7a390bf8beaa33da5a991106640bb411aca110d6'
 
 permissions:
   contents: write
