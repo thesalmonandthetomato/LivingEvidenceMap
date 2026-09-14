@@ -17,7 +17,7 @@
   "records_without_lens_id": 0,
   "batches": 48,
   "canonical_path": "data/canonical/current/repair/records.jsonl",
-  "pipeline_stage": "abstract_enriched_deduplication_ready",
+  "pipeline_stage": "scopus_abstract_enrichment_complete",
   "fresh_state": {
     "deduplication_present": false,
     "publication_status_present": false,
@@ -48,6 +48,30 @@
       "checkpoint_every": 250,
       "checkpoint_dir": "fresh_rebuild_01/checkpoints",
       "output": "deduplication_ready"
+    }
+  },
+  "scopus_abstract_enrichment": {
+    "workflow": "workflow_01b_scopus_abstract_enrichment",
+    "implementation_language": "R",
+    "provider": "Scopus RIS export",
+    "source_file": "data/external/export_bcf8e118-e7ba-47c0-9b69-63f0a98dd2b0_2026-09-14T100754.023402853.ris",
+    "scopus_records": 19940,
+    "scopus_records_with_abstract": 19426,
+    "canonical_records": 23809,
+    "canonical_missing_abstract_before": 2999,
+    "abstracts_recovered": 1184,
+    "match_counts": {
+      "exact_doi_exact_normalised_title": 1091,
+      "exact_doi_compatible_title": 35,
+      "exact_title_year_journal": 58
+    },
+    "doi_title_conflicts_quarantined": 26,
+    "canonical_missing_abstract_after": 1815,
+    "existing_abstracts_overwritten": 0,
+    "matching_rules": {
+      "doi": "exact normalised DOI; exact normalised title or Jaro-Winkler title similarity >= 0.90",
+      "fallback": "exact normalised title + exact year + exact normalised journal",
+      "conflict_policy": "exact DOI with title similarity < 0.90 quarantined and not applied"
     }
   }
 }
