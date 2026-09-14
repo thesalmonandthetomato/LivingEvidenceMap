@@ -17,7 +17,7 @@
   "records_without_lens_id": 0,
   "batches": 48,
   "canonical_path": "data/canonical/current/repair/records.jsonl",
-  "pipeline_stage": "scopus_abstract_enrichment_complete",
+  "pipeline_stage": "deduplicated",
   "fresh_state": {
     "deduplication_present": false,
     "publication_status_present": false,
@@ -72,6 +72,35 @@
       "doi": "exact normalised DOI; exact normalised title or Jaro-Winkler title similarity >= 0.90",
       "fallback": "exact normalised title + exact year + exact normalised journal",
       "conflict_policy": "exact DOI with title similarity < 0.90 quarantined and not applied"
+    }
+  },
+  "deduplication": {
+    "workflow": "workflow_02_deduplication",
+    "implementation_language": "R",
+    "completed_at": "2026-09-14T16:27:01Z",
+    "summary": {
+      "input_records": 23809,
+      "output_records": 23809,
+      "records_removed": 0,
+      "unique": 21375,
+      "canonical": 1090,
+      "duplicates": 1344,
+      "adjudication_required": 0,
+      "candidate_pairs": 1469,
+      "auto_duplicate_pairs": 1344,
+      "rejected_distinct_pairs": 125,
+      "queued_pairs": 0,
+      "auto_rule_counts": {
+        "deterministic_duplicate": 1158,
+        "high_confidence_preprint_version": 163,
+        "very_high_confidence_same_work_version": 23
+      },
+      "rejection_reason_counts": {
+        "reject_same_issue_distinct_article": 14,
+        "reject_different_journal_doi_title": 89,
+        "reject_distinct_pagination": 22
+      },
+      "implementation_language": "R"
     }
   }
 }
