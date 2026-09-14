@@ -128,6 +128,27 @@ jobs:
             if (d$status == 'adjudication_required') stopifnot(identical(d$downstream_eligible,FALSE))
           }
           stopifnot(!anyDuplicated(ids))
+
+          # Cluster-state invariant: any record listed as a duplicate member must
+          # itself be status=duplicate and point back to that representative.
+          parsed <- lapply(lines, fromJSON, simplifyVector=FALSE)
+          id_index <- setNames(seq_along(parsed), ids)
+          for (i in seq_along(parsed)) {
+            d <- parsed[[i]]$deduplication
+            mem <- d$duplicate_members %||% list()
+            mem <- as.character(unlist(mem, use.names=FALSE))
+            if (length(mem)) {
+              for (mid in mem) {
+                stopifnot(mid %in% names(id_index))
+                md <- parsed[[id_index[[mid]]]]$deduplication
+                stopifnot(
+                  identical(md$status, 'duplicate'),
+                  identical(as.character(md$duplicate_of), ids[[i]])
+                )
+              }
+            }
+          }
+
           s <- fromJSON('outputs/fresh_workflow02/resolution_summary.json', simplifyVector=FALSE)
           stopifnot(s$input_records == expected, s$output_records == expected, s$records_removed == 0)
           stopifnot(is.numeric(s$unique), is.numeric(s$canonical), is.numeric(s$duplicates), is.numeric(s$adjudication_required))
