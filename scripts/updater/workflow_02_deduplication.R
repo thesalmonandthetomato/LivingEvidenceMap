@@ -72,7 +72,7 @@ prepared <- function(r) {
   c <- canonical(r); tk <- norm(c$title); av <- author_values(r)
   list(lens_id=lens_id(r), record_id=as.character(c$record_id %||% ''), title=as.character(c$title %||% ''), title_key=tk,
        abstract_key=norm(c$abstract), doi_keys=extract_dois(r), year_key=norm(c$year), year=year_int(c$year), source_key=norm(c$source),
-       first_author_key=if(length(av)) av[[1]] else '', title_prefix=substr(tk,1,24), title_token_key=paste(sort(unique(head(strsplit(tk,' +')[[1]],8))),collapse=' '))
+       author_keys=av, first_author_key=if(length(av)) av[[1]] else '', title_prefix=substr(tk,1,24), title_token_key=paste(sort(unique(head(strsplit(tk,' +')[[1]],8))),collapse=' '))
 }
 # Python-compatible Jaro-Winkler-like title similarity.
 jaro <- function(a,b) {
@@ -102,13 +102,50 @@ getidx<-function(e,k)if(nzchar(k)&&exists(k,e,inherits=FALSE))get(k,e)else integ
 candidate_payload <- function(status,basis,m,tsim,asim=0,manifestation=NULL){x<-list(status=status,basis=basis,matched_master_record_id=m$record_id,matched_master_lens_id=m$lens_id,matched_master_title=m$title,title_similarity=round(tsim,6),abstract_similarity=round(asim,6));if(!is.null(manifestation))x$manifestation_pattern<-manifestation;x}
 best_candidate<-function(xs){if(!length(xs))return(NULL); pri<-vapply(xs,function(x)switch(x$status,duplicate=1,probable_duplicate=3,possible_duplicate=4,doi_conflict_review=6,5),numeric(1)); xs[[order(pri,-vapply(xs,function(x)x$abstract_similarity%||%0,numeric(1)),-vapply(xs,function(x)x$title_similarity%||%0,numeric(1)))[1]]]}
 match_record <- function(inc, comps){
-  exact<-Filter(function(m)nzchar(inc$title_key)&&inc$title_key==m$title_key,comps);if(length(exact))return(candidate_payload('duplicate','exact normalised title',exact[[1]],1))
+  # Exact title equality is a candidate-generation signal, not sufficient proof
+  # of duplication. Generic/reused titles can otherwise create false transitive
+  # clusters. Require independent bibliographic support for auto-duplicate.
+  exact_choice <- NULL
+  exact <- Filter(function(m) nzchar(inc$title_key) && inc$title_key == m$title_key, comps)
+  if (length(exact)) {
+    ex <- list()
+    for (m in exact) {
+      as <- token_cosine(inc$abstract_key,m$abstract_key)
+      same_doi <- length(intersect(inc$doi_keys,m$doi_keys)) > 0
+      disjoint_doi <- length(inc$doi_keys) > 0 && length(m$doi_keys) > 0 && !same_doi
+      same_first <- nzchar(inc$first_author_key) && inc$first_author_key == m$first_author_key
+      author_overlap <- length(intersect(inc$author_keys,m$author_keys)) > 0
+      gap <- if (!is.na(inc$year) && !is.na(m$year)) abs(inc$year-m$year) else NA_integer_
+      year_compatible <- is.na(gap) || gap <= 2L
+
+      if (same_doi) {
+        st <- 'duplicate'
+        ba <- 'exact normalised title plus matching DOI'
+      } else if (same_first && author_overlap && year_compatible && !disjoint_doi) {
+        st <- 'duplicate'
+        ba <- 'exact normalised title plus compatible authors and publication year'
+      } else if (as >= .95 && year_compatible && !disjoint_doi) {
+        st <- 'probable_duplicate'
+        ba <- 'exact normalised title plus very high abstract similarity; independent bibliographic confirmation required'
+      } else {
+        st <- 'possible_duplicate'
+        ba <- 'exact normalised title without sufficient independent bibliographic support'
+      }
+      ex[[length(ex)+1L]] <- candidate_payload(st,ba,m,1,as)
+    }
+    exact_choice <- best_candidate(ex)
+    if (!is.null(exact_choice) && identical(exact_choice$status,'duplicate')) return(exact_choice)
+  }
   dc<-list();if(length(inc$doi_keys))for(m in comps)if(length(intersect(inc$doi_keys,m$doi_keys))){ts<-title_similarity(inc$title_key,m$title_key);as<-token_cosine(inc$abstract_key,m$abstract_key); if(ts>=.90){st<-'duplicate';ba<-'matching DOI plus compatible title'}else if(!nzchar(inc$title_key)||!nzchar(m$title_key)){st<-'possible_duplicate';ba<-'matching DOI but one title unavailable'}else{st<-'doi_conflict_review';ba<-'matching DOI but discordant titles'};dc[[length(dc)+1]]<-candidate_payload(st,ba,m,ts,as)}
   chosen<-best_candidate(dc);if(!is.null(chosen)&&chosen$status!='doi_conflict_review')return(chosen)
   cs<-list();for(m in comps){same<-nzchar(inc$first_author_key)&&inc$first_author_key==m$first_author_key; gap<-if(!is.na(inc$year)&&!is.na(m$year))abs(inc$year-m$year)else NA; compat<-is.na(gap)||gap<=2;ts<-title_similarity(inc$title_key,m$title_key)
     if(same&&compat&&nzchar(inc$abstract_key)&&nzchar(m$abstract_key)){as<-token_cosine(inc$abstract_key,m$abstract_key);pre<-source_preprint_missing(inc$source_key)||source_preprint_missing(m$source_key);if(as>=.94){cs[[length(cs)+1]]<-candidate_payload('probable_duplicate','very high abstract similarity plus same first author and compatible publication year',m,ts,as,if(pre)'preprint_or_repository_to_later_manifestation'else'same_work_manifestation');next};if(as>=.88&&(pre||ts>=.80)){cs[[length(cs)+1]]<-candidate_payload('probable_duplicate','high abstract similarity plus same first author, compatible publication year, and preprint/repository or compatible-title evidence',m,ts,as,if(pre)'preprint_or_repository_to_later_manifestation'else'same_work_manifestation');next};if(as>=.82)cs[[length(cs)+1]]<-candidate_payload('possible_duplicate','moderate-high abstract similarity plus same first author and compatible publication year',m,ts,as,'possible_same_work_manifestation')}
     bases<-character();if(nzchar(inc$year_key)&&inc$year_key==m$year_key)bases<-c(bases,'same year');if(same)bases<-c(bases,'same first author');if(nzchar(inc$title_prefix)&&inc$title_prefix==m$title_prefix)bases<-c(bases,'same title prefix');if(nzchar(inc$title_token_key)&&inc$title_token_key==m$title_token_key)bases<-c(bases,'same title-token key');if(length(bases)&&ts>=FUZZY_THRESHOLD){prob<-ts>=PROBABLE_THRESHOLD&&bases[1]%in%c('same first author','same title prefix','same title-token key');cs[[length(cs)+1]]<-candidate_payload(if(prob)'probable_duplicate'else'possible_duplicate',sprintf('%s title similarity plus %s',if(prob)'very high'else'high',bases[1]),m,ts)}}
-  best_candidate(c(cs,if(is.null(chosen))list()else list(chosen)))
+  best_candidate(c(
+    cs,
+    if(is.null(chosen)) list() else list(chosen),
+    if(is.null(exact_choice)) list() else list(exact_choice)
+  ))
 }
 
 candidates<-list();seen<-new.env(hash=TRUE,parent=emptyenv())
