@@ -1,0 +1,116 @@
+name: Recover OpenAlex batch to Zenodo
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_number:
+        description: "Batch number whose preserved artifact should be staged to Zenodo"
+        required: true
+        type: number
+      source_run_id:
+        description: "Failed OpenAlex workflow run ID containing the preserved final artifact"
+        required: true
+        type: string
+
+concurrency:
+  group: openalex-fulltext-zenodo
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate recovery inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          BATCH="${{ inputs.batch_number }}"
+          SOURCE_RUN="${{ inputs.source_run_id }}"
+          [[ "$BATCH" =~ ^[0-9]+$ ]] || { echo "Batch number must be an integer."; exit 1; }
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]] || { echo "Source run ID must be numeric."; exit 1; }
+          (( BATCH >= 1 && BATCH <= 40 )) || { echo "Batch number must be between 1 and 40."; exit 1; }
+
+      - name: Restore preserved final batch artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openalex-fulltext-batch-${{ inputs.batch_number }}-final-${{ inputs.source_run_id }}
+          path: openalex_fulltext/batch_${{ inputs.batch_number }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Confirm preserved artifact contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          BATCH_DIR="openalex_fulltext/batch_${{ inputs.batch_number }}"
+          test -f "$BATCH_DIR/download_manifest.csv"
+          echo "Recovered artifact from run ${{ inputs.source_run_id }}:"
+          find "$BATCH_DIR" -maxdepth 1 -type f -printf '%f\n' | sort
+          echo "Files: $(find "$BATCH_DIR" -maxdepth 1 -type f | wc -l)"
+
+      - name: Stage preserved batch in private Zenodo
+        id: zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          python scripts/zenodo_partial_batch.py \
+            --batch "${{ inputs.batch_number }}" \
+            --output openalex_fulltext \
+            --source-run-id "${{ inputs.source_run_id }}"
+
+      - name: Verify Zenodo round trip
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          python scripts/verify_zenodo_batch.py \
+            --batch "${{ inputs.batch_number }}" \
+            --output openalex_fulltext
+
+      - name: Update master full-text provenance registry
+        run: |
+          python scripts/update_fulltext_batch_registry.py \
+            --manifest "openalex_fulltext/batch_${{ inputs.batch_number }}/download_manifest.csv" \
+            --receipt "openalex_fulltext/batch_${{ inputs.batch_number }}/zenodo_receipt.json" \
+            --registry data/reference/fulltext_batch_registry.csv
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/reference/fulltext_batch_registry.csv
+          if git diff --cached --quiet; then
+            echo "No provenance registry changes to commit."
+          else
+            git commit -m "Recover OpenAlex batch ${{ inputs.batch_number }} to Zenodo"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Upload recovered final state
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-fulltext-batch-${{ inputs.batch_number }}-zenodo-recovery-${{ github.run_id }}
+          path: openalex_fulltext/batch_${{ inputs.batch_number }}
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Show Zenodo receipt and verification
+        shell: bash
+        run: |
+          BATCH_DIR="openalex_fulltext/batch_${{ inputs.batch_number }}"
+          for f in zenodo_receipt.json zenodo_verification.json; do
+            echo "--- $f ---"
+            cat "$BATCH_DIR/$f"
+          done
