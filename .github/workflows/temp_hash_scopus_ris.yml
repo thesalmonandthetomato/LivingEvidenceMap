@@ -1,0 +1,22 @@
+name: Hash Scopus RIS
+
+on:
+  push:
+    paths:
+      - '.github/workflows/temp_hash_scopus_ris.yml'
+
+jobs:
+  hash:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Hash Scopus RIS
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE='data/external/export_bcf8e118-e7ba-47c0-9b69-63f0a98dd2b0_2026-09-14T100754.023402853.ris'
+          sha256sum "$FILE"
+          wc -c "$FILE"
+          grep -c '^TY  -' "$FILE"
