@@ -19,6 +19,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Deposit all successfully downloaded files from a partial OpenAlex batch.")
     parser.add_argument("--batch", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--source-run-id", default=None, help="GitHub Actions run ID that produced the preserved batch artifact.")
     args = parser.parse_args()
 
     plan = oa.build_plan()
@@ -47,7 +48,7 @@ def main() -> int:
 
     # The Zenodo filename is part of the provenance chain.  Every future
     # deposition therefore carries the exact GitHub Actions run that produced it.
-    run_id = os.environ.get("GITHUB_RUN_ID", "unknown")
+    run_id = str(args.source_run_id or os.environ.get("GITHUB_RUN_ID", "unknown"))
     linked_zip_path = batch_dir / f"LivingEvidenceMap_fulltext_batch_{args.batch:03d}_run-{run_id}.zip"
     if linked_zip_path.exists():
         linked_zip_path.unlink()
