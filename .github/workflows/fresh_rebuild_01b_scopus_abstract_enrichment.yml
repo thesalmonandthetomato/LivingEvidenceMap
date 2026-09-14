@@ -1,0 +1,85 @@
+name: Workflow 01B - Scopus abstract enrichment
+
+on:
+  workflow_dispatch:
+    inputs:
+      scopus_ris_path:
+        description: 'Path on main to the Scopus RIS export'
+        required: true
+        default: 'data/external/export_512d303c-60dc-47d2-bdc4-f74cf76a335b_2026-09-14T101344.295379711.ris'
+      expected_sha256:
+        description: 'Expected SHA256 of the Scopus RIS'
+        required: true
+        default: 'f31248e20e7f5d140b29fd0b7852022abd2c8c9b93daa845bcf9e90d8a9a651d'
+
+permissions:
+  contents: write
+
+env:
+  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+
+jobs:
+  scopus-abstract-enrichment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout fresh canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-2026-09-08-v1
+          fetch-depth: 0
+          lfs: true
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(c('jsonlite', 'stringdist'))
+
+      - name: Load implementation and Scopus source from main
+        shell: bash
+        env:
+          SCOPUS_RIS_PATH: ${{ inputs.scopus_ris_path }}
+          EXPECTED_SHA256: ${{ inputs.expected_sha256 }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git show origin/main:scripts/updater/workflow_01b_scopus_abstract_enrichment.R > /tmp/workflow_01b_scopus_abstract_enrichment.R
+          git show "origin/main:${SCOPUS_RIS_PATH}" > /tmp/scopus_enrichment.ris
+          echo "${EXPECTED_SHA256}  /tmp/scopus_enrichment.ris" | sha256sum -c -
+
+      - name: Fill missing abstracts from Scopus
+        shell: bash
+        env:
+          SCOPUS_RIS_PATH: ${{ inputs.scopus_ris_path }}
+        run: |
+          set -euo pipefail
+          mkdir -p fresh_rebuild_01b
+          Rscript /tmp/workflow_01b_scopus_abstract_enrichment.R             --input data/canonical/current/repair/records.jsonl             --scopus-ris /tmp/scopus_enrichment.ris             --output fresh_rebuild_01b/enriched_records.jsonl             --audit fresh_rebuild_01b/scopus_abstract_recovery_audit.csv             --conflicts fresh_rebuild_01b/scopus_doi_title_conflicts.csv             --report fresh_rebuild_01b/scopus_abstract_enrichment_report.json             --manifest data/canonical/current/repair/manifest.json             --source-name "${SCOPUS_RIS_PATH}"
+          mv fresh_rebuild_01b/enriched_records.jsonl data/canonical/current/repair/records.jsonl
+
+      - name: Persist Scopus-enriched canonical JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git lfs install --local
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git commit -m 'Fill missing canonical abstracts from Scopus'
+          git lfs push origin "$FRESH_CANONICAL_BRANCH"
+          git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
+          git log -1 --format='scopus_enriched_canonical_commit=%H'
+
+      - name: Upload Workflow 01B audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-01b-scopus-abstract-enrichment-${{ github.run_id }}
+          path: fresh_rebuild_01b/
+          retention-days: 90
+          if-no-files-found: error
