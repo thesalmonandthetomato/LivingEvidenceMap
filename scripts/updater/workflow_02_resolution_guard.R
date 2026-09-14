@@ -128,16 +128,43 @@ touched<-unique(unlist(lapply(auto_pairs,function(ca)c(ca$record_index+1L,ca$mat
 groups<-if(length(touched))split(touched,vapply(touched,find_root,integer(1)))else list()
 rep_by<-rep(NA_integer_,n);members<-vector('list',n);rules<-vector('list',n)
 for(g in groups){vals<-lapply(g,function(i)survivor_score(records[[i]]));ord<-do.call(order,c(lapply(seq_len(length(vals[[1]])),function(k)-vapply(vals,`[`,numeric(1),k)),list(na.last=TRUE)));rep<-g[ord[1]];for(i in g)rep_by[i]<-rep;members[[rep]]<-setdiff(g,rep);rules[[rep]]<-unique(unlist(lapply(auto_pairs,function(ca)if((ca$record_index+1L)%in%g&&(ca$matched_index+1L)%in%g)ca$resolution_rule else NULL)))}
+# Attach pending review to the resolved representative cluster, not to a
+# manifestation inside that cluster. Confirmed duplicate members must remain
+# duplicate records even when their representative has a pending external pair.
+cluster_rep<-function(i) if(!is.na(rep_by[i])) rep_by[i] else i
 review_refs<-vector('list',n)
-for(ca in queued){a<-ca$record_index+1L;b<-ca$matched_index+1L;if(a<1||b<1||a>n||b>n)next;link<-list(status=ca$status,basis=ca$basis,title_similarity=ca$title_similarity,abstract_similarity=ca$abstract_similarity,manifestation_pattern=ca$manifestation_pattern);review_refs[[a]]<-c(review_refs[[a]],list(c(link,list(other_index=b-1L,other_lens_id=lens_id(records[[b]])))));review_refs[[b]]<-c(review_refs[[b]],list(c(link,list(other_index=a-1L,other_lens_id=lens_id(records[[a]])))))}
+internal_queued<-list()
+for(ca in queued){
+  a0<-ca$record_index+1L;b0<-ca$matched_index+1L
+  if(a0<1||b0<1||a0>n||b0>n)next
+  a<-cluster_rep(a0);b<-cluster_rep(b0)
+  link<-list(status=ca$status,basis=ca$basis,title_similarity=ca$title_similarity,abstract_similarity=ca$abstract_similarity,manifestation_pattern=ca$manifestation_pattern,original_lens_id=lens_id(records[[a0]]),original_other_lens_id=lens_id(records[[b0]]))
+  if(a==b){
+    internal_queued[[length(internal_queued)+1L]]<-c(link,list(representative_lens_id=lens_id(records[[a]])))
+    next
+  }
+  review_refs[[a]]<-c(review_refs[[a]],list(c(link,list(other_index=b-1L,other_lens_id=lens_id(records[[b]])))))
+  review_refs[[b]]<-c(review_refs[[b]],list(c(link,list(other_index=a-1L,other_lens_id=lens_id(records[[a]])))))
+}
+write_jsonl(internal_queued,file.path(output_dir,'queued_pairs_internal_to_auto_clusters.jsonl'))
 
 partial_path<-file.path(checkpoint_dir,'annotated_records.partial.jsonl');if(file.exists(partial_path))file.remove(partial_path);con<-file(partial_path,'at',encoding='UTF-8');on.exit(close(con),add=TRUE)
 counts<-c(unique=0L,canonical=0L,duplicate=0L,adjudication_required=0L)
 for(i in seq_len(n)){
   r<-records[[i]]
-  if(length(review_refs[[i]])) d<-list(workflow='02_deduplication',implementation_language='R',status='adjudication_required',downstream_eligible=FALSE,candidate_links=review_refs[[i]])
-  else if(!is.na(rep_by[i])){rep<-rep_by[i];if(i==rep)d<-list(workflow='02_deduplication',implementation_language='R',status='canonical',downstream_eligible=TRUE,duplicate_members=vapply(members[[rep]],function(j)lens_id(records[[j]]),character(1)),resolution_rules=rules[[rep]])else d<-list(workflow='02_deduplication',implementation_language='R',status='duplicate',downstream_eligible=FALSE,duplicate_of=lens_id(records[[rep]]),representative_index=rep-1L,resolution_rules=rules[[rep]])}
-  else d<-list(workflow='02_deduplication',implementation_language='R',status='unique',downstream_eligible=TRUE)
+  if(!is.na(rep_by[i])&&i!=rep_by[i]){
+    rep<-rep_by[i]
+    d<-list(workflow='02_deduplication',implementation_language='R',status='duplicate',downstream_eligible=FALSE,duplicate_of=lens_id(records[[rep]]),representative_index=rep-1L,resolution_rules=rules[[rep]])
+  } else if(length(review_refs[[i]])){
+    d<-list(workflow='02_deduplication',implementation_language='R',status='adjudication_required',downstream_eligible=FALSE,candidate_links=review_refs[[i]])
+    if(!is.na(rep_by[i])&&i==rep_by[i]){
+      d$duplicate_members<-vapply(members[[i]],function(j)lens_id(records[[j]]),character(1))
+      d$resolution_rules<-rules[[i]]
+    }
+  } else if(!is.na(rep_by[i])){
+    rep<-rep_by[i]
+    d<-list(workflow='02_deduplication',implementation_language='R',status='canonical',downstream_eligible=TRUE,duplicate_members=vapply(members[[rep]],function(j)lens_id(records[[j]]),character(1)),resolution_rules=rules[[rep]])
+  } else d<-list(workflow='02_deduplication',implementation_language='R',status='unique',downstream_eligible=TRUE)
   r$deduplication<-d;counts[d$status]<-counts[d$status]+1L
   writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con);flush(con)
   if(i%%checkpoint_every==0L||i==n){writeLines(toJSON(list(phase='guarded_resolution',processed_records=i,total_records=n,status_counts=as.list(counts),updated_at=now_utc()),auto_unbox=TRUE,pretty=TRUE),file.path(checkpoint_dir,'checkpoint_manifest.json'));message(sprintf('Workflow 02 checkpoint: guarded resolution %d/%d',i,n))}
@@ -145,7 +172,7 @@ for(i in seq_len(n)){
 close(con)
 file.copy(partial_path,file.path(output_dir,'annotated_records.jsonl'),overwrite=TRUE)
 write_jsonl(queued,file.path(output_dir,'adjudication_queue.jsonl'))
-summary<-list(input_records=n,output_records=n,records_removed=0,unique=unname(counts['unique']),canonical=unname(counts['canonical']),duplicates=unname(counts['duplicate']),adjudication_required=unname(counts['adjudication_required']),candidate_pairs=length(candidates),auto_duplicate_pairs=length(auto_pairs),rejected_distinct_pairs=length(rejected),queued_pairs=length(queued),auto_rule_counts=as.list(rule_counts),rejection_reason_counts=as.list(reject_counts),implementation_language='R')
+summary<-list(input_records=n,output_records=n,records_removed=0,unique=unname(counts['unique']),canonical=unname(counts['canonical']),duplicates=unname(counts['duplicate']),adjudication_required=unname(counts['adjudication_required']),candidate_pairs=length(candidates),auto_duplicate_pairs=length(auto_pairs),rejected_distinct_pairs=length(rejected),queued_pairs=length(queued),queued_pairs_internal_to_auto_clusters=length(internal_queued),auto_rule_counts=as.list(rule_counts),rejection_reason_counts=as.list(reject_counts),implementation_language='R')
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(output_dir,'resolution_summary.json'))
 writeLines(toJSON(list(workflow='workflow_02_deduplication',created_at=now_utc(),summary=summary),auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(output_dir,'resolution_audit.json'))
 if(sum(counts)!=n)stop('Status count invariant failed')
