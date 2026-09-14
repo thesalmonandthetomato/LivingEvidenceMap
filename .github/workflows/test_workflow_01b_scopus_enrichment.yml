@@ -24,6 +24,7 @@ jobs:
           {"identity":{"lens_id":"B"},"canonical":{"title":"Second study","abstract":"Existing abstract","doi":"10.1000/def","year":2021,"source":"Journal B"}}
           {"identity":{"lens_id":"C"},"canonical":{"title":"Title match only","abstract":"","doi":null,"year":2022,"source":"Journal C"}}
           {"identity":{"lens_id":"D"},"canonical":{"title":"Completely different title","abstract":"","doi":"10.1000/conflict","year":2023,"source":"Journal D"}}
+          {"identity":{"lens_id":"E"},"canonical":{"title":"Missing year DOI match","abstract":"","doi":"10.1000/missingyear","year":null,"source":"Journal E"}}
           EOF
           cat > /tmp/scopus.ris <<'EOF'
           TY  - JOUR
@@ -57,6 +58,14 @@ jobs:
           DO  - 10.1000/conflict
           AB  - Must be quarantined.
           ER  -
+
+          TY  - JOUR
+          TI  - Missing year DOI match
+          PY  - 2024
+          T2  - Journal E
+          DO  - 10.1000/missingyear
+          AB  - Recovered despite missing canonical year.
+          ER  -
           EOF
       - name: Run enrichment
         shell: bash
@@ -72,8 +81,9 @@ jobs:
           stopifnot(x[[2]]$canonical$abstract == 'Existing abstract')
           stopifnot(x[[3]]$canonical$abstract == 'Recovered title-year-journal abstract.')
           stopifnot(is.null(x[[4]]$canonical$abstract) || x[[4]]$canonical$abstract == '')
+          stopifnot(x[[5]]$canonical$abstract == 'Recovered despite missing canonical year.')
           r <- fromJSON('/tmp/report.json')
-          stopifnot(r$abstracts_recovered == 2)
+          stopifnot(r$abstracts_recovered == 3)
           stopifnot(r$existing_abstracts_overwritten == 0)
           stopifnot(r$doi_title_conflicts_quarantined == 1)
           cat('PASS: synthetic Workflow 01B test\\n')
