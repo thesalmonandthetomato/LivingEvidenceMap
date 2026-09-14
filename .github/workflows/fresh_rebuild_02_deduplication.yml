@@ -9,13 +9,18 @@ on:
         default: audit
         type: choice
         options: [audit, apply]
+      canonical_branch:
+        description: 'Canonical branch to audit/apply'
+        required: true
+        default: canonical-fresh-2026-09-08-v1
+        type: string
 
 permissions:
   contents: write
   actions: read
 
 env:
-  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+  FRESH_CANONICAL_BRANCH: ${{ inputs.canonical_branch }}
 
 jobs:
   deduplication:
@@ -51,7 +56,7 @@ jobs:
       - name: Checkout fresh canonical JSON with LFS
         uses: actions/checkout@v4
         with:
-          ref: canonical-fresh-2026-09-08-v1
+          ref: ${{ inputs.canonical_branch }}
           fetch-depth: 0
           lfs: true
           path: canonical_store
