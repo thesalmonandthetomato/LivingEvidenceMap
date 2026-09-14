@@ -49,7 +49,9 @@ norm_doi <- function(x) {
   x <- tolower(trimws(x))
   x <- sub('^https?://(dx\\.)?doi\\.org/', '', x)
   x <- sub('^doi:\\s*', '', x)
-  x <- sub('[ .;,]+
+  x <- sub('[ .;,]+$', '', x)
+  if (is.na(x)) '' else x
+}
 
 parse_ris <- function(path) {
   lines <- readLines(path, encoding = 'UTF-8', warn = FALSE)
