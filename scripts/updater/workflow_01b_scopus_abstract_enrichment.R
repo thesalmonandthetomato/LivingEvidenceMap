@@ -153,7 +153,9 @@ repeat {
     missing_before <- missing_before + 1L
     cdoi <- norm_doi(canonical$doi)
     ctitle <- norm_text(canonical$title)
-    cyear <- suppressWarnings(as.integer(canonical$year))
+    cyear_raw <- canonical$year %||% NA_integer_
+    cyear <- suppressWarnings(as.integer(cyear_raw[[1L]]))
+    if (!length(cyear) || is.na(cyear)) cyear <- NA_integer_
     cjournal <- norm_text(canonical$source)
     chosen <- NULL
     method <- NULL
