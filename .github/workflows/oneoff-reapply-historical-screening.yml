@@ -1,0 +1,219 @@
+name: One-off - Reapply historical screening decisions
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Audit first; apply only after audit review'
+        required: true
+        default: audit
+        type: choice
+        options: [audit, apply]
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+
+jobs:
+  historical-screening:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main orchestration branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Validate restoration script
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/oneoff_reapply_historical_screening.R')
+          cat('PASS: restoration R script parses successfully\n')
+
+      - name: Download base historical reconciliation artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: historical-reconciliation-audit-34568524841
+          path: /tmp/workflow03/base
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 34568524841
+
+      - name: Download corrected second-pass reconciliation artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: second-pass-unmatched-master-includes-34592152244
+          path: /tmp/workflow03/second_pass
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 34592152244
+
+      - name: Validate historical reconciliation inputs
+        run: |
+          set -euo pipefail
+          test -s /tmp/workflow03/base/candidate_screening_history.jsonl
+          test -s /tmp/workflow03/second_pass/high_confidence_matches.jsonl
+          test "$(wc -l < /tmp/workflow03/base/candidate_screening_history.jsonl)" -eq 17735
+          test "$(wc -l < /tmp/workflow03/second_pass/high_confidence_matches.jsonl)" -eq 80
+          sha256sum /tmp/workflow03/base/candidate_screening_history.jsonl
+          sha256sum /tmp/workflow03/second_pass/high_confidence_matches.jsonl
+
+      - name: Checkout fresh canonical JSON with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-2026-09-08-v1
+          fetch-depth: 0
+          lfs: true
+          path: canonical_store
+
+      - name: Validate canonical input
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
+          rp <- 'canonical_store/data/canonical/current/repair/records.jsonl'
+          m <- fromJSON(mp,simplifyVector=FALSE)
+          stopifnot(identical(m$pipeline_stage,'deduplicated'))
+          expected <- as.integer(m$unique_records_written %||% m$lens_reported_total)
+          lines <- readLines(rp,warn=FALSE,encoding='UTF-8')
+          lines <- lines[nzchar(trimws(lines))]
+          stopifnot(length(lines)==expected)
+          ids <- character(length(lines))
+          for (i in seq_along(lines)) {
+            r <- fromJSON(lines[[i]],simplifyVector=FALSE)
+            ids[i] <- as.character(r$identity$lens_id %||% '')
+            stopifnot(is.list(r$deduplication),is.null(r$screening),is.null(r$screening_history))
+          }
+          stopifnot(all(nzchar(ids)),!anyDuplicated(ids))
+          cat(sprintf('PASS: %d deduplicated records ready for historical screening restoration\n',length(lines)))
+
+      - name: Run historical screening restoration
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/oneoff_reapply_historical_screening
+          Rscript scripts/updater/oneoff_reapply_historical_screening.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --base-history /tmp/workflow03/base/candidate_screening_history.jsonl \
+            --second-pass /tmp/workflow03/second_pass/high_confidence_matches.jsonl \
+            --output-dir outputs/oneoff_reapply_historical_screening
+
+      - name: Validate restoration output
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          m <- fromJSON(
+            'canonical_store/data/canonical/current/repair/manifest.json',
+            simplifyVector=FALSE
+          )
+          expected <- as.integer(m$unique_records_written %||% m$lens_reported_total)
+          s <- fromJSON(
+            'outputs/oneoff_reapply_historical_screening/historical_screening_summary.json',
+            simplifyVector=FALSE
+          )
+          stopifnot(
+            s$input_records==expected,
+            s$output_records==expected,
+            s$historical_decision_ledger_records==17849,
+            s$manual_adjudication_keys_recovered==37,
+            s$new_screening_queue_records==s$representatives_not_previously_screened
+          )
+          stopifnot(
+            s$representatives_include +
+            s$representatives_exclude +
+            s$representatives_not_previously_screened +
+            s$representatives_with_historical_conflict ==
+            s$downstream_representatives
+          )
+          print(s)
+          if ('${{ inputs.mode }}' == 'apply' &&
+              s$representatives_with_historical_conflict != 0) {
+            stop('Apply blocked: historical decision conflicts remain')
+          }
+
+      - name: Persist historical screening reconciliation
+        if: ${{ inputs.mode == 'apply' }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          file.copy(
+            'outputs/oneoff_reapply_historical_screening/annotated_records.jsonl',
+            'canonical_store/data/canonical/current/repair/records.jsonl',
+            overwrite=TRUE
+          )
+          file.copy(
+            'outputs/oneoff_reapply_historical_screening/historical_screening_decisions_normalized.jsonl',
+            'canonical_store/data/canonical/current/repair/historical_screening_decisions.jsonl',
+            overwrite=TRUE
+          )
+          file.copy(
+            'outputs/oneoff_reapply_historical_screening/new_screening_queue.jsonl',
+            'canonical_store/data/canonical/current/repair/new_screening_queue.jsonl',
+            overwrite=TRUE
+          )
+
+          mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
+          m <- fromJSON(mp,simplifyVector=FALSE)
+          s <- fromJSON(
+            'outputs/oneoff_reapply_historical_screening/historical_screening_summary.json',
+            simplifyVector=FALSE
+          )
+          m$historical_screening_reconciliation <- list(
+            workflow='oneoff_reapply_historical_screening',
+            implementation_language='R',
+            completed_at=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'),
+            base_reconciliation_run=34568524841,
+            second_pass_run=34592152244,
+            summary=s
+          )
+          m$pipeline_stage <- 'historical_screening_reconciled'
+          writeLines(
+            toJSON(m,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),
+            mp
+          )
+
+      - name: Commit restored historical screening state
+        if: ${{ inputs.mode == 'apply' }}
+        working-directory: canonical_store
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git lfs install --local
+          git add \
+            data/canonical/current/repair/records.jsonl \
+            data/canonical/current/repair/manifest.json \
+            data/canonical/current/repair/historical_screening_decisions.jsonl \
+            data/canonical/current/repair/new_screening_queue.jsonl
+          git diff --cached --quiet && {
+            echo 'No historical-screening changes detected'
+            exit 1
+          }
+          git commit -m 'Reapply historical screening decisions'
+          git lfs push origin "$FRESH_CANONICAL_BRANCH"
+          git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
+          git log -1 --format='historical_screening_commit=%H'
+
+      - name: Upload restoration artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oneoff-historical-screening-${{ inputs.mode }}-${{ github.run_id }}
+          path: outputs/oneoff_reapply_historical_screening/
+          retention-days: 90
+          if-no-files-found: warn
