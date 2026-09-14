@@ -10,7 +10,7 @@ source("R/relevance_screening.R")
 
 update_dir <- here::here("data", "updates", "2026-08-13_lens")
 incoming_file <- fs::path(update_dir, "lens-export.ris")
-existing_corpus_file <- here::here("data", "reference", "salmon_evidence_map.csv")
+existing_corpus_file <- here::here("data", "master", "current", "living_evidence_map_master.csv")
 
 fs::dir_create(update_dir)
 validate_lens_update(incoming_file)
