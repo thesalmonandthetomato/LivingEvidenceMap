@@ -144,9 +144,14 @@ for (ca in candidates) {
   if (!is.null(sd)) { ca$resolution_rule<-sd$rule;ca$resolution_evidence<-Filter(Negate(is.null),sd$evidence);rejected[[length(rejected)+1]]<-ca;reject_counts<-inc_count(reject_counts,sd$rule);next }
   asim<-as.numeric(ca$abstract_similarity%||%0);tsim<-as.numeric(ca$title_similarity%||%0);manifest<-ca$manifestation_pattern%||%''
   rule<-NULL
+  da<-extract_dois(a); db<-extract_dois(b)
+  populated_doi_conflict<-length(da)>0&&length(db)>0&&length(intersect(da,db))==0
+  exact_title<-nzchar(norm(canonical(a)$title))&&norm(canonical(a)$title)==norm(canonical(b)$title)
+
   if (identical(ca$status,'duplicate')) rule<-'deterministic_duplicate'
   else if (manifest=='preprint_or_repository_to_later_manifestation'&&asim>=.90&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'high_confidence_preprint_version'
   else if (manifest=='same_work_manifestation'&&asim>=.95&&tsim>=.85&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'very_high_confidence_same_work_version'
+  else if (exact_title&&asim>=.999&&!populated_doi_conflict) rule<-'exact_title_identical_abstract_no_contradiction'
   else if (asim>=.95&&tsim>=.90&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'high_abstract_title_similarity_compatible_bibliography'
   if (is.null(rule)) {ca$resolution_rule<-'requires_adjudication';queued[[length(queued)+1]]<-ca} else {ca$resolution_rule<-rule;auto_pairs[[length(auto_pairs)+1]]<-ca;rule_counts<-inc_count(rule_counts,rule)}
 }
