@@ -17,7 +17,7 @@
   "records_without_lens_id": 0,
   "batches": 48,
   "canonical_path": "data/canonical/current/repair/records.jsonl",
-  "pipeline_stage": "deduplicated",
+  "pipeline_stage": "publication_status_screened",
   "fresh_state": {
     "deduplication_present": false,
     "publication_status_present": false,
@@ -109,6 +109,42 @@
         "reject_exact_title_disjoint_doi_authors": 16
       },
       "implementation_language": "R"
+    }
+  },
+  "notices": {
+    "workflow": "workflow_03_publication_status",
+    "implementation_language": "R",
+    "completed_at": "2026-09-15T17:29:08Z",
+    "provider": "openalex",
+    "summary": {
+      "workflow": "workflow_03_publication_status",
+      "implementation_language": "R",
+      "mode": "apply",
+      "checked_at": "2026-09-15T17:29:08Z",
+      "input_records": 23809,
+      "dedup_downstream_eligible_records": 22607,
+      "manifestations_checked": 23809,
+      "duplicate_manifestations_checked": 1202,
+      "unique_dois_queried": 19648,
+      "notices_total": 23,
+      "retraction_notices": 1,
+      "withdrawal_notices": 3,
+      "correction_notices": 13,
+      "corrigendum_notices": 2,
+      "erratum_notices": 3,
+      "openalex_retracted_originals": 1,
+      "blocking_notice_records": 5,
+      "downstream_excluded_by_notice": 4,
+      "retained_notice_records": 18,
+      "retracted_duplicate_manifestations": 1,
+      "retracted_canonical_manifestations": 0,
+      "retracted_unique_manifestations": 4,
+      "clusters_with_retracted_manifestation": 5,
+      "openalex_not_found": 135,
+      "openalex_failed_records": 0,
+      "failed_batches": [],
+      "records_removed": 0,
+      "checkpoint_dir": "outputs/fresh_workflow03/checkpoints"
     }
   }
 }
