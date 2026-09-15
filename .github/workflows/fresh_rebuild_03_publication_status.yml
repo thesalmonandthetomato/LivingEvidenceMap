@@ -14,13 +14,18 @@ on:
         default: audit
         type: choice
         options: [audit, apply]
+      canonical_branch:
+        description: 'Deduplicated canonical branch'
+        required: true
+        default: canonical-fresh-dedup-v2-2026-09-14
+        type: string
 
 permissions:
   contents: write
   actions: read
 
 env:
-  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+  FRESH_CANONICAL_BRANCH: ${{ inputs.canonical_branch || 'canonical-fresh-dedup-v2-2026-09-14' }}
 
 jobs:
   publication-status:
@@ -55,7 +60,7 @@ jobs:
       - name: Checkout fresh canonical JSON with LFS
         uses: actions/checkout@v4
         with:
-          ref: canonical-fresh-2026-09-08-v1
+          ref: ${{ env.FRESH_CANONICAL_BRANCH }}
           fetch-depth: 0
           lfs: true
           path: canonical_store
@@ -129,6 +134,10 @@ jobs:
           if (as.integer(s$notices_total) != expected_notices) stop(sprintf('ERROR: notice-type totals do not sum to notices_total: types=%d notices_total=%d', expected_notices, as.integer(s$notices_total)), call.=FALSE)
           if (as.integer(s$downstream_excluded_by_notice) != as.integer(s$retraction_notices) + as.integer(s$withdrawal_notices) + as.integer(s$openalex_retracted_originals)) stop('ERROR: downstream notice exclusions are inconsistent with retraction/withdrawal rules', call.=FALSE)
           if (as.integer(s$retained_notice_records) != as.integer(s$correction_notices) + as.integer(s$corrigendum_notices) + as.integer(s$erratum_notices)) stop('ERROR: retained notice count is inconsistent with correction/corrigendum/erratum rules', call.=FALSE)
+          if (as.integer(s$manifestations_checked) != as.integer(s$input_records)) stop('ERROR: Workflow 03 did not check every manifestation', call.=FALSE)
+          if (as.integer(s$duplicate_manifestations_checked) != 1202L) stop(sprintf('ERROR: expected 1202 duplicate manifestations checked, found %d', as.integer(s$duplicate_manifestations_checked)), call.=FALSE)
+          direct_retracted <- as.integer(s$retracted_duplicate_manifestations) + as.integer(s$retracted_canonical_manifestations) + as.integer(s$retracted_unique_manifestations)
+          if (direct_retracted != as.integer(s$retraction_notices) + as.integer(s$withdrawal_notices) + as.integer(s$openalex_retracted_originals)) stop('ERROR: direct retraction counts by deduplication status do not reconcile', call.=FALSE)
           cat(toJSON(s, auto_unbox=TRUE, pretty=TRUE, null='null'), '\n')
           cat('PASS: Workflow 03 notice classification, cardinality and provider-failure invariants validated\n')
 
@@ -155,10 +164,11 @@ jobs:
               n <- r$notices
               if (!n$type %in% allowed) stop(sprintf('ERROR: invalid notices.type=%s at Lens ID %s', n$type %||% '<missing>', ids[i]), call.=FALSE)
               if (!identical(n$downstream_eligible, TRUE) && !identical(n$downstream_eligible, FALSE)) stop(sprintf('ERROR: invalid notices.downstream_eligible at Lens ID %s', ids[i]), call.=FALSE)
-              if (!dedup_ok) stop(sprintf('ERROR: notice annotation attached to dedup-ineligible record %s', ids[i]), call.=FALSE)
               blocking_type <- n$type %in% c('retraction','withdrawal','retracted_original')
-              if (blocking_type && !identical(n$downstream_eligible, FALSE)) stop(sprintf('ERROR: blocking notice remained downstream eligible at Lens ID %s', ids[i]), call.=FALSE)
-              if (!blocking_type && !identical(n$downstream_eligible, TRUE)) stop(sprintf('ERROR: correction/corrigendum/erratum was blocked at Lens ID %s', ids[i]), call.=FALSE)
+              if (blocking_type && !identical(n$downstream_eligible, FALSE)) stop(sprintf('ERROR: blocking notice remained publication-status eligible at Lens ID %s', ids[i]), call.=FALSE)
+              if (!blocking_type && !identical(n$downstream_eligible, TRUE)) stop(sprintf('ERROR: correction/corrigendum/erratum was blocked by publication-status logic at Lens ID %s', ids[i]), call.=FALSE)
+              expected_record_eligible <- dedup_ok && identical(n$downstream_eligible, TRUE)
+              if (!identical(n$record_downstream_eligible, expected_record_eligible)) stop(sprintf('ERROR: combined record_downstream_eligible mismatch at Lens ID %s', ids[i]), call.=FALSE)
               if (blocking_type) blocking_count <- blocking_count + 1L else retained_notice_count <- retained_notice_count + 1L
             }
           }
