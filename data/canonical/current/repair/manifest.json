@@ -17,7 +17,7 @@
   "records_without_lens_id": 0,
   "batches": 48,
   "canonical_path": "data/canonical/current/repair/records.jsonl",
-  "pipeline_stage": "publication_status_screened",
+  "pipeline_stage": "historical_screening_reconciled",
   "fresh_state": {
     "deduplication_present": false,
     "publication_status_present": false,
@@ -145,6 +145,41 @@
       "failed_batches": [],
       "records_removed": 0,
       "checkpoint_dir": "outputs/fresh_workflow03/checkpoints"
+    }
+  },
+  "historical_screening_reconciliation": {
+    "workflow": "oneoff_reapply_historical_screening",
+    "implementation_language": "R",
+    "completed_at": "2026-09-15T18:43:38Z",
+    "base_reconciliation_run": 34568524841,
+    "second_pass_run": 34592152244,
+    "summary": {
+      "input_records": 23809,
+      "output_records": 23809,
+      "downstream_representatives": 22609,
+      "historical_decision_ledger_records": 17849,
+      "historical_decision_ids_present_in_fresh_records": 17849,
+      "historical_decision_ids_absent_from_fresh_records": 0,
+      "representatives_include": 12631,
+      "representatives_exclude": 5028,
+      "representatives_not_previously_screened": 4949,
+      "representatives_not_previously_screened_publication_blocked": 1,
+      "representatives_with_historical_conflict": 0,
+      "new_screening_queue_records": 4949,
+      "source_historical_decision_ids_used": 17849,
+      "manual_adjudication_keys_recovered": 37,
+      "manual_post_dedup_repair_records": 3,
+      "historical_conflict_overrides_applied": 2,
+      "implementation_language": "R"
+    }
+  },
+  "manual_post_dedup_repair": {
+    "records": ["115-623-146-471-00X", "083-231-522-166-315", "148-538-962-380-852"],
+    "reason": "split_malformed_hybrid_transitive_cluster",
+    "resulting_counts": {
+      "unique": 21573,
+      "canonical": 1036,
+      "duplicates": 1200
     }
   }
 }
