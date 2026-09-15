@@ -101,7 +101,45 @@ n<-length(records)
 if (!length(queue)) {
   dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
   file.create(output_path)
-  writeLines(toJSON(list(queued_pairs=0,adjudicated_pairs=0,duplicate=0,not_duplicate=0,uncertain=0,technical_failures=0,reused_prior_decisions=0,new_api_calls=0,model=model,completed_at=now_utc()),auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),sub('\\.jsonl
+  writeLines(
+    toJSON(
+      list(
+        queued_pairs=0,
+        adjudicated_pairs=0,
+        duplicate=0,
+        not_duplicate=0,
+        uncertain=0,
+        technical_failures=0,
+        reused_prior_decisions=0,
+        new_api_calls=0,
+        model=model,
+        completed_at=now_utc()
+      ),
+      auto_unbox=TRUE,pretty=TRUE,null='null',na='null'
+    ),
+    sub('\\.jsonl$','_summary.json',output_path)
+  )
+  message('PASS: no residual duplicate candidates require OpenAI adjudication')
+  quit(save='no',status=0)
+}
+
+# Resume safely within the same run if a checkpoint file already exists.
+existing<-read_jsonl(output_path)
+done_keys<-if(length(existing)) unique(vapply(existing,function(x)as.character(x$pair_key%||%''),character(1))) else character()
+
+# Reuse only previously resolved substantive model decisions. Uncertain or
+# technically failed decisions are deliberately not cached.
+prior<-if(!is.null(prior_path) && file.exists(prior_path)) read_jsonl(prior_path) else list()
+prior_map<-list()
+if(length(prior)) for(x in prior) {
+  k<-as.character(x$pair_key%||%'')
+  d<-as.character(x$decision%||%'')
+  if(nzchar(k) && d%in%c('duplicate','not_duplicate') && !isTRUE(x$technical_failure)) prior_map[[k]]<-x
+}
+message(sprintf(
+  'OpenAI duplicate adjudication: %d queued pairs; %d already checkpointed; %d reusable prior decisions; model=%s',
+  length(queue),length(done_keys),length(prior_map),model
+))
 
 schema<-list(
   type='object',
