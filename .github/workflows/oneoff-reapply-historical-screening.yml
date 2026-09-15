@@ -9,13 +9,18 @@ on:
         default: audit
         type: choice
         options: [audit, apply]
+      canonical_branch:
+        description: 'Publication-status-screened canonical branch'
+        required: true
+        default: canonical-fresh-dedup-v2-2026-09-14
+        type: string
 
 permissions:
   contents: write
   actions: read
 
 env:
-  FRESH_CANONICAL_BRANCH: canonical-fresh-2026-09-08-v1
+  FRESH_CANONICAL_BRANCH: canonical-fresh-dedup-v2-2026-09-14
 
 jobs:
   historical-screening:
@@ -75,7 +80,7 @@ jobs:
       - name: Checkout fresh canonical JSON with LFS
         uses: actions/checkout@v4
         with:
-          ref: canonical-fresh-2026-09-08-v1
+          ref: canonical-fresh-dedup-v2-2026-09-14
           fetch-depth: 0
           lfs: true
           path: canonical_store
@@ -88,7 +93,7 @@ jobs:
           mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
           rp <- 'canonical_store/data/canonical/current/repair/records.jsonl'
           m <- fromJSON(mp,simplifyVector=FALSE)
-          stopifnot(identical(m$pipeline_stage,'deduplicated'))
+          stopifnot(identical(m$pipeline_stage,'publication_status_screened'))
           expected <- as.integer(m$unique_records_written %||% m$lens_reported_total)
           lines <- readLines(rp,warn=FALSE,encoding='UTF-8')
           lines <- lines[nzchar(trimws(lines))]
@@ -137,6 +142,7 @@ jobs:
             s$representatives_include +
             s$representatives_exclude +
             s$representatives_not_previously_screened +
+            s$representatives_not_previously_screened_publication_blocked +
             s$representatives_with_historical_conflict ==
             s$downstream_representatives
           )
