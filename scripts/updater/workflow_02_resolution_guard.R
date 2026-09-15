@@ -67,14 +67,22 @@ source_title <- function(r) { c<-canonical(r); s<-payload(r)$source; raw<-if(is.
 publication_type <- function(r) as.character(payload(r)$publication_type %||% '')
 page_int <- function(x) { m<-regexpr('[0-9]+',as.character(x%||%''),perl=TRUE); if(m[1]<0)return(NA_integer_); as.integer(regmatches(as.character(x),m)[1]) }
 PREPRINT_TERMS <- c('preprint','biorxiv','medrxiv','arxiv','repository','thesis','dissertation')
-is_preprint_like <- function(r) { txt<-paste(norm(publication_type(r)),norm(source_title(r))); !nzchar(norm(source_title(r))) || any(vapply(PREPRINT_TERMS,function(t)grepl(t,txt,fixed=TRUE),logical(1))) }
+is_explicit_preprint_like <- function(r) {
+  txt<-paste(norm(publication_type(r)),norm(source_title(r)))
+  any(vapply(PREPRINT_TERMS,function(t)grepl(t,txt,fixed=TRUE),logical(1)))
+}
+is_preprint_like <- function(r) {
+  !nzchar(norm(source_title(r))) || is_explicit_preprint_like(r)
+}
 compatible_authors <- function(a,b) { aa<-author_values(a);bb<-author_values(b);length(aa)>0&&length(bb)>0&&aa[1]==bb[1]&&length(intersect(aa,bb))>0 }
 compatible_year <- function(a,b) { ya<-year_int(canonical(a)$year);yb<-year_int(canonical(b)$year);is.na(ya)||is.na(yb)||abs(ya-yb)<=2 }
 page_ranges_nonoverlap <- function(a,b) { pa<-payload(a);pb<-payload(b);sa<-page_int(pa$start_page);sb<-page_int(pb$start_page);if(is.na(sa)||is.na(sb)||sa==sb)return(FALSE);ea<-page_int(pa$end_page);eb<-page_int(pb$end_page);if(is.na(ea))ea<-sa;if(is.na(eb))eb<-sb;ea<sb||eb<sa }
 different_nonempty <- function(a,b) { na<-norm(a);nb<-norm(b);nzchar(na)&&nzchar(nb)&&na!=nb }
 
 strong_distinct <- function(a,b,ca) {
-  if (is_preprint_like(a) || is_preprint_like(b)) return(NULL)
+  # Only an explicit preprint/repository signal suppresses contradiction checks.
+  # Missing source metadata alone is not evidence of a version relationship.
+  if (is_explicit_preprint_like(a) || is_explicit_preprint_like(b)) return(NULL)
   ta<-norm(canonical(a)$title);tb<-norm(canonical(b)$title)
   exact_title<-nzchar(ta)&&ta==tb
 
