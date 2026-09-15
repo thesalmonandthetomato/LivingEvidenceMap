@@ -1,4 +1,4 @@
-name: Workflow 04 - Relevance screening
+name: Workflow 04 - Relevance screening calibration
 
 on:
   workflow_dispatch:
@@ -6,231 +6,320 @@ on:
       mode:
         description: 'Workflow 04 mode'
         required: true
-        default: canonical_audit
+        default: validation_200
         type: choice
         options:
-          - canonical_audit
-          - validation_test
-          - live_validation_200
+          - validation_200
+          - production_queue
+      canonical_branch:
+        description: 'Canonical branch'
+        required: true
+        default: canonical-fresh-dedup-v2-2026-09-14
+        type: string
+      model:
+        description: 'OpenAI model'
+        required: true
+        default: gpt-5.6-luna
+        type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  relevance-screening-audit:
+  workflow04:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
+    env:
+      FRESH_CANONICAL_BRANCH: ${{ inputs.canonical_branch }}
+      OPENAI_RELEVANCE_MODEL: ${{ inputs.model }}
+
     steps:
-      - name: Checkout Workflow 04 development branch
+      - name: Checkout main orchestration branch
         uses: actions/checkout@v4
         with:
-          ref: updater-workflow-04-relevance-screening
+          ref: main
+          fetch-depth: 0
 
-      - name: Checkout canonical JSON with LFS
-        if: ${{ inputs.mode == 'canonical_audit' || inputs.mode == 'live_validation_200' }}
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(c('httr2','jsonlite','stringi','digest'))
+
+      - name: Validate R implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_04_relevance_screening.R')
+          cat('PASS: Workflow 04 R implementation parses successfully\n')
+
+      - name: Checkout reconciled canonical JSON with LFS
         uses: actions/checkout@v4
         with:
-          ref: canonical-repair-store
-          lfs: true
+          ref: ${{ env.FRESH_CANONICAL_BRANCH }}
           path: canonical_store
+          lfs: true
+          fetch-depth: 0
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install OpenAI client
-        if: ${{ inputs.mode == 'live_validation_200' }}
-        run: python -m pip install --upgrade openai
-
-      - name: Validate screening prompt and script
+      - name: Validate canonical input
+        shell: Rscript {0}
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('scripts/updater/relevance_screen_jsonl.py')
-          text=p.read_text(encoding='utf-8')
-          assert 'Atlantic salmon' in text
-          assert 'rainbow trout' in text
-          assert 'HATCHERY / STOCK ENHANCEMENT' in text
-          assert 'WILD POPULATIONS' in text
-          assert 'GENERIC SALMONIDS' in text
-          assert 'fishmeal' in text.lower()
-          forbidden=(
-              'historical_screening',
-              'historical_excludes_reconciliation',
-              'residual_screening_assignment',
-              'screening_decision_history',
-              "'historical_decision'",
-              '"historical_decision"',
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          rp <- 'canonical_store/data/canonical/current/repair/records.jsonl'
+          mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
+          stopifnot(file.exists(rp),file.exists(mp))
+          m <- fromJSON(mp,simplifyVector=FALSE)
+          stopifnot(identical(m$pipeline_stage,'historical_screening_reconciled'))
+          x <- readLines(rp,warn=FALSE,encoding='UTF-8')
+          x <- x[nzchar(trimws(x))]
+          stopifnot(length(x)==23809L)
+          ids <- character(length(x))
+          for(i in seq_along(x)) {
+            r <- fromJSON(x[[i]],simplifyVector=FALSE)
+            ids[[i]] <- as.character((r$identity %||% list())$lens_id %||% '')
+          }
+          stopifnot(all(nzchar(ids)),!anyDuplicated(ids))
+          cat('PASS: 23809 historical-screening-reconciled records available to Workflow 04\n')
+
+      - name: Build random 200-record historical validation sample
+        if: ${{ inputs.mode == 'validation_200' }}
+        shell: Rscript {0}
+        env:
+          VALIDATION_RUN_ID: ${{ github.run_id }}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            z <- readLines(path,warn=FALSE,encoding='UTF-8')
+            z <- z[nzchar(trimws(z))]
+            lapply(z,function(v)fromJSON(v,simplifyVector=FALSE))
+          }
+          write_jsonl <- function(rows,path) {
+            dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+            con <- file(path,'wt',encoding='UTF-8'); on.exit(close(con))
+            for(r in rows) writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
+          }
+          records <- read_jsonl('canonical_store/data/canonical/current/repair/records.jsonl')
+          eligible <- which(vapply(records,function(r) {
+            s <- r$screening %||% list()
+            d <- r$deduplication %||% list()
+            n <- r$notices %||% NULL
+            publication_ok <- is.null(n) || isTRUE(n$record_downstream_eligible %||% n$downstream_eligible %||% TRUE)
+            as.character(d$status %||% '') %in% c('unique','canonical') &&
+              as.character(s$decision %||% '') %in% c('include','exclude') &&
+              publication_ok
+          },logical(1)))
+          if(length(eligible)<200L) stop('Fewer than 200 historically decided eligible records are available')
+          run_id <- Sys.getenv('VALIDATION_RUN_ID')
+          seed <- as.integer((as.numeric(run_id) %% 2147483646) + 1)
+          set.seed(seed)
+          chosen <- sample(eligible,200L,replace=FALSE)
+          sample_rows <- records[chosen]
+          labels <- vector('list',length(sample_rows))
+          blinded <- vector('list',length(sample_rows))
+          for(i in seq_along(sample_rows)) {
+            r <- sample_rows[[i]]
+            truth_raw <- as.character((r$screening %||% list())$decision %||% '')
+            truth <- if(truth_raw=='include') 'retain' else if(truth_raw=='exclude') 'exclude' else stop('Unexpected historical decision')
+            labels[[i]] <- list(
+              lens_id=as.character(r$identity$lens_id),
+              historical_decision=truth,
+              historical_decision_raw=truth_raw
+            )
+            b <- r
+            b$screening <- list(
+              workflow='04_validation_blinded_sample',
+              status='not_previously_screened',
+              requires_screening=TRUE,
+              publication_status_eligible=TRUE,
+              downstream_eligible=FALSE
+            )
+            blinded[[i]] <- b
+          }
+          root <- 'outputs/workflow04_validation'
+          dir.create(root,recursive=TRUE,showWarnings=FALSE)
+          write_jsonl(blinded,file.path(root,'validation_queue_200.jsonl'))
+          write_jsonl(labels,file.path(root,'validation_truth_200.jsonl'))
+          writeLines(vapply(labels,function(x)x$lens_id,character(1)),file.path(root,'sample_lens_ids.txt'))
+          manifest <- list(
+            workflow='04_relevance_screening',
+            purpose='prompt_calibration_against_historical_decisions',
+            validation_run_id=run_id,
+            sample_size=200L,
+            sample_seed=seed,
+            sampling_frame_records=length(eligible),
+            sampling_method='simple_random_sample_without_replacement',
+            truth_blinded_from_model=TRUE,
+            canonical_branch=Sys.getenv('FRESH_CANONICAL_BRANCH'),
+            canonical_commit=system('git -C canonical_store rev-parse HEAD',intern=TRUE),
+            created_at=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ')
           )
-          found=[x for x in forbidden if x in text]
-          assert not found, f'Screening implementation must not depend on prior screening decisions: {found}'
-          print('Workflow 04 screening prompt/script contract validated')
-          PY
+          writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(root,'sample_manifest.json'))
+          cat(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
 
-      - name: Audit current canonical input
-        if: ${{ inputs.mode == 'canonical_audit' }}
+      - name: Copy production queue
+        if: ${{ inputs.mode == 'production_queue' }}
         run: |
-          mkdir -p outputs/workflow04
-          python - <<'PY'
-          import collections, json
-          from pathlib import Path
+          mkdir -p outputs/workflow04_production
+          cp canonical_store/data/canonical/current/repair/new_screening_queue.jsonl outputs/workflow04_production/production_queue.jsonl
 
-          def load_json_stream(path):
-              text=path.read_text(encoding='utf-8')
-              decoder=json.JSONDecoder(); records=[]; pos=0; n=len(text)
-              while pos < n:
-                  while pos < n and text[pos].isspace(): pos += 1
-                  if pos >= n: break
-                  obj,end=decoder.raw_decode(text,pos); records.append(obj); pos=end
-              return records
-
-          path=Path('canonical_store/data/canonical/current/repair/records.jsonl')
-          records=load_json_stream(path)
-          assert len(records)==20488, len(records)
-          status=collections.Counter(); eligible=[]; inherited_screening=[]; bad_dedup=[]
-          for i,r in enumerate(records):
-              d=r.get('deduplication')
-              if not isinstance(d,dict) or not d.get('status'):
-                  bad_dedup.append(i); continue
-              status[d['status']]+=1
-              if d.get('downstream_eligible') is True: eligible.append(r)
-              if 'screening' in r: inherited_screening.append(i)
-              prov=r.get('provenance')
-              if isinstance(prov,dict) and any(k in prov for k in ('historical_screening','historical_excludes_reconciliation','residual_screening_assignment','screening_decision_history')):
-                  inherited_screening.append(i)
-          assert not bad_dedup, bad_dedup[:20]
-          assert status==collections.Counter({'unique':18379,'duplicate':1170,'canonical':939}), status
-          assert len(eligible)==19318, len(eligible)
-          assert not inherited_screening, f'Inherited screening state remains on records: {sorted(set(inherited_screening))[:20]}'
-          assert all((r.get('deduplication') or {}).get('status') in {'unique','canonical'} for r in eligible)
-          assert all((r.get('deduplication') or {}).get('downstream_eligible') is False for r in records if (r.get('deduplication') or {}).get('status')=='duplicate')
-          missing_title=sum(not ((r.get('canonical') or {}).get('title')) for r in eligible)
-          missing_abstract=sum(not ((r.get('canonical') or {}).get('abstract')) for r in eligible)
-          summary={'workflow':'04_relevance_screening','mode':'canonical_audit','canonical_records':len(records),'deduplication_status_counts':dict(status),'screening_input_records':len(eligible),'duplicate_records_skipped':status['duplicate'],'inherited_screening_records':0,'eligible_records_missing_title':missing_title,'eligible_records_missing_abstract':missing_abstract,'canonical_modified':False,'ready_for_fresh_screening':True}
-          Path('outputs/workflow04/input_audit_summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
-          with Path('outputs/workflow04/screening_input.jsonl').open('w',encoding='utf-8') as f:
-              for r in eligible: f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
-          print(json.dumps(summary,indent=2))
-          PY
-
-      - name: Validation fixture
-        if: ${{ inputs.mode == 'validation_test' }}
-        run: |
-          python - <<'PY'
-          import json, subprocess, tempfile
-          from pathlib import Path
-          rows=[{'identity':{'lens_id':'retain'},'canonical':{'title':'Farmed Atlantic salmon aquaculture trial','abstract':'Atlantic salmon were reared under commercial farm conditions.'},'deduplication':{'status':'unique','downstream_eligible':True}},{'identity':{'lens_id':'wild'},'canonical':{'title':'Wild Atlantic salmon migration','abstract':'Migration of wild salmon was studied with no aquaculture context.'},'deduplication':{'status':'unique','downstream_eligible':True}},{'identity':{'lens_id':'dup'},'canonical':{'title':'Duplicate'},'deduplication':{'status':'duplicate','downstream_eligible':False,'duplicate_of':'retain'}}]
-          root=Path(tempfile.mkdtemp()); inp=root/'in.jsonl'; out=root/'out.jsonl'; aud=root/'audit.jsonl'; chk=root/'checkpoint.json'
-          inp.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
-          subprocess.run(['python','scripts/updater/relevance_screen_jsonl.py','--input',str(inp),'--output',str(out),'--audit',str(aud),'--checkpoint',str(chk),'--mode','mock'],check=True)
-          screened=[json.loads(x) for x in out.read_text().splitlines() if x.strip()]; by={r['identity']['lens_id']:r for r in screened}
-          assert len(screened)==3
-          assert by['retain']['screening']['decision']=='retain'
-          assert by['wild']['screening']['decision']=='exclude'
-          assert 'screening' not in by['dup']
-          print('Workflow 04 duplicate skipping and mock decisions validated')
-          PY
-
-      - name: Select deterministic live validation sample
-        if: ${{ inputs.mode == 'live_validation_200' }}
-        run: |
-          mkdir -p outputs/workflow04_live_200
-          python - <<'PY'
-          import collections, hashlib, json
-          from pathlib import Path
-
-          def load_json_stream(path):
-              text=path.read_text(encoding='utf-8')
-              decoder=json.JSONDecoder(); records=[]; pos=0; n=len(text)
-              while pos < n:
-                  while pos < n and text[pos].isspace(): pos += 1
-                  if pos >= n: break
-                  obj,end=decoder.raw_decode(text,pos); records.append(obj); pos=end
-              return records
-
-          source=Path('canonical_store/data/canonical/current/repair/records.jsonl')
-          records=load_json_stream(source)
-          assert len(records)==20488, len(records)
-          status=collections.Counter((r.get('deduplication') or {}).get('status') for r in records)
-          assert status==collections.Counter({'unique':18379,'duplicate':1170,'canonical':939}), status
-          eligible=[r for r in records if (r.get('deduplication') or {}).get('downstream_eligible') is True]
-          assert len(eligible)==19318, len(eligible)
-          assert all('screening' not in r for r in records)
-          ranked=[]
-          for r in eligible:
-              lid=str((r.get('identity') or {}).get('lens_id') or '')
-              assert lid
-              key=hashlib.sha256(('workflow04-live-validation-200-v1:'+lid).encode()).hexdigest()
-              ranked.append((key,lid,r))
-          ranked.sort(key=lambda x:x[0]); selected=ranked[:200]
-          assert len(selected)==200 and len({x[1] for x in selected})==200
-          root=Path('outputs/workflow04_live_200')
-          with (root/'input_200.jsonl').open('w',encoding='utf-8') as f:
-              for _,_,r in selected: f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
-          (root/'lens_ids.txt').write_text('\n'.join(x[1] for x in selected)+'\n',encoding='utf-8')
-          manifest={'sample_records':200,'canonical_records':20488,'eligible_records':19318,'duplicate_records_skipped':1170,'selection_seed':'workflow04-live-validation-200-v1','canonical_modified':False}
-          (root/'input_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps(manifest,indent=2))
-          PY
-
-      - name: Run live screening on 200 records
-        if: ${{ inputs.mode == 'live_validation_200' }}
+      - name: Run R relevance screening
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python scripts/updater/relevance_screen_jsonl.py \
-            --input outputs/workflow04_live_200/input_200.jsonl \
-            --output outputs/workflow04_live_200/screened_200.jsonl \
-            --audit outputs/workflow04_live_200/screening_audit_200.jsonl \
-            --checkpoint outputs/workflow04_live_200/checkpoint.json \
-            --chunk-size 25 \
-            --mode openai \
-            --model gpt-5-mini
+          set -euo pipefail
+          if [ "${{ inputs.mode }}" = "validation_200" ]; then
+            ROOT=outputs/workflow04_validation
+            QUEUE="$ROOT/validation_queue_200.jsonl"
+          else
+            ROOT=outputs/workflow04_production
+            QUEUE="$ROOT/production_queue.jsonl"
+          fi
+          Rscript scripts/updater/workflow_04_relevance_screening.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --queue "$QUEUE" \
+            --output "$ROOT/screening_results.jsonl" \
+            --checkpoint "$ROOT/checkpoint.json" \
+            --summary "$ROOT/screening_summary.json" \
+            --model "${{ inputs.model }}" \
+            --checkpoint-every 25 \
+            --mode openai
 
-      - name: Build live validation review table
-        if: ${{ inputs.mode == 'live_validation_200' }}
+      - name: Calculate validation agreement and Cohen kappa
+        if: ${{ inputs.mode == 'validation_200' }}
+        shell: Rscript {0}
         run: |
-          python - <<'PY'
-          import collections, csv, json
-          from pathlib import Path
-          root=Path('outputs/workflow04_live_200')
-          rows=[json.loads(x) for x in (root/'screened_200.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
-          assert len(rows)==200, len(rows)
-          counts=collections.Counter(); technical=[]; review=[]
-          for i,r in enumerate(rows,1):
-              c=r.get('canonical') or {}; p=((r.get('lens') or {}).get('raw_payload') or {}); s=r.get('screening') or {}
-              lid=str((r.get('identity') or {}).get('lens_id') or p.get('lens_id') or '')
-              decision=str(s.get('decision') or '').lower(); counts[decision]+=1
-              if s.get('technical_error'): technical.append((lid,s.get('technical_error')))
-              source=c.get('source') or p.get('source') or ''
-              if isinstance(source,dict): source=source.get('title') or source.get('name') or ''
-              keywords=c.get('keywords') or p.get('keywords') or p.get('keyword') or p.get('author_keywords') or ''
-              if isinstance(keywords,list): keywords='; '.join(str(x) for x in keywords)
-              review.append({'order':i,'lens_id':lid,'title':c.get('title') or p.get('title') or '','abstract':c.get('abstract') or p.get('abstract') or '','keywords':keywords,'journal_source_title':c.get('source_title') or c.get('journal') or p.get('source_title') or p.get('journal') or source,'model_decision':decision.upper(),'model_reason':s.get('reason') or '','human_decision':'','review_note':'','technical_error':s.get('technical_error') or ''})
-          assert sum(counts.values())==200
-          assert set(counts) <= {'retain','exclude','uncertain'}, counts
-          assert not technical, f'Technical screening errors: {technical[:10]}'
-          with (root/'human_review_200.csv').open('w',newline='',encoding='utf-8-sig') as f:
-              w=csv.DictWriter(f,fieldnames=list(review[0])); w.writeheader(); w.writerows(review)
-          summary={'records':200,'decision_counts':dict(counts),'technical_errors':0,'canonical_modified':False,'purpose':'human validation before full Workflow 04 screening'}
-          (root/'screening_summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps(summary,indent=2))
-          PY
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            z <- readLines(path,warn=FALSE,encoding='UTF-8')
+            z <- z[nzchar(trimws(z))]
+            lapply(z,function(v)fromJSON(v,simplifyVector=FALSE))
+          }
+          root <- 'outputs/workflow04_validation'
+          truth <- read_jsonl(file.path(root,'validation_truth_200.jsonl'))
+          pred <- read_jsonl(file.path(root,'screening_results.jsonl'))
+          stopifnot(length(truth)==200L,length(pred)==200L)
+          tmap <- setNames(vapply(truth,function(x)as.character(x$historical_decision),character(1)),
+                           vapply(truth,function(x)as.character(x$lens_id),character(1)))
+          pmap <- setNames(vapply(pred,function(x)as.character(x$decision),character(1)),
+                           vapply(pred,function(x)as.character(x$lens_id),character(1)))
+          stopifnot(setequal(names(tmap),names(pmap)))
+          ids <- names(tmap)
+          levels <- c('retain','exclude','uncertain')
+          tv <- factor(unname(tmap[ids]),levels=levels)
+          pv <- factor(unname(pmap[ids]),levels=levels)
+          tab <- table(historical=tv,model=pv)
+          n <- length(ids)
+          po <- sum(diag(tab))/n
+          pe <- sum((rowSums(tab)/n)*(colSums(tab)/n))
+          kappa <- if(pe==1) NA_real_ else (po-pe)/(1-pe)
+          hist_retain <- sum(tv=='retain')
+          hist_exclude <- sum(tv=='exclude')
+          metrics <- list(
+            n=n,
+            observed_agreement=po,
+            cohens_kappa=kappa,
+            historical_retain=hist_retain,
+            historical_exclude=hist_exclude,
+            model_retain=sum(pv=='retain'),
+            model_exclude=sum(pv=='exclude'),
+            model_uncertain=sum(pv=='uncertain'),
+            retain_retain=sum(tv=='retain' & pv=='retain'),
+            retain_exclude_false_exclusion=sum(tv=='retain' & pv=='exclude'),
+            retain_uncertain=sum(tv=='retain' & pv=='uncertain'),
+            exclude_exclude=sum(tv=='exclude' & pv=='exclude'),
+            exclude_retain_false_retention=sum(tv=='exclude' & pv=='retain'),
+            exclude_uncertain=sum(tv=='exclude' & pv=='uncertain'),
+            sensitivity_retain=if(hist_retain) sum(tv=='retain' & pv=='retain')/hist_retain else NA_real_,
+            specificity_exclude=if(hist_exclude) sum(tv=='exclude' & pv=='exclude')/hist_exclude else NA_real_,
+            false_exclusion_rate=if(hist_retain) sum(tv=='retain' & pv=='exclude')/hist_retain else NA_real_,
+            false_retention_rate=if(hist_exclude) sum(tv=='exclude' & pv=='retain')/hist_exclude else NA_real_,
+            uncertain_rate=sum(pv=='uncertain')/n,
+            conflicts=sum(tv!=pv)
+          )
+          scr <- fromJSON(file.path(root,'screening_summary.json'),simplifyVector=FALSE)
+          manifest <- fromJSON(file.path(root,'sample_manifest.json'),simplifyVector=FALSE)
+          metrics$prompt_version <- scr$prompt_version
+          metrics$prompt_sha256 <- scr$prompt_sha256
+          metrics$model <- scr$model
+          metrics$validation_run_id <- manifest$validation_run_id
+          metrics$sample_seed <- manifest$sample_seed
+          metrics$canonical_commit <- manifest$canonical_commit
+          metrics$confusion_matrix <- unclass(tab)
+          writeLines(toJSON(metrics,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),file.path(root,'validation_metrics.json'))
 
-      - name: Upload Workflow 04 audit artefacts
-        if: ${{ inputs.mode == 'canonical_audit' }}
+          records <- read_jsonl('canonical_store/data/canonical/current/repair/records.jsonl')
+          byid <- setNames(records,vapply(records,function(r)as.character(r$identity$lens_id),character(1)))
+          bypred <- setNames(pred,vapply(pred,function(r)as.character(r$lens_id),character(1)))
+          con <- file(file.path(root,'conflicts.csv'),'wt',encoding='UTF-8')
+          writeLines('lens_id,historical_decision,model_decision,title,abstract,model_reason',con)
+          csvq <- function(x) paste0('"',gsub('"','""',as.character(x %||% ''),fixed=TRUE),'"')
+          for(id in ids[tv!=pv]) {
+            r <- byid[[id]]; p <- bypred[[id]]
+            can <- r$canonical %||% list(); raw <- (r$lens %||% list())$raw_payload %||% list()
+            vals <- c(id,tmap[[id]],pmap[[id]],can$title %||% raw$title %||% '',can$abstract %||% raw$abstract %||% '',p$reason %||% '')
+            writeLines(paste(vapply(vals,csvq,character(1)),collapse=','),con)
+          }
+          close(con)
+
+          con <- file(file.path(root,'sample_decisions.csv'),'wt',encoding='UTF-8')
+          writeLines('lens_id,historical_decision,model_decision,agreement',con)
+          for(id in ids) {
+            vals <- c(id,tmap[[id]],pmap[[id]],if(tmap[[id]]==pmap[[id]]) '1' else '0')
+            writeLines(paste(vals,collapse=','),con)
+          }
+          close(con)
+          cat(toJSON(metrics,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),'\n')
+
+      - name: Save exact prompt text
+        if: ${{ inputs.mode == 'validation_200' }}
+        shell: Rscript {0}
+        run: |
+          source_file <- readLines('scripts/updater/workflow_04_relevance_screening.R',warn=FALSE,encoding='UTF-8')
+          start <- grep('^SYSTEM_PROMPT <- paste\\($',source_file)
+          stop <- grep('^PROMPT_VERSION <- ',source_file)
+          stopifnot(length(start)==1L,length(stop)==1L,stop>start)
+          writeLines(source_file[start:(stop-1L)],'outputs/workflow04_validation/prompt_R_source.txt')
+
+      - name: Persist validation run record
+        if: ${{ inputs.mode == 'validation_200' }}
+        run: |
+          set -euo pipefail
+          DEST="data/adjudication/workflow04_validation_runs/${{ github.run_id }}"
+          mkdir -p "$DEST"
+          cp outputs/workflow04_validation/sample_manifest.json "$DEST/"
+          cp outputs/workflow04_validation/validation_metrics.json "$DEST/"
+          cp outputs/workflow04_validation/sample_lens_ids.txt "$DEST/"
+          cp outputs/workflow04_validation/sample_decisions.csv "$DEST/"
+          cp outputs/workflow04_validation/conflicts.csv "$DEST/"
+          cp outputs/workflow04_validation/prompt_R_source.txt "$DEST/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "Record Workflow 04 validation run ${{ github.run_id }}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Upload Workflow 04 validation artefacts
+        if: ${{ inputs.mode == 'validation_200' && always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: workflow04-canonical-audit-${{ github.run_id }}
-          path: outputs/workflow04/
-          retention-days: 30
+          name: workflow04-validation-200-${{ github.run_id }}
+          path: outputs/workflow04_validation/
+          retention-days: 90
           if-no-files-found: error
 
-      - name: Upload Workflow 04 live validation artefacts
-        if: ${{ inputs.mode == 'live_validation_200' }}
+      - name: Upload Workflow 04 production artefacts
+        if: ${{ inputs.mode == 'production_queue' && always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: workflow04-live-validation-200-${{ github.run_id }}
-          path: outputs/workflow04_live_200/
+          name: workflow04-production-${{ github.run_id }}
+          path: outputs/workflow04_production/
           retention-days: 90
           if-no-files-found: error
