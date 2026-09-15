@@ -88,6 +88,25 @@ canonical_field <- function(rec, key, default = NULL) {
   can[[key]] %||% default
 }
 
+record_dois <- function(rec) {
+  vals <- character()
+  can_doi <- canonical_field(rec, "doi", NULL)
+  if (!is.null(can_doi)) {
+    vals <- c(vals, as.character(unlist(can_doi, use.names = FALSE)))
+  }
+  raw <- (rec$lens %||% list())$raw_payload %||% list()
+  ext <- raw$external_ids %||% list()
+  if (is.list(ext)) {
+    for (item in ext) {
+      if (is.list(item) && identical(tolower(as.character(item$type %||% "")), "doi")) {
+        vals <- c(vals, as.character(item$value %||% ""))
+      }
+    }
+  }
+  vals <- unique(vapply(vals, normalise_doi, character(1)))
+  vals[nzchar(vals)]
+}
+
 write_json_line <- function(x, con) {
   writeLines(toJSON(x, auto_unbox = TRUE, null = "null", na = "null", digits = NA), con)
   flush(con)
@@ -180,7 +199,7 @@ n <- length(lines)
 ids <- character(n)
 audits <- vector("list", n)
 doi_to_indices <- new.env(hash = TRUE, parent = emptyenv())
-eligible_indices <- integer()
+dedup_eligible_indices <- integer()
 
 for (i in seq_len(n)) {
   rec <- tryCatch(fromJSON(lines[[i]], simplifyVector = FALSE), error = function(e) {
@@ -192,32 +211,35 @@ for (i in seq_len(n)) {
 
   dedup <- rec$deduplication %||% list()
   title <- canonical_field(rec, "title", "")
-  doi <- normalise_doi(canonical_field(rec, "doi", ""))
+  dois <- record_dois(rec)
+  doi <- if (length(dois)) dois[[1]] else ""
+  dedup_ok <- identical(dedup$downstream_eligible, TRUE)
+  if (dedup_ok) dedup_eligible_indices <- c(dedup_eligible_indices, i)
 
-  if (!identical(dedup$downstream_eligible, TRUE)) {
-    audits[[i]] <- list(
-      record_id = rid, title = title, doi = doi,
-      notice_type = NULL, notice_source = NULL,
-      openalex_id = NULL, openalex_title = NULL, openalex_is_retracted = FALSE,
-      openalex_lookup_status = "not_queried_dedup_ineligible", openalex_error = NULL,
-      notice_present = FALSE, downstream_eligible = FALSE
-    )
-  } else {
-    eligible_indices <- c(eligible_indices, i)
-    title_notice <- notice_from_title(title)
-    audits[[i]] <- list(
-      record_id = rid, title = title, doi = doi,
-      notice_type = if (is.null(title_notice)) NULL else title_notice$type,
-      notice_source = if (is.null(title_notice)) NULL else "title_rule",
-      openalex_id = NULL, openalex_title = NULL, openalex_is_retracted = FALSE,
-      openalex_lookup_status = if (!is.null(title_notice)) "not_queried_notice" else if (nzchar(doi)) "pending" else "not_queried_no_doi",
-      openalex_error = NULL,
-      notice_present = !is.null(title_notice),
-      downstream_eligible = if (is.null(title_notice)) TRUE else isTRUE(title_notice$downstream_eligible)
-    )
-    if (is.null(title_notice) && nzchar(doi)) {
-      old <- if (exists(doi, doi_to_indices, inherits = FALSE)) get(doi, doi_to_indices) else integer()
-      assign(doi, c(old, i), doi_to_indices)
+  title_notice <- notice_from_title(title)
+  audits[[i]] <- list(
+    record_id = rid,
+    title = title,
+    doi = doi,
+    dois = dois,
+    deduplication_status = as.character(dedup$status %||% ""),
+    deduplication_downstream_eligible = dedup_ok,
+    duplicate_of = as.character(dedup$duplicate_of %||% ""),
+    cluster_id = if (identical(as.character(dedup$status %||% ""), "duplicate") && nzchar(as.character(dedup$duplicate_of %||% ""))) as.character(dedup$duplicate_of) else rid,
+    notice_type = if (is.null(title_notice)) NULL else title_notice$type,
+    notice_source = if (is.null(title_notice)) NULL else "title_rule",
+    openalex_id = NULL,
+    openalex_title = NULL,
+    openalex_is_retracted = FALSE,
+    openalex_lookup_status = if (!is.null(title_notice)) "not_queried_notice" else if (length(dois)) "pending" else "not_queried_no_doi",
+    openalex_error = NULL,
+    notice_present = !is.null(title_notice),
+    downstream_eligible = if (is.null(title_notice)) TRUE else isTRUE(title_notice$downstream_eligible)
+  )
+  if (is.null(title_notice) && length(dois)) {
+    for (d in dois) {
+      old <- if (exists(d, doi_to_indices, inherits = FALSE)) get(d, doi_to_indices) else integer()
+      assign(d, unique(c(old, i)), doi_to_indices)
     }
   }
 
@@ -225,7 +247,7 @@ for (i in seq_len(n)) {
 }
 
 if (anyDuplicated(ids)) stop(sprintf("ERROR: duplicate Lens ID detected before Workflow 03: %s", ids[duplicated(ids)][1]), call. = FALSE)
-message(sprintf("Workflow 03 input validation PASS: %d records; %d dedup-downstream-eligible", n, length(eligible_indices)))
+message(sprintf("Workflow 03 input validation PASS: %d records; %d dedup-downstream-eligible; all %d manifestations included in publication-status audit", n, length(dedup_eligible_indices), n))
 
 dois <- sort(ls(doi_to_indices, all.names = TRUE))
 total_dois <- length(dois)
@@ -273,7 +295,7 @@ if (total_dois) {
           } else {
             audits[[i]]$openalex_id <- row$openalex_id
             audits[[i]]$openalex_title <- row$openalex_title
-            audits[[i]]$openalex_is_retracted <- isTRUE(row$openalex_is_retracted)
+            audits[[i]]$openalex_is_retracted <- isTRUE(audits[[i]]$openalex_is_retracted) || isTRUE(row$openalex_is_retracted)
             audits[[i]]$openalex_lookup_status <- "matched"
             audits[[i]]$openalex_error <- NULL
             if (isTRUE(row$openalex_is_retracted)) {
@@ -307,26 +329,37 @@ close(audit_con)
 if (!file.rename(audit_tmp, audit_path)) stop("ERROR: could not atomically promote publication-status audit file", call. = FALSE)
 
 checked_at <- now_utc()
-eligible_rows <- audits[eligible_indices]
-count_type <- function(type) sum(vapply(eligible_rows, function(x) identical(x$notice_type, type), logical(1)))
-count_status <- function(status) sum(vapply(eligible_rows, function(x) identical(x$openalex_lookup_status, status), logical(1)))
+all_rows <- audits
+count_type <- function(type) sum(vapply(all_rows, function(x) identical(x$notice_type, type), logical(1)))
+count_status <- function(status) sum(vapply(all_rows, function(x) identical(x$openalex_lookup_status, status), logical(1)))
+count_type_status <- function(type, status) sum(vapply(all_rows, function(x) identical(x$notice_type, type) && identical(x$deduplication_status, status), logical(1)))
+cluster_ids <- unique(vapply(all_rows, function(x) as.character(x$cluster_id %||% ""), character(1)))
+cluster_has_retraction <- vapply(cluster_ids, function(cid) {
+  any(vapply(all_rows, function(x) identical(as.character(x$cluster_id %||% ""), cid) && (identical(x$notice_type, "retraction") || identical(x$notice_type, "withdrawal") || identical(x$notice_type, "retracted_original")), logical(1)))
+}, logical(1))
 summary <- list(
   workflow = "workflow_03_publication_status",
   implementation_language = "R",
   mode = mode,
   checked_at = checked_at,
   input_records = n,
-  dedup_downstream_eligible_records = length(eligible_indices),
+  dedup_downstream_eligible_records = length(dedup_eligible_indices),
+  manifestations_checked = n,
+  duplicate_manifestations_checked = sum(vapply(all_rows, function(x) identical(x$deduplication_status, "duplicate"), logical(1))),
   unique_dois_queried = total_dois,
-  notices_total = sum(vapply(eligible_rows, function(x) isTRUE(x$notice_present), logical(1))),
+  notices_total = sum(vapply(all_rows, function(x) isTRUE(x$notice_present), logical(1))),
   retraction_notices = count_type("retraction"),
   withdrawal_notices = count_type("withdrawal"),
   correction_notices = count_type("correction"),
   corrigendum_notices = count_type("corrigendum"),
   erratum_notices = count_type("erratum"),
   openalex_retracted_originals = count_type("retracted_original"),
-  downstream_excluded_by_notice = sum(vapply(eligible_rows, function(x) isTRUE(x$notice_present) && !isTRUE(x$downstream_eligible), logical(1))),
-  retained_notice_records = sum(vapply(eligible_rows, function(x) isTRUE(x$notice_present) && isTRUE(x$downstream_eligible), logical(1))),
+  downstream_excluded_by_notice = sum(vapply(all_rows, function(x) isTRUE(x$notice_present) && !isTRUE(x$downstream_eligible), logical(1))),
+  retained_notice_records = sum(vapply(all_rows, function(x) isTRUE(x$notice_present) && isTRUE(x$downstream_eligible), logical(1))),
+  retracted_duplicate_manifestations = count_type_status("retracted_original", "duplicate") + count_type_status("retraction", "duplicate") + count_type_status("withdrawal", "duplicate"),
+  retracted_canonical_manifestations = count_type_status("retracted_original", "canonical") + count_type_status("retraction", "canonical") + count_type_status("withdrawal", "canonical"),
+  retracted_unique_manifestations = count_type_status("retracted_original", "unique") + count_type_status("retraction", "unique") + count_type_status("withdrawal", "unique"),
+  clusters_with_retracted_manifestation = sum(cluster_has_retraction),
   openalex_not_found = count_status("not_found"),
   openalex_failed_records = count_status("failed"),
   failed_batches = failed_batches,
@@ -350,12 +383,16 @@ if (mode == "apply") {
     row <- audits[[i]]
     rec$publication_status <- NULL
     rec$notices <- NULL
-    if (identical((rec$deduplication %||% list())$downstream_eligible, TRUE) && isTRUE(row$notice_present)) {
+    if (isTRUE(row$notice_present)) {
+      dedup_ok <- identical((rec$deduplication %||% list())$downstream_eligible, TRUE)
       rec$notices <- list(
         type = row$notice_type,
         status = if (isTRUE(row$downstream_eligible)) "retained" else "excluded_from_downstream",
         source = row$notice_source,
         downstream_eligible = isTRUE(row$downstream_eligible),
+        record_downstream_eligible = dedup_ok && isTRUE(row$downstream_eligible),
+        deduplication_downstream_eligible = dedup_ok,
+        cluster_id = row$cluster_id,
         doi_for_lookup = if (identical(row$notice_source, "openalex")) row$doi else NULL,
         openalex_id = if (identical(row$notice_source, "openalex")) row$openalex_id else NULL,
         checked_at = checked_at
