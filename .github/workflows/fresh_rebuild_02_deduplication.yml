@@ -154,8 +154,8 @@ jobs:
             d <- as.character(x$decision %||% '')
             d %in% c('duplicate','not_duplicate') && !isTRUE(x$technical_failure)
           }, cur))
+          by_key <- list()
           if (length(keep)) {
-            by_key <- list()
             for (x in keep) {
               k <- as.character(x$pair_key %||% '')
               if (nzchar(k)) by_key[[k]] <- x
