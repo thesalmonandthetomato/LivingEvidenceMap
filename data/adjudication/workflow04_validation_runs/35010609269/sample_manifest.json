@@ -1,0 +1,13 @@
+{
+  "workflow": "04_relevance_screening",
+  "purpose": "prompt_calibration_against_historical_decisions",
+  "validation_run_id": "35010609269",
+  "sample_size": 200,
+  "sample_seed": 650870934,
+  "sampling_frame_records": 17656,
+  "sampling_method": "simple_random_sample_without_replacement",
+  "truth_blinded_from_model": true,
+  "canonical_branch": "canonical-fresh-dedup-v2-2026-09-14",
+  "canonical_commit": "033c700f37821f53c59cfc09180ee36e5dae16f6",
+  "created_at": "2026-09-15T18:58:43Z"
+}
