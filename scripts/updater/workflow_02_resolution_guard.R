@@ -82,7 +82,20 @@ different_nonempty <- function(a,b) { na<-norm(a);nb<-norm(b);nzchar(na)&&nzchar
 doi_version_base <- function(x) {
   s <- tolower(trimws(as.character(x %||% '')))
   s <- sub('^https?://(dx\\.)?doi\\.org/','',s,perl=TRUE)
-  s <- sub('/v[0-9]+
+  s <- sub('/v[0-9]+$','',s,perl=TRUE)
+  s <- sub('v[0-9]+$','',s,perl=TRUE)
+  s
+}
+versioned_doi_match <- function(a,b) {
+  da <- extract_dois(a); db <- extract_dois(b)
+  if(!length(da) || !length(db)) return(FALSE)
+  for(x in da) for(y in db) {
+    if(x==y) next
+    bx <- doi_version_base(x); by <- doi_version_base(y)
+    if(nzchar(bx) && identical(bx,by) && (!identical(x,bx) || !identical(y,by))) return(TRUE)
+  }
+  FALSE
+}
 
 strong_distinct <- function(a,b,ca) {
   # Only an explicit preprint/repository signal suppresses contradiction checks.
