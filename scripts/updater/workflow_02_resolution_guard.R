@@ -79,6 +79,303 @@ compatible_year <- function(a,b) { ya<-year_int(canonical(a)$year);yb<-year_int(
 page_ranges_nonoverlap <- function(a,b) { pa<-payload(a);pb<-payload(b);sa<-page_int(pa$start_page);sb<-page_int(pb$start_page);if(is.na(sa)||is.na(sb)||sa==sb)return(FALSE);ea<-page_int(pa$end_page);eb<-page_int(pb$end_page);if(is.na(ea))ea<-sa;if(is.na(eb))eb<-sb;ea<sb||eb<sa }
 different_nonempty <- function(a,b) { na<-norm(a);nb<-norm(b);nzchar(na)&&nzchar(nb)&&na!=nb }
 
+doi_version_base <- function(x) {
+  s <- tolower(trimws(as.character(x %||% '')))
+  s <- sub('^https?://(dx\\.)?doi\\.org/','',s,perl=TRUE)
+  s <- sub('/v[0-9]+
+
+strong_distinct <- function(a,b,ca) {
+  # Only an explicit preprint/repository signal suppresses contradiction checks.
+  # Missing source metadata alone is not evidence of a version relationship.
+  if (is_explicit_preprint_like(a) || is_explicit_preprint_like(b)) return(NULL)
+  ta<-norm(canonical(a)$title);tb<-norm(canonical(b)$title)
+  exact_title<-nzchar(ta)&&ta==tb
+
+  # Exact-title equality is not a veto on contradictory bibliographic evidence.
+  # Generic/reused headings such as "Rainbow Trout", "Aquaculture", "Preface",
+  # and "Introduction" can otherwise create false duplicate clusters.
+  aa<-author_values(a);bb<-author_values(b)
+  author_nonoverlap<-length(aa)>0&&length(bb)>0&&length(intersect(aa,bb))==0
+  ya<-year_int(canonical(a)$year);yb<-year_int(canonical(b)$year)
+  year_gap<-if(!is.na(ya)&&!is.na(yb))abs(ya-yb)else NA_integer_
+  da0<-extract_dois(a);db0<-extract_dois(b)
+  disjoint_doi0<-length(da0)>0&&length(db0)>0&&length(intersect(da0,db0))==0
+  asim0<-as.numeric(ca$abstract_similarity%||%0)
+
+  if (exact_title && author_nonoverlap && !is.na(year_gap) && year_gap>2L) {
+    return(list(
+      rule='reject_exact_title_incompatible_authors_year',
+      evidence=c('exact normalised title','non-overlapping author sets',sprintf('publication years differ by %d years',year_gap))
+    ))
+  }
+  if (exact_title && author_nonoverlap && disjoint_doi0 && asim0<.82) {
+    return(list(
+      rule='reject_exact_title_disjoint_doi_authors',
+      evidence=c('exact normalised title','non-overlapping author sets','different DOI values','abstract similarity below 0.82')
+    ))
+  }
+
+  pa<-payload(a);pb<-payload(b);sa<-norm(source_title(a));sb<-norm(source_title(b))
+  same_source<-nzchar(sa)&&sa==sb; diff_source<-nzchar(sa)&&nzchar(sb)&&sa!=sb
+  same_volume<-nzchar(norm(pa$volume))&&norm(pa$volume)==norm(pb$volume)
+  diff_volume<-different_nonempty(pa$volume,pb$volume)
+  same_issue<-nzchar(norm(pa$issue))&&norm(pa$issue)==norm(pb$issue)
+  diff_issue<-different_nonempty(pa$issue,pb$issue)
+  spa<-page_int(pa$start_page);spb<-page_int(pb$start_page);diff_start<-!is.na(spa)&&!is.na(spb)&&spa!=spb
+  nonoverlap<-page_ranges_nonoverlap(a,b); tsim<-as.numeric(ca$title_similarity%||%0)
+  da<-extract_dois(a);db<-extract_dois(b);disjoint_doi<-length(da)>0&&length(db)>0&&length(intersect(da,db))==0
+  if (diff_source&&disjoint_doi&&tsim<.985) return(list(rule='reject_different_journal_doi_title',evidence=c('different journal/source','different DOI values','materially different titles',if(diff_volume)'different volume',if(diff_start||nonoverlap)'different pagination')))
+  if (same_source&&same_volume&&nonoverlap&&tsim<.985) return(list(rule='reject_distinct_pagination',evidence=c('same journal and volume','non-overlapping pagination','materially different titles',if(disjoint_doi)'different DOI values',if(diff_issue)'different issue')))
+  if (same_source&&same_issue&&disjoint_doi&&diff_start&&tsim<.985) return(list(rule='reject_same_issue_distinct_article',evidence=c('same journal and issue','different DOI values','different start pages/article locations','materially different titles')))
+  NULL
+}
+
+survivor_score <- function(r) {
+  c<-canonical(r)
+  c(if(nzchar(norm(source_title(r))))4 else 0,if(length(extract_dois(r)))3 else 0,if(nzchar(norm(payload(r)$volume)))2 else 0,if(nzchar(norm(payload(r)$start_page)))2 else 0,min(length(author_values(r)),10),min(nchar(norm(c$abstract)),5000),min(nchar(norm(c$title)),1000),ifelse(is.na(year_int(c$year)),0,year_int(c$year)))
+}
+
+records <- read_jsonl(input_path); candidates <- read_jsonl(candidates_path); n <- length(records)
+ids<-vapply(records,lens_id,character(1)); if(any(!nzchar(ids))||anyDuplicated(ids))stop('Lens-ID invariant failed')
+message(sprintf('Workflow 02 guarded resolution: %d records; %d reviewed candidate pairs',n,length(candidates)))
+
+auto_pairs<-list();queued<-list();rejected<-list();rule_counts<-integer();names(rule_counts)<-character();reject_counts<-integer();names(reject_counts)<-character()
+inc_count <- function(v,k){v[k]<-if(is.na(v[k]))1L else v[k]+1L;v}
+for (ca in candidates) {
+  ai<-as.integer(ca$record_index)+1L;bi<-as.integer(ca$matched_index)+1L
+  if (is.na(ai)||is.na(bi)||ai<1||bi<1||ai>n||bi>n) { ca$resolution_rule<-'invalid_pair_indices';queued[[length(queued)+1]]<-ca;next }
+  a<-records[[ai]];b<-records[[bi]]
+  sd<-strong_distinct(a,b,ca)
+  if (!is.null(sd)) { ca$resolution_rule<-sd$rule;ca$resolution_evidence<-Filter(Negate(is.null),sd$evidence);rejected[[length(rejected)+1]]<-ca;reject_counts<-inc_count(reject_counts,sd$rule);next }
+  asim<-as.numeric(ca$abstract_similarity%||%0);tsim<-as.numeric(ca$title_similarity%||%0);manifest<-ca$manifestation_pattern%||%''
+  rule<-NULL
+  da<-extract_dois(a); db<-extract_dois(b)
+  populated_doi_conflict<-length(da)>0&&length(db)>0&&length(intersect(da,db))==0
+  exact_title<-nzchar(norm(canonical(a)$title))&&norm(canonical(a)$title)==norm(canonical(b)$title)
+
+  if (identical(ca$status,'duplicate')) rule<-'deterministic_duplicate'
+  else if (manifest=='preprint_or_repository_to_later_manifestation'&&asim>=.90&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'high_confidence_preprint_version'
+  else if (manifest=='same_work_manifestation'&&asim>=.95&&tsim>=.85&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'very_high_confidence_same_work_version'
+  else if (exact_title&&asim>=.999&&versioned_doi_match(a,b)) rule<-'exact_title_identical_abstract_versioned_doi'
+  else if (exact_title&&asim>=.999&&!populated_doi_conflict) rule<-'exact_title_identical_abstract_no_contradiction'
+  else if (asim>=.95&&tsim>=.90&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'high_abstract_title_similarity_compatible_bibliography'
+  if (is.null(rule)) {ca$resolution_rule<-'requires_adjudication';queued[[length(queued)+1]]<-ca} else {ca$resolution_rule<-rule;auto_pairs[[length(auto_pairs)+1]]<-ca;rule_counts<-inc_count(rule_counts,rule)}
+}
+message(sprintf('Resolution dispositions: %d auto-duplicate; %d rejected as distinct; %d queued',length(auto_pairs),length(rejected),length(queued)))
+write_jsonl(rejected,file.path(output_dir,'rejected_distinct_pairs.jsonl'))
+
+parent<-seq_len(n)
+find_root<-function(x){while(parent[x]!=x){parent[x]<<-parent[parent[x]];x<-parent[x]};x}
+unionf<-function(a,b){ra<-find_root(a);rb<-find_root(b);if(ra!=rb)parent[rb]<<-ra}
+for(ca in auto_pairs)unionf(ca$record_index+1L,ca$matched_index+1L)
+touched<-unique(unlist(lapply(auto_pairs,function(ca)c(ca$record_index+1L,ca$matched_index+1L))))
+groups<-if(length(touched))split(touched,vapply(touched,find_root,integer(1)))else list()
+rep_by<-rep(NA_integer_,n);members<-vector('list',n);rules<-vector('list',n)
+for(g in groups){vals<-lapply(g,function(i)survivor_score(records[[i]]));ord<-do.call(order,c(lapply(seq_len(length(vals[[1]])),function(k)-vapply(vals,`[`,numeric(1),k)),list(na.last=TRUE)));rep<-g[ord[1]];for(i in g)rep_by[i]<-rep;members[[rep]]<-setdiff(g,rep);rules[[rep]]<-unique(unlist(lapply(auto_pairs,function(ca)if((ca$record_index+1L)%in%g&&(ca$matched_index+1L)%in%g)ca$resolution_rule else NULL)))}
+# Attach pending review to the resolved representative cluster, not to a
+# manifestation inside that cluster. Confirmed duplicate members must remain
+# duplicate records even when their representative has a pending external pair.
+cluster_rep<-function(i) if(!is.na(rep_by[i])) rep_by[i] else i
+review_refs<-vector('list',n)
+internal_queued<-list()
+for(ca in queued){
+  a0<-ca$record_index+1L;b0<-ca$matched_index+1L
+  if(a0<1||b0<1||a0>n||b0>n)next
+  a<-cluster_rep(a0);b<-cluster_rep(b0)
+  link<-list(status=ca$status,basis=ca$basis,title_similarity=ca$title_similarity,abstract_similarity=ca$abstract_similarity,manifestation_pattern=ca$manifestation_pattern,original_lens_id=lens_id(records[[a0]]),original_other_lens_id=lens_id(records[[b0]]))
+  if(a==b){
+    internal_queued[[length(internal_queued)+1L]]<-c(link,list(representative_lens_id=lens_id(records[[a]])))
+    next
+  }
+  review_refs[[a]]<-c(review_refs[[a]],list(c(link,list(other_index=b-1L,other_lens_id=lens_id(records[[b]])))))
+  review_refs[[b]]<-c(review_refs[[b]],list(c(link,list(other_index=a-1L,other_lens_id=lens_id(records[[a]])))))
+}
+write_jsonl(internal_queued,file.path(output_dir,'queued_pairs_internal_to_auto_clusters.jsonl'))
+
+partial_path<-file.path(checkpoint_dir,'annotated_records.partial.jsonl');if(file.exists(partial_path))file.remove(partial_path);con<-file(partial_path,'at',encoding='UTF-8');on.exit(close(con),add=TRUE)
+counts<-c(unique=0L,canonical=0L,duplicate=0L,adjudication_required=0L)
+for(i in seq_len(n)){
+  r<-records[[i]]
+  if(!is.na(rep_by[i])&&i!=rep_by[i]){
+    rep<-rep_by[i]
+    d<-list(workflow='02_deduplication',implementation_language='R',status='duplicate',downstream_eligible=FALSE,duplicate_of=lens_id(records[[rep]]),representative_index=rep-1L,resolution_rules=rules[[rep]])
+  } else if(length(review_refs[[i]])){
+    d<-list(workflow='02_deduplication',implementation_language='R',status='adjudication_required',downstream_eligible=FALSE,candidate_links=review_refs[[i]])
+    if(!is.na(rep_by[i])&&i==rep_by[i]){
+      d$duplicate_members<-vapply(members[[i]],function(j)lens_id(records[[j]]),character(1))
+      d$resolution_rules<-rules[[i]]
+    }
+  } else if(!is.na(rep_by[i])){
+    rep<-rep_by[i]
+    d<-list(workflow='02_deduplication',implementation_language='R',status='canonical',downstream_eligible=TRUE,duplicate_members=vapply(members[[rep]],function(j)lens_id(records[[j]]),character(1)),resolution_rules=rules[[rep]])
+  } else d<-list(workflow='02_deduplication',implementation_language='R',status='unique',downstream_eligible=TRUE)
+  r$deduplication<-d;counts[d$status]<-counts[d$status]+1L
+  writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con);flush(con)
+  if(i%%checkpoint_every==0L||i==n){writeLines(toJSON(list(phase='guarded_resolution',processed_records=i,total_records=n,status_counts=as.list(counts),updated_at=now_utc()),auto_unbox=TRUE,pretty=TRUE),file.path(checkpoint_dir,'checkpoint_manifest.json'));message(sprintf('Workflow 02 checkpoint: guarded resolution %d/%d',i,n))}
+}
+close(con)
+file.copy(partial_path,file.path(output_dir,'annotated_records.jsonl'),overwrite=TRUE)
+write_jsonl(queued,file.path(output_dir,'adjudication_queue.jsonl'))
+summary<-list(input_records=n,output_records=n,records_removed=0,unique=unname(counts['unique']),canonical=unname(counts['canonical']),duplicates=unname(counts['duplicate']),adjudication_required=unname(counts['adjudication_required']),candidate_pairs=length(candidates),auto_duplicate_pairs=length(auto_pairs),rejected_distinct_pairs=length(rejected),queued_pairs=length(queued),queued_pairs_internal_to_auto_clusters=length(internal_queued),auto_rule_counts=as.list(rule_counts),rejection_reason_counts=as.list(reject_counts),implementation_language='R')
+writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(output_dir,'resolution_summary.json'))
+writeLines(toJSON(list(workflow='workflow_02_deduplication',created_at=now_utc(),summary=summary),auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(output_dir,'resolution_audit.json'))
+if(sum(counts)!=n)stop('Status count invariant failed')
+message(toJSON(summary,auto_unbox=TRUE,pretty=TRUE))
+message('PASS: Workflow 02 guarded R resolution complete; bibliographic contradiction guard applied; append-only checkpoint output complete.')
+,'',s,perl=TRUE)
+  s <- sub('v[0-9]+
+
+strong_distinct <- function(a,b,ca) {
+  # Only an explicit preprint/repository signal suppresses contradiction checks.
+  # Missing source metadata alone is not evidence of a version relationship.
+  if (is_explicit_preprint_like(a) || is_explicit_preprint_like(b)) return(NULL)
+  ta<-norm(canonical(a)$title);tb<-norm(canonical(b)$title)
+  exact_title<-nzchar(ta)&&ta==tb
+
+  # Exact-title equality is not a veto on contradictory bibliographic evidence.
+  # Generic/reused headings such as "Rainbow Trout", "Aquaculture", "Preface",
+  # and "Introduction" can otherwise create false duplicate clusters.
+  aa<-author_values(a);bb<-author_values(b)
+  author_nonoverlap<-length(aa)>0&&length(bb)>0&&length(intersect(aa,bb))==0
+  ya<-year_int(canonical(a)$year);yb<-year_int(canonical(b)$year)
+  year_gap<-if(!is.na(ya)&&!is.na(yb))abs(ya-yb)else NA_integer_
+  da0<-extract_dois(a);db0<-extract_dois(b)
+  disjoint_doi0<-length(da0)>0&&length(db0)>0&&length(intersect(da0,db0))==0
+  asim0<-as.numeric(ca$abstract_similarity%||%0)
+
+  if (exact_title && author_nonoverlap && !is.na(year_gap) && year_gap>2L) {
+    return(list(
+      rule='reject_exact_title_incompatible_authors_year',
+      evidence=c('exact normalised title','non-overlapping author sets',sprintf('publication years differ by %d years',year_gap))
+    ))
+  }
+  if (exact_title && author_nonoverlap && disjoint_doi0 && asim0<.82) {
+    return(list(
+      rule='reject_exact_title_disjoint_doi_authors',
+      evidence=c('exact normalised title','non-overlapping author sets','different DOI values','abstract similarity below 0.82')
+    ))
+  }
+
+  pa<-payload(a);pb<-payload(b);sa<-norm(source_title(a));sb<-norm(source_title(b))
+  same_source<-nzchar(sa)&&sa==sb; diff_source<-nzchar(sa)&&nzchar(sb)&&sa!=sb
+  same_volume<-nzchar(norm(pa$volume))&&norm(pa$volume)==norm(pb$volume)
+  diff_volume<-different_nonempty(pa$volume,pb$volume)
+  same_issue<-nzchar(norm(pa$issue))&&norm(pa$issue)==norm(pb$issue)
+  diff_issue<-different_nonempty(pa$issue,pb$issue)
+  spa<-page_int(pa$start_page);spb<-page_int(pb$start_page);diff_start<-!is.na(spa)&&!is.na(spb)&&spa!=spb
+  nonoverlap<-page_ranges_nonoverlap(a,b); tsim<-as.numeric(ca$title_similarity%||%0)
+  da<-extract_dois(a);db<-extract_dois(b);disjoint_doi<-length(da)>0&&length(db)>0&&length(intersect(da,db))==0
+  if (diff_source&&disjoint_doi&&tsim<.985) return(list(rule='reject_different_journal_doi_title',evidence=c('different journal/source','different DOI values','materially different titles',if(diff_volume)'different volume',if(diff_start||nonoverlap)'different pagination')))
+  if (same_source&&same_volume&&nonoverlap&&tsim<.985) return(list(rule='reject_distinct_pagination',evidence=c('same journal and volume','non-overlapping pagination','materially different titles',if(disjoint_doi)'different DOI values',if(diff_issue)'different issue')))
+  if (same_source&&same_issue&&disjoint_doi&&diff_start&&tsim<.985) return(list(rule='reject_same_issue_distinct_article',evidence=c('same journal and issue','different DOI values','different start pages/article locations','materially different titles')))
+  NULL
+}
+
+survivor_score <- function(r) {
+  c<-canonical(r)
+  c(if(nzchar(norm(source_title(r))))4 else 0,if(length(extract_dois(r)))3 else 0,if(nzchar(norm(payload(r)$volume)))2 else 0,if(nzchar(norm(payload(r)$start_page)))2 else 0,min(length(author_values(r)),10),min(nchar(norm(c$abstract)),5000),min(nchar(norm(c$title)),1000),ifelse(is.na(year_int(c$year)),0,year_int(c$year)))
+}
+
+records <- read_jsonl(input_path); candidates <- read_jsonl(candidates_path); n <- length(records)
+ids<-vapply(records,lens_id,character(1)); if(any(!nzchar(ids))||anyDuplicated(ids))stop('Lens-ID invariant failed')
+message(sprintf('Workflow 02 guarded resolution: %d records; %d reviewed candidate pairs',n,length(candidates)))
+
+auto_pairs<-list();queued<-list();rejected<-list();rule_counts<-integer();names(rule_counts)<-character();reject_counts<-integer();names(reject_counts)<-character()
+inc_count <- function(v,k){v[k]<-if(is.na(v[k]))1L else v[k]+1L;v}
+for (ca in candidates) {
+  ai<-as.integer(ca$record_index)+1L;bi<-as.integer(ca$matched_index)+1L
+  if (is.na(ai)||is.na(bi)||ai<1||bi<1||ai>n||bi>n) { ca$resolution_rule<-'invalid_pair_indices';queued[[length(queued)+1]]<-ca;next }
+  a<-records[[ai]];b<-records[[bi]]
+  sd<-strong_distinct(a,b,ca)
+  if (!is.null(sd)) { ca$resolution_rule<-sd$rule;ca$resolution_evidence<-Filter(Negate(is.null),sd$evidence);rejected[[length(rejected)+1]]<-ca;reject_counts<-inc_count(reject_counts,sd$rule);next }
+  asim<-as.numeric(ca$abstract_similarity%||%0);tsim<-as.numeric(ca$title_similarity%||%0);manifest<-ca$manifestation_pattern%||%''
+  rule<-NULL
+  da<-extract_dois(a); db<-extract_dois(b)
+  populated_doi_conflict<-length(da)>0&&length(db)>0&&length(intersect(da,db))==0
+  exact_title<-nzchar(norm(canonical(a)$title))&&norm(canonical(a)$title)==norm(canonical(b)$title)
+
+  if (identical(ca$status,'duplicate')) rule<-'deterministic_duplicate'
+  else if (manifest=='preprint_or_repository_to_later_manifestation'&&asim>=.90&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'high_confidence_preprint_version'
+  else if (manifest=='same_work_manifestation'&&asim>=.95&&tsim>=.85&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'very_high_confidence_same_work_version'
+  else if (exact_title&&asim>=.999&&!populated_doi_conflict) rule<-'exact_title_identical_abstract_no_contradiction'
+  else if (asim>=.95&&tsim>=.90&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'high_abstract_title_similarity_compatible_bibliography'
+  if (is.null(rule)) {ca$resolution_rule<-'requires_adjudication';queued[[length(queued)+1]]<-ca} else {ca$resolution_rule<-rule;auto_pairs[[length(auto_pairs)+1]]<-ca;rule_counts<-inc_count(rule_counts,rule)}
+}
+message(sprintf('Resolution dispositions: %d auto-duplicate; %d rejected as distinct; %d queued',length(auto_pairs),length(rejected),length(queued)))
+write_jsonl(rejected,file.path(output_dir,'rejected_distinct_pairs.jsonl'))
+
+parent<-seq_len(n)
+find_root<-function(x){while(parent[x]!=x){parent[x]<<-parent[parent[x]];x<-parent[x]};x}
+unionf<-function(a,b){ra<-find_root(a);rb<-find_root(b);if(ra!=rb)parent[rb]<<-ra}
+for(ca in auto_pairs)unionf(ca$record_index+1L,ca$matched_index+1L)
+touched<-unique(unlist(lapply(auto_pairs,function(ca)c(ca$record_index+1L,ca$matched_index+1L))))
+groups<-if(length(touched))split(touched,vapply(touched,find_root,integer(1)))else list()
+rep_by<-rep(NA_integer_,n);members<-vector('list',n);rules<-vector('list',n)
+for(g in groups){vals<-lapply(g,function(i)survivor_score(records[[i]]));ord<-do.call(order,c(lapply(seq_len(length(vals[[1]])),function(k)-vapply(vals,`[`,numeric(1),k)),list(na.last=TRUE)));rep<-g[ord[1]];for(i in g)rep_by[i]<-rep;members[[rep]]<-setdiff(g,rep);rules[[rep]]<-unique(unlist(lapply(auto_pairs,function(ca)if((ca$record_index+1L)%in%g&&(ca$matched_index+1L)%in%g)ca$resolution_rule else NULL)))}
+# Attach pending review to the resolved representative cluster, not to a
+# manifestation inside that cluster. Confirmed duplicate members must remain
+# duplicate records even when their representative has a pending external pair.
+cluster_rep<-function(i) if(!is.na(rep_by[i])) rep_by[i] else i
+review_refs<-vector('list',n)
+internal_queued<-list()
+for(ca in queued){
+  a0<-ca$record_index+1L;b0<-ca$matched_index+1L
+  if(a0<1||b0<1||a0>n||b0>n)next
+  a<-cluster_rep(a0);b<-cluster_rep(b0)
+  link<-list(status=ca$status,basis=ca$basis,title_similarity=ca$title_similarity,abstract_similarity=ca$abstract_similarity,manifestation_pattern=ca$manifestation_pattern,original_lens_id=lens_id(records[[a0]]),original_other_lens_id=lens_id(records[[b0]]))
+  if(a==b){
+    internal_queued[[length(internal_queued)+1L]]<-c(link,list(representative_lens_id=lens_id(records[[a]])))
+    next
+  }
+  review_refs[[a]]<-c(review_refs[[a]],list(c(link,list(other_index=b-1L,other_lens_id=lens_id(records[[b]])))))
+  review_refs[[b]]<-c(review_refs[[b]],list(c(link,list(other_index=a-1L,other_lens_id=lens_id(records[[a]])))))
+}
+write_jsonl(internal_queued,file.path(output_dir,'queued_pairs_internal_to_auto_clusters.jsonl'))
+
+partial_path<-file.path(checkpoint_dir,'annotated_records.partial.jsonl');if(file.exists(partial_path))file.remove(partial_path);con<-file(partial_path,'at',encoding='UTF-8');on.exit(close(con),add=TRUE)
+counts<-c(unique=0L,canonical=0L,duplicate=0L,adjudication_required=0L)
+for(i in seq_len(n)){
+  r<-records[[i]]
+  if(!is.na(rep_by[i])&&i!=rep_by[i]){
+    rep<-rep_by[i]
+    d<-list(workflow='02_deduplication',implementation_language='R',status='duplicate',downstream_eligible=FALSE,duplicate_of=lens_id(records[[rep]]),representative_index=rep-1L,resolution_rules=rules[[rep]])
+  } else if(length(review_refs[[i]])){
+    d<-list(workflow='02_deduplication',implementation_language='R',status='adjudication_required',downstream_eligible=FALSE,candidate_links=review_refs[[i]])
+    if(!is.na(rep_by[i])&&i==rep_by[i]){
+      d$duplicate_members<-vapply(members[[i]],function(j)lens_id(records[[j]]),character(1))
+      d$resolution_rules<-rules[[i]]
+    }
+  } else if(!is.na(rep_by[i])){
+    rep<-rep_by[i]
+    d<-list(workflow='02_deduplication',implementation_language='R',status='canonical',downstream_eligible=TRUE,duplicate_members=vapply(members[[rep]],function(j)lens_id(records[[j]]),character(1)),resolution_rules=rules[[rep]])
+  } else d<-list(workflow='02_deduplication',implementation_language='R',status='unique',downstream_eligible=TRUE)
+  r$deduplication<-d;counts[d$status]<-counts[d$status]+1L
+  writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con);flush(con)
+  if(i%%checkpoint_every==0L||i==n){writeLines(toJSON(list(phase='guarded_resolution',processed_records=i,total_records=n,status_counts=as.list(counts),updated_at=now_utc()),auto_unbox=TRUE,pretty=TRUE),file.path(checkpoint_dir,'checkpoint_manifest.json'));message(sprintf('Workflow 02 checkpoint: guarded resolution %d/%d',i,n))}
+}
+close(con)
+file.copy(partial_path,file.path(output_dir,'annotated_records.jsonl'),overwrite=TRUE)
+write_jsonl(queued,file.path(output_dir,'adjudication_queue.jsonl'))
+summary<-list(input_records=n,output_records=n,records_removed=0,unique=unname(counts['unique']),canonical=unname(counts['canonical']),duplicates=unname(counts['duplicate']),adjudication_required=unname(counts['adjudication_required']),candidate_pairs=length(candidates),auto_duplicate_pairs=length(auto_pairs),rejected_distinct_pairs=length(rejected),queued_pairs=length(queued),queued_pairs_internal_to_auto_clusters=length(internal_queued),auto_rule_counts=as.list(rule_counts),rejection_reason_counts=as.list(reject_counts),implementation_language='R')
+writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(output_dir,'resolution_summary.json'))
+writeLines(toJSON(list(workflow='workflow_02_deduplication',created_at=now_utc(),summary=summary),auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(output_dir,'resolution_audit.json'))
+if(sum(counts)!=n)stop('Status count invariant failed')
+message(toJSON(summary,auto_unbox=TRUE,pretty=TRUE))
+message('PASS: Workflow 02 guarded R resolution complete; bibliographic contradiction guard applied; append-only checkpoint output complete.')
+,'',s,perl=TRUE)
+  s
+}
+versioned_doi_match <- function(a,b) {
+  da <- extract_dois(a); db <- extract_dois(b)
+  if(!length(da) || !length(db)) return(FALSE)
+  for(x in da) for(y in db) {
+    if(x==y) next
+    bx <- doi_version_base(x); by <- doi_version_base(y)
+    if(nzchar(bx) && identical(bx,by) && (!identical(x,bx) || !identical(y,by))) return(TRUE)
+  }
+  FALSE
+}
+
 strong_distinct <- function(a,b,ca) {
   # Only an explicit preprint/repository signal suppresses contradiction checks.
   # Missing source metadata alone is not evidence of a version relationship.
