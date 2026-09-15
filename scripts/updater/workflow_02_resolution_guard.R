@@ -76,7 +76,32 @@ different_nonempty <- function(a,b) { na<-norm(a);nb<-norm(b);nzchar(na)&&nzchar
 strong_distinct <- function(a,b,ca) {
   if (is_preprint_like(a) || is_preprint_like(b)) return(NULL)
   ta<-norm(canonical(a)$title);tb<-norm(canonical(b)$title)
-  if (nzchar(ta)&&ta==tb) return(NULL)
+  exact_title<-nzchar(ta)&&ta==tb
+
+  # Exact-title equality is not a veto on contradictory bibliographic evidence.
+  # Generic/reused headings such as "Rainbow Trout", "Aquaculture", "Preface",
+  # and "Introduction" can otherwise create false duplicate clusters.
+  aa<-author_values(a);bb<-author_values(b)
+  author_nonoverlap<-length(aa)>0&&length(bb)>0&&length(intersect(aa,bb))==0
+  ya<-year_int(canonical(a)$year);yb<-year_int(canonical(b)$year)
+  year_gap<-if(!is.na(ya)&&!is.na(yb))abs(ya-yb)else NA_integer_
+  da0<-extract_dois(a);db0<-extract_dois(b)
+  disjoint_doi0<-length(da0)>0&&length(db0)>0&&length(intersect(da0,db0))==0
+  asim0<-as.numeric(ca$abstract_similarity%||%0)
+
+  if (exact_title && author_nonoverlap && !is.na(year_gap) && year_gap>2L) {
+    return(list(
+      rule='reject_exact_title_incompatible_authors_year',
+      evidence=c('exact normalised title','non-overlapping author sets',sprintf('publication years differ by %d years',year_gap))
+    ))
+  }
+  if (exact_title && author_nonoverlap && disjoint_doi0 && asim0<.82) {
+    return(list(
+      rule='reject_exact_title_disjoint_doi_authors',
+      evidence=c('exact normalised title','non-overlapping author sets','different DOI values','abstract similarity below 0.82')
+    ))
+  }
+
   pa<-payload(a);pb<-payload(b);sa<-norm(source_title(a));sb<-norm(source_title(b))
   same_source<-nzchar(sa)&&sa==sb; diff_source<-nzchar(sa)&&nzchar(sb)&&sa!=sb
   same_volume<-nzchar(norm(pa$volume))&&norm(pa$volume)==norm(pb$volume)
