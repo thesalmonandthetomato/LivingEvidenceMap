@@ -13,6 +13,7 @@ arg <- function(flag, default=NULL) {
 }
 input_path <- arg('--input')
 candidates_path <- arg('--candidates')
+llm_decisions_path <- arg('--llm-decisions',NULL)
 output_dir <- arg('--output-dir','outputs/fresh_workflow02')
 checkpoint_every <- as.integer(arg('--checkpoint-every','250'))
 if (is.null(input_path) || is.null(candidates_path)) stop('--input and --candidates are required')
@@ -33,6 +34,7 @@ write_jsonl <- function(rows,path) {
   con <- file(path,'wt',encoding='UTF-8'); on.exit(close(con))
   for (x in rows) writeLines(toJSON(x,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
 }
+pair_key <- function(a,b) paste(sort(c(as.character(a),as.character(b))),collapse='||')
 norm <- function(x) {
   if (is.null(x) || !length(x)) return('')
   s <- tolower(stringi::stri_trans_general(as.character(x)[1],'NFKD; [:Nonspacing Mark:] Remove; NFC'))
@@ -150,7 +152,18 @@ survivor_score <- function(r) {
 
 records <- read_jsonl(input_path); candidates <- read_jsonl(candidates_path); n <- length(records)
 ids<-vapply(records,lens_id,character(1)); if(any(!nzchar(ids))||anyDuplicated(ids))stop('Lens-ID invariant failed')
-message(sprintf('Workflow 02 guarded resolution: %d records; %d reviewed candidate pairs',n,length(candidates)))
+
+llm_results <- if (!is.null(llm_decisions_path) && file.exists(llm_decisions_path)) read_jsonl(llm_decisions_path) else list()
+llm_map <- list()
+if (length(llm_results)) {
+  for (x in llm_results) {
+    k <- as.character(x$pair_key %||% pair_key(x$lens_id_a %||% '', x$lens_id_b %||% ''))
+    if (!nzchar(k)) stop('LLM adjudication result missing pair identity')
+    if (!is.null(llm_map[[k]])) stop(sprintf('Duplicate LLM adjudication key: %s',k))
+    llm_map[[k]] <- x
+  }
+}
+message(sprintf('Workflow 02 guarded resolution: %d records; %d reviewed candidate pairs; %d LLM adjudications loaded',n,length(candidates),length(llm_results)))
 
 auto_pairs<-list();queued<-list();rejected<-list();rule_counts<-integer();names(rule_counts)<-character();reject_counts<-integer();names(reject_counts)<-character()
 inc_count <- function(v,k){v[k]<-if(is.na(v[k]))1L else v[k]+1L;v}
@@ -172,7 +185,29 @@ for (ca in candidates) {
   else if (exact_title&&asim>=.999&&versioned_doi_match(a,b)) rule<-'exact_title_identical_abstract_versioned_doi'
   else if (exact_title&&asim>=.999&&!populated_doi_conflict) rule<-'exact_title_identical_abstract_no_contradiction'
   else if (asim>=.95&&tsim>=.90&&compatible_authors(a,b)&&compatible_year(a,b)) rule<-'high_abstract_title_similarity_compatible_bibliography'
-  if (is.null(rule)) {ca$resolution_rule<-'requires_adjudication';queued[[length(queued)+1]]<-ca} else {ca$resolution_rule<-rule;auto_pairs[[length(auto_pairs)+1]]<-ca;rule_counts<-inc_count(rule_counts,rule)}
+
+  # LLM adjudication is consulted only after deterministic rules and explicit
+  # bibliographic contradiction guards have failed to resolve the pair.
+  if (is.null(rule) && length(llm_map)) {
+    k <- pair_key(lens_id(a),lens_id(b))
+    llm <- llm_map[[k]]
+    if (!is.null(llm)) {
+      dec <- as.character(llm$decision %||% 'uncertain')
+      ca$llm_adjudication <- llm
+      if (identical(dec,'duplicate')) {
+        rule <- 'llm_adjudicated_duplicate'
+      } else if (identical(dec,'not_duplicate')) {
+        ca$resolution_rule <- 'llm_adjudicated_not_duplicate'
+        ca$resolution_evidence <- c('OpenAI bibliographic adjudication returned not_duplicate')
+        rejected[[length(rejected)+1L]] <- ca
+        reject_counts <- inc_count(reject_counts,'llm_adjudicated_not_duplicate')
+        next
+      }
+      # uncertain and technical failures deliberately remain queued.
+    }
+  }
+
+  if (is.null(rule)) {ca$resolution_rule<-'requires_human_review';queued[[length(queued)+1]]<-ca} else {ca$resolution_rule<-rule;auto_pairs[[length(auto_pairs)+1]]<-ca;rule_counts<-inc_count(rule_counts,rule)}
 }
 message(sprintf('Resolution dispositions: %d auto-duplicate; %d rejected as distinct; %d queued',length(auto_pairs),length(rejected),length(queued)))
 write_jsonl(rejected,file.path(output_dir,'rejected_distinct_pairs.jsonl'))
@@ -229,7 +264,7 @@ for(i in seq_len(n)){
 close(con)
 file.copy(partial_path,file.path(output_dir,'annotated_records.jsonl'),overwrite=TRUE)
 write_jsonl(queued,file.path(output_dir,'adjudication_queue.jsonl'))
-summary<-list(input_records=n,output_records=n,records_removed=0,unique=unname(counts['unique']),canonical=unname(counts['canonical']),duplicates=unname(counts['duplicate']),adjudication_required=unname(counts['adjudication_required']),candidate_pairs=length(candidates),auto_duplicate_pairs=length(auto_pairs),rejected_distinct_pairs=length(rejected),queued_pairs=length(queued),queued_pairs_internal_to_auto_clusters=length(internal_queued),auto_rule_counts=as.list(rule_counts),rejection_reason_counts=as.list(reject_counts),implementation_language='R')
+summary<-list(input_records=n,output_records=n,records_removed=0,unique=unname(counts['unique']),canonical=unname(counts['canonical']),duplicates=unname(counts['duplicate']),adjudication_required=unname(counts['adjudication_required']),candidate_pairs=length(candidates),auto_duplicate_pairs=length(auto_pairs),rejected_distinct_pairs=length(rejected),queued_pairs=length(queued),queued_pairs_internal_to_auto_clusters=length(internal_queued),llm_adjudications_loaded=length(llm_results),auto_rule_counts=as.list(rule_counts),rejection_reason_counts=as.list(reject_counts),implementation_language='R')
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(output_dir,'resolution_summary.json'))
 writeLines(toJSON(list(workflow='workflow_02_deduplication',created_at=now_utc(),summary=summary),auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(output_dir,'resolution_audit.json'))
 if(sum(counts)!=n)stop('Status count invariant failed')
