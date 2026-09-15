@@ -57,6 +57,9 @@ jobs:
           git show origin/main:scripts/updater/workflow_02_openai_adjudication.R > /tmp/workflow02/workflow_02_openai_adjudication.R
           Rscript -e "parse(file='/tmp/workflow02/workflow_02_deduplication.R'); parse(file='/tmp/workflow02/workflow_02_resolution_guard.R'); parse(file='/tmp/workflow02/workflow_02_openai_adjudication.R'); cat('PASS: Workflow 02 R scripts parse successfully\n')"
           git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-07.jsonl > /tmp/workflow02/reviewed_duplicates.jsonl
+          if git cat-file -e origin/main:data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-15.jsonl 2>/dev/null; then
+            git show origin/main:data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-15.jsonl >> /tmp/workflow02/reviewed_duplicates.jsonl
+          fi
           git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_not_duplicate_hashes_2026-09-07.json > /tmp/workflow02/reviewed_not_duplicates.json
 
       - name: Checkout fresh canonical JSON with LFS
