@@ -187,6 +187,11 @@ jobs:
             second_pass_run=34592152244,
             summary=s
           )
+          m$manual_post_dedup_repair <- list(
+            records=c('115-623-146-471-00X','083-231-522-166-315','148-538-962-380-852'),
+            reason='split_malformed_hybrid_transitive_cluster',
+            resulting_counts=list(unique=21573,canonical=1036,duplicates=1200)
+          )
           m$pipeline_stage <- 'historical_screening_reconciled'
           writeLines(
             toJSON(m,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),
