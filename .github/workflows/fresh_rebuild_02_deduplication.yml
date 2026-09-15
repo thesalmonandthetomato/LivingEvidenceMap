@@ -14,6 +14,11 @@ on:
         required: true
         default: canonical-fresh-2026-09-08-v1
         type: string
+      llm_model:
+        description: 'OpenAI model for residual duplicate adjudication'
+        required: true
+        default: gpt-5.6-luna
+        type: string
 
 permissions:
   contents: write
@@ -39,7 +44,7 @@ jobs:
           use-public-rspm: true
 
       - name: Install R dependencies
-        run: install.packages(c('jsonlite', 'stringi', 'digest'))
+        run: install.packages(c('jsonlite', 'stringi', 'digest', 'httr2'))
         shell: Rscript {0}
 
       - name: Load Workflow 02 R implementation and reviewed decisions
@@ -49,7 +54,8 @@ jobs:
           mkdir -p /tmp/workflow02
           git show origin/main:scripts/updater/workflow_02_deduplication.R > /tmp/workflow02/workflow_02_deduplication.R
           git show origin/main:scripts/updater/workflow_02_resolution_guard.R > /tmp/workflow02/workflow_02_resolution_guard.R
-          Rscript -e "parse(file='/tmp/workflow02/workflow_02_deduplication.R'); parse(file='/tmp/workflow02/workflow_02_resolution_guard.R'); cat('PASS: Workflow 02 R scripts parse successfully\n')"
+          git show origin/main:scripts/updater/workflow_02_openai_adjudication.R > /tmp/workflow02/workflow_02_openai_adjudication.R
+          Rscript -e "parse(file='/tmp/workflow02/workflow_02_deduplication.R'); parse(file='/tmp/workflow02/workflow_02_resolution_guard.R'); parse(file='/tmp/workflow02/workflow_02_openai_adjudication.R'); cat('PASS: Workflow 02 R scripts parse successfully\n')"
           git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-07.jsonl > /tmp/workflow02/reviewed_duplicates.jsonl
           git show origin/updater-workflow-02-deduplication:data/adjudication/workflow02_reviewed_not_duplicate_hashes_2026-09-07.json > /tmp/workflow02/reviewed_not_duplicates.json
 
@@ -98,12 +104,37 @@ jobs:
             --reviewed-not-duplicates /tmp/workflow02/reviewed_not_duplicates.json \
             --checkpoint-every 5000
 
-      - name: Apply guarded Workflow 02 resolution in R
+      - name: Run deterministic Workflow 02 resolution
         run: |
           set -euo pipefail
           Rscript /tmp/workflow02/workflow_02_resolution_guard.R \
             --input canonical_store/data/canonical/current/repair/records.jsonl \
             --candidates outputs/fresh_workflow02/candidates_reviewed.jsonl \
+            --output-dir outputs/fresh_workflow02 \
+            --checkpoint-every 250
+          cp outputs/fresh_workflow02/adjudication_queue.jsonl outputs/fresh_workflow02/adjudication_queue_pre_llm.jsonl
+          cp outputs/fresh_workflow02/resolution_summary.json outputs/fresh_workflow02/resolution_summary_pre_llm.json
+
+      - name: Adjudicate residual duplicate candidates with OpenAI
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_DUPLICATE_MODEL: ${{ inputs.llm_model }}
+        run: |
+          set -euo pipefail
+          Rscript /tmp/workflow02/workflow_02_openai_adjudication.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --queue outputs/fresh_workflow02/adjudication_queue_pre_llm.jsonl \
+            --output outputs/fresh_workflow02/llm_adjudication_results.jsonl \
+            --model "${OPENAI_DUPLICATE_MODEL}" \
+            --checkpoint-every 1
+
+      - name: Re-resolve Workflow 02 with OpenAI adjudications
+        run: |
+          set -euo pipefail
+          Rscript /tmp/workflow02/workflow_02_resolution_guard.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --candidates outputs/fresh_workflow02/candidates_reviewed.jsonl \
+            --llm-decisions outputs/fresh_workflow02/llm_adjudication_results.jsonl \
             --output-dir outputs/fresh_workflow02 \
             --checkpoint-every 250
 
@@ -153,8 +184,28 @@ jobs:
           stopifnot(s$input_records == expected, s$output_records == expected, s$records_removed == 0)
           stopifnot(is.numeric(s$unique), is.numeric(s$canonical), is.numeric(s$duplicates), is.numeric(s$adjudication_required))
           stopifnot(s$unique + s$canonical + s$duplicates + s$adjudication_required == expected)
+
+          pre <- fromJSON('outputs/fresh_workflow02/resolution_summary_pre_llm.json', simplifyVector=FALSE)
+          llm <- fromJSON('outputs/fresh_workflow02/llm_adjudication_results_summary.json', simplifyVector=FALSE)
+          stopifnot(llm$queued_pairs == pre$queued_pairs)
+          stopifnot(llm$adjudicated_pairs == pre$queued_pairs)
+          stopifnot(s$llm_adjudications_loaded == llm$adjudicated_pairs)
+          stopifnot(s$queued_pairs <= llm$uncertain)
+
           print(table(statuses))
+          print(llm)
           print(s)
+
+      - name: Block apply while human duplicate review remains
+        if: ${{ inputs.mode == 'apply' }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/fresh_workflow02/resolution_summary.json', simplifyVector=FALSE)
+          if (as.integer(s$queued_pairs) > 0L) {
+            stop(sprintf('Cannot apply Workflow 02: %d duplicate pairs still require human review', as.integer(s$queued_pairs)))
+          }
+          cat('PASS: no unresolved duplicate adjudications remain; apply may proceed\n')
 
       - name: Persist fresh deduplication annotations
         if: ${{ inputs.mode == 'apply' }}
