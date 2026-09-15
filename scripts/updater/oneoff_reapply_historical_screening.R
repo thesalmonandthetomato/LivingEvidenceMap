@@ -65,6 +65,37 @@ if (any(vapply(records,function(r)is.null(r$deduplication$status),logical(1)))) 
   stop("One-off historical screening requires Workflow 02 deduplication state")
 }
 
+# Targeted post-dedup repair discovered during historical-screening audit.
+# Lens record 083-231-522-166-315 is a malformed hybrid: its title matches
+# Sano 1972 paper III, while its abstract matches Sano & Yamazaki 1973 paper V.
+# It had bridged two distinct publications into one transitive cluster.
+manual_dedup_repair_ids <- c(
+  "115-623-146-471-00X",
+  "083-231-522-166-315",
+  "148-538-962-380-852"
+)
+idx <- match(manual_dedup_repair_ids, ids)
+if (anyNA(idx)) stop("Targeted Sano dedup repair records are missing from canonical input")
+if (!identical(dedup_status(records[[idx[[1]]]]), "canonical") ||
+    !all(vapply(records[idx[-1]], function(r) identical(dedup_status(r), "duplicate"), logical(1)))) {
+  stop("Targeted Sano dedup repair precondition failed: cluster state changed unexpectedly")
+}
+for (j in seq_along(idx)) {
+  i <- idx[[j]]
+  r <- records[[i]]
+  r$deduplication$status <- "unique"
+  r$deduplication$duplicate_of <- NULL
+  r$deduplication$duplicate_members <- list()
+  r$deduplication$downstream_eligible <- TRUE
+  r$deduplication$manual_post_dedup_repair <- list(
+    adjudicated_at=now_utc(),
+    reason="split_malformed_hybrid_transitive_cluster",
+    prior_representative="115-623-146-471-00X",
+    evidence="J-STAGE confirms paper III (1972, DOI 10.2331/suisan.38.313) and paper V (1973, DOI 10.2331/suisan.39.477) are distinct publications; Lens record 083-231-522-166-315 combines title metadata from III with abstract metadata from V."
+  )
+  records[[i]] <- r
+}
+
 base <- read_jsonl(base_history_path)
 second_pass <- read_jsonl(second_pass_path)
 
@@ -197,6 +228,17 @@ writeLines(
   file.path(output_dir,"historical_decision_ids_absent_from_fresh_records.txt")
 )
 
+historical_conflict_overrides <- list(
+  "073-514-199-866-043"=list(
+    decision="include",
+    rationale="Journal final and PeerJ preprint manifestations are the same underlying study; retain the historical include attached to the final publication."
+  ),
+  "103-905-489-817-973"=list(
+    decision="include",
+    rationale="The canonical Aquaculture article is the final publication of the same survey represented by the alternate conference/proceedings manifestation; retain the historical include attached to the final publication."
+  )
+)
+
 conflicts <- list()
 representative_summary <- list()
 new_queue <- list()
@@ -275,7 +317,6 @@ for (i in seq_along(records)) {
       downstream_eligible=identical(d,"include") && publication_ok
     )
   } else {
-    counts["conflict"] <- counts["conflict"] + 1L
     cobj <- list(
       representative_lens_id=id,
       group_lens_ids=group_ids,
@@ -284,17 +325,42 @@ for (i in seq_along(records)) {
         function(g)list(lens_id=g,decision=decision_map[[g]])
       )
     )
-    conflicts[[length(conflicts)+1L]] <- cobj
-    r$screening <- list(
-      workflow="04_historical_screening_reconciliation",
-      implementation_language="R",
-      status="historical_decision_conflict",
-      decision=NULL,
-      requires_screening=FALSE,
-      publication_status_eligible=publication_ok,
-      downstream_eligible=FALSE,
-      conflict=cobj$historical_decisions
-    )
+    override <- historical_conflict_overrides[[id]]
+    if (!is.null(override)) {
+      d <- as.character(override$decision)
+      if (!(d %in% c("include","exclude"))) stop("Invalid historical conflict override")
+      counts[d] <- counts[d] + 1L
+      source_decision_ids_used <- c(source_decision_ids_used,src_ids)
+      r$screening <- list(
+        workflow="04_historical_screening_reconciliation",
+        implementation_language="R",
+        status="historical_decision_conflict_resolved",
+        decision=d,
+        source_lens_ids=src_ids,
+        historical_conflict=cobj$historical_decisions,
+        conflict_resolution=list(
+          adjudicated_at=now_utc(),
+          decision=d,
+          rationale=override$rationale
+        ),
+        requires_screening=FALSE,
+        publication_status_eligible=publication_ok,
+        downstream_eligible=identical(d,"include") && publication_ok
+      )
+    } else {
+      counts["conflict"] <- counts["conflict"] + 1L
+      conflicts[[length(conflicts)+1L]] <- cobj
+      r$screening <- list(
+        workflow="04_historical_screening_reconciliation",
+        implementation_language="R",
+        status="historical_decision_conflict",
+        decision=NULL,
+        requires_screening=FALSE,
+        publication_status_eligible=publication_ok,
+        downstream_eligible=FALSE,
+        conflict=cobj$historical_decisions
+      )
+    }
   }
 
   representative_summary[[length(representative_summary)+1L]] <- list(
@@ -336,6 +402,8 @@ summary <- list(
   new_screening_queue_records=length(new_queue),
   source_historical_decision_ids_used=length(unique(source_decision_ids_used)),
   manual_adjudication_keys_recovered=matched_manual,
+  manual_post_dedup_repair_records=length(manual_dedup_repair_ids),
+  historical_conflict_overrides_applied=sum(vapply(records,function(r) identical((r$screening %||% list())$status,"historical_decision_conflict_resolved"),logical(1))),
   implementation_language="R"
 )
 
