@@ -1,0 +1,90 @@
+{
+  "record_type": "workflow04_consistency_check",
+  "validation_run_id": "35010609269",
+  "canonical_commit": "033c700f37821f53c59cfc09180ee36e5dae16f6",
+  "sample": {
+    "n": 200,
+    "seed": 650870934,
+    "sampling_frame_records": 17656,
+    "method": "simple_random_sample_without_replacement",
+    "truth_blinded_from_model": true
+  },
+  "model": "gpt-5.6-luna",
+  "prompt": {
+    "version": "workflow04-v1-legacy-python-prompt",
+    "sha256": "3b7bb27fa107b56f5b265a6ef5b8833e20eae43ccd02b20b0491db0372de3d19"
+  },
+  "pre_adjudication_metrics": {
+    "observed_agreement": 0.965,
+    "cohens_kappa": 0.9086,
+    "historical_retain": 145,
+    "historical_exclude": 55,
+    "model_retain": 152,
+    "model_exclude": 48,
+    "model_uncertain": 0,
+    "conflicts": 7,
+    "false_exclusion_rate": 0.0,
+    "false_retention_rate": 0.1273
+  },
+  "adjudications": [
+    {
+      "lens_id": "040-863-819-587-677",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Eligible Atlantic salmon are explicit and the abstract directly reports hatchery and sea-aquaculture conditions; the aquaculture-context criterion is therefore met."
+    },
+    {
+      "lens_id": "116-318-945-230-187",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "The record explicitly concerns salmon aquaculture; the screening rules do not impose a primary-research or journal-article requirement."
+    },
+    {
+      "lens_id": "040-667-284-559-371",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "exclude",
+      "rationale": "The direct study subject is sea trout/brown trout rather than an eligible species; references to Atlantic and coho salmon are comparative and do not make the direct-species study eligible."
+    },
+    {
+      "lens_id": "088-135-859-002-393",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout are explicit and the study concerns feeding with a commercial pelleted trout diet, which establishes production-related aquaculture relevance."
+    },
+    {
+      "lens_id": "096-023-028-792-973",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Although the measured animals are wild sea trout, the study explicitly evaluates an impact caused by salmon aquaculture and is eligible under the salmon-farming-impact rule."
+    },
+    {
+      "lens_id": "180-065-942-523-812",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout are explicit and the disease experiment is published in Aquaculture; under the established screening rules that is sufficient aquaculture context."
+    },
+    {
+      "lens_id": "045-197-539-993-291",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Triploid rainbow trout, experimental feed replacement, a commercial-diet control and industry-production framing establish eligible aquaculture relevance."
+    }
+  ],
+  "post_adjudication_metrics": {
+    "observed_agreement": 0.995,
+    "cohens_kappa": 0.9864,
+    "adjudicated_retain": 151,
+    "adjudicated_exclude": 49,
+    "model_retain": 152,
+    "model_exclude": 48,
+    "remaining_disagreements": 1
+  },
+  "process_note": "The original validation metrics and sample outputs remain unchanged. Adjudications are recorded separately as a consistency-checking record. Canonical historical decisions are not silently rewritten by this record."
+}
