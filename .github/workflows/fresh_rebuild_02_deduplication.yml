@@ -124,12 +124,60 @@ jobs:
           OPENAI_DUPLICATE_MODEL: ${{ inputs.llm_model }}
         run: |
           set -euo pipefail
+          PRIOR_ARGS=()
+          if [ -f data/adjudication/workflow02_llm_resolved_cache.jsonl ]; then
+            PRIOR_ARGS=(--prior-decisions data/adjudication/workflow02_llm_resolved_cache.jsonl)
+          fi
           Rscript /tmp/workflow02/workflow_02_openai_adjudication.R \
             --input canonical_store/data/canonical/current/repair/records.jsonl \
             --queue outputs/fresh_workflow02/adjudication_queue_pre_llm.jsonl \
             --output outputs/fresh_workflow02/llm_adjudication_results.jsonl \
             --model "${OPENAI_DUPLICATE_MODEL}" \
+            "${PRIOR_ARGS[@]}" \
             --checkpoint-every 1
+
+      - name: Persist resolved OpenAI adjudications
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            if (!file.exists(path)) return(list())
+            x <- readLines(path, warn=FALSE, encoding='UTF-8')
+            x <- x[nzchar(trimws(x))]
+            lapply(x, fromJSON, simplifyVector=FALSE)
+          }
+          out <- 'data/adjudication/workflow02_llm_resolved_cache.jsonl'
+          old <- read_jsonl(out)
+          cur <- read_jsonl('outputs/fresh_workflow02/llm_adjudication_results.jsonl')
+          keep <- c(old, Filter(function(x) {
+            d <- as.character(x$decision %||% '')
+            d %in% c('duplicate','not_duplicate') && !isTRUE(x$technical_failure)
+          }, cur))
+          if (length(keep)) {
+            by_key <- list()
+            for (x in keep) {
+              k <- as.character(x$pair_key %||% '')
+              if (nzchar(k)) by_key[[k]] <- x
+            }
+            dir.create(dirname(out), recursive=TRUE, showWarnings=FALSE)
+            con <- file(out,'wt',encoding='UTF-8')
+            on.exit(close(con), add=TRUE)
+            for (x in by_key) writeLines(toJSON(x,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
+          }
+          cat(sprintf('PASS: durable resolved LLM cache contains %d pair decisions\n', length(by_key)))
+      - name: Commit resolved OpenAI adjudication cache
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/adjudication/workflow02_llm_resolved_cache.jsonl
+          if git diff --cached --quiet; then
+            echo 'No new resolved LLM adjudications to cache'
+          else
+            git commit -m 'Cache resolved Workflow 02 OpenAI adjudications'
+            git push origin HEAD:main
+          fi
 
       - name: Re-resolve Workflow 02 with OpenAI adjudications
         run: |
