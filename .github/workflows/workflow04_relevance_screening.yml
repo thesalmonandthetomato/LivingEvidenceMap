@@ -114,7 +114,14 @@ jobs:
               as.character(s$decision %||% '') %in% c('include','exclude') &&
               publication_ok
           },logical(1)))
-          if(length(eligible)<200L) stop('Fewer than 200 historically decided eligible records are available')
+          prior_files <- Sys.glob('data/adjudication/workflow04_validation_runs/*/sample_lens_ids.txt')
+          prior_ids <- unique(unlist(lapply(prior_files,function(p) {
+            x <- readLines(p,warn=FALSE,encoding='UTF-8')
+            x[nzchar(trimws(x))]
+          }),use.names=FALSE))
+          eligible_ids <- vapply(records[eligible],function(r)as.character(r$identity$lens_id),character(1))
+          eligible <- eligible[!eligible_ids %in% prior_ids]
+          if(length(eligible)<200L) stop('Fewer than 200 previously unsampled historically decided eligible records are available')
           run_id <- Sys.getenv('VALIDATION_RUN_ID')
           seed <- as.integer((as.numeric(run_id) %% 2147483646) + 1)
           set.seed(seed)
@@ -153,7 +160,8 @@ jobs:
             sample_size=200L,
             sample_seed=seed,
             sampling_frame_records=length(eligible),
-            sampling_method='simple_random_sample_without_replacement',
+            prior_validation_sample_records_excluded=length(prior_ids),
+            sampling_method='simple_random_sample_without_replacement_from_previously_unsampled_historical_records',
             truth_blinded_from_model=TRUE,
             canonical_branch=Sys.getenv('FRESH_CANONICAL_BRANCH'),
             canonical_commit=system('git -C canonical_store rev-parse HEAD',intern=TRUE),
