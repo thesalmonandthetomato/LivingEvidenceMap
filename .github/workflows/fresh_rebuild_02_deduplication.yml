@@ -176,7 +176,19 @@ jobs:
             echo 'No new resolved LLM adjudications to cache'
           else
             git commit -m 'Cache resolved Workflow 02 OpenAI adjudications'
-            git push origin HEAD:main
+            for attempt in 1 2 3; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                echo "PASS: adjudication cache pushed on attempt ${attempt}"
+                break
+              fi
+              if [ "${attempt}" -eq 3 ]; then
+                echo 'ERROR: failed to push adjudication cache after 3 rebased attempts' >&2
+                exit 1
+              fi
+              sleep 2
+            done
           fi
 
       - name: Re-resolve Workflow 02 with OpenAI adjudications
