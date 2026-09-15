@@ -49,6 +49,13 @@ duplicate_members <- function(r) {
   x <- r$deduplication$duplicate_members %||% list()
   if (is.null(x)) character() else as.character(unlist(x,use.names=FALSE))
 }
+publication_status_eligible <- function(r) {
+  n <- r$notices %||% NULL
+  if (is.null(n)) return(TRUE)
+  if (!is.null(n$record_downstream_eligible)) return(isTRUE(n$record_downstream_eligible))
+  if (!is.null(n$downstream_eligible)) return(isTRUE(n$downstream_eligible))
+  TRUE
+}
 sha_id <- function(x) digest(x,algo="sha256",serialize=FALSE)
 
 records <- read_jsonl(input_path)
@@ -193,22 +200,24 @@ writeLines(
 conflicts <- list()
 representative_summary <- list()
 new_queue <- list()
-counts <- c(include=0L,exclude=0L,not_previously_screened=0L,conflict=0L)
+counts <- c(include=0L,exclude=0L,not_previously_screened=0L,publication_blocked_unscreened=0L,conflict=0L)
 source_decision_ids_used <- character()
 
 for (i in seq_along(records)) {
   r <- records[[i]]
   st <- dedup_status(r)
   id <- ids[[i]]
+  publication_ok <- publication_status_eligible(r)
 
   if (st == "duplicate") {
     direct <- decision_map[[id]]
     r$screening <- list(
-      workflow="03_historical_screening_reconciliation",
+      workflow="04_historical_screening_reconciliation",
       implementation_language="R",
       status="duplicate_manifestation",
       direct_historical_decision=if(is.null(direct)) NULL else direct,
       decision_applied_to=r$deduplication$duplicate_of %||% NULL,
+      publication_status_eligible=publication_ok,
       downstream_eligible=FALSE
     )
     records[[i]] <- r
@@ -226,29 +235,44 @@ for (i in seq_along(records)) {
   uniq <- unique(vapply(src_ids,function(g)decision_map[[g]],character(1)))
 
   if (length(uniq)==0L) {
-    counts["not_previously_screened"] <- counts["not_previously_screened"] + 1L
-    r$screening <- list(
-      workflow="03_historical_screening_reconciliation",
-      implementation_language="R",
-      status="not_previously_screened",
-      decision=NULL,
-      requires_screening=TRUE,
-      downstream_eligible=FALSE
-    )
-    new_queue[[length(new_queue)+1L]] <- r
+    if (publication_ok) {
+      counts["not_previously_screened"] <- counts["not_previously_screened"] + 1L
+      r$screening <- list(
+        workflow="04_historical_screening_reconciliation",
+        implementation_language="R",
+        status="not_previously_screened",
+        decision=NULL,
+        requires_screening=TRUE,
+        publication_status_eligible=TRUE,
+        downstream_eligible=FALSE
+      )
+      new_queue[[length(new_queue)+1L]] <- r
+    } else {
+      counts["publication_blocked_unscreened"] <- counts["publication_blocked_unscreened"] + 1L
+      r$screening <- list(
+        workflow="04_historical_screening_reconciliation",
+        implementation_language="R",
+        status="not_previously_screened_publication_blocked",
+        decision=NULL,
+        requires_screening=FALSE,
+        publication_status_eligible=FALSE,
+        downstream_eligible=FALSE
+      )
+    }
   } else if (length(uniq)==1L) {
     d <- uniq[[1]]
     counts[d] <- counts[d] + 1L
     source_decision_ids_used <- c(source_decision_ids_used,src_ids)
     r$screening <- list(
-      workflow="03_historical_screening_reconciliation",
+      workflow="04_historical_screening_reconciliation",
       implementation_language="R",
       status="historical_decision_applied",
       decision=d,
       source_lens_ids=src_ids,
       propagated_across_deduplication_group=length(group_ids)>1L,
       requires_screening=FALSE,
-      downstream_eligible=identical(d,"include")
+      publication_status_eligible=publication_ok,
+      downstream_eligible=identical(d,"include") && publication_ok
     )
   } else {
     counts["conflict"] <- counts["conflict"] + 1L
@@ -262,11 +286,12 @@ for (i in seq_along(records)) {
     )
     conflicts[[length(conflicts)+1L]] <- cobj
     r$screening <- list(
-      workflow="03_historical_screening_reconciliation",
+      workflow="04_historical_screening_reconciliation",
       implementation_language="R",
       status="historical_decision_conflict",
       decision=NULL,
       requires_screening=FALSE,
+      publication_status_eligible=publication_ok,
       downstream_eligible=FALSE,
       conflict=cobj$historical_decisions
     )
@@ -306,6 +331,7 @@ summary <- list(
   representatives_include=unname(counts["include"]),
   representatives_exclude=unname(counts["exclude"]),
   representatives_not_previously_screened=unname(counts["not_previously_screened"]),
+  representatives_not_previously_screened_publication_blocked=unname(counts["publication_blocked_unscreened"]),
   representatives_with_historical_conflict=unname(counts["conflict"]),
   new_screening_queue_records=length(new_queue),
   source_historical_decision_ids_used=length(unique(source_decision_ids_used)),
@@ -316,9 +342,13 @@ summary <- list(
 if (summary$output_records != summary$input_records) {
   stop("One-off historical screening cardinality invariant failed")
 }
+if (summary$new_screening_queue_records != summary$representatives_not_previously_screened) {
+  stop("New-screening queue invariant failed: publication-blocked unscreened records must not be queued")
+}
 if (summary$representatives_include +
     summary$representatives_exclude +
     summary$representatives_not_previously_screened +
+    summary$representatives_not_previously_screened_publication_blocked +
     summary$representatives_with_historical_conflict != rep_n) {
   stop("One-off historical screening representative status count invariant failed")
 }
