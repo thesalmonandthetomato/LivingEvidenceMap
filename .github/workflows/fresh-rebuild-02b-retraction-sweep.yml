@@ -1,0 +1,155 @@
+name: Workflow 02B - Retraction audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'audit or apply'
+        required: true
+        default: audit
+        type: choice
+        options:
+          - audit
+          - apply
+      canonical_branch:
+        description: 'Canonical branch containing completed Workflow 02 deduplication'
+        required: true
+        default: canonical-fresh-dedup-v2-2026-09-14
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  retraction-audit:
+    runs-on: ubuntu-latest
+    env:
+      FRESH_CANONICAL_BRANCH: ${{ inputs.canonical_branch }}
+    steps:
+      - name: Checkout main orchestration branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        run: install.packages(c('jsonlite','httr2','dplyr','purrr','stringr','readr','tibble','tidyr'))
+
+      - name: Load retraction audit implementation
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          mkdir -p /tmp/retraction
+          git show origin/main:scripts/updater/workflow_02b_retraction_sweep.R > /tmp/retraction/workflow_02b_retraction_sweep.R
+          Rscript -e "parse(file='/tmp/retraction/workflow_02b_retraction_sweep.R'); cat('PASS: Workflow 02B R script parses successfully\n')"
+
+      - name: Checkout deduplicated canonical JSON with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.canonical_branch }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Validate deduplicated input
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- 'canonical_store/data/canonical/current/repair/records.jsonl'
+          m <- fromJSON('canonical_store/data/canonical/current/repair/manifest.json', simplifyVector=FALSE)
+          stopifnot(file.exists(p))
+          stopifnot(identical(as.character(m$pipeline_stage), 'deduplicated'))
+          x <- readLines(p, warn=FALSE, encoding='UTF-8')
+          x <- x[nzchar(trimws(x))]
+          stopifnot(length(x) == 23809L)
+          status <- character(length(x))
+          ids <- character(length(x))
+          for(i in seq_along(x)) {
+            r <- fromJSON(x[[i]], simplifyVector=FALSE)
+            ids[i] <- r$identity$lens_id
+            status[i] <- r$deduplication$status
+          }
+          stopifnot(!anyDuplicated(ids))
+          stopifnot(sum(status=='duplicate') == 1202L)
+          stopifnot(sum(status=='canonical') == 1037L)
+          stopifnot(sum(status=='unique') == 21570L)
+          stopifnot(sum(status=='adjudication_required') == 0L)
+          cat('PASS: deduplicated Workflow 02 input verified\n')
+
+      - name: Run dedup-aware retraction audit
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        run: |
+          set -euo pipefail
+          Rscript /tmp/retraction/workflow_02b_retraction_sweep.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --output-dir outputs/retraction_sweep
+
+      - name: Validate retraction audit
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/retraction_sweep/retraction_summary.json', simplifyVector=FALSE)
+          stopifnot(s$input_records == 23809L)
+          stopifnot(s$records_with_doi >= s$directly_retracted_records)
+          stopifnot(s$directly_retracted_records ==
+            s$directly_retracted_duplicate_records +
+            s$directly_retracted_canonical_records +
+            s$directly_retracted_unique_records)
+          stopifnot(s$openalex_failed == 0L)
+          x <- readLines('outputs/retraction_sweep/records_with_retraction_status.jsonl', warn=FALSE, encoding='UTF-8')
+          x <- x[nzchar(trimws(x))]
+          stopifnot(length(x) == 23809L)
+          cat('PASS: retraction audit invariants verified\n')
+          print(s)
+
+      - name: Persist retraction annotations
+        if: ${{ inputs.mode == 'apply' }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          file.copy(
+            'outputs/retraction_sweep/records_with_retraction_status.jsonl',
+            'canonical_store/data/canonical/current/repair/records.jsonl',
+            overwrite=TRUE
+          )
+          mp <- 'canonical_store/data/canonical/current/repair/manifest.json'
+          m <- fromJSON(mp, simplifyVector=FALSE)
+          s <- fromJSON('outputs/retraction_sweep/retraction_summary.json', simplifyVector=FALSE)
+          m$retraction_sweep <- list(
+            workflow='workflow_02b_retraction_sweep',
+            completed_at=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'),
+            summary=s
+          )
+          m$pipeline_stage <- 'retraction_checked'
+          writeLines(toJSON(m,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),mp)
+
+      - name: Commit retraction annotations
+        if: ${{ inputs.mode == 'apply' }}
+        working-directory: canonical_store
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git lfs install --local
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git diff --cached --quiet && { echo 'No retraction annotation changes detected'; exit 1; }
+          git commit -m 'Persist Workflow 02B retraction annotations'
+          git lfs push origin "$FRESH_CANONICAL_BRANCH"
+          git push origin HEAD:"$FRESH_CANONICAL_BRANCH"
+          git log -1 --format='retraction_commit=%H'
+
+      - name: Upload retraction audit artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02b-retraction-${{ inputs.mode }}-${{ github.run_id }}
+          path: outputs/retraction_sweep/
+          retention-days: 90
+          if-no-files-found: warn
