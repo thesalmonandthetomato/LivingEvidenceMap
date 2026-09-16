@@ -64,3 +64,25 @@ Canonical commit: `e8ba9f3f8577e88130e77f214f5565260e33673f`
 - specificity: **79.63%**
 
 Adjudication status: **pending**. The complete conflict set is stored under `data/adjudication/workflow04_validation_runs/35075669317/conflicts.csv`, and the adjudication record is `validation_35075669317.json`.
+
+
+## Validation run 35093862530
+
+Prompt: `workflow04-v2-targeted-clarifications`  
+Prompt SHA-256: `3eb903948e355546af85bfb0869a22652af2b711ac5aa4b28994c0964b847b55`  
+Model: `gpt-5.6-luna`  
+Sample: 200 previously unsampled records, seed `734124195`  
+Canonical commit: `726110f985e4ad8dc21d238fd48626fe1886bfae`
+
+### Before conflict adjudication
+
+- observed agreement: **90.0%**
+- Cohen's kappa: **0.7538**
+- conflicts: **20**
+- false exclusions against historical labels: **2**
+- false retentions against historical labels: **16**
+- uncertain decisions: **2**
+- sensitivity: **97.83%**
+- specificity: **72.58%**
+
+Adjudication status: **pending**.
