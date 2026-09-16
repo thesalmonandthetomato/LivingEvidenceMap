@@ -157,7 +157,14 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "The chapter substantively addresses welfare at harvest for farmed fish and explicitly includes salmon and trout among the farmed species whose harvesting processes are discussed."
+    },
+    {
+      "lens_id": "188-307-184-108-491",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "exclude",
+      "rationale": "The title links coho salmon to aquaculture facilities, but this appears to concern population supplementation/returning fish rather than farmed production. With no abstract available, exclusion is the preferred adjudication, while acknowledging that retain would also be defensible at title-only screening."
     }
   ],
-  "adjudications_completed": 14
+  "adjudications_completed": 15
 }
