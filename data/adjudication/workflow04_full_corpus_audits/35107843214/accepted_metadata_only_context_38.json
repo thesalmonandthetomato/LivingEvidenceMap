@@ -1,0 +1,52 @@
+{
+  "audit_run_id": "35107843214",
+  "adjudication_type": "metadata_only_context_rule",
+  "approved_date": "2026-09-16",
+  "rule": "A journal title, keyword, affiliation, funding source, generic commercial importance statement or potential future aquaculture application is not sufficient by itself to establish aquaculture relevance. Retain where the study itself has a production-oriented link such as commercial stock/strains, large-scale reproduction, nutrition/growth, breeding, disease resistance/control, aquaculture therapeutics, RAS/post-smolt production, or another explicit husbandry context.",
+  "counts": {
+    "retain": 18,
+    "exclude": 20
+  },
+  "retain_lens_ids": [
+    "095-616-794-585-540",
+    "029-183-929-619-601",
+    "151-937-875-442-185",
+    "156-303-158-334-058",
+    "057-153-167-523-600",
+    "031-836-935-425-392",
+    "112-209-460-516-402",
+    "011-103-852-716-254",
+    "043-288-722-009-345",
+    "054-643-752-817-522",
+    "101-293-069-937-429",
+    "185-840-796-683-83X",
+    "005-018-408-312-073",
+    "009-398-987-759-904",
+    "010-262-716-194-641",
+    "020-886-911-639-683",
+    "035-628-701-784-367",
+    "038-098-385-419-07X"
+  ],
+  "exclude_lens_ids": [
+    "012-027-195-913-948",
+    "013-941-371-383-757",
+    "031-938-983-838-527",
+    "082-321-254-271-41X",
+    "121-921-349-218-20X",
+    "136-452-631-072-457",
+    "168-837-111-142-528",
+    "029-867-142-745-53X",
+    "030-709-414-459-791",
+    "101-702-814-471-222",
+    "121-924-625-213-872",
+    "159-787-937-637-384",
+    "131-216-094-679-547",
+    "033-765-582-978-123",
+    "057-927-790-230-996",
+    "027-315-622-363-065",
+    "077-118-217-667-47X",
+    "173-447-907-334-709",
+    "017-363-989-797-680",
+    "132-107-076-388-184"
+  ]
+}
