@@ -34,12 +34,21 @@
     "uncertain_rate": 0.01,
     "conflicts": 20
   },
-  "adjudication_status": "pending",
-  "adjudications_completed": 0,
+  "adjudication_status": "in_progress",
+  "adjudications_completed": 1,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
     "metrics": "data/adjudication/workflow04_validation_runs/35093862530/validation_metrics.json",
     "prompt": "data/adjudication/workflow04_validation_runs/35093862530/prompt_R_source.txt"
-  }
+  },
+  "adjudications": [
+    {
+      "lens_id": "027-298-811-682-071",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Chinook salmon are explicit and the study compares growth and survival during prolonged confinement, including 1.5 years in sea-pens, which is a clear aquaculture rearing context."
+    }
+  ]
 }
