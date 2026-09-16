@@ -1,0 +1,208 @@
+name: Apply Workflow 04 accepted batch adjudications 35107843214
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply_workflow04_batch_adjudications_35107843214.yml'
+
+permissions:
+  contents: write
+
+env:
+  CANONICAL_BRANCH: canonical-fresh-dedup-v2-2026-09-14
+  AUDIT_RUN: '35107843214'
+  AUDIT_DIR: data/adjudication/workflow04_full_corpus_audits/35107843214
+  BATCH_FILE: data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_batch_adjudications_918.json
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANONICAL_BRANCH }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Resolve and validate accepted batches
+        run: |
+          python - <<'PY'
+          import csv,json
+          from pathlib import Path
+
+          audit_dir=Path("${{ env.AUDIT_DIR }}")
+          cfg=json.loads(Path("${{ env.BATCH_FILE }}").read_text(encoding="utf-8"))
+          rows=list(csv.DictReader((audit_dir/"historical_conflicts.csv").open(encoding="utf-8")))
+
+          def expand(spec):
+              out=[]
+              for token in spec.split(","):
+                  token=token.strip()
+                  if not token: continue
+                  if "-" in token:
+                      a,b=map(int,token.split("-",1)); out.extend(range(a,b+1))
+                  else:
+                      out.append(int(token))
+              return out
+
+          accepted={}
+          batch_counts={}
+          for b in cfg["batches"]:
+              nums=expand(b["rows"])
+              assert len(nums)==b["n"], (b["batch"],len(nums),b["n"])
+              batch_counts[b["batch"]]=len(nums)
+              for n in nums:
+                  assert 1 <= n <= len(rows)
+                  r=rows[n-1]
+                  assert r["model_decision"]==b["decision"], (n,r["model_decision"],b["decision"])
+                  assert r["historical_decision"]!=r["model_decision"], n
+                  lid=r["lens_id"]
+                  assert lid not in accepted, lid
+                  accepted[lid]={
+                      "lens_id":lid,
+                      "historical_decision":r["historical_decision"],
+                      "model_decision":r["model_decision"],
+                      "final_adjudication":b["decision"],
+                      "batch":b["batch"],
+                      "model_reason":r["model_reason"],
+                      "source_row":n
+                  }
+          assert len(accepted)==918, len(accepted)
+          assert sum(x["final_adjudication"]=="retain" for x in accepted.values())==757
+          assert sum(x["final_adjudication"]=="exclude" for x in accepted.values())==161
+          out=audit_dir/"accepted_batch_adjudications_918_resolved.json"
+          out.write_text(json.dumps({
+              "audit_run_id":"35107843214",
+              "status":"accepted",
+              "records":list(accepted.values()),
+              "batch_counts":batch_counts
+          },indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+          print("PASS: resolved exactly 918 accepted conflict adjudications")
+          PY
+
+      - name: Apply accepted adjudications to canonical JSON
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          audit_dir=Path("${{ env.AUDIT_DIR }}")
+          resolved=json.loads((audit_dir/"accepted_batch_adjudications_918_resolved.json").read_text(encoding="utf-8"))
+          decisions={x["lens_id"]:x for x in resolved["records"]}
+
+          src=Path("canonical_store/data/canonical/current/repair/records.jsonl")
+          tmp=src.with_suffix(".jsonl.tmp")
+          seen=set(); changed=0; include_delta=0; exclude_delta=0
+
+          with src.open(encoding="utf-8") as fin, tmp.open("w",encoding="utf-8") as fout:
+              for line in fin:
+                  if not line.strip(): continue
+                  r=json.loads(line)
+                  lid=str((r.get("identity") or {}).get("lens_id") or "")
+                  if lid in decisions:
+                      a=decisions[lid]; seen.add(lid)
+                      s=r.setdefault("screening",{})
+                      old="include" if a["historical_decision"]=="retain" else "exclude"
+                      target="include" if a["final_adjudication"]=="retain" else "exclude"
+                      cur=s.get("decision")
+                      if cur not in (old,target):
+                          raise SystemExit(f"{lid}: unexpected canonical decision {cur!r}; expected {old!r} or {target!r}")
+                      s.setdefault("historical_decision_original",old)
+                      entry={
+                          "status":"batch_adjudicated",
+                          "final_decision":a["final_adjudication"],
+                          "canonical_decision":target,
+                          "source":"workflow04_full_corpus_audit_batch_adjudication",
+                          "source_audit_run":"35107843214",
+                          "source_conflict_row":a["source_row"],
+                          "batch":a["batch"],
+                          "model_decision":a["model_decision"],
+                          "model_reason":a["model_reason"],
+                          "adjudication_date":"2026-09-16"
+                      }
+                      hist=s.setdefault("manual_adjudication_history",[])
+                      if not any(isinstance(x,dict) and x.get("source_audit_run")=="35107843214" and x.get("source_conflict_row")==a["source_row"] for x in hist):
+                          hist.append(entry)
+                      s["manual_adjudication"]=entry
+                      if cur != target:
+                          s["decision"]=target; changed += 1
+                          if target=="include":
+                              include_delta += 1; exclude_delta -= 1
+                          else:
+                              include_delta -= 1; exclude_delta += 1
+                  fout.write(json.dumps(r,ensure_ascii=False,separators=(",",":"))+"\n")
+
+          missing=sorted(set(decisions)-seen)
+          if missing: raise SystemExit(f"Missing Lens IDs: {missing[:20]} (n={len(missing)})")
+          assert changed==918, f"Expected 918 changes, got {changed}"
+          assert include_delta==596 and exclude_delta==-596, (include_delta,exclude_delta)
+          tmp.replace(src)
+
+          manifest_path=Path("canonical_store/data/canonical/current/repair/manifest.json")
+          m=json.loads(manifest_path.read_text(encoding="utf-8"))
+          hs=m["historical_screening_reconciliation"]["summary"]
+          hs["representatives_include"] += include_delta
+          hs["representatives_exclude"] += exclude_delta
+          node=m.setdefault("workflow04_full_corpus_batch_adjudications",{})
+          node["audit_35107843214_batch_918"]={
+              "applied_at":"2026-09-16",
+              "records_adjudicated":918,
+              "retain":757,
+              "exclude":161,
+              "include_delta":include_delta,
+              "exclude_delta":exclude_delta,
+              "source":"data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_batch_adjudications_918.json"
+          }
+          manifest_path.write_text(json.dumps(m,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+          print(f"PASS: applied 918 decisions; include_delta={include_delta}; exclude_delta={exclude_delta}")
+          PY
+
+      - name: Validate canonical adjudications
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          resolved=json.loads(Path("${{ env.AUDIT_DIR }}/accepted_batch_adjudications_918_resolved.json").read_text(encoding="utf-8"))
+          expected={x["lens_id"]:("include" if x["final_adjudication"]=="retain" else "exclude") for x in resolved["records"]}
+          found=set()
+          with Path("canonical_store/data/canonical/current/repair/records.jsonl").open(encoding="utf-8") as f:
+              for line in f:
+                  r=json.loads(line)
+                  lid=str((r.get("identity") or {}).get("lens_id") or "")
+                  if lid in expected:
+                      s=r.get("screening") or {}
+                      assert s.get("decision")==expected[lid], (lid,s.get("decision"),expected[lid])
+                      ma=s.get("manual_adjudication") or {}
+                      assert ma.get("source_audit_run")=="35107843214"
+                      found.add(lid)
+          assert len(found)==918, len(found)
+          print("PASS: all 918 accepted batch adjudications validated")
+          PY
+
+      - name: Persist resolved adjudication record on main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${AUDIT_DIR}/accepted_batch_adjudications_918_resolved.json"
+          git commit -m "Resolve 918 accepted Workflow 04 batch adjudications"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Commit canonical changes
+        run: |
+          set -euo pipefail
+          cd canonical_store
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git commit -m "Apply 918 accepted Workflow 04 batch adjudications"
+          git pull --rebase origin "${CANONICAL_BRANCH}"
+          git push origin HEAD:"${CANONICAL_BRANCH}"
+          git rev-parse HEAD
