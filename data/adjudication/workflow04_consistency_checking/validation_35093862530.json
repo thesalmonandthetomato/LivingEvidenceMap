@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 5,
+  "adjudications_completed": 6,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -77,6 +77,13 @@
       "model_decision": "uncertain",
       "final_adjudication": "exclude",
       "rationale": "Atlantic salmon is explicit, but the available metadata do not establish farmed or aquaculture origin; commercial fraud alone does not satisfy the aquaculture-context criterion."
+    },
+    {
+      "lens_id": "052-346-902-722-104",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "The chapter explicitly discusses Atlantic salmon retrovirus-associated tumours in the context of increased cancer epizootics in farm-reared or hatchery fish facilities, establishing direct aquaculture relevance."
     }
   ]
 }
