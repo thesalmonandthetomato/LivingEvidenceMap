@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 8,
+  "adjudications_completed": 9,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -98,6 +98,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "The abstract explicitly identifies cultured Atlantic salmon and evaluates processing of salmon muscle for a commercial process, establishing farmed origin and relevant commercial processing."
+    },
+    {
+      "lens_id": "088-783-849-898-339",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "The abstract explicitly discusses commercially raised salmon and compares contaminant levels with wild-caught salmon, establishing farmed-salmon product relevance."
     }
   ]
 }
