@@ -1,0 +1,38 @@
+{
+  "audit_run_id": "35107843214",
+  "adjudication_type": "residual_production_and_aquaculture_impact",
+  "approved_date": "2026-09-16",
+  "rules": [
+    "Retain production-oriented studies on eligible salmonids where the work directly concerns feeding, growth, rearing, reproduction, smolt transfer, transport/handling, stunning/processing, disease transmission or other husbandry operations, even when the word commercial is absent.",
+    "Retain environmental or ecological studies where aquaculture itself is a substantive exposure, operation, source or impact being investigated. Exclude where an aquaculture facility is merely incidental background or where the eligible-species gate is not met.",
+    "Potential future commercial application alone is not sufficient when the actual study concerns wild, hatchery-release or otherwise non-aquaculture fish."
+  ],
+  "retain_lens_ids": [
+    "007-886-690-512-433",
+    "022-972-958-404-72X",
+    "062-796-192-291-565",
+    "118-352-859-788-426",
+    "010-111-845-335-166",
+    "074-328-204-087-309",
+    "121-893-212-873-291",
+    "137-110-510-031-719",
+    "170-912-810-803-160",
+    "015-567-786-249-571",
+    "106-178-376-801-466",
+    "149-897-696-663-745",
+    "021-644-567-395-548",
+    "067-678-114-026-357",
+    "002-947-120-478-872",
+    "014-574-849-352-525",
+    "051-855-413-147-718",
+    "167-104-243-030-662"
+  ],
+  "exclude_lens_ids": [
+    "077-161-034-664-675",
+    "199-991-573-829-527",
+    "069-133-093-715-876",
+    "010-209-452-564-297",
+    "022-872-345-932-660"
+  ],
+  "counts": {"retain": 18, "exclude": 5}
+}
