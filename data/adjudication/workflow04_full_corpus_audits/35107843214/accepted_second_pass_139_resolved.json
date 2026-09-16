@@ -1,0 +1,1257 @@
+{
+  "audit_run_id": "35107843214",
+  "status": "accepted",
+  "records": [
+    {
+      "lens_id": "007-479-060-649-920",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns rainbow trout and uses the National Center for Cool and Cold Water Aquaculture broodstock population, establishing aquaculture relevance.",
+      "remaining_543_row": 2
+    },
+    {
+      "lens_id": "015-414-346-641-310",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns Atlantic salmon (Salmo salar) and discusses aquaculture experiments, published in Aquaculture Research.",
+      "remaining_543_row": 10
+    },
+    {
+      "lens_id": "024-283-644-924-916",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study examines sockeye salmon (Oncorhynchus nerka) and explicitly discusses implications for aquaculturists considering feed supplementation.",
+      "remaining_543_row": 11
+    },
+    {
+      "lens_id": "036-960-343-432-126",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns Atlantic salmon and rainbow trout and reports rainbow-trout eDNA released from upstream land-based rainbow-trout farms, establishing a direct aquaculture connection.",
+      "remaining_543_row": 15
+    },
+    {
+      "lens_id": "078-152-640-988-559",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns female rainbow trout (Oncorhynchus mykiss) and is linked to aquaculture through the Aquaculture Europe venue and an affiliation in Nutrition, Métabolisme, Aquaculture.",
+      "remaining_543_row": 20
+    },
+    {
+      "lens_id": "096-839-233-163-30X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns Atlantic salmon and an oral vaccine in aquaculture, establishing both eligible species and production-related aquaculture relevance.",
+      "remaining_543_row": 26
+    },
+    {
+      "lens_id": "121-831-341-838-819",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The aquaculture-focused book explicitly includes egg production in rainbow trout and farming-related aquaculture chapters, establishing both eligible species and aquaculture relevance.",
+      "remaining_543_row": 30
+    },
+    {
+      "lens_id": "180-773-105-827-197",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly identifies Atlantic salmon and rainbow trout and discusses diseases and pathogens in aquaculture species, including outbreaks that can wipe out farms.",
+      "remaining_543_row": 43
+    },
+    {
+      "lens_id": "004-699-327-737-90X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns rainbow trout (Oncorhynchus mykiss) and discusses aquaculture management, production, health, and productivity.",
+      "remaining_543_row": 48
+    },
+    {
+      "lens_id": "048-562-521-927-271",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly identifies rainbow trout (Oncorhynchus mykiss) in the context of inland finfish aquaculture and production.",
+      "remaining_543_row": 73
+    },
+    {
+      "lens_id": "053-764-652-652-366",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns rainbow trout (Salmo gairdneri, historical synonym of Oncorhynchus mykiss) strains being bred at the National Research Institute of Aquaculture, establishing aquaculture relevance.",
+      "remaining_543_row": 77
+    },
+    {
+      "lens_id": "061-161-883-922-279",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The review explicitly identifies Atlantic salmon and rainbow trout and concerns genetic improvement technologies applied by the aquaculture industry.",
+      "remaining_543_row": 79
+    },
+    {
+      "lens_id": "084-992-456-768-248",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines juvenile Chinook salmon (Oncorhynchus tshawytscha) reared in a tank at a fish hatchery and concerns aquaculture blood-sampling and anaesthesia protocols.",
+      "remaining_543_row": 88
+    },
+    {
+      "lens_id": "110-400-910-703-890",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly uses coho salmon (Oncorhynchus kisutch) and an aquaculture antibiotic, establishing an eligible species and a direct aquaculture-related input.",
+      "remaining_543_row": 100
+    },
+    {
+      "lens_id": "133-130-580-555-30X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly identifies Atlantic salmon as infected by Vibrio splendidus, and the phage was isolated and tested in an aquaculture context.",
+      "remaining_543_row": 105
+    },
+    {
+      "lens_id": "188-088-771-027-402",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly studies Atlantic salmon (Salmo salar) and oxygen conditions in aquaculture incubation systems and sea-cage rearing.",
+      "remaining_543_row": 112
+    },
+    {
+      "lens_id": "002-780-914-252-515",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "Rainbow trout is explicitly identified, and the pathogen is linked to serious disease outbreaks in fish farms, establishing aquaculture relevance.",
+      "remaining_543_row": 115
+    },
+    {
+      "lens_id": "004-258-863-991-254",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns Atlantic salmon and has aquaculture relevance stated in the abstract, supported by an affiliation in Animal and Aquacultural Sciences.",
+      "remaining_543_row": 116
+    },
+    {
+      "lens_id": "008-550-210-618-288",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study examines Atlantic salmon (Salmo salar), and its abstract explicitly identifies the species as important in aquaculture; an author is affiliated with Tassal Operations, supporting aquaculture relevance.",
+      "remaining_543_row": 121
+    },
+    {
+      "lens_id": "012-930-584-265-973",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The proceedings explicitly include a study of slaughter procedures in aquacultured salmon, establishing both eligible salmon and aquaculture relevance.",
+      "remaining_543_row": 124
+    },
+    {
+      "lens_id": "036-230-033-733-615",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns Atlantic salmon and a commercial breeding program with broodstock and commercial sib-test populations, establishing aquaculture production relevance.",
+      "remaining_543_row": 134
+    },
+    {
+      "lens_id": "043-320-291-170-934",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns rainbow trout (Oncorhynchus mykiss) and identifies aquacultural research as its context, with publication in Aquaculture.",
+      "remaining_543_row": 139
+    },
+    {
+      "lens_id": "062-646-120-438-683",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns rainbow trout and sleeping disease affecting salmonid fish farmers, establishing both eligible species and aquaculture relevance.",
+      "remaining_543_row": 147
+    },
+    {
+      "lens_id": "090-558-100-900-426",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The review explicitly concerns global aquaculture and discusses Atlantic salmon and rainbow trout as aquacultured food fishes.",
+      "remaining_543_row": 160
+    },
+    {
+      "lens_id": "137-762-538-779-482",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly studies pink salmon (Oncorhynchus gorbuscha) and discusses aquaculture, including diploid females reared in farming cages.",
+      "remaining_543_row": 170
+    },
+    {
+      "lens_id": "143-509-172-842-798",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines farm-relevant dietary curcumin, growth, immunity, and disease resistance in rainbow trout (Oncorhynchus mykiss), with aquaculture context stated in the abstract and affiliations.",
+      "remaining_543_row": 171
+    },
+    {
+      "lens_id": "005-794-151-519-66X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns rainbow trout (Oncorhynchus mykiss) production in Denmark and smoked trout fillets, with clear aquaculture and recirculating production-system context.",
+      "remaining_543_row": 182
+    },
+    {
+      "lens_id": "009-162-981-382-092",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns Chinook salmon (Oncorhynchus tshawytscha), identifies aquaculture in the keywords, and examines growth, health, and selective-breeding traits relevant to aquaculture.",
+      "remaining_543_row": 187
+    },
+    {
+      "lens_id": "013-058-574-812-280",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines rainbow trout fry (Oncorhynchus mykiss) from a commercial freshwater hatchery, establishing both eligible species and aquaculture context.",
+      "remaining_543_row": 189
+    },
+    {
+      "lens_id": "021-338-892-598-730",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines Atlantic salmon (Salmo salar) embryos and discusses aquaculture incubation systems, establishing eligible species and aquaculture relevance.",
+      "remaining_543_row": 194
+    },
+    {
+      "lens_id": "025-906-722-689-312",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines Atlantic salmon (Salmo salar) and identifies it as an important global aquaculture species, with aquaculture-focused Nofima affiliations.",
+      "remaining_543_row": 196
+    },
+    {
+      "lens_id": "040-592-155-068-783",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly concerns Atlantic salmon and transgenic technology for commercial fish aquaculture, identifying both an eligible species and aquaculture-production relevance.",
+      "remaining_543_row": 205
+    },
+    {
+      "lens_id": "049-919-064-542-995",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines rainbow trout slaughter welfare and flesh quality in an aquaculture context, published in Aquaculture.",
+      "remaining_543_row": 210
+    },
+    {
+      "lens_id": "061-660-175-715-873",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly identifies rainbow trout and use of astaxanthin for pigmentation in aquaculture systems, establishing both eligible species and aquaculture relevance.",
+      "remaining_543_row": 216
+    },
+    {
+      "lens_id": "068-144-627-855-492",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly identifies Atlantic salmon (Salmo salar) and states that the genomics resources support research in aquaculture environments and are relevant to the global aquaculture industry.",
+      "remaining_543_row": 219
+    },
+    {
+      "lens_id": "108-446-582-680-782",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns rainbow trout (Oncorhynchus mykiss) and connects the findings to medicinal plants as food additives in aquaculture.",
+      "remaining_543_row": 232
+    },
+    {
+      "lens_id": "140-770-394-585-619",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly identifies Atlantic salmon as an aquaculture-cultivated host affected by Aeromonas salmonicida, establishing eligible species and aquaculture relevance despite the study analyzing bacterial lipid A.",
+      "remaining_543_row": 243
+    },
+    {
+      "lens_id": "150-373-474-667-466",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The proceedings explicitly address coho salmon genetics and broodstock management within a finfish aquaculture context.",
+      "remaining_543_row": 244
+    },
+    {
+      "lens_id": "001-780-213-205-285",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns rainbow trout (Oncorhynchus mykiss) held in aquaculture pens, establishing an aquaculture context.",
+      "remaining_543_row": 252
+    },
+    {
+      "lens_id": "004-998-402-479-868",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines domesticated rainbow trout (Oncorhynchus mykiss) under intensive culture conditions, establishing both eligible species and aquaculture relevance.",
+      "remaining_543_row": 254
+    },
+    {
+      "lens_id": "008-486-185-673-002",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record concerns aquaculture cage-system design and explicitly references the global Atlantic salmon industry, establishing eligible species context and aquaculture relevance.",
+      "remaining_543_row": 256
+    },
+    {
+      "lens_id": "034-318-280-264-362",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines rainbow trout (Oncorhynchus mykiss) fed commercial pellets in environmental conditions of a commercial rainbow trout fishery and aquaculture breeding.",
+      "remaining_543_row": 269
+    },
+    {
+      "lens_id": "038-492-109-422-067",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns an aquaculture facility containing rainbow trout (Oncorhynchus mykiss), an eligible species, and evaluates eDNA released from that facility.",
+      "remaining_543_row": 270
+    },
+    {
+      "lens_id": "039-525-628-754-228",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns rainbow trout (Salmo gairdneri) and an IPN epizootic in a Scottish trout farm, establishing eligible species and aquaculture context.",
+      "remaining_543_row": 272
+    },
+    {
+      "lens_id": "065-200-083-795-130",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly examines impacts and interactions involving salmonid aquaculture, including aquaculture operations and escaped Atlantic salmon, even though the focal species is spiny dogfish.",
+      "remaining_543_row": 283
+    },
+    {
+      "lens_id": "067-377-327-929-761",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "Rainbow trout are explicitly mentioned alongside fish-farm escapees, establishing an eligible species and aquaculture connection despite the conservation focus.",
+      "remaining_543_row": 286
+    },
+    {
+      "lens_id": "080-640-976-120-790",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly rears Atlantic salmon (Salmo salar) under saltwater conditions for comparison of aquaculture potential, establishing eligible species and aquaculture relevance.",
+      "remaining_543_row": 292
+    },
+    {
+      "lens_id": "087-219-974-833-67X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns rainbow trout (Oncorhynchus mykiss) and addresses immune responses relevant to intraperitoneal vaccination in aquaculture.",
+      "remaining_543_row": 297
+    },
+    {
+      "lens_id": "099-078-745-780-075",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines rainbow trout (Oncorhynchus mykiss) periodically restocked through aquaculture and contamination likely acquired during farming, establishing both eligible species and aquaculture relevance.",
+      "remaining_543_row": 300
+    },
+    {
+      "lens_id": "118-547-968-037-525",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly studies Atlantic salmon and rainbow trout and concerns genetic markers for aquaculture, including commercially important aquacultural species.",
+      "remaining_543_row": 308
+    },
+    {
+      "lens_id": "135-931-040-456-178",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The title explicitly identifies Atlantic Salmon of Maine and describes an aquaculture company, establishing both eligible species and aquaculture relevance.",
+      "remaining_543_row": 312
+    },
+    {
+      "lens_id": "190-345-624-792-143",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly identifies Atlantic salmon among traded samples and discusses seafood originating from aquaculture, including species with important aquaculture production.",
+      "remaining_543_row": 319
+    },
+    {
+      "lens_id": "005-206-735-456-988",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns rainbow trout (Oncorhynchus mykiss) and sex-control steroid use in aquaculture, establishing both eligible species and aquaculture relevance.",
+      "remaining_543_row": 325
+    },
+    {
+      "lens_id": "019-715-036-294-020",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines eligible coho, chum, and pink salmon and states that the marker is used for aquaculture strain development.",
+      "remaining_543_row": 339
+    },
+    {
+      "lens_id": "067-955-992-314-347",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines farm-relevant rearing density and stress responses in rainbow trout (Oncorhynchus mykiss), with fish held in experimental net-pens and an aquaculture-program affiliation supporting aquaculture context.",
+      "remaining_543_row": 365
+    },
+    {
+      "lens_id": "078-481-441-776-104",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns chum salmon (Oncorhynchus keta) and management at the Okhotsk salmon fish farm, including broodstock removal and artificial reproduction.",
+      "remaining_543_row": 374
+    },
+    {
+      "lens_id": "144-886-916-347-010",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The review explicitly covers Atlantic salmon and rainbow trout genetic improvement and connects these production technologies to the aquaculture industry.",
+      "remaining_543_row": 390
+    },
+    {
+      "lens_id": "146-673-124-873-884",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The title explicitly identifies rainbow trout (Oncorhynchus mykiss), and the Aquaculture Europe 2019 source plus dietary nutrition evaluation establish aquaculture relevance.",
+      "remaining_543_row": 391
+    },
+    {
+      "lens_id": "164-840-411-601-011",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The title explicitly identifies juvenile rainbow trout (Oncorhynchus mykiss) and evaluates dietary effects on growth and antioxidant status, establishing a production-related aquaculture study.",
+      "remaining_543_row": 396
+    },
+    {
+      "lens_id": "166-297-752-980-161",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly identifies rainbow trout (Oncorhynchus mykiss) and states that some non-native fish were introduced for aquaculture, establishing both eligible species and aquaculture context.",
+      "remaining_543_row": 397
+    },
+    {
+      "lens_id": "007-179-719-822-935",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly concerns aquaculture and identifies Atlantic salmon and rainbow trout as aquaculture species.",
+      "remaining_543_row": 405
+    },
+    {
+      "lens_id": "028-006-650-242-014",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study concerns steelhead trout (Salmo gairdneri, a historical synonym of rainbow trout) reared at a salmonid aquaculture facility.",
+      "remaining_543_row": 413
+    },
+    {
+      "lens_id": "044-318-392-344-458",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly describes Atlantic salmon in commercial sea cages and fish farmers producing salmon for human consumption.",
+      "remaining_543_row": 417
+    },
+    {
+      "lens_id": "047-186-343-550-308",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "Rainbow trout are explicitly mentioned, and the abstract reports impacts of acidified/lime-treated waters on fish farms, establishing an aquaculture connection.",
+      "remaining_543_row": 418
+    },
+    {
+      "lens_id": "056-501-874-055-65X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines chum salmon (Oncorhynchus keta) eggs at hatcheries and oomycete infection in aquaculture hatcheries, establishing both eligible species and aquaculture context.",
+      "remaining_543_row": 424
+    },
+    {
+      "lens_id": "056-974-120-187-525",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns Atlantic salmon (Salmo salar) and industrial electro-stunning within the aquaculture industry, with funding from the Fishery and Aquaculture Industry Research Fund.",
+      "remaining_543_row": 425
+    },
+    {
+      "lens_id": "067-775-881-390-402",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns Atlantic salmon (Salmo salar), identifies it as an important aquaculture species, and is published in Aquaculture.",
+      "remaining_543_row": 430
+    },
+    {
+      "lens_id": "127-060-905-199-801",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns registered salmonid fish farms and intensive aquaculture, including production and disease monitoring of rainbow trout.",
+      "remaining_543_row": 447
+    },
+    {
+      "lens_id": "139-028-722-355-053",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly identifies rainbow trout as a major economic product of Italian aquaculture and examines aquaculture-related impacts.",
+      "remaining_543_row": 452
+    },
+    {
+      "lens_id": "006-555-312-943-276",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly includes Atlantic salmon (Salmo salar) and evaluates hybrids under fish-farming conditions in seawater, including growth and slaughter weight.",
+      "remaining_543_row": 467
+    },
+    {
+      "lens_id": "020-101-685-466-207",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly concerns Atlantic salmon (Salmo salar) and Pacific salmon (Oncorhynchus spp.) and includes applications in aquaculture facilities.",
+      "remaining_543_row": 478
+    },
+    {
+      "lens_id": "026-643-074-145-708",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study concerns eligible coho and chinook salmon and evaluates transfer to seawater net-pens for optimizing seawater survival, establishing aquaculture relevance.",
+      "remaining_543_row": 482
+    },
+    {
+      "lens_id": "031-005-184-388-748",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly concerns rainbow trout (Oncorhynchus mykiss) from a commercial fish farm, establishing both eligible species and aquaculture context despite also studying Arctic char.",
+      "remaining_543_row": 485
+    },
+    {
+      "lens_id": "033-865-617-636-990",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines rainbow trout (Oncorhynchus mykiss) and particle effects relevant to aquaculture facilities, and is published in Aquaculture.",
+      "remaining_543_row": 488
+    },
+    {
+      "lens_id": "038-512-155-505-387",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly examines farm-relevant rainbow trout (Oncorhynchus mykiss) vaccination and disease challenge, with funding from Targeted Disease Prophylaxis in European Fish Farming and an Aquaculture Division affiliation.",
+      "remaining_543_row": 495
+    },
+    {
+      "lens_id": "042-974-609-411-379",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly discusses fish farming involving caged salmon and its environmental impacts, including noise pollution and effects on whales and wild salmon.",
+      "remaining_543_row": 500
+    },
+    {
+      "lens_id": "048-317-106-127-673",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns Atlantic salmon and rainbow trout and identifies them as key aquaculture species of commercial importance, with affiliation to Nofima, an aquaculture research institute.",
+      "remaining_543_row": 502
+    },
+    {
+      "lens_id": "055-198-835-121-532",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The record explicitly studies rainbow trout and identifies the disease as important to fish farmers, establishing eligible species and aquaculture relevance.",
+      "remaining_543_row": 507
+    },
+    {
+      "lens_id": "061-447-398-644-264",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The study explicitly concerns rainbow trout (Oncorhynchus mykiss) fries transported from a rainbow trout company to aquaculture facilities, establishing eligible species and aquaculture context.",
+      "remaining_543_row": 509
+    },
+    {
+      "lens_id": "068-432-747-874-889",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly identifies fish farms in the Inner Hebrides mainly growing salmon and rainbow trout, establishing both eligible species and aquaculture context.",
+      "remaining_543_row": 514
+    },
+    {
+      "lens_id": "069-210-462-520-051",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "The abstract explicitly evaluates commercial and industrial slaughter methods for Atlantic salmon (Salmo salar), establishing both eligible species and aquaculture production relevance.",
+      "remaining_543_row": 515
+    },
+    {
+      "lens_id": "137-059-374-395-049",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "Rainbow trout is explicitly identified through rainbow trout fry syndrome, and the abstract directly concerns disease in salmonid aquaculture.",
+      "remaining_543_row": 532
+    },
+    {
+      "lens_id": "190-238-144-859-560",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "batch": "second-pass clear retain",
+      "model_reason": "Atlantic salmon is explicitly identified as a host of the studied pathogen, and the phage was isolated from aquaculture ponds, establishing relevant aquaculture context.",
+      "remaining_543_row": 542
+    },
+    {
+      "lens_id": "004-305-648-745-500",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Atlantic salmon and other eligible species are identified, this is a disease survey of wild fish and does not evaluate or meaningfully connect findings to commercial salmon aquaculture.",
+      "remaining_543_row": 1
+    },
+    {
+      "lens_id": "011-197-338-163-247",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the study explicitly concerns rainbow trout, it is an experimental cardiac study and only mentions farmed salmonids as background, without establishing a commercial aquaculture or production context.",
+      "remaining_543_row": 6
+    },
+    {
+      "lens_id": "107-129-028-716-842",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Chinook salmon, coho salmon, and rainbow trout are identified, the study concerns state hatcheries, broodstock, and pre-stocking fingerlings for fisheries enhancement rather than commercial aquaculture.",
+      "remaining_543_row": 27
+    },
+    {
+      "lens_id": "123-038-194-554-195",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although rainbow trout (Oncorhynchus mykiss) and European fish farms are mentioned, the study concerns naturalized populations introduced into rivers and lakes, not commercial aquaculture.",
+      "remaining_543_row": 32
+    },
+    {
+      "lens_id": "124-729-005-238-45X",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the record concerns pisciculture, the only salmon reference is to salmon GnRH as a peptide sequence, while the breeding subject is unspecified fish and murrel (Channa punctatus), not an eligible salmon or rainbow trout species.",
+      "remaining_543_row": 33
+    },
+    {
+      "lens_id": "033-095-936-120-352",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the record concerns aquafeeds and mentions salmon, salmon is only an illustrative example and no eligible species is established as the study subject.",
+      "remaining_543_row": 62
+    },
+    {
+      "lens_id": "068-385-648-537-044",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the study concerns feeding in cages on salmon farms, the fish are identified only as generic “salmonids,” which does not establish an eligible species for this direct aquaculture study.",
+      "remaining_543_row": 83
+    },
+    {
+      "lens_id": "068-634-386-323-410",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the study concerns aquaculture farms, it examines brown trout (Salmo trutta), which is not an eligible Atlantic/Pacific salmon or rainbow trout species.",
+      "remaining_543_row": 84
+    },
+    {
+      "lens_id": "070-848-804-880-574",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The record concerns generic salmon/salmonid cell lines but provides no eligible species-specific or commercial aquaculture context.",
+      "remaining_543_row": 85
+    },
+    {
+      "lens_id": "153-908-714-039-328",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although rainbow trout is identified, the record concerns introduced/wild fish populations and does not establish commercial aquaculture of rainbow trout or salmon.",
+      "remaining_543_row": 110
+    },
+    {
+      "lens_id": "000-178-771-837-238",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the record clearly concerns farmed salmonids in Norway, no eligible species is identified beyond the generic term “salmonids.”",
+      "remaining_543_row": 113
+    },
+    {
+      "lens_id": "014-622-137-507-14X",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although pink salmon is explicitly identified, the record concerns wild/traditional fishing and only mentions aquaculture as a proposed solution, not as the study context.",
+      "remaining_543_row": 125
+    },
+    {
+      "lens_id": "023-729-335-828-602",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Aquaculture context is explicit, but salmon appears only as an illustrative example of flesh coloration and is not the study species or a specific salmon aquaculture subject.",
+      "remaining_543_row": 130
+    },
+    {
+      "lens_id": "044-228-899-727-061",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the study concerns farmed salmonids and salmon-lice treatments, no eligible species is identified beyond the generic term “salmonids.”",
+      "remaining_543_row": 140
+    },
+    {
+      "lens_id": "052-338-831-571-299",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The study directly examines non-eligible Eleginops maclovinus, while Salmo salar is only an illustrative example of a farmed species and no substantive salmon-aquaculture connection is established.",
+      "remaining_543_row": 142
+    },
+    {
+      "lens_id": "077-790-905-367-230",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Atlantic salmon is specified, the study concerns an ocean ranching farm, which falls under excluded sea/ocean ranching rather than commercial aquaculture.",
+      "remaining_543_row": 153
+    },
+    {
+      "lens_id": "085-214-550-074-010",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Atlantic salmon are studied and some gametes came from fish farms, the record concerns a salmon restitution/stocking programme and river-ascending fish, not commercial aquaculture.",
+      "remaining_543_row": 157
+    },
+    {
+      "lens_id": "105-501-306-361-902",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Rainbow trout is explicit, but the record concerns in vitro cell lines and commercial availability of a cell line, not commercial aquaculture or farmed-fish production.",
+      "remaining_543_row": 164
+    },
+    {
+      "lens_id": "107-136-444-165-07X",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The record mentions salmon only as part of general fishery catches, while aquaculture is discussed generically without connecting it to salmon production.",
+      "remaining_543_row": 165
+    },
+    {
+      "lens_id": "006-853-000-164-201",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Atlantic salmon is specified, the study models wild salmon and only mentions farmed salmon as a parameter-data source, without investigating commercial aquaculture.",
+      "remaining_543_row": 185
+    },
+    {
+      "lens_id": "031-827-139-954-184",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although fish farming is explicit, the direct study identifies the fish only as generic “salmon” without a specified eligible species.",
+      "remaining_543_row": 201
+    },
+    {
+      "lens_id": "056-765-914-671-537",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the record mentions salmon and farmed trout, it does not identify the farmed trout as rainbow trout, while the salmon is described as Baltic rather than farmed.",
+      "remaining_543_row": 213
+    },
+    {
+      "lens_id": "065-100-217-181-284",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although it studies eligible Atlantic salmon, the study concerns wild populations and only mentions escaped farmed fish as background, without evaluating commercial aquaculture or its consequences.",
+      "remaining_543_row": 217
+    },
+    {
+      "lens_id": "137-888-921-289-578",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Norwegian farmed salmon is mentioned, it appears only as an incidental illustrative quotation and the record does not concern salmon aquaculture.",
+      "remaining_543_row": 242
+    },
+    {
+      "lens_id": "000-543-046-217-995",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The study concerns generic fish farms and multiple fish diseases, but does not identify an eligible salmon or rainbow trout species or explicitly concern salmon aquaculture.",
+      "remaining_543_row": 251
+    },
+    {
+      "lens_id": "029-353-049-483-370",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although intensive aquaculture is discussed, the record identifies only a generic “salmonid model” and does not name an eligible salmon or rainbow trout species.",
+      "remaining_543_row": 266
+    },
+    {
+      "lens_id": "052-227-617-549-558",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Rainbow trout is explicit, but the record describes experimental infection biology and only mentions farmed salmonids generically without establishing a commercial aquaculture context.",
+      "remaining_543_row": 278
+    },
+    {
+      "lens_id": "110-706-066-427-422",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The record concerns unspecified trout and salmon in farms, rivers, and a private hatchery, but does not identify an eligible salmon species or rainbow trout, nor establish commercial aquaculture rather than hatchery/wild contexts.",
+      "remaining_543_row": 304
+    },
+    {
+      "lens_id": "125-738-730-987-884",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The title concerns salmon-friendly agricultural farms, not commercial aquaculture or farming of an eligible salmon species.",
+      "remaining_543_row": 310
+    },
+    {
+      "lens_id": "002-188-201-552-339",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Chinook and coho salmon are identified, the study concerns virus isolates from salmon returning to hatcheries and mentions aquaculture only as a speculative possible source, without establishing commercial aquaculture relevance.",
+      "remaining_543_row": 323
+    },
+    {
+      "lens_id": "014-305-491-237-251",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the study concerns IMTA and commercial aquaculture, it examines mussels and only references ISAV as a finfish pathogen, without identifying an eligible salmon species or explicitly studying salmon farming.",
+      "remaining_543_row": 335
+    },
+    {
+      "lens_id": "017-422-453-741-766",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The record concerns generic fish cage-rearing practices and does not identify Atlantic/Pacific salmon, rainbow trout, or explicit salmon farming.",
+      "remaining_543_row": 337
+    },
+    {
+      "lens_id": "028-662-100-018-478",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the study concerns Atlantic salmon, it examines wild river-caught fish and mentions farmed salmon only as a comparison, without evaluating commercial aquaculture or its consequences.",
+      "remaining_543_row": 344
+    },
+    {
+      "lens_id": "038-631-735-999-581",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the study concerns chum salmon, it examines wild/ecological climate vulnerability and only mentions future aquaculture strategies, without establishing a commercial aquaculture context.",
+      "remaining_543_row": 348
+    },
+    {
+      "lens_id": "039-381-906-839-628",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the abstract establishes salmonid aquaculture context, the directly studied fish are identified only generically as salmonids, not an eligible salmon or rainbow trout species.",
+      "remaining_543_row": 349
+    },
+    {
+      "lens_id": "059-738-989-378-816",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The study concerns ISAV in marine aquaculture but does not identify an eligible salmon or rainbow trout species, and the pathogen name alone cannot establish the species criterion.",
+      "remaining_543_row": 360
+    },
+    {
+      "lens_id": "062-465-584-830-074",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Rainbow trout farming appears only in an illustrative photograph caption, while the record concerns a broad wild freshwater fish–parasite dataset with no substantive commercial aquaculture focus.",
+      "remaining_543_row": 361
+    },
+    {
+      "lens_id": "064-916-705-048-701",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Atlantic salmon is explicitly studied, the record concerns genomic transcriptome resources and only mentions aquaculture as a general research field, with no established commercial aquaculture context.",
+      "remaining_543_row": 362
+    },
+    {
+      "lens_id": "065-200-225-882-257",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the abstract mentions farmed salmon in Chile, this is only an illustrative example in a broad review of non-native fish introductions, not a study meaningfully concerning salmon aquaculture.",
+      "remaining_543_row": 363
+    },
+    {
+      "lens_id": "066-055-243-072-213",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The title concerns salmon ranching, which falls under excluded sea/ocean ranching or stock-enhancement contexts rather than commercial aquaculture production.",
+      "remaining_543_row": 364
+    },
+    {
+      "lens_id": "081-457-933-271-709",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The study concerns aquaculture but identifies the cultured fish only as generic “salmonids,” which does not satisfy the eligible-species criterion for a direct species study.",
+      "remaining_543_row": 375
+    },
+    {
+      "lens_id": "171-455-002-907-143",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The study concerns salmonids generically and does not identify an eligible salmon or rainbow trout species; although salmon farming and aquaculture context are explicit, the direct-study species gate fails.",
+      "remaining_543_row": 398
+    },
+    {
+      "lens_id": "005-015-140-501-880",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The record concerns otter reintroduction and wild juvenile salmon, while fish farming is only mentioned generically without establishing a connection to eligible salmon aquaculture.",
+      "remaining_543_row": 402
+    },
+    {
+      "lens_id": "007-420-729-298-119",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The study concerns cultured gilt-head sea bream (Sparus aurata), not an eligible salmon or rainbow trout species; chinook salmon appears only as a cell-line source and does not establish relevance.",
+      "remaining_543_row": 406
+    },
+    {
+      "lens_id": "037-558-318-697-510",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Aquaculture context is explicit, but the record does not identify Atlantic salmon, any Pacific salmon, rainbow trout, or an explicit salmon-farming subject.",
+      "remaining_543_row": 416
+    },
+    {
+      "lens_id": "050-136-926-440-277",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Oncorhynchus mykiss is mentioned as introduced for aquaculture, the study is a survey of wild river fish fauna and community structure with no substantive connection to salmon aquaculture.",
+      "remaining_543_row": 420
+    },
+    {
+      "lens_id": "073-006-755-153-28X",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The study concerns VHSV risk from imported sardine bait to southern hake, with only generic wild and pen-raised salmonids mentioned incidentally and no substantive eligible salmon aquaculture focus.",
+      "remaining_543_row": 431
+    },
+    {
+      "lens_id": "082-281-612-050-649",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Aquaculture context is explicit through trout farming, but the study identifies the fish only as generic trout/Salmonidae and does not establish rainbow trout or another eligible salmon species.",
+      "remaining_543_row": 435
+    },
+    {
+      "lens_id": "135-633-045-583-20X",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although Atlantic salmon are studied, the record concerns wild fish and baseline sea-lice infections in a region only proposed for aquaculture, with no established commercial salmon-farming exposure or operation.",
+      "remaining_543_row": 451
+    },
+    {
+      "lens_id": "168-208-301-633-983",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although rainbow trout are studied, the record concerns a lampricide field-treatment experiment with caged and wild fish and provides no commercial aquaculture context.",
+      "remaining_543_row": 455
+    },
+    {
+      "lens_id": "037-776-252-840-489",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The study concerns Aeromonas salmonicida and generic farmed/wild salmonids, without identifying an eligible salmon or rainbow trout species or explicitly linking the work to salmon aquaculture.",
+      "remaining_543_row": 493
+    },
+    {
+      "lens_id": "040-348-204-415-32X",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although the title and Danish Aquaculture Institute affiliation establish production aquaculture context, the species is identified only as generic “trout,” not rainbow trout or another eligible salmon species.",
+      "remaining_543_row": 497
+    },
+    {
+      "lens_id": "050-639-123-201-410",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The record concerns general marine-fish aquaculture feeds and fishmeal but does not identify an eligible salmon or rainbow trout species as the study subject; the salmon reference is only in an organizational section name.",
+      "remaining_543_row": 505
+    },
+    {
+      "lens_id": "064-681-456-306-090",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Aquaculture context is explicit, but the record does not identify Atlantic salmon, any Pacific salmon, rainbow trout, or even a specific eligible species.",
+      "remaining_543_row": 511
+    },
+    {
+      "lens_id": "076-340-692-789-151",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "The record concerns generic fish vector/reservoir species and mentions aquaculture establishments, but does not identify an eligible salmon or rainbow trout species or explicitly concern salmon farming.",
+      "remaining_543_row": 517
+    },
+    {
+      "lens_id": "097-679-986-749-379",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "batch": "second-pass clear exclude",
+      "model_reason": "Although farmed rainbow trout and eligible salmon species are mentioned, the study investigates PKD in wild salmonids without evaluating a salmon-aquaculture exposure or consequence.",
+      "remaining_543_row": 523
+    }
+  ]
+}
