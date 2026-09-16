@@ -35,7 +35,7 @@
     "conflicts": 10
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 3,
+  "adjudications_completed": 4,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35099300089/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35099300089/sample_decisions.csv",
@@ -63,6 +63,13 @@
       "model_decision": "uncertain",
       "final_adjudication": "exclude",
       "rationale": "Rainbow trout is explicit, but the record describes food processing without establishing farmed or aquaculture origin."
+    },
+    {
+      "lens_id": "032-149-733-786-546",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "The study concerns stocking juvenile Atlantic salmon into net-pens and compares transfer methods to improve survival. 'Stocked' here refers to stocking aquaculture pens, not population restocking or release."
     }
   ]
 }
