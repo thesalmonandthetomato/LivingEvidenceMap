@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 18,
+  "adjudications_completed": 19,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -168,6 +168,13 @@
       "model_decision": "exclude",
       "final_adjudication": "retain",
       "rationale": "The study explicitly concerns salmon lice as a major aquaculture-industry problem causing fish mortality, reduced growth and treatment costs, so it is directly relevant to salmon aquaculture even though the measured organism is the louse."
+    },
+    {
+      "lens_id": "112-715-587-416-072",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon is explicitly identified as mainly supplied by fish farming, and increasing farmed-fish/aquaculture production is an explicit driver in the ecological-economic model, so salmon aquaculture is part of the system being analysed rather than incidental background."
     }
   ]
 }
