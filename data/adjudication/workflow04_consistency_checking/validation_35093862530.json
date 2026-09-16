@@ -34,8 +34,8 @@
     "uncertain_rate": 0.01,
     "conflicts": 20
   },
-  "adjudication_status": "in_progress",
-  "adjudications_completed": 19,
+  "adjudication_status": "complete",
+  "adjudications_completed": 20,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -175,6 +175,26 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Atlantic salmon is explicitly identified as mainly supplied by fish farming, and increasing farmed-fish/aquaculture production is an explicit driver in the ecological-economic model, so salmon aquaculture is part of the system being analysed rather than incidental background."
+    },
+    {
+      "lens_id": "157-821-492-834-185",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Aquaculture is explicit and the study directly derives river-water siting and withdrawal recommendations for fish culture, explicitly including salmon culture."
     }
-  ]
+  ],
+  "post_adjudication_metrics": {
+    "scope_note": "Metrics replace the 20 historical conflict labels with human adjudications; the 180 non-conflict historical labels were not manually re-adjudicated.",
+    "observed_agreement": 0.98,
+    "cohens_kappa": 0.9455,
+    "adjudicated_retain": 153,
+    "adjudicated_exclude": 47,
+    "model_retain": 151,
+    "model_exclude": 47,
+    "model_uncertain": 2,
+    "conflict_model_matches": 16,
+    "remaining_disagreements": 4
+  },
+  "historical_labels_corrected": 17
 }
