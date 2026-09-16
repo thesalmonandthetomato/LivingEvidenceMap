@@ -57,6 +57,7 @@ SYSTEM_PROMPT <- paste(
 "- unspecified \"salmon\" where the aquaculture/farming context is established",
 "",
 "Generic terms such as salmonid, salmonids, trout, or fish DO NOT by themselves satisfy the species criterion. Do not infer an eligible species merely from a salmonid-specific pathogen.",
+"An eligible species mentioned only as an illustrative example, for example in wording such as \"species such as salmon…\", should not by itself establish relevance.",
 "",
 "However, explicit SALMON FARMING can itself establish the relevant salmon context for studies examining impacts arising from salmon aquaculture, even where the organism actually measured is not an eligible species. Examples: sea trout affected by salmon farming -> RETAIN; lumpfish deployed in salmon farms -> RETAIN; prawns exposed to salmon-farm treatments -> RETAIN; environmental effects of salmon net pens -> RETAIN.",
 "",
@@ -64,6 +65,8 @@ SYSTEM_PROMPT <- paste(
 "The record must concern commercial/farmed aquaculture, its products, processes, infrastructure, inputs, consequences, impacts, or closely connected research. Evidence can come from any supplied metadata field.",
 "",
 "Explicit indicators include aquaculture, mariculture, farmed, salmon farm, fish farm, commercial production, aquaculture production, recirculating aquaculture system/RAS, commercial sea cages/net pens, aquaculture feed, farm management, on-farm monitoring, or commercial processing of farmed fish.",
+"Where the record explicitly states that the eligible study species is farmed, this is sufficient evidence of farming context.",
+"Do not infer that fish are farmed solely from terms such as commercial, commercially, processing, or market. These terms alone do not establish aquaculture origin.",
 "",
 "An explicitly aquaculture-focused journal may establish aquaculture context where the eligible species and study subject are otherwise clear.",
 "",
@@ -90,11 +93,13 @@ SYSTEM_PROMPT <- paste(
 "",
 "6. EXPERIMENTAL CAGES AND PENS",
 "Do NOT infer commercial aquaculture solely because fish are held experimentally in cages, pens, net pens, or tanks. Experimental containment used only for an exposure/ecology experiment is insufficient. There must be additional evidence connecting the study to commercial aquaculture or production.",
+"Temporary capture, trapping or holding of fish in rivers or streams for research does not constitute farming or aquaculture.",
 "",
 "7. WILD POPULATIONS",
 "A study of wild eligible salmonids is not automatically relevant.",
 "EXCLUDE purely wild-population ecology, genetics, migration, conservation, restocking, or disease surveillance where aquaculture appears only as generic background and the study does not evaluate or meaningfully connect to salmon aquaculture.",
 "RETAIN where the wild-population study explicitly evaluates an exposure, impact, interaction, disease risk, genetic interaction or other consequence connected to eligible salmon aquaculture. At this high-sensitivity stage, an explicit and plausible salmon-farming connection should normally favour RETAIN.",
+"Studies of wild eligible salmonids may be relevant where salmon farming is itself a substantive exposure, pressure or explanatory factor being investigated.",
 "",
 "8. GENERIC SALMONIDS",
 "Strong aquaculture context does NOT rescue a direct study that identifies the relevant fish only as \"salmonid\" or \"salmonids\".",
@@ -122,7 +127,7 @@ SYSTEM_PROMPT <- paste(
 "Do not invent missing metadata. Do not infer species from subject matter alone. Do not use topical similarity alone as evidence of eligibility.",
 sep="\n"
 )
-PROMPT_VERSION <- "workflow04-v1-legacy-python-prompt"
+PROMPT_VERSION <- "workflow04-v2-targeted-clarifications"
 PROMPT_SHA256 <- digest::digest(SYSTEM_PROMPT,algo="sha256",serialize=FALSE)
 
 read_jsonl <- function(path) {
