@@ -34,7 +34,7 @@
     "uncertain_rate": 0.015,
     "conflicts": 16
   },
-  "adjudication_status": "pending",
+  "adjudication_status": "in_progress",
   "conflict_ids": [
     "070-797-313-928-660",
     "073-107-551-964-753",
@@ -58,5 +58,29 @@
     "decisions": "data/adjudication/workflow04_validation_runs/35075669317/sample_decisions.csv",
     "metrics": "data/adjudication/workflow04_validation_runs/35075669317/validation_metrics.json",
     "prompt": "data/adjudication/workflow04_validation_runs/35075669317/prompt_R_source.txt"
-  }
+  },
+  "adjudications": [
+    {
+      "lens_id": "070-797-313-928-660",
+      "historical_decision": "retain",
+      "model_decision": "uncertain",
+      "final_adjudication": "exclude",
+      "rationale": "Rainbow trout is explicit, but the title alone does not establish that cage rearing represents eligible aquaculture rather than non-commercial or experimental holding."
+    },
+    {
+      "lens_id": "073-107-551-964-753",
+      "historical_decision": "exclude",
+      "model_decision": "uncertain",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout are explicit and the study concerns vaccination, probiotic feeding and a commercial control diet in a production-relevant aquaculture context."
+    },
+    {
+      "lens_id": "061-514-915-164-291",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "rationale": "Rainbow trout are explicit, but the abstract describes a controlled laboratory infection experiment without explicit aquaculture or farming context."
+    }
+  ],
+  "adjudications_completed": 3
 }
