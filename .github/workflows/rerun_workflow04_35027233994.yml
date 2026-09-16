@@ -1,0 +1,205 @@
+name: Rerun Workflow 04 validation 35027233994
+
+on:
+  push:
+    paths:
+      - '.github/workflows/rerun_workflow04_35027233994.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rerun-same-200:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      FRESH_CANONICAL_BRANCH: canonical-fresh-dedup-v2-2026-09-14
+      OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
+      SOURCE_VALIDATION_RUN: '35027233994'
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','stringi','digest'))
+
+      - name: Validate R implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_04_relevance_screening.R')
+          cat('PASS: Workflow 04 R implementation parses successfully\n')
+
+      - name: Checkout canonical store
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FRESH_CANONICAL_BRANCH }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Rebuild exact blinded sample from saved 200 Lens IDs
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            z <- readLines(path,warn=FALSE,encoding='UTF-8')
+            z <- z[nzchar(trimws(z))]
+            lapply(z,function(v)fromJSON(v,simplifyVector=FALSE))
+          }
+          write_jsonl <- function(rows,path) {
+            dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+            con <- file(path,'wt',encoding='UTF-8'); on.exit(close(con))
+            for(r in rows) writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
+          }
+          src <- file.path('data/adjudication/workflow04_validation_runs',Sys.getenv('SOURCE_VALIDATION_RUN'))
+          wanted <- readLines(file.path(src,'sample_lens_ids.txt'),warn=FALSE,encoding='UTF-8')
+          wanted <- wanted[nzchar(trimws(wanted))]
+          stopifnot(length(wanted)==200L,!anyDuplicated(wanted))
+          records <- read_jsonl('canonical_store/data/canonical/current/repair/records.jsonl')
+          byid <- setNames(records,vapply(records,function(r)as.character(r$identity$lens_id),character(1)))
+          stopifnot(all(wanted %in% names(byid)))
+          sample_rows <- unname(byid[wanted])
+          labels <- vector('list',length(sample_rows))
+          blinded <- vector('list',length(sample_rows))
+          for(i in seq_along(sample_rows)) {
+            r <- sample_rows[[i]]
+            truth_raw <- as.character((r$screening %||% list())$decision %||% '')
+            truth <- if(truth_raw=='include') 'retain' else if(truth_raw=='exclude') 'exclude' else stop('Unexpected historical decision')
+            labels[[i]] <- list(lens_id=as.character(r$identity$lens_id),historical_decision=truth,historical_decision_raw=truth_raw)
+            b <- r
+            b$screening <- list(workflow='04_validation_blinded_rerun',status='not_previously_screened',requires_screening=TRUE,publication_status_eligible=TRUE,downstream_eligible=FALSE)
+            blinded[[i]] <- b
+          }
+          root <- 'outputs/workflow04_validation_rerun'
+          dir.create(root,recursive=TRUE,showWarnings=FALSE)
+          write_jsonl(blinded,file.path(root,'validation_queue_200.jsonl'))
+          write_jsonl(labels,file.path(root,'validation_truth_200.jsonl'))
+          writeLines(wanted,file.path(root,'sample_lens_ids.txt'))
+          manifest <- list(
+            workflow='04_relevance_screening',
+            purpose='same_sample_prompt_rerun',
+            source_validation_run=Sys.getenv('SOURCE_VALIDATION_RUN'),
+            rerun_id=Sys.getenv('GITHUB_RUN_ID'),
+            sample_size=200L,
+            same_sample_ids=TRUE,
+            canonical_branch=Sys.getenv('FRESH_CANONICAL_BRANCH'),
+            canonical_commit=system('git -C canonical_store rev-parse HEAD',intern=TRUE),
+            orchestration_commit=Sys.getenv('GITHUB_SHA'),
+            created_at=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ')
+          )
+          writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(root,'sample_manifest.json'))
+
+      - name: Run revised Workflow 04 screening
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          ROOT=outputs/workflow04_validation_rerun
+          Rscript scripts/updater/workflow_04_relevance_screening.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --queue "$ROOT/validation_queue_200.jsonl" \
+            --output "$ROOT/screening_results.jsonl" \
+            --checkpoint "$ROOT/checkpoint.json" \
+            --summary "$ROOT/screening_summary.json" \
+            --model "${{ env.OPENAI_RELEVANCE_MODEL }}" \
+            --checkpoint-every 25 \
+            --mode openai
+
+      - name: Calculate agreement and conflicts
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            z <- readLines(path,warn=FALSE,encoding='UTF-8'); z <- z[nzchar(trimws(z))]
+            lapply(z,function(v)fromJSON(v,simplifyVector=FALSE))
+          }
+          root <- 'outputs/workflow04_validation_rerun'
+          truth <- read_jsonl(file.path(root,'validation_truth_200.jsonl'))
+          pred <- read_jsonl(file.path(root,'screening_results.jsonl'))
+          stopifnot(length(truth)==200L,length(pred)==200L)
+          tmap <- setNames(vapply(truth,function(x)as.character(x$historical_decision),character(1)),vapply(truth,function(x)as.character(x$lens_id),character(1)))
+          pmap <- setNames(vapply(pred,function(x)as.character(x$decision),character(1)),vapply(pred,function(x)as.character(x$lens_id),character(1)))
+          stopifnot(setequal(names(tmap),names(pmap)))
+          ids <- names(tmap); lev <- c('retain','exclude','uncertain')
+          tv <- factor(unname(tmap[ids]),levels=lev); pv <- factor(unname(pmap[ids]),levels=lev)
+          tab <- table(historical=tv,model=pv); n <- length(ids)
+          po <- sum(diag(tab))/n; pe <- sum((rowSums(tab)/n)*(colSums(tab)/n))
+          hist_retain <- sum(tv=='retain'); hist_exclude <- sum(tv=='exclude')
+          scr <- fromJSON(file.path(root,'screening_summary.json'),simplifyVector=FALSE)
+          metrics <- list(
+            n=n,observed_agreement=po,cohens_kappa=if(pe==1) NA_real_ else (po-pe)/(1-pe),
+            historical_retain=hist_retain,historical_exclude=hist_exclude,
+            model_retain=sum(pv=='retain'),model_exclude=sum(pv=='exclude'),model_uncertain=sum(pv=='uncertain'),
+            retain_retain=sum(tv=='retain' & pv=='retain'),retain_exclude_false_exclusion=sum(tv=='retain' & pv=='exclude'),
+            retain_uncertain=sum(tv=='retain' & pv=='uncertain'),exclude_exclude=sum(tv=='exclude' & pv=='exclude'),
+            exclude_retain_false_retention=sum(tv=='exclude' & pv=='retain'),exclude_uncertain=sum(tv=='exclude' & pv=='uncertain'),
+            sensitivity_retain=sum(tv=='retain' & pv=='retain')/hist_retain,
+            specificity_exclude=sum(tv=='exclude' & pv=='exclude')/hist_exclude,
+            false_exclusion_rate=sum(tv=='retain' & pv=='exclude')/hist_retain,
+            false_retention_rate=sum(tv=='exclude' & pv=='retain')/hist_exclude,
+            uncertain_rate=sum(pv=='uncertain')/n,conflicts=sum(tv!=pv),
+            prompt_version=scr$prompt_version,prompt_sha256=scr$prompt_sha256,model=scr$model,
+            source_validation_run=Sys.getenv('SOURCE_VALIDATION_RUN'),rerun_id=Sys.getenv('GITHUB_RUN_ID'),
+            confusion_matrix=unclass(tab)
+          )
+          writeLines(toJSON(metrics,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),file.path(root,'validation_metrics.json'))
+          records <- read_jsonl('canonical_store/data/canonical/current/repair/records.jsonl')
+          byid <- setNames(records,vapply(records,function(r)as.character(r$identity$lens_id),character(1)))
+          bypred <- setNames(pred,vapply(pred,function(r)as.character(r$lens_id),character(1)))
+          con <- file(file.path(root,'conflicts.csv'),'wt',encoding='UTF-8')
+          writeLines('lens_id,historical_decision,model_decision,title,abstract,model_reason',con)
+          csvq <- function(x) paste0('"',gsub('"','""',as.character(x %||% ''),fixed=TRUE),'"')
+          for(id in ids[tv!=pv]) {
+            r <- byid[[id]]; p <- bypred[[id]]
+            can <- r$canonical %||% list(); raw <- (r$lens %||% list())$raw_payload %||% list()
+            vals <- c(id,tmap[[id]],pmap[[id]],can$title %||% raw$title %||% '',can$abstract %||% raw$abstract %||% '',p$reason %||% '')
+            writeLines(paste(vapply(vals,csvq,character(1)),collapse=','),con)
+          }
+          close(con)
+          cat(toJSON(metrics,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),'\n')
+
+      - name: Save exact prompt text
+        shell: Rscript {0}
+        run: |
+          source_file <- readLines('scripts/updater/workflow_04_relevance_screening.R',warn=FALSE,encoding='UTF-8')
+          start <- grep('^SYSTEM_PROMPT <- paste\\\\($',source_file)
+          stop <- grep('^PROMPT_VERSION <- ',source_file)
+          stopifnot(length(start)==1L,length(stop)==1L,stop>start)
+          writeLines(source_file[start:(stop-1L)],'outputs/workflow04_validation_rerun/prompt_R_source.txt')
+
+      - name: Persist rerun
+        run: |
+          set -euo pipefail
+          DEST="data/adjudication/workflow04_validation_reruns/${{ github.run_id }}"
+          mkdir -p "$DEST"
+          cp outputs/workflow04_validation_rerun/sample_manifest.json "$DEST/"
+          cp outputs/workflow04_validation_rerun/validation_metrics.json "$DEST/"
+          cp outputs/workflow04_validation_rerun/sample_lens_ids.txt "$DEST/"
+          cp outputs/workflow04_validation_rerun/conflicts.csv "$DEST/"
+          cp outputs/workflow04_validation_rerun/prompt_R_source.txt "$DEST/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "Record Workflow 04 same-sample rerun ${{ github.run_id }}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Upload artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-same-200-rerun-${{ github.run_id }}
+          path: outputs/workflow04_validation_rerun/
+          retention-days: 90
+          if-no-files-found: warn
