@@ -160,8 +160,8 @@
       "historical_decision_ledger_records": 17849,
       "historical_decision_ids_present_in_fresh_records": 17849,
       "historical_decision_ids_absent_from_fresh_records": 0,
-      "representatives_include": 12631,
-      "representatives_exclude": 5028,
+      "representatives_include": 12636,
+      "representatives_exclude": 5023,
       "representatives_not_previously_screened": 4949,
       "representatives_not_previously_screened_publication_blocked": 1,
       "representatives_with_historical_conflict": 0,
@@ -174,12 +174,26 @@
     }
   },
   "manual_post_dedup_repair": {
-    "records": ["115-623-146-471-00X", "083-231-522-166-315", "148-538-962-380-852"],
+    "records": [
+      "115-623-146-471-00X",
+      "083-231-522-166-315",
+      "148-538-962-380-852"
+    ],
     "reason": "split_malformed_hybrid_transitive_cluster",
     "resulting_counts": {
       "unique": 21573,
       "canonical": 1036,
       "duplicates": 1200
     }
+  },
+  "workflow04_manual_adjudication_corrections": {
+    "applied_at": "2026-09-16",
+    "source_validation_run": "35027233994",
+    "source_rerun": "35073633839",
+    "records_adjudicated": 11,
+    "historical_decisions_corrected": 11,
+    "include_delta": 5,
+    "exclude_delta": -5,
+    "ledger_path": "data/adjudication/workflow04_consistency_checking/validation_35027233994_manual_corrections.json"
   }
 }
