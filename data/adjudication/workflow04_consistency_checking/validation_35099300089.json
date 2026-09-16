@@ -35,7 +35,7 @@
     "conflicts": 10
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 4,
+  "adjudications_completed": 5,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35099300089/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35099300089/sample_decisions.csv",
@@ -70,6 +70,13 @@
       "model_decision": "exclude",
       "final_adjudication": "retain",
       "rationale": "The study concerns stocking juvenile Atlantic salmon into net-pens and compares transfer methods to improve survival. 'Stocked' here refers to stocking aquaculture pens, not population restocking or release."
+    },
+    {
+      "lens_id": "003-327-314-664-621",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout are explicit and the study directly evaluates larval dietary fatty-acid requirements using commercial fish feed and growth outcomes, establishing aquaculture-relevant feeding research."
     }
   ]
 }
