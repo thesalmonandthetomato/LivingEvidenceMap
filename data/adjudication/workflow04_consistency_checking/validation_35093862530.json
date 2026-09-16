@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 6,
+  "adjudications_completed": 7,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -84,6 +84,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "The chapter explicitly discusses Atlantic salmon retrovirus-associated tumours in the context of increased cancer epizootics in farm-reared or hatchery fish facilities, establishing direct aquaculture relevance."
+    },
+    {
+      "lens_id": "054-245-292-502-533",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon is explicit, the study directly concerns feed optimisation, and the record explicitly identifies aquaculture in its keywords, establishing commercial aquaculture relevance."
     }
   ]
 }
