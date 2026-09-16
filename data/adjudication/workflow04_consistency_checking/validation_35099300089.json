@@ -35,7 +35,7 @@
     "conflicts": 10
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 5,
+  "adjudications_completed": 6,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35099300089/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35099300089/sample_decisions.csv",
@@ -77,6 +77,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Rainbow trout are explicit and the study directly evaluates larval dietary fatty-acid requirements using commercial fish feed and growth outcomes, establishing aquaculture-relevant feeding research."
+    },
+    {
+      "lens_id": "004-638-984-636-800",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout fingerlings are explicitly stocked in cages and evaluated in a dietary feeding experiment using growth performance and feed-conversion outcomes, establishing direct aquaculture relevance."
     }
   ]
 }
