@@ -1,0 +1,33 @@
+{
+  "n": 200,
+  "observed_agreement": 0.95,
+  "cohens_kappa": 0.8776,
+  "historical_retain": 142,
+  "historical_exclude": 58,
+  "model_retain": 145,
+  "model_exclude": 53,
+  "model_uncertain": 2,
+  "retain_retain": 139,
+  "retain_exclude_false_exclusion": 2,
+  "retain_uncertain": 1,
+  "exclude_exclude": 51,
+  "exclude_retain_false_retention": 6,
+  "exclude_uncertain": 1,
+  "sensitivity_retain": 0.9789,
+  "specificity_exclude": 0.8793,
+  "false_exclusion_rate": 0.0141,
+  "false_retention_rate": 0.1034,
+  "uncertain_rate": 0.01,
+  "conflicts": 10,
+  "prompt_version": "workflow04-v3-salmon-lice-clarification",
+  "prompt_sha256": "ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69",
+  "model": "gpt-5.6-luna",
+  "validation_run_id": "35099300089",
+  "sample_seed": 739561754,
+  "canonical_commit": "23168dc982f3571bd2a1284f054c939748a2c67e",
+  "confusion_matrix": [
+    [139, 2, 1],
+    [6, 51, 1],
+    [0, 0, 0]
+  ]
+}
