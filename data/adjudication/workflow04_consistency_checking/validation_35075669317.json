@@ -94,7 +94,14 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "The review substantively considers residues and contaminants in farmed aquaculture species including salmon, so both eligible salmon relevance and aquaculture context are explicit."
+    },
+    {
+      "lens_id": "030-923-353-855-842",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon are explicit, the population is described as commercial, harvest traits are analysed, and aquaculture/marker-assisted selection are explicit keywords, establishing production aquaculture relevance."
     }
   ],
-  "adjudications_completed": 5
+  "adjudications_completed": 6
 }
