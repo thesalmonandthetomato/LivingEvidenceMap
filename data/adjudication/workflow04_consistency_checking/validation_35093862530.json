@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 15,
+  "adjudications_completed": 16,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -147,6 +147,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Rainbow trout are explicit and the study directly evaluates dietary supplementation, growth performance, feed conversion and immune response, establishing clear aquaculture production relevance."
+    },
+    {
+      "lens_id": "070-176-666-299-597",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon is explicit and the study directly concerns carotenoid retention relevant to pigmentation in commercial salmonid feeds, establishing aquaculture production relevance."
     }
   ]
 }
