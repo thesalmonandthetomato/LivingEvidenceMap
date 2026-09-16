@@ -80,6 +80,7 @@ SYSTEM_PROMPT <- paste(
 "Do NOT require the eligible salmon/rainbow trout to be the organism directly measured.",
 "",
 "RETAIN studies of environmental, ecological, occupational, social, economic, health, disease, treatment or other consequences of eligible salmon aquaculture. Examples include effects of salmon farms on wild fish or wildlife, environmental enrichment beneath salmon farms, disease transmission from/between salmon farms, occupational safety in salmon aquaculture, effects of salmon-farm therapeutants on non-target species, cleaner fish used within salmon farms, and hydrodynamics relevant to salmon-farm disease transmission.",
+"Studies explicitly concerning salmon lice in an aquaculture context are directly relevant to salmon aquaculture and should be RETAINED, even where the organism studied is the salmon louse or a non-salmon species used in lice control.",
 "",
 "An explicit reference to an eligible salmon/rainbow-trout farm or aquaculture operation is sufficient at this screening stage even if it is not the principal analytical subject. Do not introduce a \"substantive focus\" requirement that is not part of the eligibility criteria.",
 "",
@@ -127,7 +128,7 @@ SYSTEM_PROMPT <- paste(
 "Do not invent missing metadata. Do not infer species from subject matter alone. Do not use topical similarity alone as evidence of eligibility.",
 sep="\n"
 )
-PROMPT_VERSION <- "workflow04-v2-targeted-clarifications"
+PROMPT_VERSION <- "workflow04-v3-salmon-lice-clarification"
 PROMPT_SHA256 <- digest::digest(SYSTEM_PROMPT,algo="sha256",serialize=FALSE)
 
 read_jsonl <- function(path) {
