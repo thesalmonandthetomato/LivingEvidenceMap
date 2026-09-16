@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 16,
+  "adjudications_completed": 17,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -154,6 +154,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Atlantic salmon is explicit and the study directly concerns carotenoid retention relevant to pigmentation in commercial salmonid feeds, establishing aquaculture production relevance."
+    },
+    {
+      "lens_id": "122-869-685-542-771",
+      "historical_decision": "retain",
+      "model_decision": "uncertain",
+      "final_adjudication": "exclude",
+      "rationale": "Rainbow trout is explicit, but the available metadata do not establish a commercial aquaculture or farmed-production context; disease in rainbow trout alone does not satisfy the aquaculture-context criterion."
     }
   ]
 }
