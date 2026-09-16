@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 3,
+  "adjudications_completed": 4,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -63,6 +63,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Atlantic salmon is explicit and the abstract explicitly identifies Salmo salar as an important aquaculture species, which establishes eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "038-554-454-359-776",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Chinook salmon is explicit, the record states that the species is farmed commercially in New Zealand, and the findings are explicitly linked to possible improvement of commercial farming."
     }
   ]
 }
