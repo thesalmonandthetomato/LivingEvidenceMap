@@ -101,7 +101,14 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Atlantic salmon are explicit, the population is described as commercial, harvest traits are analysed, and aquaculture/marker-assisted selection are explicit keywords, establishing production aquaculture relevance."
+    },
+    {
+      "lens_id": "037-638-535-818-104",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "Although the chapter concerns South American fur seals, it makes a substantive factual statement about differential interaction with salmon farms compared with South American sea lions. This salmon-farming statement is considered relevant evidence and is retained."
     }
   ],
-  "adjudications_completed": 6
+  "adjudications_completed": 7
 }
