@@ -35,7 +35,7 @@
     "conflicts": 10
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 6,
+  "adjudications_completed": 7,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35099300089/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35099300089/sample_decisions.csv",
@@ -84,6 +84,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Rainbow trout fingerlings are explicitly stocked in cages and evaluated in a dietary feeding experiment using growth performance and feed-conversion outcomes, establishing direct aquaculture relevance."
+    },
+    {
+      "lens_id": "005-782-852-268-682",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "The study explicitly examines hatchery-reared coho salmon in a controlled feeding trial, including growth, feed conversion and feed formulation outcomes, which are directly relevant to aquaculture."
     }
   ]
 }
