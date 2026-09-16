@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 9,
+  "adjudications_completed": 10,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -105,6 +105,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "The abstract explicitly discusses commercially raised salmon and compares contaminant levels with wild-caught salmon, establishing farmed-salmon product relevance."
+    },
+    {
+      "lens_id": "025-870-421-654-843",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon is explicit; the abstract states the response occurs under farming conditions and the experimental fish were reared from first feeding, establishing aquaculture relevance."
     }
   ]
 }
