@@ -1,0 +1,28 @@
+{
+  "audit_run_id": "35107843214",
+  "analysis_type": "second_pass_remaining_conflicts",
+  "status": "analysis_only_not_applied",
+  "remaining_conflicts": 543,
+  "direction_counts": {
+    "historical_exclude_model_retain": 396,
+    "historical_retain_model_exclude": 147
+  },
+  "clear_second_pass_candidates": {
+    "retain": 83,
+    "exclude": 56,
+    "note": "Conservative candidates identified from actual title/abstract evidence: direct eligible-species plus farm/aquaculture proximity for retain; clear species/context gate failure, wild/release, or background-only rationale for exclude."
+  },
+  "policy_sensitive_remaining": {
+    "total": 404,
+    "buckets": {
+      "production-type experiment/husbandry": 57,
+      "product/processing without farm origin": 73,
+      "lab/ecology/toxicology without farm context": 47,
+      "aquaculture context mainly metadata": 41,
+      "release/restocking/sea-ranching": 29,
+      "broad review/example": 12,
+      "other/mixed": 145
+    },
+    "note": "These buckets are analytical groupings, not final adjudications. Records can contain nuanced evidence and should be batch-adjudicated using the agreed eligibility policy before canonical changes."
+  }
+}
