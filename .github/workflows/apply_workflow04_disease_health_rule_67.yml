@@ -1,0 +1,134 @@
+name: Apply Workflow 04 disease-health rule batch 35107843214
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply_workflow04_disease_health_rule_67.yml'
+
+permissions:
+  contents: write
+
+env:
+  CANONICAL_BRANCH: canonical-fresh-dedup-v2-2026-09-14
+  DECISIONS_FILE: data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_disease_health_rule_67.json
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANONICAL_BRANCH }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Apply disease-health adjudications
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          cfg=json.loads(Path("${{ env.DECISIONS_FILE }}").read_text(encoding="utf-8"))
+          decisions={x:"retain" for x in cfg["retain_lens_ids"]}
+          decisions.update({x:"exclude" for x in cfg["exclude_lens_ids"]})
+          assert len(decisions)==67
+
+          src=Path("canonical_store/data/canonical/current/repair/records.jsonl")
+          tmp=src.with_suffix(".jsonl.tmp")
+          seen=set(); changed=0; include_delta=0; exclude_delta=0
+
+          with src.open(encoding="utf-8") as fin, tmp.open("w",encoding="utf-8") as fout:
+              for line in fin:
+                  if not line.strip(): continue
+                  r=json.loads(line)
+                  lid=str((r.get("identity") or {}).get("lens_id") or "")
+                  if lid in decisions:
+                      seen.add(lid)
+                      s=r.setdefault("screening",{})
+                      target="include" if decisions[lid]=="retain" else "exclude"
+                      cur=s.get("decision")
+                      s.setdefault("historical_decision_original",cur)
+                      entry={
+                          "status":"rule_adjudicated",
+                          "final_decision":decisions[lid],
+                          "canonical_decision":target,
+                          "source":"workflow04_disease_health_rule",
+                          "source_audit_run":"35107843214",
+                          "rule":cfg["rule"],
+                          "refined_boundary":cfg["refined_boundary"],
+                          "adjudication_date":"2026-09-16"
+                      }
+                      hist=s.setdefault("manual_adjudication_history",[])
+                      if not any(isinstance(x,dict) and x.get("source")=="workflow04_disease_health_rule" and x.get("source_audit_run")=="35107843214" for x in hist):
+                          hist.append(entry)
+                      s["manual_adjudication"]=entry
+                      if cur != target:
+                          s["decision"]=target; changed += 1
+                          if target=="include":
+                              include_delta += 1; exclude_delta -= 1
+                          else:
+                              include_delta -= 1; exclude_delta += 1
+                  fout.write(json.dumps(r,ensure_ascii=False,separators=(",",":"))+"\n")
+
+          assert len(seen)==67, (len(seen),sorted(set(decisions)-seen))
+          tmp.replace(src)
+
+          manifest_path=Path("canonical_store/data/canonical/current/repair/manifest.json")
+          m=json.loads(manifest_path.read_text(encoding="utf-8"))
+          hs=m["historical_screening_reconciliation"]["summary"]
+          hs["representatives_include"] += include_delta
+          hs["representatives_exclude"] += exclude_delta
+          node=m.setdefault("workflow04_full_corpus_batch_adjudications",{})
+          node["audit_35107843214_disease_health_rule_67"]={
+              "applied_at":"2026-09-16",
+              "records_adjudicated":67,
+              "retain":50,
+              "exclude":17,
+              "records_changed":changed,
+              "include_delta":include_delta,
+              "exclude_delta":exclude_delta,
+              "source":"${{ env.DECISIONS_FILE }}"
+          }
+          manifest_path.write_text(json.dumps(m,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+          print(f"PASS: applied 67 disease-health adjudications; changed={changed}; include_delta={include_delta}; exclude_delta={exclude_delta}")
+          PY
+
+      - name: Validate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          cfg=json.loads(Path("${{ env.DECISIONS_FILE }}").read_text(encoding="utf-8"))
+          expected={x:"include" for x in cfg["retain_lens_ids"]}
+          expected.update({x:"exclude" for x in cfg["exclude_lens_ids"]})
+          found=set()
+          with Path("canonical_store/data/canonical/current/repair/records.jsonl").open(encoding="utf-8") as f:
+              for line in f:
+                  r=json.loads(line)
+                  lid=str((r.get("identity") or {}).get("lens_id") or "")
+                  if lid in expected:
+                      s=r.get("screening") or {}
+                      assert s.get("decision")==expected[lid], (lid,s.get("decision"),expected[lid])
+                      assert (s.get("manual_adjudication") or {}).get("source")=="workflow04_disease_health_rule"
+                      found.add(lid)
+          assert len(found)==67
+          print("PASS: all 67 disease-health rule adjudications validated")
+          PY
+
+      - name: Commit canonical changes
+        run: |
+          cd canonical_store
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git commit -m "Apply Workflow 04 disease-health rule batch"
+          git pull --rebase origin "${CANONICAL_BRANCH}"
+          git push origin HEAD:"${CANONICAL_BRANCH}"
+          git rev-parse HEAD
