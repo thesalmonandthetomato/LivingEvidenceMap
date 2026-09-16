@@ -34,7 +34,7 @@
     "uncertain_rate": 0.015,
     "conflicts": 16
   },
-  "adjudication_status": "in_progress",
+  "adjudication_status": "complete",
   "conflict_ids": [
     "070-797-313-928-660",
     "073-107-551-964-753",
@@ -164,7 +164,14 @@
       "model_decision": "retain",
       "final_adjudication": "exclude",
       "rationale": "The title links coho salmon to aquaculture facilities, but this appears to concern population supplementation/returning fish rather than farmed production. With no abstract available, exclusion is the preferred adjudication, while acknowledging that retain would also be defensible at title-only screening."
+    },
+    {
+      "lens_id": "069-360-382-206-285",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Chinook salmon are explicit and the study is a 30-week controlled feeding/rearing experiment evaluating dietary lipid replacement in a production-relevant aquaculture context."
     }
   ],
-  "adjudications_completed": 15
+  "adjudications_completed": 16
 }
