@@ -160,8 +160,8 @@
       "historical_decision_ledger_records": 17849,
       "historical_decision_ids_present_in_fresh_records": 17849,
       "historical_decision_ids_absent_from_fresh_records": 0,
-      "representatives_include": 12656,
-      "representatives_exclude": 5003,
+      "representatives_include": 12661,
+      "representatives_exclude": 4998,
       "representatives_not_previously_screened": 4949,
       "representatives_not_previously_screened_publication_blocked": 1,
       "representatives_with_historical_conflict": 0,
@@ -210,6 +210,14 @@
       "include_delta": 15,
       "exclude_delta": -15,
       "source": "data/adjudication/workflow04_consistency_checking/validation_35093862530.json"
+    },
+    "validation_35099300089": {
+      "applied_at": "2026-09-16",
+      "records_corrected": 5,
+      "records_changed": 5,
+      "include_delta": 5,
+      "exclude_delta": -5,
+      "source": "data/adjudication/workflow04_consistency_checking/validation_35099300089.json"
     }
   }
 }
