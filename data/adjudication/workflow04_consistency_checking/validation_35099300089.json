@@ -1,0 +1,45 @@
+{
+  "record_type": "workflow04_consistency_check",
+  "validation_run_id": "35099300089",
+  "canonical_commit": "23168dc982f3571bd2a1284f054c939748a2c67e",
+  "sample": {
+    "n": 200,
+    "seed": 739561754,
+    "method": "simple_random_sample_without_replacement_from_previously_unsampled_historical_records",
+    "truth_blinded_from_model": true
+  },
+  "model": "gpt-5.6-luna",
+  "prompt": {
+    "version": "workflow04-v3-salmon-lice-clarification",
+    "sha256": "ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69"
+  },
+  "pre_adjudication_metrics": {
+    "observed_agreement": 0.95,
+    "cohens_kappa": 0.8776,
+    "historical_retain": 142,
+    "historical_exclude": 58,
+    "model_retain": 145,
+    "model_exclude": 53,
+    "model_uncertain": 2,
+    "retain_retain": 139,
+    "retain_exclude_false_exclusion": 2,
+    "retain_uncertain": 1,
+    "exclude_exclude": 51,
+    "exclude_retain_false_retention": 6,
+    "exclude_uncertain": 1,
+    "sensitivity_retain": 0.9789,
+    "specificity_exclude": 0.8793,
+    "false_exclusion_rate": 0.0141,
+    "false_retention_rate": 0.1034,
+    "uncertain_rate": 0.01,
+    "conflicts": 10
+  },
+  "adjudication_status": "pending",
+  "adjudications_completed": 0,
+  "source_files": {
+    "conflicts": "data/adjudication/workflow04_validation_runs/35099300089/conflicts.csv",
+    "decisions": "data/adjudication/workflow04_validation_runs/35099300089/sample_decisions.csv",
+    "metrics": "data/adjudication/workflow04_validation_runs/35099300089/validation_metrics.json",
+    "prompt": "data/adjudication/workflow04_validation_runs/35099300089/prompt_R_source.txt"
+  }
+}
