@@ -1,0 +1,62 @@
+{
+  "record_type": "workflow04_consistency_check",
+  "validation_run_id": "35075669317",
+  "canonical_commit": "e8ba9f3f8577e88130e77f214f5565260e33673f",
+  "sample": {
+    "n": 200,
+    "seed": 715930982,
+    "method": "simple_random_sample_without_replacement_from_previously_unsampled_historical_records",
+    "truth_blinded_from_model": true
+  },
+  "model": "gpt-5.6-luna",
+  "prompt": {
+    "version": "workflow04-v2-targeted-clarifications",
+    "sha256": "3eb903948e355546af85bfb0869a22652af2b711ac5aa4b28994c0964b847b55"
+  },
+  "pre_adjudication_metrics": {
+    "observed_agreement": 0.92,
+    "cohens_kappa": 0.7944,
+    "historical_retain": 146,
+    "historical_exclude": 54,
+    "model_retain": 150,
+    "model_exclude": 47,
+    "model_uncertain": 3,
+    "retain_retain": 141,
+    "retain_exclude_false_exclusion": 4,
+    "retain_uncertain": 1,
+    "exclude_exclude": 43,
+    "exclude_retain_false_retention": 9,
+    "exclude_uncertain": 2,
+    "sensitivity_retain": 0.9658,
+    "specificity_exclude": 0.7963,
+    "false_exclusion_rate": 0.0274,
+    "false_retention_rate": 0.1667,
+    "uncertain_rate": 0.015,
+    "conflicts": 16
+  },
+  "adjudication_status": "pending",
+  "conflict_ids": [
+    "070-797-313-928-660",
+    "073-107-551-964-753",
+    "061-514-915-164-291",
+    "035-982-995-655-772",
+    "039-241-007-297-875",
+    "030-923-353-855-842",
+    "037-638-535-818-104",
+    "179-414-354-985-786",
+    "120-067-923-897-264",
+    "024-725-813-849-386",
+    "072-444-560-311-886",
+    "103-431-439-029-061",
+    "060-167-043-645-724",
+    "083-918-383-162-584",
+    "188-307-184-108-491",
+    "069-360-382-206-285"
+  ],
+  "source_files": {
+    "conflicts": "data/adjudication/workflow04_validation_runs/35075669317/conflicts.csv",
+    "decisions": "data/adjudication/workflow04_validation_runs/35075669317/sample_decisions.csv",
+    "metrics": "data/adjudication/workflow04_validation_runs/35075669317/validation_metrics.json",
+    "prompt": "data/adjudication/workflow04_validation_runs/35075669317/prompt_R_source.txt"
+  }
+}
