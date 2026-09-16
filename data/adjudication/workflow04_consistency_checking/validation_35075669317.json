@@ -80,7 +80,14 @@
       "model_decision": "exclude",
       "final_adjudication": "exclude",
       "rationale": "Rainbow trout are explicit, but the abstract describes a controlled laboratory infection experiment without explicit aquaculture or farming context."
+    },
+    {
+      "lens_id": "035-982-995-655-772",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon are explicit and the record identifies aquaculture directly in the metadata; the eligible species is central to pathogen identification rather than incidental."
     }
   ],
-  "adjudications_completed": 3
+  "adjudications_completed": 4
 }
