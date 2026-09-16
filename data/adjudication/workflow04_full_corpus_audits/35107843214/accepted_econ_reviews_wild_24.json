@@ -1,0 +1,42 @@
+{
+  "audit_run_id": "35107843214",
+  "adjudication_type": "economics_reviews_wild_final_rules",
+  "approved_date": "2026-09-16",
+  "rules": [
+    "Retain economics, policy, industry or market studies when salmon aquaculture/farming is itself a substantive production system, exposure, market force or supply-chain component being analysed. Commercial seafood terminology or a statement that salmon is usually farmed is insufficient by itself.",
+    "For reviews, books and proceedings, retain where eligible salmonids and aquaculture form a substantive reviewed topic, chapter, section, dataset or production application. Exclude where salmon/rainbow trout is merely an illustrative example or aquaculture appears only as generic future relevance, keywords, affiliation or journal context.",
+    "Retain wild/ecological studies where farming conditions or aquaculture are directly part of the study design or explanatory context."
+  ],
+  "counts": {
+    "retain": 16,
+    "exclude": 8
+  },
+  "retain_lens_ids": [
+    "000-818-284-655-448",
+    "052-355-085-234-841",
+    "102-339-116-421-597",
+    "085-634-886-792-324",
+    "000-430-324-239-051",
+    "009-110-531-273-521",
+    "024-761-532-555-267",
+    "111-082-764-915-646",
+    "105-981-409-652-150",
+    "038-659-458-767-196",
+    "071-264-821-019-759",
+    "122-637-258-358-352",
+    "143-004-592-631-387",
+    "169-180-733-132-220",
+    "190-427-989-639-597",
+    "084-529-720-053-133"
+  ],
+  "exclude_lens_ids": [
+    "029-135-410-670-842",
+    "073-162-731-698-765",
+    "022-817-515-051-400",
+    "005-627-028-580-563",
+    "049-566-410-344-334",
+    "010-723-354-047-474",
+    "020-921-993-188-935",
+    "051-427-783-093-613"
+  ]
+}
