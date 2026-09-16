@@ -150,7 +150,14 @@
       "model_decision": "exclude",
       "final_adjudication": "exclude",
       "rationale": "The record explicitly concerns farmed salmonid disease costs and aquaculture surveillance, but it does not identify an eligible salmon or rainbow trout species; generic salmonids are insufficient under the species criterion."
+    },
+    {
+      "lens_id": "083-918-383-162-584",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "The chapter substantively addresses welfare at harvest for farmed fish and explicitly includes salmon and trout among the farmed species whose harvesting processes are discussed."
     }
   ],
-  "adjudications_completed": 13
+  "adjudications_completed": 14
 }
