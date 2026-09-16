@@ -143,7 +143,14 @@
       "model_decision": "uncertain",
       "final_adjudication": "exclude",
       "rationale": "Rainbow trout are used as the basis for an in vitro digestive model, but the record does not explicitly establish farmed fish or an aquaculture production context."
+    },
+    {
+      "lens_id": "060-167-043-645-724",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "rationale": "The record explicitly concerns farmed salmonid disease costs and aquaculture surveillance, but it does not identify an eligible salmon or rainbow trout species; generic salmonids are insufficient under the species criterion."
     }
   ],
-  "adjudications_completed": 12
+  "adjudications_completed": 13
 }
