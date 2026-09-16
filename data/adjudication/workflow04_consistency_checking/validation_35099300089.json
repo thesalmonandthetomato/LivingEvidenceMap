@@ -35,7 +35,7 @@
     "conflicts": 10
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 8,
+  "adjudications_completed": 9,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35099300089/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35099300089/sample_decisions.csv",
@@ -98,6 +98,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Retained by human adjudication. The study directly analyses Atlantic salmon and rainbow trout in a food-production/market context; this is considered within scope for the map."
+    },
+    {
+      "lens_id": "075-122-461-297-49X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "The review explicitly includes salmon aquaculture within its synthesis of aquaculture economics, so salmon farming is a substantive part of the reviewed evidence base."
     }
   ]
 }
