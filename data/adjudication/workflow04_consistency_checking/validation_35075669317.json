@@ -115,7 +115,14 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Rainbow trout are explicit and the study is a production-oriented feeding trial using commercial and experimental diets, with phosphorus loading expressed per tonne of fish produced."
+    },
+    {
+      "lens_id": "120-067-923-897-264",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "exclude",
+      "rationale": "Atlantic salmon and salmon-processing workers are explicit, but the record does not establish that the processed salmon originated from aquaculture; downstream processing alone is insufficient."
     }
   ],
-  "adjudications_completed": 8
+  "adjudications_completed": 9
 }
