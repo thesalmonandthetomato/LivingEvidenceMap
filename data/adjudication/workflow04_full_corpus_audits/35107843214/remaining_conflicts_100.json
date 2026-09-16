@@ -1,0 +1,707 @@
+{
+  "audit_run_id": "35107843214",
+  "generated_after": "accepted_econ_reviews_wild_24",
+  "n": 100,
+  "records": [
+    {
+      "lens_id": "048-367-507-519-788",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies AquaAdvantage salmon in the context of genetic engineering to improve animal production traits, establishing eligible salmon and food-production relevance."
+    },
+    {
+      "lens_id": "065-962-938-330-242",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly discusses salmon and salmonid production alongside aquaculture production systems and aquaculture science, establishing relevant aquaculture context."
+    },
+    {
+      "lens_id": "085-506-031-258-947",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly discusses gene-modified salmon intended for food production in fish farms, establishing both an eligible salmon species and aquaculture relevance."
+    },
+    {
+      "lens_id": "136-095-963-630-045",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns Atlantic salmon (Salmo salar) and uses a commercial LHRHa treatment to manipulate spawning, establishing production-related aquaculture relevance."
+    },
+    {
+      "lens_id": "167-272-593-334-52X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study directly examines rainbow trout, and publication in the explicitly aquaculture-focused journal Aquaculture establishes the relevant aquaculture context."
+    },
+    {
+      "lens_id": "022-027-190-792-780",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns Atlantic salmon and has an aquaculture-focused affiliation (Institute of Aquaculture), with clonal lines developed as resources for commercially important traits."
+    },
+    {
+      "lens_id": "022-890-325-503-040",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly studies commercial processing of salmon muscle and includes an affiliation with the Norwegian Institute of Fisheries and Aquaculture Ltd., establishing relevant aquaculture context."
+    },
+    {
+      "lens_id": "025-945-940-504-031",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns rainbow trout (Oncorhynchus mykiss) breeding programs and genetic evaluation at the NCCCWA facility, establishing aquaculture production relevance."
+    },
+    {
+      "lens_id": "026-364-817-832-401",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly mentions salmon and aquaculture breeding, establishing both eligible species context and aquaculture relevance."
+    },
+    {
+      "lens_id": "062-643-365-855-334",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study examines eligible rainbow trout (Oncorhynchus mykiss) obtained from a local fish farm, establishing both species and aquaculture relevance."
+    },
+    {
+      "lens_id": "085-402-467-717-757",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly mentions Pacific salmons and discusses aquaculture's developing role and effects on estuarine fisheries, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "094-269-099-416-550",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns hatchery-reared steelhead (Oncorhynchus mykiss, an eligible species), Oregon hatcheries, and aquaculture/fish-health production practices."
+    },
+    {
+      "lens_id": "106-208-816-441-850",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies Atlantic salmon and discusses photoperiod regimes used in aquaculture to optimize artificial rearing, establishing both eligible species and aquaculture context."
+    },
+    {
+      "lens_id": "106-836-945-157-642",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies Salmo gairdneri (rainbow trout) and its farming in an aquaculture-focused journal."
+    },
+    {
+      "lens_id": "000-605-628-762-759",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns Atlantic salmon fillets processed at a commercial smokehouse, establishing both eligible species and aquaculture-related commercial seafood processing relevance."
+    },
+    {
+      "lens_id": "006-211-384-062-903",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly studies rainbow trout (Oncorhynchus mykiss) egg quality and discusses aquaculture conditions, supported by an aquaculture-focused affiliation."
+    },
+    {
+      "lens_id": "018-795-804-696-863",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The title explicitly identifies Atlantic salmon and commercial processing/retail display, establishing an eligible species and production-related context."
+    },
+    {
+      "lens_id": "027-657-020-298-462",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly discusses aquaculture for ocean salmon and defines aquaculture as breeding, rearing, and harvesting, establishing eligible salmon and aquaculture relevance."
+    },
+    {
+      "lens_id": "036-964-324-426-175",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly mentions salmon fry at a fish farm exposed to contaminated water, establishing eligible salmon and aquaculture context despite the article’s primary focus on swimming pools."
+    },
+    {
+      "lens_id": "041-119-046-531-612",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns Atlantic salmon and is affiliated with the Norwegian Institute of Fisheries and Aquaculture Ltd, providing aquaculture-context evidence."
+    },
+    {
+      "lens_id": "052-607-038-568-855",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines rainbow trout (Oncorhynchus mykiss) and is affiliated with the USDA-ARS Hagerman Fish Culture Experiment Station, establishing a fish-culture/aquaculture context."
+    },
+    {
+      "lens_id": "054-249-513-358-220",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly concerns salmons grown in pond farms and recirculating aquaculture systems, establishing both eligible salmon context and aquaculture relevance."
+    },
+    {
+      "lens_id": "056-433-951-825-338",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies chinook and sockeye salmon genes and states the objective is producing transgenic tilapia strains for aquaculture, establishing eligible salmon relevance and aquaculture context."
+    },
+    {
+      "lens_id": "083-949-485-769-725",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly identifies rainbow trout (Salmo gairdneri) and discusses genetic selection for production traits in captivity and under production systems, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "094-897-500-730-544",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns aquaculture, includes rainbow trout (Oncorhynchus mykiss), and is published in an aquaculture-focused journal."
+    },
+    {
+      "lens_id": "004-258-943-860-377",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies marine aquaculture in Atlantic Canada as mainly salmon and shellfish production and examines occupational injuries among its workers."
+    },
+    {
+      "lens_id": "027-690-276-284-069",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines Atlantic salmon (Salmo salar), and its aquaculture context is established by the aquaculture-focused keywords, affiliations, and recirculating aquaculture system reference."
+    },
+    {
+      "lens_id": "044-276-561-003-935",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study examines trout (Salmo gairdneri, a historical synonym of rainbow trout) sperm and explicitly discusses artificial insemination for fish produced in aquaculture."
+    },
+    {
+      "lens_id": "051-525-706-571-107",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly studies rainbow trout (Oncorhynchus mykiss) and refers to improved nutrient use by aquacultured fish, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "068-513-662-726-187",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study directly examines Atlantic salmon (Salmo salar), and the authors include Chile’s Interdisciplinary Center for Aquaculture Research, establishing an aquaculture-focused context."
+    },
+    {
+      "lens_id": "078-833-667-445-128",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly discusses farming and harvesting salmon in freshwater for food, establishing both eligible salmon context and aquaculture/production relevance."
+    },
+    {
+      "lens_id": "087-491-617-413-717",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines Atlantic salmon (Salmo salar) and records survival during commercial seawater rearing, establishing direct aquaculture relevance."
+    },
+    {
+      "lens_id": "096-105-588-982-934",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly describes a commercial nori–salmon integrated polyculture system, establishing an aquaculture context involving unspecified salmon."
+    },
+    {
+      "lens_id": "105-730-554-988-922",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns Atlantic salmon and production/processing of smoked salmon, with commercial blood-spot quality and exsanguination methods indicating aquaculture relevance."
+    },
+    {
+      "lens_id": "106-175-727-271-820",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns Atlantic salmon fillets and states that soft fillets affect farming and processing industries, establishing both eligible species and aquaculture-production relevance."
+    },
+    {
+      "lens_id": "114-476-949-483-211",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly discusses salmon biotechnology and genetic engineering for commercially important fish production in controlled culture and production systems."
+    },
+    {
+      "lens_id": "119-062-906-756-306",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns rainbow trout (Oncorhynchus mykiss), and the authors’ affiliation with a Key Laboratory of Mariculture establishes an aquaculture context."
+    },
+    {
+      "lens_id": "122-970-324-871-138",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines rainbow trout (Oncorhynchus mykiss) semen cryopreservation for routine fertilization and is published in the aquaculture-focused journal Aquaculture Research, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "130-508-322-944-508",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns rainbow trout (Oncorhynchus mykiss) and evaluates fertility and viability at an aquaculture center."
+    },
+    {
+      "lens_id": "167-052-571-099-229",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly mentions salmon and discusses developing grazing aquaculture of pelagic fish including salmon."
+    },
+    {
+      "lens_id": "000-270-116-081-19X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns Atlantic salmon (Salmo salar) embryos and fry and evaluates rearing conditions used in commercial hatcheries, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "002-526-525-335-065",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines Atlantic salmon and rainbow trout, with Atlantic salmon treated in a commercial facility, establishing eligible species and aquaculture context."
+    },
+    {
+      "lens_id": "013-747-541-671-833",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns rainbow trout (Oncorhynchus mykiss) transported from a commercial fish production facility, establishing both eligible species and aquaculture context."
+    },
+    {
+      "lens_id": "023-797-500-632-895",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines juvenile Atlantic salmon (Salmo salar) and commercially used fish nutrition, with an affiliation in CSIRO’s Livestock & Aquaculture Program, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "032-488-971-478-625",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly identifies Atlantic salmon (Salmo salar) and proposes applications for selective traps in aquaculture, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "039-381-296-184-985",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly identifies Atlantic salmon (Salmo salar) and examines its imported fishery products in Aquaculture International, an aquaculture-focused journal, establishing relevant aquaculture context."
+    },
+    {
+      "lens_id": "039-569-365-260-051",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly studies Salmo salar and discusses food-quality impacts relevant to aquaculture production, including effects on aquaculture output."
+    },
+    {
+      "lens_id": "044-235-604-036-251",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines Atlantic salmon, and the authors include an Institute of Aquaculture affiliation, establishing relevant aquaculture context."
+    },
+    {
+      "lens_id": "049-625-675-960-084",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns Atlantic salmon (Salmo salar) and includes a farm-based exposure experiment, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "060-208-706-648-845",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly examines aquacultured finfish including salmon, establishing both eligible salmon relevance and an aquaculture context."
+    },
+    {
+      "lens_id": "065-618-313-334-902",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns rainbow trout (Oncorhynchus mykiss) and states its aquacultural significance and ease of culture, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "071-290-688-380-447",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines rainbow trout and states that the biomarkers may support genetic line evaluation and on-farm health monitoring, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "079-711-962-318-851",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns Pacific salmon (Oncorhynchus spp.) and includes aquaculture as a research theme."
+    },
+    {
+      "lens_id": "083-203-706-067-460",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies rainbow trout (Oncorhynchus mykiss) and discusses its culture and the environmental effects of aquaculture in Venezuela."
+    },
+    {
+      "lens_id": "086-994-076-480-017",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies coho salmon and states that the sulfonamide residues can occur in aquacultured species, establishing both eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "087-127-069-067-428",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly references salmon waters and water-quality monitoring for fish farming in artificial ponds, establishing both eligible salmon context and aquaculture relevance."
+    },
+    {
+      "lens_id": "093-755-529-399-584",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly discusses salmon rearing within aquaculture and its environmental impacts."
+    },
+    {
+      "lens_id": "106-634-530-573-796",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The title explicitly identifies juvenile Pacific salmon and evaluates impacts of shellfish aquaculture, establishing both eligible salmon relevance and an aquaculture context."
+    },
+    {
+      "lens_id": "131-516-461-164-786",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns coho salmon and transgenic fish in potential commercial production systems, with an affiliation at a Centre for Aquaculture and Environmental Research."
+    },
+    {
+      "lens_id": "157-712-388-826-940",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The contents explicitly include co-management by Alaska regional aquaculture associations of salmon, establishing eligible salmon and an aquaculture context."
+    },
+    {
+      "lens_id": "006-936-381-225-058",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly concerns Atlantic salmon fillets and commercial smoked-salmon processing, establishing eligible species and aquaculture-related production/processing relevance."
+    },
+    {
+      "lens_id": "007-795-812-928-573",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly mentions farm-bred salmon from Norway and Scotland and discusses mariculture, establishing eligible salmon and aquaculture relevance."
+    },
+    {
+      "lens_id": "013-750-221-241-815",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns Pacific salmon and discusses aquaculture impacts including disease transmission and genetic effects, establishing relevant salmon and aquaculture context."
+    },
+    {
+      "lens_id": "018-277-027-752-575",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines rainbow trout (Oncorhynchus mykiss) and discusses hypoxia as an “aquaculture floating head” phenomenon, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "024-054-591-075-551",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines triploid Atlantic salmon (Salmo salar) and states that it is commercially available, with the research focused on triploid Atlantic salmon breeding, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "024-118-514-296-262",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly references intensive salmon cultivation in Chile and examines environmental impacts of aquaculture, establishing a relevant salmon-aquaculture context."
+    },
+    {
+      "lens_id": "025-500-291-913-641",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns Atlantic salmon (Salmo salar) and identifies aquaculture as a relevant context for maturation research."
+    },
+    {
+      "lens_id": "048-139-626-905-636",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly includes rainbow trout (Oncorhynchus mykiss) and states that rainbow trout were grown in a farm, establishing eligible species and aquaculture context."
+    },
+    {
+      "lens_id": "050-946-925-070-133",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly mentions a salmon DNA transposon and applications in aquacultural fish species, establishing both eligible salmon relevance and aquaculture context."
+    },
+    {
+      "lens_id": "055-259-977-821-805",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly studies rainbow trout (Oncorhynchus mykiss) and evaluates photoperiod regimes including continuous light currently used commercially, establishing aquaculture-production relevance."
+    },
+    {
+      "lens_id": "074-592-491-698-024",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The title explicitly identifies Atlantic salmon (Salmo salar), and the abstract states the technique was used in commercial fish production; the Landcatch affiliation further supports aquaculture relevance."
+    },
+    {
+      "lens_id": "097-528-854-469-457",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The title and abstract explicitly identify rainbow trout and describe a practical sperm-production method for breeding programs, while the keyword “aquacultural species” establishes aquaculture relevance."
+    },
+    {
+      "lens_id": "102-202-849-636-301",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study uses a rainbow trout gill cell line and explicitly discusses implications for finfish aquaculture management, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "127-150-377-515-493",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies rainbow trout and discusses IPNV diagnosis and monitoring in aquaculture farms."
+    },
+    {
+      "lens_id": "130-432-655-420-755",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly mentions salmon and fish farming, establishing eligible salmon and aquaculture relevance despite its biographical focus."
+    },
+    {
+      "lens_id": "132-474-646-245-439",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The title explicitly concerns aquaculture nutrition, and the abstract identifies Chinook salmon and trout in the subject’s aquaculture-related research."
+    },
+    {
+      "lens_id": "139-638-389-606-16X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies rainbow trout (Oncorhynchus mykiss) commercial production and commercial freshwater culture, establishing both eligible species and aquaculture context, despite the experiment being conducted on brook trout."
+    },
+    {
+      "lens_id": "163-649-392-048-895",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The title explicitly links salmon with regional aquaculture associations, establishing both eligible salmon context and aquaculture relevance."
+    },
+    {
+      "lens_id": "164-277-411-062-070",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly discusses salmon and designs a semi-submersible offshore aquaculture facility for marine fish farming, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "006-230-833-890-004",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly discusses gene editing in salmon and rainbow trout and its application to sustainable food-fish farming, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "059-454-697-894-961",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The title explicitly identifies Chinook salmon and exposure to commercially used fish anaesthetics, establishing a production-related aquaculture context."
+    },
+    {
+      "lens_id": "066-973-705-642-78X",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record identifies rainbow trout (Oncorhynchus mykiss) and explicitly describes a PKD outbreak at a farm, establishing relevance to aquaculture."
+    },
+    {
+      "lens_id": "075-689-933-949-589",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines rainbow trout (Oncorhynchus mykiss) and discusses nanosilver application in aquaculture, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "085-280-384-155-848",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study concerns Chinook salmon and explicitly addresses aquaculture rearing conditions, with Yellow Island Aquaculture Limited listed among the affiliations."
+    },
+    {
+      "lens_id": "106-333-488-719-579",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns rainbow trout (Oncorhynchus mykiss) and probiotic applications for aquaculture, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "121-321-251-952-300",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study directly examines Atlantic salmon sperm and reproductive efficiency in the aquaculture journal Aquaculture, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "126-334-574-392-488",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "Rainbow trout (Salmo gairdneri, a historical synonym) are explicitly studied for the feasibility of commercial production in prairie ponds/lakes."
+    },
+    {
+      "lens_id": "163-668-642-022-334",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies Atlantic salmon and recirculating aquaculture systems, with experiments on biofilters used in aquaculture production."
+    },
+    {
+      "lens_id": "199-925-802-439-245",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly identifies salmon among aquaculture species and discusses reproductive control applied to commercial fish production and captivity."
+    },
+    {
+      "lens_id": "001-509-147-325-263",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly identifies Atlantic salmon and examines fish movements through consignments associated with aquaculture, establishing a relevant aquaculture pathway."
+    },
+    {
+      "lens_id": "015-988-685-498-582",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly involves Atlantic salmon and discusses the results’ significance for aquaculture, establishing eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "031-589-508-674-495",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns rainbow trout (Oncorhynchus mykiss) meat and its value for commercial products, with stated relevance to trout producers, establishing production-related aquaculture context."
+    },
+    {
+      "lens_id": "040-466-697-871-178",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study concerns eligible amago salmon (Oncorhynchus masou ishikawae) and explicitly evaluates androgenesis for aquaculture breeding programs."
+    },
+    {
+      "lens_id": "041-389-295-488-037",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study includes pink salmon, an eligible species, and explicitly discusses fishmeal made from fish offal, triggering the fishmeal inclusion rule."
+    },
+    {
+      "lens_id": "060-145-748-012-655",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly discusses commercial breeding programs and aquaculture projects, using salmon as a type animal, establishing both eligible species and aquaculture relevance."
+    },
+    {
+      "lens_id": "104-131-824-440-107",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The abstract explicitly concerns commercial fish farming and cultivation of high-value fish species including salmon in the Belgorod region."
+    },
+    {
+      "lens_id": "105-531-198-680-013",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The study explicitly examines Atlantic salmon (Salmo salar) and is production-related reproductive research, with an author affiliation at Salmon Enterprises of Tasmania Pty. Ltd. and publication in Aquaculture."
+    },
+    {
+      "lens_id": "136-003-199-669-671",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The title and abstract explicitly concern a trout farm/fishery farm and its ecological effects, establishing rainbow-trout aquaculture relevance even though the measured ecosystem components are not trout."
+    },
+    {
+      "lens_id": "167-508-148-941-098",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "The record explicitly concerns salmon and was presented at the World Aquaculture Conference, establishing relevant aquaculture context."
+    },
+    {
+      "lens_id": "182-806-978-710-140",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "category": "conflict",
+      "model_reason": "Rainbow trout is explicitly identified, and the study addresses ploidy methods and biotechnology applied to fish culture, including use by farm staff."
+    }
+  ]
+}
