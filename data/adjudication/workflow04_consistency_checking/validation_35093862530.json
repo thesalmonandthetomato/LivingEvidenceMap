@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 14,
+  "adjudications_completed": 15,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -140,6 +140,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Rainbow trout are explicit and the study evaluates commercial trout feed, probiotic supplementation, growth and rearing performance in a recirculation system, establishing clear aquaculture production relevance."
+    },
+    {
+      "lens_id": "046-035-359-455-677",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout are explicit and the study directly evaluates dietary supplementation, growth performance, feed conversion and immune response, establishing clear aquaculture production relevance."
     }
   ]
 }
