@@ -1,0 +1,70 @@
+{
+  "audit_run_id": "35107843214",
+  "adjudication_type": "production_husbandry_rule_trial",
+  "approved_by_user": true,
+  "approved_date": "2026-09-16",
+  "rule": "Experimental rearing, feeding, vaccination, growth, welfare, production-oriented physiology or husbandry work on an eligible species is relevant even without the word commercial, unless there is affirmative evidence that rearing is solely for release/restocking/stock enhancement, or the eligible salmonid is incidental.",
+  "refined_boundary": "Basic laboratory physiology/toxicology/pathology does not become eligible merely because an eligible species is used; there should be a production-oriented rearing, feeding, vaccination, growth, acclimation or husbandry connection.",
+  "accepted": [
+    {
+      "lens_id": "024-732-165-258-531",
+      "decision": "retain",
+      "basis": "Rainbow trout fry vaccine candidate; production-health intervention."
+    },
+    {
+      "lens_id": "106-486-925-595-699",
+      "decision": "retain",
+      "basis": "Atlantic salmon smoltification cage designed for holding and transport; husbandry method."
+    },
+    {
+      "lens_id": "014-981-376-978-47X",
+      "decision": "retain",
+      "basis": "Rainbow trout dietary composition experiment with commercial diet and growth response."
+    },
+    {
+      "lens_id": "026-423-458-275-232",
+      "decision": "retain",
+      "basis": "Coho salmon seawater acclimation following transfer to seawater net pens; production-oriented smolt transfer physiology."
+    },
+    {
+      "lens_id": "029-767-008-186-847",
+      "decision": "retain",
+      "basis": "Pink salmon pen-rearing and growth experiment in a floating net pen."
+    },
+    {
+      "lens_id": "112-443-518-510-202",
+      "decision": "retain",
+      "basis": "Rainbow trout salinity adaptation with growth, mortality and ionoregulation measured in sea cages."
+    },
+    {
+      "lens_id": "081-671-922-300-137",
+      "decision": "retain",
+      "basis": "Seawater-acclimated rainbow trout feeding/digestion study using a commercial diet."
+    },
+    {
+      "lens_id": "020-039-448-163-531",
+      "decision": "retain",
+      "basis": "Hatchery-reared rainbow trout feeding physiology using commercial pellets; no affirmative release/restocking evidence."
+    },
+    {
+      "lens_id": "043-471-234-933-446",
+      "decision": "exclude",
+      "basis": "Masu salmon juveniles are explicitly described as released from fish farms; affirmative hatchery-release context overrides rearing evidence."
+    },
+    {
+      "lens_id": "017-617-938-538-184",
+      "decision": "exclude",
+      "basis": "Hatchery-scale whirling-disease filtration study is tied to Sport Fish Restoration, indicating stocking/release rather than commercial aquaculture."
+    }
+  ],
+  "held_for_other_rule": [
+    {
+      "lens_id": "049-809-078-498-940",
+      "reason": "Controlled co-infection/pathology study; production-health relevance is plausible but not a husbandry intervention."
+    },
+    {
+      "lens_id": "020-817-182-034-238",
+      "reason": "Experimental disease transmission; net pens/ponds appear as inferred transmission settings rather than the actual production context."
+    }
+  ]
+}
