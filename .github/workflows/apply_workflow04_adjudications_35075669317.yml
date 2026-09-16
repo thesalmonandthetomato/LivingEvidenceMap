@@ -1,0 +1,138 @@
+name: Apply Workflow 04 adjudications 35075669317
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply_workflow04_adjudications_35075669317.yml'
+
+permissions:
+  contents: write
+
+env:
+  CANONICAL_BRANCH: canonical-fresh-dedup-v2-2026-09-14
+  ADJUDICATION_FILE: data/adjudication/workflow04_consistency_checking/validation_35075669317.json
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANONICAL_BRANCH }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Apply corrected historical decisions
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          adj_path=Path('${{ env.ADJUDICATION_FILE }}')
+          data=json.loads(adj_path.read_text(encoding='utf-8'))
+          corrections={a['lens_id']:a for a in data['adjudications'] if a['final_adjudication'] != a['historical_decision']}
+          assert len(corrections)==13, len(corrections)
+
+          src=Path('canonical_store/data/canonical/current/repair/records.jsonl')
+          tmp=src.with_suffix('.jsonl.tmp')
+          seen=set(); changed=0; include_delta=0; exclude_delta=0
+
+          with src.open(encoding='utf-8') as fin, tmp.open('w',encoding='utf-8') as fout:
+              for line in fin:
+                  if not line.strip(): continue
+                  r=json.loads(line)
+                  lid=str((r.get('identity') or {}).get('lens_id') or '')
+                  if lid in corrections:
+                      a=corrections[lid]; seen.add(lid)
+                      s=r.setdefault('screening',{})
+                      old='include' if a['historical_decision']=='retain' else 'exclude'
+                      target='include' if a['final_adjudication']=='retain' else 'exclude'
+                      cur=s.get('decision')
+                      if cur not in (old,target):
+                          raise SystemExit(f'{lid}: unexpected canonical decision {cur!r}; expected {old!r} or {target!r}')
+                      s.setdefault('historical_decision_original',old)
+                      entry={
+                          'status':'adjudicated',
+                          'final_decision':a['final_adjudication'],
+                          'canonical_decision':target,
+                          'source':'workflow04_consistency_checking',
+                          'source_validation_run':'35075669317',
+                          'adjudication_date':'2026-09-16',
+                          'rationale':a['rationale']
+                      }
+                      hist=s.setdefault('manual_adjudication_history',[])
+                      if not any(isinstance(x,dict) and x.get('source_validation_run')=='35075669317' for x in hist):
+                          hist.append(entry)
+                      s['manual_adjudication']=entry
+                      if cur != target:
+                          s['decision']=target; changed += 1
+                          if target=='include':
+                              include_delta += 1; exclude_delta -= 1
+                          else:
+                              include_delta -= 1; exclude_delta += 1
+                  fout.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+
+          missing=sorted(set(corrections)-seen)
+          if missing: raise SystemExit(f'Missing correction Lens IDs: {missing}')
+          tmp.replace(src)
+
+          manifest_path=Path('canonical_store/data/canonical/current/repair/manifest.json')
+          m=json.loads(manifest_path.read_text(encoding='utf-8'))
+          hs=m['historical_screening_reconciliation']['summary']
+          if changed:
+              hs['representatives_include'] += include_delta
+              hs['representatives_exclude'] += exclude_delta
+          node=m.setdefault('workflow04_manual_adjudication_corrections',{})
+          node['validation_35075669317']={
+              'applied_at':'2026-09-16',
+              'records_corrected':len(corrections),
+              'records_changed':changed,
+              'include_delta':include_delta,
+              'exclude_delta':exclude_delta,
+              'source':str(adj_path)
+          }
+          manifest_path.write_text(json.dumps(m,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          print(f'PASS: found={len(seen)} changed={changed} include_delta={include_delta} exclude_delta={exclude_delta}')
+          PY
+
+      - name: Validate corrections
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('${{ env.ADJUDICATION_FILE }}').read_text(encoding='utf-8'))
+          expected={a['lens_id']:('include' if a['final_adjudication']=='retain' else 'exclude')
+                    for a in data['adjudications'] if a['final_adjudication'] != a['historical_decision']}
+          found={}
+          with Path('canonical_store/data/canonical/current/repair/records.jsonl').open(encoding='utf-8') as f:
+              for line in f:
+                  r=json.loads(line)
+                  lid=str((r.get('identity') or {}).get('lens_id') or '')
+                  if lid in expected:
+                      s=r.get('screening') or {}
+                      assert s.get('decision')==expected[lid], (lid,s.get('decision'),expected[lid])
+                      ma=s.get('manual_adjudication') or {}
+                      assert ma.get('source_validation_run')=='35075669317'
+                      found[lid]=True
+          assert len(found)==13, len(found)
+          print('PASS: all 13 corrected historical decisions present with adjudication provenance')
+          PY
+
+      - name: Commit canonical corrections
+        run: |
+          set -euo pipefail
+          cd canonical_store
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git commit -m "Apply Workflow 04 adjudications from validation 35075669317"
+          git pull --rebase origin "${CANONICAL_BRANCH}"
+          git push origin HEAD:"${CANONICAL_BRANCH}"
+          git rev-parse HEAD
