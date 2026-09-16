@@ -1,0 +1,12 @@
+{
+  "workflow": "04_relevance_screening",
+  "purpose": "same_sample_prompt_rerun",
+  "source_validation_run": "35027233994",
+  "rerun_id": "35074695069",
+  "sample_size": 200,
+  "same_sample_ids": true,
+  "canonical_branch": "canonical-fresh-dedup-v2-2026-09-14",
+  "canonical_commit": "033c700f37821f53c59cfc09180ee36e5dae16f6",
+  "orchestration_commit": "d01b7c2df865a39cb2e955da46dd20cc2513aa94",
+  "created_at": "2026-09-16T08:38:48Z"
+}
