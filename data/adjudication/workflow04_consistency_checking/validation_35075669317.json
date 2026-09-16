@@ -122,7 +122,14 @@
       "model_decision": "exclude",
       "final_adjudication": "exclude",
       "rationale": "Atlantic salmon and salmon-processing workers are explicit, but the record does not establish that the processed salmon originated from aquaculture; downstream processing alone is insufficient."
+    },
+    {
+      "lens_id": "024-725-813-849-386",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon post-smolts are explicitly studied in tank and cage rearing groups, and the work evaluates routine handling equipment and fish-welfare effects in a production-relevant aquaculture context."
     }
   ],
-  "adjudications_completed": 9
+  "adjudications_completed": 10
 }
