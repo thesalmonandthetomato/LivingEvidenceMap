@@ -173,7 +173,7 @@ jobs:
         shell: Rscript {0}
         run: |
           source_file <- readLines('scripts/updater/workflow_04_relevance_screening.R',warn=FALSE,encoding='UTF-8')
-          start <- grep('^SYSTEM_PROMPT <- paste\\\\($',source_file)
+          start <- which(source_file == 'SYSTEM_PROMPT <- paste(')
           stop <- grep('^PROMPT_VERSION <- ',source_file)
           stopifnot(length(start)==1L,length(stop)==1L,stop>start)
           writeLines(source_file[start:(stop-1L)],'outputs/workflow04_validation_rerun/prompt_R_source.txt')
