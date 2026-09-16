@@ -1,0 +1,312 @@
+name: Workflow 04 - Full corpus audit (parallel)
+
+on:
+  workflow_dispatch:
+    inputs:
+      canonical_branch:
+        description: 'Canonical branch'
+        required: true
+        default: canonical-fresh-dedup-v2-2026-09-14
+        type: string
+      model:
+        description: 'OpenAI model'
+        required: true
+        default: gpt-5.6-luna
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  FRESH_CANONICAL_BRANCH: ${{ inputs.canonical_branch }}
+  OPENAI_RELEVANCE_MODEL: ${{ inputs.model }}
+  AUDIT_CHUNKS: 8
+
+jobs:
+  screen:
+    name: Screen chunk ${{ matrix.chunk }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        chunk: [0,1,2,3,4,5,6,7]
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','stringi','digest'))
+
+      - name: Checkout canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FRESH_CANONICAL_BRANCH }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Build chunk queue
+        shell: Rscript {0}
+        env:
+          CHUNK_INDEX: ${{ matrix.chunk }}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            z <- readLines(path,warn=FALSE,encoding='UTF-8')
+            z <- z[nzchar(trimws(z))]
+            lapply(z,function(v)fromJSON(v,simplifyVector=FALSE))
+          }
+          write_jsonl <- function(rows,path) {
+            dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+            con <- file(path,'wt',encoding='UTF-8'); on.exit(close(con))
+            for(r in rows) writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
+          }
+          records <- read_jsonl('canonical_store/data/canonical/current/repair/records.jsonl')
+          prior_files <- Sys.glob('data/adjudication/workflow04_validation_runs/*/sample_lens_ids.txt')
+          adjudicated_ids <- unique(unlist(lapply(prior_files,function(p) {
+            x <- readLines(p,warn=FALSE,encoding='UTF-8')
+            x[nzchar(trimws(x))]
+          }),use.names=FALSE))
+          eligible <- which(vapply(records,function(r) {
+            d <- r$deduplication %||% list()
+            n <- r$notices %||% NULL
+            publication_ok <- is.null(n) || isTRUE(n$record_downstream_eligible %||% n$downstream_eligible %||% TRUE)
+            as.character(d$status %||% '') %in% c('unique','canonical') && publication_ok
+          },logical(1)))
+          eligible_ids <- vapply(records[eligible],function(r)as.character(r$identity$lens_id),character(1))
+          keep <- !eligible_ids %in% adjudicated_ids
+          idx <- eligible[keep]
+          ids <- eligible_ids[keep]
+          ord <- order(ids)
+          idx <- idx[ord]; ids <- ids[ord]
+          chunk_index <- as.integer(Sys.getenv('CHUNK_INDEX'))
+          chunk_count <- as.integer(Sys.getenv('AUDIT_CHUNKS'))
+          select <- ((seq_along(idx)-1L) %% chunk_count) == chunk_index
+          rows <- records[idx[select]]
+          baseline <- vector('list',length(rows))
+          blinded <- vector('list',length(rows))
+          for(i in seq_along(rows)) {
+            r <- rows[[i]]
+            s <- r$screening %||% list()
+            raw <- as.character(s$decision %||% '')
+            hist <- if(raw=='include') 'retain' else if(raw=='exclude') 'exclude' else ''
+            baseline[[i]] <- list(
+              lens_id=as.character(r$identity$lens_id),
+              historical_decision=hist,
+              historical_decision_raw=raw,
+              previously_screened=nzchar(hist)
+            )
+            b <- r
+            b$workflow04_audit_baseline <- baseline[[i]]
+            b$screening <- list(
+              workflow='04_full_corpus_audit_blinded',
+              status='not_previously_screened',
+              requires_screening=TRUE,
+              publication_status_eligible=TRUE,
+              downstream_eligible=FALSE
+            )
+            blinded[[i]] <- b
+          }
+          root <- sprintf('outputs/chunk_%s',chunk_index)
+          dir.create(root,recursive=TRUE,showWarnings=FALSE)
+          write_jsonl(blinded,file.path(root,'audit_queue.jsonl'))
+          write_jsonl(baseline,file.path(root,'audit_baseline.jsonl'))
+          manifest <- list(
+            audit_run_id='${{ github.run_id }}',
+            chunk_index=chunk_index,
+            chunk_count=chunk_count,
+            canonical_branch=Sys.getenv('FRESH_CANONICAL_BRANCH'),
+            canonical_commit=system('git -C canonical_store rev-parse HEAD',intern=TRUE),
+            eligible_representative_records=length(eligible),
+            prior_validation_records_excluded=length(intersect(eligible_ids,adjudicated_ids)),
+            total_audit_queue_records=length(idx),
+            chunk_records=length(rows),
+            historically_decided_records=sum(vapply(baseline,function(x)isTRUE(x$previously_screened),logical(1))),
+            previously_unscreened_records=sum(!vapply(baseline,function(x)isTRUE(x$previously_screened),logical(1)))
+          )
+          writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(root,'chunk_manifest.json'))
+          cat(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
+
+      - name: Run relevance screening
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CHUNK_INDEX: ${{ matrix.chunk }}
+        run: |
+          set -euo pipefail
+          ROOT="outputs/chunk_${CHUNK_INDEX}"
+          Rscript scripts/updater/workflow_04_relevance_screening.R \
+            --input canonical_store/data/canonical/current/repair/records.jsonl \
+            --queue "$ROOT/audit_queue.jsonl" \
+            --output "$ROOT/screening_results.jsonl" \
+            --checkpoint "$ROOT/checkpoint.json" \
+            --summary "$ROOT/screening_summary.json" \
+            --model "${{ inputs.model }}" \
+            --checkpoint-every 25 \
+            --mode openai
+
+      - name: Upload chunk artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-full-audit-${{ github.run_id }}-chunk-${{ matrix.chunk }}
+          path: outputs/chunk_${{ matrix.chunk }}/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Fail if technical screening failures occurred
+        if: success()
+        shell: Rscript {0}
+        env:
+          CHUNK_INDEX: ${{ matrix.chunk }}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          s <- fromJSON(sprintf('outputs/chunk_%s/screening_summary.json',Sys.getenv('CHUNK_INDEX')),simplifyVector=FALSE)
+          stopifnot(as.integer(s$technical_failures)==0L)
+          cat('PASS: no technical screening failures in chunk',Sys.getenv('CHUNK_INDEX'),'\n')
+
+  aggregate:
+    name: Aggregate audit
+    needs: screen
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Download all chunk artefacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow04-full-audit-${{ github.run_id }}-chunk-*
+          path: downloaded
+          merge-multiple: false
+
+      - name: Aggregate decisions and conflicts
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            z <- readLines(path,warn=FALSE,encoding='UTF-8')
+            z <- z[nzchar(trimws(z))]
+            lapply(z,function(v)fromJSON(v,simplifyVector=FALSE))
+          }
+          roots <- sort(Sys.glob('downloaded/workflow04-full-audit-*-chunk-*'))
+          stopifnot(length(roots)==8L)
+          baselines <- unlist(lapply(roots,function(r)read_jsonl(file.path(r,'audit_baseline.jsonl'))),recursive=FALSE)
+          preds <- unlist(lapply(roots,function(r)read_jsonl(file.path(r,'screening_results.jsonl'))),recursive=FALSE)
+          manifests <- lapply(roots,function(r)fromJSON(file.path(r,'chunk_manifest.json'),simplifyVector=FALSE))
+          summaries <- lapply(roots,function(r)fromJSON(file.path(r,'screening_summary.json'),simplifyVector=FALSE))
+          ids_b <- vapply(baselines,function(x)as.character(x$lens_id),character(1))
+          ids_p <- vapply(preds,function(x)as.character(x$lens_id),character(1))
+          stopifnot(!anyDuplicated(ids_b),!anyDuplicated(ids_p),setequal(ids_b,ids_p))
+          stopifnot(length(preds)==as.integer(manifests[[1]]$total_audit_queue_records))
+          commits <- unique(vapply(manifests,function(x)as.character(x$canonical_commit),character(1)))
+          stopifnot(length(commits)==1L)
+          prompts <- unique(vapply(summaries,function(x)as.character(x$prompt_sha256),character(1)))
+          versions <- unique(vapply(summaries,function(x)as.character(x$prompt_version),character(1)))
+          models <- unique(vapply(summaries,function(x)as.character(x$model),character(1)))
+          stopifnot(length(prompts)==1L,length(versions)==1L,length(models)==1L)
+          bmap <- setNames(baselines,ids_b)
+          pmap <- setNames(preds,ids_p)
+          root <- 'outputs/workflow04_full_corpus_audit'
+          dir.create(root,recursive=TRUE,showWarnings=FALSE)
+          csvq <- function(x) paste0('"',gsub('"','""',as.character(x %||% ''),fixed=TRUE),'"')
+          header <- 'lens_id,historical_decision,model_decision,category,model_reason'
+          con <- file(file.path(root,'audit_decisions.csv'),'wt',encoding='UTF-8')
+          writeLines(header,con)
+          conflict_rows <- uncertain_rows <- new_rows <- character()
+          counts <- list(agreement=0L,conflict=0L,new_retain=0L,new_exclude=0L,new_uncertain=0L,historical_uncertain=0L)
+          for(id in ids_b) {
+            b <- bmap[[id]]; p <- pmap[[id]]
+            h <- as.character(b$historical_decision %||% '')
+            m <- as.character(p$decision %||% '')
+            catg <- if(nzchar(h)) {
+              if(m=='uncertain') 'historical_uncertain' else if(h==m) 'agreement' else 'conflict'
+            } else paste0('new_',m)
+            counts[[catg]] <- counts[[catg]] + 1L
+            row <- paste(vapply(c(id,h,m,catg,p$reason %||% ''),csvq,character(1)),collapse=',')
+            writeLines(row,con)
+            if(catg=='conflict') conflict_rows <- c(conflict_rows,row)
+            if(m=='uncertain') uncertain_rows <- c(uncertain_rows,row)
+            if(!nzchar(h)) new_rows <- c(new_rows,row)
+          }
+          close(con)
+          writeLines(c(header,conflict_rows),file.path(root,'historical_conflicts.csv'))
+          writeLines(c(header,uncertain_rows),file.path(root,'uncertain_records.csv'))
+          writeLines(c(header,new_rows),file.path(root,'previously_unscreened_decisions.csv'))
+          audit_summary <- c(list(
+            audit_run_id='${{ github.run_id }}',
+            canonical_commit=commits[[1]],
+            queue_records=length(preds),
+            eligible_representative_records=as.integer(manifests[[1]]$eligible_representative_records),
+            prior_validation_records_excluded=as.integer(manifests[[1]]$prior_validation_records_excluded),
+            prompt_version=versions[[1]],prompt_sha256=prompts[[1]],model=models[[1]]
+          ),counts)
+          writeLines(toJSON(audit_summary,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(root,'audit_summary.json'))
+          writeLines(toJSON(list(
+            audit_run_id='${{ github.run_id }}',
+            canonical_branch='${{ inputs.canonical_branch }}',
+            canonical_commit=commits[[1]],
+            chunks=8L,
+            prior_validation_records_excluded=as.integer(manifests[[1]]$prior_validation_records_excluded),
+            queue_records=length(preds)
+          ),auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(root,'audit_manifest.json'))
+          source_file <- readLines('scripts/updater/workflow_04_relevance_screening.R',warn=FALSE,encoding='UTF-8')
+          start <- grep('^SYSTEM_PROMPT <- paste\\($',source_file)
+          stop <- grep('^PROMPT_VERSION <- ',source_file)
+          stopifnot(length(start)==1L,length(stop)==1L,stop>start)
+          writeLines(source_file[start:(stop-1L)],file.path(root,'prompt_R_source.txt'))
+          cat(toJSON(audit_summary,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
+
+      - name: Persist full-corpus audit record
+        run: |
+          set -euo pipefail
+          DEST="data/adjudication/workflow04_full_corpus_audits/${{ github.run_id }}"
+          mkdir -p "$DEST"
+          cp outputs/workflow04_full_corpus_audit/audit_manifest.json "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/audit_summary.json "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/audit_decisions.csv "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/historical_conflicts.csv "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/uncertain_records.csv "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/previously_unscreened_decisions.csv "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/prompt_R_source.txt "$DEST/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+nealhaddaway@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "Record Workflow 04 full-corpus audit ${{ github.run_id }}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Upload aggregate audit artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-full-corpus-audit-${{ github.run_id }}
+          path: outputs/workflow04_full_corpus_audit/
+          retention-days: 90
+          if-no-files-found: error
