@@ -1,0 +1,177 @@
+name: Apply Workflow 04 manual corrections and launch next validation
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply_workflow04_manual_corrections_2026_09_16.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  CANONICAL_BRANCH: canonical-fresh-dedup-v2-2026-09-14
+  LEDGER: data/adjudication/workflow04_consistency_checking/validation_35027233994_manual_corrections.json
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Checkout canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANONICAL_BRANCH }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Apply adjudicated corrections to canonical JSON
+        env:
+          LEDGER_PATH: ${{ env.LEDGER }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          ledger=json.loads(Path(os.environ['LEDGER_PATH']).read_text(encoding='utf-8'))
+          corrections={x['lens_id']:x for x in ledger['corrections']}
+          assert len(corrections)==11, len(corrections)
+
+          src=Path('canonical_store/data/canonical/current/repair/records.jsonl')
+          tmp=src.with_suffix('.jsonl.tmp')
+          seen=set()
+          changed=0
+          include_delta=0
+          exclude_delta=0
+
+          with src.open(encoding='utf-8') as fin, tmp.open('w',encoding='utf-8') as fout:
+              for line in fin:
+                  if not line.strip():
+                      continue
+                  r=json.loads(line)
+                  lid=str((r.get('identity') or {}).get('lens_id') or '')
+                  if lid in corrections:
+                      a=corrections[lid]
+                      seen.add(lid)
+                      s=r.setdefault('screening',{})
+                      current=s.get('decision')
+                      expected_old='include' if a['historical_decision']=='retain' else 'exclude'
+                      target='include' if a['final_adjudication']=='retain' else 'exclude'
+                      if current not in (expected_old,target):
+                          raise SystemExit(f'{lid}: current screening decision {current!r} is neither expected historical {expected_old!r} nor target {target!r}')
+                      if 'historical_decision_original' not in s:
+                          s['historical_decision_original']=expected_old
+                      elif s['historical_decision_original'] != expected_old:
+                          raise SystemExit(f'{lid}: conflicting historical_decision_original')
+                      s['manual_adjudication']={
+                          'status':'adjudicated',
+                          'final_decision':a['final_adjudication'],
+                          'canonical_decision':target,
+                          'source':'workflow04_consistency_checking',
+                          'source_validation_run':ledger['source_validation_run'],
+                          'source_rerun':ledger['source_rerun'],
+                          'adjudication_date':ledger['adjudication_date'],
+                          'rationale':a['rationale']
+                      }
+                      if current != target:
+                          s['decision']=target
+                          changed += 1
+                          if target=='include':
+                              include_delta += 1
+                              exclude_delta -= 1
+                          else:
+                              include_delta -= 1
+                              exclude_delta += 1
+                  fout.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+
+          missing=sorted(set(corrections)-seen)
+          if missing:
+              raise SystemExit(f'Missing correction Lens IDs from canonical JSON: {missing}')
+          tmp.replace(src)
+
+          manifest_path=Path('canonical_store/data/canonical/current/repair/manifest.json')
+          m=json.loads(manifest_path.read_text(encoding='utf-8'))
+          hs=m['historical_screening_reconciliation']['summary']
+          # These 11 records are all sampled downstream representatives.
+          if changed:
+              hs['representatives_include'] += include_delta
+              hs['representatives_exclude'] += exclude_delta
+          m['workflow04_manual_adjudication_corrections']={
+              'applied_at':'2026-09-16',
+              'source_validation_run':ledger['source_validation_run'],
+              'source_rerun':ledger['source_rerun'],
+              'records_adjudicated':len(corrections),
+              'historical_decisions_corrected':changed,
+              'include_delta':include_delta,
+              'exclude_delta':exclude_delta,
+              'ledger_path':os.environ['LEDGER_PATH']
+          }
+          manifest_path.write_text(json.dumps(m,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+
+          print(f'PASS: found={len(seen)} corrected={changed} include_delta={include_delta} exclude_delta={exclude_delta}')
+          assert len(seen)==11
+          assert changed in (0,11)
+          if changed==11:
+              assert include_delta==5 and exclude_delta==-5
+          PY
+
+      - name: Validate canonical corrections
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          ledger=json.loads(Path('${{ env.LEDGER }}').read_text(encoding='utf-8'))
+          expected={x['lens_id']:('include' if x['final_adjudication']=='retain' else 'exclude') for x in ledger['corrections']}
+          found={}
+          with Path('canonical_store/data/canonical/current/repair/records.jsonl').open(encoding='utf-8') as f:
+              for line in f:
+                  r=json.loads(line)
+                  lid=str((r.get('identity') or {}).get('lens_id') or '')
+                  if lid in expected:
+                      s=r.get('screening') or {}
+                      assert s.get('decision')==expected[lid], (lid,s.get('decision'),expected[lid])
+                      ma=s.get('manual_adjudication') or {}
+                      assert ma.get('status')=='adjudicated'
+                      assert ma.get('source_validation_run')=='35027233994'
+                      found[lid]=True
+          assert len(found)==11, len(found)
+          print('PASS: all 11 manual corrections are present in canonical JSON with provenance')
+          PY
+
+      - name: Commit canonical corrections
+        id: commit
+        run: |
+          set -euo pipefail
+          cd canonical_store
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No canonical changes required"
+          else
+            git commit -m "Apply Workflow 04 manual screening adjudications"
+            git pull --rebase origin "${CANONICAL_BRANCH}"
+            git push origin HEAD:"${CANONICAL_BRANCH}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "canonical_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Launch next fresh 200 validation sample
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            repos/${{ github.repository }}/actions/workflows/workflow04_relevance_screening.yml/dispatches \
+            -f ref=main \
+            -f 'inputs[mode]=validation_200' \
+            -f 'inputs[canonical_branch]=${{ env.CANONICAL_BRANCH }}' \
+            -f 'inputs[model]=gpt-5.6-luna'
+          echo "PASS: dispatched a fresh non-overlapping 200-record Workflow 04 validation"
