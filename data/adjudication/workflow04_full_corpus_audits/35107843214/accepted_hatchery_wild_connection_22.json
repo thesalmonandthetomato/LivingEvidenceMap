@@ -1,0 +1,54 @@
+{
+  "audit_run_id": "35107843214",
+  "adjudication_type": "hatchery_release_and_wild_aquaculture_connection",
+  "approved_date": "2026-09-16",
+  "rules": [
+    "Hatchery or captive rearing alone does not establish aquaculture relevance where the purpose could be stocking, release or sea-ranching. Retain where production/aquaculture use is explicit, or where the study directly evaluates aquaculture operations, inputs, escapes or impacts.",
+    "Wild eligible salmonids are relevant where salmon farming/aquaculture is a substantive exposure, pressure, source population, production system or explanatory factor being investigated. Generic implications for future commercial rearing are not sufficient by themselves."
+  ],
+  "retain_lens_ids": [
+    "119-708-828-966-104",
+    "072-764-053-466-309",
+    "088-403-176-490-680",
+    "126-385-143-862-732",
+    "061-326-484-522-633",
+    "011-163-081-022-338",
+    "055-042-179-129-059",
+    "016-643-971-261-589",
+    "105-486-398-388-674",
+    "093-266-162-276-328",
+    "194-807-857-248-535",
+    "033-648-922-734-107",
+    "123-038-362-818-525",
+    "030-327-470-379-450",
+    "009-720-872-590-451",
+    "005-181-876-048-752",
+    "094-409-308-515-902",
+    "170-077-641-566-240"
+  ],
+  "exclude_lens_ids": [
+    "074-365-982-850-406",
+    "074-444-082-214-821",
+    "014-726-082-303-903",
+    "094-336-294-310-871"
+  ],
+  "held_for_individual_review": [
+    {
+      "lens_id": "094-269-099-416-550",
+      "reason": "Oregon hatchery steelhead; hatchery purpose is not clear enough from the model rationale to distinguish aquaculture production from stocking/release."
+    },
+    {
+      "lens_id": "020-921-993-188-935",
+      "reason": "Broad review mixes hatcheries, ocean ranching, net penning and feedlot aquaculture; record-level eligibility depends on how substantive the eligible salmon-aquaculture material is."
+    },
+    {
+      "lens_id": "084-529-720-053-133",
+      "reason": "The phrase 'wild and/or farming conditions' may indicate substantive farm context, but the model also relies on affiliation; needs direct title/abstract inspection."
+    }
+  ],
+  "counts": {
+    "retain": 18,
+    "exclude": 4,
+    "held": 3
+  }
+}
