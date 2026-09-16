@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 10,
+  "adjudications_completed": 11,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -112,6 +112,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Atlantic salmon is explicit; the abstract states the response occurs under farming conditions and the experimental fish were reared from first feeding, establishing aquaculture relevance."
+    },
+    {
+      "lens_id": "122-761-944-428-128",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "The study explicitly uses seawater from beneath a commercial salmon cage, so salmon aquaculture is a direct exposure/context relevant to pathogen survival and disease transmission."
     }
   ]
 }
