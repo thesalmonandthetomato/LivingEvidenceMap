@@ -1,0 +1,76 @@
+{
+  "record_type": "workflow04_manual_adjudication_corrections",
+  "source_validation_run": "35027233994",
+  "source_rerun": "35073633839",
+  "adjudicated_by": "human",
+  "adjudication_date": "2026-09-16",
+  "note": "Only records where the human adjudication corrected the historical screening decision are included. Canonical screening decisions should be updated while preserving the original historical decision in provenance.",
+  "corrections": [
+    {
+      "lens_id": "014-167-238-375-914",
+      "historical_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon are explicitly studied in a production feeding experiment through seawater transfer and subsequent seawater rearing."
+    },
+    {
+      "lens_id": "058-566-829-960-546",
+      "historical_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "Imported frozen salmon fillets are explicitly analysed as part of a demand model for imported farmed fish."
+    },
+    {
+      "lens_id": "006-824-741-298-538",
+      "historical_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "Eligible salmon and rainbow trout species are explicitly studied in vaccination experiments using commercial bacterins."
+    },
+    {
+      "lens_id": "036-940-081-952-704",
+      "historical_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout are explicitly studied using a commercial immersion vaccine for aquaculture disease control."
+    },
+    {
+      "lens_id": "010-890-842-482-668",
+      "historical_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon are explicitly studied in a long-term experimental feeding trial using production-relevant diets."
+    },
+    {
+      "lens_id": "044-182-927-353-482",
+      "historical_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "The wild pink salmon study explicitly evaluates mortality risk in relation to salmon-farm parasite treatment practices."
+    },
+    {
+      "lens_id": "126-877-219-150-602",
+      "historical_decision": "retain",
+      "final_adjudication": "exclude",
+      "rationale": "The title describes a cold-water aquaponic system but provides no evidence of an eligible salmon or rainbow trout species."
+    },
+    {
+      "lens_id": "122-693-216-079-730",
+      "historical_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout are explicitly identified and vaccination is explicitly discussed as an aquaculture application."
+    },
+    {
+      "lens_id": "084-499-433-375-67X",
+      "historical_decision": "retain",
+      "final_adjudication": "exclude",
+      "rationale": "The study concerns temporary trapping and holding of pink salmon in a stream for research, with no farming or aquaculture context."
+    },
+    {
+      "lens_id": "068-993-896-830-29X",
+      "historical_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "Atlantic salmon is explicit and the salmon product is stated to have been supplied by a Greek farming and processing unit."
+    },
+    {
+      "lens_id": "016-054-687-040-505",
+      "historical_decision": "retain",
+      "final_adjudication": "exclude",
+      "rationale": "Only generic salmon and trout are identified as enzyme sources; commercially available fish vaccines do not establish an eligible species or eligible salmon aquaculture context."
+    }
+  ]
+}
