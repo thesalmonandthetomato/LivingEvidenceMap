@@ -87,7 +87,14 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Atlantic salmon are explicit and the record identifies aquaculture directly in the metadata; the eligible species is central to pathogen identification rather than incidental."
+    },
+    {
+      "lens_id": "039-241-007-297-875",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "The review substantively considers residues and contaminants in farmed aquaculture species including salmon, so both eligible salmon relevance and aquaculture context are explicit."
     }
   ],
-  "adjudications_completed": 4
+  "adjudications_completed": 5
 }
