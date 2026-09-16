@@ -1,0 +1,14 @@
+{
+  "workflow": "04_relevance_screening",
+  "purpose": "prompt_calibration_against_historical_decisions",
+  "validation_run_id": "35075669317",
+  "sample_size": 200,
+  "sample_seed": 715930982,
+  "sampling_frame_records": 17256,
+  "prior_validation_sample_records_excluded": 400,
+  "sampling_method": "simple_random_sample_without_replacement_from_previously_unsampled_historical_records",
+  "truth_blinded_from_model": true,
+  "canonical_branch": "canonical-fresh-dedup-v2-2026-09-14",
+  "canonical_commit": "e8ba9f3f8577e88130e77f214f5565260e33673f",
+  "created_at": "2026-09-16T08:48:43Z"
+}
