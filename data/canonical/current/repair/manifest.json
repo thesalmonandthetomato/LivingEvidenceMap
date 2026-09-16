@@ -160,8 +160,8 @@
       "historical_decision_ledger_records": 17849,
       "historical_decision_ids_present_in_fresh_records": 17849,
       "historical_decision_ids_absent_from_fresh_records": 0,
-      "representatives_include": 12636,
-      "representatives_exclude": 5023,
+      "representatives_include": 12641,
+      "representatives_exclude": 5018,
       "representatives_not_previously_screened": 4949,
       "representatives_not_previously_screened_publication_blocked": 1,
       "representatives_with_historical_conflict": 0,
@@ -194,6 +194,14 @@
     "historical_decisions_corrected": 11,
     "include_delta": 5,
     "exclude_delta": -5,
-    "ledger_path": "data/adjudication/workflow04_consistency_checking/validation_35027233994_manual_corrections.json"
+    "ledger_path": "data/adjudication/workflow04_consistency_checking/validation_35027233994_manual_corrections.json",
+    "validation_35075669317": {
+      "applied_at": "2026-09-16",
+      "records_corrected": 13,
+      "records_changed": 13,
+      "include_delta": 5,
+      "exclude_delta": -5,
+      "source": "data/adjudication/workflow04_consistency_checking/validation_35075669317.json"
+    }
   }
 }
