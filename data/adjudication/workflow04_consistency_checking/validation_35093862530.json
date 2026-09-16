@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 12,
+  "adjudications_completed": 13,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -126,6 +126,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "The title explicitly defines the material as aquacultured seafood, and salmon is one of the tested matrices, establishing both salmon relevance and aquaculture origin."
+    },
+    {
+      "lens_id": "188-076-487-055-889",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "The chapter explicitly discusses salmon lice on Atlantic salmon in aquaculture and the economic importance of cultured salmonids, establishing direct salmon-aquaculture relevance."
     }
   ]
 }
