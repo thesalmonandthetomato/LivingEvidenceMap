@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 17,
+  "adjudications_completed": 18,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -161,6 +161,13 @@
       "model_decision": "uncertain",
       "final_adjudication": "exclude",
       "rationale": "Rainbow trout is explicit, but the available metadata do not establish a commercial aquaculture or farmed-production context; disease in rainbow trout alone does not satisfy the aquaculture-context criterion."
+    },
+    {
+      "lens_id": "099-711-796-955-948",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "The study explicitly concerns salmon lice as a major aquaculture-industry problem causing fish mortality, reduced growth and treatment costs, so it is directly relevant to salmon aquaculture even though the measured organism is the louse."
     }
   ]
 }
