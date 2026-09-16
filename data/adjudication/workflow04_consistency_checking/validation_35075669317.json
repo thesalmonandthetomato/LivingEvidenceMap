@@ -108,7 +108,14 @@
       "model_decision": "exclude",
       "final_adjudication": "retain",
       "rationale": "Although the chapter concerns South American fur seals, it makes a substantive factual statement about differential interaction with salmon farms compared with South American sea lions. This salmon-farming statement is considered relevant evidence and is retained."
+    },
+    {
+      "lens_id": "179-414-354-985-786",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout are explicit and the study is a production-oriented feeding trial using commercial and experimental diets, with phosphorus loading expressed per tonne of fish produced."
     }
   ],
-  "adjudications_completed": 7
+  "adjudications_completed": 8
 }
