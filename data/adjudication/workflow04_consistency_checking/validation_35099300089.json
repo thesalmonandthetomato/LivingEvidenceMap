@@ -35,7 +35,7 @@
     "conflicts": 10
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 1,
+  "adjudications_completed": 2,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35099300089/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35099300089/sample_decisions.csv",
@@ -49,6 +49,13 @@
       "model_decision": "exclude",
       "final_adjudication": "retain",
       "rationale": "The record explicitly reports mortality of rainbow trout held in sea cages during the harmful algal-bloom event, which is a direct impact on aquaculture even though the paper mainly examines wild rocky-shore fauna."
+    },
+    {
+      "lens_id": "076-137-731-594-194",
+      "historical_decision": "retain",
+      "model_decision": "uncertain",
+      "final_adjudication": "retain",
+      "rationale": "Rainbow trout are explicitly cage-reared, and the source journal is The Progressive Fish-Culturist; the article describes cage construction and an automatic feeder, which together establish an explicit fish-culture/aquaculture rearing context."
     }
   ]
 }
