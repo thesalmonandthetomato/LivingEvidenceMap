@@ -34,12 +34,21 @@
     "uncertain_rate": 0.01,
     "conflicts": 10
   },
-  "adjudication_status": "pending",
-  "adjudications_completed": 0,
+  "adjudication_status": "in_progress",
+  "adjudications_completed": 1,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35099300089/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35099300089/sample_decisions.csv",
     "metrics": "data/adjudication/workflow04_validation_runs/35099300089/validation_metrics.json",
     "prompt": "data/adjudication/workflow04_validation_runs/35099300089/prompt_R_source.txt"
-  }
+  },
+  "adjudications": [
+    {
+      "lens_id": "027-786-732-724-90X",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "The record explicitly reports mortality of rainbow trout held in sea cages during the harmful algal-bloom event, which is a direct impact on aquaculture even though the paper mainly examines wild rocky-shore fauna."
+    }
+  ]
 }
