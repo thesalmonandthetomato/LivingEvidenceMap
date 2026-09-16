@@ -173,5 +173,18 @@
       "rationale": "Chinook salmon are explicit and the study is a 30-week controlled feeding/rearing experiment evaluating dietary lipid replacement in a production-relevant aquaculture context."
     }
   ],
-  "adjudications_completed": 16
+  "adjudications_completed": 16,
+  "post_adjudication_metrics": {
+    "scope_note": "Metrics replace the 16 historical conflict labels with human adjudications; the 184 non-conflict historical labels were not manually re-adjudicated.",
+    "observed_agreement": 0.975,
+    "cohens_kappa": 0.9335,
+    "adjudicated_retain": 151,
+    "adjudicated_exclude": 49,
+    "model_retain": 150,
+    "model_exclude": 47,
+    "model_uncertain": 3,
+    "conflict_model_matches": 11,
+    "remaining_disagreements": 5
+  },
+  "historical_labels_corrected": 13
 }
