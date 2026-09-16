@@ -136,7 +136,14 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Rainbow trout are explicit and the study evaluates dietary DON delivered in commercial pellets, establishing a production-relevant aquaculture feed context."
+    },
+    {
+      "lens_id": "103-431-439-029-061",
+      "historical_decision": "exclude",
+      "model_decision": "uncertain",
+      "final_adjudication": "exclude",
+      "rationale": "Rainbow trout are used as the basis for an in vitro digestive model, but the record does not explicitly establish farmed fish or an aquaculture production context."
     }
   ],
-  "adjudications_completed": 11
+  "adjudications_completed": 12
 }
