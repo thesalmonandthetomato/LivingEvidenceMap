@@ -1,0 +1,24 @@
+{
+  "audit_run_id": "35107843214",
+  "source": "remaining_conflicts_after_accepted_batch_918",
+  "approved_by_user": true,
+  "approved_date": "2026-09-16",
+  "total_records": 139,
+  "retain_records": 83,
+  "exclude_records": 56,
+  "row_number_definition": "1-based row number within historical_conflicts.csv after removing the 918 records already present in accepted_batch_adjudications_918_resolved.json, preserving original CSV order.",
+  "batches": [
+    {
+      "decision": "retain",
+      "n": 83,
+      "rows": "2,10-11,15,20,26,30,43,48,73,77,79,88,100,105,112,115-116,121,124,134,139,147,160,170-171,182,187,189,194,196,205,210,216,219,232,243-244,252,254,256,269-270,272,283,286,292,297,300,308,312,319,325,339,365,374,390-391,396-397,405,413,417-418,424-425,430,447,452,467,478,482,485,488,495,500,502,507,509,514-515,532,542",
+      "label": "second-pass clear retain"
+    },
+    {
+      "decision": "exclude",
+      "n": 56,
+      "rows": "1,6,27,32-33,62,83-85,110,113,125,130,140,142,153,157,164-165,185,201,213,217,242,251,266,278,304,310,323,335,337,344,348-349,360-364,375,398,402,406,416,420,431,435,451,455,493,497,505,511,517,523",
+      "label": "second-pass clear exclude"
+    }
+  ]
+}
