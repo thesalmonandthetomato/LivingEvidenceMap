@@ -11,6 +11,7 @@ on:
         options:
           - validation_200
           - production_queue
+          - full_corpus_audit
       canonical_branch:
         description: 'Canonical branch'
         required: true
@@ -170,6 +171,85 @@ jobs:
           writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(root,'sample_manifest.json'))
           cat(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
 
+
+      - name: Build full-corpus audit queue
+        if: ${{ inputs.mode == 'full_corpus_audit' }}
+        shell: Rscript {0}
+        env:
+          AUDIT_RUN_ID: ${{ github.run_id }}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            z <- readLines(path,warn=FALSE,encoding='UTF-8')
+            z <- z[nzchar(trimws(z))]
+            lapply(z,function(v)fromJSON(v,simplifyVector=FALSE))
+          }
+          write_jsonl <- function(rows,path) {
+            dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+            con <- file(path,'wt',encoding='UTF-8'); on.exit(close(con))
+            for(r in rows) writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
+          }
+          records <- read_jsonl('canonical_store/data/canonical/current/repair/records.jsonl')
+          prior_files <- Sys.glob('data/adjudication/workflow04_validation_runs/*/sample_lens_ids.txt')
+          adjudicated_ids <- unique(unlist(lapply(prior_files,function(p) {
+            x <- readLines(p,warn=FALSE,encoding='UTF-8')
+            x[nzchar(trimws(x))]
+          }),use.names=FALSE))
+          eligible <- which(vapply(records,function(r) {
+            d <- r$deduplication %||% list()
+            n <- r$notices %||% NULL
+            publication_ok <- is.null(n) || isTRUE(n$record_downstream_eligible %||% n$downstream_eligible %||% TRUE)
+            as.character(d$status %||% '') %in% c('unique','canonical') && publication_ok
+          },logical(1)))
+          eligible_ids <- vapply(records[eligible],function(r)as.character(r$identity$lens_id),character(1))
+          keep <- !eligible_ids %in% adjudicated_ids
+          audit_rows <- records[eligible[keep]]
+          baseline <- vector('list',length(audit_rows))
+          blinded <- vector('list',length(audit_rows))
+          for(i in seq_along(audit_rows)) {
+            r <- audit_rows[[i]]
+            s <- r$screening %||% list()
+            raw <- as.character(s$decision %||% '')
+            hist <- if(raw=='include') 'retain' else if(raw=='exclude') 'exclude' else ''
+            baseline[[i]] <- list(
+              lens_id=as.character(r$identity$lens_id),
+              historical_decision=hist,
+              historical_decision_raw=raw,
+              previously_screened=nzchar(hist)
+            )
+            b <- r
+            b$workflow04_audit_baseline <- baseline[[i]]
+            b$screening <- list(
+              workflow='04_full_corpus_audit_blinded',
+              status='not_previously_screened',
+              requires_screening=TRUE,
+              publication_status_eligible=TRUE,
+              downstream_eligible=FALSE
+            )
+            blinded[[i]] <- b
+          }
+          root <- 'outputs/workflow04_full_corpus_audit'
+          dir.create(root,recursive=TRUE,showWarnings=FALSE)
+          write_jsonl(blinded,file.path(root,'audit_queue.jsonl'))
+          write_jsonl(baseline,file.path(root,'audit_baseline.jsonl'))
+          manifest <- list(
+            workflow='04_relevance_screening',
+            purpose='full_corpus_model_audit_excluding_manually_adjudicated_validation_records',
+            audit_run_id=Sys.getenv('AUDIT_RUN_ID'),
+            canonical_branch=Sys.getenv('FRESH_CANONICAL_BRANCH'),
+            canonical_commit=system('git -C canonical_store rev-parse HEAD',intern=TRUE),
+            total_canonical_records=length(records),
+            eligible_representative_records=length(eligible),
+            prior_validation_records_excluded=length(intersect(eligible_ids,adjudicated_ids)),
+            audit_queue_records=length(audit_rows),
+            historically_decided_records=sum(vapply(baseline,function(x)isTRUE(x$previously_screened),logical(1))),
+            previously_unscreened_records=sum(!vapply(baseline,function(x)isTRUE(x$previously_screened),logical(1))),
+            created_at=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ')
+          )
+          writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(root,'audit_manifest.json'))
+          cat(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
+
       - name: Copy production queue
         if: ${{ inputs.mode == 'production_queue' }}
         run: |
@@ -184,6 +264,9 @@ jobs:
           if [ "${{ inputs.mode }}" = "validation_200" ]; then
             ROOT=outputs/workflow04_validation
             QUEUE="$ROOT/validation_queue_200.jsonl"
+          elif [ "${{ inputs.mode }}" = "full_corpus_audit" ]; then
+            ROOT=outputs/workflow04_full_corpus_audit
+            QUEUE="$ROOT/audit_queue.jsonl"
           else
             ROOT=outputs/workflow04_production
             QUEUE="$ROOT/production_queue.jsonl"
@@ -284,6 +367,150 @@ jobs:
           }
           close(con)
           cat(toJSON(metrics,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),'\n')
+
+
+      - name: Build full-corpus audit report
+        if: ${{ inputs.mode == 'full_corpus_audit' }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            z <- readLines(path,warn=FALSE,encoding='UTF-8')
+            z <- z[nzchar(trimws(z))]
+            lapply(z,function(v)fromJSON(v,simplifyVector=FALSE))
+          }
+          root <- 'outputs/workflow04_full_corpus_audit'
+          baseline <- read_jsonl(file.path(root,'audit_baseline.jsonl'))
+          pred <- read_jsonl(file.path(root,'screening_results.jsonl'))
+          bmap <- setNames(baseline,vapply(baseline,function(x)as.character(x$lens_id),character(1)))
+          pmap <- setNames(pred,vapply(pred,function(x)as.character(x$lens_id),character(1)))
+          stopifnot(setequal(names(bmap),names(pmap)))
+          csvq <- function(x) paste0('"',gsub('"','""',as.character(x %||% ''),fixed=TRUE),'"')
+          con <- file(file.path(root,'audit_decisions.csv'),'wt',encoding='UTF-8')
+          writeLines('lens_id,historical_decision,model_decision,category,model_reason',con)
+          counts <- list(agreement=0L,conflict=0L,new_retain=0L,new_exclude=0L,new_uncertain=0L,historical_uncertain=0L)
+          conflict_rows <- character()
+          uncertain_rows <- character()
+          for(id in names(bmap)) {
+            b <- bmap[[id]]; p <- pmap[[id]]
+            h <- as.character(b$historical_decision %||% '')
+            m <- as.character(p$decision %||% '')
+            catg <- if(nzchar(h)) {
+              if(m=='uncertain') 'historical_uncertain' else if(h==m) 'agreement' else 'conflict'
+            } else {
+              paste0('new_',m)
+            }
+            counts[[catg]] <- counts[[catg]] + 1L
+            row <- paste(vapply(c(id,h,m,catg,p$reason %||% ''),csvq,character(1)),collapse=',')
+            writeLines(row,con)
+            if(catg=='conflict') conflict_rows <- c(conflict_rows,row)
+            if(m=='uncertain') uncertain_rows <- c(uncertain_rows,row)
+          }
+          close(con)
+          writeLines(c('lens_id,historical_decision,model_decision,category,model_reason',conflict_rows),
+                     file.path(root,'historical_conflicts.csv'))
+          writeLines(c('lens_id,historical_decision,model_decision,category,model_reason',uncertain_rows),
+                     file.path(root,'uncertain_records.csv'))
+          scr <- fromJSON(file.path(root,'screening_summary.json'),simplifyVector=FALSE)
+          manifest <- fromJSON(file.path(root,'audit_manifest.json'),simplifyVector=FALSE)
+          summary <- c(list(
+            audit_run_id=manifest$audit_run_id,
+            canonical_commit=manifest$canonical_commit,
+            queue_records=manifest$audit_queue_records,
+            prior_validation_records_excluded=manifest$prior_validation_records_excluded,
+            prompt_version=scr$prompt_version,
+            prompt_sha256=scr$prompt_sha256,
+            model=scr$model
+          ),counts)
+          writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     file.path(root,'audit_summary.json'))
+          cat(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
+
+      - name: Save exact prompt text for full-corpus audit
+        if: ${{ inputs.mode == 'full_corpus_audit' }}
+        shell: Rscript {0}
+        run: |
+          source_file <- readLines('scripts/updater/workflow_04_relevance_screening.R',warn=FALSE,encoding='UTF-8')
+          start <- grep('^SYSTEM_PROMPT <- paste\\(
+        if: ${{ inputs.mode == 'validation_200' }}
+        shell: Rscript {0}
+        run: |
+          source_file <- readLines('scripts/updater/workflow_04_relevance_screening.R',warn=FALSE,encoding='UTF-8')
+          start <- grep('^SYSTEM_PROMPT <- paste\\($',source_file)
+          stop <- grep('^PROMPT_VERSION <- ',source_file)
+          stopifnot(length(start)==1L,length(stop)==1L,stop>start)
+          writeLines(source_file[start:(stop-1L)],'outputs/workflow04_validation/prompt_R_source.txt')
+
+      - name: Persist validation run record
+        if: ${{ inputs.mode == 'validation_200' }}
+        run: |
+          set -euo pipefail
+          DEST="data/adjudication/workflow04_validation_runs/${{ github.run_id }}"
+          mkdir -p "$DEST"
+          cp outputs/workflow04_validation/sample_manifest.json "$DEST/"
+          cp outputs/workflow04_validation/validation_metrics.json "$DEST/"
+          cp outputs/workflow04_validation/sample_lens_ids.txt "$DEST/"
+          cp outputs/workflow04_validation/sample_decisions.csv "$DEST/"
+          cp outputs/workflow04_validation/conflicts.csv "$DEST/"
+          cp outputs/workflow04_validation/prompt_R_source.txt "$DEST/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "Record Workflow 04 validation run ${{ github.run_id }}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Upload Workflow 04 validation artefacts
+        if: ${{ inputs.mode == 'validation_200' && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-validation-200-${{ github.run_id }}
+          path: outputs/workflow04_validation/
+          retention-days: 90
+          if-no-files-found: error
+
+
+      - name: Upload Workflow 04 full-corpus audit artefacts
+        if: ${{ inputs.mode == 'full_corpus_audit' && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-full-corpus-audit-${{ github.run_id }}
+          path: outputs/workflow04_full_corpus_audit/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload Workflow 04 production artefacts
+        if: ${{ inputs.mode == 'production_queue' && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-production-${{ github.run_id }}
+          path: outputs/workflow04_production/
+          retention-days: 90
+          if-no-files-found: error
+,source_file)
+          stop <- grep('^PROMPT_VERSION <- ',source_file)
+          stopifnot(length(start)==1L,length(stop)==1L,stop>start)
+          writeLines(source_file[start:(stop-1L)],'outputs/workflow04_full_corpus_audit/prompt_R_source.txt')
+
+      - name: Persist full-corpus audit record
+        if: ${{ inputs.mode == 'full_corpus_audit' }}
+        run: |
+          set -euo pipefail
+          DEST="data/adjudication/workflow04_full_corpus_audits/${{ github.run_id }}"
+          mkdir -p "$DEST"
+          cp outputs/workflow04_full_corpus_audit/audit_manifest.json "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/audit_summary.json "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/audit_decisions.csv "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/historical_conflicts.csv "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/uncertain_records.csv "$DEST/"
+          cp outputs/workflow04_full_corpus_audit/prompt_R_source.txt "$DEST/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "Record Workflow 04 full-corpus audit ${{ github.run_id }}"
+          git pull --rebase origin main
+          git push origin HEAD:main
 
       - name: Save exact prompt text
         if: ${{ inputs.mode == 'validation_200' }}
