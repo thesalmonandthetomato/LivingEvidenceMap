@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 4,
+  "adjudications_completed": 5,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -70,6 +70,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Chinook salmon is explicit, the record states that the species is farmed commercially in New Zealand, and the findings are explicitly linked to possible improvement of commercial farming."
+    },
+    {
+      "lens_id": "107-547-035-512-014",
+      "historical_decision": "exclude",
+      "model_decision": "uncertain",
+      "final_adjudication": "exclude",
+      "rationale": "Atlantic salmon is explicit, but the available metadata do not establish farmed or aquaculture origin; commercial fraud alone does not satisfy the aquaculture-context criterion."
     }
   ]
 }
