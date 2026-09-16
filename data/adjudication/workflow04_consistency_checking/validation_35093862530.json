@@ -35,7 +35,7 @@
     "conflicts": 20
   },
   "adjudication_status": "in_progress",
-  "adjudications_completed": 1,
+  "adjudications_completed": 2,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35093862530/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35093862530/sample_decisions.csv",
@@ -49,6 +49,13 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "Chinook salmon are explicit and the study compares growth and survival during prolonged confinement, including 1.5 years in sea-pens, which is a clear aquaculture rearing context."
+    },
+    {
+      "lens_id": "131-003-744-713-294",
+      "historical_decision": "retain",
+      "model_decision": "exclude",
+      "final_adjudication": "retain",
+      "rationale": "Salmon lice in an aquaculture context are directly relevant to salmon farming even when the organism studied is ballan wrasse or the salmon louse rather than an eligible salmon species."
     }
   ]
 }
