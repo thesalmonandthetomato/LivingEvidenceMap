@@ -1,0 +1,56 @@
+name: Recover Workflow 04 rerun 35073633839
+
+on:
+  push:
+    paths:
+      - '.github/workflows/recover_workflow04_35073633839.yml'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Download completed rerun artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p recovered
+          gh api repos/${{ github.repository }}/actions/artifacts/10436839300/zip > recovered/artifact.zip
+          unzip -q recovered/artifact.zip -d recovered/out
+          test -s recovered/out/validation_metrics.json
+          test -s recovered/out/conflicts.csv
+          test -s recovered/out/sample_lens_ids.txt
+
+      - name: Save exact prompt text
+        shell: Rscript {0}
+        run: |
+          source_file <- readLines('scripts/updater/workflow_04_relevance_screening.R',warn=FALSE,encoding='UTF-8')
+          start <- which(source_file == 'SYSTEM_PROMPT <- paste(')
+          stop <- grep('^PROMPT_VERSION <- ',source_file)
+          stopifnot(length(start)==1L,length(stop)==1L,stop>start)
+          writeLines(source_file[start:(stop-1L)],'recovered/out/prompt_R_source.txt')
+
+      - name: Persist recovered rerun
+        run: |
+          set -euo pipefail
+          DEST="data/adjudication/workflow04_validation_reruns/35073633839"
+          mkdir -p "$DEST"
+          cp recovered/out/sample_manifest.json "$DEST/"
+          cp recovered/out/validation_metrics.json "$DEST/"
+          cp recovered/out/sample_lens_ids.txt "$DEST/"
+          cp recovered/out/conflicts.csv "$DEST/"
+          cp recovered/out/prompt_R_source.txt "$DEST/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "Recover Workflow 04 same-sample rerun 35073633839"
+          git pull --rebase origin main
+          git push origin HEAD:main
