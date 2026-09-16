@@ -34,8 +34,8 @@
     "uncertain_rate": 0.01,
     "conflicts": 10
   },
-  "adjudication_status": "in_progress",
-  "adjudications_completed": 9,
+  "adjudication_status": "complete",
+  "adjudications_completed": 10,
   "source_files": {
     "conflicts": "data/adjudication/workflow04_validation_runs/35099300089/conflicts.csv",
     "decisions": "data/adjudication/workflow04_validation_runs/35099300089/sample_decisions.csv",
@@ -105,6 +105,48 @@
       "model_decision": "retain",
       "final_adjudication": "retain",
       "rationale": "The review explicitly includes salmon aquaculture within its synthesis of aquaculture economics, so salmon farming is a substantive part of the reviewed evidence base."
+    },
+    {
+      "lens_id": "098-657-890-460-115",
+      "historical_decision": "exclude",
+      "model_decision": "retain",
+      "final_adjudication": "exclude",
+      "rationale": "The study is about transgenic common carp. Chum salmon appears only as the source of a growth-hormone gene, so the eligible salmonid is not itself the study organism or aquaculture subject."
     }
-  ]
+  ],
+  "post_adjudication_metrics": {
+    "scope_note": "Metrics replace the 10 historical conflict labels with human adjudications; the 190 non-conflict historical labels were not manually re-adjudicated.",
+    "observed_agreement": 0.975,
+    "cohens_kappa": 0.937,
+    "adjudicated_retain": 147,
+    "adjudicated_exclude": 53,
+    "model_retain": 145,
+    "model_exclude": 53,
+    "model_uncertain": 2,
+    "conflict_model_matches": 5,
+    "remaining_disagreements": 5,
+    "confusion_matrix": [
+      [
+        144,
+        2,
+        1
+      ],
+      [
+        1,
+        51,
+        1
+      ],
+      [
+        0,
+        0,
+        0
+      ]
+    ],
+    "sensitivity_retain": 0.9796,
+    "specificity_exclude": 0.9623,
+    "false_exclusion_rate": 0.0136,
+    "false_retention_rate": 0.0189,
+    "uncertain_rate": 0.01
+  },
+  "historical_labels_corrected": 5
 }
