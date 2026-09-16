@@ -160,8 +160,8 @@
       "historical_decision_ledger_records": 17849,
       "historical_decision_ids_present_in_fresh_records": 17849,
       "historical_decision_ids_absent_from_fresh_records": 0,
-      "representatives_include": 13341,
-      "representatives_exclude": 4318,
+      "representatives_include": 13359,
+      "representatives_exclude": 4300,
       "representatives_not_previously_screened": 4949,
       "representatives_not_previously_screened_publication_blocked": 1,
       "representatives_with_historical_conflict": 0,
@@ -298,6 +298,16 @@
       "include_delta": 18,
       "exclude_delta": -18,
       "source": "data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_hatchery_wild_connection_22.json"
+    },
+    "audit_35107843214_residual_production_impact_23": {
+      "applied_at": "2026-09-16",
+      "records_adjudicated": 23,
+      "retain": 18,
+      "exclude": 5,
+      "records_changed": 18,
+      "include_delta": 18,
+      "exclude_delta": -18,
+      "source": "data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_residual_production_impact_23.json"
     }
   }
 }
