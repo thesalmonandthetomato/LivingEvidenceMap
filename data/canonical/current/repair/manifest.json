@@ -160,8 +160,8 @@
       "historical_decision_ledger_records": 17849,
       "historical_decision_ids_present_in_fresh_records": 17849,
       "historical_decision_ids_absent_from_fresh_records": 0,
-      "representatives_include": 13305,
-      "representatives_exclude": 4354,
+      "representatives_include": 13323,
+      "representatives_exclude": 4336,
       "representatives_not_previously_screened": 4949,
       "representatives_not_previously_screened_publication_blocked": 1,
       "representatives_with_historical_conflict": 0,
@@ -278,6 +278,16 @@
       "include_delta": 37,
       "exclude_delta": -37,
       "source": "data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_product_processing_market_59.json"
+    },
+    "audit_35107843214_metadata_context_38": {
+      "applied_at": "2026-09-16",
+      "records_adjudicated": 38,
+      "retain": 18,
+      "exclude": 20,
+      "records_changed": 18,
+      "include_delta": 18,
+      "exclude_delta": -18,
+      "source": "data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_metadata_only_context_38.json"
     }
   }
 }
