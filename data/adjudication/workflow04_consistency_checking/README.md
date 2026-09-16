@@ -42,3 +42,25 @@ Six historical excludes were adjudicated to **retain** and one remained **exclud
 The full seven-record adjudication trail is stored in `validation_35010609269.json`.
 
 The original files under `data/adjudication/workflow04_validation_runs/35010609269/` remain the immutable raw validation record.
+
+
+## Validation run 35075669317
+
+Prompt: `workflow04-v2-targeted-clarifications`  
+Prompt SHA-256: `3eb903948e355546af85bfb0869a22652af2b711ac5aa4b28994c0964b847b55`  
+Model: `gpt-5.6-luna`  
+Sample: 200 previously unsampled records, seed `715930982`  
+Canonical commit: `e8ba9f3f8577e88130e77f214f5565260e33673f`
+
+### Before conflict adjudication
+
+- observed agreement: **92.0%**
+- Cohen's kappa: **0.7944**
+- conflicts: **16**
+- false exclusions against historical labels: **4**
+- false retentions against historical labels: **9**
+- uncertain decisions: **3**
+- sensitivity: **96.58%**
+- specificity: **79.63%**
+
+Adjudication status: **pending**. The complete conflict set is stored under `data/adjudication/workflow04_validation_runs/35075669317/conflicts.csv`, and the adjudication record is `validation_35075669317.json`.
