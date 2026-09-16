@@ -1,0 +1,54 @@
+{
+  "audit_run_id": "35107843214",
+  "analysis_type": "candidate_batch_adjudication",
+  "status": "proposed_not_applied",
+  "conflicts_total": 1461,
+  "high_confidence_batch_candidates": 918,
+  "proposed_retain": 757,
+  "proposed_exclude": 161,
+  "remaining_conflicts_for_second_pass": 543,
+  "uncertain_records_for_review": 241,
+  "batches": [
+    {
+      "decision": "retain",
+      "label": "explicit farmed/cultured/commercial production",
+      "n": 462
+    },
+    {
+      "decision": "retain",
+      "label": "feed/diet/fishmeal with aquaculture context",
+      "n": 178
+    },
+    {
+      "decision": "retain",
+      "label": "salmon-lice or salmon-farm impact",
+      "n": 103
+    },
+    {
+      "decision": "retain",
+      "label": "genetic engineering/breeding for aquaculture",
+      "n": 10
+    },
+    {
+      "decision": "retain",
+      "label": "explicit net-pen/cage culture",
+      "n": 4
+    },
+    {
+      "decision": "exclude",
+      "label": "no eligible species or generic salmonid only",
+      "n": 57
+    },
+    {
+      "decision": "exclude",
+      "label": "eligible species only background/comparator",
+      "n": 54
+    },
+    {
+      "decision": "exclude",
+      "label": "explicit release/restocking/sea-ranching",
+      "n": 50
+    }
+  ],
+  "note": "Candidate batches were assigned conservatively from the model's recorded reason. No canonical decisions have been changed by this analysis."
+}
