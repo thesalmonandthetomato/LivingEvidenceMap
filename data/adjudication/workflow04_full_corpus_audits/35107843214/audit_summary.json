@@ -1,0 +1,16 @@
+{
+  "audit_run_id": "35107843214",
+  "canonical_commit": "7544189465cd60d081dcb3e9c9dacef6ed4fc099",
+  "queue_records": 21605,
+  "eligible_representative_records": 22605,
+  "prior_validation_records_excluded": 1000,
+  "prompt_version": "workflow04-v3-salmon-lice-clarification",
+  "prompt_sha256": "ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69",
+  "model": "gpt-5.6-luna",
+  "agreement": 15035,
+  "conflict": 1461,
+  "new_retain": 2693,
+  "new_exclude": 2175,
+  "new_uncertain": 81,
+  "historical_uncertain": 160
+}

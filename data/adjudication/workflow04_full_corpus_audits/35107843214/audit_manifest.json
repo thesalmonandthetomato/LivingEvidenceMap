@@ -1,0 +1,8 @@
+{
+  "audit_run_id": "35107843214",
+  "canonical_branch": "canonical-fresh-dedup-v2-2026-09-14",
+  "canonical_commit": "7544189465cd60d081dcb3e9c9dacef6ed4fc099",
+  "chunks": 8,
+  "prior_validation_records_excluded": 1000,
+  "queue_records": 21605
+}
