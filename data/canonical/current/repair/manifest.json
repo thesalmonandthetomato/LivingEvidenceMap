@@ -160,8 +160,8 @@
       "historical_decision_ledger_records": 17849,
       "historical_decision_ids_present_in_fresh_records": 17849,
       "historical_decision_ids_absent_from_fresh_records": 0,
-      "representatives_include": 13257,
-      "representatives_exclude": 4402,
+      "representatives_include": 13284,
+      "representatives_exclude": 4375,
       "representatives_not_previously_screened": 4949,
       "representatives_not_previously_screened_publication_blocked": 1,
       "representatives_with_historical_conflict": 0,
@@ -229,6 +229,15 @@
       "include_delta": 596,
       "exclude_delta": -596,
       "source": "data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_batch_adjudications_918.json"
+    },
+    "audit_35107843214_second_pass_139": {
+      "applied_at": "2026-09-16",
+      "records_adjudicated": 139,
+      "retain": 83,
+      "exclude": 56,
+      "include_delta": 27,
+      "exclude_delta": -27,
+      "source": "data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_second_pass_139.json"
     }
   }
 }
