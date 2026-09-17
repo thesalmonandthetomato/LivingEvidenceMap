@@ -17,7 +17,7 @@
   "records_without_lens_id": 0,
   "batches": 48,
   "canonical_path": "data/canonical/current/repair/records.jsonl",
-  "pipeline_stage": "historical_screening_reconciled",
+  "pipeline_stage": "relevance_screening_complete",
   "fresh_state": {
     "deduplication_present": false,
     "publication_status_present": false,
@@ -160,8 +160,8 @@
       "historical_decision_ledger_records": 17849,
       "historical_decision_ids_present_in_fresh_records": 17849,
       "historical_decision_ids_absent_from_fresh_records": 0,
-      "representatives_include": 13411,
-      "representatives_exclude": 4248,
+      "representatives_include": 16068,
+      "representatives_exclude": 6537,
       "representatives_not_previously_screened": 4949,
       "representatives_not_previously_screened_publication_blocked": 1,
       "representatives_with_historical_conflict": 0,
@@ -340,5 +340,27 @@
       "source": "data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_final_100_reassessed.json",
       "supersedes": "accepted_final_100.json"
     }
+  },
+  "workflow04_relevance_screening_completion": {
+    "workflow": "workflow_04_relevance_screening",
+    "status": "complete",
+    "completed_at": "2026-09-17",
+    "source_audit_run": "35107843214",
+    "eligible_representatives": 22605,
+    "include": 16068,
+    "exclude": 6537,
+    "unresolved": 0,
+    "manual_uncertain_adjudications": 241,
+    "manual_uncertain_retain": 27,
+    "manual_uncertain_exclude": 214,
+    "previously_unscreened_model_decisions_applied": 4868,
+    "previously_unscreened_model_retain": 2693,
+    "previously_unscreened_model_exclude": 2175,
+    "records_changed_manual": 118,
+    "records_changed_model": 4868,
+    "decision_source": "data/adjudication/workflow04_full_corpus_audits/35107843214/workflow04_completion_decisions.json",
+    "model": "gpt-5.6-luna",
+    "prompt_version": "workflow04-v3-salmon-lice-clarification",
+    "prompt_sha256": "ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69"
   }
 }
