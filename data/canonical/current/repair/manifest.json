@@ -160,8 +160,8 @@
       "historical_decision_ledger_records": 17849,
       "historical_decision_ids_present_in_fresh_records": 17849,
       "historical_decision_ids_absent_from_fresh_records": 0,
-      "representatives_include": 13375,
-      "representatives_exclude": 4284,
+      "representatives_include": 13430,
+      "representatives_exclude": 4229,
       "representatives_not_previously_screened": 4949,
       "representatives_not_previously_screened_publication_blocked": 1,
       "representatives_with_historical_conflict": 0,
@@ -318,6 +318,16 @@
       "include_delta": 16,
       "exclude_delta": -16,
       "source": "data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_econ_reviews_wild_24.json"
+    },
+    "audit_35107843214_final_100": {
+      "applied_at": "2026-09-17",
+      "records_adjudicated": 100,
+      "retain": 55,
+      "exclude": 45,
+      "records_changed": 55,
+      "include_delta": 55,
+      "exclude_delta": -55,
+      "source": "data/adjudication/workflow04_full_corpus_audits/35107843214/accepted_final_100.json"
     }
   }
 }
