@@ -1,0 +1,178 @@
+name: Workflow 06 Nano benchmark resume
+
+on:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_nano_resume.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  WF05_ARTIFACT_ID: '10501181612'
+  FAILED_NANO_ARTIFACT_ID: '10518707351'
+  OUTPUT_DIR: outputs/workflow06_nano
+
+jobs:
+  nano_resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::tibble
+
+      - name: Recover failed Nano benchmark artefact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${FAILED_NANO_ARTIFACT_ID}/zip" > /tmp/nano_failed.zip
+          unzip -q /tmp/nano_failed.zip -d "$OUTPUT_DIR"
+          test -s "$OUTPUT_DIR/topic_nano_queue.csv"
+          test -s "$OUTPUT_DIR/topic_nano_reference.csv"
+          test -s "$OUTPUT_DIR/nano_a/topic_v4_checkpoint.rds"
+
+      - name: Remove only failed rows from recovered Nano A checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          p <- 'outputs/workflow06_nano/nano_a/topic_v4_checkpoint.rds'
+          x <- readRDS(p)
+          ok <- unique(x$record_results$record_id[x$record_results$status == 'completed'])
+          x$record_results <- x$record_results[x$record_results$status == 'completed', , drop = FALSE]
+          if (nrow(x$long_results)) x$long_results <- x$long_results[x$long_results$record_id %in% ok, , drop = FALSE]
+          saveRDS(x, p)
+          cat('Recovered', length(ok), 'successful Nano A records; failed records will be retried.\n')
+          RS
+
+      - name: Complete Nano pass A with technical retries
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_nano/topic_nano_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_nano/nano_a
+          TOPIC_MODEL: gpt-5-nano
+          TOPIC_REASONING_EFFORT: medium
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if Rscript R/run_topic_v4_classifier.R; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "Nano A still has technical failures after $attempt attempts" >&2
+              exit 1
+            fi
+            Rscript - <<'RS'
+            p <- 'outputs/workflow06_nano/nano_a/topic_v4_checkpoint.rds'
+            x <- readRDS(p)
+            ok <- unique(x$record_results$record_id[x$record_results$status == 'completed'])
+            x$record_results <- x$record_results[x$record_results$status == 'completed', , drop = FALSE]
+            if (nrow(x$long_results)) x$long_results <- x$long_results[x$long_results$record_id %in% ok, , drop = FALSE]
+            saveRDS(x, p)
+            cat('Retry checkpoint retains', length(ok), 'successful records.\n')
+            RS
+          done
+
+      - name: Run Nano pass B with technical retries
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_nano/topic_nano_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_nano/nano_b
+          TOPIC_MODEL: gpt-5-nano
+          TOPIC_REASONING_EFFORT: medium
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if Rscript R/run_topic_v4_classifier.R; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "Nano B still has technical failures after $attempt attempts" >&2
+              exit 1
+            fi
+            Rscript - <<'RS'
+            p <- 'outputs/workflow06_nano/nano_b/topic_v4_checkpoint.rds'
+            x <- readRDS(p)
+            ok <- unique(x$record_results$record_id[x$record_results$status == 'completed'])
+            x$record_results <- x$record_results[x$record_results$status == 'completed', , drop = FALSE]
+            if (nrow(x$long_results)) x$long_results <- x$long_results[x$long_results$record_id %in% ok, , drop = FALSE]
+            saveRDS(x, p)
+            cat('Retry checkpoint retains', length(ok), 'successful records.\n')
+            RS
+          done
+
+      - name: Compare Nano consistency and historical agreement
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv,json,statistics
+          from collections import defaultdict
+          out='outputs/workflow06_nano'
+          with open(f'{out}/topic_nano_queue.csv',encoding='utf-8-sig',newline='') as f: queue=list(csv.DictReader(f))
+          ids=[r['record_id'] for r in queue]; qby={r['record_id']:r for r in queue}; ref=defaultdict(set)
+          with open(f'{out}/topic_nano_reference.csv',encoding='utf-8-sig',newline='') as f:
+              for r in csv.DictReader(f): ref[r['record_id']].add(r['path_id'])
+          def load(label):
+              pred=defaultdict(set); status={}
+              with open(f'{out}/{label}/topic_classification_records.csv',encoding='utf-8-sig',newline='') as f:
+                  for r in csv.DictReader(f): status[r['record_id']]=r
+              with open(f'{out}/{label}/topic_assignments.csv',encoding='utf-8-sig',newline='') as f:
+                  for r in csv.DictReader(f): pred[r['record_id']].add(r['path_id'])
+              failed=[rid for rid in ids if rid not in status or status[rid].get('status')!='completed']
+              if failed: raise SystemExit(f'{label}: {len(failed)} failures')
+              return pred,status
+          runs={x:load(x) for x in ['nano_a','nano_b']}
+          def compare(A,B):
+              exact=tp=fp=fn=0; js=[]
+              for rid in ids:
+                  x=A[rid]; y=B[rid]; exact+=int(x==y); tp+=len(x&y); fp+=len(y-x); fn+=len(x-y); u=x|y; js.append(len(x&y)/len(u) if u else 1.0)
+              p=tp/(tp+fp) if tp+fp else 1; r=tp/(tp+fn) if tp+fn else 1; f=2*p*r/(p+r) if p+r else 0
+              return {'exact_matches':exact,'exact_agreement':exact/len(ids),'path_precision':p,'path_recall':r,'path_f1':f,'mean_jaccard':sum(js)/len(js)}
+          selfm=compare(runs['nano_a'][0],runs['nano_b'][0])
+          hist=[]
+          for label in ['nano_a','nano_b']:
+              P=runs[label][0]; m=compare(ref,P); counts=[len(P[rid]) for rid in ids]; m.update({'run':label,'mean_topics_per_record':statistics.mean(counts),'median_topics_per_record':statistics.median(counts)}); hist.append(m)
+          summary={'records':50,'seed':20260917,'model':'gpt-5-nano','reasoning_effort':'medium','historical_mean_topics_per_record':statistics.mean([len(ref[r]) for r in ids]),'self_agreement':selfm,'historical_comparisons':hist}
+          with open(f'{out}/nano_consistency_summary.json','w',encoding='utf-8') as f: json.dump(summary,f,indent=2)
+          details=[]; A=runs['nano_a'][0]; B=runs['nano_b'][0]
+          for rid in ids:
+              if A[rid]!=B[rid]: details.append({'record_id':rid,'title':qby[rid]['title'],'nano_a':'; '.join(sorted(A[rid])),'nano_b':'; '.join(sorted(B[rid])),'a_only':'; '.join(sorted(A[rid]-B[rid])),'b_only':'; '.join(sorted(B[rid]-A[rid]))})
+          with open(f'{out}/nano_disagreements.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=['record_id','title','nano_a','nano_b','a_only','b_only']); w.writeheader(); w.writerows(details)
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload resumed Nano benchmark artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-nano-resume-${{ github.run_id }}
+          path: outputs/workflow06_nano/
+          if-no-files-found: error
+          retention-days: 90
