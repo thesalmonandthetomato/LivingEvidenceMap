@@ -36,7 +36,7 @@ jobs:
           test -s inputs/workflow05/records.jsonl
           test -s inputs/workflow05/records_after_species_geography_adjudication.csv
 
-      - name: Reuse historical v3 topic assignments
+      - name: Reuse historical v3 topic assignments and draw validation sample
         shell: bash
         run: |
           set -euo pipefail
@@ -45,9 +45,11 @@ jobs:
             --workflow05-csv inputs/workflow05/records_after_species_geography_adjudication.csv \
             --historical-master 'data/reference/living_evidence_map_master_topic_repaired.csv' \
             --ontology data/reference/topic_ontology_v3.csv \
-            --output-dir "$OUTPUT_DIR"
+            --output-dir "$OUTPUT_DIR" \
+            --validation-sample-size 200 \
+            --validation-seed 20260917
 
-      - name: Validate historical seed and residual queue
+      - name: Validate historical seed, production queue, and validation sample
         shell: bash
         run: |
           set -euo pipefail
@@ -56,14 +58,25 @@ jobs:
           out='outputs/workflow06'
           with open(f'{out}/workflow06_seed_summary.json',encoding='utf-8') as f: s=json.load(f)
           with open(f'{out}/topic_llm_queue.csv',encoding='utf-8-sig',newline='') as f: queue=list(csv.DictReader(f))
+          with open(f'{out}/topic_validation_llm_queue.csv',encoding='utf-8-sig',newline='') as f: validation=list(csv.DictReader(f))
+          with open(f'{out}/topic_validation_reference.csv',encoding='utf-8-sig',newline='') as f: reference=list(csv.DictReader(f))
           with open(f'{out}/topic_assignments_historical.csv',encoding='utf-8-sig',newline='') as f: assignments=list(csv.DictReader(f))
           if s['llm_calls_made'] != 0: raise SystemExit('Historical seed unexpectedly made LLM calls')
           if s['records_with_reused_v3_topics'] + s['records_queued_for_llm'] != s['workflow05_includes']:
-              raise SystemExit('Reuse + queue does not equal Workflow 05 includes')
-          if len(queue) != s['records_queued_for_llm']: raise SystemExit('Queue count mismatch')
-          if len(assignments) != s['historical_topic_assignment_rows']: raise SystemExit('Assignment row count mismatch')
-          ids=[r['record_id'] for r in queue]
-          if len(ids) != len(set(ids)): raise SystemExit('Residual queue contains duplicate record IDs')
+              raise SystemExit('Reuse + production queue does not equal Workflow 05 includes')
+          if len(queue) != s['records_queued_for_llm']: raise SystemExit('Production queue count mismatch')
+          if len(validation) != 200 or s['validation_sample_records'] != 200: raise SystemExit('Validation sample is not exactly 200 records')
+          if len(assignments) != s['historical_topic_assignment_rows']: raise SystemExit('Historical assignment row count mismatch')
+          qids=[r['record_id'] for r in queue]
+          vids=[r['record_id'] for r in validation]
+          rids={r['record_id'] for r in reference}
+          if len(qids) != len(set(qids)): raise SystemExit('Production queue contains duplicate record IDs')
+          if len(vids) != len(set(vids)): raise SystemExit('Validation queue contains duplicate record IDs')
+          if set(qids) & set(vids): raise SystemExit('Validation records overlap the genuinely unassigned production queue')
+          if set(vids) != rids: raise SystemExit('Validation queue/reference record IDs differ')
+          if any(r.get('queue_type') != 'production_unassigned' for r in queue): raise SystemExit('Bad production queue_type')
+          if any(r.get('queue_type') != 'historical_validation' for r in validation): raise SystemExit('Bad validation queue_type')
+          if s['planned_total_llm_records'] != len(queue) + len(validation): raise SystemExit('Planned LLM count mismatch')
           print(json.dumps(s,indent=2))
           PY
 
