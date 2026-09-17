@@ -1,0 +1,206 @@
+name: Workflow 05 - full model rerun from scratch
+
+on:
+  push:
+    branches:
+      - workflow05-species-geography
+    paths:
+      - '.github/workflows/workflow05_full_llm_from_scratch.yml'
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_JSONL: canonical_store/data/canonical/current/repair/records.jsonl
+  OUTPUT_DIR: outputs/workflow05-full-llm
+  MODEL: gpt-5-mini
+  CHUNK_COUNT: '16'
+
+jobs:
+  annotate:
+    name: annotate-${{ matrix.chunk }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        chunk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+    steps:
+      - name: Checkout Workflow 05 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow05-species-geography
+          fetch-depth: 0
+
+      - name: Checkout canonical store from completed Workflow 04
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-dedup-v2-2026-09-14
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Validate canonical Workflow 04 input
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$CANONICAL_JSONL"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('canonical_store/data/canonical/current/repair/manifest.json')
+          m=json.loads(p.read_text(encoding='utf-8'))
+          stage=m.get('pipeline_stage','')
+          print('pipeline_stage:', stage)
+          if stage != 'relevance_screening_complete':
+              raise SystemExit(f'Workflow 04 is not complete: {stage!r}')
+          c=m.get('workflow04_relevance_screening_completion',{})
+          print('workflow04 include:', c.get('include'))
+          print('workflow04 exclude:', c.get('exclude'))
+          print('workflow04 unresolved:', c.get('unresolved'))
+          PY
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::fs
+            any::httr2
+            any::jsonlite
+            any::tibble
+
+      - name: Annotate this chunk from scratch
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_05_full_llm_from_scratch.R \
+            --input "$CANONICAL_JSONL" \
+            --output-dir "$OUTPUT_DIR" \
+            --model "$MODEL" \
+            --chunk-index '${{ matrix.chunk }}' \
+            --chunk-count "$CHUNK_COUNT"
+
+      - name: Report chunk summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="$OUTPUT_DIR/workflow05_full_llm_chunk_$(printf '%02d' '${{ matrix.chunk }}')_summary.json"
+          if [ -s "$f" ]; then cat "$f"; else echo 'No chunk summary produced'; fi
+
+      - name: Upload chunk checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-full-llm-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/workflow05-full-llm/
+          if-no-files-found: warn
+          retention-days: 90
+
+  aggregate:
+    name: aggregate-full-rerun
+    needs: annotate
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all chunk checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow05-full-llm-chunk-*-${{ github.run_id }}
+          path: downloaded
+          merge-multiple: true
+
+      - name: Aggregate and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p aggregate
+          python3 - <<'PY'
+          import csv, glob, json, pathlib, sys
+
+          summaries=[]
+          for p in sorted(glob.glob('downloaded/*_summary.json')):
+              with open(p, encoding='utf-8') as f:
+                  summaries.append(json.load(f))
+
+          jsonl_files=sorted(glob.glob('downloaded/workflow05_full_llm_chunk_*.jsonl'))
+          rows=[]
+          for p in jsonl_files:
+              with open(p, encoding='utf-8') as f:
+                  for line in f:
+                      if line.strip(): rows.append(json.loads(line))
+
+          expected_total = summaries[0]['total_forwarded_records'] if summaries else None
+          expected_chunks = summaries[0]['chunk_count'] if summaries else 16
+          ids=[r['record_id'] for r in rows]
+          failures=sum(bool(r.get('llm_failed')) for r in rows)
+          duplicate_ids=len(ids)-len(set(ids))
+          species_unresolved=sum(r.get('species_status')=='UNRESOLVED' for r in rows)
+          geography_none=sum(r.get('geography_status')=='NONE' for r in rows)
+          geography_unresolved=sum(r.get('geography_status')=='UNRESOLVED' for r in rows)
+
+          out_jsonl=pathlib.Path('aggregate/workflow05_full_llm_annotations.jsonl')
+          with out_jsonl.open('w', encoding='utf-8') as f:
+              for r in sorted(rows, key=lambda x: x['record_sequence']):
+                  f.write(json.dumps(r, ensure_ascii=False, separators=(',',':'))+'\n')
+
+          out_csv=pathlib.Path('aggregate/workflow05_full_llm_annotations.csv')
+          fields=['record_sequence','record_id','screening_decision','model','annotated_at','llm_failed','llm_error','species_status','species_ids','species_reason','geography_status','primary_country_iso3c','geography_reason']
+          with out_csv.open('w', encoding='utf-8', newline='') as f:
+              w=csv.DictWriter(f, fieldnames=fields)
+              w.writeheader()
+              for r in sorted(rows, key=lambda x: x['record_sequence']):
+                  x=dict(r)
+                  x['species_ids']='; '.join(x.get('species_ids') or [])
+                  x['primary_country_iso3c']='; '.join(x.get('primary_country_iso3c') or [])
+                  w.writerow({k:x.get(k,'') for k in fields})
+
+          summary={
+              'workflow':'workflow05_full_llm_from_scratch',
+              'model': summaries[0]['model'] if summaries else None,
+              'expected_chunks': expected_chunks,
+              'chunk_summaries_found': len(summaries),
+              'expected_total_forwarded_records': expected_total,
+              'annotation_rows': len(rows),
+              'unique_record_ids': len(set(ids)),
+              'duplicate_record_ids': duplicate_ids,
+              'technical_failures': failures,
+              'species_unresolved': species_unresolved,
+              'geography_none': geography_none,
+              'geography_unresolved': geography_unresolved,
+              'master_reuse': False,
+              'deterministic_annotation_reuse': False,
+              'fresh_title_abstract_annotation': True
+          }
+          pathlib.Path('aggregate/workflow05_full_llm_summary.json').write_text(json.dumps(summary,indent=2),encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+
+          problems=[]
+          if len(summaries) != expected_chunks: problems.append(f'found {len(summaries)} of {expected_chunks} chunk summaries')
+          if expected_total is None: problems.append('expected total unavailable')
+          elif len(rows) != expected_total: problems.append(f'rows {len(rows)} != expected {expected_total}')
+          if duplicate_ids: problems.append(f'{duplicate_ids} duplicate record IDs')
+          if failures: problems.append(f'{failures} technical LLM failures')
+          if problems:
+              raise SystemExit('FULL RERUN INCOMPLETE: ' + '; '.join(problems))
+          print('PASS: every Workflow 04-forwarded record received a fresh model annotation.')
+          PY
+
+      - name: Upload aggregate artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-full-llm-complete-${{ github.run_id }}
+          path: aggregate/
+          if-no-files-found: warn
+          retention-days: 90
