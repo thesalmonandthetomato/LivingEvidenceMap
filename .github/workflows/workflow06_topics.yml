@@ -1,0 +1,77 @@
+name: Workflow 06 topics
+
+on:
+  push:
+    branches: [workflow06-topic-reuse]
+    paths:
+      - 'scripts/updater/workflow_06_seed_historical_topics.py'
+      - '.github/workflows/workflow06_topics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  WF05_ARTIFACT_ID: '10501181612'
+  OUTPUT_DIR: outputs/workflow06
+
+jobs:
+  historical_seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-topic-reuse
+
+      - name: Download completed Workflow 05 artefact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/workflow05
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${WF05_ARTIFACT_ID}/zip" > /tmp/workflow05.zip
+          unzip -q /tmp/workflow05.zip -d inputs/workflow05
+          test -s inputs/workflow05/records.jsonl
+          test -s inputs/workflow05/records_after_species_geography_adjudication.csv
+
+      - name: Reuse historical v3 topic assignments
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/updater/workflow_06_seed_historical_topics.py \
+            --input-jsonl inputs/workflow05/records.jsonl \
+            --workflow05-csv inputs/workflow05/records_after_species_geography_adjudication.csv \
+            --historical-master 'data/reference/living_evidence_map_master_topic_repaired.csv' \
+            --ontology data/reference/topic_ontology_v3.csv \
+            --output-dir "$OUTPUT_DIR"
+
+      - name: Validate historical seed and residual queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, json
+          out='outputs/workflow06'
+          with open(f'{out}/workflow06_seed_summary.json',encoding='utf-8') as f: s=json.load(f)
+          with open(f'{out}/topic_llm_queue.csv',encoding='utf-8-sig',newline='') as f: queue=list(csv.DictReader(f))
+          with open(f'{out}/topic_assignments_historical.csv',encoding='utf-8-sig',newline='') as f: assignments=list(csv.DictReader(f))
+          if s['llm_calls_made'] != 0: raise SystemExit('Historical seed unexpectedly made LLM calls')
+          if s['records_with_reused_v3_topics'] + s['records_queued_for_llm'] != s['workflow05_includes']:
+              raise SystemExit('Reuse + queue does not equal Workflow 05 includes')
+          if len(queue) != s['records_queued_for_llm']: raise SystemExit('Queue count mismatch')
+          if len(assignments) != s['historical_topic_assignment_rows']: raise SystemExit('Assignment row count mismatch')
+          ids=[r['record_id'] for r in queue]
+          if len(ids) != len(set(ids)): raise SystemExit('Residual queue contains duplicate record IDs')
+          print(json.dumps(s,indent=2))
+          PY
+
+      - name: Upload Workflow 06 historical checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-topics-seed-${{ github.run_id }}
+          path: outputs/workflow06/
+          if-no-files-found: error
+          retention-days: 90
