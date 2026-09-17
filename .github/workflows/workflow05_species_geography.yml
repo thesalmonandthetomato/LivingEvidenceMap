@@ -1,0 +1,119 @@
+name: Workflow 05 - species and geography annotation
+
+on:
+  workflow_dispatch:
+    inputs:
+      input_path:
+        description: 'CSV of relevance-retained records to annotate'
+        required: true
+        type: string
+      output_dir:
+        description: 'Output directory for Workflow 05 artefacts'
+        required: false
+        default: 'outputs/workflow05'
+        type: string
+      master_path:
+        description: 'Production master used to reuse existing annotations'
+        required: false
+        default: 'data/master/current/living_evidence_map_master.csv'
+        type: string
+      llm_mode:
+        description: 'off = zero API calls; new-only = call LLM only for unresolved dimensions not reusable from master'
+        required: false
+        default: 'off'
+        type: choice
+        options:
+          - 'off'
+          - 'new-only'
+      max_llm_records:
+        description: 'Safety cap on records sent to the LLM; 0 means no cap. Ignored when llm_mode=off.'
+        required: false
+        default: '0'
+        type: string
+      model:
+        description: 'OpenAI annotation model used only when llm_mode=new-only'
+        required: false
+        default: 'gpt-5-mini'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  annotate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate requested paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f '${{ inputs.input_path }}' || { echo 'Input path does not exist: ${{ inputs.input_path }}' >&2; exit 1; }
+          test -f '${{ inputs.master_path }}' || { echo 'Master path does not exist: ${{ inputs.master_path }}' >&2; exit 1; }
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::fs
+            any::here
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::stringi
+            any::stringr
+            any::tibble
+            any::tidyr
+            any::yaml
+
+      - name: Run Workflow 05
+        env:
+          OPENAI_API_KEY: ${{ inputs.llm_mode == 'new-only' && secrets.OPENAI_API_KEY || '' }}
+        run: |
+          Rscript scripts/updater/workflow_05_species_geography.R \
+            --input '${{ inputs.input_path }}' \
+            --master '${{ inputs.master_path }}' \
+            --output-dir '${{ inputs.output_dir }}' \
+            --llm-mode '${{ inputs.llm_mode }}' \
+            --max-llm-records '${{ inputs.max_llm_records }}' \
+            --model '${{ inputs.model }}'
+
+      - name: Validate outputs and report API exposure
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary='${{ inputs.output_dir }}/workflow05_summary.json'
+          final='${{ inputs.output_dir }}/records_after_species_geography_adjudication.csv'
+          review='${{ inputs.output_dir }}/workflow05_human_review_queue.csv'
+          test -s "$summary"
+          test -s "$final"
+          python3 - "$summary" <<'PY'
+          import json, sys
+          p=sys.argv[1]
+          x=json.load(open(p, encoding='utf-8'))
+          print('Workflow 05 summary')
+          for k in ['records','master_matches','species_reused_from_master','geography_reused_from_master','species_deterministic_records','geography_deterministic_records','adjudication_queue_records','llm_calls_attempted','llm_failures','human_review_records','complete']:
+              print(f'{k}: {x.get(k)}')
+          if x.get('llm_mode') == 'off' and x.get('llm_calls_attempted') != 0:
+              raise SystemExit('FAIL: llm_mode=off but summary reports LLM calls')
+          if x.get('llm_failures',0):
+              raise SystemExit('FAIL: technical LLM failures occurred')
+          PY
+          echo "Human review queue: $review"
+
+      - name: Upload Workflow 05 artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-species-geography-${{ github.run_id }}
+          path: ${{ inputs.output_dir }}/
+          if-no-files-found: error
+          retention-days: 90
