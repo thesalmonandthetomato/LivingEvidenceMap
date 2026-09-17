@@ -1,0 +1,46 @@
+name: Patch radial definitions
+
+on:
+  push:
+    paths:
+      - 'workflow-fixes/radial-definition-trigger.txt'
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'Run radial definition fallback patch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch fallback definitions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('docs/dashboard-redesign-temp.html')
+          s = p.read_text()
+          old = "  var def=(window.D && D.topic_definitions && D.topic_definitions[key]) || 'No definition is available for this topic.';"
+          new = """  var defs=(window.D && D.topic_definitions) || {};
+  var def=defs[key];
+  if(!def){
+    var kids=(d.children||[]).map(function(c){return c&&c.data&&c.data.name;}).filter(Boolean);
+    if(kids.length){
+      var shown=kids.slice(0,8);
+      def='Research classified under '+d.data.name+', including '+shown.join(', ')+(kids.length>shown.length?', and other subtopics.':'.');
+    }else{
+      var descendants=Object.keys(defs).filter(function(k){return k.indexOf(key+' > ')===0;});
+      def=descendants.length?'Research classified under '+d.data.name+'. More specific definitions are available for topics within this branch.':'Research classified under '+d.data.name+'.';
+    }
+  }"""
+          if old not in s:
+              raise SystemExit('Expected radial definition line not found; no change made')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/dashboard-redesign-temp.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'Fix missing parent topic definitions in radial dashboard'
+          git push
