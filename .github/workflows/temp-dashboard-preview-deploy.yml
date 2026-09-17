@@ -5,9 +5,11 @@ on:
     branches: [main]
     paths:
       - "docs/dashboard-redesign-temp.html"
+      - "docs/dashboard-topic-definitions.json"
       - "config/dashboard_redesign_manifest.json"
       - "scripts/validate_dashboard_redesign.py"
       - "scripts/promote_dashboard_redesign.py"
+      - "scripts/augment_dashboard_topic_definitions.py"
       - "data/master/current/living_evidence_map_master CORRECTED.csv"
       - ".github/workflows/temp-dashboard-preview-deploy.yml"
       - "scripts/build_dashboard.py"
@@ -61,6 +63,7 @@ jobs:
           python scripts/augment_dashboard_data.py
           python scripts/patch_dashboard_feedback_data.py
           python scripts/augment_dashboard_update_metrics.py
+          python scripts/augment_dashboard_topic_definitions.py
           python scripts/validate_dashboard_data.py
 
       - name: Save corrected preview data and restore production data
