@@ -3,9 +3,10 @@ name: Workflow 05 - species and geography annotation
 on:
   workflow_dispatch:
     inputs:
-      input_path:
-        description: 'CSV of relevance-retained records to annotate'
-        required: true
+      canonical_branch:
+        description: 'Canonical branch containing the completed Workflow 04 JSONL'
+        required: false
+        default: 'canonical-fresh-dedup-v2-2026-09-14'
         type: string
       output_dir:
         description: 'Output directory for Workflow 05 artefacts'
@@ -13,12 +14,12 @@ on:
         default: 'outputs/workflow05'
         type: string
       master_path:
-        description: 'Production master used to reuse existing annotations'
+        description: 'Production master CSV used to reuse existing annotations'
         required: false
         default: 'data/master/current/living_evidence_map_master.csv'
         type: string
       llm_mode:
-        description: 'off = zero API calls; new-only = call LLM only for unresolved dimensions not reusable from master'
+        description: 'off = zero API calls; new-only = call LLM only for unresolved non-reused dimensions'
         required: false
         default: 'off'
         type: choice
@@ -39,18 +40,47 @@ on:
 permissions:
   contents: read
 
+env:
+  CANONICAL_JSONL: canonical_store/data/canonical/current/repair/records.jsonl
+
 jobs:
   annotate:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout pipeline code and production master
+        uses: actions/checkout@v4
+        with:
+          ref: workflow05-species-geography
+          fetch-depth: 0
 
-      - name: Validate requested paths
+      - name: Checkout canonical store from Workflow 04
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.canonical_branch }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Validate canonical input and master
         shell: bash
         run: |
           set -euo pipefail
-          test -f '${{ inputs.input_path }}' || { echo 'Input path does not exist: ${{ inputs.input_path }}' >&2; exit 1; }
-          test -f '${{ inputs.master_path }}' || { echo 'Master path does not exist: ${{ inputs.master_path }}' >&2; exit 1; }
+          test -s "$CANONICAL_JSONL" || { echo "Canonical Workflow 04 JSONL missing: $CANONICAL_JSONL" >&2; exit 1; }
+          test -s '${{ inputs.master_path }}' || { echo 'Master CSV missing: ${{ inputs.master_path }}' >&2; exit 1; }
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('canonical_store/data/canonical/current/repair/manifest.json')
+          m=json.loads(p.read_text())
+          stage=m.get('pipeline_stage')
+          if stage != 'relevance_screening_complete':
+              raise SystemExit(f'Canonical branch is not Workflow-04 complete: pipeline_stage={stage!r}')
+          c=m.get('workflow04_relevance_screening_completion',{})
+          if c.get('unresolved') != 0:
+              raise SystemExit(f'Workflow 04 still has unresolved records: {c.get("unresolved")}')
+          print(f'PASS: canonical Workflow 04 complete; include={c.get("include")}; exclude={c.get("exclude")}')
+          PY
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
@@ -74,38 +104,45 @@ jobs:
             any::tidyr
             any::yaml
 
-      - name: Run Workflow 05
+      - name: Run Workflow 05 from canonical JSONL
         env:
           OPENAI_API_KEY: ${{ inputs.llm_mode == 'new-only' && secrets.OPENAI_API_KEY || '' }}
         run: |
           Rscript scripts/updater/workflow_05_species_geography.R \
-            --input '${{ inputs.input_path }}' \
+            --input "$CANONICAL_JSONL" \
             --master '${{ inputs.master_path }}' \
             --output-dir '${{ inputs.output_dir }}' \
             --llm-mode '${{ inputs.llm_mode }}' \
             --max-llm-records '${{ inputs.max_llm_records }}' \
             --model '${{ inputs.model }}'
 
-      - name: Validate outputs and report API exposure
+      - name: Validate outputs and API exposure
         shell: bash
         run: |
           set -euo pipefail
           summary='${{ inputs.output_dir }}/workflow05_summary.json'
-          final='${{ inputs.output_dir }}/records_after_species_geography_adjudication.csv'
+          final='${{ inputs.output_dir }}/records.jsonl'
           review='${{ inputs.output_dir }}/workflow05_human_review_queue.csv'
           test -s "$summary"
           test -s "$final"
-          python3 - "$summary" <<'PY'
+          python3 - "$summary" "$final" <<'PY'
           import json, sys
-          p=sys.argv[1]
-          x=json.load(open(p, encoding='utf-8'))
+          from pathlib import Path
+          summary_path, final_path = map(Path, sys.argv[1:])
+          x=json.loads(summary_path.read_text())
           print('Workflow 05 summary')
-          for k in ['records','master_matches','species_reused_from_master','geography_reused_from_master','species_deterministic_records','geography_deterministic_records','adjudication_queue_records','llm_calls_attempted','llm_failures','human_review_records','complete']:
+          for k in ['canonical_records','annotation_targets','master_matches','species_reused_from_master','geography_reused_from_master','species_deterministic_records','geography_deterministic_records','adjudication_queue_records','llm_calls_attempted','llm_failures','human_review_records','complete']:
               print(f'{k}: {x.get(k)}')
+          if x.get('annotation_targets') != 16068:
+              raise SystemExit(f'FAIL: expected 16068 Workflow-04 included representatives, got {x.get("annotation_targets")}')
           if x.get('llm_mode') == 'off' and x.get('llm_calls_attempted') != 0:
               raise SystemExit('FAIL: llm_mode=off but summary reports LLM calls')
           if x.get('llm_failures',0):
               raise SystemExit('FAIL: technical LLM failures occurred')
+          n=sum(1 for line in final_path.open() if line.strip())
+          if n != x.get('canonical_records'):
+              raise SystemExit(f'FAIL: output JSONL lines={n}, expected={x.get("canonical_records")}')
+          print('PASS: canonical JSONL preserved and Workflow 05 output validated')
           PY
           echo "Human review queue: $review"
 
