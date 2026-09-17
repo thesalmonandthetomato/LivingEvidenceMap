@@ -5,11 +5,18 @@ No LLM calls are made here. Existing v3 topic assignments are inherited only
 when the current included record has a unique, unambiguous exact match by
 record_id, normalised DOI, or normalised title. Records without non-empty v3
 paths remain in the residual queue for later classification.
+
+A reproducible random validation sample is also drawn from records with reused
+v3 assignments. These records are written to a separate validation queue so a
+later LLM stage can classify them independently and compare the new assignments
+against the inherited historical reference without altering the production
+assignment.
 """
 
 import argparse
 import csv
 import json
+import random
 import re
 import unicodedata
 from collections import Counter, defaultdict
@@ -70,6 +77,13 @@ def record_title(rec):
     if canonical.get("title"):
         return clean(canonical.get("title"))
     return clean(((rec.get("lens") or {}).get("raw_payload") or {}).get("title"))
+
+
+def record_abstract(rec):
+    canonical = rec.get("canonical") or {}
+    if canonical.get("abstract"):
+        return clean(canonical.get("abstract"))
+    return clean(((rec.get("lens") or {}).get("raw_payload") or {}).get("abstract"))
 
 
 def load_included_ids(path):
@@ -147,7 +161,6 @@ def choose_historical_match(current, rows, indexes):
         hits = indexes[method].get(value, [])
         if not hits:
             continue
-        # Topic reuse requires a non-empty v3 assignment.
         usable = [rows[i] for i in hits if rows[i]["path_ids"]]
         if len(usable) == 1:
             return method, usable[0]
@@ -166,7 +179,12 @@ def main():
     parser.add_argument("--historical-master", required=True)
     parser.add_argument("--ontology", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--validation-sample-size", type=int, default=200)
+    parser.add_argument("--validation-seed", type=int, default=20260917)
     args = parser.parse_args()
+
+    if args.validation_sample_size < 0:
+        raise RuntimeError("Validation sample size must be >= 0")
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -183,6 +201,7 @@ def main():
     matches = {}
     method_counts = Counter()
     canonical_records = []
+    record_lookup = {}
 
     with open(args.input_jsonl, encoding="utf-8") as handle:
         for line in handle:
@@ -210,15 +229,27 @@ def main():
                     matches[rid] = (method, source)
                     method_counts[method] += 1
             canonical_records.append(rec)
+            record_lookup[rid] = rec
 
-    canonical_ids = {record_id(rec) for rec in canonical_records}
+    canonical_ids = set(record_lookup)
     missing = sorted(included_set - canonical_ids)
     if missing:
         raise RuntimeError(f"{len(missing)} Workflow 05 includes are absent from canonical JSON")
 
+    reusable_ids = sorted(matches)
+    if args.validation_sample_size > len(reusable_ids):
+        raise RuntimeError(
+            f"Validation sample size {args.validation_sample_size} exceeds reusable topic records {len(reusable_ids)}"
+        )
+    rng = random.Random(args.validation_seed)
+    validation_ids = set(rng.sample(reusable_ids, args.validation_sample_size))
+
     queue_rows = []
+    validation_queue_rows = []
+    validation_reference_rows = []
     assignment_rows = []
     output_jsonl = output_dir / "records.jsonl"
+
     with open(output_jsonl, "w", encoding="utf-8") as out:
         for rec in canonical_records:
             rid = record_id(rec)
@@ -243,6 +274,7 @@ def main():
                     "historical_assignment_sources": source["assignment_sources"],
                     "review_required": source["review_required"],
                     "review_reason": source["review_reason"],
+                    "validation_resample": rid in validation_ids,
                 }
                 for pid, path in zip(source["path_ids"], source["hierarchy_paths"]):
                     assignment_rows.append({
@@ -256,6 +288,23 @@ def main():
                         "review_required": source["review_required"],
                         "review_reason": source["review_reason"] or "",
                     })
+                if rid in validation_ids:
+                    validation_queue_rows.append({
+                        "record_id": rid,
+                        "title": record_title(rec),
+                        "abstract": record_abstract(rec),
+                        "doi": record_doi(rec),
+                        "queue_type": "historical_validation",
+                    })
+                    for pid, path in zip(source["path_ids"], source["hierarchy_paths"]):
+                        validation_reference_rows.append({
+                            "record_id": rid,
+                            "path_id": pid,
+                            "hierarchy_path": path,
+                            "match_method": method,
+                            "source_record_id": source["record_id"],
+                            "source_row": source["source_row"],
+                        })
             else:
                 rec["topics"] = {
                     "workflow": "workflow_06_topics",
@@ -264,8 +313,9 @@ def main():
                 queue_rows.append({
                     "record_id": rid,
                     "title": record_title(rec),
-                    "abstract": clean((rec.get("canonical") or {}).get("abstract")),
+                    "abstract": record_abstract(rec),
                     "doi": record_doi(rec),
+                    "queue_type": "production_unassigned",
                 })
             out.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
 
@@ -278,10 +328,22 @@ def main():
         writer.writeheader()
         writer.writerows(assignment_rows)
 
+    queue_fields = ["record_id", "title", "abstract", "doi", "queue_type"]
     with open(output_dir / "topic_llm_queue.csv", "w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["record_id", "title", "abstract", "doi"])
+        writer = csv.DictWriter(handle, fieldnames=queue_fields)
         writer.writeheader()
         writer.writerows(queue_rows)
+
+    with open(output_dir / "topic_validation_llm_queue.csv", "w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=queue_fields)
+        writer.writeheader()
+        writer.writerows(validation_queue_rows)
+
+    reference_fields = ["record_id", "path_id", "hierarchy_path", "match_method", "source_record_id", "source_row"]
+    with open(output_dir / "topic_validation_reference.csv", "w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=reference_fields)
+        writer.writeheader()
+        writer.writerows(validation_reference_rows)
 
     summary = {
         "workflow": "workflow_06_topics",
@@ -292,11 +354,15 @@ def main():
         "reused_v3_fraction": round(len(matches) / len(included_ids), 6) if included_ids else 0,
         "historical_topic_assignment_rows": len(assignment_rows),
         "records_queued_for_llm": len(queue_rows),
+        "validation_sample_records": len(validation_queue_rows),
+        "validation_reference_assignment_rows": len(validation_reference_rows),
+        "validation_seed": args.validation_seed,
+        "planned_total_llm_records": len(queue_rows) + len(validation_queue_rows),
         "match_methods": dict(sorted(method_counts.items())),
         "historical_source": "data/reference/living_evidence_map_master_topic_repaired.csv",
         "ontology": args.ontology,
         "llm_calls_made": 0,
-        "safety_rule": "Only non-empty v3 path assignments from unique exact matches, or duplicate exact matches with identical topic payloads, are reused.",
+        "safety_rule": "Only non-empty v3 path assignments from unique exact matches, or duplicate exact matches with identical topic payloads, are reused. Validation resampling does not overwrite inherited production assignments.",
     }
     with open(output_dir / "workflow06_seed_summary.json", "w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2, ensure_ascii=False)
