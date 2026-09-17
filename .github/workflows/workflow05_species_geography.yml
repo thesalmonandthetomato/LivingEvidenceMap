@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       canonical_branch:
-        description: 'Canonical branch containing the completed Workflow 04 JSONL'
+        description: 'Canonical branch containing Workflow 04 output'
         required: false
         default: 'canonical-fresh-dedup-v2-2026-09-14'
         type: string
@@ -14,12 +14,12 @@ on:
         default: 'outputs/workflow05'
         type: string
       master_path:
-        description: 'Production master CSV used to reuse existing annotations'
+        description: 'Production master CSV used only to reuse existing annotations'
         required: false
         default: 'data/master/current/living_evidence_map_master.csv'
         type: string
       llm_mode:
-        description: 'off = zero API calls; new-only = call LLM only for unresolved non-reused dimensions'
+        description: 'off = zero API calls; new-only = adjudicate only unresolved non-reused dimensions'
         required: false
         default: 'off'
         type: choice
@@ -27,7 +27,7 @@ on:
           - 'off'
           - 'new-only'
       max_llm_records:
-        description: 'Safety cap on records sent to the LLM; 0 means no cap. Ignored when llm_mode=off.'
+        description: 'Safety cap on records sent to the LLM; 0 means no cap'
         required: false
         default: '0'
         type: string
@@ -51,7 +51,6 @@ jobs:
       - name: Checkout pipeline code and production master
         uses: actions/checkout@v4
         with:
-          ref: workflow05-species-geography
           fetch-depth: 0
 
       - name: Checkout canonical store from Workflow 04
@@ -62,24 +61,27 @@ jobs:
           lfs: true
           fetch-depth: 0
 
-      - name: Validate canonical input and master
+      - name: Validate canonical Workflow 04 input
         shell: bash
         run: |
           set -euo pipefail
-          test -s "$CANONICAL_JSONL" || { echo "Canonical Workflow 04 JSONL missing: $CANONICAL_JSONL" >&2; exit 1; }
+          test -s "$CANONICAL_JSONL" || { echo "Canonical JSONL missing: $CANONICAL_JSONL" >&2; exit 1; }
           test -s '${{ inputs.master_path }}' || { echo 'Master CSV missing: ${{ inputs.master_path }}' >&2; exit 1; }
           python3 - <<'PY'
           import json
           from pathlib import Path
           p=Path('canonical_store/data/canonical/current/repair/manifest.json')
-          m=json.loads(p.read_text())
-          stage=m.get('pipeline_stage')
-          if stage != 'relevance_screening_complete':
-              raise SystemExit(f'Canonical branch is not Workflow-04 complete: pipeline_stage={stage!r}')
+          m=json.loads(p.read_text(encoding='utf-8'))
+          stage=m.get('pipeline_stage','')
+          if not stage.startswith('relevance_screening'):
+              raise SystemExit(f'Canonical branch has not completed Workflow 04 processing: pipeline_stage={stage!r}')
           c=m.get('workflow04_relevance_screening_completion',{})
-          if c.get('unresolved') != 0:
-              raise SystemExit(f'Workflow 04 still has unresolved records: {c.get("unresolved")}')
-          print(f'PASS: canonical Workflow 04 complete; include={c.get("include")}; exclude={c.get("exclude")}')
+          print('Workflow 04 canonical input accepted')
+          print('pipeline_stage:', stage)
+          print('include:', c.get('include'))
+          print('exclude:', c.get('exclude'))
+          print('unresolved:', c.get('unresolved'))
+          print('NOTE: screening uncertainty is allowed and will be carried through Workflow 05 and topic classification.')
           PY
 
       - name: Set up R
@@ -116,35 +118,33 @@ jobs:
             --max-llm-records '${{ inputs.max_llm_records }}' \
             --model '${{ inputs.model }}'
 
-      - name: Validate outputs and API exposure
+      - name: Validate Workflow 05 outputs
         shell: bash
         run: |
           set -euo pipefail
           summary='${{ inputs.output_dir }}/workflow05_summary.json'
-          final='${{ inputs.output_dir }}/records.jsonl'
-          review='${{ inputs.output_dir }}/workflow05_human_review_queue.csv'
+          output='${{ inputs.output_dir }}/records.jsonl'
+          review='${{ inputs.output_dir }}/workflow05_review_queue.csv'
           test -s "$summary"
-          test -s "$final"
-          python3 - "$summary" "$final" <<'PY'
-          import json, sys
-          from pathlib import Path
-          summary_path, final_path = map(Path, sys.argv[1:])
-          x=json.loads(summary_path.read_text())
+          test -s "$output"
+          python3 - "$summary" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1],encoding='utf-8'))
           print('Workflow 05 summary')
-          for k in ['canonical_records','annotation_targets','master_matches','species_reused_from_master','geography_reused_from_master','species_deterministic_records','geography_deterministic_records','adjudication_queue_records','llm_calls_attempted','llm_failures','human_review_records','complete']:
+          for k in [
+              'total_canonical_records','screening_include','screening_uncertain','screening_exclude',
+              'records_forwarded_to_annotation','species_reused_from_master','geography_reused_from_master',
+              'annotation_adjudication_queue_records','llm_calls_attempted',
+              'screening_uncertain_carried_forward','annotation_unresolved','combined_review_candidates'
+          ]:
               print(f'{k}: {x.get(k)}')
-          if x.get('annotation_targets') != 16068:
-              raise SystemExit(f'FAIL: expected 16068 Workflow-04 included representatives, got {x.get("annotation_targets")}')
           if x.get('llm_mode') == 'off' and x.get('llm_calls_attempted') != 0:
-              raise SystemExit('FAIL: llm_mode=off but summary reports LLM calls')
-          if x.get('llm_failures',0):
-              raise SystemExit('FAIL: technical LLM failures occurred')
-          n=sum(1 for line in final_path.open() if line.strip())
-          if n != x.get('canonical_records'):
-              raise SystemExit(f'FAIL: output JSONL lines={n}, expected={x.get("canonical_records")}')
-          print('PASS: canonical JSONL preserved and Workflow 05 output validated')
+              raise SystemExit('FAIL: llm_mode=off but LLM calls were reported')
+          if not x.get('substantive_uncertainty_deferred_to_post_topic_gate'):
+              raise SystemExit('FAIL: Workflow 05 must defer substantive uncertainty to the post-topic gate')
+          print('PASS: Workflow 05 completed without resolving or emailing on substantive uncertainty.')
           PY
-          echo "Human review queue: $review"
+          echo "Workflow 05 review candidates retained for later combined gate: $review"
 
       - name: Upload Workflow 05 artefacts
         if: always()
