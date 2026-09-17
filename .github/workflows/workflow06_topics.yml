@@ -1,9 +1,11 @@
-name: Workflow 06 topics
+name: Workflow 06 topic V4 replication test
 
 on:
   push:
     branches: [workflow06-topic-reuse]
     paths:
+      - 'R/run_topic_v4_classifier.R'
+      - 'R/run_update_topic_classification.R'
       - 'scripts/updater/workflow_06_seed_historical_topics.py'
       - '.github/workflows/workflow06_topics.yml'
   workflow_dispatch:
@@ -17,9 +19,9 @@ env:
   OUTPUT_DIR: outputs/workflow06
 
 jobs:
-  topics:
+  replication_test:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,8 +37,8 @@ jobs:
             any::dplyr
             any::httr2
             any::jsonlite
+            any::purrr
             any::readr
-            any::stringr
             any::tibble
 
       - name: Download completed Workflow 05 artefact
@@ -51,7 +53,7 @@ jobs:
           test -s inputs/workflow05/records.jsonl
           test -s inputs/workflow05/records_after_species_geography_adjudication.csv
 
-      - name: Reuse historical v3 topic assignments and draw validation sample
+      - name: Reuse historical V3 assignments and draw candidate validation pool
         shell: bash
         run: |
           set -euo pipefail
@@ -61,177 +63,137 @@ jobs:
             --historical-master 'data/reference/living_evidence_map_master_topic_repaired.csv' \
             --ontology data/reference/topic_ontology_v3.csv \
             --output-dir "$OUTPUT_DIR" \
-            --validation-sample-size 200 \
+            --validation-sample-size 500 \
             --validation-seed 20260917
 
-      - name: Validate seed and queues
+      - name: Build 50-record known-original replication set
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import csv, json
+          import csv,json,random
           out='outputs/workflow06'
-          with open(f'{out}/workflow06_seed_summary.json',encoding='utf-8') as f: s=json.load(f)
-          with open(f'{out}/topic_llm_queue.csv',encoding='utf-8-sig',newline='') as f: queue=list(csv.DictReader(f))
-          with open(f'{out}/topic_validation_llm_queue.csv',encoding='utf-8-sig',newline='') as f: validation=list(csv.DictReader(f))
-          with open(f'{out}/topic_validation_reference.csv',encoding='utf-8-sig',newline='') as f: reference=list(csv.DictReader(f))
-          with open(f'{out}/topic_assignments_historical.csv',encoding='utf-8-sig',newline='') as f: assignments=list(csv.DictReader(f))
-          if s['llm_calls_made'] != 0: raise SystemExit('Historical seed unexpectedly made LLM calls')
-          if s['records_with_reused_v3_topics'] + s['records_queued_for_llm'] != s['workflow05_includes']:
-              raise SystemExit('Reuse + production queue does not equal Workflow 05 includes')
-          if len(queue) != s['records_queued_for_llm']: raise SystemExit('Production queue count mismatch')
-          if len(validation) != 200 or s['validation_sample_records'] != 200: raise SystemExit('Validation sample is not exactly 200 records')
-          if len(assignments) != s['historical_topic_assignment_rows']: raise SystemExit('Historical assignment row count mismatch')
-          qids=[r['record_id'] for r in queue]
-          vids=[r['record_id'] for r in validation]
-          rids={r['record_id'] for r in reference}
-          if len(qids) != len(set(qids)): raise SystemExit('Production queue contains duplicate record IDs')
-          if len(vids) != len(set(vids)): raise SystemExit('Validation queue contains duplicate record IDs')
-          if set(qids) & set(vids): raise SystemExit('Validation records overlap production queue')
-          if set(vids) != rids: raise SystemExit('Validation queue/reference record IDs differ')
-          if s['planned_total_llm_records'] != len(queue) + len(validation): raise SystemExit('Planned LLM count mismatch')
-          print(json.dumps(s,indent=2))
+          provenance={}
+          with open(f'{out}/records.jsonl',encoding='utf-8') as f:
+              for line in f:
+                  if not line.strip(): continue
+                  rec=json.loads(line)
+                  ident=rec.get('identity') or {}
+                  rid=str(ident.get('record_id') or ident.get('lens_id') or '').strip()
+                  t=rec.get('topics') or {}
+                  provenance[rid]={
+                      'sources':[str(x).strip().lower() for x in (t.get('historical_assignment_sources') or []) if str(x).strip()],
+                      'review_required':t.get('review_required') is True,
+                  }
+          with open(f'{out}/topic_validation_llm_queue.csv',encoding='utf-8-sig',newline='') as f:
+              candidates=list(csv.DictReader(f))
+          with open(f'{out}/topic_validation_reference.csv',encoding='utf-8-sig',newline='') as f:
+              refs=list(csv.DictReader(f))
+          eligible=[]
+          for r in candidates:
+              p=provenance.get(r['record_id'],{})
+              sources=set(p.get('sources') or [])
+              if sources=={'original'} and not p.get('review_required',False):
+                  eligible.append(r)
+          if len(eligible)<50:
+              raise SystemExit(f'Only {len(eligible)} eligible original non-review records found in candidate pool')
+          rng=random.Random(20260917)
+          chosen=rng.sample(eligible,50)
+          ids={r['record_id'] for r in chosen}
+          chosen_refs=[r for r in refs if r['record_id'] in ids]
+          if {r['record_id'] for r in chosen_refs} != ids:
+              raise SystemExit('Reference rows missing for selected replication records')
+          qfields=['record_id','title','abstract','doi','queue_type']
+          with open(f'{out}/topic_replication_llm_queue.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=qfields); w.writeheader()
+              for r in chosen:
+                  r=dict(r); r['queue_type']='v4_replication_original'; w.writerow({k:r.get(k,'') for k in qfields})
+          rfields=list(chosen_refs[0].keys())
+          with open(f'{out}/topic_replication_reference.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=rfields); w.writeheader(); w.writerows(chosen_refs)
+          with open(f'{out}/topic_replication_sample_summary.json','w',encoding='utf-8') as f:
+              json.dump({'records':50,'historical_assignment_source':'original','historical_review_required':False,'seed':20260917},f,indent=2)
+          print('Selected 50 known original V4 records for replication.')
           PY
 
-      - name: Prepare exact weekly classifier copies
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp R/run_update_topic_classification.R /tmp/topic_validation.R
-          cp R/run_update_topic_classification.R /tmp/topic_production.R
-          python3 - <<'PY'
-          from pathlib import Path
-          jobs={
-            '/tmp/topic_validation.R':(
-              'outputs/workflow06/topic_validation_llm_queue.csv',
-              'outputs/workflow06/validation_llm'
-            ),
-            '/tmp/topic_production.R':(
-              'outputs/workflow06/topic_llm_queue.csv',
-              'outputs/workflow06/production_llm'
-            ),
-          }
-          source=Path('R/run_update_topic_classification.R').read_text()
-          original_input='input_path <- "data/updates/2026-08-13_lens/records_after_species_geography_adjudication.csv"'
-          original_out='out_dir <- "data/updates/2026-08-13_lens/topic_classification_v3"'
-          if source.count(original_input)!=1 or source.count(original_out)!=1:
-              raise SystemExit('Weekly topic classifier path lines changed; refusing to patch classifier')
-          prompt_anchor='classify_one <- function(title, abstract) {'
-          original_prompt_tail=source[source.index(prompt_anchor):]
-          for path,(inp,out) in jobs.items():
-              text=source.replace(original_input,f'input_path <- "{inp}"').replace(original_out,f'out_dir <- "{out}"')
-              Path(path).write_text(text)
-              if text[text.index(prompt_anchor):] != original_prompt_tail:
-                  raise SystemExit(f'Classifier prompt/body changed unexpectedly in {path}')
-          print('Verified: only input_path and out_dir differ from the weekly classifier.')
-          PY
-
-      - name: Reclassify 200-record validation sample with weekly prompt
+      - name: Run validated V4 mechanism with Luna
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: Rscript /tmp/topic_validation.R
+          TOPIC_INPUT_PATH: outputs/workflow06/topic_replication_llm_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06/replication_luna
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier.R
 
-      - name: Validate validation-run technical completion and calculate agreement
+      - name: Compare Luna assignments with known historical V4 assignments
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import csv,json
+          import csv,json,statistics
           from collections import defaultdict
           out='outputs/workflow06'
-          ref=defaultdict(set); pred=defaultdict(set); status={}; review={}
-          with open(f'{out}/topic_validation_reference.csv',encoding='utf-8-sig',newline='') as f:
+          ref=defaultdict(set); pred=defaultdict(set); reasons=defaultdict(list)
+          with open(f'{out}/topic_replication_reference.csv',encoding='utf-8-sig',newline='') as f:
               for r in csv.DictReader(f): ref[r['record_id']].add(r['path_id'])
-          with open(f'{out}/topic_validation_llm_queue.csv',encoding='utf-8-sig',newline='') as f:
-              sample=[r['record_id'] for r in csv.DictReader(f)]
-          with open(f'{out}/validation_llm/topic_assignments.csv',encoding='utf-8-sig',newline='') as f:
-              rows=list(csv.DictReader(f))
-          for r in rows:
-              rid=r['record_id']; status[rid]=r['status']; review[rid]=str(r.get('review_required','')).lower()=='true'
-              if r['status']=='completed' and r.get('path_id'): pred[rid].add(r['path_id'])
-          failed=sorted({r['record_id'] for r in rows if r['status']!='completed'})
-          missing=sorted(set(sample)-set(status))
-          if failed or missing:
-              raise SystemExit(f'Validation classifier technical failure: failed={len(failed)}, missing={len(missing)}')
-          details=[]; tp=fp=fn=exact=0; jac=[]
-          for rid in sample:
+          with open(f'{out}/topic_replication_llm_queue.csv',encoding='utf-8-sig',newline='') as f:
+              queue=list(csv.DictReader(f))
+          with open(f'{out}/replication_luna/topic_classification_records.csv',encoding='utf-8-sig',newline='') as f:
+              recrows=list(csv.DictReader(f))
+          with open(f'{out}/replication_luna/topic_assignments.csv',encoding='utf-8-sig',newline='') as f:
+              longrows=list(csv.DictReader(f))
+          status={r['record_id']:r for r in recrows}
+          for r in longrows:
+              pred[r['record_id']].add(r['path_id'])
+              reasons[r['record_id']].append(f"{r['path_id']}: {r.get('reason','')}")
+          ids=[r['record_id'] for r in queue]
+          failed=[rid for rid in ids if rid not in status or status[rid].get('status')!='completed']
+          if failed: raise SystemExit(f'Replication technical failures: {len(failed)}')
+          details=[]; tp=fp=fn=exact=0; jaccards=[]; old_counts=[]; new_counts=[]
+          qby={r['record_id']:r for r in queue}
+          for rid in ids:
               a=ref[rid]; b=pred[rid]
               t=len(a&b); fpos=len(b-a); fneg=len(a-b)
               tp+=t; fp+=fpos; fn+=fneg; exact+=int(a==b)
-              u=len(a|b); j=(len(a&b)/u) if u else 1.0; jac.append(j)
-              details.append({'record_id':rid,'reference_path_ids':';'.join(sorted(a)),'llm_path_ids':';'.join(sorted(b)),'exact_set_match':a==b,'true_positive_paths':t,'false_positive_paths':fpos,'false_negative_paths':fneg,'jaccard':round(j,6),'review_required':review.get(rid,False)})
+              u=len(a|b); j=len(a&b)/u if u else 1.0
+              jaccards.append(j); old_counts.append(len(a)); new_counts.append(len(b))
+              details.append({
+                  'record_id':rid,'title':qby[rid]['title'],
+                  'reference_path_ids':'; '.join(sorted(a)),'luna_path_ids':'; '.join(sorted(b)),
+                  'added_by_luna':'; '.join(sorted(b-a)),'missed_by_luna':'; '.join(sorted(a-b)),
+                  'reference_count':len(a),'luna_count':len(b),'exact_set_match':a==b,
+                  'jaccard':round(j,6),'luna_review_required':status[rid].get('review_required',''),
+                  'luna_reasons':' || '.join(reasons[rid])
+              })
           precision=tp/(tp+fp) if tp+fp else 1.0
           recall=tp/(tp+fn) if tp+fn else 1.0
           f1=2*precision*recall/(precision+recall) if precision+recall else 0.0
-          summary={'records':len(sample),'exact_set_matches':exact,'exact_set_agreement':exact/len(sample),'true_positive_paths':tp,'false_positive_paths':fp,'false_negative_paths':fn,'path_precision':precision,'path_recall':recall,'path_f1':f1,'mean_record_jaccard':sum(jac)/len(jac),'review_required_records':sum(review.get(x,False) for x in sample),'technical_failures':0,'reference_interpretation':'Agreement/reproducibility against inherited historical v3 assignments; not an independent human gold standard.'}
-          with open(f'{out}/topic_validation_comparison.csv','w',encoding='utf-8',newline='') as f:
+          summary={
+              'records':len(ids),'model':'gpt-5.6-luna','reasoning_effort':'medium',
+              'classifier':'legacy V4 full-corpus prompt and ontology presentation',
+              'historical_reference':'original assignments from repaired master',
+              'exact_set_matches':exact,'exact_set_agreement':exact/len(ids),
+              'true_positive_paths':tp,'false_positive_paths':fp,'false_negative_paths':fn,
+              'path_precision':precision,'path_recall':recall,'path_f1':f1,
+              'mean_record_jaccard':sum(jaccards)/len(jaccards),
+              'mean_historical_topics_per_record':statistics.mean(old_counts),
+              'mean_luna_topics_per_record':statistics.mean(new_counts),
+              'median_historical_topics_per_record':statistics.median(old_counts),
+              'median_luna_topics_per_record':statistics.median(new_counts),
+              'technical_failures':0
+          }
+          with open(f'{out}/topic_replication_comparison.csv','w',encoding='utf-8',newline='') as f:
               w=csv.DictWriter(f,fieldnames=details[0].keys()); w.writeheader(); w.writerows(details)
-          with open(f'{out}/topic_validation_summary.json','w',encoding='utf-8') as f: json.dump(summary,f,indent=2)
+          with open(f'{out}/topic_replication_summary.json','w',encoding='utf-8') as f: json.dump(summary,f,indent=2)
           print(json.dumps(summary,indent=2))
           PY
 
-      - name: Upload validation checkpoint before production classification
-        uses: actions/upload-artifact@v4
-        with:
-          name: workflow06-topic-validation-${{ github.run_id }}
-          path: outputs/workflow06/
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Classify genuinely unassigned records with exact weekly prompt
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: Rscript /tmp/topic_production.R
-
-      - name: Validate production classification and merge into canonical JSON
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import csv,json
-          from collections import defaultdict
-          out='outputs/workflow06'
-          with open(f'{out}/topic_llm_queue.csv',encoding='utf-8-sig',newline='') as f: queued=[r['record_id'] for r in csv.DictReader(f)]
-          by=defaultdict(list); status={}; review={}; reason={}
-          with open(f'{out}/production_llm/topic_assignments.csv',encoding='utf-8-sig',newline='') as f: rows=list(csv.DictReader(f))
-          for r in rows:
-              rid=r['record_id']; status[rid]=r['status']; review[rid]=str(r.get('review_required','')).lower()=='true'; reason[rid]=r.get('review_reason') or None
-              if r['status']=='completed' and r.get('path_id'):
-                  by[rid].append((r['path_id'],r['hierarchy_path']))
-          failed=sorted({r['record_id'] for r in rows if r['status']!='completed'})
-          missing=sorted(set(queued)-set(status))
-          if failed or missing:
-              raise SystemExit(f'Production classifier technical failure: failed={len(failed)}, missing={len(missing)}')
-          src=f'{out}/records.jsonl'; dst=f'{out}/records_after_topics.jsonl'
-          updated=0
-          with open(src,encoding='utf-8') as fi, open(dst,'w',encoding='utf-8') as fo:
-              for line in fi:
-                  if not line.strip(): continue
-                  rec=json.loads(line); ident=rec.get('identity') or {}; rid=str(ident.get('record_id') or ident.get('lens_id') or '').strip()
-                  topics=rec.get('topics') or {}
-                  if topics.get('status')=='pending_llm':
-                      vals=by[rid]
-                      topics={
-                        'workflow':'workflow_06_topics','status':'llm_classified','assignment_source':'weekly_topic_classifier_exact_prompt',
-                        'classifier_file':'R/run_update_topic_classification.R','model':'gpt-5-mini',
-                        'path_ids':[x[0] for x in vals],'hierarchy_paths':[x[1] for x in vals],
-                        'review_required':review.get(rid,False),'review_reason':reason.get(rid)
-                      }
-                      rec['topics']=topics; updated+=1
-                  fo.write(json.dumps(rec,ensure_ascii=False,separators=(',',':'))+'\n')
-          if updated!=len(queued): raise SystemExit(f'Updated {updated} records but expected {len(queued)}')
-          with open(f'{out}/workflow06_seed_summary.json',encoding='utf-8') as f: seed=json.load(f)
-          with open(f'{out}/topic_validation_summary.json',encoding='utf-8') as f: validation=json.load(f)
-          summary={**seed,'stage':'topic_classification_complete','production_llm_records':len(queued),'production_llm_assignment_rows':sum(1 for r in rows if r.get('path_id')),'production_review_required_records':sum(review.get(x,False) for x in queued),'production_technical_failures':0,'validation':validation,'llm_calls_made':len(queued)+validation['records'],'final_included_topic_records':seed['records_with_reused_v3_topics']+len(queued)}
-          with open(f'{out}/workflow06_summary.json','w',encoding='utf-8') as f: json.dump(summary,f,indent=2)
-          print(json.dumps(summary,indent=2))
-          PY
-
-      - name: Upload complete Workflow 06 artefact
+      - name: Upload replication test artefact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow06-topics-${{ github.run_id }}
+          name: workflow06-v4-luna-replication-${{ github.run_id }}
           path: outputs/workflow06/
           if-no-files-found: error
           retention-days: 90
