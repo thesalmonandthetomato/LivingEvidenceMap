@@ -1,0 +1,213 @@
+name: Apply Workflow 04 completion decisions
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply_workflow04_completion.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  CANONICAL_BRANCH: canonical-fresh-dedup-v2-2026-09-14
+  DECISIONS_FILE: data/adjudication/workflow04_full_corpus_audits/35107843214/workflow04_completion_decisions.json
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANONICAL_BRANCH }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Download original full-corpus audit aggregate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ARTIFACT_ID=$(python - <<'PY'
+          import json
+          print(json.load(open("${{ env.DECISIONS_FILE }}"))["aggregate_artifact_id"])
+          PY
+          )
+          mkdir -p audit_aggregate
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            > audit_aggregate.zip
+          unzip -q audit_aggregate.zip -d audit_aggregate
+          find audit_aggregate -maxdepth 3 -type f -print
+          test "$(find audit_aggregate -name previously_unscreened_decisions.csv | wc -l)" -eq 1
+
+      - name: Apply remaining Workflow 04 decisions
+        run: |
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+
+          cfg=json.loads(Path("${{ env.DECISIONS_FILE }}").read_text(encoding="utf-8"))
+
+          manual={}
+          for x in cfg["uncertain_adjudications"]["retain_lens_ids"]:
+              manual[x]="retain"
+          for x in cfg["uncertain_adjudications"]["exclude_lens_ids"]:
+              manual[x]="exclude"
+          assert len(manual)==241, len(manual)
+
+          csv_paths=list(Path("audit_aggregate").rglob("previously_unscreened_decisions.csv"))
+          assert len(csv_paths)==1, csv_paths
+          model={}
+          with csv_paths[0].open(encoding="utf-8-sig",newline="") as f:
+              for row in csv.DictReader(f):
+                  decision=(row.get("model_decision") or "").strip().lower()
+                  lid=(row.get("lens_id") or "").strip()
+                  if decision in ("retain","exclude"):
+                      model[lid]=decision
+          assert len(model)==4868, len(model)
+          assert sum(v=="retain" for v in model.values())==2693
+          assert sum(v=="exclude" for v in model.values())==2175
+          assert not (set(manual) & set(model))
+
+          src=Path("canonical_store/data/canonical/current/repair/records.jsonl")
+          tmp=src.with_suffix(".jsonl.tmp")
+          seen_manual=set()
+          seen_model=set()
+          changed_manual=0
+          changed_model=0
+
+          with src.open(encoding="utf-8") as fin, tmp.open("w",encoding="utf-8") as fout:
+              for line in fin:
+                  if not line.strip():
+                      continue
+                  r=json.loads(line)
+                  lid=str((r.get("identity") or {}).get("lens_id") or "")
+                  s=r.setdefault("screening",{})
+
+                  if lid in manual:
+                      seen_manual.add(lid)
+                      target="include" if manual[lid]=="retain" else "exclude"
+                      cur=s.get("decision")
+                      s.setdefault("historical_decision_original",cur)
+                      entry={
+                          "status":"user_adjudicated",
+                          "final_decision":manual[lid],
+                          "canonical_decision":target,
+                          "source":"workflow04_uncertain_manual_adjudication",
+                          "source_audit_run":"35107843214",
+                          "adjudication_date":"2026-09-17",
+                          "basis":"manual review using agreed Workflow 04 eligibility rules"
+                      }
+                      hist=s.setdefault("manual_adjudication_history",[])
+                      if not any(isinstance(x,dict) and x.get("source")=="workflow04_uncertain_manual_adjudication" and x.get("source_audit_run")=="35107843214" for x in hist):
+                          hist.append(entry)
+                      s["manual_adjudication"]=entry
+                      s["workflow04_model_decision_original"]="uncertain"
+                      if cur != target:
+                          s["decision"]=target
+                          changed_manual += 1
+
+                  elif lid in model:
+                      seen_model.add(lid)
+                      target="include" if model[lid]=="retain" else "exclude"
+                      cur=s.get("decision")
+                      s.setdefault("historical_decision_original",cur)
+                      prov={
+                          "status":"model_screened",
+                          "decision":model[lid],
+                          "canonical_decision":target,
+                          "source":"workflow04_full_corpus_audit_model_decision",
+                          "source_audit_run":"35107843214",
+                          "model":"gpt-5.6-luna",
+                          "prompt_version":"workflow04-v3-salmon-lice-clarification",
+                          "prompt_sha256":"ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69",
+                          "applied_at":"2026-09-17"
+                      }
+                      s["workflow04_model_application"]=prov
+                      if cur != target:
+                          s["decision"]=target
+                          changed_model += 1
+
+                  fout.write(json.dumps(r,ensure_ascii=False,separators=(",",":"))+"\n")
+
+          assert len(seen_manual)==241, (len(seen_manual), sorted(set(manual)-seen_manual)[:20])
+          assert len(seen_model)==4868, (len(seen_model), sorted(set(model)-seen_model)[:20])
+          tmp.replace(src)
+
+          eligible=include=exclude=0
+          unresolved=[]
+          with src.open(encoding="utf-8") as f:
+              for line in f:
+                  if not line.strip():
+                      continue
+                  r=json.loads(line)
+                  d=r.get("deduplication") or {}
+                  n=r.get("notices")
+                  publication_ok = True if n is None else bool(n.get("record_downstream_eligible", n.get("downstream_eligible", True)))
+                  if str(d.get("status") or "") in ("unique","canonical") and publication_ok:
+                      eligible += 1
+                      dec=(r.get("screening") or {}).get("decision")
+                      if dec=="include":
+                          include += 1
+                      elif dec=="exclude":
+                          exclude += 1
+                      else:
+                          unresolved.append(str((r.get("identity") or {}).get("lens_id") or ""))
+
+          assert eligible==22605, eligible
+          assert include+exclude==eligible, (include,exclude,len(unresolved),unresolved[:20])
+          assert not unresolved, unresolved[:20]
+
+          manifest_path=Path("canonical_store/data/canonical/current/repair/manifest.json")
+          m=json.loads(manifest_path.read_text(encoding="utf-8"))
+          m["pipeline_stage"]="relevance_screening_complete"
+          hs=m["historical_screening_reconciliation"]["summary"]
+          hs["representatives_include"]=include
+          hs["representatives_exclude"]=exclude
+          completion={
+              "workflow":"workflow_04_relevance_screening",
+              "status":"complete",
+              "completed_at":"2026-09-17",
+              "source_audit_run":"35107843214",
+              "eligible_representatives":eligible,
+              "include":include,
+              "exclude":exclude,
+              "unresolved":0,
+              "manual_uncertain_adjudications":241,
+              "manual_uncertain_retain":sum(v=="retain" for v in manual.values()),
+              "manual_uncertain_exclude":sum(v=="exclude" for v in manual.values()),
+              "previously_unscreened_model_decisions_applied":4868,
+              "previously_unscreened_model_retain":sum(v=="retain" for v in model.values()),
+              "previously_unscreened_model_exclude":sum(v=="exclude" for v in model.values()),
+              "records_changed_manual":changed_manual,
+              "records_changed_model":changed_model,
+              "decision_source":"${{ env.DECISIONS_FILE }}",
+              "model":"gpt-5.6-luna",
+              "prompt_version":"workflow04-v3-salmon-lice-clarification",
+              "prompt_sha256":"ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69"
+          }
+          m["workflow04_relevance_screening_completion"]=completion
+          manifest_path.write_text(json.dumps(m,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+          print(json.dumps(completion,indent=2))
+          print(f"PASS: Workflow 04 complete; eligible={eligible}; include={include}; exclude={exclude}; unresolved=0")
+          PY
+
+      - name: Commit canonical changes
+        run: |
+          cd canonical_store
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/canonical/current/repair/records.jsonl data/canonical/current/repair/manifest.json
+          git commit -m "Complete Workflow 04 relevance screening"
+          git pull --rebase origin "${CANONICAL_BRANCH}"
+          git push origin HEAD:"${CANONICAL_BRANCH}"
+          git rev-parse HEAD
