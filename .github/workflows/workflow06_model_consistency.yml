@@ -1,0 +1,241 @@
+name: Workflow 06 model consistency test
+
+on:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_model_consistency.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  WF05_ARTIFACT_ID: '10501181612'
+  OUTPUT_DIR: outputs/workflow06_consistency
+
+jobs:
+  consistency_test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::tibble
+
+      - name: Download completed Workflow 05 artefact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/workflow05
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${WF05_ARTIFACT_ID}/zip" > /tmp/workflow05.zip
+          unzip -q /tmp/workflow05.zip -d inputs/workflow05
+          test -s inputs/workflow05/records.jsonl
+          test -s inputs/workflow05/records_after_species_geography_adjudication.csv
+
+      - name: Reuse historical assignments and build fixed 50-record set
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/updater/workflow_06_seed_historical_topics.py \
+            --input-jsonl inputs/workflow05/records.jsonl \
+            --workflow05-csv inputs/workflow05/records_after_species_geography_adjudication.csv \
+            --historical-master 'data/reference/living_evidence_map_master_topic_repaired.csv' \
+            --ontology data/reference/topic_ontology_v3.csv \
+            --output-dir "$OUTPUT_DIR" \
+            --validation-sample-size 500 \
+            --validation-seed 20260917
+          python3 - <<'PY'
+          import csv,json,random
+          out='outputs/workflow06_consistency'
+          provenance={}
+          with open(f'{out}/records.jsonl',encoding='utf-8') as f:
+              for line in f:
+                  if not line.strip(): continue
+                  rec=json.loads(line)
+                  ident=rec.get('identity') or {}
+                  rid=str(ident.get('record_id') or ident.get('lens_id') or '').strip()
+                  t=rec.get('topics') or {}
+                  provenance[rid]={
+                      'sources':[str(x).strip().lower() for x in (t.get('historical_assignment_sources') or []) if str(x).strip()],
+                      'review_required':t.get('review_required') is True,
+                  }
+          with open(f'{out}/topic_validation_llm_queue.csv',encoding='utf-8-sig',newline='') as f:
+              candidates=list(csv.DictReader(f))
+          with open(f'{out}/topic_validation_reference.csv',encoding='utf-8-sig',newline='') as f:
+              refs=list(csv.DictReader(f))
+          eligible=[]
+          for r in candidates:
+              p=provenance.get(r['record_id'],{})
+              if set(p.get('sources') or [])=={'original'} and not p.get('review_required',False):
+                  eligible.append(r)
+          if len(eligible)<50:
+              raise SystemExit(f'Only {len(eligible)} eligible original non-review records found')
+          rng=random.Random(20260917)
+          chosen=rng.sample(eligible,50)
+          ids={r['record_id'] for r in chosen}
+          chosen_refs=[r for r in refs if r['record_id'] in ids]
+          if {r['record_id'] for r in chosen_refs} != ids:
+              raise SystemExit('Reference rows missing for selected records')
+          qfields=['record_id','title','abstract','doi','queue_type']
+          with open(f'{out}/topic_consistency_queue.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=qfields); w.writeheader()
+              for r in chosen:
+                  x=dict(r); x['queue_type']='model_consistency'; w.writerow({k:x.get(k,'') for k in qfields})
+          rfields=list(chosen_refs[0].keys())
+          with open(f'{out}/topic_consistency_reference.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=rfields); w.writeheader(); w.writerows(chosen_refs)
+          print('Selected fixed 50-record set with seed 20260917.')
+          PY
+
+      - name: Mini pass A
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_consistency/topic_consistency_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_consistency/mini_a
+          TOPIC_MODEL: gpt-5-mini
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier.R
+
+      - name: Mini pass B
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_consistency/topic_consistency_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_consistency/mini_b
+          TOPIC_MODEL: gpt-5-mini
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier.R
+
+      - name: Luna pass A
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_consistency/topic_consistency_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_consistency/luna_a
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier.R
+
+      - name: Luna pass B
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_consistency/topic_consistency_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_consistency/luna_b
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier.R
+
+      - name: Compare self-agreement, historical agreement and coding density
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv,json,statistics
+          from collections import defaultdict
+          out='outputs/workflow06_consistency'
+          with open(f'{out}/topic_consistency_queue.csv',encoding='utf-8-sig',newline='') as f:
+              queue=list(csv.DictReader(f))
+          ids=[r['record_id'] for r in queue]
+          qby={r['record_id']:r for r in queue}
+          ref=defaultdict(set)
+          with open(f'{out}/topic_consistency_reference.csv',encoding='utf-8-sig',newline='') as f:
+              for r in csv.DictReader(f): ref[r['record_id']].add(r['path_id'])
+
+          def load(label):
+              pred=defaultdict(set); status={}
+              with open(f'{out}/{label}/topic_classification_records.csv',encoding='utf-8-sig',newline='') as f:
+                  for r in csv.DictReader(f): status[r['record_id']]=r
+              with open(f'{out}/{label}/topic_assignments.csv',encoding='utf-8-sig',newline='') as f:
+                  for r in csv.DictReader(f): pred[r['record_id']].add(r['path_id'])
+              failed=[rid for rid in ids if rid not in status or status[rid].get('status')!='completed']
+              if failed: raise SystemExit(f'{label}: {len(failed)} technical failures')
+              return pred,status
+
+          runs={}
+          for label in ['mini_a','mini_b','luna_a','luna_b']:
+              runs[label]=load(label)
+
+          def pair_metrics(a,b):
+              A=runs[a][0]; B=runs[b][0]
+              exact=0; tp=fp=fn=0; js=[]; details=[]
+              for rid in ids:
+                  x=A[rid]; y=B[rid]
+                  exact += int(x==y)
+                  tp += len(x&y); fp += len(y-x); fn += len(x-y)
+                  u=x|y; j=len(x&y)/len(u) if u else 1.0; js.append(j)
+                  if x!=y:
+                      details.append({'pair':f'{a}_vs_{b}','record_id':rid,'title':qby[rid]['title'],
+                                      'a_paths':'; '.join(sorted(x)),'b_paths':'; '.join(sorted(y)),
+                                      'a_only':'; '.join(sorted(x-y)),'b_only':'; '.join(sorted(y-x)),
+                                      'jaccard':round(j,6)})
+              precision=tp/(tp+fp) if tp+fp else 1.0
+              recall=tp/(tp+fn) if tp+fn else 1.0
+              f1=2*precision*recall/(precision+recall) if precision+recall else 0.0
+              return {'pair':f'{a}_vs_{b}','records':len(ids),'exact_matches':exact,
+                      'exact_agreement':exact/len(ids),'path_precision_b_vs_a':precision,
+                      'path_recall_b_vs_a':recall,'path_f1':f1,'mean_jaccard':sum(js)/len(js)},details
+
+          def hist_metrics(label):
+              P=runs[label][0]
+              exact=tp=fp=fn=0; js=[]; counts=[]
+              for rid in ids:
+                  x=ref[rid]; y=P[rid]
+                  exact += int(x==y); tp += len(x&y); fp += len(y-x); fn += len(x-y)
+                  u=x|y; js.append(len(x&y)/len(u) if u else 1.0); counts.append(len(y))
+              precision=tp/(tp+fp) if tp+fp else 1.0
+              recall=tp/(tp+fn) if tp+fn else 1.0
+              f1=2*precision*recall/(precision+recall) if precision+recall else 0.0
+              return {'run':label,'exact_historical_agreement':exact/len(ids),
+                      'historical_path_precision':precision,'historical_path_recall':recall,
+                      'historical_path_f1':f1,'mean_historical_jaccard':sum(js)/len(js),
+                      'mean_topics_per_record':statistics.mean(counts),
+                      'median_topics_per_record':statistics.median(counts)}
+
+          pairs=[]; disagreements=[]
+          for a,b in [('mini_a','mini_b'),('luna_a','luna_b'),('mini_a','luna_a'),('mini_b','luna_b')]:
+              m,d=pair_metrics(a,b); pairs.append(m); disagreements.extend(d)
+          historical=[hist_metrics(x) for x in ['mini_a','mini_b','luna_a','luna_b']]
+          hist_counts=[len(ref[rid]) for rid in ids]
+          summary={'records':len(ids),'seed':20260917,
+                   'historical_mean_topics_per_record':statistics.mean(hist_counts),
+                   'historical_median_topics_per_record':statistics.median(hist_counts),
+                   'pairwise':pairs,'historical_comparisons':historical}
+          with open(f'{out}/model_consistency_summary.json','w',encoding='utf-8') as f: json.dump(summary,f,indent=2)
+          with open(f'{out}/model_consistency_pairwise.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=pairs[0].keys()); w.writeheader(); w.writerows(pairs)
+          with open(f'{out}/model_consistency_historical.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=historical[0].keys()); w.writeheader(); w.writerows(historical)
+          fields=['pair','record_id','title','a_paths','b_paths','a_only','b_only','jaccard']
+          with open(f'{out}/model_consistency_disagreements.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(disagreements)
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload model consistency artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-model-consistency-${{ github.run_id }}
+          path: outputs/workflow06_consistency/
+          if-no-files-found: error
+          retention-days: 90
