@@ -99,8 +99,8 @@ ontology_entries <- purrr::pmap_chr(
 )
 ontology_prompt <- paste(ontology_entries, collapse = "\n\n")
 
-# This prompt is intentionally retained verbatim from the validated legacy V4
-# full-corpus classifier. Do not simplify it in the weekly updater.
+# Legacy V4 prompt plus one deliberate clarification, validated against the
+# historical replication set, to retain independently substantive secondary topics.
 system_prompt <- paste(
   "You are coding titles and abstracts for a systematic map of salmon",
   "aquaculture research using a fixed systems-based ontology.",
@@ -124,6 +124,9 @@ system_prompt <- paste(
   "MULTIPLE CODING",
   "5. Code all genuinely substantive concepts, including meaningful secondary",
   "   outcomes, but do not code every measurement.",
+  "   When a study has more than one clearly distinct substantive research question or conclusion,",
+  "   assign each independently supported pathway. Do not omit a secondary pathway merely because",
+  "   another pathway captures the study's primary focus.",
   "6. The ontology is not hierarchical for coding purposes. Do not assign a",
   "   broader or related pathway merely because a more specific pathway applies.",
   "7. Each assigned pathway must independently satisfy the substantive-coding",
