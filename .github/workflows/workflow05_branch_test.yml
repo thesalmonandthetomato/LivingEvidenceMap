@@ -1,0 +1,99 @@
+name: Workflow 05 branch test
+
+on:
+  push:
+    branches:
+      - workflow05-species-geography
+    paths:
+      - '.github/workflows/workflow05_branch_test.yml'
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_JSONL: canonical_store/data/canonical/current/repair/records.jsonl
+  OUTPUT_DIR: outputs/workflow05-test
+
+jobs:
+  test-workflow05:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout Workflow 05 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow05-species-geography
+          fetch-depth: 0
+
+      - name: Checkout canonical store from completed Workflow 04
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-dedup-v2-2026-09-14
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Validate canonical input
+        run: |
+          set -euo pipefail
+          test -s "$CANONICAL_JSONL"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('canonical_store/data/canonical/current/repair/manifest.json').read_text())
+          print('pipeline_stage:', m.get('pipeline_stage'))
+          if m.get('pipeline_stage') != 'relevance_screening_complete':
+              raise SystemExit('Workflow 04 is not complete')
+          PY
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::fs
+            any::here
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::stringi
+            any::stringr
+            any::tibble
+            any::tidyr
+            any::yaml
+
+      - name: Run Workflow 05 with zero LLM calls
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_05_species_geography.R \
+            --input "$CANONICAL_JSONL" \
+            --master data/master/current/living_evidence_map_master.csv \
+            --output-dir "$OUTPUT_DIR" \
+            --llm-mode off
+
+      - name: Report summary
+        run: |
+          set -euo pipefail
+          cat "$OUTPUT_DIR/workflow05_summary.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('outputs/workflow05-test/workflow05_summary.json').read_text())
+          assert x['llm_calls_attempted'] == 0, x
+          print('PASS: zero LLM calls')
+          PY
+
+      - name: Upload test artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-zero-cost-test-${{ github.run_id }}
+          path: outputs/workflow05-test/
+          if-no-files-found: warn
+          retention-days: 14
