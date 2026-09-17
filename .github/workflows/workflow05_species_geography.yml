@@ -8,47 +8,39 @@ on:
         required: false
         default: 'canonical-fresh-dedup-v2-2026-09-14'
         type: string
-      output_dir:
-        description: 'Output directory for Workflow 05 artefacts'
-        required: false
-        default: 'outputs/workflow05'
-        type: string
-      master_path:
-        description: 'Production master CSV used only to reuse existing annotations'
-        required: false
-        default: 'data/master/current/living_evidence_map_master.csv'
-        type: string
-      llm_mode:
-        description: 'off = zero API calls; new-only = adjudicate only unresolved non-reused dimensions'
-        required: false
-        default: 'off'
-        type: choice
-        options:
-          - 'off'
-          - 'new-only'
-      max_llm_records:
-        description: 'Safety cap on records sent to the LLM; 0 means no cap'
-        required: false
-        default: '0'
-        type: string
       model:
-        description: 'OpenAI annotation model used only when llm_mode=new-only'
+        description: 'Model used only for residual deterministic uncertainty'
         required: false
         default: 'gpt-5-mini'
         type: string
+  workflow_call:
+    inputs:
+      canonical_branch:
+        required: true
+        type: string
+      model:
+        required: false
+        default: 'gpt-5-mini'
+        type: string
+    secrets:
+      OPENAI_API_KEY:
+        required: false
 
 permissions:
   contents: read
 
 env:
   CANONICAL_JSONL: canonical_store/data/canonical/current/repair/records.jsonl
+  DETERMINISTIC_DIR: outputs/workflow05/deterministic
+  FINAL_DIR: outputs/workflow05/final
 
 jobs:
-  annotate:
+  deterministic-species-geography:
+    name: deterministic species + geography
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
-      - name: Checkout pipeline code and production master
+      - name: Checkout pipeline code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -61,12 +53,11 @@ jobs:
           lfs: true
           fetch-depth: 0
 
-      - name: Validate canonical Workflow 04 input
+      - name: Validate Workflow 04 canonical input
         shell: bash
         run: |
           set -euo pipefail
-          test -s "$CANONICAL_JSONL" || { echo "Canonical JSONL missing: $CANONICAL_JSONL" >&2; exit 1; }
-          test -s '${{ inputs.master_path }}' || { echo 'Master CSV missing: ${{ inputs.master_path }}' >&2; exit 1; }
+          test -s "$CANONICAL_JSONL"
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -74,14 +65,13 @@ jobs:
           m=json.loads(p.read_text(encoding='utf-8'))
           stage=m.get('pipeline_stage','')
           if not stage.startswith('relevance_screening'):
-              raise SystemExit(f'Canonical branch has not completed Workflow 04 processing: pipeline_stage={stage!r}')
+              raise SystemExit(f'Workflow 04 has not completed: pipeline_stage={stage!r}')
           c=m.get('workflow04_relevance_screening_completion',{})
-          print('Workflow 04 canonical input accepted')
+          print('Workflow 04 input accepted')
           print('pipeline_stage:', stage)
           print('include:', c.get('include'))
           print('exclude:', c.get('exclude'))
           print('unresolved:', c.get('unresolved'))
-          print('NOTE: screening uncertainty is allowed and will be carried through Workflow 05 and topic classification.')
           PY
 
       - name: Set up R
@@ -89,7 +79,85 @@ jobs:
         with:
           r-version: 'release'
 
-      - name: Install R dependencies
+      - name: Install deterministic annotation dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::fs
+            any::here
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::stringi
+            any::stringr
+            any::tibble
+            any::tidyr
+            any::yaml
+
+      - name: Deterministic species and geography identification
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_05_species_geography.R \
+            --input "$CANONICAL_JSONL" \
+            --output-dir "$DETERMINISTIC_DIR"
+
+      - name: Validate deterministic stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$DETERMINISTIC_DIR/workflow05_deterministic_summary.json"
+          test -f "$DETERMINISTIC_DIR/annotation_adjudication_queue.csv"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('outputs/workflow05/deterministic/workflow05_deterministic_summary.json')
+          x=json.loads(p.read_text(encoding='utf-8'))
+          assert x['llm_calls'] == 0, x
+          print(json.dumps(x, indent=2))
+          print('PASS: deterministic stage made zero LLM calls.')
+          PY
+
+      - name: Upload deterministic checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-deterministic-${{ github.run_id }}
+          path: outputs/workflow05/deterministic/
+          if-no-files-found: error
+          retention-days: 90
+
+  llm-adjudication:
+    name: LLM adjudication of uncertain annotations only
+    needs: deterministic-species-geography
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout pipeline code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout canonical store from Workflow 04
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.canonical_branch }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Download deterministic checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-deterministic-${{ github.run_id }}
+          path: outputs/workflow05/deterministic/
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - name: Install adjudication dependencies
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
           packages: |
@@ -100,57 +168,63 @@ jobs:
             any::jsonlite
             any::purrr
             any::readr
-            any::stringi
-            any::stringr
             any::tibble
             any::tidyr
             any::yaml
 
-      - name: Run Workflow 05 from canonical JSONL
-        env:
-          OPENAI_API_KEY: ${{ inputs.llm_mode == 'new-only' && secrets.OPENAI_API_KEY || '' }}
-        run: |
-          Rscript scripts/updater/workflow_05_species_geography.R \
-            --input "$CANONICAL_JSONL" \
-            --master '${{ inputs.master_path }}' \
-            --output-dir '${{ inputs.output_dir }}' \
-            --llm-mode '${{ inputs.llm_mode }}' \
-            --max-llm-records '${{ inputs.max_llm_records }}' \
-            --model '${{ inputs.model }}'
-
-      - name: Validate Workflow 05 outputs
+      - name: Report residual LLM queue before any API call
         shell: bash
         run: |
           set -euo pipefail
-          summary='${{ inputs.output_dir }}/workflow05_summary.json'
-          output='${{ inputs.output_dir }}/records.jsonl'
-          review='${{ inputs.output_dir }}/workflow05_review_queue.csv'
-          test -s "$summary"
-          test -s "$output"
-          python3 - "$summary" <<'PY'
-          import json,sys
-          x=json.load(open(sys.argv[1],encoding='utf-8'))
-          print('Workflow 05 summary')
-          for k in [
-              'total_canonical_records','screening_include','screening_uncertain','screening_exclude',
-              'records_forwarded_to_annotation','species_reused_from_master','geography_reused_from_master',
-              'annotation_adjudication_queue_records','llm_calls_attempted',
-              'screening_uncertain_carried_forward','annotation_unresolved','combined_review_candidates'
-          ]:
-              print(f'{k}: {x.get(k)}')
-          if x.get('llm_mode') == 'off' and x.get('llm_calls_attempted') != 0:
-              raise SystemExit('FAIL: llm_mode=off but LLM calls were reported')
-          if not x.get('substantive_uncertainty_deferred_to_post_topic_gate'):
-              raise SystemExit('FAIL: Workflow 05 must defer substantive uncertainty to the post-topic gate')
-          print('PASS: Workflow 05 completed without resolving or emailing on substantive uncertainty.')
+          python3 - <<'PY'
+          import csv
+          from pathlib import Path
+          p=Path('outputs/workflow05/deterministic/annotation_adjudication_queue.csv')
+          with p.open(newline='', encoding='utf-8') as f:
+              n=max(0, sum(1 for _ in f)-1)
+          print(f'LLM adjudication queue: {n} records')
+          print('Only these deterministic uncertainty records can be sent to the model.')
           PY
-          echo "Workflow 05 review candidates retained for later combined gate: $review"
 
-      - name: Upload Workflow 05 artefacts
+      - name: Adjudicate residual uncertainty only
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_05_species_geography_adjudication.R \
+            --input "$CANONICAL_JSONL" \
+            --deterministic-dir "$DETERMINISTIC_DIR" \
+            --output-dir "$FINAL_DIR" \
+            --model '${{ inputs.model }}'
+
+      - name: Validate Workflow 05 completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$FINAL_DIR/records.jsonl"
+          test -s "$FINAL_DIR/workflow05_summary.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('outputs/workflow05/final/workflow05_summary.json').read_text(encoding='utf-8'))
+          print(json.dumps(x, indent=2))
+          if x['llm_calls_attempted'] != x['deterministic_review_queue_records']:
+              raise SystemExit('FAIL: LLM call count differs from deterministic uncertainty queue size')
+          if x['llm_technical_failures'] != 0:
+              raise SystemExit('FAIL: technical LLM failures occurred')
+          if x.get('email_notification_sent') is not False:
+              raise SystemExit('FAIL: Workflow 05 must not send human-review notifications')
+          print('PASS: LLM was limited to residual deterministic uncertainty; substantive uncertainty is retained for the later combined review gate.')
+          PY
+
+      - name: Upload Workflow 05 output
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workflow05-species-geography-${{ github.run_id }}
-          path: ${{ inputs.output_dir }}/
+          path: |
+            outputs/workflow05/deterministic/
+            outputs/workflow05/final/
           if-no-files-found: error
           retention-days: 90
