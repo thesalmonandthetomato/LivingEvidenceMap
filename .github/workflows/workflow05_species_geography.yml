@@ -1,0 +1,118 @@
+name: Workflow 05 - species and geography annotation
+
+on:
+  workflow_dispatch:
+    inputs:
+      canonical_branch:
+        description: 'Canonical branch containing Workflow 04 output'
+        required: false
+        default: 'canonical-fresh-dedup-v2-2026-09-14'
+        type: string
+      model:
+        description: 'OpenAI model used only for residual adjudication'
+        required: false
+        default: 'gpt-5-mini'
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_JSONL: canonical_store/data/canonical/current/repair/records.jsonl
+  OUTPUT_DIR: outputs/workflow05
+
+jobs:
+  workflow05:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout Workflow 05 implementation
+        uses: actions/checkout@v4
+        with:
+          ref: workflow05-species-geography
+          fetch-depth: 0
+
+      - name: Checkout canonical Workflow 04 store
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.canonical_branch }}
+          path: canonical_store
+          lfs: true
+          fetch-depth: 0
+
+      - name: Validate Workflow 04 canonical input
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$CANONICAL_JSONL"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('canonical_store/data/canonical/current/repair/manifest.json')
+          m=json.loads(p.read_text(encoding='utf-8'))
+          stage=m.get('pipeline_stage','')
+          if not stage.startswith('relevance_screening'):
+              raise SystemExit(f'Workflow 04 not complete: {stage!r}')
+          print('Workflow 04 input accepted:', stage)
+          print('Screening completion:', m.get('workflow04_relevance_screening_completion', {}))
+          PY
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::fs
+            any::here
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::stringi
+            any::stringr
+            any::tibble
+            any::tidyr
+            any::yaml
+
+      - name: Stage 1 - deterministic species and geography identification
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_05_species_geography.R \
+            --input "$CANONICAL_JSONL" \
+            --output-dir "$OUTPUT_DIR"
+
+      - name: Stage 2 - LLM adjudication of residual uncertainty only
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_05_species_geography_adjudication.R \
+            --input "$CANONICAL_JSONL" \
+            --deterministic-dir "$OUTPUT_DIR" \
+            --output-dir "$OUTPUT_DIR" \
+            --model '${{ inputs.model }}'
+
+      - name: Report Workflow 05 summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in "$OUTPUT_DIR"/*summary*.json; do
+            if [ -f "$f" ]; then echo "===== $f ====="; cat "$f"; fi
+          done
+
+      - name: Upload Workflow 05 artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-species-geography-${{ github.run_id }}
+          path: outputs/workflow05/
+          if-no-files-found: error
+          retention-days: 90
