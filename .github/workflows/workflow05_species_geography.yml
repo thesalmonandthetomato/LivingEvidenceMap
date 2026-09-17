@@ -13,9 +13,15 @@ on:
         required: false
         default: 'gpt-5-mini'
         type: string
+      recovery_run_id:
+        description: 'Optional prior Workflow 05 run ID. Restores its deterministic artefact and skips Stage 1.'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 env:
   CANONICAL_JSONL: canonical_store/data/canonical/current/repair/records.jsonl
@@ -79,7 +85,37 @@ jobs:
             any::tidyr
             any::yaml
 
+      - name: Restore deterministic checkpoint from prior Workflow 05 run
+        if: ${{ inputs.recovery_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-species-geography-${{ inputs.recovery_run_id }}
+          path: outputs/workflow05
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.recovery_run_id }}
+
+      - name: Validate recovered checkpoint and remove partial Stage 2 outputs
+        if: ${{ inputs.recovery_run_id != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in \
+            "$OUTPUT_DIR/annotation_adjudication_queue.csv" \
+            "$OUTPUT_DIR/deterministic_annotation_summary.csv" \
+            "$OUTPUT_DIR/records_for_annotation.csv"; do
+            test -s "$f" || { echo "Missing recovered deterministic checkpoint file: $f" >&2; exit 1; }
+          done
+          rm -f \
+            "$OUTPUT_DIR/annotation_adjudication.csv" \
+            "$OUTPUT_DIR/records_after_species_geography_adjudication.csv" \
+            "$OUTPUT_DIR/workflow05_review_queue.csv" \
+            "$OUTPUT_DIR/records.jsonl" \
+            "$OUTPUT_DIR/workflow05_summary.json"
+          echo "Recovered deterministic Workflow 05 checkpoint from run ${{ inputs.recovery_run_id }}; Stage 1 will be skipped."
+
       - name: Stage 1 - deterministic species and geography identification
+        if: ${{ inputs.recovery_run_id == '' }}
         shell: bash
         run: |
           set -euo pipefail
