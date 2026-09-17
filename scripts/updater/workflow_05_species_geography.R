@@ -8,21 +8,26 @@ suppressPackageStartupMessages({
   library(jsonlite)
   library(purrr)
   library(readr)
+  library(stringi)
   library(stringr)
   library(tibble)
 })
 
-# Workflow 05: species + primary study geography annotation.
+# Workflow 05: species + primary-study geography annotation.
 #
-# Design principles:
-#   * standalone and updater-safe: all paths are supplied at runtime;
-#   * reuse trustworthy non-blank annotations from the production master;
-#   * deterministic annotation is used for dimensions not recoverable from master;
-#   * LLM adjudication is never repeated for a dimension recovered from master;
-#   * in llm-mode=new-only, API calls are limited to unresolved dimensions for
-#     records without reusable master annotation;
-#   * llm-mode=off performs no API calls and emits a human-review queue instead;
-#   * provenance is explicit for every final dimension.
+# CONTRACT
+#   Input: canonical JSONL produced by Workflow 04.
+#   Scope: canonical/unique, publication-eligible records with screening.decision == include.
+#   Output: the same canonical JSONL structure, with Workflow 05 annotations added.
+#
+# COST CONTROL
+#   1. Reuse existing species/geography from the production master wherever a
+#      unique Lens ID, DOI or normalised-title match is available.
+#   2. Run local deterministic species/geography annotation only for dimensions
+#      not recovered from the master.
+#   3. Never send a master-reused dimension to the LLM.
+#   4. --llm-mode=off guarantees zero API calls and emits a review queue.
+#   5. --llm-mode=new-only sends only genuinely unresolved, non-reused dimensions.
 
 source("scripts/setup_pipeline.R")
 source("R/species_detect.R")
@@ -44,36 +49,37 @@ arg <- function(flag, default = NULL) {
 input_path <- arg("--input")
 master_path <- arg("--master", "data/master/current/living_evidence_map_master.csv")
 output_dir <- arg("--output-dir", "outputs/workflow05")
-llm_mode <- arg("--llm-mode", "new-only")
+llm_mode <- arg("--llm-mode", "off")
 model <- arg("--model", Sys.getenv("OPENAI_ANNOTATION_MODEL", "gpt-5-mini"))
 max_llm_records <- as.integer(arg("--max-llm-records", "0"))
 
-if (is.null(input_path)) stop("--input is required", call. = FALSE)
-if (!file.exists(input_path)) stop("Input does not exist: ", input_path, call. = FALSE)
-if (!file.exists(master_path)) stop("Master does not exist: ", master_path, call. = FALSE)
+if (is.null(input_path)) stop("--input canonical JSONL is required", call. = FALSE)
+if (!file.exists(input_path)) stop("Canonical input does not exist: ", input_path, call. = FALSE)
+if (!file.exists(master_path)) stop("Master CSV does not exist: ", master_path, call. = FALSE)
 if (!llm_mode %in% c("off", "new-only")) stop("--llm-mode must be off or new-only", call. = FALSE)
 if (is.na(max_llm_records) || max_llm_records < 0L) stop("--max-llm-records must be >= 0", call. = FALSE)
-if (llm_mode == "new-only" && !nzchar(Sys.getenv("OPENAI_API_KEY"))) {
-  stop("OPENAI_API_KEY is required when --llm-mode=new-only", call. = FALSE)
-}
+if (llm_mode == "new-only" && !nzchar(Sys.getenv("OPENAI_API_KEY"))) stop("OPENAI_API_KEY is required for --llm-mode=new-only", call. = FALSE)
 
 dir_create(output_dir, recurse = TRUE)
 now_utc <- function() format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
+`%||%` <- function(x, y) if (is.null(x)) y else x
 clean <- function(x) {
-  x <- as.character(x)
+  x <- as.character(x %||% "")
   x[is.na(x)] <- ""
   trimws(x)
 }
-first_col <- function(df, candidates) {
-  hit <- candidates[candidates %in% names(df)]
-  if (!length(hit)) return(rep("", nrow(df)))
-  out <- rep("", nrow(df))
-  for (nm in hit) {
-    x <- clean(df[[nm]])
-    take <- !nzchar(out) & nzchar(x)
-    out[take] <- x[take]
+textify <- function(x) {
+  if (is.null(x)) return("")
+  if (is.atomic(x)) return(paste(clean(x)[nzchar(clean(x))], collapse = "; "))
+  if (is.list(x)) return(paste(Filter(nzchar, vapply(x, textify, character(1))), collapse = "; "))
+  clean(x)
+}
+first_nonempty <- function(...) {
+  for (x in list(...)) {
+    z <- textify(x)
+    if (nzchar(trimws(z))) return(trimws(z))
   }
-  out
+  ""
 }
 normalise_doi <- function(x) {
   x <- tolower(clean(x))
@@ -87,128 +93,144 @@ normalise_title <- function(x) {
   x <- gsub("[^[:alnum:]]+", " ", x)
   stringr::str_squish(x)
 }
+read_jsonl <- function(path) {
+  lines <- readLines(path, warn = FALSE, encoding = "UTF-8")
+  lines <- lines[nzchar(trimws(lines))]
+  lapply(seq_along(lines), function(i) {
+    tryCatch(fromJSON(lines[[i]], simplifyVector = FALSE), error = function(e) {
+      stop(sprintf("Invalid JSONL at line %d: %s", i, conditionMessage(e)), call. = FALSE)
+    })
+  })
+}
+write_jsonl <- function(records, path) {
+  dir_create(dirname(path), recurse = TRUE)
+  con <- file(path, "w", encoding = "UTF-8")
+  on.exit(close(con), add = TRUE)
+  for (r in records) writeLines(toJSON(r, auto_unbox = TRUE, null = "null", na = "null", digits = NA), con)
+}
+first_col <- function(df, candidates) {
+  hit <- candidates[candidates %in% names(df)]
+  if (!length(hit)) return(rep("", nrow(df)))
+  out <- rep("", nrow(df))
+  for (nm in hit) {
+    x <- clean(df[[nm]])
+    take <- !nzchar(out) & nzchar(x)
+    out[take] <- x[take]
+  }
+  out
+}
 
-message("Workflow 05: reading input and production master.")
-records_raw <- read_csv(input_path, show_col_types = FALSE, progress = FALSE)
-master_raw <- read_csv(master_path, show_col_types = FALSE, progress = FALSE)
-if (!nrow(records_raw)) stop("Input contains no records", call. = FALSE)
+message("Workflow 05: reading canonical JSONL from Workflow 04.")
+canonical_records <- read_jsonl(input_path)
+master <- read_csv(master_path, show_col_types = FALSE, progress = FALSE)
+if (!length(canonical_records)) stop("Canonical input contains no records", call. = FALSE)
 
-# Normalise only the fields required by the existing annotation modules while
-# preserving every original input column in the final output.
-records <- records_raw
-records$record_id <- first_col(records, c("record_id", "lens_id", "Lens ID", "LensID", "doi", "DOI"))
-records$title <- first_col(records, c("title", "Title", "document_title", "Document Title"))
-records$abstract <- first_col(records, c("abstract", "Abstract"))
-if (!"record_sequence" %in% names(records)) records$record_sequence <- seq_len(nrow(records))
-records$record_sequence <- as.integer(records$record_sequence)
-if (any(!nzchar(records$record_id))) stop("Every input record must have record_id/lens_id/DOI", call. = FALSE)
-if (anyDuplicated(records$record_id)) stop("Input record_id values must be unique", call. = FALSE)
+record_view <- function(r, seq) {
+  id <- r$identity %||% list()
+  can <- r$canonical %||% list()
+  raw <- (r$lens %||% list())$raw_payload %||% list()
+  dedup <- r$deduplication %||% list()
+  notices <- r$notices
+  screening <- r$screening %||% list()
+  publication_ok <- if (is.null(notices)) TRUE else isTRUE(notices$record_downstream_eligible %||% notices$downstream_eligible %||% TRUE)
+  dedup_ok <- clean(dedup$status) %in% c("unique", "canonical")
+  included <- identical(clean(screening$decision), "include")
+  list(
+    record_sequence = seq,
+    record_id = first_nonempty(id$lens_id, can$lens_id, raw$lens_id, id$doi, can$doi, raw$doi),
+    lens_id = first_nonempty(id$lens_id, can$lens_id, raw$lens_id),
+    doi = first_nonempty(id$doi, can$doi, raw$doi),
+    title = first_nonempty(can$title, raw$title),
+    abstract = first_nonempty(can$abstract, raw$abstract),
+    workflow05_target = dedup_ok && publication_ok && included,
+    screening_decision = clean(screening$decision),
+    deduplication_status = clean(dedup$status),
+    publication_eligible = publication_ok
+  )
+}
+views <- lapply(seq_along(canonical_records), function(i) record_view(canonical_records[[i]], i))
+flat <- bind_rows(views)
+if (any(!nzchar(flat$record_id))) stop("At least one canonical record has no usable identity", call. = FALSE)
+targets <- flat |> filter(workflow05_target)
+message(sprintf("Workflow 05: canonical records=%d; annotation targets=%d.", nrow(flat), nrow(targets)))
 
-records$.lens_key <- tolower(first_col(records, c("lens_id", "Lens ID", "LensID", "record_id")))
-records$.doi_key <- normalise_doi(first_col(records, c("doi", "DOI", "doi_id")))
-records$.title_key <- normalise_title(records$title)
-
-master <- master_raw
-master$.master_row <- seq_len(nrow(master))
+# Production-master reuse. We only treat non-blank values as reusable evidence.
 master$.lens_key <- tolower(first_col(master, c("lens_id", "Lens ID", "LensID", "record_id")))
 master$.doi_key <- normalise_doi(first_col(master, c("doi", "DOI", "doi_id")))
 master$.title_key <- normalise_title(first_col(master, c("title", "Title", "document_title", "Document Title")))
-
-# These are deliberately conservative, final/production-oriented aliases.
-# Blank values are not treated as evidence of an explicit NONE decision.
 master$.species_value <- first_col(master, c(
-  "final_species", "species_final", "final_farmed_species",
-  "adjudicated_species", "llm_species", "deterministic_species"
+  "final_species", "species_final", "final_farmed_species", "adjudicated_species",
+  "farmed_species", "species", "Species", "llm_species", "deterministic_species"
 ))
 master$.geo_iso3c <- first_col(master, c(
-  "final_primary_country_iso3c", "primary_country_iso3c_final",
-  "adjudicated_primary_country_iso3c", "llm_primary_country_iso3c",
-  "deterministic_primary_iso3c", "primary_iso3c"
+  "final_primary_country_iso3c", "primary_country_iso3c_final", "adjudicated_primary_country_iso3c",
+  "primary_iso3c", "country_iso3c", "iso3c", "llm_primary_country_iso3c", "deterministic_primary_iso3c"
 ))
 master$.geo_country <- first_col(master, c(
-  "final_primary_country", "final_primary_countries", "primary_country_final",
-  "deterministic_primary_countries", "primary_countries"
+  "final_primary_country", "final_primary_countries", "primary_country_final", "primary_countries",
+  "country", "Country", "geography", "Geography", "deterministic_primary_countries"
 ))
-
-# Unique-match indexes. Ambiguous keys are intentionally ignored rather than
-# risking transfer of annotation from the wrong publication.
 unique_index <- function(values) {
   ok <- nzchar(values)
   tab <- table(values[ok])
-  unique_values <- names(tab)[tab == 1L]
-  idx <- which(ok & values %in% unique_values)
+  vals <- names(tab)[tab == 1L]
+  idx <- which(ok & values %in% vals)
   setNames(idx, values[idx])
 }
 lens_index <- unique_index(master$.lens_key)
 doi_index <- unique_index(master$.doi_key)
 title_index <- unique_index(master$.title_key)
 
-match_master_row <- function(i) {
-  k <- records$.lens_key[[i]]
-  if (nzchar(k) && k %in% names(lens_index)) return(unname(lens_index[[k]]))
-  k <- records$.doi_key[[i]]
-  if (nzchar(k) && k %in% names(doi_index)) return(unname(doi_index[[k]]))
-  k <- records$.title_key[[i]]
-  if (nzchar(k) && k %in% names(title_index)) return(unname(title_index[[k]]))
+match_master <- function(lens, doi, title) {
+  lk <- tolower(clean(lens)); dk <- normalise_doi(doi); tk <- normalise_title(title)
+  if (nzchar(lk) && lk %in% names(lens_index)) return(unname(lens_index[[lk]]))
+  if (nzchar(dk) && dk %in% names(doi_index)) return(unname(doi_index[[dk]]))
+  if (nzchar(tk) && tk %in% names(title_index)) return(unname(title_index[[tk]]))
   NA_integer_
 }
-master_match <- vapply(seq_len(nrow(records)), match_master_row, integer(1))
-
-reuse <- tibble(
-  record_id = records$record_id,
-  master_match_row = master_match,
-  master_species = ifelse(is.na(master_match), "", master$.species_value[master_match]),
-  master_primary_country_iso3c = ifelse(is.na(master_match), "", master$.geo_iso3c[master_match]),
-  master_primary_countries = ifelse(is.na(master_match), "", master$.geo_country[master_match])
-) |>
+master_rows <- mapply(match_master, targets$lens_id, targets$doi, targets$title)
+reuse <- targets |>
+  transmute(
+    record_sequence, record_id,
+    master_match_row = master_rows,
+    master_species = ifelse(is.na(master_rows), "", master$.species_value[master_rows]),
+    master_primary_country_iso3c = ifelse(is.na(master_rows), "", master$.geo_iso3c[master_rows]),
+    master_primary_countries = ifelse(is.na(master_rows), "", master$.geo_country[master_rows])
+  ) |>
   mutate(
     master_species = clean(master_species),
     master_primary_country_iso3c = clean(master_primary_country_iso3c),
     master_primary_countries = clean(master_primary_countries),
+    master_match = !is.na(master_match_row),
     species_reused = nzchar(master_species),
-    geography_reused = nzchar(master_primary_country_iso3c),
-    master_match = !is.na(master_match_row)
+    geography_reused = nzchar(master_primary_country_iso3c) | nzchar(master_primary_countries)
   )
-
 write_csv(reuse, path(output_dir, "master_annotation_reuse.csv"), na = "")
-message(sprintf(
-  "Workflow 05: master matches=%d/%d; species reused=%d; geography reused=%d.",
-  sum(reuse$master_match), nrow(records), sum(reuse$species_reused), sum(reuse$geography_reused)
-))
+message(sprintf("Workflow 05: master matches=%d; species reused=%d; geography reused=%d.", sum(reuse$master_match), sum(reuse$species_reused), sum(reuse$geography_reused)))
 
-species_needed_ids <- reuse$record_id[!reuse$species_reused]
-geo_needed_ids <- reuse$record_id[!reuse$geography_reused]
-
-species_records <- records |> filter(record_id %in% species_needed_ids) |>
+species_records <- targets |>
+  inner_join(reuse |> filter(!species_reused) |> select(record_id), by = "record_id") |>
   select(record_sequence, record_id, title, abstract)
-geo_records <- records |> filter(record_id %in% geo_needed_ids) |>
+geo_records <- targets |>
+  inner_join(reuse |> filter(!geography_reused) |> select(record_id), by = "record_id") |>
   select(record_sequence, record_id, title, abstract)
 
 species_dictionary <- read_csv(here("config", "species_dictionary.csv"), show_col_types = FALSE, progress = FALSE)
 gazetteer <- read_csv(here("config", "global_country_gazetteer_v3.csv"), show_col_types = FALSE, progress = FALSE)
 
-message(sprintf("Workflow 05: deterministic species annotation required for %d records.", nrow(species_records)))
-if (nrow(species_records)) {
-  species <- annotate_species(species_records, species_dictionary, progress = TRUE)
-} else {
-  species <- list(species_mentions = tibble(), species_assignments = tibble(), failures = tibble())
-}
+message(sprintf("Workflow 05: local species annotation required for %d targets.", nrow(species_records)))
+species <- if (nrow(species_records)) annotate_species(species_records, species_dictionary, progress = TRUE) else list(species_mentions = tibble(), species_assignments = tibble(), failures = tibble())
 write_csv(species$species_mentions, path(output_dir, "species_mentions.csv"), na = "")
 write_csv(species$species_assignments, path(output_dir, "species_assignments.csv"), na = "")
 write_csv(species$failures, path(output_dir, "species_annotation_failures.csv"), na = "")
-if (nrow(species$failures)) stop("Deterministic species annotation produced failures", call. = FALSE)
+if (nrow(species$failures)) stop("Species annotation failures present; refusing to continue", call. = FALSE)
 
-message(sprintf("Workflow 05: deterministic geography annotation required for %d records.", nrow(geo_records)))
+message(sprintf("Workflow 05: local geography annotation required for %d targets.", nrow(geo_records)))
 if (nrow(geo_records)) {
   geo_mentions <- detect_geography_mentions(geo_records, gazetteer, progress = TRUE)
-  if (nrow(geo_mentions)) {
-    geo <- assign_primary_country(geo_mentions)
-  } else {
-    geo <- list(ranking = tibble(), assignments = tibble(), summary = tibble(), review_queue = tibble())
-  }
+  geo <- if (nrow(geo_mentions)) assign_primary_country(geo_mentions) else list(ranking=tibble(),assignments=tibble(),summary=tibble(),review_queue=tibble())
 } else {
-  geo_mentions <- tibble()
-  geo <- list(ranking = tibble(), assignments = tibble(), summary = tibble(), review_queue = tibble())
+  geo_mentions <- tibble(); geo <- list(ranking=tibble(),assignments=tibble(),summary=tibble(),review_queue=tibble())
 }
 write_csv(geo_mentions, path(output_dir, "geography_mentions.csv"), na = "")
 write_csv(geo$ranking, path(output_dir, "geography_ranking.csv"), na = "")
@@ -216,193 +238,174 @@ write_csv(geo$assignments, path(output_dir, "geography_assignments.csv"), na = "
 write_csv(geo$summary, path(output_dir, "geography_summary.csv"), na = "")
 write_csv(geo$review_queue, path(output_dir, "geography_review_queue.csv"), na = "")
 
-# Collapse deterministic species assignments and retain their review flag.
 if (nrow(species$species_assignments)) {
-  species_summary <- species$species_assignments |>
+  sp <- species$species_assignments |>
     group_by(record_id) |>
     summarise(
-      deterministic_species = paste(sort(unique(stats::na.omit(farmed_species[nzchar(clean(farmed_species))]))), collapse = "; "),
-      deterministic_species_ids = paste(sort(unique(stats::na.omit(farmed_species_id[nzchar(clean(farmed_species_id))]))), collapse = "; "),
+      deterministic_species = paste(sort(unique(clean(farmed_species)[nzchar(clean(farmed_species))])), collapse = "; "),
+      deterministic_species_ids = paste(sort(unique(clean(farmed_species_id)[nzchar(clean(farmed_species_id))])), collapse = "; "),
       species_review_required = any(review_required %in% TRUE),
-      species_reasons = paste(sort(unique(stats::na.omit(assignment_reason))), collapse = " | "),
-      non_target_species = paste(sort(unique(stats::na.omit(non_target_species[nzchar(clean(non_target_species))]))), collapse = "; "),
+      species_reasons = paste(sort(unique(clean(assignment_reason)[nzchar(clean(assignment_reason))])), collapse = " | "),
+      non_target_species = paste(sort(unique(clean(non_target_species)[nzchar(clean(non_target_species))])), collapse = "; "),
       .groups = "drop"
     )
-} else {
-  species_summary <- tibble(record_id = character(), deterministic_species = character(), deterministic_species_ids = character(), species_review_required = logical(), species_reasons = character(), non_target_species = character())
-}
+} else sp <- tibble(record_id=character(),deterministic_species=character(),deterministic_species_ids=character(),species_review_required=logical(),species_reasons=character(),non_target_species=character())
 
 if (nrow(geo$summary)) {
-  geo_summary <- geo$summary |>
-    transmute(
-      record_id = as.character(record_id),
-      deterministic_primary_countries = clean(primary_countries),
-      deterministic_primary_iso3c = clean(primary_iso3c),
-      geography_review_required = review_required %in% TRUE,
-      geography_review_reason = clean(review_reason)
-    )
-} else {
-  geo_summary <- tibble(record_id = character(), deterministic_primary_countries = character(), deterministic_primary_iso3c = character(), geography_review_required = logical(), geography_review_reason = character())
-}
+  gs <- geo$summary |>
+    transmute(record_id=as.character(record_id), deterministic_primary_countries=clean(primary_countries), deterministic_primary_iso3c=clean(primary_iso3c), geography_review_required=review_required %in% TRUE, geography_review_reason=clean(review_reason))
+} else gs <- tibble(record_id=character(),deterministic_primary_countries=character(),deterministic_primary_iso3c=character(),geography_review_required=logical(),geography_review_reason=character())
 
 state <- reuse |>
-  left_join(species_summary, by = "record_id") |>
-  left_join(geo_summary, by = "record_id") |>
+  left_join(sp, by="record_id") |>
+  left_join(gs, by="record_id") |>
   mutate(
-    species_review_required = coalesce(species_review_required, FALSE) & !species_reused,
-    geography_review_required = coalesce(geography_review_required, FALSE) & !geography_reused,
-    deterministic_species = coalesce(deterministic_species, ""),
-    deterministic_species_ids = coalesce(deterministic_species_ids, ""),
-    deterministic_primary_countries = coalesce(deterministic_primary_countries, ""),
-    deterministic_primary_iso3c = coalesce(deterministic_primary_iso3c, "")
+    deterministic_species=coalesce(deterministic_species,""),
+    deterministic_species_ids=coalesce(deterministic_species_ids,""),
+    deterministic_primary_countries=coalesce(deterministic_primary_countries,""),
+    deterministic_primary_iso3c=coalesce(deterministic_primary_iso3c,""),
+    species_reasons=coalesce(species_reasons,""),
+    non_target_species=coalesce(non_target_species,""),
+    geography_review_reason=coalesce(geography_review_reason,""),
+    species_review_required=coalesce(species_review_required,FALSE) & !species_reused,
+    geography_review_required=coalesce(geography_review_required,FALSE) & !geography_reused
   )
 
-# Build only the genuinely unresolved queue. This avoids the historical bug of
-# sending every deterministic species assignment to adjudication.
-queue_records <- records |>
-  select(record_sequence, record_id, title, abstract) |>
-  inner_join(state |> filter(species_review_required | geography_review_required), by = "record_id")
-
-# Geography candidates are useful to the adjudicator.
+# Only genuinely unresolved dimensions enter the adjudication queue.
+queue <- targets |>
+  select(record_sequence,record_id,title,abstract) |>
+  inner_join(state |> filter(species_review_required | geography_review_required), by="record_id")
 if (nrow(geo$ranking)) {
-  geo_candidates <- geo$ranking |>
-    group_by(record_id) |>
-    summarise(
-      geography_candidates = paste(unique(paste0(country_name, " [", iso3c, "]; tier ", best_tier)), collapse = "; "),
-      .groups = "drop"
-    )
-  queue_records <- queue_records |> left_join(geo_candidates, by = "record_id")
-} else {
-  queue_records$geography_candidates <- ""
+  candidates <- geo$ranking |> group_by(record_id) |> summarise(geography_candidates=paste(unique(paste0(country_name," [",iso3c,"]; tier ",best_tier)),collapse="; "),.groups="drop")
+  queue <- queue |> left_join(candidates,by="record_id")
 }
-queue_records$geography_candidates <- coalesce(queue_records$geography_candidates, "")
+if (!"geography_candidates" %in% names(queue)) queue$geography_candidates <- ""
+queue$geography_candidates <- coalesce(queue$geography_candidates, "")
+write_csv(queue, path(output_dir,"annotation_adjudication_queue.csv"), na="")
+message(sprintf("Workflow 05: unresolved adjudication queue=%d records.", nrow(queue)))
 
-write_csv(queue_records, path(output_dir, "annotation_adjudication_queue.csv"), na = "")
-message(sprintf("Workflow 05: %d records require adjudication after master reuse + deterministic annotation.", nrow(queue_records)))
-
-openai_annotation_model <- function(system_prompt, user_prompt, schema,
-                                     api_key = Sys.getenv("OPENAI_API_KEY"), model_name = model) {
-  body <- list(
-    model = model_name, store = FALSE, reasoning = list(effort = "low"),
-    input = list(
-      list(role = "system", content = list(list(type = "input_text", text = system_prompt))),
-      list(role = "user", content = list(list(type = "input_text", text = user_prompt)))
-    ),
-    text = list(verbosity = "low", format = list(
-      type = "json_schema", name = "salmon_annotation_adjudication", strict = TRUE,
-      schema = annotation_adjudication_schema()
-    ))
-  )
+openai_annotation_model <- function(system_prompt,user_prompt,schema,api_key=Sys.getenv("OPENAI_API_KEY"),model_name=model) {
+  body <- list(model=model_name,store=FALSE,reasoning=list(effort="low"),input=list(
+    list(role="system",content=list(list(type="input_text",text=system_prompt))),
+    list(role="user",content=list(list(type="input_text",text=user_prompt)))
+  ),text=list(verbosity="low",format=list(type="json_schema",name="salmon_annotation_adjudication",strict=TRUE,schema=schema)))
   httr2::request("https://api.openai.com/v1/responses") |>
     httr2::req_auth_bearer_token(api_key) |>
-    httr2::req_body_json(body, auto_unbox = TRUE) |>
+    httr2::req_body_json(body,auto_unbox=TRUE) |>
     httr2::req_timeout(120) |>
-    httr2::req_retry(max_tries = 4, backoff = ~ 2^.x) |>
+    httr2::req_retry(max_tries=4,backoff=~2^.x) |>
     httr2::req_perform() |>
     httr2::resp_body_json() |>
     extract_openai_output_text() |>
-    jsonlite::fromJSON(simplifyVector = TRUE)
+    jsonlite::fromJSON(simplifyVector=TRUE)
 }
 
-if (llm_mode == "new-only" && nrow(queue_records)) {
-  if (max_llm_records > 0L && nrow(queue_records) > max_llm_records) {
-    stop(sprintf("Adjudication queue has %d records, exceeding --max-llm-records=%d; refusing API calls.", nrow(queue_records), max_llm_records), call. = FALSE)
-  }
-  adjudication <- adjudicate_annotation_queue(queue_records, openai_annotation_model, progress = TRUE)
-} else {
-  adjudication <- tibble()
-}
-write_csv(adjudication, path(output_dir, "annotation_adjudication.csv"), na = "")
+if (llm_mode=="new-only" && nrow(queue)) {
+  if (max_llm_records>0L && nrow(queue)>max_llm_records) stop(sprintf("Queue=%d exceeds --max-llm-records=%d; refusing API calls",nrow(queue),max_llm_records),call.=FALSE)
+  adjudication <- adjudicate_annotation_queue(queue,openai_annotation_model,progress=TRUE)
+} else adjudication <- tibble()
+write_csv(adjudication,path(output_dir,"annotation_adjudication.csv"),na="")
 
-state_final <- state
-if (nrow(adjudication)) state_final <- state_final |> left_join(adjudication, by = "record_id")
-for (nm in c("species_decision", "llm_species", "species_reason", "geography_decision", "llm_primary_country_iso3c", "geography_reason", "llm_failed", "llm_error")) {
-  if (!nm %in% names(state_final)) state_final[[nm]] <- if (nm == "llm_failed") FALSE else ""
+if (nrow(adjudication)) state <- state |> left_join(adjudication,by="record_id")
+for (nm in c("species_decision","llm_species","species_reason","geography_decision","llm_primary_country_iso3c","geography_reason","llm_failed","llm_error")) {
+  if (!nm %in% names(state)) state[[nm]] <- if (nm=="llm_failed") FALSE else ""
 }
-state_final$species_decision <- clean(state_final$species_decision)
-state_final$llm_species <- clean(state_final$llm_species)
-state_final$geography_decision <- clean(state_final$geography_decision)
-state_final$llm_primary_country_iso3c <- clean(state_final$llm_primary_country_iso3c)
-state_final$llm_failed <- coalesce(as.logical(state_final$llm_failed), FALSE)
-
-state_final <- state_final |>
+state <- state |>
   mutate(
-    final_species = case_when(
+    species_decision=clean(species_decision), llm_species=clean(llm_species), geography_decision=clean(geography_decision), llm_primary_country_iso3c=clean(llm_primary_country_iso3c),
+    llm_failed=coalesce(as.logical(llm_failed),FALSE),
+    final_species=case_when(
       species_reused ~ master_species,
-      species_review_required & species_decision %in% c("ACCEPT", "CHANGE") & nzchar(llm_species) ~ llm_species,
+      species_review_required & species_decision %in% c("ACCEPT","CHANGE") & nzchar(llm_species) ~ llm_species,
       !species_review_required & nzchar(deterministic_species) ~ deterministic_species,
       TRUE ~ ""
     ),
-    species_annotation_provenance = case_when(
+    species_provenance=case_when(
       species_reused ~ "historical_master",
-      species_review_required & species_decision %in% c("ACCEPT", "CHANGE") & nzchar(llm_species) ~ "workflow05_llm_new_only",
+      species_review_required & species_decision %in% c("ACCEPT","CHANGE") & nzchar(llm_species) ~ "workflow05_llm_new_only",
       !species_review_required & nzchar(deterministic_species) ~ "workflow05_deterministic",
       TRUE ~ "workflow05_unresolved"
     ),
-    final_primary_country_iso3c = case_when(
+    final_primary_country_iso3c=case_when(
       geography_reused ~ master_primary_country_iso3c,
-      geography_review_required & geography_decision %in% c("ACCEPT", "CHANGE") & nzchar(llm_primary_country_iso3c) ~ llm_primary_country_iso3c,
-      !geography_review_required & nzchar(deterministic_primary_iso3c) ~ deterministic_primary_iso3c,
+      geography_review_required & geography_decision %in% c("ACCEPT","CHANGE") & nzchar(llm_primary_country_iso3c) ~ llm_primary_country_iso3c,
+      !geography_review_required ~ deterministic_primary_iso3c,
       TRUE ~ ""
     ),
-    final_primary_countries = case_when(
+    final_primary_countries=case_when(
       geography_reused ~ master_primary_countries,
-      !geography_review_required & nzchar(deterministic_primary_countries) ~ deterministic_primary_countries,
+      !geography_review_required ~ deterministic_primary_countries,
       TRUE ~ ""
     ),
-    geography_annotation_provenance = case_when(
+    geography_provenance=case_when(
       geography_reused ~ "historical_master",
-      geography_review_required & geography_decision %in% c("ACCEPT", "CHANGE") & nzchar(llm_primary_country_iso3c) ~ "workflow05_llm_new_only",
-      !geography_review_required & nzchar(deterministic_primary_iso3c) ~ "workflow05_deterministic",
+      geography_review_required & geography_decision %in% c("ACCEPT","CHANGE") & nzchar(llm_primary_country_iso3c) ~ "workflow05_llm_new_only",
+      !geography_review_required & (nzchar(deterministic_primary_iso3c)|nzchar(deterministic_primary_countries)) ~ "workflow05_deterministic",
+      !geography_review_required ~ "workflow05_no_country_detected",
       TRUE ~ "workflow05_unresolved"
     ),
-    workflow05_review_required = species_annotation_provenance == "workflow05_unresolved" |
-      geography_annotation_provenance == "workflow05_unresolved" |
-      llm_failed
+    workflow05_review_required = species_provenance=="workflow05_unresolved" | geography_provenance=="workflow05_unresolved" | llm_failed
   )
 
-final <- records_raw |>
-  mutate(record_id = records$record_id) |>
-  left_join(
-    state_final |>
-      select(record_id, final_species, final_primary_countries, final_primary_country_iso3c,
-             species_annotation_provenance, geography_annotation_provenance,
-             deterministic_species, deterministic_species_ids,
-             deterministic_primary_countries, deterministic_primary_iso3c,
-             species_review_required, geography_review_required,
-             species_decision, llm_species, species_reason,
-             geography_decision, llm_primary_country_iso3c, geography_reason,
-             llm_failed, llm_error, workflow05_review_required),
-    by = "record_id"
+state_by_seq <- setNames(seq_len(nrow(state)), as.character(state$record_sequence))
+for (i in seq_along(canonical_records)) {
+  k <- as.character(i)
+  if (!k %in% names(state_by_seq)) next
+  s <- state[[state_by_seq[[k]], , drop=FALSE]]
+  r <- canonical_records[[i]]
+  ann <- r$annotations %||% list()
+  ann$species <- list(
+    value=s$final_species[[1]],
+    deterministic_value=s$deterministic_species[[1]],
+    deterministic_ids=s$deterministic_species_ids[[1]],
+    provenance=s$species_provenance[[1]],
+    review_required=isTRUE(s$species_provenance[[1]]=="workflow05_unresolved")
   )
+  ann$geography <- list(
+    primary_countries=s$final_primary_countries[[1]],
+    primary_iso3c=s$final_primary_country_iso3c[[1]],
+    deterministic_primary_countries=s$deterministic_primary_countries[[1]],
+    deterministic_primary_iso3c=s$deterministic_primary_iso3c[[1]],
+    provenance=s$geography_provenance[[1]],
+    review_required=isTRUE(s$geography_provenance[[1]]=="workflow05_unresolved")
+  )
+  ann$workflow05 <- list(
+    workflow="workflow_05_species_geography",
+    completed_at=now_utc(),
+    master_reuse=isTRUE(s$master_match[[1]]),
+    llm_mode=llm_mode,
+    review_required=isTRUE(s$workflow05_review_required[[1]])
+  )
+  r$annotations <- ann
+  canonical_records[[i]] <- r
+}
 
-write_csv(final, path(output_dir, "records_after_species_geography_adjudication.csv"), na = "")
-review <- final |> filter(workflow05_review_required %in% TRUE)
-write_csv(review, path(output_dir, "workflow05_human_review_queue.csv"), na = "")
+output_jsonl <- path(output_dir,"records.jsonl")
+write_jsonl(canonical_records,output_jsonl)
+review <- state |> filter(workflow05_review_required) |> left_join(targets |> select(record_sequence,record_id,title,abstract),by=c("record_sequence","record_id"))
+write_csv(review,path(output_dir,"workflow05_human_review_queue.csv"),na="")
 
 summary <- list(
-  workflow = "05_species_geography_annotation",
-  completed_at = now_utc(),
-  input = input_path,
-  master = master_path,
-  output_dir = output_dir,
-  llm_mode = llm_mode,
-  model = if (llm_mode == "new-only") model else NA_character_,
-  records = nrow(final),
-  master_matches = sum(reuse$master_match),
-  species_reused_from_master = sum(reuse$species_reused),
-  geography_reused_from_master = sum(reuse$geography_reused),
-  species_deterministic_records = nrow(species_records),
-  geography_deterministic_records = nrow(geo_records),
-  adjudication_queue_records = nrow(queue_records),
-  llm_calls_attempted = if (llm_mode == "new-only") nrow(queue_records) else 0L,
-  llm_failures = if (nrow(adjudication)) sum(adjudication$llm_failed %in% TRUE) else 0L,
-  human_review_records = nrow(review),
-  complete = nrow(review) == 0L
+  workflow="workflow_05_species_geography",
+  input=input_path,
+  output=output_jsonl,
+  completed_at=now_utc(),
+  canonical_records=length(canonical_records),
+  annotation_targets=nrow(targets),
+  expected_workflow04_includes=16068,
+  target_count_matches_workflow04_completion=(nrow(targets)==16068),
+  master_matches=sum(reuse$master_match),
+  species_reused_from_master=sum(reuse$species_reused),
+  geography_reused_from_master=sum(reuse$geography_reused),
+  species_deterministic_records=nrow(species_records),
+  geography_deterministic_records=nrow(geo_records),
+  adjudication_queue_records=nrow(queue),
+  llm_mode=llm_mode,
+  llm_calls_attempted=if (llm_mode=="new-only") nrow(queue) else 0L,
+  llm_failures=if (nrow(adjudication)) sum(adjudication$llm_failed %in% TRUE) else 0L,
+  human_review_records=nrow(review),
+  complete=nrow(review)==0L
 )
-writeLines(toJSON(summary, auto_unbox = TRUE, pretty = TRUE, na = "null"), path(output_dir, "workflow05_summary.json"))
-
-message(sprintf(
-  "Workflow 05 complete: %d records; master species=%d; master geography=%d; LLM queue=%d; human review=%d.",
-  nrow(final), sum(reuse$species_reused), sum(reuse$geography_reused), nrow(queue_records), nrow(review)
-))
+writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,na="null"),path(output_dir,"workflow05_summary.json"))
+if (nrow(targets)!=16068) warning(sprintf("Workflow 04 completed with 16068 includes, but Workflow 05 found %d targets",nrow(targets)))
+message(sprintf("Workflow 05 finished: targets=%d; species master=%d; geography master=%d; adjudication queue=%d; human review=%d; LLM calls=%d.",nrow(targets),sum(reuse$species_reused),sum(reuse$geography_reused),nrow(queue),nrow(review),if(llm_mode=="new-only")nrow(queue) else 0L))
