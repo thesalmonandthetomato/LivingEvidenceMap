@@ -2,7 +2,7 @@ name: Workflow 06 topic V4 replication test
 
 on:
   push:
-    branches: [workflow06-topic-reuse]
+    branches: [workflow06-gpt5mini-replication]
     paths:
       - 'R/run_topic_v4_classifier.R'
       - 'R/run_update_topic_classification.R'
@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow06-topic-reuse
+          ref: workflow06-gpt5mini-replication
 
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -116,17 +116,17 @@ jobs:
           print('Selected 50 known original V4 records for replication.')
           PY
 
-      - name: Run validated V4 mechanism with Luna
+      - name: Run validated V4 mechanism with GPT-5 mini
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TOPIC_INPUT_PATH: outputs/workflow06/topic_replication_llm_queue.csv
           TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
-          TOPIC_OUTPUT_DIR: outputs/workflow06/replication_luna
-          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_OUTPUT_DIR: outputs/workflow06/replication_gpt5mini
+          TOPIC_MODEL: gpt-5-mini
           TOPIC_REASONING_EFFORT: medium
         run: Rscript R/run_topic_v4_classifier.R
 
-      - name: Compare Luna assignments with known historical V4 assignments
+      - name: Compare GPT-5 mini assignments with known historical V4 assignments
         shell: bash
         run: |
           set -euo pipefail
@@ -139,9 +139,9 @@ jobs:
               for r in csv.DictReader(f): ref[r['record_id']].add(r['path_id'])
           with open(f'{out}/topic_replication_llm_queue.csv',encoding='utf-8-sig',newline='') as f:
               queue=list(csv.DictReader(f))
-          with open(f'{out}/replication_luna/topic_classification_records.csv',encoding='utf-8-sig',newline='') as f:
+          with open(f'{out}/replication_gpt5mini/topic_classification_records.csv',encoding='utf-8-sig',newline='') as f:
               recrows=list(csv.DictReader(f))
-          with open(f'{out}/replication_luna/topic_assignments.csv',encoding='utf-8-sig',newline='') as f:
+          with open(f'{out}/replication_gpt5mini/topic_assignments.csv',encoding='utf-8-sig',newline='') as f:
               longrows=list(csv.DictReader(f))
           status={r['record_id']:r for r in recrows}
           for r in longrows:
@@ -160,17 +160,17 @@ jobs:
               jaccards.append(j); old_counts.append(len(a)); new_counts.append(len(b))
               details.append({
                   'record_id':rid,'title':qby[rid]['title'],
-                  'reference_path_ids':'; '.join(sorted(a)),'luna_path_ids':'; '.join(sorted(b)),
-                  'added_by_luna':'; '.join(sorted(b-a)),'missed_by_luna':'; '.join(sorted(a-b)),
-                  'reference_count':len(a),'luna_count':len(b),'exact_set_match':a==b,
-                  'jaccard':round(j,6),'luna_review_required':status[rid].get('review_required',''),
-                  'luna_reasons':' || '.join(reasons[rid])
+                  'reference_path_ids':'; '.join(sorted(a)),'gpt5mini_path_ids':'; '.join(sorted(b)),
+                  'added_by_gpt5mini':'; '.join(sorted(b-a)),'missed_by_gpt5mini':'; '.join(sorted(a-b)),
+                  'reference_count':len(a),'gpt5mini_count':len(b),'exact_set_match':a==b,
+                  'jaccard':round(j,6),'gpt5mini_review_required':status[rid].get('review_required',''),
+                  'gpt5mini_reasons':' || '.join(reasons[rid])
               })
           precision=tp/(tp+fp) if tp+fp else 1.0
           recall=tp/(tp+fn) if tp+fn else 1.0
           f1=2*precision*recall/(precision+recall) if precision+recall else 0.0
           summary={
-              'records':len(ids),'model':'gpt-5.6-luna','reasoning_effort':'medium',
+              'records':len(ids),'model':'gpt-5-mini','reasoning_effort':'medium',
               'classifier':'legacy V4 full-corpus prompt and ontology presentation',
               'historical_reference':'original assignments from repaired master',
               'exact_set_matches':exact,'exact_set_agreement':exact/len(ids),
@@ -178,9 +178,9 @@ jobs:
               'path_precision':precision,'path_recall':recall,'path_f1':f1,
               'mean_record_jaccard':sum(jaccards)/len(jaccards),
               'mean_historical_topics_per_record':statistics.mean(old_counts),
-              'mean_luna_topics_per_record':statistics.mean(new_counts),
+              'mean_gpt5mini_topics_per_record':statistics.mean(new_counts),
               'median_historical_topics_per_record':statistics.median(old_counts),
-              'median_luna_topics_per_record':statistics.median(new_counts),
+              'median_gpt5mini_topics_per_record':statistics.median(new_counts),
               'technical_failures':0
           }
           with open(f'{out}/topic_replication_comparison.csv','w',encoding='utf-8',newline='') as f:
@@ -193,7 +193,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow06-v4-luna-replication-${{ github.run_id }}
+          name: workflow06-v4-gpt5mini-replication-${{ github.run_id }}
           path: outputs/workflow06/
           if-no-files-found: error
           retention-days: 90
