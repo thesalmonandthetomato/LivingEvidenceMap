@@ -1,0 +1,219 @@
+name: Workflow 06 topic reuse audit
+
+on:
+  push:
+    branches: [workflow06-topic-reuse]
+    paths:
+      - '.github/workflows/workflow06_topic_reuse_audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  WF05_ARTIFACT_ID: '10501181612'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-topic-reuse
+
+      - name: Download completed Workflow 05 artefact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/workflow05
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${WF05_ARTIFACT_ID}/zip" > /tmp/workflow05.zip
+          unzip -q /tmp/workflow05.zip -d inputs/workflow05
+          test -s inputs/workflow05/records.jsonl
+          test -s inputs/workflow05/records_after_species_geography_adjudication.csv
+
+      - name: Audit reusable historical topic assignments
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow06_topic_reuse
+          python3 - <<'PY'
+          import csv, json, os, re, unicodedata
+          from collections import Counter, defaultdict
+
+          wfdir='inputs/workflow05'
+          outdir='outputs/workflow06_topic_reuse'
+          eligible_csv=os.path.join(wfdir,'records_after_species_geography_adjudication.csv')
+          jsonl=os.path.join(wfdir,'records.jsonl')
+          sources=[
+            ('topic_repaired','data/reference/living_evidence_map_master_topic_repaired.csv'),
+            ('corrected_master','data/master/current/living_evidence_map_master CORRECTED.csv'),
+            ('historical_master','data/reference/historical_master_12043.csv'),
+          ]
+
+          def clean(x): return (x or '').strip()
+          def norm_doi(x):
+              x=clean(x).lower()
+              x=re.sub(r'^https?://(dx\.)?doi\.org/','',x)
+              x=re.sub(r'^doi:\s*','',x)
+              return x.rstrip(' .;,')
+          def norm_title(x):
+              x=unicodedata.normalize('NFKD',clean(x)).encode('ascii','ignore').decode().lower()
+              x=re.sub(r'[^a-z0-9]+',' ',x)
+              return ' '.join(x.split())
+          def norm_name(x): return re.sub(r'[^a-z0-9]+','',x.lower())
+          def resolve(fields, candidates):
+              bynorm={norm_name(f):f for f in fields}
+              for c in candidates:
+                  if norm_name(c) in bynorm: return bynorm[norm_name(c)]
+              return None
+          def first_doi_from_json(rec):
+              raw=((rec.get('lens') or {}).get('raw_payload') or {})
+              for item in raw.get('external_ids') or []:
+                  if str(item.get('type','')).lower()=='doi' and item.get('value'):
+                      return norm_doi(item['value'])
+              can=rec.get('canonical') or {}
+              for k in ('doi','DOI'):
+                  if can.get(k): return norm_doi(can[k])
+              return ''
+          def title_from_json(rec):
+              raw=((rec.get('lens') or {}).get('raw_payload') or {})
+              return clean(raw.get('title') or (rec.get('canonical') or {}).get('title'))
+
+          eligible=[]
+          with open(eligible_csv,encoding='utf-8-sig',newline='') as f:
+              for r in csv.DictReader(f):
+                  if clean(r.get('screening_decision')).lower()=='include':
+                      eligible.append(clean(r.get('record_id')))
+          eligible_set=set(eligible)
+          current={}
+          with open(jsonl,encoding='utf-8') as f:
+              for line in f:
+                  if not line.strip(): continue
+                  r=json.loads(line)
+                  rid=clean(((r.get('identity') or {}).get('record_id')) or ((r.get('identity') or {}).get('lens_id')))
+                  if rid not in eligible_set: continue
+                  lens=clean((r.get('identity') or {}).get('lens_id'))
+                  title=title_from_json(r)
+                  current[rid]={'record_id':rid,'lens_id':lens,'doi':first_doi_from_json(r),'title':title,'title_norm':norm_title(title)}
+          missing_json=sorted(eligible_set-set(current))
+          if missing_json: raise SystemExit(f'{len(missing_json)} eligible IDs absent from records.jsonl')
+
+          topic_regex=re.compile(r'(topic|subtopic|feature|component|hierarch|path|theme|category)',re.I)
+          source_meta={}
+          source_indexes={}
+          source_rows={}
+          for label,path in sources:
+              if not os.path.exists(path):
+                  source_meta[label]={'path':path,'exists':False}; continue
+              with open(path,encoding='utf-8-sig',newline='') as f:
+                  reader=csv.DictReader(f); fields=reader.fieldnames or []
+                  rid_col=resolve(fields,['record_id','record id','id'])
+                  lens_col=resolve(fields,['lens_id','lens id','lensid'])
+                  doi_col=resolve(fields,['doi','DOI'])
+                  title_col=resolve(fields,['title','document title','article title'])
+                  topic_cols=[c for c in fields if topic_regex.search(c)]
+                  # Preserve the known historical coding fields even if naming differs.
+                  for c in fields:
+                      if norm_name(c) in {'broadtopic','subtopic','feature','component'} and c not in topic_cols: topic_cols.append(c)
+                  rows=[]; idx={k:defaultdict(list) for k in ('record_id','lens_id','doi','title')}
+                  topic_nonempty=0
+                  for n,r in enumerate(reader):
+                      vals={c:clean(r.get(c)) for c in topic_cols}
+                      has_topic=any(vals.values())
+                      if has_topic: topic_nonempty+=1
+                      item={'source_row':n+2,'topics':vals,'has_topic':has_topic}
+                      if rid_col: item['record_id']=clean(r.get(rid_col))
+                      if lens_col: item['lens_id']=clean(r.get(lens_col))
+                      if doi_col: item['doi']=norm_doi(r.get(doi_col))
+                      if title_col:
+                          item['title']=clean(r.get(title_col)); item['title_norm']=norm_title(item['title'])
+                      j=len(rows); rows.append(item)
+                      for key in ('record_id','lens_id','doi','title'):
+                          val=item.get('title_norm') if key=='title' else item.get(key)
+                          if val: idx[key][val].append(j)
+              source_meta[label]={'path':path,'exists':True,'rows':len(rows),'topic_nonempty_rows':topic_nonempty,'fields':fields,'topic_columns':topic_cols,'record_id_column':rid_col,'lens_id_column':lens_col,'doi_column':doi_col,'title_column':title_col}
+              source_indexes[label]=idx; source_rows[label]=rows
+
+          matches={}; counts=Counter(); ambiguous=Counter(); no_topic_match=Counter()
+          source_order=[x[0] for x in sources]
+          methods=['record_id','lens_id','doi','title']
+          for rid,cur in current.items():
+              chosen=None
+              for label in source_order:
+                  if label not in source_indexes: continue
+                  idx=source_indexes[label]; rows=source_rows[label]
+                  for method in methods:
+                      val=cur['title_norm'] if method=='title' else cur.get(method,'')
+                      if not val: continue
+                      hits=idx[method].get(val,[])
+                      # Reuse only a unique historical row and only if it actually has topic data.
+                      if len(hits)==1:
+                          h=rows[hits[0]]
+                          if h['has_topic']:
+                              chosen=(label,method,h); break
+                          else:
+                              no_topic_match[(label,method)]+=1
+                      elif len(hits)>1:
+                          topic_hits=[j for j in hits if rows[j]['has_topic']]
+                          # If repeated rows have exactly the same non-empty topic payload, reuse safely.
+                          payloads={json.dumps(rows[j]['topics'],sort_keys=True,ensure_ascii=False) for j in topic_hits}
+                          if len(payloads)==1 and topic_hits:
+                              chosen=(label,method,rows[topic_hits[0]]); break
+                          ambiguous[(label,method)]+=1
+                  if chosen: break
+              if chosen:
+                  label,method,h=chosen
+                  matches[rid]={'source':label,'method':method,'source_row':h['source_row'],'topics':h['topics']}
+                  counts[(label,method)]+=1
+
+          # Write a seed file with all historical topic fields, plus provenance. This does NOT call an LLM.
+          all_topic_cols=[]
+          for label in source_order:
+              for c in source_meta.get(label,{}).get('topic_columns',[]):
+                  outc=f'{label}__{c}'
+                  if outc not in all_topic_cols: all_topic_cols.append(outc)
+          seed_path=os.path.join(outdir,'historical_topic_reuse_seed.csv')
+          with open(seed_path,'w',encoding='utf-8',newline='') as f:
+              fields=['record_id','match_source','match_method','source_row']+all_topic_cols
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader()
+              for rid in eligible:
+                  m=matches.get(rid); row={'record_id':rid}
+                  if m:
+                      row.update(match_source=m['source'],match_method=m['method'],source_row=m['source_row'])
+                      for k,v in m['topics'].items(): row[f"{m['source']}__{k}"]=v
+                  w.writerow(row)
+
+          summary={
+              'workflow05_includes':len(eligible),
+              'historical_topic_matches':len(matches),
+              'unmatched_for_topics':len(eligible)-len(matches),
+              'reuse_fraction': round(len(matches)/len(eligible),6) if eligible else 0,
+              'matches_by_source_and_method': {f'{s}:{m}':n for (s,m),n in sorted(counts.items())},
+              'ambiguous_matches_skipped': {f'{s}:{m}':n for (s,m),n in sorted(ambiguous.items())},
+              'unique_matches_without_topic_data': {f'{s}:{m}':n for (s,m),n in sorted(no_topic_match.items())},
+              'sources':source_meta,
+              'matching_policy':['exact record_id','exact lens_id','exact normalised DOI','exact normalised title'],
+              'safety_rule':'Reuse only unique matches, or repeated matches with identical non-empty topic payloads. Conflicts are not inherited.'
+          }
+          with open(os.path.join(outdir,'topic_reuse_audit.json'),'w',encoding='utf-8') as f: json.dump(summary,f,indent=2,ensure_ascii=False)
+          with open(os.path.join(outdir,'unmatched_record_ids.txt'),'w',encoding='utf-8') as f:
+              for rid in eligible:
+                  if rid not in matches: f.write(rid+'\n')
+          print(json.dumps({k:v for k,v in summary.items() if k!='sources'},indent=2))
+          for label,m in source_meta.items():
+              print('\nSOURCE',label)
+              print(' rows=',m.get('rows'),' topic_nonempty=',m.get('topic_nonempty_rows'))
+              print(' id cols=',m.get('record_id_column'),m.get('lens_id_column'),m.get('doi_column'),m.get('title_column'))
+              print(' topic columns=',m.get('topic_columns'))
+          PY
+
+      - name: Upload audit and reusable seed
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-topic-reuse-audit-${{ github.run_id }}
+          path: outputs/workflow06_topic_reuse/
+          if-no-files-found: error
+          retention-days: 90
