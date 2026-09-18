@@ -161,13 +161,20 @@ body <- list(
   )
 )
 
-response <- httr2::request("https://api.openai.com/v1/responses") |>
+resp <- httr2::request("https://api.openai.com/v1/responses") |>
   httr2::req_auth_bearer_token(api_key) |>
   httr2::req_body_json(body, auto_unbox=TRUE) |>
   httr2::req_timeout(600) |>
   httr2::req_retry(max_tries=4, backoff=~2^.x) |>
-  httr2::req_perform() |>
-  httr2::resp_body_json()
+  httr2::req_error(is_error = function(resp) FALSE) |>
+  httr2::req_perform()
+
+if (httr2::resp_status(resp) >= 400) {
+  err <- httr2::resp_body_string(resp)
+  writeLines(err, file.path(output_dir, "api_error.txt"))
+  stop("OpenAI API returned HTTP ", httr2::resp_status(resp), ": ", err)
+}
+response <- httr2::resp_body_json(resp)
 
 parsed <- jsonlite::fromJSON(extract_output_text(response), simplifyVector=FALSE)
 adj <- parsed$adjudications
