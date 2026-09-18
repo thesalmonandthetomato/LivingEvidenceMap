@@ -1,0 +1,104 @@
+name: Workflow 06 - Luna ontology v3.4 batch 4 controlled rerun
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_luna_v3_4_validation_batch4_rerun.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_ARTIFACT_ID: '10567111322'
+  OUTPUT_DIR: outputs/workflow06_luna_v3_4_validation_batch4_rerun
+  VALIDATION_OUTPUT_DIR: outputs/workflow06_luna_v3_4_validation_batch4_rerun
+
+jobs:
+  validation:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Launch Luna v3.4 batch 4 controlled rerun' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::tibble
+
+      - name: Recover exact batch 4 queue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR" /tmp/luna_batch4
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" > /tmp/luna_batch4.zip
+          unzip -q /tmp/luna_batch4.zip -d /tmp/luna_batch4
+          cp /tmp/luna_batch4/validation_queue_20.csv "$OUTPUT_DIR/validation_queue_20.csv"
+          cp /tmp/luna_batch4/historical_context_not_gold.csv "$OUTPUT_DIR/historical_context_not_gold.csv"
+          test "$(($(wc -l < "$OUTPUT_DIR/validation_queue_20.csv") - 1))" -eq 20
+          sha256sum "$OUTPUT_DIR/validation_queue_20.csv" | tee "$OUTPUT_DIR/recovered_queue_sha256.txt"
+          grep -q '^a71c2ead9d8df29b382748425660cff341d4ed642dff90d05eca29c352020e3a ' "$OUTPUT_DIR/recovered_queue_sha256.txt"
+
+      - name: Run independent Luna v3.4 pass A
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_v3_4_validation_batch4_rerun/validation_queue_20.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_4.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_v3_4_validation_batch4_rerun/luna_a
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked_v3_4.R
+
+      - name: Run independent Luna v3.4 pass B
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_v3_4_validation_batch4_rerun/validation_queue_20.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_4.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_v3_4_validation_batch4_rerun/luna_b
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked_v3_4.R
+
+      - name: Evaluate reproducibility and build review queue
+        run: python3 scripts/evaluate_topic_v3_3_validation_batch2.py evaluate
+
+      - name: Record rerun manifest
+        shell: bash
+        run: |
+          cat > "$OUTPUT_DIR/rerun_manifest.json" <<'JSON'
+          {
+            "source_artifact_id": 10567111322,
+            "source_queue_sha256": "a71c2ead9d8df29b382748425660cff341d4ed642dff90d05eca29c352020e3a",
+            "sample_changed": false,
+            "ontology": "data/reference/topic_ontology_v3_4.csv",
+            "ontology_change": "V3_122 vaccination may establish disease-prevention focus without a named disease or pathogen",
+            "model": "gpt-5.6-luna",
+            "reasoning_effort": "medium",
+            "passes": 2
+          }
+          JSON
+
+      - name: Upload controlled-rerun artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-luna-v3-4-validation-batch4-rerun-${{ github.run_id }}
+          path: outputs/workflow06_luna_v3_4_validation_batch4_rerun/
+          if-no-files-found: error
+          retention-days: 90
