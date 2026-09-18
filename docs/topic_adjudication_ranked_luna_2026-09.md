@@ -12,9 +12,9 @@ Only actual ranked A/B conflicts are included here. Historical coding is not tre
 |---|---|---|---|
 | 056-749-018-332-932 | Saprolegnia identification/genetic characterisation | `V3_121 PRIMARY; V3_123 SECONDARY` | Both role allocations were acceptable; epidemiology is the main contribution and diagnosis/detection is substantive but secondary. |
 | 123-404-554-291-067 | Alternative dietary protein sources | `V3_096 PRIMARY; V3_112 SECONDARY; V3_113 SECONDARY` | Growth and metabolism are explicit substantive outcomes, not incidental measurements. |
-| 099-035-316-344-435 | Blue mussels / salmon IMTA | `V3_110 PRIMARY; V3_043 PRIMARY; V3_005 SECONDARY; V3_020 SECONDARY` | IMTA and use of salmon waste by mussels are central; waste and mitigation are substantive secondary themes; `V3_044` excluded. |
+| 099-035-316-344-435 | Blue mussels / salmon IMTA | `V3_110 PRIMARY; V3_043 PRIMARY; V3_005 PRIMARY; V3_020 SECONDARY` | Ontology re-audit: `V3_005` remains PRIMARY because release/fate/effects of salmon feed and faecal waste are a central study objective; `V3_110` and `V3_043` are also PRIMARY; `V3_020` SECONDARY; `V3_044` excluded. |
 | 002-142-200-779-757 | Hot smoking and EPA/DHA | `V3_072 PRIMARY; V3_078 PRIMARY` | Processing and compositional consequences are co-primary. |
-| 032-215-431-747-456 | Amoebic gill disease pathology | `V3_120 PRIMARY; V3_123 SECONDARY; V3_132 SECONDARY` | Histopathology serves the disease question rather than constituting an independent anatomy/tissues topic. |
+| 032-215-431-747-456 | Amoebic gill disease pathology | `V3_120 PRIMARY; V3_114 SECONDARY; V3_123 SECONDARY; V3_132 SECONDARY` | Ontology re-audit: lesion morphology and histopathological tissue changes are substantive objectives, so `V3_114` is SECONDARY rather than excluded. |
 | 097-530-935-361-045 | Alexandrium bloom and salmon mortality | `V3_133 PRIMARY; V3_129 SECONDARY; V3_019 SECONDARY` | Mortality is a substantive bloom consequence and monitoring is a substantive response. |
 | 032-384-942-689-849 | Nutrient-based growth model | `V3_049 PRIMARY` | Growth and physiology are modelled validation outcomes; methodological development is the principal contribution. |
 | 033-811-323-921-83X | Marine growth and morphometrics | `V3_112 PRIMARY; V3_114 PRIMARY` | Growth and morphology are both explicit substantive objectives. |
@@ -33,7 +33,13 @@ An earlier conversational assessment of the Patagonia Azul paper referred to an 
 
 ## Adjudication rules
 
+The machine-readable policy is stored in `data/reference/topic_adjudication_policy_v1.json`.
+
+- **Use the ontology as the governing standard.** Apply each pathway's `definition`, `include_when`, `exclude_when` and `prompt_logic_note`; labels and lexical cues are secondary aids.
+- **Select the pass that best aligns with the ontology for the record as a whole.** Do not prefer Pass A or Pass B systematically.
+- **Only alter agreed/shared assignments when there is a substantial ontology error.** The purpose of adjudication is to resolve the A/B conflict, not to recode unrelated shared assignments. A shared assignment may be changed only when the evidence clearly violates or clearly requires an ontology rule; document the reason.
 - **Do not assign topics from title alone.** If the abstract/full text is unavailable, leave the record unresolved and require further evidence before assigning substantive topics.
+- **Preserve provenance.** Keep the original A/B assignments, the final adjudication, rationale, evidence status and any rule-based override in the audit trail.
 
 ## Status
 
