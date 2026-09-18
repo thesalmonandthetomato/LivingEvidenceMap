@@ -25,6 +25,7 @@ Only actual ranked A/B conflicts are included here. Historical coding is not tre
 | 119-850-003-348-077 | Chilean salmon aquaculture and Alaskan sockeye markets | `V3_028 PRIMARY; V3_025 SECONDARY` | Supply, demand and prices are primary; revenues/earnings are explicit modelled outcomes and substantively secondary. Prefer Pass A. |
 | 106-264-889-658-256 | Organic plant-protein replacement in trout feed | `V3_096 PRIMARY; V3_100 PRIMARY; V3_112 SECONDARY; V3_005 SECONDARY` | Alternative feed ingredients and nutrient utilisation are co-primary; growth is substantive secondary; nitrogen/phosphorus outputs are independently substantive environmental outputs. Prefer Pass B. |
 | 128-953-506-234-897 | Huon Estuary environmental paper | **Unresolved** | No abstract or DOI available. Do not assign topics from title alone; retrieve abstract/full text before adjudicating `V3_001` versus no assignment. |
+| 071-178-447-768-395 | Atlantic salmon SNP database | **Unresolved** | No abstract available in the benchmark data. Do not assign `V3_051` from title alone; retrieve abstract/full text before adjudication. |
 
 ## Audit correction
 
@@ -38,5 +39,5 @@ An earlier conversational assessment of the Patagonia Azul paper referred to an 
 
 - Total ranked conflicts: **22**
 - Agreed and recorded here: **14**
-- Needs more information: **1**
-- Pending: **7**
+- Needs more information: **2**
+- Pending: **6**
