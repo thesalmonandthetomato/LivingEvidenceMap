@@ -18,13 +18,14 @@ Only actual ranked A/B conflicts are included here. Historical coding is not tre
 | 097-530-935-361-045 | Alexandrium bloom and salmon mortality | `V3_133 PRIMARY; V3_129 SECONDARY; V3_019 SECONDARY` | Mortality is a substantive bloom consequence and monitoring is a substantive response. |
 | 032-384-942-689-849 | Nutrient-based growth model | `V3_049 PRIMARY` | Growth and physiology are modelled validation outcomes; methodological development is the principal contribution. |
 | 033-811-323-921-83X | Marine growth and morphometrics | `V3_112 PRIMARY; V3_114 PRIMARY` | Growth and morphology are both explicit substantive objectives. |
+| 142-901-874-742-548 | Patagonia Azul / Indigenous marine areas | `V3_062 PRIMARY; V3_056 PRIMARY; V3_067 SECONDARY` | Indigenous rights/governance and livelihoods are central; Indigenous knowledge is a substantive secondary theme. Neither pass alone was complete. |
 
 ## Audit correction
 
-An earlier conversational assessment of the Patagonia Azul paper referred to an **older unranked disagreement**, not the ranked A/B conflict in this 22-record set. That earlier judgement has therefore **not** been entered here. The ranked Patagonia record remains pending and will be adjudicated from its actual ranked outputs.
+An earlier conversational assessment of the Patagonia Azul paper referred to an **older unranked disagreement**, not the ranked A/B conflict in this 22-record set. That mistaken assessment was not propagated. The ranked record was subsequently reviewed from its actual ranked outputs and is now recorded above.
 
 ## Status
 
 - Total ranked conflicts: **22**
-- Agreed and recorded here: **8**
-- Pending: **14**
+- Agreed and recorded here: **9**
+- Pending: **13**
