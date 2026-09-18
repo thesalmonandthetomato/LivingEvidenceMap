@@ -1,0 +1,64 @@
+{
+  "policy_id": "topic_adjudication_policy_v1",
+  "version": "1.0.0",
+  "effective_date": "2026-09-18",
+  "scope": "Two-pass topic-classification adjudication for LivingEvidenceMap",
+  "authoritative_inputs": {
+    "conflict_table": "Authoritative ranked A/B disagreement table",
+    "ontology": "data/reference/topic_ontology_v3.csv"
+  },
+  "principles": [
+    {
+      "id": "ontology_first",
+      "rule": "Use the ontology as the governing standard for adjudication.",
+      "precedence": [
+        "include_when",
+        "exclude_when",
+        "definition",
+        "prompt_logic_note",
+        "hierarchy_path",
+        "lexical_cues"
+      ],
+      "note": "Pathway labels and lexical cues must not override explicit ontology criteria."
+    },
+    {
+      "id": "choose_best_aligned_pass",
+      "rule": "Select Pass A or Pass B for each record according to which pass best aligns with the ontology and the record evidence.",
+      "note": "Do not systematically prefer either pass."
+    },
+    {
+      "id": "conflict_focused",
+      "rule": "Resolve the actual A/B conflict only. Preserve assignments on which both passes agree unless there is a substantial ontology error.",
+      "substantial_error_definition": "A shared assignment clearly violates an ontology exclusion rule, clearly fails the ontology inclusion/definition criteria, or a clearly required shared role/pathway is materially misclassified.",
+      "action_if_substantial_error": "Correct the shared assignment and document the ontology-based reason explicitly."
+    },
+    {
+      "id": "evidence_requirement",
+      "rule": "Do not assign topics from title alone.",
+      "action_if_abstract_or_full_text_unavailable": "Set adjudication status to needs_more_information or unresolved and require additional evidence."
+    },
+    {
+      "id": "role_assignment",
+      "rule": "Assign PRIMARY to central research questions, interventions, exposures, outcomes or conclusions; assign SECONDARY only to independently substantive but non-central topics.",
+      "note": "Do not use SECONDARY for background, context or incidental measurements."
+    },
+    {
+      "id": "provenance",
+      "rule": "Preserve original Pass A and Pass B outputs, final adjudication, rationale, evidence status, and any ontology-based override."
+    },
+    {
+      "id": "integrity_over_speed",
+      "rule": "Prioritise data integrity, provenance, verifiability and reproducibility over speed unless explicitly instructed otherwise."
+    }
+  ],
+  "output_statuses": [
+    "agreed",
+    "needs_more_information",
+    "unresolved"
+  ],
+  "audit_requirements": {
+    "record_id_title_pair_verified_against_source": true,
+    "manual_identifier_transcription": false,
+    "final_decision_must_reference_ontology": true
+  }
+}
