@@ -17,6 +17,7 @@ ontology_path <- Sys.getenv("TOPIC_ONTOLOGY_PATH", "data/reference/topic_ontolog
 out_dir <- Sys.getenv("TOPIC_OUTPUT_DIR", "")
 model <- Sys.getenv("TOPIC_MODEL", "gpt-5.6-luna")
 reasoning_effort <- Sys.getenv("TOPIC_REASONING_EFFORT", "medium")
+general_code_exclusivity <- tolower(Sys.getenv("TOPIC_GENERAL_CODE_EXCLUSIVITY", "false")) %in% c("1", "true", "yes")
 
 if (!nzchar(input_path)) stop("TOPIC_INPUT_PATH is required")
 if (!nzchar(out_dir)) stop("TOPIC_OUTPUT_DIR is required")
@@ -190,6 +191,23 @@ system_prompt <- paste(
   "    endpoints or incidental measurements. Such concepts must remain unassigned.",
   sep = "\n"
 )
+
+# Optional versioned rule. It is disabled by default so completed v3.3 runs
+# remain reproducible; v3.4 workflows enable it explicitly.
+if (general_code_exclusivity) {
+  system_prompt <- paste(
+    system_prompt,
+    "",
+    "GENERAL-CODE EXCLUSIVITY",
+    "32. A pathway labelled General may be assigned only when no more specific",
+    "    pathway under the same immediate parent adequately represents the",
+    "    substantive topic.",
+    "33. If any more specific sibling pathway is assigned, do not also assign",
+    "    the General pathway. General pathways are fallbacks, not additional",
+    "    codes for breadth, context, pathology or supporting findings.",
+    sep = "\n"
+  )
+}
 
 readr::write_lines(system_prompt, system_prompt_file)
 readr::write_lines(ontology_prompt, ontology_prompt_file)
