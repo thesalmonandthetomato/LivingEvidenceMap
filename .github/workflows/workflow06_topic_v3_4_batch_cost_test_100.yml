@@ -1,0 +1,82 @@
+name: Workflow 06 - Topic v3.4 Batch API cost test 100
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_topic_v3_4_batch_cost_test_100.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  ORIGINAL_BENCHMARK_ARTIFACT_ID: '10536181345'
+  BATCH3_ARTIFACT_ID: '10565511758'
+  BATCH4_ARTIFACT_ID: '10567111322'
+  PRIOR_PROMPT_ARTIFACT_ID: '10567109484'
+  COST_TEST_OUTPUT_DIR: outputs/workflow06_topic_v3_4_batch_cost_test_100
+  COST_TEST_SAMPLE_SIZE: '100'
+  COST_TEST_SELECTION_SALT: 'topic-v3.4-cost-test-100-2026-09|'
+  COST_TEST_ADDITIONAL_EXCLUSIONS: 'docs/topic_v3_3_validation_batch2_adjudication_2026-09.csv:/tmp/batch3/validation_queue_20.csv:/tmp/batch4/validation_queue_20.csv'
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_4.csv
+  TOPIC_SYSTEM_PROMPT_PATH: /tmp/prior_prompt/luna_a/topic_v4_system_prompt.txt
+
+jobs:
+  cost-test:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Launch topic v3.4 Batch API cost test 100' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - name: Recover exclusion and prompt artefacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ranked /tmp/batch3 /tmp/batch4 /tmp/prior_prompt "$COST_TEST_OUTPUT_DIR"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ORIGINAL_BENCHMARK_ARTIFACT_ID}/zip" > /tmp/ranked.zip
+          unzip -q /tmp/ranked.zip -d /tmp/ranked
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${BATCH3_ARTIFACT_ID}/zip" > /tmp/batch3.zip
+          unzip -q /tmp/batch3.zip -d /tmp/batch3
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${BATCH4_ARTIFACT_ID}/zip" > /tmp/batch4.zip
+          unzip -q /tmp/batch4.zip -d /tmp/batch4
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PRIOR_PROMPT_ARTIFACT_ID}/zip" > /tmp/prior_prompt.zip
+          unzip -q /tmp/prior_prompt.zip -d /tmp/prior_prompt
+          test -s /tmp/ranked/topic_consistency_queue.csv
+          test -s /tmp/batch3/validation_queue_20.csv
+          test -s /tmp/batch4/validation_queue_20.csv
+          test -s /tmp/prior_prompt/luna_a/topic_v4_system_prompt.txt
+
+      - name: Build fresh deterministic 100-record queue
+        run: python3 scripts/run_topic_batch_cost_test.py build
+
+      - name: Run two Luna passes through Batch API
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python3 scripts/run_topic_batch_cost_test.py luna
+
+      - name: Evaluate Luna reproducibility
+        run: python3 scripts/run_topic_batch_cost_test.py evaluate
+
+      - name: Run disagreement-only Terra Batch
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python3 scripts/run_topic_batch_cost_test.py terra
+
+      - name: Calculate measured cost
+        run: python3 scripts/run_topic_batch_cost_test.py summary
+
+      - name: Upload cost-test artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-topic-v3-4-batch-cost-test-100-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_4_batch_cost_test_100/
+          if-no-files-found: error
+          retention-days: 90
