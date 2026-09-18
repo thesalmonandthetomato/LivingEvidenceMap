@@ -13,7 +13,7 @@ permissions:
 
 env:
   WF05_ARTIFACT_ID: '10501181612'
-  FAILED_NANO_ARTIFACT_ID: '10518707351'
+  FAILED_NANO_ARTIFACT_ID: '10519483783'
   OUTPUT_DIR: outputs/workflow06_nano
 
 jobs:
@@ -85,15 +85,7 @@ jobs:
               echo "Nano A still has technical failures after $attempt attempts" >&2
               exit 1
             fi
-            Rscript - <<'RS'
-            p <- 'outputs/workflow06_nano/nano_a/topic_v4_checkpoint.rds'
-            x <- readRDS(p)
-            ok <- unique(x$record_results$record_id[x$record_results$status == 'completed'])
-            x$record_results <- x$record_results[x$record_results$status == 'completed', , drop = FALSE]
-            if (nrow(x$long_results)) x$long_results <- x$long_results[x$long_results$record_id %in% ok, , drop = FALSE]
-            saveRDS(x, p)
-            cat('Retry checkpoint retains', length(ok), 'successful records.\n')
-            RS
+            Rscript -e "p <- 'outputs/workflow06_nano/nano_a/topic_v4_checkpoint.rds'; x <- readRDS(p); ok <- unique(x\$record_results\$record_id[x\$record_results\$status == 'completed']); x\$record_results <- x\$record_results[x\$record_results\$status == 'completed', , drop = FALSE]; if (nrow(x\$long_results)) x\$long_results <- x\$long_results[x\$long_results\$record_id %in% ok, , drop = FALSE]; saveRDS(x, p); cat('Retry checkpoint retains', length(ok), 'successful records.\\n')"
           done
 
       - name: Run Nano pass B with technical retries
@@ -115,15 +107,7 @@ jobs:
               echo "Nano B still has technical failures after $attempt attempts" >&2
               exit 1
             fi
-            Rscript - <<'RS'
-            p <- 'outputs/workflow06_nano/nano_b/topic_v4_checkpoint.rds'
-            x <- readRDS(p)
-            ok <- unique(x$record_results$record_id[x$record_results$status == 'completed'])
-            x$record_results <- x$record_results[x$record_results$status == 'completed', , drop = FALSE]
-            if (nrow(x$long_results)) x$long_results <- x$long_results[x$long_results$record_id %in% ok, , drop = FALSE]
-            saveRDS(x, p)
-            cat('Retry checkpoint retains', length(ok), 'successful records.\n')
-            RS
+            Rscript -e "p <- 'outputs/workflow06_nano/nano_b/topic_v4_checkpoint.rds'; x <- readRDS(p); ok <- unique(x\$record_results\$record_id[x\$record_results\$status == 'completed']); x\$record_results <- x\$record_results[x\$record_results\$status == 'completed', , drop = FALSE]; if (nrow(x\$long_results)) x\$long_results <- x\$long_results[x\$long_results\$record_id %in% ok, , drop = FALSE]; saveRDS(x, p); cat('Retry checkpoint retains', length(ok), 'successful records.\\n')"
           done
 
       - name: Compare Nano consistency and historical agreement
