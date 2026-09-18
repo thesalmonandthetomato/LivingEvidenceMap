@@ -1,0 +1,69 @@
+name: Workflow 06 - Terra adjudication of Luna v3.4 batch 4 rerun conflicts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_luna_v3_4_batch4_rerun_terra_adjudication.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_ARTIFACT_ID: '10567109484'
+  OUTPUT_DIR: outputs/workflow06_luna_v3_4_batch4_rerun_terra_adjudication
+
+jobs:
+  adjudication:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Launch Terra adjudication of Luna v3.4 batch 4 rerun conflicts' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::readr
+            any::tibble
+
+      - name: Recover Luna v3.4 batch 4 rerun artefact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/luna_batch4_rerun "$OUTPUT_DIR"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" > /tmp/luna_batch4_rerun.zip
+          unzip -q /tmp/luna_batch4_rerun.zip -d /tmp/luna_batch4_rerun
+          test -s /tmp/luna_batch4_rerun/validation_review_queue.csv
+
+      - name: Adjudicate pathway conflicts with Terra
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ADJUDICATION_INPUT_PATH: /tmp/luna_batch4_rerun/validation_review_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_4.csv
+          ADJUDICATION_OUTPUT_DIR: outputs/workflow06_luna_v3_4_batch4_rerun_terra_adjudication
+          ADJUDICATION_MODEL: gpt-5.6-terra
+          ADJUDICATION_REASONING_EFFORT: medium
+        run: Rscript R/adjudicate_topic_conflicts_terra.R
+
+      - name: Upload Terra adjudication artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-terra-adjudication-v3-4-batch4-rerun-${{ github.run_id }}
+          path: outputs/workflow06_luna_v3_4_batch4_rerun_terra_adjudication/
+          if-no-files-found: error
+          retention-days: 90
