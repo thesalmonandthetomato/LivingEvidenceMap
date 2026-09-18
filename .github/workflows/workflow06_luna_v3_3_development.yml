@@ -1,0 +1,253 @@
+name: Workflow 06 - Luna ontology v3.3 development rerun
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_luna_v3_3_development.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_ARTIFACT_ID: '10536181345'
+  OUTPUT_DIR: outputs/workflow06_luna_v3_3_development
+
+jobs:
+  development:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Launch Luna v3.3 development rerun' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::tibble
+
+      - name: Recover original ranked benchmark artefact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR" /tmp/ranked
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" > /tmp/ranked.zip
+          unzip -q /tmp/ranked.zip -d /tmp/ranked
+          test -s /tmp/ranked/topic_consistency_queue.csv
+
+      - name: Build 20-record development queue and separate gold standard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, json, hashlib
+          from pathlib import Path
+
+          out=Path("outputs/workflow06_luna_v3_3_development")
+          with open("/tmp/ranked/topic_consistency_queue.csv",encoding="utf-8-sig",newline="") as f:
+              source=list(csv.DictReader(f))
+          qby={r["record_id"]:r for r in source}
+
+          with open("docs/topic_adjudication_ranked_luna_2026-09.csv",encoding="utf-8-sig",newline="") as f:
+              manual=list(csv.DictReader(f))
+          gold=[r for r in manual if r["status"]=="agreed"]
+          if len(gold)!=20:
+              raise SystemExit(f"Expected 20 agreed development records, found {len(gold)}")
+
+          rows=[]
+          gold_rows=[]
+          for g in gold:
+              rid=g["record_id"]
+              if rid not in qby:
+                  raise SystemExit(f"Gold record missing from source queue: {rid}")
+              q=qby[rid]
+              rows.append({
+                  "record_id":rid,
+                  "title":q.get("title",""),
+                  "abstract":q.get("abstract","")
+              })
+              gold_rows.append({
+                  "record_id":rid,
+                  "title":q.get("title",""),
+                  "gold_final_coding":g["final_coding"],
+                  "gold_rationale":g["rationale"]
+              })
+
+          with (out/"development_queue_20.csv").open("w",encoding="utf-8",newline="") as f:
+              w=csv.DictWriter(f,fieldnames=["record_id","title","abstract"]); w.writeheader(); w.writerows(rows)
+          with (out/"development_gold_standard.csv").open("w",encoding="utf-8",newline="") as f:
+              w=csv.DictWriter(f,fieldnames=["record_id","title","gold_final_coding","gold_rationale"]); w.writeheader(); w.writerows(gold_rows)
+
+          manifest={
+              "records":20,
+              "source_artifact_id":10536181345,
+              "ontology":"data/reference/topic_ontology_v3_3.csv",
+              "runner":"R/run_topic_v4_classifier_ranked_v3_1.R",
+              "model":"gpt-5.6-luna",
+              "reasoning_effort":"medium",
+              "manual_gold_hidden_from_model":True,
+              "development_set_warning":"These 20 records informed ontology v3.3 boundary clarification and are not an independent validation set.",
+              "queue_sha256":hashlib.sha256((out/"development_queue_20.csv").read_bytes()).hexdigest()
+          }
+          (out/"development_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Run independent Luna pass A with ontology v3.3
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_v3_3_development/development_queue_20.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_v3_3_development/luna_a
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked_v3_1.R
+
+      - name: Run independent Luna pass B with ontology v3.3
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_v3_3_development/development_queue_20.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_v3_3_development/luna_b
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked_v3_1.R
+
+      - name: Compare pathway sets with manual gold
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, json
+          from collections import defaultdict
+          from pathlib import Path
+
+          out=Path("outputs/workflow06_luna_v3_3_development")
+
+          def read_csv(p):
+              with p.open(encoding="utf-8-sig",newline="") as f:
+                  return list(csv.DictReader(f))
+
+          gold_rows=read_csv(out/"development_gold_standard.csv")
+          gold={r["record_id"]:r for r in gold_rows}
+
+          def parse_gold(s):
+              d={}
+              if not s or not s.strip(): return d
+              for item in s.split(";"):
+                  item=item.strip()
+                  if not item: continue
+                  p,role=item.split("=",1)
+                  d[p.strip()]=role.strip()
+              return d
+
+          def load_assignments(p):
+              d=defaultdict(dict); reasons=defaultdict(dict)
+              for r in read_csv(p):
+                  d[r["record_id"]][r["path_id"]]=r["role"]
+                  reasons[r["record_id"]][r["path_id"]]=r.get("reason","")
+              return d,reasons
+
+          A,Ar=load_assignments(out/"luna_a"/"topic_assignments.csv")
+          B,Br=load_assignments(out/"luna_b"/"topic_assignments.csv")
+
+          def evaluate(P,label):
+              exact_path=exact_full=tp=fp=fn=0
+              shared=role_ok=0
+              details=[]
+              for rid,g in gold.items():
+                  G=parse_gold(g["gold_final_coding"]); X=P[rid]
+                  gs=set(G); xs=set(X)
+                  exact_path+=int(gs==xs); exact_full+=int(G==X)
+                  tp+=len(gs&xs); fp+=len(xs-gs); fn+=len(gs-xs)
+                  shared+=len(gs&xs); role_ok+=sum(G[p]==X[p] for p in gs&xs)
+                  details.append({
+                      "record_id":rid,"title":g["title"],"gold":g["gold_final_coding"],
+                      f"{label}_coding":"; ".join(f"{p}={X[p]}" for p in sorted(X)),
+                      f"{label}_path_exact":int(gs==xs),f"{label}_full_exact":int(G==X)
+                  })
+              precision=tp/(tp+fp) if tp+fp else 1
+              recall=tp/(tp+fn) if tp+fn else 1
+              f1=2*precision*recall/(precision+recall) if precision+recall else 0
+              return {
+                  "records":len(gold),
+                  "exact_pathway_matches":exact_path,
+                  "exact_pathway_agreement":exact_path/len(gold),
+                  "exact_full_ranked_matches":exact_full,
+                  "exact_full_ranked_agreement":exact_full/len(gold),
+                  "pathway_precision":precision,"pathway_recall":recall,"pathway_f1":f1,
+                  "role_accuracy_on_recovered_gold_paths":role_ok/shared if shared else 1,
+                  "tp":tp,"fp":fp,"fn":fn
+              },details
+
+          mA,dA=evaluate(A,"luna_a")
+          mB,dB=evaluate(B,"luna_b")
+
+          self_path=self_full=0
+          for rid in gold:
+              self_path+=int(set(A[rid])==set(B[rid]))
+              self_full+=int(A[rid]==B[rid])
+
+          # Old v3 results from original ranked benchmark for direct record-level comparison.
+          oldA,_=load_assignments(Path("/tmp/ranked/luna_ranked_a/topic_assignments.csv"))
+          oldB,_=load_assignments(Path("/tmp/ranked/luna_ranked_b/topic_assignments.csv"))
+          oldmA,_=evaluate(oldA,"old_a")
+          oldmB,_=evaluate(oldB,"old_b")
+
+          summary={
+              "ontology_v3_3":{
+                  "luna_a_vs_manual":mA,
+                  "luna_b_vs_manual":mB,
+                  "a_b_self_consistency":{
+                      "exact_pathway_matches":self_path,
+                      "exact_pathway_agreement":self_path/len(gold),
+                      "exact_full_ranked_matches":self_full,
+                      "exact_full_ranked_agreement":self_full/len(gold)
+                  }
+              },
+              "original_ontology_v3_same_20_records":{
+                  "luna_a_vs_manual":oldmA,
+                  "luna_b_vs_manual":oldmB
+              }
+          }
+
+          dBby={r["record_id"]:r for r in dB}
+          merged=[]
+          for x in dA:
+              z=dict(x); y=dBby[x["record_id"]]
+              for k,v in y.items():
+                  if k not in ("record_id","title","gold"): z[k]=v
+              z["luna_a_reasons"]=" | ".join(f"{p}: {Ar[x['record_id']].get(p,'')}" for p in sorted(A[x["record_id"]]))
+              z["luna_b_reasons"]=" | ".join(f"{p}: {Br[x['record_id']].get(p,'')}" for p in sorted(B[x["record_id"]]))
+              merged.append(z)
+
+          with (out/"development_comparison.csv").open("w",encoding="utf-8",newline="") as f:
+              w=csv.DictWriter(f,fieldnames=list(merged[0].keys())); w.writeheader(); w.writerows(merged)
+          (out/"development_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload v3.3 development artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-luna-v3-2-development-${{ github.run_id }}
+          path: outputs/workflow06_luna_v3_3_development/
+          if-no-files-found: error
+          retention-days: 90
