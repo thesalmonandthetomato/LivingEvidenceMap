@@ -62,3 +62,54 @@ The three pathway-set disagreements were reviewed jointly with the project lead 
 
 All observed errors were omissions. No false-positive pathway was observed. These results support retaining v3.3 unchanged for the next independent batch. This is an agreement-plus-disagreement adjudication benchmark, not a fully independently adjudicated gold-standard study.
 
+## Second independent batch
+
+A further 20 records were selected deterministically from the authoritative master after excluding all 50 records in the original benchmark. Each selected record had a usable title and abstract. The v3.3 prompt and ontology were unchanged.
+
+Workflow run: `35369637629`
+
+Artefact: `10557651500`
+
+Source master SHA-256: `36f9f8eb966e2bd01b7bb309ed3f685215c1e13065f36d2233abb237f5f911e2`
+
+Queue SHA-256: `516db36eec8ee1e13ba45700febfad77c97c5ff24482e884adbd93ce3155df8c`
+
+### Reproducibility
+
+| Metric | Result |
+|---|---:|
+| Exact pathway-set agreement | 13/20 (65%) |
+| Mean pathway-set Jaccard similarity | 0.844 |
+| Pathway F1 between passes | 0.886 |
+| Exact full-ranked agreement | 11/20 (55%) |
+
+Seven pathway-set disagreements were jointly adjudicated. A further exact-agreement record was corrected because both passes assigned a General disease code alongside its more specific diagnostic sibling, contrary to the subsequently clarified General-code rule.
+
+### Joint adjudication decisions
+
+| Record | Final pathway set |
+|---|---|
+| Pancreas-disease resistance families (`79870`) | `V3_089; V3_113; V3_120; V3_129` |
+| Salmon and catfish allergens (`80052`) | `V3_082; V3_083` |
+| Cardiomyopathy-syndrome outbreak (`75382`) | `V3_121` |
+| Dietary glutamine in rainbow trout (`002-745-592-254-687`) | `V3_076; V3_097; V3_101; V3_112; V3_113` |
+| Carnobacterium infections (`77738`) | `V3_121; V3_123` |
+| PUFA concentrate from trout by-product (`73358`) | `V3_043; V3_078; V3_079` |
+| Fishmeal and fish-oil replacement (`73968`) | `V3_096; V3_112; V3_113` |
+| Dual ISA/togavirus-like infection (`77091`) | `V3_123` |
+
+### Performance against the resulting adjudicated sets
+
+| Metric | Luna A | Luna B |
+|---|---:|---:|
+| Exact pathway-set matches | 16/20 (80%) | 14/20 (70%) |
+| Pathway precision | 0.946 | 0.970 |
+| Pathway recall | 0.946 | 0.865 |
+| Pathway F1 | 0.946 | 0.914 |
+| False positives | 2 | 1 |
+| False negatives | 2 | 5 |
+
+The lower raw A/B agreement therefore did not translate into poor performance against the resulting adjudicated sets. Luna A was more complete in this batch, while Luna B remained more conservative. The additional exact-agreement correction also demonstrates that A/B agreement alone cannot guarantee correctness.
+
+The General-code decisions led to v3.4: General pathways are exclusive fallbacks when a more specific sibling pathway applies. Ontology v3.3 and its outputs remain unchanged for reproducibility. The same 20-record queue is rerun under v3.4 to isolate the effect of this change.
+
