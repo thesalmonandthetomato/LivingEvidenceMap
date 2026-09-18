@@ -1,0 +1,140 @@
+{
+  "rule_set_id": "topic_adjudication_rules_v1",
+  "version": "1.0.0",
+  "status": "candidate_validation_required",
+  "effective_date": "2026-09-18",
+  "parent_policy": "data/reference/topic_adjudication_policy_v1.json",
+  "ontology": "data/reference/topic_ontology_v3.csv",
+  "ontology_sha": "98d1fb6d43cc69f0f68d6e280590d4c64c6a0677",
+  "scope": "Candidate rules for resolving recurring disagreements between two independent ranked Luna topic-classification passes.",
+  "global_constraints": [
+    "Apply ontology definition, include_when, exclude_when and prompt_logic_note before any rule.",
+    "Rules may resolve only the disputed pathway or role unless a shared assignment contains a substantial ontology error.",
+    "Do not infer substantive topics from title alone.",
+    "Never resolve by blind union, blind intersection, or systematic preference for Pass A or Pass B.",
+    "Preserve raw Pass A, raw Pass B, rule applied, final decision, rationale and evidence status."
+  ],
+  "rules": [
+    {
+      "id": "R01_missing_evidence",
+      "trigger": "Abstract/full text evidence is unavailable or insufficient to apply ontology criteria.",
+      "action": "Do not adjudicate topic pathways from title alone.",
+      "output_status": "needs_more_information",
+      "confidence": "high",
+      "provenance_examples": [
+        "128-953-506-234-897",
+        "071-178-447-768-395"
+      ]
+    },
+    {
+      "id": "R02_methods_requires_method_as_principal_contribution",
+      "trigger": "A disputed Methods pathway is proposed because the study uses a laboratory, diagnostic, statistical or modelling method.",
+      "action": "Retain a Methods pathway only when development, validation, comparison or review of the method is itself a principal contribution. Otherwise retain the substantive-domain pathway(s) supported by the ontology.",
+      "output_status": "rule_resolved_if_unambiguous",
+      "confidence": "high",
+      "provenance_examples": [
+        "032-384-942-689-849",
+        "153-602-671-418-851",
+        "046-421-608-410-126",
+        "015-481-789-712-632"
+      ]
+    },
+    {
+      "id": "R03_specific_environmental_over_general",
+      "trigger": "V3_001 is disputed and one or more specific environmental pathways are clearly substantive.",
+      "action": "Exclude V3_001 when the specific environmental issue(s) can be coded directly and no broad multi-issue framework is independently substantive. Retain V3_001 only when several environmental issues are treated collectively and no specific issue dominates, as required by the ontology.",
+      "output_status": "rule_resolved_if_unambiguous",
+      "confidence": "high",
+      "provenance_examples": [
+        "021-344-006-899-928",
+        "046-421-608-410-126"
+      ]
+    },
+    {
+      "id": "R04_substantive_secondary_not_incidental",
+      "trigger": "A pathway is disputed because one pass treats an outcome/response as independently substantive and the other treats it as incidental.",
+      "action": "Retain as SECONDARY when the concept is an explicit objective, intervention, exposure, outcome or conclusion and independently satisfies the ontology. Exclude when it is only a routine measurement, covariate, validation target or background/context.",
+      "output_status": "manual_or_rule_resolved_only_when_ontology_fit_is_clear",
+      "confidence": "medium",
+      "provenance_examples": [
+        "123-404-554-291-067",
+        "097-530-935-361-045",
+        "038-353-098-644-720",
+        "119-850-003-348-077",
+        "106-264-889-658-256",
+        "116-524-842-809-804"
+      ]
+    },
+    {
+      "id": "R05_primary_secondary_roles",
+      "trigger": "Both passes assign the same pathway but disagree on PRIMARY versus SECONDARY.",
+      "action": "Assign PRIMARY only if the pathway is central to the paper's main research question, intervention, exposure, outcome or conclusion; assign SECONDARY if independently substantive but not central. Multiple PRIMARY assignments are allowed only when genuinely co-primary.",
+      "output_status": "manual_or_rule_resolved_only_when_centrality_is_clear",
+      "confidence": "medium",
+      "provenance_examples": [
+        "056-749-018-332-932",
+        "002-142-200-779-757",
+        "033-811-323-921-83X",
+        "153-602-671-418-851"
+      ]
+    },
+    {
+      "id": "R06_context_is_not_substantive",
+      "trigger": "A disputed pathway appears only in motivation, background, market/context description, policy aspiration or discussion rather than as an analysed question/outcome.",
+      "action": "Exclude the contextual pathway unless it independently satisfies the ontology inclusion criteria.",
+      "output_status": "rule_resolved_if_unambiguous",
+      "confidence": "high",
+      "provenance_examples": [
+        "021-344-006-899-928",
+        "184-875-629-714-196"
+      ]
+    },
+    {
+      "id": "R07_companies_substantive_unit",
+      "trigger": "V3_023 is disputed and companies themselves are substantive units of analysis.",
+      "action": "Retain V3_023 when companies or industry structure are substantive units of analysis, even if ownership/concentration is not the narrow subject; exclude when firms are merely mentioned as suppliers, funders or contextual actors.",
+      "output_status": "rule_resolved_if_unambiguous",
+      "confidence": "high",
+      "provenance_examples": [
+        "111-629-308-735-12X"
+      ]
+    },
+    {
+      "id": "R08_escape_event_and_post_escape_can_be_coprimary",
+      "trigger": "A record substantively analyses both an escape event/cause and what happens after escape.",
+      "action": "Retain V3_011 for quantified/explained escape occurrence/causes and V3_013 for substantive post-escape survival, dispersal, establishment or impacts. Allow both PRIMARY when both are central.",
+      "output_status": "rule_resolved_if_unambiguous",
+      "confidence": "medium",
+      "provenance_examples": [
+        "053-446-039-887-534"
+      ]
+    },
+    {
+      "id": "R09_shared_assignments_preserved",
+      "trigger": "Both passes agree on a pathway and role.",
+      "action": "Preserve the shared assignment unless it clearly violates an ontology exclusion rule, clearly fails the ontology inclusion/definition criteria, or is materially misclassified. Any override must be explicitly documented.",
+      "output_status": "preserve_shared_by_default",
+      "confidence": "high",
+      "provenance_examples": [
+        "099-035-316-344-435"
+      ]
+    }
+  ],
+  "validation_gate": {
+    "required_before_production_use": true,
+    "independent_sample_size_target_min": 100,
+    "independent_sample_size_target_preferred": 200,
+    "sample_source": "Fresh A/B disagreement records not used to derive these rules.",
+    "blinded_manual_reference": "Manual ontology-first adjudication completed without seeing candidate rule output where practicable.",
+    "required_metrics": [
+      "exact pathway-set agreement with manual adjudication",
+      "exact full pathway+role agreement",
+      "pathway precision",
+      "pathway recall",
+      "pathway F1",
+      "manual-review rate after rules",
+      "rule-specific error counts"
+    ],
+    "acceptance_principle": "Do not promote candidate rules to production unless validation shows they materially reduce manual review without introducing systematic ontology errors. Thresholds must be agreed before evaluating the independent sample."
+  }
+}
