@@ -60,5 +60,12 @@
     "record_id_title_pair_verified_against_source": true,
     "manual_identifier_transcription": false,
     "final_decision_must_reference_ontology": true
+  },
+  "candidate_rule_set": "data/reference/topic_adjudication_rules_v1.json",
+  "validation_plan": "docs/TOPIC_ADJUDICATION_RULE_VALIDATION_PLAN.md",
+  "production_gate": {
+    "status": "validation_required",
+    "rule_set_must_be_independently_validated": true,
+    "derivation_conflicts_must_be_excluded_from_validation": true
   }
 }
