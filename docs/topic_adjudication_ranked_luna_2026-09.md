@@ -20,6 +20,7 @@ Only actual ranked A/B conflicts are included here. Historical coding is not tre
 | 033-811-323-921-83X | Marine growth and morphometrics | `V3_112 PRIMARY; V3_114 PRIMARY` | Growth and morphology are both explicit substantive objectives. |
 | 142-901-874-742-548 | Patagonia Azul / Indigenous marine areas | `V3_062 PRIMARY; V3_056 PRIMARY; V3_067 SECONDARY` | Indigenous rights/governance and livelihoods are central; Indigenous knowledge is a substantive secondary theme. Neither pass alone was complete. |
 | 038-353-098-644-720 | Ballan wrasse bacterial survey | `V3_121 PRIMARY; V3_123 SECONDARY` | Epidemiology is the primary contribution; bacterial identification/characterisation is independently substantive and secondary. Prefer Pass B. |
+| 102-523-684-419-518 | RT-LAMP detection of IPNV | `V3_046 PRIMARY; V3_123 PRIMARY` | Method development/validation and IPNV diagnosis/detection are both central contributions. Prefer Pass A; low-cost role disagreement. |
 
 ## Audit correction
 
@@ -28,5 +29,5 @@ An earlier conversational assessment of the Patagonia Azul paper referred to an 
 ## Status
 
 - Total ranked conflicts: **22**
-- Agreed and recorded here: **10**
-- Pending: **12**
+- Agreed and recorded here: **11**
+- Pending: **11**
