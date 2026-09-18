@@ -21,6 +21,7 @@ Only actual ranked A/B conflicts are included here. Historical coding is not tre
 | 142-901-874-742-548 | Patagonia Azul / Indigenous marine areas | `V3_062 PRIMARY; V3_056 PRIMARY; V3_067 SECONDARY` | Indigenous rights/governance and livelihoods are central; Indigenous knowledge is a substantive secondary theme. Neither pass alone was complete. |
 | 038-353-098-644-720 | Ballan wrasse bacterial survey | `V3_121 PRIMARY; V3_123 SECONDARY` | Epidemiology is the primary contribution; bacterial identification/characterisation is independently substantive and secondary. Prefer Pass B. |
 | 153-602-671-418-851 | RT-LAMP detection of IPNV | `V3_046 PRIMARY; V3_123 PRIMARY` | Method development/validation and IPNV diagnosis/detection are both central contributions. Prefer Pass A; low-cost role disagreement. |
+| 021-344-006-899-928 | Life-cycle considerations for seafood awareness campaigns | `V3_004 PRIMARY; V3_001 SECONDARY; V3_034 SECONDARY` | Life-cycle/environmental assessment is primary; broad environmental impacts and certification/standards are substantive secondary themes. `V3_087` excluded because consumer response to labels is not itself investigated. Prefer Pass B. |
 
 ## Audit correction
 
@@ -29,5 +30,5 @@ An earlier conversational assessment of the Patagonia Azul paper referred to an 
 ## Status
 
 - Total ranked conflicts: **22**
-- Agreed and recorded here: **11**
-- Pending: **11**
+- Agreed and recorded here: **12**
+- Pending: **10**
