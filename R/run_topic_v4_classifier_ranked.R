@@ -341,9 +341,13 @@ for (i in seq_len(nrow(records))) {
     records$sampling_stratum[[i]], records$record_sequence[[i]], rid,
     records$title[[i]], records$abstract[[i]]
   )
+  # Replace any prior attempt for this record so transient failures do not
+  # remain in the checkpoint after a successful retry.
+  if (nrow(record_results)) record_results <- record_results |> dplyr::filter(record_id != rid)
+  if (nrow(long_results) && "record_id" %in% names(long_results)) long_results <- long_results |> dplyr::filter(record_id != rid)
   record_results <- dplyr::bind_rows(record_results, result$record)
   long_results <- dplyr::bind_rows(long_results, result$long)
-  completed_ids <- unique(c(completed_ids, rid))
+  if (identical(result$record$status[[1]], "completed")) completed_ids <- unique(c(completed_ids, rid))
 
   saveRDS(list(record_results = record_results, long_results = long_results), checkpoint_file)
   readr::write_csv(record_results, record_output_file, na = "")
