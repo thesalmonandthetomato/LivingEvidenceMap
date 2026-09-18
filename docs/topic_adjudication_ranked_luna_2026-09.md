@@ -19,7 +19,7 @@ Only actual ranked A/B conflicts are included here. Historical coding is not tre
 | 032-384-942-689-849 | Nutrient-based growth model | `V3_049 PRIMARY` | Growth and physiology are modelled validation outcomes; methodological development is the principal contribution. |
 | 033-811-323-921-83X | Marine growth and morphometrics | `V3_112 PRIMARY; V3_114 PRIMARY` | Growth and morphology are both explicit substantive objectives. |
 | 142-901-874-742-548 | Patagonia Azul / Indigenous marine areas | `V3_062 PRIMARY; V3_056 PRIMARY; V3_067 SECONDARY` | Indigenous rights/governance and livelihoods are central; Indigenous knowledge is a substantive secondary theme. Neither pass alone was complete. |
-| 038-687-748-170-176 | Ballan wrasse bacterial survey | `V3_121 PRIMARY; V3_123 SECONDARY` | Epidemiology is the primary contribution; bacterial identification/characterisation is independently substantive and secondary. Prefer Pass B. |
+| 038-353-098-644-720 | Ballan wrasse bacterial survey | `V3_121 PRIMARY; V3_123 SECONDARY` | Epidemiology is the primary contribution; bacterial identification/characterisation is independently substantive and secondary. Prefer Pass B. |
 
 ## Audit correction
 
