@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/workflow06_luna_adjudicator_benchmark.yml'
+      - 'R/run_topic_luna_adjudicator_batch.R'
 
 permissions:
   contents: read
