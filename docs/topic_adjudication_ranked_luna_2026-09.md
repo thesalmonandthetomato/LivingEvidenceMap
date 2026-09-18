@@ -24,13 +24,19 @@ Only actual ranked A/B conflicts are included here. Historical coding is not tre
 | 021-344-006-899-928 | Life-cycle considerations for seafood awareness campaigns | `V3_004 PRIMARY; V3_001 SECONDARY; V3_034 SECONDARY` | Life-cycle/environmental assessment is primary; broad environmental impacts and certification/standards are substantive secondary themes. `V3_087` excluded because consumer response to labels is not itself investigated. Prefer Pass B. |
 | 119-850-003-348-077 | Chilean salmon aquaculture and Alaskan sockeye markets | `V3_028 PRIMARY; V3_025 SECONDARY` | Supply, demand and prices are primary; revenues/earnings are explicit modelled outcomes and substantively secondary. Prefer Pass A. |
 | 106-264-889-658-256 | Organic plant-protein replacement in trout feed | `V3_096 PRIMARY; V3_100 PRIMARY; V3_112 SECONDARY; V3_005 SECONDARY` | Alternative feed ingredients and nutrient utilisation are co-primary; growth is substantive secondary; nitrogen/phosphorus outputs are independently substantive environmental outputs. Prefer Pass B. |
+| 128-953-506-234-897 | Huon Estuary environmental paper | **Unresolved** | No abstract or DOI available. Do not assign topics from title alone; retrieve abstract/full text before adjudicating `V3_001` versus no assignment. |
 
 ## Audit correction
 
 An earlier conversational assessment of the Patagonia Azul paper referred to an **older unranked disagreement**, not the ranked A/B conflict in this 22-record set. That mistaken assessment was not propagated. The ranked record was subsequently reviewed from its actual ranked outputs and is now recorded above.
 
+## Adjudication rules
+
+- **Do not assign topics from title alone.** If the abstract/full text is unavailable, leave the record unresolved and require further evidence before assigning substantive topics.
+
 ## Status
 
 - Total ranked conflicts: **22**
 - Agreed and recorded here: **14**
-- Pending: **8**
+- Needs more information: **1**
+- Pending: **7**
