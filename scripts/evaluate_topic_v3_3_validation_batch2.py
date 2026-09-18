@@ -2,14 +2,17 @@
 import csv
 import hashlib
 import json
+import os
 from collections import defaultdict
 from pathlib import Path
 
 
-OUT = Path("outputs/workflow06_luna_v3_3_validation_batch2")
+OUT = Path(os.getenv("VALIDATION_OUTPUT_DIR", "outputs/workflow06_luna_v3_3_validation_batch2"))
 MASTER = Path("data/master/current/living_evidence_map_master.csv")
 BENCHMARK = Path("/tmp/ranked/topic_consistency_queue.csv")
 SALT = "topic-v3.3-validation-batch2-2026-09|"
+ONTOLOGY = os.getenv("VALIDATION_ONTOLOGY", "data/reference/topic_ontology_v3_3.csv")
+RUNNER = os.getenv("VALIDATION_RUNNER", "R/run_topic_v4_classifier_ranked_v3_1.R")
 
 
 def read_csv(path):
@@ -72,8 +75,8 @@ def build_queue():
         "selection": "First 20 after ascending SHA-256 of selection_salt plus record_id",
         "selected_record_ids": [row["record_id"] for row in selected],
         "queue_sha256": hashlib.sha256((OUT / "validation_queue_20.csv").read_bytes()).hexdigest(),
-        "ontology": "data/reference/topic_ontology_v3_3.csv",
-        "runner": "R/run_topic_v4_classifier_ranked_v3_1.R",
+        "ontology": ONTOLOGY,
+        "runner": RUNNER,
         "model": "gpt-5.6-luna",
         "reasoning_effort": "medium",
         "manual_gold_available": False,
