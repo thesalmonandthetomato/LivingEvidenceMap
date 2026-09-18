@@ -71,3 +71,28 @@ At this stage Luna is the leading production candidate, but **no full-corpus Lun
 **Current status: validation in progress.**
 
 The present evidence rules out Nano and identifies Luna as the strongest candidate on consistency and restraint. A record-level human review of all 50 benchmark records is required before deciding whether to classify the full approximately 16,000-record corpus with Luna.
+
+## Ranked Luna benchmark: primary and secondary pathways
+
+A subsequent two-pass benchmark tested whether each assigned pathway could also be classified as **PRIMARY** or **SECONDARY** without materially reducing reproducibility. The substantive V4 coding rules were left unchanged. The only scientific change was the addition of a pathway role: PRIMARY for a central contribution, and SECONDARY for an independently substantive but non-central contribution. Background concepts and incidental measurements remained excluded rather than being retained as secondary topics. The ontology used for this test also included the newly added `V3_134 Biofouling and net fouling management` pathway.
+
+Run: **35318055832**. Artefact: **10536181345**.
+
+| Measure | Result |
+|---|---:|
+| Pathway-set exact agreement | **64% (32/50)** |
+| Pathway self-Jaccard | **0.807** |
+| Pathway self-F1 | **0.868** |
+| Exact agreement including PRIMARY/SECONDARY roles | **56% (28/50)** |
+| Role agreement on pathways assigned by both passes | **85.4% (70/82)** |
+| Exact agreement on PRIMARY pathway sets | **72% (36/50)** |
+| Primary-path self-Jaccard | **0.817** |
+| Primary-path self-F1 | **0.836** |
+| Mean topics per record, pass A / B | **1.90 / 1.88** |
+| Mean PRIMARY topics per record, pass A / B | **1.32 / 1.12** |
+
+Adding PRIMARY/SECONDARY did **not reduce exact pathway-set agreement**, which remained at 64%, the same as the earlier unranked Luna benchmark. It produced four records where the two passes selected exactly the same pathways but disagreed only on the role of one pathway. Eighteen additional records differed in pathway inclusion. Thus most disagreement remained about whether a pathway should be assigned at all, rather than about PRIMARY versus SECONDARY status.
+
+The ranked runs were somewhat more conservative than the earlier unranked Luna runs (1.88–1.90 versus 2.06–2.10 topics per record). Agreement with the historical assignments remained deliberately secondary to human substantive review: historical exact agreement was 28% and 30% for the two ranked passes, with path-level F1 of 0.684 and 0.704 respectively.
+
+The PRIMARY/SECONDARY distinction therefore appears feasible, but final adoption remains contingent on human review of the 50-record ranked outputs, especially whether the reduced coding density reflects appropriate exclusion of marginal pathways or excessive under-coding.
