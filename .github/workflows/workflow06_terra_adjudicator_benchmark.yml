@@ -1,0 +1,293 @@
+name: Workflow 06 - Terra third-pass adjudicator benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/workflow06_terra_adjudicator_benchmark.yml'
+      - 'R/run_topic_luna_adjudicator_batch.R'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_ARTIFACT_ID: '10536181345'
+  OUTPUT_DIR: outputs/workflow06_terra_adjudicator_benchmark
+
+jobs:
+  benchmark:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Launch Terra adjudicator benchmark' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::tibble
+
+      - name: Recover original ranked benchmark artefact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR" /tmp/ranked
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" > /tmp/ranked.zip
+          unzip -q /tmp/ranked.zip -d /tmp/ranked
+          test -s /tmp/ranked/topic_consistency_queue.csv
+          test -s /tmp/ranked/luna_ranked_a/topic_assignments.csv
+          test -s /tmp/ranked/luna_ranked_b/topic_assignments.csv
+
+      - name: Build blinded adjudicator input and separate gold standard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, json
+          from collections import defaultdict
+          from pathlib import Path
+
+          out=Path("outputs/workflow06_terra_adjudicator_benchmark")
+          with open("/tmp/ranked/topic_consistency_queue.csv",encoding="utf-8-sig",newline="") as f:
+              queue=list(csv.DictReader(f))
+          qby={r["record_id"]:r for r in queue}
+
+          def load_assignments(path):
+              assignments=defaultdict(dict)
+              reasons=defaultdict(dict)
+              with open(path,encoding="utf-8-sig",newline="") as f:
+                  for r in csv.DictReader(f):
+                      assignments[r["record_id"]][r["path_id"]]=r["role"]
+                      reasons[r["record_id"]][r["path_id"]]=r.get("reason","")
+              return assignments,reasons
+
+          A,Ar=load_assignments("/tmp/ranked/luna_ranked_a/topic_assignments.csv")
+          B,Br=load_assignments("/tmp/ranked/luna_ranked_b/topic_assignments.csv")
+
+          with open("docs/topic_adjudication_ranked_luna_2026-09.csv",encoding="utf-8-sig",newline="") as f:
+              manual=list(csv.DictReader(f))
+
+          agreed=[r for r in manual if r["status"]=="agreed"]
+          unresolved=[r for r in manual if r["status"]=="needs_more_information"]
+          if len(agreed)!=20:
+              raise SystemExit(f"Expected 20 manually agreed benchmark conflicts, found {len(agreed)}")
+          if len(unresolved)!=2:
+              raise SystemExit(f"Expected 2 needs_more_information conflicts, found {len(unresolved)}")
+
+          ranked_conflicts=set()
+          with open("/tmp/ranked/luna_ranked_disagreements.csv",encoding="utf-8-sig",newline="") as f:
+              ranked_conflicts={r["record_id"] for r in csv.DictReader(f)}
+          if not all(r["record_id"] in ranked_conflicts for r in agreed):
+              missing=[r["record_id"] for r in agreed if r["record_id"] not in ranked_conflicts]
+              raise SystemExit(f"Manual gold IDs absent from source conflict table: {missing}")
+
+          input_rows=[]
+          gold_rows=[]
+          for m in agreed:
+              rid=m["record_id"]
+              if rid not in qby:
+                  raise SystemExit(f"Gold record {rid} missing from benchmark queue")
+              q=qby[rid]
+              a=A[rid]; b=B[rid]
+              input_rows.append({
+                  "record_id":rid,
+                  "title":q.get("title",""),
+                  "abstract":q.get("abstract",""),
+                  "pass_a":"; ".join(f"{p}={a[p]}" for p in sorted(a)),
+                  "pass_b":"; ".join(f"{p}={b[p]}" for p in sorted(b)),
+                  "pass_a_reasons":" | ".join(f"{p}: {Ar[rid].get(p,'')}" for p in sorted(a)),
+                  "pass_b_reasons":" | ".join(f"{p}: {Br[rid].get(p,'')}" for p in sorted(b))
+              })
+              gold_rows.append({
+                  "record_id":rid,
+                  "title":q.get("title",""),
+                  "gold_final_coding":m["final_coding"],
+                  "gold_rationale":m["rationale"]
+              })
+
+          fields=["record_id","title","abstract","pass_a","pass_b","pass_a_reasons","pass_b_reasons"]
+          with (out/"benchmark_input_blinded.csv").open("w",encoding="utf-8",newline="") as f:
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(input_rows)
+          with (out/"benchmark_gold_standard.csv").open("w",encoding="utf-8",newline="") as f:
+              w=csv.DictWriter(f,fieldnames=["record_id","title","gold_final_coding","gold_rationale"])
+              w.writeheader(); w.writerows(gold_rows)
+
+          manifest={
+              "source_artifact_id":10536181345,
+              "manual_gold_source":"docs/topic_adjudication_ranked_luna_2026-09.csv",
+              "records":len(input_rows),
+              "gold_hidden_from_model":True,
+              "model":"gpt-5.6-terra",
+              "reasoning_effort":"medium",
+              "adjudicator_requests":2,
+              "batching":"all 20 records per request"
+          }
+          (out/"benchmark_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Run independent Terra adjudicator pass 1
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ADJUDICATION_INPUT_PATH: outputs/workflow06_terra_adjudicator_benchmark/benchmark_input_blinded.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          ADJUDICATION_POLICY_PATH: data/reference/topic_adjudication_policy_v1.json
+          ADJUDICATION_OUTPUT_DIR: outputs/workflow06_terra_adjudicator_benchmark/adjudicator_1
+          ADJUDICATION_MODEL: gpt-5.6-terra
+          ADJUDICATION_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_luna_adjudicator_batch.R
+
+      - name: Run independent Terra adjudicator pass 2
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ADJUDICATION_INPUT_PATH: outputs/workflow06_terra_adjudicator_benchmark/benchmark_input_blinded.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          ADJUDICATION_POLICY_PATH: data/reference/topic_adjudication_policy_v1.json
+          ADJUDICATION_OUTPUT_DIR: outputs/workflow06_terra_adjudicator_benchmark/adjudicator_2
+          ADJUDICATION_MODEL: gpt-5.6-terra
+          ADJUDICATION_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_luna_adjudicator_batch.R
+
+      - name: Compare adjudicators with manual gold
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, json
+          from pathlib import Path
+
+          out=Path("outputs/workflow06_terra_adjudicator_benchmark")
+
+          def read_csv(path):
+              with path.open(encoding="utf-8-sig",newline="") as f:
+                  return list(csv.DictReader(f))
+
+          gold_rows=read_csv(out/"benchmark_gold_standard.csv")
+          gold={r["record_id"]:r for r in gold_rows}
+
+          def parse(s):
+              d={}
+              if not s or not s.strip(): return d
+              for item in s.split(";"):
+                  item=item.strip()
+                  if not item: continue
+                  if "=" not in item:
+                      raise ValueError(f"Invalid coding item: {item!r}")
+                  p,role=item.split("=",1)
+                  d[p.strip()]=role.strip()
+              return d
+
+          def evaluate(rows,label):
+              by={r["record_id"]:r for r in rows}
+              exact_path=exact_full=tp=fp=fn=0
+              shared_gold=role_correct=0
+              details=[]
+              for rid,g in gold.items():
+                  G=parse(g["gold_final_coding"])
+                  P=parse(by[rid]["final_coding"])
+                  gs=set(G); ps=set(P)
+                  exact_path += int(gs==ps)
+                  exact_full += int(G==P)
+                  tp += len(gs & ps); fp += len(ps-gs); fn += len(gs-ps)
+                  shared_gold += len(gs & ps)
+                  role_correct += sum(G[p]==P[p] for p in gs & ps)
+                  details.append({
+                      "record_id":rid,
+                      "title":g["title"],
+                      "gold":g["gold_final_coding"],
+                      f"{label}_coding":by[rid]["final_coding"],
+                      f"{label}_status":by[rid]["status"],
+                      f"{label}_alignment":by[rid]["pass_alignment"],
+                      f"{label}_rationale":by[rid]["rationale"],
+                      f"{label}_path_exact":int(gs==ps),
+                      f"{label}_full_exact":int(G==P)
+                  })
+              p=tp/(tp+fp) if tp+fp else 1.0
+              r=tp/(tp+fn) if tp+fn else 1.0
+              f1=2*p*r/(p+r) if p+r else 0.0
+              return {
+                  "records":len(gold),
+                  "exact_pathway_matches":exact_path,
+                  "exact_pathway_agreement":exact_path/len(gold),
+                  "exact_full_ranked_matches":exact_full,
+                  "exact_full_ranked_agreement":exact_full/len(gold),
+                  "pathway_precision":p,
+                  "pathway_recall":r,
+                  "pathway_f1":f1,
+                  "role_accuracy_on_correctly_recovered_gold_paths":role_correct/shared_gold if shared_gold else 1.0,
+                  "tp":tp,"fp":fp,"fn":fn
+              },details
+
+          a1=read_csv(out/"adjudicator_1"/"adjudications.csv")
+          a2=read_csv(out/"adjudicator_2"/"adjudications.csv")
+          m1,d1=evaluate(a1,"adj1")
+          m2,d2=evaluate(a2,"adj2")
+
+          # Self-consistency of two adjudicator batches.
+          b1={r["record_id"]:parse(r["final_coding"]) for r in a1}
+          b2={r["record_id"]:parse(r["final_coding"]) for r in a2}
+          self_path=sum(set(b1[r])==set(b2[r]) for r in gold)
+          self_full=sum(b1[r]==b2[r] for r in gold)
+
+          summary={
+              "adjudicator_1_vs_manual":m1,
+              "adjudicator_2_vs_manual":m2,
+              "adjudicator_self_consistency":{
+                  "exact_pathway_matches":self_path,
+                  "exact_pathway_agreement":self_path/len(gold),
+                  "exact_full_ranked_matches":self_full,
+                  "exact_full_ranked_agreement":self_full/len(gold)
+              }
+          }
+
+          # Merge detailed rows by record_id.
+          d2by={r["record_id"]:r for r in d2}
+          merged=[]
+          for x in d1:
+              y=d2by[x["record_id"]]
+              z=dict(x)
+              for k,v in y.items():
+                  if k not in ("record_id","title","gold"):
+                      z[k]=v
+              merged.append(z)
+
+          fields=list(merged[0].keys())
+          with (out/"benchmark_comparison.csv").open("w",encoding="utf-8",newline="") as f:
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(merged)
+          (out/"benchmark_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
+
+          # Combine token usage without embedding any price assumption.
+          usage={}
+          for i in (1,2):
+              p=out/f"adjudicator_{i}"/"usage.json"
+              usage[f"adjudicator_{i}"]=json.loads(p.read_text(encoding="utf-8"))
+          (out/"benchmark_usage.json").write_text(json.dumps(usage,indent=2)+"\n",encoding="utf-8")
+
+          print(json.dumps(summary,indent=2))
+          print(json.dumps(usage,indent=2))
+          PY
+
+      - name: Upload adjudicator benchmark artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-terra-adjudicator-benchmark-${{ github.run_id }}
+          path: outputs/workflow06_terra_adjudicator_benchmark/
+          if-no-files-found: error
+          retention-days: 90
