@@ -31,6 +31,7 @@ Only actual ranked A/B conflicts are included here. Historical coding is not tre
 | 046-421-608-410-126 | Simulation models of finfish farms | `V3_049 PRIMARY; V3_005 SECONDARY; V3_009 SECONDARY; V3_010 SECONDARY` | `V3_049` is the central methodological contribution; the three environmental domains are substantive secondary topics. `V3_001` excluded because the ontology directs use of specific environmental pathways where identifiable. |
 | 053-446-039-887-534 | Flushed with the flood: rainbow trout in the Shatt Al-Arab | `V3_011 PRIMARY; V3_013 PRIMARY` | The escape event/cause and post-escape survival/establishment are both substantive under the ontology. Prefer Pass A. |
 | 184-875-629-714-196 | Aquaculture: A Diverse Industry Poised For Growth | `V3_021 PRIMARY` | Historical/sector development is substantive. `V3_029` and `V3_057` are contextual rather than analysed outcomes. Prefer Pass B. |
+| 015-481-789-712-632 | Sea-louse population markers | `V3_116 PRIMARY` | Population structure/gene flow aligns with sea-lice epidemiological/transmission processes. `V3_046` excluded because method development/validation is not the principal contribution. Prefer Pass A. |
 
 ## Audit correction
 
@@ -49,6 +50,6 @@ The machine-readable policy is stored in `data/reference/topic_adjudication_poli
 ## Status
 
 - Total ranked conflicts: **22**
-- Agreed and recorded here: **19**
+- Agreed and recorded here: **20**
 - Needs more information: **2**
-- Pending: **1**
+- Pending: **0**
