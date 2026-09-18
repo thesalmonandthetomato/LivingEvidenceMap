@@ -43,11 +43,20 @@ def build_queue():
     if len(benchmark_ids) != 50:
         raise SystemExit(f"Expected 50 benchmark exclusions, found {len(benchmark_ids)}")
     additional_ids = set()
+    additional_sources = []
     if ADDITIONAL_EXCLUSIONS:
-        additional_path = Path(ADDITIONAL_EXCLUSIONS)
-        if not additional_path.exists():
-            raise SystemExit(f"Additional exclusion file not found: {additional_path}")
-        additional_ids = {row["record_id"] for row in read_csv(additional_path)}
+        for value in ADDITIONAL_EXCLUSIONS.split(os.pathsep):
+            additional_path = Path(value)
+            if not additional_path.exists():
+                raise SystemExit(f"Additional exclusion file not found: {additional_path}")
+            source_ids = {row["record_id"] for row in read_csv(additional_path)}
+            overlap_with_previous = additional_ids & source_ids
+            if overlap_with_previous:
+                raise SystemExit(
+                    f"Additional exclusion sources overlap: {len(overlap_with_previous)} records in {additional_path}"
+                )
+            additional_ids |= source_ids
+            additional_sources.append({"path": str(additional_path), "records": len(source_ids)})
     overlap = benchmark_ids & additional_ids
     if overlap:
         raise SystemExit(f"Additional exclusions overlap benchmark exclusions: {len(overlap)} records")
@@ -80,7 +89,7 @@ def build_queue():
         "source_sha256": hashlib.sha256(MASTER.read_bytes()).hexdigest(),
         "source_records": len(source),
         "excluded_original_benchmark_records": len(benchmark_ids),
-        "additional_exclusion_source": ADDITIONAL_EXCLUSIONS or None,
+        "additional_exclusion_sources": additional_sources,
         "excluded_additional_records": len(additional_ids),
         "excluded_total_unique_records": len(excluded_ids),
         "eligible_records_with_title_and_abstract": len(candidates),
