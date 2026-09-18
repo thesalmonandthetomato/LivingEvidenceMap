@@ -247,7 +247,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow06-luna-v3-2-development-${{ github.run_id }}
+          name: workflow06-luna-v3-3-development-${{ github.run_id }}
           path: outputs/workflow06_luna_v3_3_development/
           if-no-files-found: error
           retention-days: 90
