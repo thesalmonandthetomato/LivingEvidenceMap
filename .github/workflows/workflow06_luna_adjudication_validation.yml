@@ -117,9 +117,18 @@ jobs:
           if len(eligible)!=16018:
               raise SystemExit(f"Expected 16018 eligible records, found {len(eligible)}")
 
+          # Title-only records are not sent to Luna under the adjudication policy.
+          sufficient=[r for r in eligible if r["abstract"].strip()]
+          insufficient=[r for r in eligible if not r["abstract"].strip()]
+          if len(sufficient)!=14738 or len(insufficient)!=1280:
+              raise SystemExit(
+                  f"Evidence-status integrity check failed: expected 14738 with abstract "
+                  f"and 1280 without; found {len(sufficient)} and {len(insufficient)}"
+              )
+
           n=int(os.environ["SAMPLE_N"])
           seed=int(os.environ["SAMPLE_SEED"])
-          sampled=random.Random(seed).sample(eligible,n)
+          sampled=random.Random(seed).sample(sufficient,n)
 
           fields=["record_id","title","abstract"]
           sample_path=out/"validation_input_600.csv"
@@ -129,11 +138,15 @@ jobs:
 
           manifest={
               "source_artifact_id":10491334737,
-              "source_canonical_record_count":len(all_records),\n              "source_forwarded_record_count":len(rows),
+              "source_canonical_record_count":len(all_records),
+              "source_forwarded_record_count":len(rows),
               "source_sha256":hashlib.sha256(source.read_bytes()).hexdigest(),
               "benchmark_artifact_id":10517289690,
               "benchmark_records_excluded":len(benchmark_ids),
               "eligible_record_count":len(eligible),
+              "eligible_with_abstract":len(sufficient),
+              "eligible_without_abstract":len(insufficient),
+              "title_only_policy_action":"needs_more_information_no_luna_call",
               "sample_n":n,
               "sample_seed":seed,
               "sample_sha256":hashlib.sha256(sample_path.read_bytes()).hexdigest(),
