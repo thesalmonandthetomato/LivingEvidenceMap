@@ -1,6 +1,6 @@
 Master records: 13,426
-Canonical ontology paths: 133
-Canonical ontology depth distribution: {3: 133}
+Canonical ontology paths: 134
+Canonical ontology depth distribution: {3: 134}
 
 FIELD topic_hierarchy_paths:
   total parsed paths: 42,750
