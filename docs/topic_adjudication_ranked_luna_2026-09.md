@@ -29,6 +29,7 @@ Only actual ranked A/B conflicts are included here. Historical coding is not tre
 | 111-629-308-735-12X | Big Fish: valuation of salmon farming companies | `V3_027 PRIMARY; V3_023 SECONDARY` | Pass B best aligns with the ontology: economic valuation is central, and companies are substantive units of analysis. `V3_024` excluded because commercial strategy/business decision-making is not the substantive focus. |
 | 116-524-842-809-804 | Pressed vs extruded feeds, pigmentation and fillet yield | `V3_074 PRIMARY; V3_075 PRIMARY; V3_097 SECONDARY; V3_101 SECONDARY; V3_112 SECONDARY` | Preserve shared `V3_074`, `V3_075` and `V3_101`; retain `V3_097` and `V3_112` as substantive secondary topics; exclude `V3_098` because nutrient requirements/formulation are not themselves investigated. |
 | 046-421-608-410-126 | Simulation models of finfish farms | `V3_049 PRIMARY; V3_005 SECONDARY; V3_009 SECONDARY; V3_010 SECONDARY` | `V3_049` is the central methodological contribution; the three environmental domains are substantive secondary topics. `V3_001` excluded because the ontology directs use of specific environmental pathways where identifiable. |
+| 053-446-039-887-534 | Flushed with the flood: rainbow trout in the Shatt Al-Arab | `V3_011 PRIMARY; V3_013 PRIMARY` | The escape event/cause and post-escape survival/establishment are both substantive under the ontology. Prefer Pass A. |
 
 ## Audit correction
 
@@ -47,6 +48,6 @@ The machine-readable policy is stored in `data/reference/topic_adjudication_poli
 ## Status
 
 - Total ranked conflicts: **22**
-- Agreed and recorded here: **17**
+- Agreed and recorded here: **18**
 - Needs more information: **2**
-- Pending: **3**
+- Pending: **2**
