@@ -1,0 +1,207 @@
+name: Workflow 06 Luna ranked consistency benchmark
+
+on:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_luna_ranked_consistency.yml'
+      - 'R/run_topic_v4_classifier_ranked.R'
+      - 'data/reference/topic_ontology_v3.csv'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_ARTIFACT_ID: '10517289690'
+  OUTPUT_DIR: outputs/workflow06_luna_ranked
+
+jobs:
+  luna_ranked:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::tibble
+
+      - name: Recover fixed 50-record benchmark sample
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR" /tmp/model_consistency
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" > /tmp/source.zip
+          unzip -q /tmp/source.zip -d /tmp/model_consistency
+          cp /tmp/model_consistency/topic_consistency_queue.csv "$OUTPUT_DIR/topic_consistency_queue.csv"
+          cp /tmp/model_consistency/topic_consistency_reference.csv "$OUTPUT_DIR/topic_consistency_reference.csv"
+          cp /tmp/model_consistency/luna_a/topic_assignments.csv "$OUTPUT_DIR/previous_luna_a_assignments.csv"
+          cp /tmp/model_consistency/luna_b/topic_assignments.csv "$OUTPUT_DIR/previous_luna_b_assignments.csv"
+          test -s "$OUTPUT_DIR/topic_consistency_queue.csv"
+          test -s "$OUTPUT_DIR/topic_consistency_reference.csv"
+
+      - name: Run ranked Luna pass A
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_ranked/topic_consistency_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_ranked/luna_ranked_a
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked.R
+
+      - name: Run ranked Luna pass B
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_ranked/topic_consistency_queue.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_ranked/luna_ranked_b
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked.R
+
+      - name: Compare ranked Luna passes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, json, statistics
+          from collections import defaultdict
+
+          out='outputs/workflow06_luna_ranked'
+          with open(f'{out}/topic_consistency_queue.csv',encoding='utf-8-sig',newline='') as f:
+              queue=list(csv.DictReader(f))
+          ids=[r['record_id'] for r in queue]
+          qby={r['record_id']:r for r in queue}
+
+          hist=defaultdict(set)
+          with open(f'{out}/topic_consistency_reference.csv',encoding='utf-8-sig',newline='') as f:
+              for r in csv.DictReader(f):
+                  hist[r['record_id']].add(r['path_id'])
+
+          def load_ranked(label):
+              x=defaultdict(dict)
+              with open(f'{out}/{label}/topic_assignments.csv',encoding='utf-8-sig',newline='') as f:
+                  for r in csv.DictReader(f):
+                      x[r['record_id']][r['path_id']]=r['role']
+              return x
+
+          def load_old(path):
+              x=defaultdict(set)
+              with open(path,encoding='utf-8-sig',newline='') as f:
+                  for r in csv.DictReader(f):
+                      x[r['record_id']].add(r['path_id'])
+              return x
+
+          A=load_ranked('luna_ranked_a')
+          B=load_ranked('luna_ranked_b')
+          oldA=load_old(f'{out}/previous_luna_a_assignments.csv')
+          oldB=load_old(f'{out}/previous_luna_b_assignments.csv')
+
+          def set_metrics(X,Y):
+              exact=tp=fp=fn=0
+              js=[]
+              for rid in ids:
+                  x=set(X[rid]); y=set(Y[rid])
+                  exact += int(x==y)
+                  tp += len(x & y); fp += len(y-x); fn += len(x-y)
+                  u=x|y
+                  js.append(len(x&y)/len(u) if u else 1.0)
+              p=tp/(tp+fp) if tp+fp else 1.0
+              r=tp/(tp+fn) if tp+fn else 1.0
+              f=2*p*r/(p+r) if p+r else 0.0
+              return dict(exact_matches=exact,exact_agreement=exact/len(ids),
+                          path_precision=p,path_recall=r,path_f1=f,
+                          mean_jaccard=sum(js)/len(js))
+
+          primaryA={rid:{p for p,role in A[rid].items() if role=='PRIMARY'} for rid in ids}
+          primaryB={rid:{p for p,role in B[rid].items() if role=='PRIMARY'} for rid in ids}
+
+          shared=role_same=0
+          full_ranked_exact=0
+          for rid in ids:
+              shared_paths=set(A[rid]) & set(B[rid])
+              shared += len(shared_paths)
+              role_same += sum(A[rid][p]==B[rid][p] for p in shared_paths)
+              full_ranked_exact += int(A[rid]==B[rid])
+
+          histA=set_metrics(hist,{rid:set(A[rid]) for rid in ids})
+          histB=set_metrics(hist,{rid:set(B[rid]) for rid in ids})
+          current_self=set_metrics({rid:set(A[rid]) for rid in ids},{rid:set(B[rid]) for rid in ids})
+          primary_self=set_metrics(primaryA,primaryB)
+          old_vs_ranked_A=set_metrics(oldA,{rid:set(A[rid]) for rid in ids})
+          old_vs_ranked_B=set_metrics(oldB,{rid:set(B[rid]) for rid in ids})
+
+          countsA=[len(A[r]) for r in ids]; countsB=[len(B[r]) for r in ids]
+          primA=[len(primaryA[r]) for r in ids]; primB=[len(primaryB[r]) for r in ids]
+
+          summary={
+              'records':len(ids),
+              'model':'gpt-5.6-luna',
+              'reasoning_effort':'medium',
+              'ontology_includes':'V3_134 biofouling and net fouling management',
+              'pathway_self_agreement':current_self,
+              'full_ranked_exact_matches':full_ranked_exact,
+              'full_ranked_exact_agreement':full_ranked_exact/len(ids),
+              'role_agreement_on_shared_paths': role_same/shared if shared else 1.0,
+              'shared_path_assignments':shared,
+              'primary_pathway_self_agreement':primary_self,
+              'historical_comparison_a':histA,
+              'historical_comparison_b':histB,
+              'previous_unranked_luna_vs_ranked_a':old_vs_ranked_A,
+              'previous_unranked_luna_vs_ranked_b':old_vs_ranked_B,
+              'mean_topics_per_record_a':statistics.mean(countsA),
+              'mean_topics_per_record_b':statistics.mean(countsB),
+              'mean_primary_topics_per_record_a':statistics.mean(primA),
+              'mean_primary_topics_per_record_b':statistics.mean(primB)
+          }
+          with open(f'{out}/luna_ranked_consistency_summary.json','w',encoding='utf-8') as f:
+              json.dump(summary,f,indent=2)
+
+          rows=[]
+          for rid in ids:
+              paths=sorted(set(A[rid])|set(B[rid]))
+              if A[rid]!=B[rid]:
+                  rows.append({
+                      'record_id':rid,
+                      'title':qby[rid]['title'],
+                      'luna_a':'; '.join(f'{p}={A[rid][p]}' for p in sorted(A[rid])),
+                      'luna_b':'; '.join(f'{p}={B[rid][p]}' for p in sorted(B[rid])),
+                      'a_only':'; '.join(sorted(set(A[rid])-set(B[rid]))),
+                      'b_only':'; '.join(sorted(set(B[rid])-set(A[rid]))),
+                      'role_disagreements':'; '.join(
+                          f'{p}:{A[rid][p]}->{B[rid][p]}' for p in paths
+                          if p in A[rid] and p in B[rid] and A[rid][p]!=B[rid][p]
+                      )
+                  })
+          with open(f'{out}/luna_ranked_disagreements.csv','w',encoding='utf-8',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=['record_id','title','luna_a','luna_b','a_only','b_only','role_disagreements'])
+              w.writeheader(); w.writerows(rows)
+
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload ranked Luna benchmark artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-luna-ranked-${{ github.run_id }}
+          path: outputs/workflow06_luna_ranked/
+          if-no-files-found: error
+          retention-days: 90
