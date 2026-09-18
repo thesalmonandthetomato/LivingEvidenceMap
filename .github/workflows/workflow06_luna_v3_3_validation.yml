@@ -1,0 +1,87 @@
+name: Workflow 06 - Luna ontology v3.3 independent validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_luna_v3_3_validation.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_ARTIFACT_ID: '10536181345'
+  OUTPUT_DIR: outputs/workflow06_luna_v3_3_validation
+
+jobs:
+  validation:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Launch Luna v3.3 independent validation' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::tibble
+
+      - name: Recover original 50-record benchmark artefact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR" /tmp/ranked
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" > /tmp/ranked.zip
+          unzip -q /tmp/ranked.zip -d /tmp/ranked
+          test -s /tmp/ranked/topic_consistency_queue.csv
+          test -s /tmp/ranked/topic_consistency_reference.csv
+
+      - name: Build deterministic held-out 20-record queue
+        run: python3 scripts/evaluate_topic_v3_3_holdout.py build
+
+      - name: Run independent Luna pass A
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_v3_3_validation/validation_queue_20.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_v3_3_validation/luna_a
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked_v3_1.R
+
+      - name: Run independent Luna pass B
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_v3_3_validation/validation_queue_20.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_v3_3_validation/luna_b
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked_v3_1.R
+
+      - name: Evaluate reproducibility and build review queue
+        run: python3 scripts/evaluate_topic_v3_3_holdout.py evaluate
+
+      - name: Upload v3.3 validation artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-luna-v3-3-validation-${{ github.run_id }}
+          path: outputs/workflow06_luna_v3_3_validation/
+          if-no-files-found: error
+          retention-days: 90
