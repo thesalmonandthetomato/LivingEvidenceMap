@@ -1,0 +1,62 @@
+{
+  "run_id": 35374602675,
+  "artifact_id": 10559159547,
+  "artifact_sha256": "168fc9782ade8673f25f9e62bea2f0da7f80a42c184d44054d963680c526571b",
+  "queue_sha256": "516db36eec8ee1e13ba45700febfad77c97c5ff24482e884adbd93ce3155df8c",
+  "queue_identical_to_v3_3_batch2": true,
+  "v3_4_a_b_reproducibility": {
+    "exact_pathway_matches": 18,
+    "exact_pathway_agreement": 0.9,
+    "mean_jaccard": 0.9416666666666667,
+    "pathway_f1": 0.955223880597015,
+    "exact_full_ranked_matches": 18,
+    "exact_full_ranked_agreement": 0.9
+  },
+  "v3_4_luna_a_vs_v3_3_adjudicated": {
+    "exact_pathway_matches": 16,
+    "exact_pathway_agreement": 0.8,
+    "precision": 1.0,
+    "recall": 0.8918918918918919,
+    "f1": 0.9428571428571428,
+    "tp": 33,
+    "fp": 0,
+    "fn": 4
+  },
+  "v3_4_luna_b_vs_v3_3_adjudicated": {
+    "exact_pathway_matches": 15,
+    "exact_pathway_agreement": 0.75,
+    "precision": 0.9411764705882353,
+    "recall": 0.8648648648648649,
+    "f1": 0.9014084507042254,
+    "tp": 32,
+    "fp": 2,
+    "fn": 5
+  },
+  "targeted_general_code_cases": {
+    "75382": {
+      "adjudicated": [
+        "V3_121"
+      ],
+      "luna_a": [
+        "V3_121"
+      ],
+      "luna_b": [
+        "V3_121"
+      ],
+      "target_fixed_both": true
+    },
+    "77091": {
+      "adjudicated": [
+        "V3_123"
+      ],
+      "luna_a": [
+        "V3_123"
+      ],
+      "luna_b": [
+        "V3_123"
+      ],
+      "target_fixed_both": true
+    }
+  },
+  "interpretation": "The General-code exclusivity change succeeded on both known target cases. Higher A/B agreement did not produce higher aggregate accuracy against the resulting v3.3 adjudicated sets because both v3.4 passes shared several omissions and stochastic changes occurred outside the targeted rule."
+}
