@@ -1,0 +1,26 @@
+{
+  "records": 20,
+  "adjudication_procedure": "Retain exact A/B pathway-set agreements except a known General-plus-specific violation identified after the General-code rule was clarified; jointly adjudicate pathway-set disagreements against abstract and ontology guidance. PRIMARY/SECONDARY performance excluded.",
+  "jointly_adjudicated_disagreements": 7,
+  "jointly_corrected_exact_agreements": 1,
+  "luna_a_vs_adjudicated": {
+    "exact_pathway_matches": 16,
+    "exact_pathway_agreement": 0.8,
+    "precision": 0.9459459459459459,
+    "recall": 0.9459459459459459,
+    "f1": 0.9459459459459459,
+    "tp": 35,
+    "fp": 2,
+    "fn": 2
+  },
+  "luna_b_vs_adjudicated": {
+    "exact_pathway_matches": 14,
+    "exact_pathway_agreement": 0.7,
+    "precision": 0.9696969696969697,
+    "recall": 0.8648648648648649,
+    "f1": 0.9142857142857143,
+    "tp": 32,
+    "fp": 1,
+    "fn": 5
+  }
+}
