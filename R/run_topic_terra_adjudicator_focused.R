@@ -82,7 +82,7 @@ criterion_schema <- list(
   governing_criterion=list(type="string"),
   evidence=list(type="string"),
   decision=list(type="string",enum=I(c("KEEP","EXCLUDE"))),
-  role=list(type=c("string","null"),enum=I(c("PRIMARY","SECONDARY")))
+  role=list(type="string",enum=I(c("PRIMARY","SECONDARY","NONE")))
  ),
  required=I(c("path_id","governing_criterion","evidence","decision","role")),
  additionalProperties=FALSE
