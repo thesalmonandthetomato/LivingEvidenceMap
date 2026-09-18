@@ -1,0 +1,212 @@
+name: Workflow 06 - Luna adjudication-rule validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/workflow06_luna_adjudication_validation.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_ARTIFACT_ID: '10491334737'
+  BENCHMARK_ARTIFACT_ID: '10517289690'
+  OUTPUT_DIR: outputs/workflow06_luna_validation
+  SAMPLE_N: '600'
+  SAMPLE_SEED: '20260918'
+
+jobs:
+  validation:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Launch Luna adjudication validation sample' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::httr2
+            any::jsonlite
+            any::purrr
+            any::readr
+            any::tibble
+
+      - name: Recover authoritative source and benchmark
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR" /tmp/workflow05 /tmp/benchmark
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" > /tmp/workflow05.zip
+          unzip -q /tmp/workflow05.zip -d /tmp/workflow05
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${BENCHMARK_ARTIFACT_ID}/zip" > /tmp/benchmark.zip
+          unzip -q /tmp/benchmark.zip -d /tmp/benchmark
+
+      - name: Build independent fixed-seed validation sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, json, random, hashlib, os
+          from pathlib import Path
+
+          out=Path("outputs/workflow06_luna_validation")
+          candidates=list(Path("/tmp/workflow05").rglob("records_after_species_geography_adjudication.csv"))
+          if len(candidates) != 1:
+              raise SystemExit(f"Expected exactly one source CSV, found {len(candidates)}: {candidates}")
+          source=candidates[0]
+
+          with source.open(encoding="utf-8-sig",newline="") as f:
+              rows=list(csv.DictReader(f))
+          if len(rows) != 16068:
+              raise SystemExit(f"Integrity check failed: expected 16068 Workflow 05 records, found {len(rows)}")
+          required={"record_id","title","abstract"}
+          missing=required-set(rows[0])
+          if missing:
+              raise SystemExit(f"Source missing required columns: {sorted(missing)}")
+          ids=[r["record_id"] for r in rows]
+          if any(not x for x in ids): raise SystemExit("Blank record_id in source")
+          if len(ids)!=len(set(ids)): raise SystemExit("Duplicate record_id in source")
+
+          qs=list(Path("/tmp/benchmark").rglob("topic_consistency_queue.csv"))
+          if len(qs)!=1:
+              raise SystemExit(f"Expected one original benchmark queue, found {len(qs)}")
+          with qs[0].open(encoding="utf-8-sig",newline="") as f:
+              benchmark=list(csv.DictReader(f))
+          if len(benchmark)!=50:
+              raise SystemExit(f"Expected 50 benchmark records, found {len(benchmark)}")
+          benchmark_ids={r["record_id"] for r in benchmark}
+
+          eligible=[r for r in rows if r["record_id"] not in benchmark_ids]
+          if len(eligible)!=16018:
+              raise SystemExit(f"Expected 16018 eligible records, found {len(eligible)}")
+
+          n=int(os.environ["SAMPLE_N"])
+          seed=int(os.environ["SAMPLE_SEED"])
+          sampled=random.Random(seed).sample(eligible,n)
+
+          fields=["record_id","title","abstract"]
+          sample_path=out/"validation_input_600.csv"
+          with sample_path.open("w",encoding="utf-8",newline="") as f:
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader()
+              for r in sampled: w.writerow({k:r.get(k,"") for k in fields})
+
+          manifest={
+              "source_artifact_id":10491334737,
+              "source_record_count":len(rows),
+              "source_sha256":hashlib.sha256(source.read_bytes()).hexdigest(),
+              "benchmark_artifact_id":10517289690,
+              "benchmark_records_excluded":len(benchmark_ids),
+              "eligible_record_count":len(eligible),
+              "sample_n":n,
+              "sample_seed":seed,
+              "sample_sha256":hashlib.sha256(sample_path.read_bytes()).hexdigest(),
+              "ontology":"data/reference/topic_ontology_v3.csv",
+              "runner":"R/run_topic_v4_classifier_ranked.R",
+              "model":"gpt-5.6-luna",
+              "reasoning_effort":"medium"
+          }
+          (out/"validation_sampling_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Run ranked Luna pass A
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_validation/validation_input_600.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_validation/luna_a
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked.R
+
+      - name: Run ranked Luna pass B
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOPIC_INPUT_PATH: outputs/workflow06_luna_validation/validation_input_600.csv
+          TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3.csv
+          TOPIC_OUTPUT_DIR: outputs/workflow06_luna_validation/luna_b
+          TOPIC_MODEL: gpt-5.6-luna
+          TOPIC_REASONING_EFFORT: medium
+        run: Rscript R/run_topic_v4_classifier_ranked.R
+
+      - name: Build disagreement table and validation sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, json
+          from collections import defaultdict
+          from pathlib import Path
+
+          out=Path("outputs/workflow06_luna_validation")
+          with (out/"validation_input_600.csv").open(encoding="utf-8-sig",newline="") as f:
+              queue=list(csv.DictReader(f))
+          qby={r["record_id"]:r for r in queue}
+
+          def load(path):
+              d=defaultdict(dict); reasons=defaultdict(dict)
+              with path.open(encoding="utf-8-sig",newline="") as f:
+                  for r in csv.DictReader(f):
+                      d[r["record_id"]][r["path_id"]]=r["role"]
+                      reasons[r["record_id"]][r["path_id"]]=r.get("reason","")
+              return d,reasons
+
+          A,Ar=load(out/"luna_a"/"topic_assignments.csv")
+          B,Br=load(out/"luna_b"/"topic_assignments.csv")
+
+          rows=[]; full_exact=0; path_exact=0
+          for rid,r in qby.items():
+              a=A[rid]; b=B[rid]
+              full_exact += int(a==b)
+              path_exact += int(set(a)==set(b))
+              if a==b: continue
+              union=sorted(set(a)|set(b))
+              rows.append({
+                  "record_id":rid,
+                  "title":r["title"],
+                  "abstract":r["abstract"],
+                  "luna_a":"; ".join(f"{p}={a[p]}" for p in sorted(a)),
+                  "luna_b":"; ".join(f"{p}={b[p]}" for p in sorted(b)),
+                  "a_only":"; ".join(sorted(set(a)-set(b))),
+                  "b_only":"; ".join(sorted(set(b)-set(a))),
+                  "role_disagreements":"; ".join(f"{p}:{a[p]}->{b[p]}" for p in union if p in a and p in b and a[p]!=b[p]),
+                  "luna_a_reasons":" | ".join(f"{p}: {Ar[rid].get(p,'')}" for p in sorted(a)),
+                  "luna_b_reasons":" | ".join(f"{p}: {Br[rid].get(p,'')}" for p in sorted(b))
+              })
+          fields=["record_id","title","abstract","luna_a","luna_b","a_only","b_only","role_disagreements","luna_a_reasons","luna_b_reasons"]
+          with (out/"luna_ranked_disagreements.csv").open("w",encoding="utf-8",newline="") as f:
+              w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
+
+          summary={"records":len(queue),"full_ranked_exact_matches":full_exact,
+                   "full_ranked_exact_agreement":full_exact/len(queue),
+                   "pathway_exact_matches":path_exact,
+                   "pathway_exact_agreement":path_exact/len(queue),
+                   "ranked_disagreements":len(rows)}
+          (out/"validation_consistency_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
+          print(json.dumps(summary,indent=2))
+          PY
+
+          Rscript R/sample_topic_adjudication_validation.R             "$OUTPUT_DIR/luna_ranked_disagreements.csv"             "$OUTPUT_DIR/topic_adjudication_validation_sample.csv"             200             20260918
+
+      - name: Upload validation artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-luna-validation-${{ github.run_id }}
+          path: outputs/workflow06_luna_validation/
+          if-no-files-found: error
+          retention-days: 90
