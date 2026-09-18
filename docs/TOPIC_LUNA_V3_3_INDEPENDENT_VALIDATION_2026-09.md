@@ -113,3 +113,46 @@ The lower raw A/B agreement therefore did not translate into poor performance ag
 
 The General-code decisions led to v3.4: General pathways are exclusive fallbacks when a more specific sibling pathway applies. Ontology v3.3 and its outputs remain unchanged for reproducibility. The same 20-record queue is rerun under v3.4 to isolate the effect of this change.
 
+## Controlled v3.4 rerun of the second batch
+
+The identical 20-record queue was rerun after introducing General-code exclusivity in both the system prompt and ontology v3.4.
+
+Workflow run: `35374602675`
+
+Artefact: `10559159547`
+
+Artefact SHA-256: `168fc9782ade8673f25f9e62bea2f0da7f80a42c184d44054d963680c526571b`
+
+Queue SHA-256: `516db36eec8ee1e13ba45700febfad77c97c5ff24482e884adbd93ce3155df8c`
+
+The selected record IDs and queue hash were identical to the v3.3 second batch.
+
+### Reproducibility comparison
+
+| Metric | v3.3 | v3.4 |
+|---|---:|---:|
+| Exact pathway-set agreement | 13/20 (65%) | 18/20 (90%) |
+| Mean pathway-set Jaccard similarity | 0.844 | 0.942 |
+| Pathway F1 between passes | 0.886 | 0.955 |
+| Exact full-ranked agreement | 11/20 (55%) | 18/20 (90%) |
+
+### Performance against the resulting v3.3 adjudicated sets
+
+| Metric | v3.3 A | v3.3 B | v3.4 A | v3.4 B |
+|---|---:|---:|---:|---:|
+| Exact pathway-set matches | 16/20 (80%) | 14/20 (70%) | 16/20 (80%) | 15/20 (75%) |
+| Precision | 0.946 | 0.970 | 1.000 | 0.941 |
+| Recall | 0.946 | 0.865 | 0.892 | 0.865 |
+| F1 | 0.946 | 0.914 | 0.943 | 0.901 |
+
+The targeted rule succeeded in both known cases:
+
+- cardiomyopathy-syndrome outbreak `75382`: both passes returned `V3_121` without General code `V3_120`;
+- dual ISA/togavirus-like infection `77091`: both passes returned `V3_123` without General code `V3_120`.
+
+The increase in A/B agreement must not be interpreted as a corresponding accuracy increase. Both v3.4 passes shared several omissions, and stochastic changes occurred outside the targeted General-code boundary. v3.4 A had unchanged exact-set accuracy and nearly unchanged F1; v3.4 B gained one exact-set match but had lower F1.
+
+### Decision
+
+Retain the v3.4 General-code exclusivity rule because it corrected both targeted boundary violations without introducing false positives in pass A. Do not claim an overall accuracy improvement from this same-sample rerun. The next valid assessment should use a fresh untouched sample.
+
