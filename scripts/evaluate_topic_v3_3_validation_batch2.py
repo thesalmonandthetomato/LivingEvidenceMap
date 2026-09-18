@@ -10,7 +10,8 @@ from pathlib import Path
 OUT = Path(os.getenv("VALIDATION_OUTPUT_DIR", "outputs/workflow06_luna_v3_3_validation_batch2"))
 MASTER = Path("data/master/current/living_evidence_map_master.csv")
 BENCHMARK = Path("/tmp/ranked/topic_consistency_queue.csv")
-SALT = "topic-v3.3-validation-batch2-2026-09|"
+SALT = os.getenv("VALIDATION_SELECTION_SALT", "topic-v3.3-validation-batch2-2026-09|")
+ADDITIONAL_EXCLUSIONS = os.getenv("VALIDATION_ADDITIONAL_EXCLUSIONS", "")
 ONTOLOGY = os.getenv("VALIDATION_ONTOLOGY", "data/reference/topic_ontology_v3_3.csv")
 RUNNER = os.getenv("VALIDATION_RUNNER", "R/run_topic_v4_classifier_ranked_v3_1.R")
 
@@ -38,9 +39,19 @@ def split_paths(value):
 def build_queue():
     OUT.mkdir(parents=True, exist_ok=True)
     source = read_csv(MASTER)
-    excluded_ids = {row["record_id"] for row in read_csv(BENCHMARK)}
-    if len(excluded_ids) != 50:
-        raise SystemExit(f"Expected 50 benchmark exclusions, found {len(excluded_ids)}")
+    benchmark_ids = {row["record_id"] for row in read_csv(BENCHMARK)}
+    if len(benchmark_ids) != 50:
+        raise SystemExit(f"Expected 50 benchmark exclusions, found {len(benchmark_ids)}")
+    additional_ids = set()
+    if ADDITIONAL_EXCLUSIONS:
+        additional_path = Path(ADDITIONAL_EXCLUSIONS)
+        if not additional_path.exists():
+            raise SystemExit(f"Additional exclusion file not found: {additional_path}")
+        additional_ids = {row["record_id"] for row in read_csv(additional_path)}
+    overlap = benchmark_ids & additional_ids
+    if overlap:
+        raise SystemExit(f"Additional exclusions overlap benchmark exclusions: {len(overlap)} records")
+    excluded_ids = benchmark_ids | additional_ids
 
     candidates = [
         row for row in source
@@ -68,7 +79,10 @@ def build_queue():
         "source": str(MASTER),
         "source_sha256": hashlib.sha256(MASTER.read_bytes()).hexdigest(),
         "source_records": len(source),
-        "excluded_original_benchmark_records": len(excluded_ids),
+        "excluded_original_benchmark_records": len(benchmark_ids),
+        "additional_exclusion_source": ADDITIONAL_EXCLUSIONS or None,
+        "excluded_additional_records": len(additional_ids),
+        "excluded_total_unique_records": len(excluded_ids),
         "eligible_records_with_title_and_abstract": len(candidates),
         "selected_records": len(selected),
         "selection_salt": SALT,
