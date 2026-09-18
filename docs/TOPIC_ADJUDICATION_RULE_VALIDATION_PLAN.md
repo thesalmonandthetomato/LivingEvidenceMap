@@ -8,7 +8,7 @@ Validate `data/reference/topic_adjudication_rules_v1.json` on an **independent s
 
 1. Run the frozen two-pass Luna classifier using the same ontology, prompt, model and reasoning settings.
 2. Identify A/B disagreements.
-3. Exclude the 22 benchmark conflicts used to derive the candidate rules.
+3. Exclude all 50 records from the original ranked Luna benchmark, including the 22 conflicts used to derive the candidate rules.
 4. Draw a reproducible random sample of **at least 100 disagreements**, preferably **200**.
 5. Preserve the sampling seed and the complete source disagreement table.
 6. Manually adjudicate each sampled record using `topic_adjudication_policy_v1.json` and the ontology, without consulting the candidate-rule output where practicable.
@@ -54,7 +54,7 @@ Report:
 - Preserve raw inputs and intermediate outputs.
 - Fail validation if any record-ID/title pair does not match its source.
 - Do not alter the candidate rule file after manual adjudication begins without incrementing its version and restarting validation.
-- Do not use the 22 derivation conflicts as validation observations.
+- Do not use any of the 50 original benchmark records as validation observations.
 
 ## Promotion decision
 
