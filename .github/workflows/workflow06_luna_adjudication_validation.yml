@@ -64,22 +64,45 @@ jobs:
           from pathlib import Path
 
           out=Path("outputs/workflow06_luna_validation")
-          candidates=list(Path("/tmp/workflow05").rglob("records_after_species_geography_adjudication.csv"))
+          candidates=list(Path("/tmp/workflow05").rglob("records.jsonl"))
           if len(candidates) != 1:
-              raise SystemExit(f"Expected exactly one source CSV, found {len(candidates)}: {candidates}")
+              raise SystemExit(f"Expected exactly one Workflow 05 records.jsonl, found {len(candidates)}: {candidates}")
           source=candidates[0]
 
-          with source.open(encoding="utf-8-sig",newline="") as f:
-              rows=list(csv.DictReader(f))
-          if len(rows) != 16068:
-              raise SystemExit(f"Integrity check failed: expected 16068 Workflow 05 records, found {len(rows)}")
-          required={"record_id","title","abstract"}
-          missing=required-set(rows[0])
-          if missing:
-              raise SystemExit(f"Source missing required columns: {sorted(missing)}")
+          all_records=[]
+          with source.open(encoding="utf-8") as f:
+              for line_no,line in enumerate(f,1):
+                  if not line.strip():
+                      continue
+                  try:
+                      all_records.append(json.loads(line))
+                  except Exception as e:
+                      raise SystemExit(f"Invalid JSONL at line {line_no}: {e}")
+          if len(all_records) != 23809:
+              raise SystemExit(f"Integrity check failed: expected 23809 canonical Workflow 05 records, found {len(all_records)}")
+
+          # The authoritative forwarded population is exactly the records that
+          # received Workflow 05 species/geography annotation.
+          forwarded=[
+              r for r in all_records
+              if r.get("annotations",{}).get("species_geography") is not None
+          ]
+          if len(forwarded) != 16068:
+              raise SystemExit(f"Integrity check failed: expected 16068 forwarded Workflow 05 records, found {len(forwarded)}")
+
+          rows=[]
+          for r in forwarded:
+              rid=str(r.get("identity",{}).get("record_id") or r.get("canonical",{}).get("record_id") or "")
+              can=r.get("canonical",{})
+              rows.append({
+                  "record_id":rid,
+                  "title":str(can.get("title") or ""),
+                  "abstract":str(can.get("abstract") or "")
+              })
+
           ids=[r["record_id"] for r in rows]
-          if any(not x for x in ids): raise SystemExit("Blank record_id in source")
-          if len(ids)!=len(set(ids)): raise SystemExit("Duplicate record_id in source")
+          if any(not x for x in ids): raise SystemExit("Blank record_id in forwarded source")
+          if len(ids)!=len(set(ids)): raise SystemExit("Duplicate record_id in forwarded source")
 
           qs=list(Path("/tmp/benchmark").rglob("topic_consistency_queue.csv"))
           if len(qs)!=1:
@@ -106,7 +129,7 @@ jobs:
 
           manifest={
               "source_artifact_id":10491334737,
-              "source_record_count":len(rows),
+              "source_canonical_record_count":len(all_records),\n              "source_forwarded_record_count":len(rows),
               "source_sha256":hashlib.sha256(source.read_bytes()).hexdigest(),
               "benchmark_artifact_id":10517289690,
               "benchmark_records_excluded":len(benchmark_ids),
