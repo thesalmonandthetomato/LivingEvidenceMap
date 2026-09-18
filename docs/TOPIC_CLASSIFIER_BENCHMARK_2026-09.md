@@ -21,10 +21,10 @@ The historical full-corpus V4 classifier used `gpt-5-mini`, but the exact dated 
 
 | Model | Pass | Exact agreement with historical | Historical path precision | Historical path recall | Historical path F1 | Mean Jaccard vs historical | Mean topics/record |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| GPT-5 mini | A | 46% | not used as sole selection criterion | 81–83% range across passes | ~0.84 | not used as sole selection criterion | 2.76 |
-| GPT-5 mini | B | 50% | not used as sole selection criterion | 81–83% range across passes | ~0.84 | not used as sole selection criterion | 2.90 |
-| GPT-5.6 Luna | A | 28% | higher than Mini in the benchmark | ~61–62% | lower than Mini vs historical | lower than Mini vs historical | 2.06 |
-| GPT-5.6 Luna | B | 36% | higher than Mini in the benchmark | ~61–62% | lower than Mini vs historical | lower than Mini vs historical | 2.10 |
+| GPT-5 mini | A | 46% | 0.779 | 0.813 | 0.796 | 0.706 | 2.90 |
+| GPT-5 mini | B | 50% | 0.833 | 0.827 | 0.830 | 0.759 | 2.76 |
+| GPT-5.6 Luna | A | 36% | 0.825 | 0.612 | 0.702 | 0.618 | 2.06 |
+| GPT-5.6 Luna | B | 28% | 0.819 | 0.619 | 0.705 | 0.605 | 2.10 |
 | GPT-5 Nano | A | 28% | 0.766 | 0.518 | 0.618 | 0.535 | 1.88 |
 | GPT-5 Nano | B | 18% | 0.712 | 0.532 | 0.609 | 0.488 | 2.08 |
 
