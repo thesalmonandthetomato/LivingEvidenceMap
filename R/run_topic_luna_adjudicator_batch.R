@@ -135,7 +135,7 @@ response_schema <- list(
       )
     )
   ),
-  required=c("adjudications"),
+  required=I(c("adjudications")),
   additionalProperties=FALSE
 )
 
