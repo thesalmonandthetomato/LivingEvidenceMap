@@ -435,8 +435,44 @@ export_living_evidence_flow_svg <- function(widget, path) {
   if (!requireNamespace("DiagrammeRsvg", quietly = TRUE)) {
     stop("Install DiagrammeRsvg to export SVG.", call. = FALSE)
   }
+
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   svg <- DiagrammeRsvg::export_svg(widget)
+
+  # DiagrammeRsvg exports the raw Graphviz SVG before htmlwidget JavaScript
+  # executes. PRISMA2020 rotates the side labels with JS at render time, so for
+  # a static SVG we reproduce that same transformation directly in the XML.
+  rotate_static_label <- function(svg_text, node_id, label) {
+    pattern <- paste0(
+      "(<title>", node_id, "</title>[\\s\\S]*?<text[^>]*x=\\\"([^\\\"]+)\\\" ",
+      "y=\\\"([^\\\"]+)\\\"[^>]*)(>)[^<]*(</text>)"
+    )
+
+    m <- regexec(pattern, svg_text, perl = TRUE)
+    hit <- regmatches(svg_text, m)[[1]]
+
+    if (!length(hit)) {
+      stop("Could not locate static SVG side label node: ", node_id, call. = FALSE)
+    }
+
+    x <- hit[3]
+    y <- hit[4]
+
+    replacement <- paste0(
+      hit[2],
+      " transform=\\\"rotate(-90 ", x, " ", y, ")\\\"",
+      hit[5],
+      label,
+      hit[6]
+    )
+
+    sub(pattern, replacement, svg_text, perl = TRUE)
+  }
+
+  svg <- rotate_static_label(svg, "section_identification", "Identification")
+  svg <- rotate_static_label(svg, "section_screening", "Screening")
+  svg <- rotate_static_label(svg, "section_included", "Included")
+
   writeLines(svg, path, useBytes = TRUE)
   invisible(path)
 }
