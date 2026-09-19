@@ -2,7 +2,19 @@ name: R tests
 
 on:
   push:
+    paths:
+      - 'R/**'
+      - 'scripts/**/*.R'
+      - 'tests/testthat/**'
+      - 'DESCRIPTION'
+      - '.github/workflows/R-CMD-check.yml'
   pull_request:
+    paths:
+      - 'R/**'
+      - 'scripts/**/*.R'
+      - 'tests/testthat/**'
+      - 'DESCRIPTION'
+      - '.github/workflows/R-CMD-check.yml'
   workflow_dispatch:
 
 jobs:
