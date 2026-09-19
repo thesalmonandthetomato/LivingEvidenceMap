@@ -1,0 +1,91 @@
+name: Recover Workflow 06 cost-test evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/recover_workflow06_cost_test_evidence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Recover Workflow 06 cost-test evidence' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Recover original OpenAI Batch files
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          out="recovered_workflow06_cost_test_100"
+          mkdir -p "$out"
+
+          start_epoch="$(date -u -d '2026-09-18 21:45:00' +%s)"
+          end_epoch="$(date -u -d '2026-09-18 22:10:00' +%s)"
+
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            "https://api.openai.com/v1/batches?limit=100" > "$out/batches_page.json"
+
+          jq --argjson start "$start_epoch" --argjson end "$end_epoch" '
+            [.data[] |
+              select(.created_at >= $start and .created_at <= $end) |
+              select(.endpoint == "/v1/responses") |
+              select(.metadata.description == "luna" or .metadata.description == "terra")
+            ]' "$out/batches_page.json" > "$out/matched_batches.json"
+
+          matched="$(jq 'length' "$out/matched_batches.json")"
+          [[ "$matched" -eq 2 ]] || {
+            echo "Expected exactly two cost-test batches in the controlled time window; found $matched" >&2
+            jq '[.[] | {id, created_at, status, description:.metadata.description}]' "$out/matched_batches.json" >&2
+            exit 1
+          }
+
+          for label in luna terra; do
+            count="$(jq --arg label "$label" '[.[] | select(.metadata.description == $label)] | length' "$out/matched_batches.json")"
+            [[ "$count" -eq 1 ]] || {
+              echo "Expected one $label batch; found $count" >&2
+              exit 1
+            }
+
+            jq --arg label "$label" '.[] | select(.metadata.description == $label)' \
+              "$out/matched_batches.json" > "$out/${label}_batch.json"
+
+            input_id="$(jq -r '.input_file_id' "$out/${label}_batch.json")"
+            output_id="$(jq -r '.output_file_id' "$out/${label}_batch.json")"
+            [[ "$input_id" != "null" && "$output_id" != "null" ]]
+
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $OPENAI_API_KEY" \
+              "https://api.openai.com/v1/files/${input_id}/content" > "$out/${label}_input.jsonl"
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $OPENAI_API_KEY" \
+              "https://api.openai.com/v1/files/${output_id}/content" > "$out/${label}_output.jsonl"
+          done
+
+          rm "$out/batches_page.json"
+          (
+            cd "$out"
+            sha256sum ./* > SHA256SUMS
+          )
+
+          jq -n \
+            --arg recovered_at "$(date -u +%FT%TZ)" \
+            --arg source_run "35398553060" \
+            --arg source_artifact "10569498107 (deleted from GitHub after completion)" \
+            --arg method "Recovered immutable OpenAI Batch input/output files by controlled creation window and metadata label; no inference requests submitted." \
+            '{recovered_at:$recovered_at, source_workflow_run:$source_run, deleted_source_artifact:$source_artifact, recovery_method:$method}' \
+            > "$out/recovery_manifest.json"
+
+      - name: Upload one-day recovery artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovered-workflow06-cost-test-100-${{ github.run_id }}
+          path: recovered_workflow06_cost_test_100/
+          if-no-files-found: error
+          retention-days: 1
