@@ -1,0 +1,107 @@
+name: Workflow 06 - v3.5 ontology fix diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_v3_5_ontology_fix_diagnostic.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  COST_TEST_OUTPUT_DIR: outputs/workflow06_v3_5_ontology_fix_diagnostic
+  COST_TEST_SAMPLE_SIZE: '2'
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_5.csv
+  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_5.txt
+  SOURCE_THREE_LUNA_ARTIFACT_ID: '10581104681'
+
+jobs:
+  diagnostic:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Run v3.5 ontology fix diagnostic' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Recover exact source records and select ontology diagnostics
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$COST_TEST_OUTPUT_DIR" /tmp/three_luna
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_THREE_LUNA_ARTIFACT_ID}/zip" > /tmp/three_luna.zip
+          unzip -q /tmp/three_luna.zip -d /tmp/three_luna
+          cp /tmp/three_luna/validation_queue_100.csv /tmp/validation_queue_100.csv
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(readr))
+          x <- read_csv("/tmp/validation_queue_100.csv", show_col_types = FALSE)
+          ids <- c("048-161-001-194-791", "75130")
+          y <- x[as.character(x$record_id) %in% ids, , drop = FALSE]
+          if (nrow(y) != length(ids)) {
+            stop("Expected 2 diagnostic records but found ", nrow(y))
+          }
+          y <- y[match(ids, as.character(y$record_id)), , drop = FALSE]
+          dir.create(Sys.getenv("COST_TEST_OUTPUT_DIR"), recursive = TRUE, showWarnings = FALSE)
+          write_csv(y, file.path(Sys.getenv("COST_TEST_OUTPUT_DIR"), "validation_queue_100.csv"), na = "")
+          RS
+          test -s "$COST_TEST_OUTPUT_DIR/validation_queue_100.csv"
+
+      - name: Run one fresh Luna pass on two diagnostic records
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: Rscript R/run_topic_batch_cost_test.R luna_c
+
+      - name: Summarise diagnostic assignments
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          suppressPackageStartupMessages({
+            library(readr)
+            library(jsonlite)
+          })
+          od <- Sys.getenv("COST_TEST_OUTPUT_DIR")
+          x <- read_csv(file.path(od, "luna_c", "topic_assignments.csv"), show_col_types = FALSE)
+          q <- read_csv(file.path(od, "validation_queue_100.csv"), show_col_types = FALSE)
+          out <- merge(q[, c("record_id","title")], x[, c("record_id","path_id","role","reason")],
+                       by = "record_id", all.x = TRUE, sort = FALSE)
+          write_csv(out, file.path(od, "ontology_fix_diagnostic_results.csv"), na = "")
+          usage <- read_csv(file.path(od, "luna_c_usage.csv"), show_col_types = FALSE)
+          summary <- list(
+            records = nrow(q),
+            record_ids = as.character(q$record_id),
+            luna_requests = nrow(usage),
+            measured_batch_cost_usd = sum(usage$estimated_batch_cost_usd),
+            ontology_path = Sys.getenv("TOPIC_ONTOLOGY_PATH"),
+            prompt_path = Sys.getenv("TOPIC_SYSTEM_PROMPT_PATH")
+          )
+          write_json(summary, file.path(od, "ontology_fix_diagnostic_summary.json"),
+                     auto_unbox = TRUE, pretty = TRUE)
+          print(summary)
+          RS
+
+      - name: Upload diagnostic artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-v3-5-ontology-fix-diagnostic-${{ github.run_id }}
+          path: outputs/workflow06_v3_5_ontology_fix_diagnostic/
+          if-no-files-found: error
+          retention-days: 90
