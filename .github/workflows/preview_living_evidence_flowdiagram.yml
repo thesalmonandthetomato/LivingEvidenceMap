@@ -46,6 +46,8 @@ jobs:
             records_screened = NA,
             records_excluded = NA,
             records_included = NA,
+            excluded_topic_coding_missing_abstracts = NA,
+            records_with_topic_coding = NA,
             search_date = NA,
             draft = TRUE
           )
