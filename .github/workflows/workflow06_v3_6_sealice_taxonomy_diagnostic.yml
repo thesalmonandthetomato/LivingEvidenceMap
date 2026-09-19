@@ -1,0 +1,98 @@
+name: Workflow 06 - v3.6 sea-lice taxonomy diagnostic
+
+on:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_v3_6_sealice_taxonomy_diagnostic.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  COST_TEST_OUTPUT_DIR: outputs/workflow06_v3_6_sealice_taxonomy_diagnostic
+  COST_TEST_SAMPLE_SIZE: '1'
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  SOURCE_PILOT_ARTIFACT_ID: '10584745964'
+
+jobs:
+  diagnostic:
+    if: ${{ github.event.head_commit.message == 'Add sea lice biology taxonomy pathway and diagnostic' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Recover exact pilot record 73613
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$COST_TEST_OUTPUT_DIR" /tmp/source
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_PILOT_ARTIFACT_ID}/zip" > /tmp/source.zip
+          unzip -q /tmp/source.zip -d /tmp/source
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(readr))
+          x <- read_csv("/tmp/source/input_queue.csv", show_col_types = FALSE)
+          y <- x[as.character(x$record_id) == "73613", , drop = FALSE]
+          if (nrow(y) != 1) stop("Expected exactly one record 73613; found ", nrow(y))
+          dir.create(Sys.getenv("COST_TEST_OUTPUT_DIR"), recursive = TRUE, showWarnings = FALSE)
+          write_csv(y, file.path(Sys.getenv("COST_TEST_OUTPUT_DIR"), "validation_queue_100.csv"), na = "")
+          cat("Diagnostic record:", y$record_id, "-", y$title, "\n")
+          RS
+
+      - name: Run one fresh Luna classification
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: Rscript R/run_topic_batch_cost_test.R luna_c
+
+      - name: Verify and summarise
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          suppressPackageStartupMessages({library(readr); library(jsonlite)})
+          od <- Sys.getenv("COST_TEST_OUTPUT_DIR")
+          x <- read_csv(file.path(od, "luna_c", "topic_assignments.csv"), show_col_types = FALSE)
+          q <- read_csv(file.path(od, "validation_queue_100.csv"), show_col_types = FALSE)
+          out <- merge(q[, c("record_id","title","abstract")],
+                       x[, c("record_id","path_id","role","reason")],
+                       by="record_id", all.x=TRUE, sort=FALSE)
+          write_csv(out, file.path(od, "sea_lice_taxonomy_diagnostic_results.csv"), na="")
+          usage <- read_csv(file.path(od, "luna_c_usage.csv"), show_col_types = FALSE)
+          summary <- list(
+            records=nrow(q),
+            record_id=as.character(q$record_id[1]),
+            assigned_path_ids=as.list(as.character(x$path_id)),
+            v3_135_assigned=any(as.character(x$path_id)=="V3_135"),
+            measured_batch_cost_usd=sum(usage$estimated_batch_cost_usd)
+          )
+          write_json(summary, file.path(od, "sea_lice_taxonomy_diagnostic_summary.json"),
+                     auto_unbox=TRUE, pretty=TRUE)
+          print(summary)
+          if (!isTRUE(summary$v3_135_assigned)) stop("V3_135 was not assigned")
+          RS
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workflow06-v3-6-sealice-taxonomy-diagnostic-${{ github.run_id }}
+          path: outputs/workflow06_v3_6_sealice_taxonomy_diagnostic/
+          if-no-files-found: error
+          retention-days: 90
