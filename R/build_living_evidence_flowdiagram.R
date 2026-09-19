@@ -381,7 +381,7 @@ living_evidence_flowdiagram <- function(
   graph <- paste0(
     "digraph living_evidence_flow {\n",
     "graph [layout=neato, overlap=false, splines=ortho, outputorder=edgesfirst, ",
-    "bgcolor='transparent', pad=0.25];\n",
+    "bgcolor='White', pad=0.25];\n",
     "node [shape=box];\n",
     paste(nodes, collapse = "\n"), "\n",
     paste(edges, collapse = "\n"), "\n",
