@@ -206,7 +206,12 @@ run_luna <- function() {
 split_paths <- function(x) { y<-trimws(strsplit(x %||% "",";",fixed=TRUE)[[1]]); y[nzchar(y)] }
 evaluate_luna <- function() {
   records<-read_csv_quiet(queue_path); hist<-read_csv_quiet(file.path(out_dir,"historical_context_not_gold.csv")); maps<-list(); reasons<-list()
-  for(pass in c("a","b")){ x<-read_csv_quiet(file.path(out_dir,paste0("luna_",pass),"topic_assignments.csv")); maps[[pass]]<-split(x$role,list(x$record_id,x$path_id)); reasons[[pass]]<-split(x$reason,list(x$record_id,x$path_id)) }
+  for(pass in c("a","b")){
+    x<-read_csv_quiet(file.path(out_dir,paste0("luna_",pass),"topic_assignments.csv"))
+    by_record<-split(x, as.character(x$record_id))
+    maps[[pass]]<-lapply(by_record, function(df) setNames(as.character(df$role), as.character(df$path_id)))
+    reasons[[pass]]<-lapply(by_record, function(df) setNames(as.character(df$reason), as.character(df$path_id)))
+  }
   rows<-list(); exact<-full<-tp<-fp<-fn<-0; jac<-numeric()
   for(i in seq_len(nrow(records))){ rid<-as.character(records$record_id[i]); a<-maps$a[[rid]] %||% character(); b<-maps$b[[rid]] %||% character(); as<-names(a); bs<-names(b)
     exact<-exact+setequal(as,bs); full<-full+identical(a[order(names(a))],b[order(names(b))]); tp<-tp+length(intersect(as,bs)); fp<-fp+length(setdiff(bs,as)); fn<-fn+length(setdiff(as,bs)); jac<-c(jac,if(length(union(as,bs)))length(intersect(as,bs))/length(union(as,bs)) else 1)

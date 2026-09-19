@@ -18,10 +18,11 @@ env:
   TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_5.csv
   TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_5.txt
   SOURCE_LUNA_BATCH_INPUT_FILE_ID: file-ErBixapGzLBg9jpoqQux7N
+  SOURCE_COMPLETED_LUNA_ARTIFACT_ID: '10582102714'
 
 jobs:
   validate:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Run v3.5 same-sample topic validation' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Repair v3.5 evaluator and resume adjudication' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -40,60 +41,20 @@ jobs:
             any::jsonlite
             any::readr
 
-      - name: Recover exact prior 100-record sample
+      - name: Recover completed Luna outputs from failed run
         shell: bash
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p "$COST_TEST_OUTPUT_DIR"
-          curl -fsS --retry 3 \
-            -H "Authorization: Bearer $OPENAI_API_KEY" \
-            "https://api.openai.com/v1/files/${SOURCE_LUNA_BATCH_INPUT_FILE_ID}/content" \
-            > /tmp/prior_luna_input.jsonl
-          python3 - <<'PY'
-          import csv, json, os, re
-          src="/tmp/prior_luna_input.jsonl"
-          out=os.environ["COST_TEST_OUTPUT_DIR"]
-          seen=set()
-          rows=[]
-          with open(src, encoding="utf-8") as fh:
-              for line in fh:
-                  if not line.strip():
-                      continue
-                  obj=json.loads(line)
-                  cid=obj["custom_id"]
-                  if not cid.startswith("luna-a-"):
-                      continue
-                  rid=cid[len("luna-a-"):]
-                  if rid in seen:
-                      continue
-                  seen.add(rid)
-                  text=obj["body"]["input"][1]["content"][0]["text"]
-                  m=re.match(r"RECORD\n\nTitle: (.*?)\n\nAbstract: (.*?)\n\nReturn the substantive ontology assignments\.\Z", text, re.S)
-                  if not m:
-                      raise RuntimeError(f"Could not parse source record {rid}")
-                  rows.append((rid,m.group(1),m.group(2)))
-          if len(rows)!=100:
-              raise RuntimeError(f"Expected 100 source records, recovered {len(rows)}")
-          with open(os.path.join(out,"validation_queue_100.csv"),"w",newline="",encoding="utf-8") as f:
-              w=csv.writer(f); w.writerow(["record_id","title","abstract"]); w.writerows(rows)
-          with open(os.path.join(out,"historical_context_not_gold.csv"),"w",newline="",encoding="utf-8") as f:
-              w=csv.writer(f); w.writerow(["record_id","historical_pathways_not_gold"])
-              for rid,_,_ in rows: w.writerow([rid,""])
-          with open(os.path.join(out,"same_sample_manifest.json"),"w",encoding="utf-8") as f:
-              json.dump({
-                  "source_workflow_run":35398553060,
-                  "source_luna_batch_input_file_id":os.environ["SOURCE_LUNA_BATCH_INPUT_FILE_ID"],
-                  "records":100,
-                  "recovery":"Exact Luna pass-A records recovered from immutable prior Batch input; no inference used."
-              },f,indent=2)
-          PY
-
-      - name: Run two Luna passes through Batch API
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: Rscript R/run_topic_batch_cost_test.R luna
+          mkdir -p "$COST_TEST_OUTPUT_DIR" /tmp/v35_luna
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_COMPLETED_LUNA_ARTIFACT_ID}/zip" > /tmp/v35_luna.zip
+          unzip -q /tmp/v35_luna.zip -d /tmp/v35_luna
+          cp -a /tmp/v35_luna/. "$COST_TEST_OUTPUT_DIR/"
+          test -s "$COST_TEST_OUTPUT_DIR/luna_a/topic_assignments.csv"
+          test -s "$COST_TEST_OUTPUT_DIR/luna_b/topic_assignments.csv"
+          test -s "$COST_TEST_OUTPUT_DIR/validation_queue_100.csv"
+          test -s "$COST_TEST_OUTPUT_DIR/luna_usage.csv"
 
       - name: Evaluate Luna reproducibility
         run: Rscript R/run_topic_batch_cost_test.R evaluate
