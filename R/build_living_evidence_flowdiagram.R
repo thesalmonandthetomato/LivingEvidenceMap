@@ -235,12 +235,12 @@ living_evidence_flowdiagram <- function(
   note_label <- "No full-text screening stage is included in the current workflow."
 
   pos <- list(
-    identified = c(4.5, 6.9),
-    removed = c(8.7, 6.9),
-    screened = c(4.5, 4.9),
-    excluded = c(8.7, 4.9),
-    included = c(4.5, 2.9),
-    note = c(4.5, 1.55),
+    identified = c(3.7, 6.9),
+    removed = c(9.3, 6.9),
+    screened = c(3.7, 4.9),
+    excluded = c(9.3, 4.9),
+    included = c(3.7, 2.9),
+    note = c(3.7, 1.55),
     identification_section = c(0.75, 6.9),
     screening_section = c(0.75, 4.9),
     included_section = c(0.75, 2.9)
