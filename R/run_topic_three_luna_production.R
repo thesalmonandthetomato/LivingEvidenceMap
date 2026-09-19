@@ -313,8 +313,14 @@ audit <- function(){
 
 args<-commandArgs(trailingOnly=TRUE)
 mode<-args[1] %||% ""
-if(mode=="manifest") write_global_manifest()
-else if(mode=="run_chunk") run_chunk(args[2],as.integer(args[3]))
-else if(mode=="combine") combine()
-else if(mode=="audit") audit()
-else stop("Usage: manifest | run_chunk <a|b|c> <chunk> | combine | audit")
+if (mode == "manifest") {
+  write_global_manifest()
+} else if (mode == "run_chunk") {
+  run_chunk(args[2], as.integer(args[3]))
+} else if (mode == "combine") {
+  combine()
+} else if (mode == "audit") {
+  audit()
+} else {
+  stop("Usage: manifest | run_chunk <a|b|c> <chunk> | combine | audit")
+}
