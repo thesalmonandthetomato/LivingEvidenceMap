@@ -1,0 +1,86 @@
+name: Clean active-branch workflow artefacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/cleanup_active_branch_artifacts.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cleanup:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Clean active branch workflow artefacts' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete verified expendable artefacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: workflow06-gpt5mini-replication
+        run: |
+          set -euo pipefail
+
+          declare -A RUN_NAME RUN_PATH RUN_CREATED RUN_STATUS
+
+          while IFS=$'\t' read -r run_id run_name run_path run_created run_status; do
+            RUN_NAME["$run_id"]="$run_name"
+            RUN_PATH["$run_id"]="$run_path"
+            RUN_CREATED["$run_id"]="$run_created"
+            RUN_STATUS["$run_id"]="$run_status"
+          done < <(
+            gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=${TARGET_BRANCH}&per_page=100" \
+              --jq '.workflow_runs[] | [.id, .name, .path, .created_at, .status] | @tsv'
+          )
+
+          today="$(date -u +%F)"
+          deleted_count=0
+          deleted_bytes=0
+          preserved_workflow04=0
+          preserved_fulltext=0
+          preserved_unresolved=0
+
+          while IFS=$'\t' read -r artifact_id artifact_name artifact_bytes artifact_branch run_id; do
+            [[ "$artifact_branch" == "$TARGET_BRANCH" ]] || continue
+
+            if [[ -z "${RUN_NAME[$run_id]+x}" ]]; then
+              echo "PRESERVE unresolved run: artifact=$artifact_id name=$artifact_name run=$run_id"
+              preserved_unresolved=$((preserved_unresolved + 1))
+              continue
+            fi
+
+            descriptor="${RUN_NAME[$run_id]} ${RUN_PATH[$run_id]} $artifact_name"
+            descriptor_lower="${descriptor,,}"
+
+            if [[ "$descriptor_lower" =~ workflow[^[:alnum:]]*04 ]]; then
+              echo "PRESERVE Workflow 04: artifact=$artifact_id name=$artifact_name run=$run_id"
+              preserved_workflow04=$((preserved_workflow04 + 1))
+              continue
+            fi
+
+            if [[ "$descriptor_lower" =~ full.?text ]] && [[ "${RUN_CREATED[$run_id]}" == "$today"* ]]; then
+              echo "PRESERVE today's full-text run: artifact=$artifact_id name=$artifact_name run=$run_id status=${RUN_STATUS[$run_id]}"
+              preserved_fulltext=$((preserved_fulltext + 1))
+              continue
+            fi
+
+            echo "DELETE: artifact=$artifact_id name=$artifact_name run=$run_id bytes=$artifact_bytes"
+            gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/$artifact_id"
+            deleted_count=$((deleted_count + 1))
+            deleted_bytes=$((deleted_bytes + artifact_bytes))
+          done < <(
+            gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+              --jq '.artifacts[] | [.id, .name, .size_in_bytes, .workflow_run.head_branch, .workflow_run.id] | @tsv'
+          )
+
+          {
+            echo "### Active-branch artefact cleanup"
+            echo "- Target branch: $TARGET_BRANCH"
+            echo "- Deleted: $deleted_count artefacts ($deleted_bytes bytes)"
+            echo "- Preserved Workflow 04: $preserved_workflow04"
+            echo "- Preserved today's full-text: $preserved_fulltext"
+            echo "- Preserved because run metadata was unresolved: $preserved_unresolved"
+          } >> "$GITHUB_STEP_SUMMARY"
