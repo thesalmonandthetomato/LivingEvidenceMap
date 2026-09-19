@@ -1,0 +1,119 @@
+name: Workflow 07 - Static CSV and dashboard
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_json:
+        description: Canonical Living Evidence Map JSON to flatten
+        required: true
+        default: data/master/current/living_evidence_map_master.json
+
+permissions:
+  contents: write
+
+env:
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Workflow 07 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow07-static-csv-dashboard
+          fetch-depth: 0
+
+      - name: Verify canonical JSON exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "${{ inputs.source_json }}" || {
+            echo "Canonical JSON not found: ${{ inputs.source_json }}" >&2
+            exit 1
+          }
+          test -s "$TOPIC_ONTOLOGY_PATH"
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::jsonlite
+            any::readr
+
+      - name: Flatten canonical JSON and build dashboard data from static CSV
+        run: |
+          Rscript R/workflow07_build_static_dashboard.R \
+            "${{ inputs.source_json }}" \
+            docs/living_evidence_map_static.csv \
+            docs/dashboard-v07.json
+
+      - name: Validate generated outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s docs/living_evidence_map_static.csv
+          test -s docs/dashboard-v07.json
+          test -s docs/dashboard-v07-manifest.json
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+
+          csv_path=Path("docs/living_evidence_map_static.csv")
+          json_path=Path("docs/dashboard-v07.json")
+          manifest_path=Path("docs/dashboard-v07-manifest.json")
+
+          with csv_path.open(newline="",encoding="utf-8") as f:
+              n_csv=sum(1 for _ in csv.DictReader(f))
+          payload=json.loads(json_path.read_text(encoding="utf-8"))
+          manifest=json.loads(manifest_path.read_text(encoding="utf-8"))
+
+          assert n_csv == len(payload["records"]) == manifest["records"]
+          assert payload["source"]["static_csv"] == "docs/living_evidence_map_static.csv"
+
+          for r in payload["records"]:
+              for path,stars in (r.get("topic_stars") or {}).items():
+                  assert stars in (1,2,3), (r.get("record_id"),path,stars)
+                  assert path in (r.get("topic_path_ids") or {}), (r.get("record_id"),path)
+
+          print(f"Validated {n_csv:,} records")
+          PY
+
+      - name: Validate dashboard JavaScript
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html=Path("docs/dashboard-v07.html").read_text(encoding="utf-8")
+          js=html.split("<script>",1)[1].split("</script>",1)[0]
+          Path("/tmp/dashboard-v07.js").write_text(js,encoding="utf-8")
+          PY
+          node --check /tmp/dashboard-v07.js
+
+      - name: Package Workflow 07 preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-static-dashboard-${{ github.run_id }}
+          path: |
+            docs/dashboard-v07.html
+            docs/dashboard-v07.json
+            docs/dashboard-v07-manifest.json
+            docs/living_evidence_map_static.csv
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Commit generated static data to Workflow 07 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/living_evidence_map_static.csv docs/dashboard-v07.json docs/dashboard-v07-manifest.json
+          if git diff --cached --quiet; then
+            echo "Workflow 07 generated data unchanged."
+            exit 0
+          fi
+          git commit -m "Build Workflow 07 static dashboard data"
+          git push origin HEAD:workflow07-static-csv-dashboard
