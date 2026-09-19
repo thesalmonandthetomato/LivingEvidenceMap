@@ -266,7 +266,7 @@ living_evidence_flowdiagram <- function(
   )
 
   topic_included_label <- paste0(
-    "Records with topic coding\n(n = ",
+    "Records assigned topic codes\n(n = ",
     display_n(data$records_with_topic_coding),
     ")"
   )
