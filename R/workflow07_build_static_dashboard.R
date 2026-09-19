@@ -196,9 +196,11 @@ if (file.exists(iso_map_path)) {
 country_name_by_iso3 <- list()
 if (file.exists(gazetteer_path)) {
   g <- suppressWarnings(read_csv(gazetteer_path, show_col_types = FALSE, progress = FALSE))
-  iso_col <- intersect(c("iso3","iso3c","alpha3","iso_a3"), names(g))[1]
-  name_col <- intersect(c("country_name","name","country","name_en"), names(g))[1]
-  if (!is.na(iso_col) && !is.na(name_col)) {
+  iso_col <- intersect(c("iso3","iso3c","alpha3","iso_a3"), names(g))
+  name_col <- intersect(c("country_name","name","country","name_en"), names(g))
+  if (length(iso_col) && length(name_col)) {
+    iso_col <- iso_col[[1]]
+    name_col <- name_col[[1]]
     for (j in seq_len(nrow(g))) {
       k <- toupper(trim(g[[iso_col]][[j]]))
       v <- trim(g[[name_col]][[j]])
@@ -301,9 +303,15 @@ strip_tree <- function(tree) {
 map_id_to_iso3 <- list()
 if (length(iso_numeric)) {
   for (k in names(iso_numeric)) {
-    v <- sprintf("%03d", suppressWarnings(as.integer(iso_numeric[[k]])))
-    if (!is.na(v)) map_id_to_iso3[[v]] <- toupper(k)
+    n <- suppressWarnings(as.integer(iso_numeric[[k]]))
+    if (!is.na(n)) map_id_to_iso3[[sprintf("%03d", n)]] <- toupper(k)
   }
+}
+
+root_meta <- if (is.list(raw) && !is.null(raw$metadata)) raw$metadata else list()
+last_search <- scalar(first_field(root_meta, c("last_search","last_search_at","search_date"), ""))
+if (!nzchar(last_search) && is.list(raw)) {
+  last_search <- scalar(first_field(raw, c("last_search","last_search_at","search_date"), ""))
 }
 
 all_topic_dates <- unique(csv$topic_coded_at[nzchar(csv$topic_coded_at)])
@@ -322,6 +330,7 @@ payload <- list(
     total_topics = nrow(ontology),
     total_countries = length(country_counts),
     total_species = length(species_counts),
+    last_search = last_search,
     last_evidence_update = last_evidence_update
   ),
   species_display_order = c(
