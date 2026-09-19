@@ -1,0 +1,296 @@
+name: Workflow 06 - Topic v3.6 production recovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_topic_v3_6_production_recovery.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_RUN_ID: '35445670490'
+  SOURCE_SHA: 'd3f2b7698b0a2fd34efcb4206a92aad73a360b30'
+  TOPIC_PROD_OUTPUT_DIR: outputs/workflow06_topic_v3_6_full_production
+  TOPIC_MASTER_PATH: data/master/current/living_evidence_map_master.csv
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  TOPIC_CHUNK_SIZE: '500'
+  BATCH_POLL_SECONDS: '20'
+  BATCH_MAX_WAIT_SECONDS: '7200'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      chunks: ${{ steps.matrix.outputs.chunks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - name: Recover immutable production input
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$TOPIC_PROD_OUTPUT_DIR"
+          gh run download "$SOURCE_RUN_ID" \
+            -n "topic-v36-production-input-$SOURCE_RUN_ID" \
+            -D "$TOPIC_PROD_OUTPUT_DIR"
+
+      - name: Verify frozen production identity and build recovery matrix
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -s "$TOPIC_PROD_OUTPUT_DIR/input_queue.csv"
+          test -s "$TOPIC_PROD_OUTPUT_DIR/production_manifest.json"
+
+          expected_queue="$(jq -r '.queue_sha256' "$TOPIC_PROD_OUTPUT_DIR/production_manifest.json")"
+          actual_queue="$(sha256sum "$TOPIC_PROD_OUTPUT_DIR/input_queue.csv" | awk '{print $1}')"
+          test "$expected_queue" = "$actual_queue"
+
+          expected_ontology="$(jq -r '.ontology_sha256' "$TOPIC_PROD_OUTPUT_DIR/production_manifest.json")"
+          actual_ontology="$(sha256sum "$TOPIC_ONTOLOGY_PATH" | awk '{print $1}')"
+          test "$expected_ontology" = "$actual_ontology"
+
+          expected_prompt="$(jq -r '.system_prompt_sha256' "$TOPIC_PROD_OUTPUT_DIR/production_manifest.json")"
+          actual_prompt="$(sha256sum "$TOPIC_SYSTEM_PROMPT_PATH" | awk '{print $1}')"
+          test "$expected_prompt" = "$actual_prompt"
+
+          n="$(jq -r '.chunks_per_pass' "$TOPIC_PROD_OUTPUT_DIR/production_manifest.json")"
+          jq -nc --argjson n "$n" '
+            {include: [range(1;$n+1) as $ch | ["a","b","c"][] as $p | {pass:$p,chunk:$ch}]}
+          ' > matrix.json
+          echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
+          echo "chunks=$n" >> "$GITHUB_OUTPUT"
+          echo "Recovery matrix: $(( n * 3 )) chunks; max four API batches concurrently."
+
+      - name: Preserve recovery input
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-recovery-input-${{ github.run_id }}
+          path: |
+            outputs/workflow06_topic_v3_6_full_production/input_queue.csv
+            outputs/workflow06_topic_v3_6_full_production/queue_summary.json
+            outputs/workflow06_topic_v3_6_full_production/production_manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  recover:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Recover immutable production input
+        uses: actions/download-artifact@v4
+        with:
+          name: topic-v36-recovery-input-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_full_production
+
+      - name: Recover source-run chunk and validate retry eligibility
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        run: |
+          set -euo pipefail
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_${PASS}/chunk_$(printf '%03d' "${CHUNK}")"
+          rm -rf "$d" /tmp/source_chunk
+          mkdir -p "$d" /tmp/source_chunk
+          name="topic-v36-complete-${PASS}-chunk-${CHUNK}-${SOURCE_RUN_ID}"
+          gh run download "$SOURCE_RUN_ID" -n "$name" -D /tmp/source_chunk
+          src="$(find /tmp/source_chunk -maxdepth 1 -type d -name 'chunk_*' | head -1)"
+          test -n "$src"
+          cp -a "$src"/. "$d"/
+
+          if test -s "$d/complete.ok"; then
+            echo "Source chunk ${PASS}/${CHUNK} already validated; it will be reused unchanged."
+            exit 0
+          fi
+
+          test -s "$d/batch_final.json"
+          jq -e '
+            .status == "failed"
+            and ([.errors.data[]?.code] | index("token_limit_exceeded") != null)
+            and (.request_counts.total == 0)
+            and (.request_counts.completed == 0)
+            and (.request_counts.failed == 0)
+            and (.usage.input_tokens == 0)
+            and (.usage.output_tokens == 0)
+            and (.usage.total_tokens == 0)
+          ' "$d/batch_final.json" >/dev/null
+
+          mkdir -p "$d/source_failure"
+          for f in batch_submitted.json batch_final.json batch_latest.json submission.ok; do
+            if test -e "$d/$f"; then mv "$d/$f" "$d/source_failure/$f"; fi
+          done
+          echo "Source chunk ${PASS}/${CHUNK}: verified zero-request token-limit failure; eligible for one replacement batch."
+
+      - name: Recover persisted replacement submission on rerun
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        run: |
+          set -euo pipefail
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_${PASS}/chunk_$(printf '%03d' "${CHUNK}")"
+          test -s "$d/complete.ok" && exit 0
+          rm -rf /tmp/recovery_submission
+          mkdir -p /tmp/recovery_submission
+          name="topic-v36-recovery-submission-${PASS}-chunk-${CHUNK}-${GITHUB_RUN_ID}"
+          if gh run download "$GITHUB_RUN_ID" -n "$name" -D /tmp/recovery_submission 2>/dev/null; then
+            src="$(find /tmp/recovery_submission -maxdepth 1 -type d -name 'chunk_*' | head -1)"
+            if test -n "$src"; then cp -a "$src"/. "$d"/; fi
+            echo "Recovered existing replacement submission for ${PASS}/${CHUNK}."
+          else
+            echo "No replacement submission exists yet for ${PASS}/${CHUNK}."
+          fi
+
+      - name: Submit replacement only when needed
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        run: |
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_${PASS}/chunk_$(printf '%03d' "${CHUNK}")"
+          if test -s "$d/complete.ok"; then
+            echo "Reusing validated source chunk ${PASS}/${CHUNK}; no API submission."
+          else
+            Rscript R/run_topic_three_luna_production.R submit_chunk "$PASS" "$CHUNK"
+          fi
+
+      - name: Persist replacement batch ID before polling
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-recovery-submission-${{ matrix.pass }}-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: |
+            outputs/workflow06_topic_v3_6_full_production/pass_${{ matrix.pass }}/chunk_*/batch_submitted.json
+            outputs/workflow06_topic_v3_6_full_production/pass_${{ matrix.pass }}/chunk_*/chunk_input_manifest.json
+            outputs/workflow06_topic_v3_6_full_production/pass_${{ matrix.pass }}/chunk_*/submission.ok
+          if-no-files-found: ignore
+          retention-days: 90
+          overwrite: true
+
+      - name: Poll replacement and validate output
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        run: |
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_${PASS}/chunk_$(printf '%03d' "${CHUNK}")"
+          if test -s "$d/complete.ok"; then
+            echo "Validated source chunk ${PASS}/${CHUNK} retained unchanged."
+          else
+            Rscript R/run_topic_three_luna_production.R finish_chunk "$PASS" "$CHUNK"
+          fi
+
+      - name: Upload recovered validated chunk
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-recovery-complete-${{ matrix.pass }}-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_full_production/pass_${{ matrix.pass }}/chunk_*
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+  combine_audit:
+    needs: [prepare, recover]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.recover.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: topic-v36-recovery-input-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_full_production
+
+      - name: Assemble all 81 validated chunks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N_CHUNKS: ${{ needs.prepare.outputs.chunks }}
+        run: |
+          set -euo pipefail
+          for p in a b c; do
+            for ch in $(seq 1 "$N_CHUNKS"); do
+              d="$TOPIC_PROD_OUTPUT_DIR/pass_${p}/chunk_$(printf '%03d' "$ch")"
+              rm -rf "$d" /tmp/recovered_chunk
+              mkdir -p "$d" /tmp/recovered_chunk
+              name="topic-v36-recovery-complete-${p}-chunk-${ch}-${GITHUB_RUN_ID}"
+              gh run download "$GITHUB_RUN_ID" -n "$name" -D /tmp/recovered_chunk
+              src="$(find /tmp/recovered_chunk -maxdepth 1 -type d -name 'chunk_*' | head -1)"
+              test -n "$src"
+              cp -a "$src"/. "$d"/
+              test -s "$d/complete.ok"
+            done
+          done
+
+      - name: Combine three independent Luna passes
+        run: Rscript R/run_topic_three_luna_production.R combine
+
+      - name: Deterministic integrity audit
+        run: Rscript R/run_topic_three_luna_production.R audit
+
+      - name: Upload final recovered production outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-full-production-recovered-final-${{ github.run_id }}
+          path: |
+            outputs/workflow06_topic_v3_6_full_production/input_queue.csv
+            outputs/workflow06_topic_v3_6_full_production/queue_summary.json
+            outputs/workflow06_topic_v3_6_full_production/production_manifest.json
+            outputs/workflow06_topic_v3_6_full_production/all_pass_assignments.csv
+            outputs/workflow06_topic_v3_6_full_production/all_pass_record_results.csv
+            outputs/workflow06_topic_v3_6_full_production/all_pass_usage.csv
+            outputs/workflow06_topic_v3_6_full_production/three_luna_pathway_scores.csv
+            outputs/workflow06_topic_v3_6_full_production/combine_summary.json
+            outputs/workflow06_topic_v3_6_full_production/audit_review_flags.csv
+            outputs/workflow06_topic_v3_6_full_production/audit_summary.json
+            outputs/workflow06_topic_v3_6_full_production/AUDIT_PASS.ok
+          if-no-files-found: error
+          retention-days: 90
