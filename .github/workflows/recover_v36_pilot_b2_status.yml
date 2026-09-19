@@ -1,0 +1,45 @@
+name: Recover OpenAI batch status - v3.6 pilot B2
+
+on:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/recover_v36_pilot_b2_status.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    if: ${{ github.event.head_commit.message == 'Check cancelled pilot OpenAI batch status' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query OpenAI batch
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            "https://api.openai.com/v1/batches/batch_6aae6cd5f11081909681fbe2a314efb2" \
+            > batch_status.json
+          python - <<'PY'
+          import json
+          x=json.load(open("batch_status.json"))
+          print(json.dumps({
+            "id":x.get("id"),
+            "status":x.get("status"),
+            "request_counts":x.get("request_counts"),
+            "usage":x.get("usage"),
+            "output_file_id":x.get("output_file_id"),
+            "error_file_id":x.get("error_file_id"),
+            "completed_at":x.get("completed_at"),
+            "cancelled_at":x.get("cancelled_at"),
+            "failed_at":x.get("failed_at")
+          }, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v36-pilot-b2-status-${{ github.run_id }}
+          path: batch_status.json
+          retention-days: 7
