@@ -447,60 +447,42 @@ export_living_evidence_flow_svg <- function(widget, path) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   svg <- DiagrammeRsvg::export_svg(widget)
 
-  # DiagrammeRsvg exports the raw Graphviz SVG before htmlwidget JavaScript
-  # executes. PRISMA2020 rotates the side labels with JS at render time, so for
-  # a static SVG we reproduce that same transformation directly in the XML.
+  # DiagrammeRsvg exports before the PRISMA-style JavaScript executes.
+  # Rebuild each side-label <text> element cleanly in the static SVG rather
+  # than appending attributes to Graphviz's original tag.
   rotate_static_label <- function(svg_text, node_id, label) {
-    pattern <- paste0(
-      "(<title>", node_id, "</title>[\\s\\S]*?<text[^>]*x=\\\"([^\\\"]+)\\\" ",
-      "y=\\\"([^\\\"]+)\\\"[^>]*)(>)[^<]*(</text>)"
+    node_pattern <- paste0(
+      "(<g[^>]*class=\\\"node\\\"[^>]*>[\\s\\S]*?<title>",
+      node_id,
+      "</title>[\\s\\S]*?)(<text[^>]*x=\\\"([^\\\"]+)\\\" ",
+      "y=\\\"([^\\\"]+)\\\"[^>]*>[^<]*</text>)"
     )
 
-    m <- regexec(pattern, svg_text, perl = TRUE)
+    m <- regexec(node_pattern, svg_text, perl = TRUE)
     hit <- regmatches(svg_text, m)[[1]]
 
     if (!length(hit)) {
       stop("Could not locate static SVG side label node: ", node_id, call. = FALSE)
     }
 
-    x <- as.numeric(hit[3])
-    # Graphviz's 10 pt text baseline is approximately 3 pt below the centre
-    # of the blank side-label node. Put the rotation anchor at the true centre.
-    y <- as.numeric(hit[4]) - 3
+    x <- as.numeric(hit[4])
+    y <- as.numeric(hit[5]) - 3
 
-    text_open <- hit[2]
-    text_open <- gsub('\\\\s+x="[^"]+"', "", text_open, perl = TRUE)
-    text_open <- gsub('\\\\s+y="[^"]+"', "", text_open, perl = TRUE)
-    text_open <- gsub(
-      '\\\\s+text-anchor="[^"]+"',
-      "",
-      text_open,
-      perl = TRUE
-    )
-    text_open <- gsub(
-      '\\\\s+dominant-baseline="[^"]+"',
-      "",
-      text_open,
-      perl = TRUE
-    )
-    text_open <- gsub(
-      '\\\\s+transform="[^"]+"',
-      "",
-      text_open,
-      perl = TRUE
-    )
-
-    replacement <- paste0(
-      text_open,
-      " x=\\\"", x, "\\\" y=\\\"", y, "\\\"",
-      " text-anchor=\\\"middle\\\" dominant-baseline=\\\"middle\\\"",
-      " transform=\\\"rotate(-90 ", x, " ", y, ")\\\"",
-      hit[5],
+    clean_text <- paste0(
+      "<text text-anchor=\\\"middle\\\"",
+      " x=\\\"", x, "\\\"",
+      " y=\\\"", y, "\\\"",
+      " font-family=\\\"Helvetica,sans-Serif\\\"",
+      " font-size=\\\"10.00\\\"",
+      " fill=\\\"#000000\\\"",
+      " dominant-baseline=\\\"middle\\\"",
+      " transform=\\\"rotate(-90 ", x, " ", y, ")\\\">",
       label,
-      hit[6]
+      "</text>"
     )
 
-    sub(pattern, replacement, svg_text, perl = TRUE)
+    replacement <- paste0(hit[2], clean_text)
+    sub(node_pattern, replacement, svg_text, perl = TRUE)
   }
 
   svg <- rotate_static_label(svg, "section_identification", "Identification")
