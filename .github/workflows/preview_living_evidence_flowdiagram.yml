@@ -1,0 +1,72 @@
+name: Preview Living Evidence Map flow diagram
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow07-static-csv-dashboard]
+    paths:
+      - 'R/build_living_evidence_flowdiagram.R'
+      - '.github/workflows/preview_living_evidence_flowdiagram.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow07-static-csv-dashboard
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::DiagrammeR
+            any::DiagrammeRsvg
+            any::htmlwidgets
+            any::stringr
+
+      - name: Render draft flow diagram
+        shell: Rscript {0}
+        run: |
+          source("R/build_living_evidence_flowdiagram.R")
+
+          flow_data <- living_evidence_flow_data(
+            database_results = c(
+              "Lens" = NA,
+              "Scopus" = NA,
+              "Web of Science Core Collection" = NA,
+              "OpenAlex" = NA
+            ),
+            duplicates_removed = NA,
+            other_removed_before_screening = NA,
+            records_screened = NA,
+            records_excluded = NA,
+            records_included = NA,
+            search_date = NA,
+            draft = TRUE
+          )
+
+          p <- living_evidence_flowdiagram(flow_data)
+
+          dir.create("outputs/workflow07/flow-preview", recursive = TRUE)
+          htmlwidgets::saveWidget(
+            p,
+            "outputs/workflow07/flow-preview/living-evidence-flow-draft.html",
+            selfcontained = TRUE
+          )
+          export_living_evidence_flow_svg(
+            p,
+            "outputs/workflow07/flow-preview/living-evidence-flow-draft.svg"
+          )
+
+      - name: Upload draft preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: living-evidence-flow-draft-${{ github.run_id }}
+          path: outputs/workflow07/flow-preview
+          if-no-files-found: error
+          retention-days: 30
