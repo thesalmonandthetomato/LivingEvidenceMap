@@ -153,9 +153,9 @@ living_evidence_flowdiagram <- function(
   display_n <- function(x) if (length(x) != 1 || is.na(x)) "TBC" else fmt_n(x)
 
   if (isTRUE(data$draft)) {
-    db_lines <- names(data$database_results)
+    db_lines <- paste0(names(data$database_results), " (n = TBC)")
     identified_label <- paste0(
-      "Records identified from databases:\n",
+      "Records identified from databases\n",
       paste(db_lines, collapse = "\n")
     )
   } else {
@@ -166,7 +166,7 @@ living_evidence_flowdiagram <- function(
       ")"
     )
     identified_label <- paste0(
-      "Records identified from databases:\n",
+      "Records identified from databases\n",
       paste(db_lines, collapse = "\n"),
       "\nTotal (n = ",
       display_n(data$total_identified),
@@ -210,7 +210,7 @@ living_evidence_flowdiagram <- function(
   }
 
   removed_label <- paste0(
-    "Records removed before screening:\n",
+    "Records removed before screening\n",
     paste(removal_lines, collapse = "\n")
   )
 
@@ -235,23 +235,23 @@ living_evidence_flowdiagram <- function(
   note_label <- "No full-text screening stage is included in the current workflow."
 
   pos <- list(
-    identified = c(4.2, 7.4),
-    removed = c(7.8, 7.4),
-    screened = c(4.2, 5.2),
-    excluded = c(7.8, 5.2),
-    included = c(4.2, 3.0),
-    note = c(4.2, 1.55),
-    identification_section = c(0.9, 7.4),
-    screening_section = c(0.9, 5.2),
-    included_section = c(0.9, 3.0)
+    identified = c(4.5, 6.9),
+    removed = c(8.7, 6.9),
+    screened = c(4.5, 4.9),
+    excluded = c(8.7, 4.9),
+    included = c(4.5, 2.9),
+    note = c(4.5, 1.55),
+    identification_section = c(0.75, 6.9),
+    screening_section = c(0.75, 4.9),
+    included_section = c(0.75, 2.9)
   )
 
   node <- function(
       id,
       label,
       xy,
-      width = 3.35,
-      height = 0.95,
+      width = 4.15,
+      height = 0.72,
       fill = greybox_colour,
       rounded = FALSE,
       bold = FALSE,
@@ -291,8 +291,8 @@ living_evidence_flowdiagram <- function(
       "fontcolor='", main_colour, "', ",
       "fontname='", font, "', ",
       "fontsize=", fontsize, ", ",
-      "width=1.45, ",
-      "height=0.48, ",
+      "width=0.48, ",
+      "height=1.55, ",
       "pos='", xy[[1]], ",", xy[[2]], "!'",
       "];"
     )
@@ -325,8 +325,8 @@ living_evidence_flowdiagram <- function(
         "note",
         note_label,
         pos$note,
-        width = 3.8,
-        height = 0.55,
+        width = 4.15,
+        height = 0.48,
         fill = "White",
         rounded = TRUE,
         border = "Grey60"
@@ -339,17 +339,17 @@ living_evidence_flowdiagram <- function(
       nodes,
       section_node(
         "section_identification",
-        "Identification",
+        " ",
         pos$identification_section
       ),
       section_node(
         "section_screening",
-        "Screening",
+        " ",
         pos$screening_section
       ),
       section_node(
         "section_included",
-        "Included",
+        " ",
         pos$included_section
       )
     )
@@ -396,7 +396,39 @@ living_evidence_flowdiagram <- function(
     "}\n"
   )
 
-  DiagrammeR::grViz(graph)
+  plot <- DiagrammeR::grViz(graph)
+
+  if (side_boxes) {
+    # PRISMA2020 approach: Graphviz renders blank labels, then JavaScript
+    # inserts and rotates the SVG text after rendering. Target by node title
+    # rather than generated node number so declaration order cannot break it.
+    javascript <- htmltools::HTML("
+      const labelMap = new Map([
+        ['section_identification', 'Identification'],
+        ['section_screening', 'Screening'],
+        ['section_included', 'Included']
+      ]);
+      document.querySelectorAll('g.node').forEach(function(node) {
+        const title = node.querySelector('title');
+        if (!title || !labelMap.has(title.textContent)) return;
+        const txt = node.querySelector('text');
+        if (!txt) return;
+        const oldX = parseFloat(txt.getAttribute('x'));
+        const oldY = parseFloat(txt.getAttribute('y'));
+        txt.setAttribute('y', oldX);
+        txt.setAttribute('x', oldY * -1);
+        txt.setAttribute('style', 'transform: rotate(-90deg);');
+        txt.setAttribute('dominant-baseline', 'middle');
+        txt.textContent = labelMap.get(title.textContent);
+      });
+    ")
+    plot <- htmlwidgets::appendContent(
+      plot,
+      htmlwidgets::onStaticRenderComplete(javascript)
+    )
+  }
+
+  plot
 }
 
 export_living_evidence_flow_svg <- function(widget, path) {
