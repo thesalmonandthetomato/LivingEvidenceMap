@@ -123,6 +123,7 @@ jobs:
           }
           assignments <- list(); records <- list(); usages <- list()
           prices <- list(input=.10,cached=.01,cache_write=.125,output=.60)
+          `%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x
           for(item in items){
             cid <- item$custom_id
             rid <- sub("^luna-b-","",cid)
@@ -154,7 +155,6 @@ jobs:
               reasoning_tokens=as.integer(odet$reasoning_tokens %||% 0),
               total_tokens=as.integer(u$total_tokens),estimated_batch_cost_usd=cost)
           }
-          `%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x
           long <- if(length(assignments)) do.call(rbind,assignments) else data.frame(
             record_id=character(),path_id=character(),role=character(),reason=character(),hierarchy_path=character())
           rec <- do.call(rbind,records); use <- do.call(rbind,usages)
