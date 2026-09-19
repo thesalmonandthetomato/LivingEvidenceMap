@@ -1,0 +1,197 @@
+name: Workflow 06 - v3.6 sea-lice set diagnostic
+
+on:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_v3_6_sealice_set_diagnostic.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  OUT_DIR: outputs/workflow06_v3_6_sealice_set_diagnostic
+  ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+  PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  SOURCE_PILOT_ARTIFACT_ID: '10584745964'
+
+jobs:
+  diagnostic:
+    if: ${{ github.event.head_commit.message == 'Refine sea lice subject-method coding and rerun set' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Recover exact pilot set and identify sea-lice records
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT_DIR" /tmp/source
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_PILOT_ARTIFACT_ID}/zip" > /tmp/source.zip
+          unzip -q /tmp/source.zip -d /tmp/source
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(readr))
+          q <- read_csv("/tmp/source/input_queue.csv", show_col_types=FALSE, progress=FALSE)
+          s <- read_csv("/tmp/source/three_luna_pathway_scores.csv", show_col_types=FALSE, progress=FALSE)
+          txt <- paste(q$title, q$abstract)
+          lexical <- grepl("sea[ -]?lice|sea[ -]?louse|salmon[ -]?lice|salmon[ -]?louse|Lepeophtheirus|Caligus",
+                           txt, ignore.case=TRUE, perl=TRUE)
+          old_ids <- unique(as.character(s$record_id[s$path_id %in% c("V3_116","V3_117","V3_118","V3_119")]))
+          keep <- lexical | as.character(q$record_id) %in% old_ids
+          y <- q[keep,,drop=FALSE]
+          y <- y[order(as.character(y$record_id)),,drop=FALSE]
+          expected <- c("034-759-737-633-580","091-162-729-204-060","198-119-944-094-77X",
+                        "73613","74960","75190","78635","79023","80122","80335","81161","84047")
+          if(!setequal(as.character(y$record_id), expected))
+            stop("Sea-lice diagnostic set changed. Found: ",paste(y$record_id,collapse=", "))
+          dir.create(Sys.getenv("OUT_DIR"),recursive=TRUE,showWarnings=FALSE)
+          write_csv(y,file.path(Sys.getenv("OUT_DIR"),"sea_lice_records.csv"),na="")
+          old <- s[as.character(s$record_id) %in% expected,,drop=FALSE]
+          write_csv(old,file.path(Sys.getenv("OUT_DIR"),"prior_three_luna_scores.csv"),na="")
+          cat("Selected",nrow(y),"sea-lice-relevant records\n")
+          print(y[,c("record_id","title")])
+          RS
+
+      - name: Run synchronous Luna classifications
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          suppressPackageStartupMessages({library(httr2);library(jsonlite);library(readr)})
+          `%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x
+          ontology_prompt <- function(x) {
+            fields <- c(definition="Definition",include_when="Include when",exclude_when="Exclude when",
+              required_subject_terms="Subject concept cues",required_focus_terms="Focus concept cues",
+              alternative_standalone_cues="Alternative specific cues",
+              supporting_terms_from_old_ontology="Supporting lexical cues",prompt_logic_note="Interpretation note")
+            vapply(seq_len(nrow(x)),function(i){
+              lines <- paste(x$path_id[i],x$hierarchy_path[i],sep=" | ")
+              for(field in names(fields)){
+                value <- trimws(as.character(x[[field]][i] %||% ""))
+                if(!is.na(value)&&nzchar(value)) lines <- c(lines,paste0(fields[[field]],": ",value))
+              }
+              paste(lines,collapse="\n")
+            },character(1)) |> paste(collapse="\n\n")
+          }
+          topic_schema <- function(path_ids) list(
+            type="object",properties=list(
+              assignments=list(type="array",items=list(type="object",properties=list(
+                path_id=list(type="string",enum=as.list(path_ids)),
+                role=list(type="string",enum=list("PRIMARY","SECONDARY")),
+                reason=list(type="string")),
+                required=list("path_id","role","reason"),additionalProperties=FALSE)),
+              review_required=list(type="boolean"),
+              review_reason=list(type=list("string","null"))),
+            required=list("assignments","review_required","review_reason"),additionalProperties=FALSE)
+          extract_text <- function(response){
+            for(item in response$output) if(identical(item$type,"message"))
+              for(content in item$content) if(identical(content$type,"output_text")) return(content$text)
+            stop("No output_text")
+          }
+          od <- Sys.getenv("OUT_DIR")
+          q <- read_csv(file.path(od,"sea_lice_records.csv"),show_col_types=FALSE,progress=FALSE)
+          o <- read_csv(Sys.getenv("ONTOLOGY_PATH"),show_col_types=FALSE,progress=FALSE)
+          prefix <- paste0(paste(readLines(Sys.getenv("PROMPT_PATH"),warn=FALSE),collapse="\n"),
+                           "\n\nONTOLOGY\n\n",ontology_prompt(o))
+          all_rows <- list(); summaries <- list()
+          for(i in seq_len(nrow(q))){
+            rec <- q[i,]
+            body <- list(
+              model="gpt-5.6-luna",store=FALSE,reasoning=list(effort="medium"),
+              prompt_cache_key="topic-v3.6-sealice-set-sync",
+              prompt_cache_options=list(mode="explicit",ttl="30m"),
+              input=list(
+                list(role="system",content=list(list(type="input_text",text=prefix,prompt_cache_breakpoint=list(mode="explicit")))),
+                list(role="user",content=list(list(type="input_text",text=paste0(
+                  "RECORD\n\nTitle: ",rec$title,"\n\nAbstract: ",rec$abstract,
+                  "\n\nReturn the substantive ontology assignments."
+                ))))
+              ),
+              text=list(verbosity="low",format=list(type="json_schema",name="topic_v36_sync",
+                strict=TRUE,schema=topic_schema(as.character(o$path_id))))
+            )
+            started <- Sys.time()
+            response <- request("https://api.openai.com/v1/responses") |>
+              req_auth_bearer_token(Sys.getenv("OPENAI_API_KEY")) |>
+              req_body_json(body,auto_unbox=TRUE,null="null") |>
+              req_retry(max_tries=5,retry_on_failure=TRUE) |>
+              req_timeout(300) |> req_perform() |> resp_body_json(simplifyVector=FALSE)
+            elapsed <- as.numeric(difftime(Sys.time(),started,units="secs"))
+            parsed <- fromJSON(extract_text(response),simplifyVector=FALSE)
+            ids <- vapply(parsed$assignments %||% list(),function(a) as.character(a$path_id),"")
+            if(anyDuplicated(ids)) stop("Duplicate path_id for ",rec$record_id)
+            bad <- setdiff(ids,as.character(o$path_id)); if(length(bad)) stop("Unknown path_id for ",rec$record_id,": ",paste(bad,collapse=","))
+            if(length(parsed$assignments)){
+              all_rows[[length(all_rows)+1]] <- do.call(rbind,lapply(parsed$assignments,function(a)data.frame(
+                record_id=as.character(rec$record_id),title=as.character(rec$title),
+                path_id=a$path_id,hierarchy_path=o$hierarchy_path[match(a$path_id,o$path_id)],
+                role=a$role,reason=a$reason,stringsAsFactors=FALSE)))
+            }
+            summaries[[length(summaries)+1]] <- data.frame(
+              record_id=as.character(rec$record_id),title=as.character(rec$title),
+              elapsed_seconds=elapsed,path_ids=paste(ids,collapse="; "),
+              v3_135_assigned=("V3_135" %in% ids),
+              review_required=isTRUE(parsed$review_required),
+              review_reason=as.character(parsed$review_reason %||% ""),
+              input_tokens=as.integer(response$usage$input_tokens %||% 0),
+              output_tokens=as.integer(response$usage$output_tokens %||% 0),
+              cached_tokens=as.integer(response$usage$input_tokens_details$cached_tokens %||% 0),
+              cache_write_tokens=as.integer(response$usage$input_tokens_details$cache_write_tokens %||% 0),
+              stringsAsFactors=FALSE)
+            cat(sprintf("%s: %s (%.2fs)\n",rec$record_id,paste(ids,collapse=", "),elapsed))
+          }
+          rows <- if(length(all_rows)) do.call(rbind,all_rows) else data.frame()
+          sums <- do.call(rbind,summaries)
+          write_csv(rows,file.path(od,"new_assignments.csv"),na="")
+          write_csv(sums,file.path(od,"new_record_summary.csv"),na="")
+          cat("Completed",nrow(q),"records in",sum(sums$elapsed_seconds),"API seconds\n")
+          RS
+
+      - name: Compare prior and revised coding
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(readr))
+          od <- Sys.getenv("OUT_DIR")
+          q <- read_csv(file.path(od,"sea_lice_records.csv"),show_col_types=FALSE,progress=FALSE)
+          old <- read_csv(file.path(od,"prior_three_luna_scores.csv"),show_col_types=FALSE,progress=FALSE)
+          new <- read_csv(file.path(od,"new_assignments.csv"),show_col_types=FALSE,progress=FALSE)
+          collapse_ids <- function(x) paste(sort(unique(x)),collapse="; ")
+          old_sets <- aggregate(path_id~record_id,old,collapse_ids)
+          names(old_sets)[2] <- "prior_path_ids"
+          new_sets <- aggregate(path_id~record_id,new,collapse_ids)
+          names(new_sets)[2] <- "revised_path_ids"
+          out <- merge(q[,c("record_id","title")],old_sets,by="record_id",all.x=TRUE,sort=FALSE)
+          out <- merge(out,new_sets,by="record_id",all.x=TRUE,sort=FALSE)
+          out$prior_path_ids[is.na(out$prior_path_ids)] <- ""
+          out$revised_path_ids[is.na(out$revised_path_ids)] <- ""
+          out$v3_135_now <- grepl("(^|; )V3_135($|;)",out$revised_path_ids)
+          write_csv(out,file.path(od,"comparison.csv"),na="")
+          print(out,row.names=FALSE)
+          RS
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workflow06-v3-6-sealice-set-diagnostic-${{ github.run_id }}
+          path: outputs/workflow06_v3_6_sealice_set_diagnostic/
+          if-no-files-found: error
+          retention-days: 90

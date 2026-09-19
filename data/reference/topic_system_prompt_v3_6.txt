@@ -32,6 +32,16 @@ suppress one pathway because another pathway has been assigned. This applies
 across domains, including where one pathway describes a method, mechanism,
 intervention, exposure, outcome, policy context or application.
 
+SUBJECT-METHOD CO-CODING
+When methodological development, validation or comparison is itself substantive,
+also consider whether the organism, process or applied problem being investigated
+independently satisfies a substantive pathway. A Methods pathway must not suppress
+an otherwise substantive subject pathway. Conversely, do not assign a subject
+pathway merely because that subject provides material, samples or context for
+method development. Assign both only where the abstract shows that the subject
+itself is an explicit object of investigation, characterisation, detection,
+identification, monitoring or inference.
+
 CONTRASTIVE EXAMPLES
 8. Feed-additive trial measuring cortisol: code Feed additives. Do not also
    code Stress unless stress is a substantive research question or conclusion.
