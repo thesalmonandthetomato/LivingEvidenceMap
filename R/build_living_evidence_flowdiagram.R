@@ -149,11 +149,11 @@ living_evidence_flowdiagram <- function(
     data,
     fontsize = 10,
     font = "Helvetica",
-    title_colour = "#e55634",
-    greybox_colour = "#eef2f1",
-    section_colour = "#a8bdbe",
-    main_colour = "#2c454a",
-    arrow_colour = "#577c84",
+    title_colour = "#dcbaa5",
+    greybox_colour = "#acbdbe",
+    section_colour = "#556c72",
+    main_colour = "#31444a",
+    arrow_colour = "#6a8289",
     side_boxes = TRUE,
     show_note = TRUE) {
 
