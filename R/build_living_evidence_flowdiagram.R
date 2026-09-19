@@ -147,7 +147,7 @@ living_evidence_flow_data <- function(
 
 living_evidence_flowdiagram <- function(
     data,
-    fontsize = 10,
+    fontsize = 11,
     font = "Helvetica",
     title_colour = "#dcbaa5",
     greybox_colour = "#acbdbe",
@@ -495,6 +495,7 @@ living_evidence_flowdiagram <- function(
         txt.setAttribute('text-anchor', 'middle');
         txt.setAttribute('dominant-baseline', 'middle');
         txt.setAttribute('transform', 'rotate(-90 ' + cx + ' ' + cy + ')');
+        txt.setAttribute('fill', '#FFFFFF');
         txt.removeAttribute('style');
         txt.textContent = labelMap.get(title.textContent);
       });
