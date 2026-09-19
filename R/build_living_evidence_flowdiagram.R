@@ -51,8 +51,9 @@ living_evidence_flow_data <- function(
     stop("database_results must be a named numeric vector.", call. = FALSE)
   }
 
-  names(database_results) <- trimws(names(database_results))
+  database_names <- trimws(names(database_results))
   database_results <- suppressWarnings(as.integer(database_results))
+  names(database_results) <- database_names
 
   numeric_fields <- c(
     database_results,
@@ -151,20 +152,27 @@ living_evidence_flowdiagram <- function(
 
   display_n <- function(x) if (length(x) != 1 || is.na(x)) "TBC" else fmt_n(x)
 
-  db_lines <- paste0(
-    names(data$database_results),
-    " (n = ",
-    vapply(data$database_results, display_n, character(1)),
-    ")"
-  )
-
-  identified_label <- paste0(
-    "Records identified from databases:\n",
-    paste(db_lines, collapse = "\n"),
-    "\nTotal (n = ",
-    display_n(data$total_identified),
-    ")"
-  )
+  if (isTRUE(data$draft)) {
+    db_lines <- names(data$database_results)
+    identified_label <- paste0(
+      "Records identified from databases:\n",
+      paste(db_lines, collapse = "\n")
+    )
+  } else {
+    db_lines <- paste0(
+      names(data$database_results),
+      " (n = ",
+      vapply(data$database_results, display_n, character(1)),
+      ")"
+    )
+    identified_label <- paste0(
+      "Records identified from databases:\n",
+      paste(db_lines, collapse = "\n"),
+      "\nTotal (n = ",
+      display_n(data$total_identified),
+      ")"
+    )
+  }
 
   removal_lines <- character()
   if (!is.na(data$duplicates_removed) && data$duplicates_removed > 0) {
@@ -182,7 +190,7 @@ living_evidence_flowdiagram <- function(
     removal_lines <- c(
       removal_lines,
       paste0(
-        "Other records removed before screening (n = ",
+        "Retractions and withdrawals (n = ",
         display_n(data$other_removed_before_screening),
         ")"
       )
@@ -194,7 +202,7 @@ living_evidence_flowdiagram <- function(
          is.na(data$other_removed_before_screening))) {
       removal_lines <- c(
         "Duplicate records removed (n = TBC)",
-        "Other records removed before screening (n = TBC)"
+        "Retractions and withdrawals (n = TBC)"
       )
     } else {
       removal_lines <- "No records removed before screening (n = 0)"
@@ -227,23 +235,23 @@ living_evidence_flowdiagram <- function(
   note_label <- "No full-text screening stage is included in the current workflow."
 
   pos <- list(
-    identified = c(4.7, 9.8),
-    removed = c(9.0, 9.8),
-    screened = c(4.7, 6.8),
-    excluded = c(9.0, 6.8),
-    included = c(4.7, 3.8),
-    note = c(4.7, 2.0),
-    identification_section = c(1.0, 9.8),
-    screening_section = c(1.0, 6.8),
-    included_section = c(1.0, 3.8)
+    identified = c(4.2, 7.4),
+    removed = c(7.8, 7.4),
+    screened = c(4.2, 5.2),
+    excluded = c(7.8, 5.2),
+    included = c(4.2, 3.0),
+    note = c(4.2, 1.55),
+    identification_section = c(0.9, 7.4),
+    screening_section = c(0.9, 5.2),
+    included_section = c(0.9, 3.0)
   )
 
   node <- function(
       id,
       label,
       xy,
-      width = 3.7,
-      height = 1.2,
+      width = 3.35,
+      height = 0.95,
       fill = greybox_colour,
       rounded = FALSE,
       bold = FALSE,
@@ -283,8 +291,8 @@ living_evidence_flowdiagram <- function(
       "fontcolor='", main_colour, "', ",
       "fontname='", font, "', ",
       "fontsize=", fontsize, ", ",
-      "width=1.55, ",
-      "height=0.55, ",
+      "width=1.45, ",
+      "height=0.48, ",
       "pos='", xy[[1]], ",", xy[[2]], "!'",
       "];"
     )
@@ -317,8 +325,8 @@ living_evidence_flowdiagram <- function(
         "note",
         note_label,
         pos$note,
-        width = 4.1,
-        height = 0.65,
+        width = 3.8,
+        height = 0.55,
         fill = "White",
         rounded = TRUE,
         border = "Grey60"
@@ -381,7 +389,7 @@ living_evidence_flowdiagram <- function(
   graph <- paste0(
     "digraph living_evidence_flow {\n",
     "graph [layout=neato, overlap=false, splines=ortho, outputorder=edgesfirst, ",
-    "bgcolor='White', pad=0.25];\n",
+    "bgcolor='White', pad=0.12];\n",
     "node [shape=box];\n",
     paste(nodes, collapse = "\n"), "\n",
     paste(edges, collapse = "\n"), "\n",
