@@ -1,0 +1,272 @@
+name: Recover and finish v3.6 three-Luna pilot
+
+on:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/recover_finish_v36_three_luna_pilot.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  TOPIC_PROD_OUTPUT_DIR: outputs/workflow06_topic_v3_6_production_pilot_100
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  TOPIC_CHUNK_SIZE: '50'
+  SOURCE_PILOT_ARTIFACT_ID: '10583509222'
+
+jobs:
+  recover_b2:
+    if: ${{ github.event.head_commit.message == 'Recover and finish v3.6 three-Luna pilot' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+      - uses: r-lib/actions/setup-r@v2
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+      - name: Recover prior pilot artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$TOPIC_PROD_OUTPUT_DIR" /tmp/prior
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_PILOT_ARTIFACT_ID}/zip" > /tmp/prior.zip
+          unzip -q /tmp/prior.zip -d /tmp/prior
+          cp -a /tmp/prior/. "$TOPIC_PROD_OUTPUT_DIR/"
+          test -s "$TOPIC_PROD_OUTPUT_DIR/pass_b/chunk_002/batch_submitted.json"
+          test -s "$TOPIC_PROD_OUTPUT_DIR/pass_b/chunk_002/batch_input.jsonl"
+
+      - name: Recover existing OpenAI batch B2 without resubmitting
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          D="$TOPIC_PROD_OUTPUT_DIR/pass_b/chunk_002"
+          BATCH_ID="$(python - <<'PY'
+          import json, os
+          p=os.path.join(os.environ["TOPIC_PROD_OUTPUT_DIR"],"pass_b","chunk_002","batch_submitted.json")
+          print(json.load(open(p))["id"])
+          PY
+          )"
+          echo "Recovering existing batch: $BATCH_ID"
+          for i in $(seq 1 360); do
+            curl -fsS -H "Authorization: Bearer $OPENAI_API_KEY" "https://api.openai.com/v1/batches/$BATCH_ID" > "$D/batch_status_latest.json"
+            STATUS="$(python - <<'PY'
+          import json, os
+          p=os.path.join(os.environ["TOPIC_PROD_OUTPUT_DIR"],"pass_b","chunk_002","batch_status_latest.json")
+          x=json.load(open(p))
+          c=x.get("request_counts") or {}
+          print(x.get("status",""))
+          print(f'{c.get("completed",0)}/{c.get("total",0)} completed; {c.get("failed",0)} failed', file=__import__("sys").stderr)
+          PY
+            )"
+            echo "B2 status: $STATUS"
+            case "$STATUS" in
+              completed) break ;;
+              failed|expired|cancelled) echo "Existing batch ended $STATUS"; exit 1 ;;
+            esac
+            sleep 20
+          done
+          python - <<'PY'
+          import json, os, sys
+          p=os.path.join(os.environ["TOPIC_PROD_OUTPUT_DIR"],"pass_b","chunk_002","batch_status_latest.json")
+          x=json.load(open(p))
+          if x.get("status")!="completed":
+              raise SystemExit("Existing B2 batch did not complete within recovery window")
+          open(os.path.join(os.environ["TOPIC_PROD_OUTPUT_DIR"],"pass_b","chunk_002","batch_final.json"),"w").write(json.dumps(x,indent=2))
+          print(x["output_file_id"])
+          PY
+          OUTPUT_ID="$(python - <<'PY'
+          import json, os
+          p=os.path.join(os.environ["TOPIC_PROD_OUTPUT_DIR"],"pass_b","chunk_002","batch_final.json")
+          print(json.load(open(p))["output_file_id"])
+          PY
+          )"
+          curl -fsS -H "Authorization: Bearer $OPENAI_API_KEY" "https://api.openai.com/v1/files/$OUTPUT_ID/content" > "$D/batch_output.jsonl"
+
+      - name: Parse and validate recovered B2
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          suppressPackageStartupMessages({
+            library(digest); library(jsonlite); library(readr)
+          })
+          od <- Sys.getenv("TOPIC_PROD_OUTPUT_DIR")
+          d <- file.path(od,"pass_b","chunk_002")
+          q <- read_csv(file.path(od,"input_queue.csv"),show_col_types=FALSE,progress=FALSE)
+          o <- read_csv(Sys.getenv("TOPIC_ONTOLOGY_PATH"),show_col_types=FALSE,progress=FALSE)
+          lines <- readLines(file.path(d,"batch_output.jsonl"),warn=FALSE,encoding="UTF-8")
+          lines <- lines[nzchar(lines)]
+          items <- lapply(lines,fromJSON,simplifyVector=FALSE)
+          input_lines <- readLines(file.path(d,"batch_input.jsonl"),warn=FALSE,encoding="UTF-8")
+          reqs <- lapply(input_lines[nzchar(input_lines)],fromJSON,simplifyVector=FALSE)
+          expected <- vapply(reqs,`[[`,"","custom_id")
+          got <- vapply(items,`[[`,"","custom_id")
+          stopifnot(length(got)==length(expected), !anyDuplicated(got), setequal(got,expected))
+          extract_text <- function(response){
+            for(item in response$output) if(identical(item$type,"message"))
+              for(content in item$content) if(identical(content$type,"output_text")) return(content$text)
+            stop("No output_text")
+          }
+          assignments <- list(); records <- list(); usages <- list()
+          prices <- list(input=.10,cached=.01,cache_write=.125,output=.60)
+          for(item in items){
+            cid <- item$custom_id
+            rid <- sub("^luna-b-","",cid)
+            response <- item$response$body
+            if(is.null(response) || !is.null(item$error)) stop("API item failure: ",cid)
+            parsed <- fromJSON(extract_text(response),simplifyVector=FALSE)
+            aa <- parsed$assignments
+            if(is.null(aa)) aa <- list()
+            ids <- vapply(aa,function(a) as.character(a$path_id),"")
+            if(anyDuplicated(ids)) stop("Duplicate path_id for ",rid)
+            bad <- setdiff(ids,as.character(o$path_id)); if(length(bad)) stop("Unknown path_id: ",paste(bad,collapse=","))
+            for(a in aa) assignments[[length(assignments)+1]] <- data.frame(
+              record_id=rid,path_id=a$path_id,role=a$role,reason=a$reason,
+              hierarchy_path=o$hierarchy_path[match(a$path_id,o$path_id)],stringsAsFactors=FALSE)
+            records[[length(records)+1]] <- data.frame(
+              record_id=rid,assignment_count=length(aa),
+              review_required=isTRUE(parsed$review_required),
+              review_reason=if(is.null(parsed$review_reason)) "" else as.character(parsed$review_reason),
+              stringsAsFactors=FALSE)
+            u<-response$usage; det<-u$input_tokens_details; odet<-u$output_tokens_details
+            input<-as.integer(u$input_tokens); cached<-as.integer(det$cached_tokens %||% 0)
+            cw<-as.integer(det$cache_write_tokens %||% 0); output<-as.integer(u$output_tokens)
+            ordinary<-input-cached-cw
+            cost<-(ordinary*prices$input+cached*prices$cached+cw*prices$cache_write+output*prices$output)/1e6
+            usages[[length(usages)+1]]<-data.frame(
+              pass="b",chunk=2,custom_id=cid,model="gpt-5.6-luna",
+              input_tokens=input,ordinary_input_tokens=ordinary,cached_input_tokens=cached,
+              cache_write_tokens=cw,output_tokens=output,
+              reasoning_tokens=as.integer(odet$reasoning_tokens %||% 0),
+              total_tokens=as.integer(u$total_tokens),estimated_batch_cost_usd=cost)
+          }
+          `%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x
+          long <- if(length(assignments)) do.call(rbind,assignments) else data.frame(
+            record_id=character(),path_id=character(),role=character(),reason=character(),hierarchy_path=character())
+          rec <- do.call(rbind,records); use <- do.call(rbind,usages)
+          write_csv(long,file.path(d,"topic_assignments.csv"),na="")
+          write_csv(rec,file.path(d,"record_results.csv"),na="")
+          write_csv(use,file.path(d,"usage.csv"),na="")
+          manifest <- list(pass="b",chunk=2,records=nrow(rec),
+            input_sha256=digest(file=file.path(d,"batch_input.jsonl"),algo="sha256",serialize=FALSE),
+            output_sha256=digest(file=file.path(d,"batch_output.jsonl"),algo="sha256",serialize=FALSE),
+            batch_id=fromJSON(file.path(d,"batch_final.json"))$id,
+            assignments=nrow(long),cost_usd=sum(use$estimated_batch_cost_usd),
+            recovered_existing_batch=TRUE)
+          write_json(manifest,file.path(d,"chunk_manifest.json"),pretty=TRUE,auto_unbox=TRUE)
+          writeLines("validated",file.path(d,"complete.ok"))
+          cat(sprintf("Recovered B2: %d records; cost $%.6f\n",nrow(rec),sum(use$estimated_batch_cost_usd)))
+          RS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v36-recovered-b2-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_production_pilot_100/pass_b/chunk_002/
+          if-no-files-found: error
+          retention-days: 90
+
+  luna_c:
+    if: ${{ github.event.head_commit.message == 'Recover and finish v3.6 three-Luna pilot' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        chunk: [1, 2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+      - uses: r-lib/actions/setup-r@v2
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+      - name: Recover queue only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$TOPIC_PROD_OUTPUT_DIR" /tmp/prior
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_PILOT_ARTIFACT_ID}/zip" > /tmp/prior.zip
+          unzip -q /tmp/prior.zip -d /tmp/prior
+          cp /tmp/prior/input_queue.csv "$TOPIC_PROD_OUTPUT_DIR/input_queue.csv"
+      - name: Run Luna C chunk ${{ matrix.chunk }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: Rscript R/run_topic_three_luna_production.R run_chunk c ${{ matrix.chunk }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v36-luna-c-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_production_pilot_100/pass_c/chunk_00${{ matrix.chunk }}/
+          if-no-files-found: error
+          retention-days: 90
+
+  combine_audit:
+    if: ${{ always() && github.event.head_commit.message == 'Recover and finish v3.6 three-Luna pilot' }}
+    needs: [recover_b2, luna_c]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+      - uses: r-lib/actions/setup-r@v2
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::digest
+            any::jsonlite
+            any::readr
+      - name: Assemble prior and recovered chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$TOPIC_PROD_OUTPUT_DIR" /tmp/prior /tmp/new
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_PILOT_ARTIFACT_ID}/zip" > /tmp/prior.zip
+          unzip -q /tmp/prior.zip -d /tmp/prior
+          cp -a /tmp/prior/. "$TOPIC_PROD_OUTPUT_DIR/"
+          gh run download "${GITHUB_RUN_ID}" -n "v36-recovered-b2-${GITHUB_RUN_ID}" -D /tmp/new/b2
+          gh run download "${GITHUB_RUN_ID}" -n "v36-luna-c-chunk-1-${GITHUB_RUN_ID}" -D /tmp/new/c1
+          gh run download "${GITHUB_RUN_ID}" -n "v36-luna-c-chunk-2-${GITHUB_RUN_ID}" -D /tmp/new/c2
+          mkdir -p "$TOPIC_PROD_OUTPUT_DIR/pass_b/chunk_002" "$TOPIC_PROD_OUTPUT_DIR/pass_c/chunk_001" "$TOPIC_PROD_OUTPUT_DIR/pass_c/chunk_002"
+          cp -a /tmp/new/b2/. "$TOPIC_PROD_OUTPUT_DIR/pass_b/chunk_002/"
+          cp -a /tmp/new/c1/. "$TOPIC_PROD_OUTPUT_DIR/pass_c/chunk_001/"
+          cp -a /tmp/new/c2/. "$TOPIC_PROD_OUTPUT_DIR/pass_c/chunk_002/"
+          for f in \
+            pass_a/chunk_001/complete.ok pass_a/chunk_002/complete.ok \
+            pass_b/chunk_001/complete.ok pass_b/chunk_002/complete.ok \
+            pass_c/chunk_001/complete.ok pass_c/chunk_002/complete.ok; do
+            test -s "$TOPIC_PROD_OUTPUT_DIR/$f"
+          done
+      - name: Combine all 1/3 2/3 3/3 assignments
+        run: Rscript R/run_topic_three_luna_production.R combine
+      - name: Deterministic integrity audit
+        run: Rscript R/run_topic_three_luna_production.R audit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v36-three-luna-pilot-complete-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_production_pilot_100/
+          if-no-files-found: error
+          retention-days: 90
