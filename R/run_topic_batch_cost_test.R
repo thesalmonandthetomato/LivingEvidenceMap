@@ -203,7 +203,13 @@ run_luna <- function() {
   write_csv_safe(do.call(rbind,usage),file.path(out_dir,"luna_usage.csv")); message("Completed two Luna passes for ",nrow(records)," records")
 }
 
-split_paths <- function(x) { y<-trimws(strsplit(x %||% "",";",fixed=TRUE)[[1]]); y[nzchar(y)] }
+split_paths <- function(x) {
+  if (length(x) == 0L || all(is.na(x))) return(character())
+  x <- as.character(x[[1]])
+  if (is.na(x) || !nzchar(x)) return(character())
+  y <- trimws(strsplit(x, ";", fixed = TRUE)[[1]])
+  y[nzchar(y)]
+}
 evaluate_luna <- function() {
   records<-read_csv_quiet(queue_path); hist<-read_csv_quiet(file.path(out_dir,"historical_context_not_gold.csv")); maps<-list(); reasons<-list()
   for(pass in c("a","b")){
