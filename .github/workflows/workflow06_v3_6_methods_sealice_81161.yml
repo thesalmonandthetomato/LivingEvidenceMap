@@ -1,0 +1,159 @@
+name: Workflow 06 - v3.6 methods + sea-lice diagnostic 81161
+
+on:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_v3_6_methods_sealice_81161.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  OUT_DIR: outputs/workflow06_v3_6_methods_sealice_81161
+  ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+  PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  SOURCE_PILOT_ARTIFACT_ID: '10584745964'
+
+jobs:
+  diagnostic:
+    if: ${{ github.event.head_commit.message == 'Run synchronous v3.6 diagnostic for 81161' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Recover exact record 81161
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT_DIR" /tmp/source
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_PILOT_ARTIFACT_ID}/zip" > /tmp/source.zip
+          unzip -q /tmp/source.zip -d /tmp/source
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(readr))
+          x <- read_csv("/tmp/source/input_queue.csv", show_col_types=FALSE, progress=FALSE)
+          y <- x[as.character(x$record_id)=="81161",,drop=FALSE]
+          if(nrow(y)!=1) stop("Expected exactly one record 81161; found ",nrow(y))
+          dir.create(Sys.getenv("OUT_DIR"),recursive=TRUE,showWarnings=FALSE)
+          write_csv(y,file.path(Sys.getenv("OUT_DIR"),"record_81161.csv"),na="")
+          cat("Record:",y$record_id,"-",y$title,"\n")
+          RS
+
+      - name: Run one synchronous Luna classification
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          suppressPackageStartupMessages({library(httr2);library(jsonlite);library(readr)})
+          `%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x
+          ontology_prompt <- function(x) {
+            fields <- c(definition="Definition",include_when="Include when",exclude_when="Exclude when",
+              required_subject_terms="Subject concept cues",required_focus_terms="Focus concept cues",
+              alternative_standalone_cues="Alternative specific cues",
+              supporting_terms_from_old_ontology="Supporting lexical cues",prompt_logic_note="Interpretation note")
+            vapply(seq_len(nrow(x)),function(i){
+              lines <- paste(x$path_id[i],x$hierarchy_path[i],sep=" | ")
+              for(field in names(fields)){
+                value <- trimws(as.character(x[[field]][i] %||% ""))
+                if(!is.na(value)&&nzchar(value)) lines <- c(lines,paste0(fields[[field]],": ",value))
+              }
+              paste(lines,collapse="\n")
+            },character(1)) |> paste(collapse="\n\n")
+          }
+          topic_schema <- function(path_ids) list(
+            type="object",
+            properties=list(
+              assignments=list(type="array",items=list(type="object",properties=list(
+                path_id=list(type="string",enum=as.list(path_ids)),
+                role=list(type="string",enum=list("PRIMARY","SECONDARY")),
+                reason=list(type="string")),
+                required=list("path_id","role","reason"),additionalProperties=FALSE)),
+              review_required=list(type="boolean"),
+              review_reason=list(type=list("string","null"))),
+            required=list("assignments","review_required","review_reason"),
+            additionalProperties=FALSE)
+          extract_text <- function(response){
+            for(item in response$output) if(identical(item$type,"message"))
+              for(content in item$content) if(identical(content$type,"output_text")) return(content$text)
+            stop("No output_text")
+          }
+
+          od <- Sys.getenv("OUT_DIR")
+          q <- read_csv(file.path(od,"record_81161.csv"),show_col_types=FALSE,progress=FALSE)
+          o <- read_csv(Sys.getenv("ONTOLOGY_PATH"),show_col_types=FALSE,progress=FALSE)
+          prefix <- paste0(paste(readLines(Sys.getenv("PROMPT_PATH"),warn=FALSE),collapse="\n"),
+                           "\n\nONTOLOGY\n\n",ontology_prompt(o))
+          body <- list(
+            model="gpt-5.6-luna",
+            store=FALSE,
+            reasoning=list(effort="medium"),
+            input=list(
+              list(role="system",content=list(list(type="input_text",text=prefix))),
+              list(role="user",content=list(list(type="input_text",text=paste0(
+                "RECORD\n\nTitle: ",q$title,
+                "\n\nAbstract: ",q$abstract,
+                "\n\nReturn the substantive ontology assignments."
+              ))))
+            ),
+            text=list(verbosity="low",format=list(
+              type="json_schema",name="topic_v36_sync",strict=TRUE,
+              schema=topic_schema(as.character(o$path_id))
+            ))
+          )
+          started <- Sys.time()
+          response <- request("https://api.openai.com/v1/responses") |>
+            req_auth_bearer_token(Sys.getenv("OPENAI_API_KEY")) |>
+            req_body_json(body,auto_unbox=TRUE,null="null") |>
+            req_retry(max_tries=5,retry_on_failure=TRUE) |>
+            req_timeout(300) |>
+            req_perform() |>
+            resp_body_json(simplifyVector=FALSE)
+          elapsed <- as.numeric(difftime(Sys.time(),started,units="secs"))
+          parsed <- fromJSON(extract_text(response),simplifyVector=FALSE)
+          ids <- vapply(parsed$assignments %||% list(),function(a) as.character(a$path_id),"")
+          if(anyDuplicated(ids)) stop("Duplicate path_id")
+          bad <- setdiff(ids,as.character(o$path_id)); if(length(bad)) stop("Unknown path_id: ",paste(bad,collapse=","))
+          rows <- if(length(parsed$assignments)) do.call(rbind,lapply(parsed$assignments,function(a)data.frame(
+            record_id="81161",path_id=a$path_id,
+            hierarchy_path=o$hierarchy_path[match(a$path_id,o$path_id)],
+            role=a$role,reason=a$reason,stringsAsFactors=FALSE
+          ))) else data.frame(record_id="81161",path_id=character(),hierarchy_path=character(),role=character(),reason=character())
+          write_csv(rows,file.path(od,"assignments.csv"),na="")
+          write_json(response,file.path(od,"raw_response.json"),pretty=TRUE,auto_unbox=TRUE,null="null")
+          summary <- list(
+            record_id="81161",
+            elapsed_seconds=elapsed,
+            assigned_path_ids=as.list(ids),
+            v3_135_assigned=("V3_135" %in% ids),
+            review_required=isTRUE(parsed$review_required),
+            review_reason=parsed$review_reason,
+            usage=response$usage
+          )
+          write_json(summary,file.path(od,"summary.json"),pretty=TRUE,auto_unbox=TRUE,null="null")
+          print(summary)
+          RS
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workflow06-v3-6-methods-sealice-81161-${{ github.run_id }}
+          path: outputs/workflow06_v3_6_methods_sealice_81161/
+          if-no-files-found: error
+          retention-days: 90
