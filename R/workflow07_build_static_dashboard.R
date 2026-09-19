@@ -1,5 +1,13 @@
 #!/usr/bin/env Rscript
 
+# WORKFLOW 07 TODO
+# After Workflow 06 topic coding is complete, embed the approved Living Evidence
+# Map flow diagram immediately below the dashboard choropleth. Populate all flow
+# counts programmatically from update/provenance outputs (database retrieval,
+# deduplication, title/abstract screening, retained records, records excluded
+# from topic coding because abstracts are missing, and records assigned topic
+# codes). Do not hand-enter counts.
+#
 suppressPackageStartupMessages({
   library(jsonlite)
   library(readr)
