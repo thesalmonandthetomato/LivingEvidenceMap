@@ -468,8 +468,30 @@ export_living_evidence_flow_svg <- function(widget, path) {
     # of the blank side-label node. Put the rotation anchor at the true centre.
     y <- as.numeric(hit[4]) - 3
 
+    text_open <- hit[2]
+    text_open <- gsub('\\\\s+x="[^"]+"', "", text_open, perl = TRUE)
+    text_open <- gsub('\\\\s+y="[^"]+"', "", text_open, perl = TRUE)
+    text_open <- gsub(
+      '\\\\s+text-anchor="[^"]+"',
+      "",
+      text_open,
+      perl = TRUE
+    )
+    text_open <- gsub(
+      '\\\\s+dominant-baseline="[^"]+"',
+      "",
+      text_open,
+      perl = TRUE
+    )
+    text_open <- gsub(
+      '\\\\s+transform="[^"]+"',
+      "",
+      text_open,
+      perl = TRUE
+    )
+
     replacement <- paste0(
-      hit[2],
+      text_open,
       " x=\\\"", x, "\\\" y=\\\"", y, "\\\"",
       " text-anchor=\\\"middle\\\" dominant-baseline=\\\"middle\\\"",
       " transform=\\\"rotate(-90 ", x, " ", y, ")\\\"",
