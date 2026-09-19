@@ -1,0 +1,78 @@
+name: Workflow 06 - Topic v3.5 three-Luna same-sample comparison
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_topic_v3_5_three_luna_comparison.yml'
+      - 'R/run_topic_batch_cost_test.R'
+      - 'data/reference/topic_ontology_v3_5.csv'
+      - 'data/reference/topic_system_prompt_v3_5.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  COST_TEST_OUTPUT_DIR: outputs/workflow06_topic_v3_5_three_luna_comparison
+  COST_TEST_SAMPLE_SIZE: '100'
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_5.csv
+  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_5.txt
+  SOURCE_V35_ARTIFACT_ID: '10581929607'
+
+jobs:
+  compare:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Run v3.5 three-Luna same-sample comparison' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Recover completed v3.5 Luna A/B and Terra outputs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$COST_TEST_OUTPUT_DIR" /tmp/v35_prior
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_V35_ARTIFACT_ID}/zip" > /tmp/v35_prior.zip
+          unzip -q /tmp/v35_prior.zip -d /tmp/v35_prior
+          cp -a /tmp/v35_prior/. "$COST_TEST_OUTPUT_DIR/"
+          test -s "$COST_TEST_OUTPUT_DIR/validation_queue_100.csv"
+          test -s "$COST_TEST_OUTPUT_DIR/luna_a/topic_assignments.csv"
+          test -s "$COST_TEST_OUTPUT_DIR/luna_b/topic_assignments.csv"
+          test -s "$COST_TEST_OUTPUT_DIR/luna_usage.csv"
+          test -s "$COST_TEST_OUTPUT_DIR/validation_review_queue.csv"
+          test -s "$COST_TEST_OUTPUT_DIR/terra_conflict_adjudication.csv"
+          test -s "$COST_TEST_OUTPUT_DIR/terra_usage.csv"
+
+      - name: Run independent Luna pass C
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: Rscript R/run_topic_batch_cost_test.R luna_c
+
+      - name: Score three Luna passes and compare with two-Luna plus Terra
+        run: Rscript R/run_topic_batch_cost_test.R three_luna
+
+      - name: Upload three-Luna comparison artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-topic-v3-5-three-luna-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_5_three_luna_comparison/
+          if-no-files-found: error
+          retention-days: 90

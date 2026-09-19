@@ -250,7 +250,335 @@ run_terra <- function() {
   write_csv_safe(do.call(rbind,rows),file.path(out_dir,"terra_conflict_adjudication.csv"));write_csv_safe(do.call(rbind,usage),file.path(out_dir,"terra_usage.csv"));message("Completed Terra adjudication for ",length(rows)," disagreements")
 }
 
+
+run_luna_c <- function() {
+  records <- read_csv_quiet(queue_path)
+  ontology <- read_csv_quiet(ontology_path)
+  prefix <- paste0(
+    paste(readLines(system_prompt_path, warn = FALSE), collapse = "\n"),
+    "\n\nONTOLOGY\n\n",
+    ontology_prompt(ontology)
+  )
+  schema <- topic_schema(as.character(ontology$path_id))
+  requests <- list()
+
+  for (i in seq_len(nrow(records))) {
+    rec <- records[i,]
+    body <- list(
+      model = luna_model,
+      store = FALSE,
+      reasoning = list(effort = "medium"),
+      prompt_cache_key = "topic-v3.5-three-luna-c",
+      prompt_cache_options = list(mode = "explicit", ttl = "30m"),
+      input = list(
+        list(
+          role = "system",
+          content = list(list(
+            type = "input_text",
+            text = prefix,
+            prompt_cache_breakpoint = list(mode = "explicit")
+          ))
+        ),
+        list(
+          role = "user",
+          content = list(list(
+            type = "input_text",
+            text = paste0(
+              "RECORD\n\nTitle: ", rec$title,
+              "\n\nAbstract: ", rec$abstract,
+              "\n\nReturn the substantive ontology assignments."
+            )
+          ))
+        )
+      ),
+      text = list(
+        verbosity = "low",
+        format = list(
+          type = "json_schema",
+          name = "topic_v4",
+          strict = TRUE,
+          schema = schema
+        )
+      )
+    )
+    requests[[length(requests) + 1L]] <- list(
+      custom_id = paste0("luna-c-", rec$record_id),
+      method = "POST",
+      url = "/v1/responses",
+      body = body
+    )
+  }
+
+  input_path <- file.path(out_dir, "luna_c_batch_input.jsonl")
+  write_jsonl(requests, input_path)
+  results <- submit_and_wait(input_path, "luna_c")
+
+  long <- list()
+  recs <- list()
+  usage <- list()
+
+  for (item in results) {
+    rid <- sub("^luna-c-", "", item$custom_id)
+    response <- item$response$body %||% NULL
+    if (is.null(response) || !is.null(item$error)) {
+      stop("Luna C batch failure: ", item$custom_id)
+    }
+
+    usage[[length(usage) + 1L]] <- usage_row(
+      "luna_c", item$custom_id, luna_model, response
+    )
+    parsed <- fromJSON(extract_output_text(response), simplifyVector = FALSE)
+
+    seen <- character()
+    assignments <- list()
+    for (a in parsed$assignments) {
+      if (a$path_id %in% ontology$path_id && !(a$path_id %in% seen)) {
+        seen <- c(seen, a$path_id)
+        assignments[[length(assignments) + 1L]] <- a
+      }
+    }
+
+    src <- records[as.character(records$record_id) == rid,]
+    for (a in assignments) {
+      long[[length(long) + 1L]] <- data.frame(
+        record_id = rid,
+        title = src$title,
+        abstract = src$abstract,
+        path_id = a$path_id,
+        role = a$role,
+        reason = a$reason,
+        hierarchy_path = ontology$hierarchy_path[match(a$path_id, ontology$path_id)]
+      )
+    }
+
+    recs[[length(recs) + 1L]] <- data.frame(
+      record_id = rid,
+      title = src$title,
+      abstract = src$abstract,
+      assigned_path_ids = paste(vapply(assignments, `[[`, "", "path_id"), collapse = "; "),
+      assigned_path_roles = paste(
+        vapply(assignments, function(a) paste0(a$path_id, "=", a$role), ""),
+        collapse = "; "
+      ),
+      assignment_count = length(assignments),
+      review_required = parsed$review_required,
+      review_reason = parsed$review_reason %||% "",
+      status = "completed",
+      classification_error = ""
+    )
+  }
+
+  od <- file.path(out_dir, "luna_c")
+  dir.create(od, recursive = TRUE, showWarnings = FALSE)
+  long_df <- if (length(long)) do.call(rbind, long) else data.frame(
+    record_id=character(), title=character(), abstract=character(),
+    path_id=character(), role=character(), reason=character(),
+    hierarchy_path=character()
+  )
+  write_csv_safe(long_df, file.path(od, "topic_assignments.csv"))
+  write_csv_safe(do.call(rbind, recs), file.path(od, "topic_classification_records.csv"))
+  write_csv_safe(
+    data.frame(record_id=character(), classification_error=character()),
+    file.path(od, "topic_classification_failures.csv")
+  )
+  write_csv_safe(do.call(rbind, usage), file.path(out_dir, "luna_c_usage.csv"))
+  message("Completed Luna pass C for ", nrow(records), " records")
+}
+
+evaluate_three_luna <- function() {
+  records <- read_csv_quiet(queue_path)
+  ontology <- read_csv_quiet(ontology_path)
+
+  read_pass <- function(pass) {
+    x <- read_csv_quiet(file.path(out_dir, paste0("luna_", pass), "topic_assignments.csv"))
+    if (!nrow(x)) return(list(roles=list(), reasons=list()))
+    by_record <- split(x, as.character(x$record_id))
+    list(
+      roles = lapply(by_record, function(df) setNames(as.character(df$role), as.character(df$path_id))),
+      reasons = lapply(by_record, function(df) setNames(as.character(df$reason), as.character(df$path_id)))
+    )
+  }
+
+  p <- list(a=read_pass("a"), b=read_pass("b"), c=read_pass("c"))
+  review <- read_csv_quiet(file.path(out_dir, "validation_review_queue.csv"))
+  terra <- read_csv_quiet(file.path(out_dir, "terra_conflict_adjudication.csv"))
+
+  get_roles <- function(pass, rid) p[[pass]]$roles[[rid]] %||% setNames(character(), character())
+  get_reasons <- function(pass, rid) p[[pass]]$reasons[[rid]] %||% setNames(character(), character())
+
+  score_rows <- list()
+  record_rows <- list()
+  exact_three <- 0L
+  exact_ab <- 0L
+  exact_ac <- 0L
+  exact_bc <- 0L
+
+  old_exact <- 0L
+  old_jaccard <- numeric()
+  old_tp <- old_fp <- old_fn <- 0L
+
+  for (i in seq_len(nrow(records))) {
+    rid <- as.character(records$record_id[i])
+    roles <- lapply(c("a","b","c"), get_roles, rid=rid)
+    reasons <- lapply(c("a","b","c"), get_reasons, rid=rid)
+    sets <- lapply(roles, names)
+    sets <- lapply(sets, function(x) x %||% character())
+
+    exact_ab <- exact_ab + as.integer(setequal(sets[[1]], sets[[2]]))
+    exact_ac <- exact_ac + as.integer(setequal(sets[[1]], sets[[3]]))
+    exact_bc <- exact_bc + as.integer(setequal(sets[[2]], sets[[3]]))
+    all_equal <- setequal(sets[[1]], sets[[2]]) && setequal(sets[[1]], sets[[3]])
+    exact_three <- exact_three + as.integer(all_equal)
+
+    union_paths <- sort(unique(unlist(sets)))
+    majority_paths <- character()
+    unanimous_paths <- character()
+
+    if (length(union_paths)) {
+      for (pid in union_paths) {
+        present <- vapply(sets, function(s) pid %in% s, logical(1))
+        n_present <- sum(present)
+        if (n_present >= 2L) majority_paths <- c(majority_paths, pid)
+        if (n_present == 3L) unanimous_paths <- c(unanimous_paths, pid)
+
+        score_rows[[length(score_rows) + 1L]] <- data.frame(
+          record_id = rid,
+          title = as.character(records$title[i]),
+          path_id = pid,
+          hierarchy_path = ontology$hierarchy_path[match(pid, ontology$path_id)],
+          luna_a_present = present[1],
+          luna_a_role = if (present[1]) unname(roles[[1]][pid]) else "",
+          luna_b_present = present[2],
+          luna_b_role = if (present[2]) unname(roles[[2]][pid]) else "",
+          luna_c_present = present[3],
+          luna_c_role = if (present[3]) unname(roles[[3]][pid]) else "",
+          score_n = n_present,
+          score_fraction = paste0(n_present, "/3"),
+          confidence_stars = paste(rep("*", n_present), collapse = ""),
+          luna_a_reason = if (present[1]) unname(reasons[[1]][pid]) else "",
+          luna_b_reason = if (present[2]) unname(reasons[[2]][pid]) else "",
+          luna_c_reason = if (present[3]) unname(reasons[[3]][pid]) else ""
+        )
+      }
+    }
+
+    rv <- review[as.character(review$record_id) == rid,]
+    if (!nrow(rv)) stop("Missing prior validation row for record ", rid)
+
+    if (as.integer(rv$a_b_pathway_exact[1]) == 1L) {
+      old_final <- sets[[1]]
+    } else {
+      tv <- terra[as.character(terra$record_id) == rid,]
+      if (!nrow(tv)) stop("Missing Terra adjudication for prior conflict record ", rid)
+      old_final <- split_paths(tv$terra_final_pathways[1])
+    }
+
+    old_exact <- old_exact + as.integer(setequal(majority_paths, old_final))
+    u <- union(majority_paths, old_final)
+    old_jaccard <- c(
+      old_jaccard,
+      if (length(u)) length(intersect(majority_paths, old_final)) / length(u) else 1
+    )
+    old_tp <- old_tp + length(intersect(majority_paths, old_final))
+    old_fp <- old_fp + length(setdiff(majority_paths, old_final))
+    old_fn <- old_fn + length(setdiff(old_final, majority_paths))
+
+    record_rows[[length(record_rows) + 1L]] <- data.frame(
+      record_id = rid,
+      title = as.character(records$title[i]),
+      luna_a_pathways = paste(sort(sets[[1]]), collapse="; "),
+      luna_b_pathways = paste(sort(sets[[2]]), collapse="; "),
+      luna_c_pathways = paste(sort(sets[[3]]), collapse="; "),
+      three_luna_all_exact = all_equal,
+      majority_2plus_pathways = paste(sort(majority_paths), collapse="; "),
+      unanimous_3of3_pathways = paste(sort(unanimous_paths), collapse="; "),
+      prior_two_luna_terra_pathways = paste(sort(old_final), collapse="; "),
+      majority_matches_prior_final = setequal(majority_paths, old_final),
+      majority_added_vs_prior = paste(sort(setdiff(majority_paths, old_final)), collapse="; "),
+      majority_removed_vs_prior = paste(sort(setdiff(old_final, majority_paths)), collapse="; ")
+    )
+  }
+
+  scores <- if (length(score_rows)) do.call(rbind, score_rows) else data.frame()
+  rec_out <- do.call(rbind, record_rows)
+  write_csv_safe(scores, file.path(out_dir, "three_luna_pathway_scores.csv"))
+  write_csv_safe(rec_out, file.path(out_dir, "three_luna_record_comparison.csv"))
+
+  score_counts <- if (nrow(scores)) {
+    as.list(setNames(
+      vapply(1:3, function(n) sum(scores$score_n == n), integer(1)),
+      paste0(1:3, "_of_3")
+    ))
+  } else {
+    list(`1_of_3`=0L, `2_of_3`=0L, `3_of_3`=0L)
+  }
+
+  old_precision <- if (old_tp + old_fp) old_tp / (old_tp + old_fp) else 1
+  old_recall <- if (old_tp + old_fn) old_tp / (old_tp + old_fn) else 1
+  old_f1 <- if (old_precision + old_recall) 2 * old_precision * old_recall / (old_precision + old_recall) else 1
+
+  usage_ab <- read_csv_quiet(file.path(out_dir, "luna_usage.csv"))
+  usage_c <- read_csv_quiet(file.path(out_dir, "luna_c_usage.csv"))
+  usage_terra <- read_csv_quiet(file.path(out_dir, "terra_usage.csv"))
+  cost_ab <- sum(usage_ab$estimated_batch_cost_usd)
+  cost_c <- sum(usage_c$estimated_batch_cost_usd)
+  cost_terra <- sum(usage_terra$estimated_batch_cost_usd)
+  cost_three_luna <- cost_ab + cost_c
+  cost_two_luna_terra <- cost_ab + cost_terra
+
+  summary <- list(
+    records = nrow(records),
+    scoring = "Each pathway receives 1/3, 2/3 or 3/3 according to presence across Luna A, B and C. PRIMARY/SECONDARY roles are retained separately and do not affect the score.",
+    pathway_score_counts = score_counts,
+    record_level_exact_pathway_agreement = list(
+      all_three = exact_three,
+      all_three_rate = exact_three / nrow(records),
+      a_b = exact_ab,
+      a_b_rate = exact_ab / nrow(records),
+      a_c = exact_ac,
+      a_c_rate = exact_ac / nrow(records),
+      b_c = exact_bc,
+      b_c_rate = exact_bc / nrow(records)
+    ),
+    majority_2of3_vs_prior_two_luna_terra = list(
+      exact_record_matches = old_exact,
+      exact_record_match_rate = old_exact / nrow(records),
+      mean_jaccard = mean(old_jaccard),
+      pathway_precision_as_comparison = old_precision,
+      pathway_recall_as_comparison = old_recall,
+      pathway_f1_as_comparison = old_f1,
+      note = "The prior two-Luna-plus-Terra result is a comparator, not a gold standard."
+    ),
+    measured_batch_cost_usd = list(
+      prior_two_luna_passes = cost_ab,
+      additional_luna_c = cost_c,
+      three_luna_total = cost_three_luna,
+      prior_2luna_plus_terra_total = cost_two_luna_terra,
+      three_luna_minus_prior_design = cost_three_luna - cost_two_luna_terra
+    ),
+    projected_14738_record_cost_usd = list(
+      three_luna = cost_three_luna / nrow(records) * 14738,
+      two_luna_plus_terra_at_observed_disagreement_rate = cost_two_luna_terra / nrow(records) * 14738
+    )
+  )
+  write_json_file(summary, file.path(out_dir, "three_luna_summary.json"))
+  print(summary)
+}
+
 summarise_cost <- function(){usage<-rbind(read_csv_quiet(file.path(out_dir,"luna_usage.csv")),read_csv_quiet(file.path(out_dir,"terra_usage.csv")));by<-lapply(split(usage,usage$stage),function(x)list(requests=nrow(x),input_tokens=sum(x$input_tokens),ordinary_input_tokens=sum(x$ordinary_input_tokens),cached_input_tokens=sum(x$cached_input_tokens),cache_write_tokens=sum(x$cache_write_tokens),output_tokens=sum(x$output_tokens),cost_usd=sum(x$estimated_batch_cost_usd)));total<-sum(usage$estimated_batch_cost_usd);summary<-list(pricing_basis="OpenAI Batch API prices per 1M tokens verified 2026-09-18",prices_usd_per_million=prices,by_stage=by,total_cost_usd=total,cost_per_source_record_usd=total/sample_size,projected_14738_record_cost_usd=total/sample_size*14738,projection_assumption="The 100-record test is representative of abstract length, output length, cache performance and pathway-disagreement rate.");write_json_file(summary,file.path(out_dir,"cost_summary.json"));print(summary)}
 
-args<-commandArgs(trailingOnly=TRUE);if(length(args)!=1||!(args[[1]]%in%c("build","luna","evaluate","terra","summary")))stop("Usage: run_topic_batch_cost_test.R build|luna|evaluate|terra|summary")
-switch(args[[1]],build=build_queue(),luna=run_luna(),evaluate=evaluate_luna(),terra=run_terra(),summary=summarise_cost())
+args<-commandArgs(trailingOnly=TRUE)
+valid_commands <- c("build","luna","evaluate","terra","summary","luna_c","three_luna")
+if(length(args)!=1||!(args[[1]]%in%valid_commands)) {
+  stop("Usage: run_topic_batch_cost_test.R ", paste(valid_commands, collapse="|"))
+}
+switch(
+  args[[1]],
+  build=build_queue(),
+  luna=run_luna(),
+  evaluate=evaluate_luna(),
+  terra=run_terra(),
+  summary=summarise_cost(),
+  luna_c=run_luna_c(),
+  three_luna=evaluate_three_luna()
+)
