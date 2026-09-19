@@ -271,7 +271,7 @@ living_evidence_flowdiagram <- function(
     ")"
   )
 
-  note_label <- "No full-text screening stage is included in the current workflow."
+  note_label <- "Full text analysis not yet published"
 
   pos <- list(
     identified = c(3.7, 6.9),
