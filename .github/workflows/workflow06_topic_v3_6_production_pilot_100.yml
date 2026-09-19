@@ -1,0 +1,81 @@
+name: Workflow 06 - Topic v3.6 production pilot 100
+
+on:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_topic_v3_6_production_pilot_100.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  TOPIC_PROD_OUTPUT_DIR: outputs/workflow06_topic_v3_6_production_pilot_100
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  TOPIC_CHUNK_SIZE: '50'
+  SOURCE_VALIDATION_ARTIFACT_ID: '10581104681'
+
+jobs:
+  pilot:
+    if: ${{ github.event.head_commit.message == 'Run v3.6 three-Luna production pilot 100' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow06-gpt5mini-replication
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Recover exact validated 100-record pilot queue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$TOPIC_PROD_OUTPUT_DIR" /tmp/source
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_VALIDATION_ARTIFACT_ID}/zip" > /tmp/source.zip
+          unzip -q /tmp/source.zip -d /tmp/source
+          cp /tmp/source/validation_queue_100.csv "$TOPIC_PROD_OUTPUT_DIR/input_queue.csv"
+          test -s "$TOPIC_PROD_OUTPUT_DIR/input_queue.csv"
+
+      - name: Freeze and validate manifest
+        run: Rscript R/run_topic_three_luna_production.R manifest
+
+      - name: Run three independent Luna passes in 50-record chunks
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pass in a b c; do
+            for chunk in 1 2; do
+              Rscript R/run_topic_three_luna_production.R run_chunk "$pass" "$chunk"
+            done
+          done
+
+      - name: Combine without majority filtering
+        run: Rscript R/run_topic_three_luna_production.R combine
+
+      - name: Deterministic integrity audit
+        run: Rscript R/run_topic_three_luna_production.R audit
+
+      - name: Upload complete or recoverable pilot artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-topic-v3-6-production-pilot-100-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_production_pilot_100/
+          if-no-files-found: error
+          retention-days: 90

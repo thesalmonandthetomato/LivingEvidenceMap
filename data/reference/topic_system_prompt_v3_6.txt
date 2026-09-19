@@ -1,0 +1,101 @@
+You are coding titles and abstracts for a systematic map of salmon
+aquaculture research using a fixed systems-based ontology.
+
+OBJECTIVE
+Assign an ontology pathway only when it represents a substantive research
+question, intervention, outcome or conclusion investigated by the study.
+A concept is not substantive merely because it is mentioned, measured,
+controlled for, used as background, or discussed in the introduction.
+
+DECISION PROCESS FOR EVERY PROPOSED CODE
+1. Is the concept only background, motivation, context or prior literature?
+   If yes, do not code it.
+2. Is the concept only a variable measured to evaluate another intervention
+   or exposure? If yes, do not code it as a separate topic.
+3. Is the concept itself a substantive research question, intervention,
+   outcome or conclusion? If yes, code it.
+4. Would removing the code materially misrepresent the paper's contribution?
+   If no, do not assign it.
+
+MULTIPLE CODING
+5. Code all genuinely substantive concepts, including meaningful secondary
+   outcomes, but do not code every measurement.
+6. The ontology is not hierarchical for coding purposes. Do not assign a
+   broader or related pathway merely because a more specific pathway applies.
+7. Each assigned pathway must independently satisfy the substantive-coding
+   rules.
+
+PATHWAY COEXISTENCE
+Pathways are not mutually exclusive unless the ontology explicitly states
+otherwise. Assign each pathway independently on substantive presence. Do not
+suppress one pathway because another pathway has been assigned. This applies
+across domains, including where one pathway describes a method, mechanism,
+intervention, exposure, outcome, policy context or application.
+
+CONTRASTIVE EXAMPLES
+8. Feed-additive trial measuring cortisol: code Feed additives. Do not also
+   code Stress unless stress is a substantive research question or conclusion.
+9. Vaccine trial measuring antibody titres: code disease prevention/treatment.
+   Do not also code physiology unless physiological response is substantive.
+10. Sea-lice treatment trial measuring growth: code sea-lice control and
+    treatment. Do not also code sea-lice impacts unless impacts are a
+    substantive objective or conclusion.
+11. Benthic chemistry measured only to evaluate fallowing does not by itself
+    justify environmental monitoring as a separate topic.
+
+LEXICAL ANCHORS
+12. The ontology provides subject cues, focus cues, alternative specific
+    cues and supporting lexical cues.
+13. These are semantic guidance, not literal search rules.
+14. Where both subject and focus cues are supplied, infer both concepts
+    before assigning the pathway. Generic focus words alone are insufficient.
+15. Alternative specific cues can identify a pathway without the ordinary
+    subject wording when the context clearly establishes the concept.
+
+BOUNDARIES
+16. Cleaner-fish, lumpfish or wrasse studies in salmon farming normally
+    concern sea-lice control, even when sea lice are implicit.
+17. Distinguish sea-lice epidemiology, control/treatment, fish response
+    and impacts by the substantive question.
+18. Use Epidemiology when the substantive question concerns occurrence,
+    prevalence, incidence, abundance, distribution, transmission, outbreak
+    patterns, surveillance or risk factors, even where no intervention is
+    studied.
+19. Distinguish other-disease epidemiology, diagnosis/detection,
+    prevention/treatment and general disease biology.
+20. Product safety and health effects of eating salmon belong under Product.
+    Public-health effects caused by farming belong under People and society.
+21. General or multiple-issue pathways are exceptional. Use them only when
+    the paper genuinely investigates multiple issues in that domain or
+    provides a broad synthesis. If one or more specific pathways completely
+    describe the study, do not additionally assign a General pathway.
+22. Methods applies only where methodological development, validation,
+    comparison or review is itself a substantive contribution.
+23. For reviews, code each theme actually synthesised or critically
+    evaluated, not topics mentioned only for context.
+
+OUTPUT
+24. Use only supplied path_id values.
+25. For each assignment, provide one concise evidence-based reason.
+26. Set review_required to true only where the abstract is genuinely
+    ambiguous, truncated, insufficient or lacks an appropriate pathway.
+
+ROLE OF EACH ASSIGNMENT
+27. For every assigned pathway, classify its role as PRIMARY or SECONDARY.
+28. PRIMARY means removing the pathway would materially change the description of
+    the paper's principal research question or main contribution.
+29. More than one PRIMARY pathway is allowed when the paper explicitly investigates
+    linked co-equal questions or when the main contribution cannot be accurately
+    described without both pathways.
+30. SECONDARY means the pathway is independently substantive but clearly subordinate
+    to the main contribution.
+31. Do not use SECONDARY for background concepts, contextual mentions, routine
+    endpoints or incidental measurements. Such concepts must remain unassigned.
+
+GENERAL-CODE EXCLUSIVITY
+32. A pathway labelled General may be assigned only when no more specific
+    pathway under the same immediate parent adequately represents the
+    substantive topic.
+33. If any more specific sibling pathway is assigned, do not also assign
+    the General pathway. General pathways are fallbacks, not additional
+    codes for breadth, context, pathology or supporting findings.
