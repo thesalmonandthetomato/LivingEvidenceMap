@@ -274,6 +274,7 @@ living_evidence_flowdiagram <- function(
       "width=", width, ", ",
       "height=", height, ", ",
       "fixedsize=false, ",
+      "pin=true, ",
       "margin='0.16,0.10', ",
       "pos='", xy[[1]], ",", xy[[2]], "!'",
       "];"
@@ -293,6 +294,7 @@ living_evidence_flowdiagram <- function(
       "fontsize=", fontsize, ", ",
       "width=0.48, ",
       "height=1.55, ",
+      "pin=true, ",
       "pos='", xy[[1]], ",", xy[[2]], "!'",
       "];"
     )
@@ -388,7 +390,7 @@ living_evidence_flowdiagram <- function(
 
   graph <- paste0(
     "digraph living_evidence_flow {\n",
-    "graph [layout=neato, overlap=false, splines=ortho, outputorder=edgesfirst, ",
+    "graph [layout=neato, overlap=true, splines=ortho, outputorder=edgesfirst, ",
     "bgcolor='White', pad=0.12];\n",
     "node [shape=box];\n",
     paste(nodes, collapse = "\n"), "\n",
@@ -412,13 +414,19 @@ living_evidence_flowdiagram <- function(
         const title = node.querySelector('title');
         if (!title || !labelMap.has(title.textContent)) return;
         const txt = node.querySelector('text');
-        if (!txt) return;
-        const oldX = parseFloat(txt.getAttribute('x'));
-        const oldY = parseFloat(txt.getAttribute('y'));
-        txt.setAttribute('y', oldX);
-        txt.setAttribute('x', oldY * -1);
-        txt.setAttribute('style', 'transform: rotate(-90deg);');
+        const shape = node.querySelector('path, polygon, ellipse');
+        if (!txt || !shape) return;
+
+        const box = shape.getBBox();
+        const cx = box.x + box.width / 2;
+        const cy = box.y + box.height / 2;
+
+        txt.setAttribute('x', cx);
+        txt.setAttribute('y', cy);
+        txt.setAttribute('text-anchor', 'middle');
         txt.setAttribute('dominant-baseline', 'middle');
+        txt.setAttribute('transform', 'rotate(-90 ' + cx + ' ' + cy + ')');
+        txt.removeAttribute('style');
         txt.textContent = labelMap.get(title.textContent);
       });
     ")
@@ -455,11 +463,15 @@ export_living_evidence_flow_svg <- function(widget, path) {
       stop("Could not locate static SVG side label node: ", node_id, call. = FALSE)
     }
 
-    x <- hit[3]
-    y <- hit[4]
+    x <- as.numeric(hit[3])
+    # Graphviz's 10 pt text baseline is approximately 3 pt below the centre
+    # of the blank side-label node. Put the rotation anchor at the true centre.
+    y <- as.numeric(hit[4]) - 3
 
     replacement <- paste0(
       hit[2],
+      " x=\\\"", x, "\\\" y=\\\"", y, "\\\"",
+      " text-anchor=\\\"middle\\\" dominant-baseline=\\\"middle\\\"",
       " transform=\\\"rotate(-90 ", x, " ", y, ")\\\"",
       hit[5],
       label,
