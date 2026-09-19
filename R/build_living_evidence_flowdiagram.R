@@ -167,7 +167,7 @@ living_evidence_flowdiagram <- function(
   )
 
   removal_lines <- character()
-  if (data$duplicates_removed > 0) {
+  if (!is.na(data$duplicates_removed) && data$duplicates_removed > 0) {
     removal_lines <- c(
       removal_lines,
       paste0(
@@ -177,7 +177,8 @@ living_evidence_flowdiagram <- function(
       )
     )
   }
-  if (data$other_removed_before_screening > 0) {
+  if (!is.na(data$other_removed_before_screening) &&
+      data$other_removed_before_screening > 0) {
     removal_lines <- c(
       removal_lines,
       paste0(
@@ -188,7 +189,16 @@ living_evidence_flowdiagram <- function(
     )
   }
   if (!length(removal_lines)) {
-    removal_lines <- "No records removed before screening (n = 0)"
+    if (isTRUE(data$draft) &&
+        (is.na(data$duplicates_removed) ||
+         is.na(data$other_removed_before_screening))) {
+      removal_lines <- c(
+        "Duplicate records removed (n = TBC)",
+        "Other records removed before screening (n = TBC)"
+      )
+    } else {
+      removal_lines <- "No records removed before screening (n = 0)"
+    }
   }
 
   removed_label <- paste0(
