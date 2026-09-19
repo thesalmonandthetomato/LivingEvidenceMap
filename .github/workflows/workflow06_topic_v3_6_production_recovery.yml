@@ -13,6 +13,7 @@ permissions:
 
 env:
   SOURCE_RUN_ID: '35445670490'
+  PREVIOUS_RECOVERY_RUN_ID: '35449735679'
   SOURCE_SHA: 'd3f2b7698b0a2fd34efcb4206a92aad73a360b30'
   TOPIC_PROD_OUTPUT_DIR: outputs/workflow06_topic_v3_6_full_production
   TOPIC_MASTER_PATH: data/master/current/living_evidence_map_master.csv
@@ -70,7 +71,7 @@ jobs:
           ' > matrix.json
           echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
           echo "chunks=$n" >> "$GITHUB_OUTPUT"
-          echo "Recovery matrix: $(( n * 3 )) chunks; max four API batches concurrently."
+          echo "Recovery matrix: $(( n * 3 )) chunks; strict serial execution (max one API batch at a time)."
 
       - name: Preserve recovery input
         uses: actions/upload-artifact@v4
@@ -83,13 +84,96 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  recover:
+  drain_previous:
     needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::httr2
+            any::jsonlite
+
+      - name: Recover all submitted batch IDs from cancelled recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/prior_submissions
+          mkdir -p /tmp/prior_submissions
+          gh run download "$PREVIOUS_RECOVERY_RUN_ID" \
+            -p "topic-v36-recovery-submission-*" \
+            -D /tmp/prior_submissions
+          find /tmp/prior_submissions -name batch_submitted.json -type f -print
+
+      - name: Wait for every previously submitted batch to leave the enqueued pool
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          Rscript - <<'RS'
+          suppressPackageStartupMessages({
+            library(httr2)
+            library(jsonlite)
+          })
+          files <- list.files("/tmp/prior_submissions", pattern="batch_submitted\\.json$", recursive=TRUE, full.names=TRUE)
+          if (!length(files)) stop("No prior submission files found")
+          ids <- unique(vapply(files, function(p) as.character(read_json(p, simplifyVector=FALSE)$id), ""))
+          terminal <- c("completed","failed","expired","cancelled")
+          api_root <- "https://api.openai.com/v1"
+          key <- Sys.getenv("OPENAI_API_KEY")
+          get_batch <- function(id) {
+            request(paste0(api_root, "/batches/", id)) |>
+              req_auth_bearer_token(key) |>
+              req_retry(max_tries=5, retry_on_failure=TRUE) |>
+              req_timeout(300) |>
+              req_perform() |>
+              resp_body_json(simplifyVector=FALSE)
+          }
+          out <- list()
+          for (id in ids) {
+            b <- get_batch(id)
+            while (!(b$status %in% terminal)) {
+              message(id, ": ", b$status, " — waiting before any new production submission")
+              Sys.sleep(20)
+              b <- get_batch(id)
+            }
+            out[[id]] <- list(
+              id=id,
+              status=b$status,
+              request_counts=b$request_counts,
+              errors=b$errors
+            )
+            message(id, ": terminal status ", b$status)
+          }
+          dir.create("outputs/workflow06_topic_v3_6_full_production", recursive=TRUE, showWarnings=FALSE)
+          write_json(out,
+            "outputs/workflow06_topic_v3_6_full_production/prior_recovery_batch_terminal_states.json",
+            pretty=TRUE, auto_unbox=TRUE, null="null")
+          RS
+
+      - name: Preserve prior-batch terminal-state audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-prior-recovery-terminal-states-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_full_production/prior_recovery_batch_terminal_states.json
+          if-no-files-found: error
+          retention-days: 90
+
+  recover:
+    needs: [prepare, drain_previous]
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 1
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
@@ -153,7 +237,7 @@ jobs:
           done
           echo "Source chunk ${PASS}/${CHUNK}: verified zero-request token-limit failure; eligible for one replacement batch."
 
-      - name: Recover persisted replacement submission on rerun
+      - name: Recover completed or submitted replacement from cancelled recovery
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -163,15 +247,71 @@ jobs:
           set -euo pipefail
           d="$TOPIC_PROD_OUTPUT_DIR/pass_${PASS}/chunk_$(printf '%03d' "${CHUNK}")"
           test -s "$d/complete.ok" && exit 0
-          rm -rf /tmp/recovery_submission
-          mkdir -p /tmp/recovery_submission
-          name="topic-v36-recovery-submission-${PASS}-chunk-${CHUNK}-${GITHUB_RUN_ID}"
-          if gh run download "$GITHUB_RUN_ID" -n "$name" -D /tmp/recovery_submission 2>/dev/null; then
-            src="$(find /tmp/recovery_submission -maxdepth 1 -type d -name 'chunk_*' | head -1)"
-            if test -n "$src"; then cp -a "$src"/. "$d"/; fi
-            echo "Recovered existing replacement submission for ${PASS}/${CHUNK}."
+
+          rm -rf /tmp/prior_complete /tmp/prior_submission
+          mkdir -p /tmp/prior_complete /tmp/prior_submission
+
+          complete_name="topic-v36-recovery-complete-${PASS}-chunk-${CHUNK}-${PREVIOUS_RECOVERY_RUN_ID}"
+          if gh run download "$PREVIOUS_RECOVERY_RUN_ID" -n "$complete_name" -D /tmp/prior_complete 2>/dev/null; then
+            src="$(find /tmp/prior_complete -maxdepth 1 -type d -name 'chunk_*' | head -1)"
+            if test -n "$src" && test -s "$src/complete.ok"; then
+              cp -a "$src"/. "$d"/
+              echo "Recovered validated replacement output from cancelled recovery for ${PASS}/${CHUNK}."
+              exit 0
+            fi
+          fi
+
+          submission_name="topic-v36-recovery-submission-${PASS}-chunk-${CHUNK}-${PREVIOUS_RECOVERY_RUN_ID}"
+          if gh run download "$PREVIOUS_RECOVERY_RUN_ID" -n "$submission_name" -D /tmp/prior_submission 2>/dev/null; then
+            src="$(find /tmp/prior_submission -maxdepth 1 -type d -name 'chunk_*' | head -1)"
+            if test -n "$src" && test -s "$src/batch_submitted.json"; then
+              cp "$src/batch_submitted.json" "$d/batch_submitted.json"
+              if test -s "$src/submission.ok"; then cp "$src/submission.ok" "$d/submission.ok"; fi
+              echo "Recovered prior replacement batch ID for ${PASS}/${CHUNK}; this batch will be polled, not duplicated."
+            fi
+          fi
+
+      - name: Poll any prior replacement before deciding whether to resubmit
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_${PASS}/chunk_$(printf '%03d' "${CHUNK}")"
+          test -s "$d/complete.ok" && exit 0
+          test -s "$d/batch_submitted.json" || exit 0
+
+          set +e
+          Rscript R/run_topic_three_luna_production.R finish_chunk "$PASS" "$CHUNK"
+          rc=$?
+          set -e
+
+          if test "$rc" -eq 0; then
+            echo "Prior replacement for ${PASS}/${CHUNK} completed and was validated."
+            exit 0
+          fi
+
+          test -s "$d/batch_final.json"
+          if jq -e '
+            .status == "failed"
+            and ([.errors.data[]?.code] | index("token_limit_exceeded") != null)
+            and ((.request_counts.total // 0) == 0)
+            and ((.request_counts.completed // 0) == 0)
+            and ((.request_counts.failed // 0) == 0)
+            and ((.usage.input_tokens // 0) == 0)
+            and ((.usage.output_tokens // 0) == 0)
+            and ((.usage.total_tokens // 0) == 0)
+          ' "$d/batch_final.json" >/dev/null; then
+            mkdir -p "$d/prior_recovery_failure"
+            for f in batch_submitted.json batch_final.json batch_latest.json submission.ok; do
+              if test -e "$d/$f"; then mv "$d/$f" "$d/prior_recovery_failure/$f"; fi
+            done
+            echo "Prior replacement for ${PASS}/${CHUNK} was another zero-request queue-limit failure; one fresh serial submission is permitted."
           else
-            echo "No replacement submission exists yet for ${PASS}/${CHUNK}."
+            echo "Prior replacement for ${PASS}/${CHUNK} failed for a reason other than a zero-request token-limit rejection; refusing automatic resubmission." >&2
+            exit "$rc"
           fi
 
       - name: Submit replacement only when needed
