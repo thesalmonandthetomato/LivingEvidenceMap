@@ -23,7 +23,7 @@ env:
 
 jobs:
   validate:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Resume v3.5 after evaluator fix' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Handle empty v3.5 assignments and resume Terra' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:

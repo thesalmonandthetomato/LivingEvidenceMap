@@ -218,9 +218,15 @@ evaluate_luna <- function() {
     maps[[pass]]<-lapply(by_record, function(df) setNames(as.character(df$role), as.character(df$path_id)))
     reasons[[pass]]<-lapply(by_record, function(df) setNames(as.character(df$reason), as.character(df$path_id)))
   }
+  canonical_roles <- function(x) {
+    if (length(x) == 0L) return(character())
+    n <- names(x)
+    if (is.null(n) || length(n) == 0L) return(as.character(x))
+    x[order(n)]
+  }
   rows<-list(); exact<-full<-tp<-fp<-fn<-0; jac<-numeric()
-  for(i in seq_len(nrow(records))){ rid<-as.character(records$record_id[i]); a<-maps$a[[rid]] %||% character(); b<-maps$b[[rid]] %||% character(); as<-names(a); bs<-names(b)
-    exact<-exact+setequal(as,bs); full<-full+identical(a[order(names(a))],b[order(names(b))]); tp<-tp+length(intersect(as,bs)); fp<-fp+length(setdiff(bs,as)); fn<-fn+length(setdiff(as,bs)); jac<-c(jac,if(length(union(as,bs)))length(intersect(as,bs))/length(union(as,bs)) else 1)
+  for(i in seq_len(nrow(records))){ rid<-as.character(records$record_id[i]); a<-maps$a[[rid]] %||% character(); b<-maps$b[[rid]] %||% character(); as<-names(a) %||% character(); bs<-names(b) %||% character()
+    exact<-exact+setequal(as,bs); full<-full+identical(canonical_roles(a),canonical_roles(b)); tp<-tp+length(intersect(as,bs)); fp<-fp+length(setdiff(bs,as)); fn<-fn+length(setdiff(as,bs)); jac<-c(jac,if(length(union(as,bs)))length(intersect(as,bs))/length(union(as,bs)) else 1)
     role_dis<-intersect(as,bs); role_dis<-role_dis[a[role_dis]!=b[role_dis]]
     rows[[i]]<-data.frame(record_id=rid,title=records$title[i],abstract=records$abstract[i],historical_pathways_not_gold=paste(sort(split_paths(hist$historical_pathways_not_gold[hist$record_id==rid])),collapse="; "),
       luna_a_coding=paste(paste0(sort(as),"=",a[sort(as)]),collapse="; "),luna_b_coding=paste(paste0(sort(bs),"=",b[sort(bs)]),collapse="; "),a_b_pathway_exact=as.integer(setequal(as,bs)),
