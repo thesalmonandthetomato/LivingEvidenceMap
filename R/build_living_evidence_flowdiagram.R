@@ -43,15 +43,16 @@ living_evidence_flow_data <- function(
     records_screened,
     records_excluded,
     records_included,
-    search_date = NA_character_) {
+    search_date = NA_character_,
+    draft = FALSE) {
 
   if (is.null(names(database_results)) ||
       any(!nzchar(trimws(names(database_results))))) {
     stop("database_results must be a named numeric vector.", call. = FALSE)
   }
 
-  database_results <- as.integer(database_results)
   names(database_results) <- trimws(names(database_results))
+  database_results <- suppressWarnings(as.integer(database_results))
 
   numeric_fields <- c(
     database_results,
@@ -62,15 +63,18 @@ living_evidence_flow_data <- function(
     records_included
   )
 
-  if (any(is.na(numeric_fields)) || any(numeric_fields < 0)) {
-    stop("All flow counts must be known, non-negative integers.", call. = FALSE)
+  if (!isTRUE(draft) && (any(is.na(numeric_fields)) || any(numeric_fields < 0))) {
+    stop("All flow counts must be known, non-negative integers in production mode.", call. = FALSE)
   }
 
-  identified <- sum(database_results)
-  removed_before <- as.integer(duplicates_removed) +
-    as.integer(other_removed_before_screening)
+  identified <- if (all(!is.na(database_results))) sum(database_results) else NA_integer_
+  removed_before <- if (!is.na(duplicates_removed) && !is.na(other_removed_before_screening)) {
+    as.integer(duplicates_removed) + as.integer(other_removed_before_screening)
+  } else {
+    NA_integer_
+  }
 
-  if (identified - removed_before != as.integer(records_screened)) {
+  if (!isTRUE(draft) && identified - removed_before != as.integer(records_screened)) {
     stop(
       sprintf(
         paste0(
@@ -85,7 +89,8 @@ living_evidence_flow_data <- function(
     )
   }
 
-  if (as.integer(records_screened) - as.integer(records_excluded) !=
+  if (!isTRUE(draft) &&
+      as.integer(records_screened) - as.integer(records_excluded) !=
       as.integer(records_included)) {
     stop(
       sprintf(
@@ -109,7 +114,8 @@ living_evidence_flow_data <- function(
     records_screened = as.integer(records_screened),
     records_excluded = as.integer(records_excluded),
     records_included = as.integer(records_included),
-    search_date = as.character(search_date)
+    search_date = as.character(search_date),
+    draft = isTRUE(draft)
   )
 }
 
@@ -143,10 +149,12 @@ living_evidence_flowdiagram <- function(
     )
   }
 
+  display_n <- function(x) if (length(x) != 1 || is.na(x)) "TBC" else fmt_n(x)
+
   db_lines <- paste0(
     names(data$database_results),
     " (n = ",
-    vapply(data$database_results, fmt_n, character(1)),
+    vapply(data$database_results, display_n, character(1)),
     ")"
   )
 
@@ -154,7 +162,7 @@ living_evidence_flowdiagram <- function(
     "Records identified from databases:\n",
     paste(db_lines, collapse = "\n"),
     "\nTotal (n = ",
-    fmt_n(data$total_identified),
+    display_n(data$total_identified),
     ")"
   )
 
@@ -164,7 +172,7 @@ living_evidence_flowdiagram <- function(
       removal_lines,
       paste0(
         "Duplicate records removed (n = ",
-        fmt_n(data$duplicates_removed),
+        display_n(data$duplicates_removed),
         ")"
       )
     )
@@ -174,7 +182,7 @@ living_evidence_flowdiagram <- function(
       removal_lines,
       paste0(
         "Other records removed before screening (n = ",
-        fmt_n(data$other_removed_before_screening),
+        display_n(data$other_removed_before_screening),
         ")"
       )
     )
@@ -190,19 +198,19 @@ living_evidence_flowdiagram <- function(
 
   screened_label <- paste0(
     "Records screened at title and abstract\n(n = ",
-    fmt_n(data$records_screened),
+    display_n(data$records_screened),
     ")"
   )
 
   excluded_label <- paste0(
     "Records excluded at title and abstract\n(n = ",
-    fmt_n(data$records_excluded),
+    display_n(data$records_excluded),
     ")"
   )
 
   included_label <- paste0(
     "Records included in the Living Evidence Map\n(n = ",
-    fmt_n(data$records_included),
+    display_n(data$records_included),
     ")"
   )
 
@@ -392,16 +400,22 @@ export_living_evidence_flow_svg <- function(widget, path) {
 # Complete deduplication and title/abstract screening counts should be supplied
 # from provenance outputs before this is promoted into production.
 #
-# Example:
+# Draft design preview:
 #
 # flow_data <- living_evidence_flow_data(
-#   database_results = c("Lens" = 21899),
-#   duplicates_removed = 0,
-#   other_removed_before_screening = 8510,
-#   records_screened = 13389,
-#   records_excluded = 0,
-#   records_included = 13389,
-#   search_date = "2026-09-14"
+#   database_results = c(
+#     "Lens" = NA,
+#     "Scopus" = NA,
+#     "Web of Science Core Collection" = NA,
+#     "OpenAlex" = NA
+#   ),
+#   duplicates_removed = NA,
+#   other_removed_before_screening = NA,
+#   records_screened = NA,
+#   records_excluded = NA,
+#   records_included = NA,
+#   search_date = NA,
+#   draft = TRUE
 # )
 #
 # p <- living_evidence_flowdiagram(flow_data)
