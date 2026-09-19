@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'R/**'
+      - '!R/build_living_evidence_flowdiagram.R'
       - 'scripts/**/*.R'
       - 'tests/testthat/**'
       - 'DESCRIPTION'
@@ -11,6 +12,7 @@ on:
   pull_request:
     paths:
       - 'R/**'
+      - '!R/build_living_evidence_flowdiagram.R'
       - 'scripts/**/*.R'
       - 'tests/testthat/**'
       - 'DESCRIPTION'
