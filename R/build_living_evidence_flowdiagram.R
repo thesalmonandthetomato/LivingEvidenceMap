@@ -43,6 +43,8 @@ living_evidence_flow_data <- function(
     records_screened,
     records_excluded,
     records_included,
+    excluded_topic_coding_missing_abstracts,
+    records_with_topic_coding,
     search_date = NA_character_,
     draft = FALSE) {
 
@@ -61,7 +63,9 @@ living_evidence_flow_data <- function(
     other_removed_before_screening,
     records_screened,
     records_excluded,
-    records_included
+    records_included,
+    excluded_topic_coding_missing_abstracts,
+    records_with_topic_coding
   )
 
   if (!isTRUE(draft) && (any(is.na(numeric_fields)) || any(numeric_fields < 0))) {
@@ -107,6 +111,24 @@ living_evidence_flow_data <- function(
     )
   }
 
+  if (!isTRUE(draft) &&
+      as.integer(records_included) -
+      as.integer(excluded_topic_coding_missing_abstracts) !=
+      as.integer(records_with_topic_coding)) {
+    stop(
+      sprintf(
+        paste0(
+          "Topic-coding arithmetic is inconsistent: included (%s) - ",
+          "missing abstracts (%s) != with topic coding (%s)."
+        ),
+        fmt_n(records_included),
+        fmt_n(excluded_topic_coding_missing_abstracts),
+        fmt_n(records_with_topic_coding)
+      ),
+      call. = FALSE
+    )
+  }
+
   list(
     database_results = database_results,
     total_identified = identified,
@@ -115,6 +137,9 @@ living_evidence_flow_data <- function(
     records_screened = as.integer(records_screened),
     records_excluded = as.integer(records_excluded),
     records_included = as.integer(records_included),
+    excluded_topic_coding_missing_abstracts =
+      as.integer(excluded_topic_coding_missing_abstracts),
+    records_with_topic_coding = as.integer(records_with_topic_coding),
     search_date = as.character(search_date),
     draft = isTRUE(draft)
   )
@@ -139,7 +164,9 @@ living_evidence_flowdiagram <- function(
     "other_removed_before_screening",
     "records_screened",
     "records_excluded",
-    "records_included"
+    "records_included",
+    "excluded_topic_coding_missing_abstracts",
+    "records_with_topic_coding"
   )
   missing <- setdiff(required, names(data))
   if (length(missing)) {
@@ -232,6 +259,18 @@ living_evidence_flowdiagram <- function(
     ")"
   )
 
+  topic_excluded_label <- paste0(
+    "Excluded from topic coding - missing abstracts\n(n = ",
+    display_n(data$excluded_topic_coding_missing_abstracts),
+    ")"
+  )
+
+  topic_included_label <- paste0(
+    "Records with topic coding\n(n = ",
+    display_n(data$records_with_topic_coding),
+    ")"
+  )
+
   note_label <- "No full-text screening stage is included in the current workflow."
 
   pos <- list(
@@ -240,10 +279,13 @@ living_evidence_flowdiagram <- function(
     screened = c(3.7, 4.9),
     excluded = c(9.3, 4.9),
     included = c(3.7, 2.9),
-    note = c(3.7, 1.55),
+    topic_excluded = c(9.3, 2.9),
+    topic_included = c(3.7, 0.9),
+    note = c(3.7, -0.45),
     identification_section = c(0.75, 6.9),
     screening_section = c(0.75, 4.9),
-    included_section = c(0.75, 2.9)
+    included_section = c(0.75, 2.9),
+    topic_coding_section = c(0.75, 0.9)
   )
 
   node <- function(
@@ -317,6 +359,18 @@ living_evidence_flowdiagram <- function(
       pos$included,
       fill = greybox_colour,
       bold = TRUE
+    ),
+    node(
+      "topic_excluded",
+      topic_excluded_label,
+      pos$topic_excluded
+    ),
+    node(
+      "topic_included",
+      topic_included_label,
+      pos$topic_included,
+      fill = greybox_colour,
+      bold = TRUE
     )
   )
 
@@ -353,6 +407,11 @@ living_evidence_flowdiagram <- function(
         "section_included",
         " ",
         pos$included_section
+      ),
+      section_node(
+        "section_topic_coding",
+        " ",
+        pos$topic_coding_section
       )
     )
   }
@@ -375,6 +434,15 @@ living_evidence_flowdiagram <- function(
     paste0(
       "screened -> included [",
       "color='", arrow_colour, "', arrowhead=normal, penwidth=1.0];"
+    ),
+    paste0(
+      "included -> topic_excluded [",
+      "color='", arrow_colour, "', arrowhead=normal, penwidth=1.0, ",
+      "constraint=false];"
+    ),
+    paste0(
+      "included -> topic_included [",
+      "color='", arrow_colour, "', arrowhead=normal, penwidth=1.0];"
     )
   )
 
@@ -382,7 +450,7 @@ living_evidence_flowdiagram <- function(
     edges <- c(
       edges,
       paste0(
-        "included -> note [",
+        "topic_included -> note [",
         "color='Grey60', style=dashed, arrowhead=none, penwidth=0.8];"
       )
     )
@@ -408,7 +476,8 @@ living_evidence_flowdiagram <- function(
       const labelMap = new Map([
         ['section_identification', 'Identification'],
         ['section_screening', 'Screening'],
-        ['section_included', 'Included']
+        ['section_included', 'Included'],
+        ['section_topic_coding', 'Topic coding']
       ]);
       document.querySelectorAll('g.node').forEach(function(node) {
         const title = node.querySelector('title');
@@ -488,6 +557,7 @@ export_living_evidence_flow_svg <- function(widget, path) {
   svg <- rotate_static_label(svg, "section_identification", "Identification")
   svg <- rotate_static_label(svg, "section_screening", "Screening")
   svg <- rotate_static_label(svg, "section_included", "Included")
+  svg <- rotate_static_label(svg, "section_topic_coding", "Topic coding")
 
   writeLines(svg, path, useBytes = TRUE)
   invisible(path)
@@ -516,6 +586,8 @@ export_living_evidence_flow_svg <- function(widget, path) {
 #   records_screened = NA,
 #   records_excluded = NA,
 #   records_included = NA,
+#   excluded_topic_coding_missing_abstracts = NA,
+#   records_with_topic_coding = NA,
 #   search_date = NA,
 #   draft = TRUE
 # )
