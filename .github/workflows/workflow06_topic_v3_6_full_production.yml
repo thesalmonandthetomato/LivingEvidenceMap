@@ -1,0 +1,237 @@
+name: Workflow 06 - Topic v3.6 full three-Luna production
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_topic_v3_6_full_production.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  TOPIC_PROD_OUTPUT_DIR: outputs/workflow06_topic_v3_6_full_production
+  TOPIC_MASTER_PATH: data/master/current/living_evidence_map_master.csv
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  TOPIC_CHUNK_SIZE: '500'
+  BATCH_POLL_SECONDS: '20'
+  BATCH_MAX_WAIT_SECONDS: '7200'
+
+jobs:
+  prepare:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Launch v3.6 full three-Luna production' }}
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      records: ${{ steps.matrix.outputs.records }}
+      chunks: ${{ steps.matrix.outputs.chunks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Build immutable full-corpus queue
+        run: Rscript R/run_topic_three_luna_production.R build_queue
+
+      - name: Freeze and validate production manifest
+        run: Rscript R/run_topic_three_luna_production.R manifest
+
+      - name: Build pass-chunk matrix
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(jsonlite))
+          m <- read_json(file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),"production_manifest.json"))
+          n <- as.integer(m$chunks_per_pass)
+          inc <- list()
+          for (p in c("a","b","c")) for (ch in seq_len(n))
+            inc[[length(inc)+1]] <- list(pass=p,chunk=ch)
+          write(toJSON(list(include=inc),auto_unbox=TRUE),"matrix.json")
+          write(as.character(m$records),"records.txt")
+          write(as.character(n),"chunks.txt")
+          RS
+          echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
+          echo "records=$(cat records.txt)" >> "$GITHUB_OUTPUT"
+          echo "chunks=$(cat chunks.txt)" >> "$GITHUB_OUTPUT"
+          echo "Production queue: $(cat records.txt) records; $(cat chunks.txt) chunks/pass; $(( $(cat chunks.txt) * 3 )) paid batches."
+
+      - name: Upload frozen queue and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-production-input-${{ github.run_id }}
+          path: |
+            outputs/workflow06_topic_v3_6_full_production/input_queue.csv
+            outputs/workflow06_topic_v3_6_full_production/queue_summary.json
+            outputs/workflow06_topic_v3_6_full_production/production_manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  classify:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Recover frozen queue
+        uses: actions/download-artifact@v4
+        with:
+          name: topic-v36-production-input-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_full_production
+
+      - name: Recover persisted submission state on rerun
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        run: |
+          set -euo pipefail
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_${PASS}/chunk_$(printf '%03d' "${CHUNK}")"
+          mkdir -p "$d" /tmp/submission
+          name="topic-v36-submission-${PASS}-chunk-${CHUNK}-${GITHUB_RUN_ID}"
+          if gh run download "$GITHUB_RUN_ID" -n "$name" -D /tmp/submission 2>/dev/null; then
+            cp -a /tmp/submission/. "$d/"
+            echo "Recovered persisted submission state for ${PASS}/${CHUNK}"
+          else
+            echo "No prior submission artefact for ${PASS}/${CHUNK}; a new batch may be submitted."
+          fi
+
+      - name: Submit once or reuse existing batch
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        run: Rscript R/run_topic_three_luna_production.R submit_chunk "$PASS" "$CHUNK"
+
+      - name: Persist batch ID before polling
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-submission-${{ matrix.pass }}-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: |
+            outputs/workflow06_topic_v3_6_full_production/pass_${{ matrix.pass }}/chunk_*/batch_submitted.json
+            outputs/workflow06_topic_v3_6_full_production/pass_${{ matrix.pass }}/chunk_*/chunk_input_manifest.json
+            outputs/workflow06_topic_v3_6_full_production/pass_${{ matrix.pass }}/chunk_*/submission.ok
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+      - name: Poll existing batch and validate output
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        run: Rscript R/run_topic_three_luna_production.R finish_chunk "$PASS" "$CHUNK"
+
+      - name: Upload validated chunk
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-complete-${{ matrix.pass }}-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_full_production/pass_${{ matrix.pass }}/chunk_*
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+  combine_audit:
+    needs: [prepare, classify]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.classify.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: topic-v36-production-input-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_full_production
+
+      - name: Assemble validated chunks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N_CHUNKS: ${{ needs.prepare.outputs.chunks }}
+        run: |
+          set -euo pipefail
+          for p in a b c; do
+            for ch in $(seq 1 "$N_CHUNKS"); do
+              d="$TOPIC_PROD_OUTPUT_DIR/pass_${p}/chunk_$(printf '%03d' "$ch")"
+              mkdir -p "$d" /tmp/chunk
+              rm -rf /tmp/chunk/*
+              name="topic-v36-complete-${p}-chunk-${ch}-${GITHUB_RUN_ID}"
+              gh run download "$GITHUB_RUN_ID" -n "$name" -D /tmp/chunk
+              cp -a /tmp/chunk/. "$d/"
+              test -s "$d/complete.ok"
+            done
+          done
+
+      - name: Combine union of all assignments
+        run: Rscript R/run_topic_three_luna_production.R combine
+
+      - name: Deterministic integrity audit
+        run: Rscript R/run_topic_three_luna_production.R audit
+
+      - name: Upload final production outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-full-production-final-${{ github.run_id }}
+          path: |
+            outputs/workflow06_topic_v3_6_full_production/input_queue.csv
+            outputs/workflow06_topic_v3_6_full_production/queue_summary.json
+            outputs/workflow06_topic_v3_6_full_production/production_manifest.json
+            outputs/workflow06_topic_v3_6_full_production/all_pass_assignments.csv
+            outputs/workflow06_topic_v3_6_full_production/all_pass_record_results.csv
+            outputs/workflow06_topic_v3_6_full_production/all_pass_usage.csv
+            outputs/workflow06_topic_v3_6_full_production/three_luna_pathway_scores.csv
+            outputs/workflow06_topic_v3_6_full_production/combine_summary.json
+            outputs/workflow06_topic_v3_6_full_production/audit_review_flags.csv
+            outputs/workflow06_topic_v3_6_full_production/audit_summary.json
+            outputs/workflow06_topic_v3_6_full_production/AUDIT_PASS.ok
+          if-no-files-found: error
+          retention-days: 90

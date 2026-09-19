@@ -14,6 +14,7 @@ out_dir <- Sys.getenv("TOPIC_PROD_OUTPUT_DIR", "outputs/workflow06_topic_v3_6_pi
 queue_path <- file.path(out_dir, "input_queue.csv")
 ontology_path <- Sys.getenv("TOPIC_ONTOLOGY_PATH", "data/reference/topic_ontology_v3_6.csv")
 system_prompt_path <- Sys.getenv("TOPIC_SYSTEM_PROMPT_PATH", "data/reference/topic_system_prompt_v3_6.txt")
+master_path <- Sys.getenv("TOPIC_MASTER_PATH", "data/master/current/living_evidence_map_master.csv")
 chunk_size <- as.integer(Sys.getenv("TOPIC_CHUNK_SIZE", "50"))
 poll_seconds <- as.integer(Sys.getenv("BATCH_POLL_SECONDS", "20"))
 max_wait_seconds <- as.integer(Sys.getenv("BATCH_MAX_WAIT_SECONDS", "18000"))
@@ -106,12 +107,47 @@ validate_queue <- function(){
   req<-c("record_id","title","abstract")
   miss<-setdiff(req,names(q)); if(length(miss)) stop("Queue missing columns: ",paste(miss,collapse=", "))
   q$record_id<-as.character(q$record_id)
+  q$title<-as.character(q$title); q$abstract<-as.character(q$abstract)
+  q$title[is.na(q$title)]<-""; q$abstract[is.na(q$abstract)]<-""
   if(any(!nzchar(q$record_id)|is.na(q$record_id))) stop("Blank record_id in queue")
   if(anyDuplicated(q$record_id)) stop("Duplicate record_id in queue")
-  if(any(!nzchar(q$title)|is.na(q$title))) stop("Blank title in queue")
-  if(any(!nzchar(q$abstract)|is.na(q$abstract))) stop("Blank abstract in queue")
+  if(any(!nzchar(q$title) & !nzchar(q$abstract))) stop("Queue contains records with neither title nor abstract")
   q
 }
+
+build_full_queue <- function(){
+  dir.create(out_dir,recursive=TRUE,showWarnings=FALSE)
+  x<-read_csv_q(master_path)
+  req<-c("record_id","title","abstract")
+  miss<-setdiff(req,names(x)); if(length(miss)) stop("Master missing columns: ",paste(miss,collapse=", "))
+  q<-x[,req,drop=FALSE]
+  q$record_id<-as.character(q$record_id)
+  q$title<-as.character(q$title); q$abstract<-as.character(q$abstract)
+  q$title[is.na(q$title)]<-""; q$abstract[is.na(q$abstract)]<-""
+  if(any(!nzchar(q$record_id)|is.na(q$record_id))) stop("Blank record_id in master")
+  if(anyDuplicated(q$record_id)) {
+    dup<-unique(q$record_id[duplicated(q$record_id)])
+    write_csv_s(q[q$record_id %in% dup,,drop=FALSE],file.path(out_dir,"duplicate_record_ids.csv"))
+    stop("Duplicate record_id values in master: ",length(dup))
+  }
+  bad<-q[!nzchar(q$title) & !nzchar(q$abstract),,drop=FALSE]
+  if(nrow(bad)){
+    write_csv_s(bad,file.path(out_dir,"records_without_title_or_abstract.csv"))
+    stop("Master contains ",nrow(bad)," records with neither title nor abstract")
+  }
+  write_csv_s(q,queue_path)
+  summary<-list(
+    source_master=master_path,
+    records=nrow(q),
+    title_only=sum(nzchar(q$title)&!nzchar(q$abstract)),
+    abstract_only=sum(!nzchar(q$title)&nzchar(q$abstract)),
+    title_and_abstract=sum(nzchar(q$title)&nzchar(q$abstract)),
+    queue_sha256=sha256_file(queue_path)
+  )
+  write_json_s(summary,file.path(out_dir,"queue_summary.json"))
+  print(summary)
+}
+
 
 write_global_manifest <- function(){
   q<-validate_queue(); o<-read_csv_q(ontology_path)
@@ -134,60 +170,101 @@ write_global_manifest <- function(){
 
 chunk_dir <- function(pass,chunk) file.path(out_dir,paste0("pass_",pass),sprintf("chunk_%03d",chunk))
 
-run_chunk <- function(pass,chunk){
+prepare_chunk <- function(pass,chunk){
   if(!(pass %in% passes)) stop("Unknown pass")
   q<-validate_queue(); o<-read_csv_q(ontology_path)
   n_chunks<-ceiling(nrow(q)/chunk_size)
   if(chunk<1||chunk>n_chunks) stop("Chunk out of range")
   d<-chunk_dir(pass,chunk); dir.create(d,recursive=TRUE,showWarnings=FALSE)
-  done<-file.path(d,"complete.ok")
-  if(file.exists(done)){
-    message("Already complete: pass ",pass," chunk ",chunk)
-    return(invisible(NULL))
-  }
+  if(file.exists(file.path(d,"complete.ok"))) return(invisible(NULL))
+  input_path<-file.path(d,"batch_input.jsonl")
+  if(file.exists(input_path)) return(invisible(NULL))
   i1<-(chunk-1)*chunk_size+1; i2<-min(chunk*chunk_size,nrow(q)); x<-q[i1:i2,,drop=FALSE]
   prefix<-paste0(paste(readLines(system_prompt_path,warn=FALSE),collapse="\n"),
                  "\n\nONTOLOGY\n\n",ontology_prompt(o))
   schema<-topic_schema(as.character(o$path_id))
   reqs<-vector("list",nrow(x))
   for(i in seq_len(nrow(x))){
-    r<-x[i,]
+    rec<-x[i,]
     body<-list(model=model,store=FALSE,reasoning=list(effort="medium"),
       prompt_cache_key="topic-v3.6-production-luna",
       prompt_cache_options=list(mode="explicit",ttl="30m"),
       input=list(
         list(role="system",content=list(list(type="input_text",text=prefix,prompt_cache_breakpoint=list(mode="explicit")))),
         list(role="user",content=list(list(type="input_text",text=paste0(
-          "RECORD\n\nTitle: ",r$title,"\n\nAbstract: ",r$abstract,
+          "RECORD\n\nTitle: ",rec$title,"\n\nAbstract: ",rec$abstract,
           "\n\nReturn all substantive ontology assignments. Retain meaningful secondary pathways."
         ))))
       ),
       text=list(verbosity="low",format=list(type="json_schema",name="topic_v36",strict=TRUE,schema=schema)))
-    reqs[[i]]<-list(custom_id=paste0("luna-",pass,"-",r$record_id),method="POST",url="/v1/responses",body=body)
+    reqs[[i]]<-list(custom_id=paste0("luna-",pass,"-",rec$record_id),method="POST",url="/v1/responses",body=body)
   }
-  input_path<-file.path(d,"batch_input.jsonl"); write_jsonl(reqs,input_path)
+  write_jsonl(reqs,input_path)
+  write_json_s(list(
+    pass=pass,chunk=chunk,records=nrow(x),record_ids=as.list(as.character(x$record_id)),
+    input_sha256=sha256_file(input_path),queue_sha256=sha256_file(queue_path),
+    ontology_sha256=sha256_file(ontology_path),prompt_sha256=sha256_file(system_prompt_path)
+  ),file.path(d,"chunk_input_manifest.json"))
+}
+
+submit_chunk <- function(pass,chunk){
+  prepare_chunk(pass,chunk)
+  d<-chunk_dir(pass,chunk)
+  if(file.exists(file.path(d,"complete.ok"))){
+    message("Already complete: pass ",pass," chunk ",chunk); return(invisible(NULL))
+  }
+  submitted_path<-file.path(d,"batch_submitted.json")
+  if(file.exists(submitted_path)){
+    prior<-jsonlite::read_json(submitted_path,simplifyVector=FALSE)
+    message("Recovering existing submitted batch ",prior$id," for pass ",pass," chunk ",chunk)
+    return(invisible(NULL))
+  }
+  input_path<-file.path(d,"batch_input.jsonl")
   uploaded<-upload_batch_file(input_path)
-  batch<-api_request("POST","/batches",list(input_file_id=uploaded$id,endpoint="/v1/responses",
-    completion_window="24h",metadata=list(description=paste0("topic-v3.6-",pass,"-chunk-",chunk))))
-  write_json_s(batch,file.path(d,"batch_submitted.json"))
-  started<-Sys.time(); terminal<-c("completed","failed","expired","cancelled")
+  batch<-api_request("POST","/batches",list(
+    input_file_id=uploaded$id,endpoint="/v1/responses",completion_window="24h",
+    metadata=list(description=paste0("topic-v3.6-",pass,"-chunk-",chunk))))
+  write_json_s(batch,submitted_path)
+  writeLines("submitted",file.path(d,"submission.ok"))
+  message("Submitted pass ",pass," chunk ",chunk," as ",batch$id)
+}
+
+finish_chunk <- function(pass,chunk){
+  prepare_chunk(pass,chunk)
+  q<-validate_queue(); o<-read_csv_q(ontology_path)
+  d<-chunk_dir(pass,chunk)
+  done<-file.path(d,"complete.ok")
+  if(file.exists(done)){
+    message("Already complete: pass ",pass," chunk ",chunk); return(invisible(NULL))
+  }
+  submitted_path<-file.path(d,"batch_submitted.json")
+  if(!file.exists(submitted_path)) stop("No persisted batch submission for pass ",pass," chunk ",chunk)
+  submitted<-jsonlite::read_json(submitted_path,simplifyVector=FALSE)
+  batch_id<-as.character(submitted$id)
+  batch<-api_request("GET",paste0("/batches/",batch_id))
+  terminal<-c("completed","failed","expired","cancelled")
+  started<-Sys.time()
   while(!(batch$status %in% terminal)){
     if(as.numeric(difftime(Sys.time(),started,units="secs"))>max_wait_seconds){
       write_json_s(batch,file.path(d,"batch_timeout_state.json"))
-      stop("Batch timeout: ",batch$id)
+      stop("Batch ",batch_id," did not reach a terminal state within ",max_wait_seconds," seconds")
     }
     Sys.sleep(poll_seconds)
-    batch<-api_request("GET",paste0("/batches/",batch$id))
+    batch<-api_request("GET",paste0("/batches/",batch_id))
+    write_json_s(batch,file.path(d,"batch_latest.json"))
     message("pass ",pass," chunk ",chunk,": ",batch$status)
   }
   write_json_s(batch,file.path(d,"batch_final.json"))
-  if(batch$status!="completed") stop("Batch ",batch$id," ended ",batch$status)
+  if(batch$status!="completed") stop("Persisted batch ",batch_id," ended ",batch$status,"; refusing automatic resubmission")
   bytes<-api_request("GET",paste0("/files/",batch$output_file_id,"/content"),raw=TRUE)
   raw_path<-file.path(d,"batch_output.jsonl"); writeBin(bytes,raw_path)
+  input_path<-file.path(d,"batch_input.jsonl")
+  input_lines<-readLines(input_path,warn=FALSE,encoding="UTF-8"); input_lines<-input_lines[nzchar(input_lines)]
+  reqs<-lapply(input_lines,jsonlite::fromJSON,simplifyVector=FALSE)
+  expected<-vapply(reqs,`[[`,"","custom_id")
   lines<-readLines(raw_path,warn=FALSE,encoding="UTF-8"); lines<-lines[nzchar(lines)]
   items<-lapply(lines,jsonlite::fromJSON,simplifyVector=FALSE)
   got<-vapply(items,`[[`,"","custom_id")
-  expected<-vapply(reqs,`[[`,"","custom_id")
   if(anyDuplicated(got)) stop("Duplicate custom_id in batch output")
   if(length(got)!=length(expected)||!setequal(got,expected)){
     write_json_s(list(expected=as.list(expected),got=as.list(got)),file.path(d,"id_mismatch.json"))
@@ -196,8 +273,7 @@ run_chunk <- function(pass,chunk){
   assignments<-list(); records<-list(); usages<-list()
   for(item in items){
     cid<-item$custom_id
-    bits<-strsplit(cid,"-",fixed=TRUE)[[1]]
-    rid<-paste(bits[-c(1,2)],collapse="-")
+    rid<-sub(paste0("^luna-",pass,"-"),"",cid)
     response<-item$response$body %||% NULL
     if(is.null(response)||!is.null(item$error)) stop("API item failure: ",cid)
     parsed<-fromJSON(extract_output_text(response),simplifyVector=FALSE)
@@ -221,15 +297,24 @@ run_chunk <- function(pass,chunk){
   write_csv_s(long,file.path(d,"topic_assignments.csv"))
   write_csv_s(rec,file.path(d,"record_results.csv"))
   write_csv_s(use,file.path(d,"usage.csv"))
-  manifest<-list(pass=pass,chunk=chunk,records=nrow(x),record_ids=as.list(as.character(x$record_id)),
+  manifest<-list(
+    pass=pass,chunk=chunk,records=nrow(rec),record_ids=as.list(as.character(rec$record_id)),
     input_sha256=sha256_file(input_path),output_sha256=sha256_file(raw_path),
-    batch_id=batch$id,input_file_id=uploaded$id,output_file_id=batch$output_file_id,
+    batch_id=batch$id,input_file_id=batch$input_file_id,output_file_id=batch$output_file_id,
     assignments=nrow(long),cost_usd=sum(use$estimated_batch_cost_usd),
     queue_sha256=sha256_file(queue_path),ontology_sha256=sha256_file(ontology_path),
-    prompt_sha256=sha256_file(system_prompt_path))
+    prompt_sha256=sha256_file(system_prompt_path)
+  )
   write_json_s(manifest,file.path(d,"chunk_manifest.json"))
   writeLines("validated",done)
+  message("Validated pass ",pass," chunk ",chunk," (",nrow(rec)," records)")
 }
+
+run_chunk <- function(pass,chunk){
+  submit_chunk(pass,chunk)
+  finish_chunk(pass,chunk)
+}
+
 
 combine <- function(){
   q<-validate_queue(); o<-read_csv_q(ontology_path); n_chunks<-ceiling(nrow(q)/chunk_size)
@@ -313,8 +398,14 @@ audit <- function(){
 
 args<-commandArgs(trailingOnly=TRUE)
 mode<-args[1] %||% ""
-if (mode == "manifest") {
+if (mode == "build_queue") {
+  build_full_queue()
+} else if (mode == "manifest") {
   write_global_manifest()
+} else if (mode == "submit_chunk") {
+  submit_chunk(args[2], as.integer(args[3]))
+} else if (mode == "finish_chunk") {
+  finish_chunk(args[2], as.integer(args[3]))
 } else if (mode == "run_chunk") {
   run_chunk(args[2], as.integer(args[3]))
 } else if (mode == "combine") {
@@ -322,5 +413,5 @@ if (mode == "manifest") {
 } else if (mode == "audit") {
   audit()
 } else {
-  stop("Usage: manifest | run_chunk <a|b|c> <chunk> | combine | audit")
+  stop("Usage: build_queue | manifest | submit_chunk <a|b|c> <chunk> | finish_chunk <a|b|c> <chunk> | run_chunk <a|b|c> <chunk> | combine | audit")
 }
