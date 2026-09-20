@@ -74,7 +74,7 @@
 
   <!-- Topic coding -->
   <rect class="section" x="28" y="602" width="54" height="88" rx="10"/>
-  <text class="sectiontext" x="55" y="646" dominant-baseline="middle" transform="rotate(-90 55 646)">Topics</text>
+  <text class="sectiontext" x="55" y="646" dominant-baseline="middle" transform="rotate(-90 55 646)">Mapping</text>
 
   <rect class="box" x="150" y="602" width="420" height="88" style="stroke-width:2.4"/>
   <text class="label" x="360" y="638">
