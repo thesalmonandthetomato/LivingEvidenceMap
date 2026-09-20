@@ -301,7 +301,6 @@ finish_chunk <- function(pass,chunk){
       hierarchy_path=o$hierarchy_path[match(a$path_id,o$path_id)],stringsAsFactors=FALSE)
     records[[length(records)+1]]<-data.frame(
       record_id=rid,assignment_count=length(aa),
-      duplicate_path_ids_collapsed=duplicate_path_ids_collapsed,
       review_required=isTRUE(parsed$review_required),
       review_reason=as.character(parsed$review_reason %||% ""),
       stringsAsFactors=FALSE)
