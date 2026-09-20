@@ -279,13 +279,29 @@ finish_chunk <- function(pass,chunk){
     parsed<-fromJSON(extract_output_text(response),simplifyVector=FALSE)
     aa<-parsed$assignments %||% list()
     ids<-vapply(aa,function(a) as.character(a$path_id),"")
-    if(anyDuplicated(ids)) stop("Duplicate path_id for ",rid)
     bad<-setdiff(ids,as.character(o$path_id)); if(length(bad)) stop("Unknown path_id for ",rid,": ",paste(bad,collapse=","))
+    duplicate_path_ids_collapsed<-sum(duplicated(ids))
+    if(duplicate_path_ids_collapsed){
+      unique_ids<-unique(ids)
+      aa<-lapply(unique_ids,function(pid){
+        z<-aa[ids==pid]
+        roles<-vapply(z,function(a) as.character(a$role),"")
+        reasons<-unique(vapply(z,function(a) as.character(a$reason),""))
+        list(
+          path_id=pid,
+          role=if("PRIMARY" %in% roles) "PRIMARY" else "SECONDARY",
+          reason=paste(reasons,collapse=" | ")
+        )
+      })
+      ids<-unique_ids
+      message("Collapsed ",duplicate_path_ids_collapsed," duplicate path assignment(s) for ",rid)
+    }
     for(a in aa) assignments[[length(assignments)+1]]<-data.frame(
       record_id=rid,path_id=a$path_id,role=a$role,reason=a$reason,
       hierarchy_path=o$hierarchy_path[match(a$path_id,o$path_id)],stringsAsFactors=FALSE)
     records[[length(records)+1]]<-data.frame(
       record_id=rid,assignment_count=length(aa),
+      duplicate_path_ids_collapsed=duplicate_path_ids_collapsed,
       review_required=isTRUE(parsed$review_required),
       review_reason=as.character(parsed$review_reason %||% ""),
       stringsAsFactors=FALSE)
