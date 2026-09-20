@@ -83,12 +83,19 @@ jobs:
           tar -xzf baselines/openalex-foundational-2026-09-20.tar.gz -C inputs/openalex
           tar -xzf baselines/agricola-foundational-2026-09-20.tar.gz -C inputs/agricola
           test -s baselines/lens-baseline-2026-09-20.jsonl
-          SCOPUS_ROOT="$(dirname "$(find inputs/scopus -type f -name manifest.json -print -quit)")"
-          OPENALEX_ROOT="$(dirname "$(find inputs/openalex -type f -name manifest.json -print -quit)")"
-          AGRICOLA_ROOT="$(dirname "$(find inputs/agricola -type f -name manifest.json -print -quit)")"
-          test -n "$SCOPUS_ROOT" && test -d "$SCOPUS_ROOT/raw"
-          test -n "$OPENALEX_ROOT" && test -d "$OPENALEX_ROOT/raw"
-          test -n "$AGRICOLA_ROOT" && test -d "$AGRICOLA_ROOT/raw"
+          find_source_root() {
+            local base="$1"
+            local raw_file
+            raw_file="$(find "$base" -type f -path '*/raw/response_*.json' -print -quit)"
+            test -n "$raw_file"
+            dirname "$(dirname "$raw_file")"
+          }
+          SCOPUS_ROOT="$(find_source_root inputs/scopus)"
+          OPENALEX_ROOT="$(find_source_root inputs/openalex)"
+          AGRICOLA_ROOT="$(find_source_root inputs/agricola)"
+          test -d "$SCOPUS_ROOT/raw"
+          test -d "$OPENALEX_ROOT/raw"
+          test -d "$AGRICOLA_ROOT/raw"
           echo "SCOPUS_ROOT=$SCOPUS_ROOT" >> "$GITHUB_ENV"
           echo "OPENALEX_ROOT=$OPENALEX_ROOT" >> "$GITHUB_ENV"
           echo "AGRICOLA_ROOT=$AGRICOLA_ROOT" >> "$GITHUB_ENV"
