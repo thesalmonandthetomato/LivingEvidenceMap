@@ -110,7 +110,7 @@ manifest <- list(
   source = "OpenAlex Works API",
   search_scope = c("title", "abstract"),
   lens_search_scope_reference = c("title", "abstract", "keywords"),
-  methodological_difference = "OpenAlex OQL title/abstract search excludes full text. Lens additionally searched keywords, so field scope is still not identical."
+  methodological_difference = "OpenAlex OQL title/abstract search excludes full text. Lens additionally searched keywords, so field scope is still not identical.",
   raw_response_preservation = TRUE,
   canonicalisation_performed = FALSE,
   downstream_processing_performed = FALSE
