@@ -1,0 +1,11 @@
+{
+  "source": "scopus",
+  "baseline_date": "2026-09-20",
+  "baseline_release_tag": "source-baselines-2026-09-20",
+  "baseline_workflow_run": 35500171094,
+  "last_successful_completed_at": "2026-09-20T08:50:27Z",
+  "fortnightly_overlap_days": 14,
+  "fortnightly_change_field": "LOAD-DATE",
+  "quarterly_strategy": "full_reconciliation",
+  "canonical_write": false
+}
