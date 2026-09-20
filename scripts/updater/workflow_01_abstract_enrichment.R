@@ -5,6 +5,7 @@ suppressPackageStartupMessages({
   library(jsonlite)
   library(stringdist)
   library(httr2)
+  library(digest)
 })
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -111,6 +112,52 @@ title_similarity <- function(a, b) {
   as.numeric(stringsim(a, b, method = "jw"))
 }
 
+norm_abstract_match <- function(value) {
+  s <- clean_abstract(value)
+  if (is.null(s)) return(NULL)
+  s <- tolower(s)
+  s <- gsub("\\s+", " ", s, perl = TRUE)
+  s <- trimws(s)
+  if (!nzchar(s)) NULL else s
+}
+
+title_display_score <- function(value) {
+  s <- scalar(value)
+  if (is.null(s)) return(c(nontruncated = 0, length = 0))
+  truncated <- grepl("(\\.{3,}|…)\\s*$", s, perl = TRUE)
+  c(nontruncated = if (truncated) 0 else 1, length = nchar(s, type = "chars"))
+}
+
+choose_group_title <- function(entries) {
+  titles <- lapply(entries, function(x) scalar(x$title))
+  keep <- !vapply(titles, is.null, logical(1))
+  if (!any(keep)) return(NULL)
+  titles <- titles[keep]
+  norms <- vapply(titles, function(x) norm_title(x) %||% "", character(1))
+  counts <- table(norms[nzchar(norms)])
+  if (!length(counts)) return(NULL)
+  max_count <- max(counts)
+  winning_norms <- names(counts)[counts == max_count]
+
+  candidates <- titles[norms %in% winning_norms]
+  scores <- t(vapply(candidates, title_display_score, numeric(2)))
+  ord <- order(scores[, "nontruncated"], scores[, "length"], candidates, decreasing = TRUE)
+  candidates[[ord[[1L]]]]
+}
+
+stopifnot(identical(
+  norm_abstract_match("<p>This is an ABSTRACT.</p>"),
+  "this is an abstract."
+))
+stopifnot(identical(
+  choose_group_title(list(
+    list(title = "A complete aquaculture title"),
+    list(title = "A complete aquaculture title"),
+    list(title = "A complete aquaculture title...")
+  )),
+  "A complete aquaculture title"
+))
+
 kind <- function(r) {
   if (is.list(r$lens)) return("lens")
   provider <- r$source$provider
@@ -183,6 +230,35 @@ repair_record_doi <- function(r) {
 record_title <- function(r) {
   if (kind(r) == "lens") return(r$canonical$title %||% r$lens$raw_payload$title)
   r$mapped_fields$title
+}
+
+set_title_repair <- function(r, repaired_title, match_doi, abstract_match_sha256, supporting_records) {
+  original <- scalar(record_title(r))
+  repaired <- scalar(repaired_title)
+  if (is.null(repaired) || identical(norm_title(original), norm_title(repaired))) return(r)
+
+  if (kind(r) == "lens") {
+    canonical <- r$canonical %||% list()
+    canonical$title <- repaired
+    r$canonical <- canonical
+  } else {
+    mapped <- r$mapped_fields %||% list()
+    mapped$title <- repaired
+    r$mapped_fields <- mapped
+  }
+
+  r$title_repair <- list(
+    workflow = "01",
+    status = "title_repaired",
+    original_value = original,
+    repaired_value = repaired,
+    method = "exact_normalised_doi_plus_exact_normalised_abstract_cross_source_title_consensus",
+    matched_doi = match_doi,
+    abstract_match_sha256 = abstract_match_sha256,
+    supporting_records = supporting_records,
+    raw_source_payload_modified = FALSE
+  )
+  r
 }
 
 existing_abstract <- function(r) {
@@ -338,7 +414,8 @@ for (source in names(paths)) {
     compatible_result_not_more_complete = 0L,
     no_compatible_abstract_recovered = 0L,
     external_technical_errors = 0L,
-    doi_values_repaired = 0L
+    doi_values_repaired = 0L,
+    title_values_repaired = 0L
   )
 
   read_jsonl_stream(paths[[source]], function(r, i) {
@@ -381,6 +458,41 @@ for (source in names(paths)) {
   per_source[[source]] <- stats
 }
 
+# Build a deterministic cross-source title-repair index. This is the only
+# cross-source repair in Workflow 01: exact normalised DOI plus exact normalised
+# existing abstract. No abstract is transferred between providers.
+title_match_groups <- list()
+for (source in names(paths)) {
+  read_jsonl_stream(paths[[source]], function(r, i) {
+    doi <- record_doi(r)
+    abs_norm <- norm_abstract_match(existing_abstract(r))
+    if (is.null(doi) || is.null(abs_norm)) return(invisible(NULL))
+    abs_hash <- digest::digest(abs_norm, algo = "sha256", serialize = FALSE)
+    key <- paste(doi, abs_hash, sep = "::")
+    entry <- list(source = source, record_id = record_id(r), title = scalar(record_title(r)))
+    title_match_groups[[key]] <<- c(title_match_groups[[key]] %||% list(), list(entry))
+  })
+}
+
+title_repair_index <- new.env(hash = TRUE, parent = emptyenv())
+for (key in names(title_match_groups)) {
+  entries <- title_match_groups[[key]]
+  sources <- unique(vapply(entries, function(x) x$source, character(1)))
+  if (length(entries) < 2L || length(sources) < 2L) next
+  chosen <- choose_group_title(entries)
+  if (is.null(chosen)) next
+  parts <- strsplit(key, "::", fixed = TRUE)[[1L]]
+  info <- list(
+    doi = parts[[1L]],
+    abstract_match_sha256 = parts[[2L]],
+    repaired_title = chosen,
+    supporting_records = lapply(entries, function(x) list(source = x$source, record_id = x$record_id, title = x$title))
+  )
+  for (entry in entries) {
+    assign(paste(entry$source, entry$record_id, sep = "::"), info, envir = title_repair_index)
+  }
+}
+
 target_dois <- sort(unique(vapply(targets, function(x) x$doi, character(1))))
 lookup_cache <- list()
 
@@ -418,6 +530,21 @@ for (source in names(paths)) {
     r <- repair_record_doi(r)
     if (!is.null(r$doi_repair) && identical(r$doi_repair$status, "doi_repaired")) {
       per_source[[source]]$doi_values_repaired <<- per_source[[source]]$doi_values_repaired + 1L
+    }
+
+    title_key <- paste(source, rid, sep = "::")
+    if (exists(title_key, envir = title_repair_index, inherits = FALSE)) {
+      ti <- get(title_key, envir = title_repair_index, inherits = FALSE)
+      r <- set_title_repair(
+        r,
+        ti$repaired_title,
+        ti$doi,
+        ti$abstract_match_sha256,
+        ti$supporting_records
+      )
+      if (!is.null(r$title_repair) && identical(r$title_repair$status, "title_repaired")) {
+        per_source[[source]]$title_values_repaired <<- per_source[[source]]$title_values_repaired + 1L
+      }
     }
 
     reason <- abstract_query_reason(existing_abstract(r))
@@ -555,7 +682,8 @@ report <- list(
       "existing abstracts under %d cleaned characters are queried and replaced only by a substantially fuller title-compatible abstract",
       SHORT_ABSTRACT_CHARS
     ),
-    cross_source_matching_performed = FALSE,
+    cross_source_matching_performed = "title repair only: exact normalised DOI plus exact normalised existing abstract across at least two source providers",
+    cross_source_title_repair = "repair mapped/canonical title deterministically from matching manifestations; raw source titles remain unchanged",
     cross_source_abstract_transfer_performed = FALSE,
     deduplication_performed = FALSE,
     external_provider = "Europe PMC",
