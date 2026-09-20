@@ -16,14 +16,12 @@ arg <- function(flag, default = NULL) {
 query <- arg("--query")
 max_records <- as.integer(arg("--max-records", "100"))
 page_size <- as.integer(arg("--page-size", "100"))
-corpus <- arg("--corpus", "core")
 output_dir <- arg("--output-dir", "outputs/updater/openalex_ingestion_test")
-base_url <- arg("--base-url", "https://api.openalex.org/works")
+base_url <- arg("--base-url", "https://api.openalex.org/")
 
 if (is.null(query) || !nzchar(trimws(query))) stop("--query is required")
 if (is.na(max_records) || max_records < 1L) stop("--max-records must be >= 1")
 if (is.na(page_size) || page_size < 1L || page_size > 100L) stop("--page-size must be between 1 and 100")
-if (!(corpus %in% c("core", "all"))) stop("--corpus must be core or all")
 
 api_key <- Sys.getenv("OPENALEX_API_KEY", unset = "")
 if (!nzchar(api_key)) api_key <- Sys.getenv("OPENALEX_API_TOKEN", unset = "")
@@ -63,10 +61,9 @@ request_page <- function(cursor, count) {
         `User-Agent` = "LivingEvidenceMap OpenAlex ingestion test"
       ) |>
       req_url_query(
-        `search.exact` = query,
-        per_page = count,
-        cursor = cursor,
-        corpus = corpus
+        oql = query,
+        `per-page` = count,
+        cursor = cursor
       ) |>
       req_error(is_error = function(resp) FALSE)
 
@@ -106,15 +103,14 @@ manifest <- list(
   status = "running",
   started_at = started_at,
   endpoint = base_url,
-  query_parameter = "search.exact",
+  query_parameter = "oql",
   query = query,
-  corpus = corpus,
   max_records = max_records,
   requested_page_size = page_size,
   source = "OpenAlex Works API",
-  search_scope = c("title", "abstract", "fulltext"),
+  search_scope = c("title", "abstract"),
   lens_search_scope_reference = c("title", "abstract", "keywords"),
-  methodological_difference = "OpenAlex search.exact searches title, abstract and full text; this is not field-identical to the Lens title/abstract/keyword search.",
+  methodological_difference = "OpenAlex OQL title/abstract search excludes full text. Lens additionally searched keywords, so field scope is still not identical."
   raw_response_preservation = TRUE,
   canonicalisation_performed = FALSE,
   downstream_processing_performed = FALSE
@@ -179,7 +175,6 @@ repeat {
     workflow = "00c_openalex_ingestion_test",
     updated_at = now_utc(),
     query = query,
-    corpus = corpus,
     total_results = reported_total,
     pages_completed = page,
     entries_retrieved = retrieved,
