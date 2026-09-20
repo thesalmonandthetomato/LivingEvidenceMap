@@ -3,7 +3,7 @@ name: Render Living Evidence Map flow diagram
 on:
   push:
     branches:
-      - restore-flowdiagram-add-agricola
+      - main
     paths:
       - "outputs/workflow07/evidence_flowdiagram.svg"
       - ".github/workflows/render_living_evidence_flowdiagram.yml"
