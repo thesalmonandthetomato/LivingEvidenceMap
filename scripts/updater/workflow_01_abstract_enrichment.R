@@ -67,9 +67,35 @@ norm_doi <- function(value) {
   s <- tolower(trimws(s))
   s <- sub("^https?://(dx\\.)?doi\\.org/", "", s, perl = TRUE)
   s <- sub("^doi:\\s*", "", s, perl = TRUE)
-  s <- sub("\\.$", "", s, perl = TRUE)
+
+  # Deterministically remove obvious publisher/web-view suffix contamination.
+  # These patterns are not legitimate parts of the DOI and occur when a page
+  # URL has been stored in a DOI field.
+  s <- sub("(?:\\.html|/full/html)(?:\\?.*)?$", "", s, perl = TRUE, ignore.case = TRUE)
+
+  # Strip only clearly web-tracking query strings. Do not remove arbitrary '?'
+  # because punctuation can legitimately occur inside DOI suffixes.
+  s <- sub("\\?(?:utm_[a-z0-9_]+|fbclid|gclid)=[^[:space:]]*$", "", s, perl = TRUE, ignore.case = TRUE)
+
+  s <- sub("[[:space:][:punct:]]+$", function(m) {
+    # Preserve DOI-valid closing punctuation unless it is ordinary trailing
+    # bibliographic punctuation. This branch intentionally removes only the
+    # common terminal full stop/comma/semicolon/colon.
+    sub("[\\.,;:]+$", "", m, perl = TRUE)
+  }, s, perl = TRUE)
+  s <- sub("[\\.,;:]+$", "", s, perl = TRUE)
+
   if (!nzchar(s)) NULL else s
 }
+
+stopifnot(identical(
+  norm_doi("10.1108/s0731-9053(2009)0000025010.html?utm_source=test"),
+  "10.1108/s0731-9053(2009)0000025010"
+))
+stopifnot(identical(
+  norm_doi("https://doi.org/10.1108/s0731-9053(2009)0000025010/full/html?utm_medium=referral"),
+  "10.1108/s0731-9053(2009)0000025010"
+))
 
 norm_title <- function(value) {
   s <- scalar(value)
@@ -120,6 +146,42 @@ record_doi <- function(r) {
     return(NULL)
   }
   norm_doi(r$mapped_fields$doi %||% r$sidecar_identity$doi)
+}
+
+repair_record_doi <- function(r) {
+  source_value <- if (kind(r) == "lens") {
+    scalar(r$canonical$doi)
+  } else {
+    scalar(r$mapped_fields$doi %||% r$sidecar_identity$doi)
+  }
+
+  repaired <- record_doi(r)
+  if (is.null(repaired)) return(r)
+
+  original_norm <- if (is.null(source_value)) NULL else tolower(trimws(source_value))
+  changed <- is.null(original_norm) || !identical(original_norm, repaired)
+
+  if (kind(r) == "lens") {
+    canonical <- r$canonical %||% list()
+    canonical$doi <- repaired
+    r$canonical <- canonical
+  } else {
+    mapped <- r$mapped_fields %||% list()
+    mapped$doi <- repaired
+    r$mapped_fields <- mapped
+  }
+
+  if (changed) {
+    r$doi_repair <- list(
+      workflow = "01",
+      status = "doi_repaired",
+      original_value = source_value,
+      repaired_value = repaired,
+      method = "deterministic_doi_normalisation",
+      raw_source_payload_modified = FALSE
+    )
+  }
+  r
 }
 
 record_title <- function(r) {
@@ -279,7 +341,8 @@ for (source in names(paths)) {
     truncated_or_short_abstracts_replaced = 0L,
     compatible_result_not_more_complete = 0L,
     no_compatible_abstract_recovered = 0L,
-    external_technical_errors = 0L
+    external_technical_errors = 0L,
+    doi_values_repaired = 0L
   )
 
   read_jsonl_stream(paths[[source]], function(r, i) {
@@ -355,6 +418,11 @@ for (source in names(paths)) {
     if (exists(rid, envir = seen, inherits = FALSE)) stop(sprintf("%s: duplicate record ID %s", source, rid))
     assign(rid, TRUE, envir = seen)
     n_written <<- n_written + 1L
+
+    r <- repair_record_doi(r)
+    if (!is.null(r$doi_repair) && identical(r$doi_repair$status, "doi_repaired")) {
+      per_source[[source]]$doi_values_repaired <<- per_source[[source]]$doi_values_repaired + 1L
+    }
 
     reason <- abstract_query_reason(existing_abstract(r))
     doi <- record_doi(r)
