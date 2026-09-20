@@ -26,6 +26,8 @@ canonical_ref <- arg("--canonical-ref", "unknown")
 canonical_commit <- arg("--canonical-commit", "unknown")
 workflow_commit <- arg("--workflow-commit", "unknown")
 workflow01_run_id <- arg("--workflow01-run-id", "unknown")
+reviewed_duplicates_path <- arg("--reviewed-duplicates")
+reviewed_not_duplicates_path <- arg("--reviewed-not-duplicates")
 
 required_args <- list(lens_path, scopus_path, openalex_path, agricola_path, canonical_path, output_dir)
 if (any(vapply(required_args, is.null, logical(1)))) {
@@ -228,6 +230,36 @@ canonical_records <- read_jsonl(canonical_path, function(r, i, line) {
 meta$canonical_overlay_present <- !is.na(meta$lens_id) &
   vapply(meta$lens_id, function(x) !is.na(x) && exists(x, envir = canonical_lines, inherits = FALSE), logical(1))
 
+
+pair_hash <- function(a, b) {
+  joined <- paste(sort(c(as.character(a), as.character(b))), collapse = "|")
+  substr(digest(joined, algo = "sha256", serialize = FALSE), 1L, 16L)
+}
+
+reviewed_duplicate_keys <- new.env(hash = TRUE, parent = emptyenv())
+preferred_canonical_ids <- character()
+reviewed_duplicate_count <- 0L
+if (!is.null(reviewed_duplicates_path) && file.exists(reviewed_duplicates_path)) {
+  read_jsonl(reviewed_duplicates_path, function(r, i, line) {
+    a <- scalar(r$lens_id_a); b <- scalar(r$lens_id_b)
+    if (!is.null(a) && !is.null(b) && identical(r$decision, "duplicate")) {
+      assign(paste(sort(c(a,b)), collapse = "|"), r, envir = reviewed_duplicate_keys)
+      reviewed_duplicate_count <<- reviewed_duplicate_count + 1L
+      pref <- scalar(r$preferred_canonical_lens_id)
+      if (!is.null(pref)) preferred_canonical_ids <<- unique(c(preferred_canonical_ids, pref))
+    }
+  })
+}
+
+reviewed_not_duplicate_hashes <- character()
+if (!is.null(reviewed_not_duplicates_path) && file.exists(reviewed_not_duplicates_path)) {
+  x <- fromJSON(reviewed_not_duplicates_path, simplifyVector = FALSE)
+  reviewed_not_duplicate_hashes <- unique(vapply(x$pairs %||% list(), function(z) as.character(z$hash %||% ""), character(1)))
+  reviewed_not_duplicate_hashes <- reviewed_not_duplicate_hashes[nzchar(reviewed_not_duplicate_hashes)]
+}
+
+lens_index <- setNames(meta$idx[!is.na(meta$lens_id) & nzchar(meta$lens_id)], meta$lens_id[!is.na(meta$lens_id) & nzchar(meta$lens_id)])
+
 pair_env <- new.env(hash = TRUE, parent = emptyenv())
 add_pair <- function(i, j, block) {
   if (i == j) return()
@@ -265,6 +297,16 @@ block_stats <- list(
   journal_volume_pages = add_block_pairs(ifelse(!is.na(meta$journal_norm) & !is.na(meta$volume) & !is.na(meta$pages), paste(meta$journal_norm, meta$volume, meta$pages, sep = "::"), NA), "journal_volume_pages")
 )
 
+
+if (length(ls(reviewed_duplicate_keys, all.names = TRUE))) {
+  for (key in ls(reviewed_duplicate_keys, all.names = TRUE)) {
+    ids <- strsplit(key, "\\|", fixed = FALSE)[[1L]]
+    if (length(ids) == 2L && all(ids %in% names(lens_index))) {
+      add_pair(lens_index[[ids[[1L]]]], lens_index[[ids[[2L]]]], "human_reviewed_duplicate")
+    }
+  }
+}
+
 pair_keys <- ls(pair_env, all.names = TRUE)
 pair_rows <- vector("list", length(pair_keys))
 
@@ -285,7 +327,21 @@ for (k in seq_along(pair_keys)) {
   classification <- "not_resolved"
   rule <- "candidate_only"
 
-  if (same_doi && !is.na(title_sim) && title_sim < 0.90) {
+  human_dup <- FALSE
+  human_not_dup <- FALSE
+  if (!is.na(a$lens_id) && !is.na(b$lens_id)) {
+    human_key <- paste(sort(c(a$lens_id, b$lens_id)), collapse = "|")
+    human_dup <- exists(human_key, envir = reviewed_duplicate_keys, inherits = FALSE)
+    human_not_dup <- pair_hash(a$lens_id, b$lens_id) %in% reviewed_not_duplicate_hashes
+  }
+
+  if (human_not_dup) {
+    classification <- "not_duplicate_human"
+    rule <- "human_reviewed_not_duplicate"
+  } else if (human_dup) {
+    classification <- "duplicate"
+    rule <- "human_reviewed_duplicate"
+  } else if (same_doi && !is.na(title_sim) && title_sim < 0.90) {
     classification <- "doi_conflict"
     rule <- "same_doi_incompatible_title"
   } else if (same_doi && !is.na(title_sim) && title_sim >= 0.90 && (author_match || year_compatible)) {
@@ -375,7 +431,8 @@ for (g in groups) {
   cluster_status <- if (conflicts) "review_required" else if (length(g) > 1L) "reconciled" else "singleton"
 
   pub_type <- ifelse(is.na(sub$publication_type), "", sub$publication_type)
-  score <- ifelse(sub$canonical_overlay_present, 1000, 0) +
+  score <- ifelse(!is.na(sub$lens_id) & sub$lens_id %in% preferred_canonical_ids, 5000, 0) +
+    ifelse(sub$canonical_overlay_present, 1000, 0) +
     ifelse(sub$source == "lens", 100, 0) +
     ifelse(sub$has_abstract, 20, 0) +
     ifelse(grepl("preprint|conference abstract|proceedings", tolower(pub_type), perl = TRUE), -10, 0)
@@ -586,6 +643,12 @@ report <- list(
     lens_records_matched = canonical_matched,
     top_level_fields_observed = sort(canonical_top_level_fields),
     policy = "Entire current canonical record is retained for matching Lens IDs; existing annotations, screening, deduplication and publication-status metadata are preserved. Workflow 01 abstract enrichment may update only canonical.abstract."
+  ),
+  human_adjudication = list(
+    reviewed_duplicate_pairs_loaded = reviewed_duplicate_count,
+    reviewed_not_duplicate_hashes_loaded = length(reviewed_not_duplicate_hashes),
+    preferred_canonical_lens_ids_loaded = length(preferred_canonical_ids),
+    policy = "Human-reviewed decisions override automatic rules before clustering."
   ),
   candidate_generation = list(
     pair_count = length(pair_keys),
