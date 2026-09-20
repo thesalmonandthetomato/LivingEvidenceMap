@@ -85,6 +85,47 @@ def record_doi(r):
         return None
     return norm_doi((r.get("mapped_fields") or {}).get("doi") or (r.get("sidecar_identity") or {}).get("doi"))
 
+def record_title(r):
+    if kind(r)=="lens":
+        c=r.get("canonical") if isinstance(r.get("canonical"),dict) else {}
+        p=(r.get("lens") or {}).get("raw_payload") or {}
+        return c.get("title") or p.get("title")
+    return (r.get("mapped_fields") or {}).get("title")
+
+def norm_title(v):
+    if not v: return None
+    s=html.unescape(str(v))
+    s=unicodedata.normalize("NFKD",s)
+    s="".join(ch for ch in s if not unicodedata.combining(ch))
+    s=s.casefold()
+    s=re.sub(r"[^a-z0-9]+"," ",s)
+    s=re.sub(r"\s+"," ",s).strip()
+    return s or None
+
+def jaro_winkler(a,b):
+    a=norm_title(a); b=norm_title(b)
+    if not a or not b: return None
+    if a==b: return 1.0
+    la,lb=len(a),len(b)
+    match_distance=max(la,lb)//2-1
+    a_match=[False]*la; b_match=[False]*lb
+    matches=0
+    for i,ch in enumerate(a):
+        start=max(0,i-match_distance); end=min(i+match_distance+1,lb)
+        for j in range(start,end):
+            if b_match[j] or b[j]!=ch: continue
+            a_match[i]=True; b_match[j]=True; matches+=1; break
+    if not matches: return 0.0
+    a_chars=[a[i] for i in range(la) if a_match[i]]
+    b_chars=[b[j] for j in range(lb) if b_match[j]]
+    transpositions=sum(x!=y for x,y in zip(a_chars,b_chars))/2
+    jaro=(matches/la + matches/lb + (matches-transpositions)/matches)/3
+    prefix=0
+    for x,y in zip(a,b):
+        if x!=y or prefix==4: break
+        prefix+=1
+    return jaro + prefix*0.1*(1-jaro)
+
 def existing_abstract(r):
     if kind(r)=="lens":
         c=r.get("canonical") if isinstance(r.get("canonical"),dict) else {}
@@ -127,15 +168,18 @@ def epmc_lookup(doi):
                 data=json.load(resp); status=getattr(resp,"status",None); url=resp.geturl()
             hits=data.get("resultList",{}).get("result",[])
             exact=[h for h in hits if norm_doi(h.get("doi"))==doi]
-            abstract=next((h.get("abstractText") for h in exact if clean_abstract(h.get("abstractText"))),None)
-            return abstract,{"method":"europe_pmc_exact_doi","http_status":status,"url":url,"hit_count":data.get("hitCount"),"exact_doi_hits":len(exact),"attempts":attempt}
+            candidates=[
+                {"title":h.get("title"),"abstract":clean_abstract(h.get("abstractText"))}
+                for h in exact if clean_abstract(h.get("abstractText"))
+            ]
+            return candidates,{"method":"europe_pmc_exact_doi_title_compatible","http_status":status,"url":url,"hit_count":data.get("hitCount"),"exact_doi_hits":len(exact),"attempts":attempt}
         except Exception as e:
             errors.append(f"{type(e).__name__}: {e}")
             transient=isinstance(e,(TimeoutError,urllib.error.URLError)) or (isinstance(e,urllib.error.HTTPError) and (e.code==429 or e.code>=500))
             if attempt==4 or not transient:
-                return None,{"method":"europe_pmc_exact_doi","outcome":"technical_error","errors":errors,"attempts":attempt}
+                return [],{"method":"europe_pmc_exact_doi_title_compatible","outcome":"technical_error","errors":errors,"attempts":attempt}
             time.sleep((1,2,4)[attempt-1])
-    return None,{"method":"europe_pmc_exact_doi","outcome":"technical_error","errors":errors}
+    return [],{"method":"europe_pmc_exact_doi_title_compatible","outcome":"technical_error","errors":errors}
 
 def main():
     ap=argparse.ArgumentParser()
@@ -154,18 +198,31 @@ def main():
         for r in rows:
             d=record_doi(r); a=clean_abstract(existing_abstract(r))
             if d and a:
-                donors[d].append({"source":src,"record_id":record_id(r),"abstract":a})
+                donors[d].append({"source":src,"record_id":record_id(r),"title":record_title(r),"abstract":a})
 
-    # Deterministic donor preference: non-reconstructed source abstracts before OpenAlex;
-    # within equal priority prefer the longer cleaned abstract, then stable source/id order.
+    # Match rule reused from the reconciliation audit: exact normalised DOI generates
+    # candidates, but title Jaro-Winkler similarity >= 0.90 is required to transfer text.
     priority={"lens":0,"agricola":0,"openalex":1,"scopus":2}
-    def choose_donor(items,target_src):
+    def choose_donor(items,target_src,target_title):
         xs=[x for x in items if x["source"]!=target_src]
-        if not xs: return None
-        xs.sort(key=lambda x:(priority.get(x["source"],9),-len(x["abstract"]),x["source"],x["record_id"]))
-        return xs[0]
+        scored=[]
+        for x in xs:
+            sim=jaro_winkler(target_title,x.get("title"))
+            if sim is not None:
+                scored.append((sim,x))
+        compatible=[(sim,x) for sim,x in scored if sim>=0.90]
+        compatible.sort(key=lambda z:(priority.get(z[1]["source"],9),-z[0],-len(z[1]["abstract"]),z[1]["source"],z[1]["record_id"]))
+        diagnostics={
+            "candidate_count":len(xs),
+            "title_comparable_count":len(scored),
+            "title_compatible_count":len(compatible),
+            "title_conflict_count":sum(sim<0.90 for sim,_ in scored),
+            "best_title_similarity":max((sim for sim,_ in scored),default=None)
+        }
+        return (compatible[0][1] if compatible else None),diagnostics
 
     repaired_by_cross=0; existing_n=0; missing_no_doi=0
+    doi_title_conflict_records=0; doi_title_unavailable_records=0
     unresolved_by_doi=defaultdict(list)
     prepared={}
 
@@ -178,16 +235,25 @@ def main():
                 meta={"workflow":"01","status":"existing_abstract","source_record":src,"doi":d,"enriched_at":None,"method":"source_native","canonical_store_modified":False}
                 out.append(set_abstract(r,old,meta))
             elif d:
-                donor=choose_donor(donors.get(d,[]),src)
+                target_title=record_title(r)
+                donor,diag=choose_donor(donors.get(d,[]),src,target_title)
                 if donor:
                     repaired_by_cross+=1
-                    meta={"workflow":"01","status":"abstract_enrichmented_cross_source","source_record":src,"doi":d,"enriched_at":now(),"method":"exact_doi_preserved_source","donor_source":donor["source"],"donor_record_id":donor["record_id"],"canonical_store_modified":False}
+                    meta={"workflow":"01","status":"abstract_enriched_cross_source","source_record":src,"doi":d,"enriched_at":now(),"method":"exact_doi_title_compatible_preserved_source","title_similarity":jaro_winkler(target_title,donor.get("title")),"donor_source":donor["source"],"donor_record_id":donor["record_id"],"canonical_store_modified":False}
                     out.append(set_abstract(r,donor["abstract"],meta))
                 else:
                     idx=len(out)
-                    meta={"workflow":"01","status":"pending_external_enrichment","source_record":src,"doi":d,"enriched_at":None,"method":None,"canonical_store_modified":False}
+                    if diag["candidate_count"] and diag["title_comparable_count"] and diag["title_conflict_count"]==diag["title_comparable_count"]:
+                        status="doi_title_conflict"
+                        doi_title_conflict_records+=1
+                    elif diag["candidate_count"] and diag["title_comparable_count"]==0:
+                        status="doi_title_unavailable"
+                        doi_title_unavailable_records+=1
+                    else:
+                        status="pending_external_enrichment"
+                    meta={"workflow":"01","status":status,"source_record":src,"doi":d,"enriched_at":None,"method":None,"title_match_diagnostics":diag,"canonical_store_modified":False}
                     out.append(set_abstract(r,None,meta))
-                    unresolved_by_doi[d].append((src,idx))
+                    unresolved_by_doi[d].append((src,idx,target_title))
             else:
                 missing_no_doi+=1
                 meta={"workflow":"01","status":"missing_no_doi","source_record":src,"doi":None,"enriched_at":None,"method":None,"canonical_store_modified":False}
@@ -198,23 +264,31 @@ def main():
     external_recovered=0; external_not_found=0; external_technical=0
     if not args.no_external:
         for n,d in enumerate(sorted(unresolved_by_doi),1):
-            abstract,attempt=epmc_lookup(d)
-            epmc_cache[d]={"abstract":clean_abstract(abstract),"attempt":attempt}
-            if abstract: external_recovered+=1
-            elif attempt.get("outcome")=="technical_error": external_technical+=1
-            else: external_not_found+=1
+            candidates,attempt=epmc_lookup(d)
+            epmc_cache[d]={"candidates":candidates,"attempt":attempt}
+            if not candidates:
+                if attempt.get("outcome")=="technical_error": external_technical+=1
+                else: external_not_found+=1
             if args.delay and n < len(unresolved_by_doi): time.sleep(args.delay)
 
         for d,targets in unresolved_by_doi.items():
             hit=epmc_cache[d]
-            for src,idx in targets:
+            for src,idx,target_title in targets:
                 r=prepared[src][idx]
-                if hit["abstract"]:
-                    meta={"workflow":"01","status":"abstract_enrichmented_europe_pmc","source_record":src,"doi":d,"enriched_at":now(),"method":"europe_pmc_exact_doi","attempt":hit["attempt"],"canonical_store_modified":False}
-                    prepared[src][idx]=set_abstract(r,hit["abstract"],meta)
+                compatible=[]
+                for cand in hit["candidates"]:
+                    sim=jaro_winkler(target_title,cand.get("title"))
+                    if sim is not None and sim>=0.90:
+                        compatible.append((sim,cand))
+                compatible.sort(key=lambda z:-z[0])
+                if compatible:
+                    sim,cand=compatible[0]
+                    external_recovered+=1
+                    meta={"workflow":"01","status":"abstract_enriched_europe_pmc","source_record":src,"doi":d,"enriched_at":now(),"method":"europe_pmc_exact_doi_title_compatible","title_similarity":sim,"attempt":hit["attempt"],"canonical_store_modified":False}
+                    prepared[src][idx]=set_abstract(r,cand["abstract"],meta)
                 else:
-                    status="external_technical_error" if hit["attempt"].get("outcome")=="technical_error" else "no_abstract_recovered"
-                    meta={"workflow":"01","status":status,"source_record":src,"doi":d,"enriched_at":None,"method":"europe_pmc_exact_doi","attempt":hit["attempt"],"canonical_store_modified":False}
+                    status="external_technical_error" if hit["attempt"].get("outcome")=="technical_error" else "no_compatible_abstract_recovered"
+                    meta={"workflow":"01","status":status,"source_record":src,"doi":d,"enriched_at":None,"method":"europe_pmc_exact_doi_title_compatible","attempt":hit["attempt"],"canonical_store_modified":False}
                     prepared[src][idx]=set_abstract(r,None,meta)
 
     outdir=Path(args.output_dir); outdir.mkdir(parents=True,exist_ok=True)
@@ -231,6 +305,9 @@ def main():
         "workflow":"01_abstract_enrichment","status":"success","created_at":now(),
         "inputs":expected,"existing_abstract_records":existing_n,
         "cross_source_enrichments":repaired_by_cross,"missing_without_doi":missing_no_doi,
+        "doi_title_conflict_records":doi_title_conflict_records,
+        "doi_title_unavailable_records":doi_title_unavailable_records,
+        "unique_unresolved_dois_after_cross_source_enrichment":len(unresolved_by_doi),
         "unique_external_doi_queries":0 if args.no_external else len(unresolved_by_doi),
         "external_abstracts_recovered":external_recovered,
         "external_no_abstract_or_no_match":external_not_found,
