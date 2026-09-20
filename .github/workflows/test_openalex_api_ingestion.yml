@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       query:
-        description: 'OpenAlex Boolean search.exact query'
+        description: 'OpenAlex OQL title/abstract query'
         required: true
-        default: '(salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)'
+        default: 'works where title/abstract has (("salmon" or "salmonid*" or "Salmo" or "Oncorhynchus" or "rainbow trout") and ("farm*" or "cage*" or "pens" or "penned" or "pen" or "aquacultur*" or "commercial*"))'
         type: string
       max_records:
         description: 'Maximum OpenAlex records to retrieve for this test'
@@ -24,14 +24,6 @@ on:
         required: true
         default: '100'
         type: string
-      corpus:
-        description: 'OpenAlex corpus'
-        required: true
-        default: 'core'
-        type: choice
-        options:
-          - core
-          - all
 
 permissions:
   contents: read
@@ -64,20 +56,17 @@ jobs:
           INPUT_QUERY: ${{ inputs.query }}
           INPUT_MAX_RECORDS: ${{ inputs.max_records }}
           INPUT_PAGE_SIZE: ${{ inputs.page_size }}
-          INPUT_CORPUS: ${{ inputs.corpus }}
         run: |
           set -euo pipefail
-          query="${INPUT_QUERY:-(salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)}"
+          query="${INPUT_QUERY:-works where title/abstract has ((\"salmon\" or \"salmonid*\" or \"Salmo\" or \"Oncorhynchus\" or \"rainbow trout\") and (\"farm*\" or \"cage*\" or \"pens\" or \"penned\" or \"pen\" or \"aquacultur*\" or \"commercial*\"))}"
           max_records="${INPUT_MAX_RECORDS:-100}"
           page_size="${INPUT_PAGE_SIZE:-100}"
-          corpus="${INPUT_CORPUS:-core}"
           {
             echo "query<<EOF"
             echo "$query"
             echo "EOF"
             echo "max_records=$max_records"
             echo "page_size=$page_size"
-            echo "corpus=$corpus"
           } >> "$GITHUB_OUTPUT"
 
       - name: Run lossless OpenAlex Works API ingestion
@@ -92,7 +81,6 @@ jobs:
             --query "$OPENALEX_QUERY" \
             --max-records '${{ steps.cfg.outputs.max_records }}' \
             --page-size '${{ steps.cfg.outputs.page_size }}' \
-            --corpus '${{ steps.cfg.outputs.corpus }}' \
             --output-dir outputs/updater/openalex_ingestion_test
 
       - name: Show manifest
