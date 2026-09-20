@@ -1,4 +1,4 @@
-name: Test Scopus sidecar canonical compatibility
+name: Build Scopus full-harvest sidecar
 
 on:
   push:
@@ -16,7 +16,7 @@ permissions:
 jobs:
   sidecar-adapter-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout Scopus integration branch
@@ -37,11 +37,11 @@ jobs:
       - name: Download successful Scopus STANDARD artefact
         uses: actions/download-artifact@v4
         with:
-          name: updater-workflow-00b-scopus-ingestion-35494321011
+          name: scopus-full-search-35500171094
           path: inputs/scopus_ingestion
           github-token: ${{ github.token }}
           repository: thesalmonandthetomato/LivingEvidenceMap
-          run-id: 35494321011
+          run-id: 35500171094
 
       - name: Verify source artefact
         shell: bash
