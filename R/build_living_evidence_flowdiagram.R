@@ -576,11 +576,11 @@ export_living_evidence_flow_svg <- function(widget, path) {
 #
 # flow_data <- living_evidence_flow_data(
 #   database_results = c(
+#     "AGRICOLA" = NA,
 #     "Lens" = NA,
-#     "Scopus" = NA,
-#     "Web of Science Core Collection" = NA,
 #     "OpenAlex" = NA,
-#     "AGRICOLA" = NA
+#     "Scopus" = NA,
+#     "Web of Science Core Collection" = NA
 #   ),
 #   duplicates_removed = NA,
 #   other_removed_before_screening = NA,
