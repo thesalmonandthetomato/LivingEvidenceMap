@@ -114,3 +114,5 @@ jobs:
           path: outputs/updater/scopus_full_search/
           if-no-files-found: error
           retention-days: 30
+
+# trigger: cursor full harvest
