@@ -191,6 +191,14 @@ Prefer machine-readable manifests and validation reports.
 
 Do not rely on conversational memory as the only record of pipeline state.
 
+## Implementation language
+
+Repository implementation code must be written in R unless the user explicitly instructs otherwise for a specific task.
+
+Do not introduce or retain Python implementations for pipeline scripts, validation scripts, adapters, or workflow logic when an R implementation is feasible. GitHub Actions shell glue may use shell commands, but substantive repository logic belongs in R.
+
+When replacing an existing Python implementation with R, remove the superseded Python file once the R workflow path is established so there is a single authoritative implementation.
+
 ## Repository changes
 
 Before editing:
