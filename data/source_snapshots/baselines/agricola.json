@@ -1,0 +1,19 @@
+{
+  "source": "agricola_via_europe_pmc",
+  "snapshot_role": "foundational_full_search",
+  "snapshot_date": "2026-09-20",
+  "record_count": 2744,
+  "query": "SRC:AGR AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+  "search_scope": [
+    "title",
+    "abstract"
+  ],
+  "synonym_expansion": false,
+  "source_workflow_run": 35499553438,
+  "source_artifact_id": 10602065296,
+  "source_artifact_name": "agricola-full-search-35499553438",
+  "source_artifact_sha256": "dbb5aa7e8c338374d91bb1696239e619892652ec1f84df6410f49915b6553856",
+  "durable_release_tag": "source-baselines-2026-09-20",
+  "canonical_json_modified": false,
+  "immutable": true
+}
