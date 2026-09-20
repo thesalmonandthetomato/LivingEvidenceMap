@@ -1,0 +1,12 @@
+{
+  "source": "agricola",
+  "provider": "Europe PMC",
+  "baseline_date": "2026-09-20",
+  "baseline_release_tag": "source-baselines-2026-09-20",
+  "baseline_workflow_run": 35499553438,
+  "last_successful_completed_at": "2026-09-20T08:27:37Z",
+  "fortnightly_overlap_days": 14,
+  "fortnightly_change_field": "UPDATE_DATE",
+  "quarterly_strategy": "full_reconciliation",
+  "canonical_write": false
+}
