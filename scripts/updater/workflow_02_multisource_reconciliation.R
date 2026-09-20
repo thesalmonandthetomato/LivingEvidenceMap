@@ -559,7 +559,25 @@ for (g in groups) {
     gp <- pairs[pairs$record_i %in% g & pairs$record_j %in% g, , drop = FALSE]
     conflicts <- nrow(gp) && any(gp$classification %in% c("doi_conflict", "not_duplicate_human"))
     years <- sub$year[!is.na(sub$year)]
-    if (length(years) > 1L && diff(range(years)) > 2L && is.null(consensus_year)) conflicts <- TRUE
+
+    # Do not let noisy year metadata alone reopen a cluster that is connected
+    # by strong content-identity evidence. This covers duplicate manifestations,
+    # repository versions, and preprint/thesis/article manifestations with the
+    # same or near-identical title and abstract.
+    content_identity_rules <- c(
+      "repository_version_doi_near_exact_title",
+      "exact_title_strong_abstract",
+      "compact_title_strong_abstract",
+      "near_exact_title_strong_abstract",
+      "exact_abstract_title_compatible"
+    )
+    strong_content_identity <- nrow(gp) &&
+      any(gp$classification == "duplicate" & gp$rule %in% content_identity_rules)
+
+    if (length(years) > 1L && diff(range(years)) > 2L &&
+        is.null(consensus_year) && !strong_content_identity) {
+      conflicts <- TRUE
+    }
   }
 
   cluster_key <- paste(sort(paste(sub$source, sub$source_record_id, sep = ":")), collapse = "|")
