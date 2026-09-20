@@ -13,7 +13,7 @@
       .note { fill:#fff; stroke:#999; stroke-width:1.2; }
       .label { font-family:Helvetica,Arial,sans-serif; font-size:16px; fill:#31444a; text-anchor:middle; }
       .small { font-family:Helvetica,Arial,sans-serif; font-size:14px; fill:#31444a; text-anchor:middle; }
-      .sectiontext { font-family:Helvetica,Arial,sans-serif; font-size:16px; fill:#31444a; text-anchor:middle; }
+      .sectiontext { font-family:Helvetica,Arial,sans-serif; font-size:16px; fill:#fff; text-anchor:middle; }
       .arrow { stroke:#31444a; stroke-width:1.8; fill:none; marker-end:url(#arrow); }
       .dash { stroke:#999; stroke-width:1.4; stroke-dasharray:7 6; fill:none; }
     </style>
