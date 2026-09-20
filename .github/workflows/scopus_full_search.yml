@@ -78,7 +78,8 @@ jobs:
           grep -q '"status": "success"' outputs/updater/scopus_full_search/manifest.json
           grep -q '"duplicate_scopus_eids_n": 0' outputs/updater/scopus_full_search/validation.json
           grep -q '"duplicate_scopus_ids_n": 0' outputs/updater/scopus_full_search/validation.json
-          grep -q '"count_matches_first_page_total": true' outputs/updater/scopus_full_search/validation.json
+          grep -q '"count_matches_unpartitioned_total": true' outputs/updater/scopus_full_search/validation.json
+          grep -q '"unique_eids_match_unpartitioned_total": true' outputs/updater/scopus_full_search/validation.json
           grep -q '"canonical_json_modified": false' outputs/updater/scopus_full_search/validation.json
 
       - name: Show manifest validation and checkpoint
@@ -120,3 +121,5 @@ jobs:
 # trigger: year-partitioned full harvest
 
 # trigger: deterministic sorted harvest
+
+# trigger: corrected validation check
