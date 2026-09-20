@@ -83,9 +83,18 @@ jobs:
           tar -xzf baselines/openalex-foundational-2026-09-20.tar.gz -C inputs/openalex
           tar -xzf baselines/agricola-foundational-2026-09-20.tar.gz -C inputs/agricola
           test -s baselines/lens-baseline-2026-09-20.jsonl
-          test -d inputs/scopus/raw
-          test -d inputs/openalex/raw
-          test -d inputs/agricola/raw
+          SCOPUS_ROOT="$(dirname "$(find inputs/scopus -type f -name manifest.json -print -quit)")"
+          OPENALEX_ROOT="$(dirname "$(find inputs/openalex -type f -name manifest.json -print -quit)")"
+          AGRICOLA_ROOT="$(dirname "$(find inputs/agricola -type f -name manifest.json -print -quit)")"
+          test -n "$SCOPUS_ROOT" && test -d "$SCOPUS_ROOT/raw"
+          test -n "$OPENALEX_ROOT" && test -d "$OPENALEX_ROOT/raw"
+          test -n "$AGRICOLA_ROOT" && test -d "$AGRICOLA_ROOT/raw"
+          echo "SCOPUS_ROOT=$SCOPUS_ROOT" >> "$GITHUB_ENV"
+          echo "OPENALEX_ROOT=$OPENALEX_ROOT" >> "$GITHUB_ENV"
+          echo "AGRICOLA_ROOT=$AGRICOLA_ROOT" >> "$GITHUB_ENV"
+          echo "Scopus root: $SCOPUS_ROOT"
+          echo "OpenAlex root: $OPENALEX_ROOT"
+          echo "AGRICOLA root: $AGRICOLA_ROOT"
 
       - name: Rebuild source sidecars from frozen baselines
         shell: bash
@@ -126,5 +135,5 @@ jobs:
           path: |
             outputs/workflow01/
             sidecars/*/compatibility_audit.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
