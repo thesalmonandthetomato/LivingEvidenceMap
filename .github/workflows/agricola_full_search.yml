@@ -1,0 +1,122 @@
+name: Full AGRICOLA Europe PMC harvest
+
+on:
+  push:
+    branches:
+      - updater-workflow-00d-agricola-ingestion
+    paths:
+      - '.github/workflows/agricola_full_search.yml'
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'Europe PMC AGRICOLA title/abstract query'
+        required: true
+        default: 'SRC:AGR AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  full-agricola-harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout AGRICOLA integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00d-agricola-ingestion
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Resolve search query
+        id: cfg
+        shell: bash
+        env:
+          INPUT_QUERY: ${{ inputs.query }}
+        run: |
+          set -euo pipefail
+          query="${INPUT_QUERY:-SRC:AGR AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))}"
+          {
+            echo "query<<EOF"
+            echo "$query"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run full lossless AGRICOLA harvest
+        env:
+          AGRICOLA_QUERY: ${{ steps.cfg.outputs.query }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00d_agricola_ingestion.R \
+            --query "$AGRICOLA_QUERY" \
+            --max-records all \
+            --page-size 1000 \
+            --output-dir outputs/updater/agricola_full_search
+
+      - name: Build full canonical-compatible AGRICOLA sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R \
+            --input-dir outputs/updater/agricola_full_search \
+            --output-dir outputs/updater/agricola_full_sidecar
+
+      - name: Verify full-harvest safeguards
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"status": "success"' outputs/updater/agricola_full_search/manifest.json
+          grep -q '"duplicate_source_ids_n": 0' outputs/updater/agricola_full_search/validation.json
+          grep -q '"count_matches_first_page_total": true' outputs/updater/agricola_full_search/validation.json
+          grep -q '"non_agricola_source_codes": \[\]' outputs/updater/agricola_full_search/validation.json
+          grep -q '"canonical_json_modified": false' outputs/updater/agricola_full_search/validation.json
+          grep -q '"canonical_branch_written": false' outputs/updater/agricola_full_sidecar/compatibility_audit.json
+          test ! -e data/canonical/current/agricola
+          test ! -e data/canonical/current/agricola_sidecar_records.jsonl
+
+      - name: Show manifest and audits
+        if: always()
+        shell: bash
+        run: |
+          if [ -f outputs/updater/agricola_full_search/manifest.json ]; then
+            cat outputs/updater/agricola_full_search/manifest.json
+          fi
+          if [ -f outputs/updater/agricola_full_search/validation.json ]; then
+            cat outputs/updater/agricola_full_search/validation.json
+          fi
+          if [ -f outputs/updater/agricola_full_sidecar/compatibility_audit.json ]; then
+            cat outputs/updater/agricola_full_sidecar/compatibility_audit.json
+          fi
+
+      - name: Guard canonical tree
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e data/canonical/current/agricola ] || [ -e data/canonical/current/agricola_sidecar_records.jsonl ]; then
+            echo "Unexpected AGRICOLA output under canonical tree"
+            exit 1
+          fi
+
+      - name: Upload full AGRICOLA harvest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agricola-full-search-${{ github.run_id }}
+          path: |
+            outputs/updater/agricola_full_search/
+            outputs/updater/agricola_full_sidecar/
+          if-no-files-found: error
+          retention-days: 30
