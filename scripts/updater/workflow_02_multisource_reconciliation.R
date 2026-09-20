@@ -344,6 +344,9 @@ for (k in seq_along(pair_keys)) {
   } else if (same_doi && !is.na(title_sim) && title_sim < 0.90) {
     classification <- "doi_conflict"
     rule <- "same_doi_incompatible_title"
+  } else if (same_doi && !is.na(title_sim) && title_sim >= 0.985) {
+    classification <- "duplicate"
+    rule <- "same_doi_near_exact_title"
   } else if (same_doi && !is.na(title_sim) && title_sim >= 0.90 && (author_match || year_compatible)) {
     classification <- "duplicate"
     rule <- "same_doi_title_compatible"
@@ -421,7 +424,7 @@ for (g in groups) {
   conflicts <- FALSE
   if (length(g) > 1L) {
     gp <- pairs[pairs$record_i %in% g & pairs$record_j %in% g, , drop = FALSE]
-    conflicts <- nrow(gp) && any(gp$classification == "doi_conflict")
+    conflicts <- nrow(gp) && any(gp$classification %in% c("doi_conflict", "not_duplicate_human"))
     years <- sub$year[!is.na(sub$year)]
     if (length(years) > 1L && diff(range(years)) > 2L) conflicts <- TRUE
   }
