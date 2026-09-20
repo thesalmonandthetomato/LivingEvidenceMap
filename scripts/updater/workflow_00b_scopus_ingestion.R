@@ -15,7 +15,7 @@ arg <- function(flag, default = NULL) {
 
 query <- arg("--query")
 max_records_arg <- arg("--max-records", "100")
-page_size <- as.integer(arg("--page-size", "25"))
+page_size <- as.integer(arg("--page-size", "200"))
 view <- toupper(arg("--view", "STANDARD"))
 output_dir <- arg("--output-dir", "outputs/updater/scopus_ingestion_test")
 base_url <- arg("--base-url", "https://api.elsevier.com/content/search/scopus")
@@ -29,6 +29,8 @@ if (!full_harvest) {
   max_records <- .Machine$integer.max
 }
 if (is.na(page_size) || page_size < 1L) stop("--page-size must be >= 1")
+if (view == "STANDARD" && page_size > 200L) stop("--page-size cannot exceed 200 for STANDARD")
+if (view != "STANDARD" && page_size > 25L) stop("--page-size cannot exceed 25 for COMPLETE/other restricted views")
 if (!(view %in% c("STANDARD", "COMPLETE"))) stop("--view must be STANDARD or COMPLETE")
 
 api_key <- Sys.getenv("SCOPUS_API_TOKEN", unset = "")
@@ -65,7 +67,7 @@ scalar_int <- function(x, default = NA_integer_) {
   if (is.na(y)) default else y
 }
 
-request_page <- function(start, count) {
+request_page <- function(cursor, count) {
   last_error <- NULL
   for (attempt in seq_len(6L)) {
     req <- request(base_url) |>
@@ -76,7 +78,7 @@ request_page <- function(start, count) {
       ) |>
       req_url_query(
         query = query,
-        start = start,
+        cursor = cursor,
         count = count,
         view = view,
         suppressNavLinks = "false"
@@ -108,7 +110,7 @@ request_page <- function(start, count) {
 
 started_at <- now_utc()
 page <- 1L
-start <- 0L
+cursor <- "*"
 retrieved <- 0L
 total_results <- NA_integer_
 page_summaries <- list()
@@ -127,6 +129,7 @@ manifest <- list(
   search_scope = c("title", "abstract", "keywords"),
   raw_response_preservation = TRUE,
   checkpoint_after_every_page = TRUE,
+  pagination_mode = "cursor",
   canonicalisation_performed = FALSE,
   canonical_json_modified = FALSE,
   downstream_processing_performed = FALSE
@@ -138,8 +141,8 @@ repeat {
   if (!full_harvest) requested_count <- min(page_size, max_records - retrieved)
   if (requested_count <= 0L) break
 
-  message(sprintf("Requesting Scopus page %d: start=%d count=%d", page, start, requested_count))
-  resp <- request_page(start, requested_count)
+  message(sprintf("Requesting Scopus page %d: cursor=%s count=%d", page, if (page == 1L) "*" else "<next_cursor>", requested_count))
+  resp <- request_page(cursor, requested_count)
   body_text <- resp_body_string(resp)
   headers <- resp_headers(resp)
   headers_json <- as.list(unclass(headers))
@@ -173,10 +176,13 @@ repeat {
   if (is.null(entries)) entries <- list()
   if (!is.list(entries)) stop(sprintf("Unexpected entry structure on page %d", page))
   n_entries <- length(entries)
+  cursor_obj <- sr[["cursor"]] %||% list()
+  next_cursor <- scalar_text(cursor_obj[["@next"]], NA_character_)
 
   page_summary <- list(
     page = page,
-    start = start,
+    pagination_mode = "cursor",
+    cursor_present = !is.na(next_cursor) && nzchar(next_cursor),
     requested_count = requested_count,
     returned_entries = n_entries,
     total_results_reported = this_total,
@@ -190,7 +196,7 @@ repeat {
   page_summaries[[length(page_summaries) + 1L]] <- page_summary
 
   retrieved <- retrieved + n_entries
-  next_start <- start + n_entries
+
 
   checkpoint <- list(
     workflow = "00b_scopus_ingestion",
@@ -201,7 +207,7 @@ repeat {
     total_results_reported_first_page = total_results,
     pages_completed = page,
     entries_retrieved = retrieved,
-    next_start = next_start,
+    next_cursor = if (!is.na(next_cursor) && nzchar(next_cursor)) next_cursor else NULL,
     max_records_requested = if (full_harvest) "all" else max_records,
     rate_limit_remaining = scalar_text(headers[["x-ratelimit-remaining"]], NULL),
     rate_limit_reset = scalar_text(headers[["x-ratelimit-reset"]], NULL)
@@ -216,8 +222,9 @@ repeat {
   if (n_entries == 0L) break
   if (!full_harvest && retrieved >= max_records) break
   if (full_harvest && !is.na(total_results) && retrieved >= total_results) break
+  if (is.na(next_cursor) || !nzchar(next_cursor)) break
 
-  start <- next_start
+  cursor <- next_cursor
   page <- page + 1L
 }
 
@@ -296,7 +303,7 @@ write_json(manifest, manifest_path)
 
 checkpoint$status <- "success"
 checkpoint$completed_at <- now_utc()
-checkpoint$next_start <- NULL
+checkpoint$next_cursor <- NULL
 write_json(checkpoint, checkpoint_path)
 
 message(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"))
