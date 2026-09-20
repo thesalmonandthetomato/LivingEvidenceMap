@@ -1,0 +1,75 @@
+name: Render Living Evidence Map flow diagram
+
+on:
+  push:
+    branches:
+      - restore-flowdiagram-add-agricola
+    paths:
+      - "R/build_living_evidence_flowdiagram.R"
+      - ".github/workflows/render_living_evidence_flowdiagram.yml"
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev libssl-dev libcurl4-openssl-dev
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(
+            c("DiagrammeR", "DiagrammeRsvg", "stringr", "htmltools", "htmlwidgets"),
+            repos = "https://cloud.r-project.org"
+          )
+
+      - name: Render SVG
+        shell: Rscript {0}
+        run: |
+          source("R/build_living_evidence_flowdiagram.R")
+
+          flow_data <- living_evidence_flow_data(
+            database_results = c(
+              "Lens" = NA,
+              "Scopus" = NA,
+              "Web of Science Core Collection" = NA,
+              "OpenAlex" = NA,
+              "AGRICOLA" = NA
+            ),
+            duplicates_removed = NA,
+            other_removed_before_screening = NA,
+            records_screened = NA,
+            records_excluded = NA,
+            records_included = NA,
+            excluded_topic_coding_missing_abstracts = NA,
+            records_with_topic_coding = NA,
+            search_date = NA,
+            draft = TRUE
+          )
+
+          p <- living_evidence_flowdiagram(flow_data)
+
+          export_living_evidence_flow_svg(
+            p,
+            "outputs/workflow07/evidence_flowdiagram.svg"
+          )
+
+          stopifnot(file.exists("outputs/workflow07/evidence_flowdiagram.svg"))
+          stopifnot(file.info("outputs/workflow07/evidence_flowdiagram.svg")$size > 0)
+
+      - name: Upload SVG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: living-evidence-flowdiagram-svg
+          path: outputs/workflow07/evidence_flowdiagram.svg
+          if-no-files-found: error
