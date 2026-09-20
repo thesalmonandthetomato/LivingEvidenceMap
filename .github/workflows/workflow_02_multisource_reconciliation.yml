@@ -129,6 +129,8 @@ jobs:
             --canonical-commit "$CANONICAL_COMMIT" \
             --workflow-commit "$WORKFLOW_COMMIT" \
             --workflow01-run-id "$WORKFLOW01_RUN_ID" \
+            --reviewed-duplicates workflow02/data/adjudication/workflow02_reviewed_duplicate_pairs_2026-09-07.jsonl \
+            --reviewed-not-duplicates workflow02/data/adjudication/workflow02_reviewed_not_duplicate_hashes_2026-09-07.json \
             --output-dir outputs/workflow02
 
       - name: Validate reconciliation outputs
