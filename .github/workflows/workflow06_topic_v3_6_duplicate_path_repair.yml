@@ -1,0 +1,151 @@
+name: Workflow 06 - repair duplicate-path chunk and combine
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow06-gpt5mini-replication]
+    paths:
+      - '.github/workflows/workflow06_topic_v3_6_duplicate_path_repair.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  FAILED_RUN_ID: '35450192652'
+  SOURCE_SHA: 'd3f2b7698b0a2fd34efcb4206a92aad73a360b30'
+  TOPIC_PROD_OUTPUT_DIR: outputs/workflow06_topic_v3_6_full_production
+  TOPIC_MASTER_PATH: data/master/current/living_evidence_map_master.csv
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  TOPIC_CHUNK_SIZE: '500'
+  BATCH_POLL_SECONDS: '20'
+  BATCH_MAX_WAIT_SECONDS: '7200'
+
+jobs:
+  repair_and_combine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore frozen production reference files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "$SOURCE_SHA"
+          git checkout "$SOURCE_SHA" --             data/reference/topic_ontology_v3_6.csv             data/reference/topic_system_prompt_v3_6.txt
+          echo "Using patched recovery parser from $(git rev-parse HEAD)"
+          echo "Using ontology and prompt from frozen production SHA $SOURCE_SHA"
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::curl
+            any::digest
+            any::httr2
+            any::jsonlite
+            any::readr
+
+      - name: Recover immutable production input
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$TOPIC_PROD_OUTPUT_DIR"
+          gh run download "$FAILED_RUN_ID"             -n "topic-v36-recovery-input-$FAILED_RUN_ID"             -D "$TOPIC_PROD_OUTPUT_DIR"
+
+          expected_queue="$(jq -r '.queue_sha256' "$TOPIC_PROD_OUTPUT_DIR/production_manifest.json")"
+          actual_queue="$(sha256sum "$TOPIC_PROD_OUTPUT_DIR/input_queue.csv" | awk '{print $1}')"
+          test "$expected_queue" = "$actual_queue"
+
+          expected_ontology="$(jq -r '.ontology_sha256' "$TOPIC_PROD_OUTPUT_DIR/production_manifest.json")"
+          actual_ontology="$(sha256sum "$TOPIC_ONTOLOGY_PATH" | awk '{print $1}')"
+          test "$expected_ontology" = "$actual_ontology"
+
+          expected_prompt="$(jq -r '.system_prompt_sha256' "$TOPIC_PROD_OUTPUT_DIR/production_manifest.json")"
+          actual_prompt="$(sha256sum "$TOPIC_SYSTEM_PROMPT_PATH" | awk '{print $1}')"
+          test "$expected_prompt" = "$actual_prompt"
+
+      - name: Recover failed b/26 batch artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_b/chunk_026"
+          rm -rf "$d" /tmp/b26
+          mkdir -p "$d" /tmp/b26
+          gh run download "$FAILED_RUN_ID"             -n "topic-v36-recovery-complete-b-chunk-26-$FAILED_RUN_ID"             -D /tmp/b26
+          src="$(find /tmp/b26 -maxdepth 1 -type d -name 'chunk_*' | head -1)"
+          test -n "$src"
+          cp -a "$src"/. "$d"/
+          test -s "$d/batch_submitted.json"
+          test -s "$d/batch_output.jsonl"
+          test ! -s "$d/complete.ok"
+
+      - name: Revalidate completed b/26 output without resubmission
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          Rscript R/run_topic_three_luna_production.R finish_chunk b 26
+          test -s "$TOPIC_PROD_OUTPUT_DIR/pass_b/chunk_026/complete.ok"
+
+      - name: Preserve repaired b/26
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-repaired-b-chunk-26-${{ github.run_id }}
+          path: outputs/workflow06_topic_v3_6_full_production/pass_b/chunk_026
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Recover remaining 80 validated chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for p in a b c; do
+            for ch in $(seq 1 27); do
+              if test "$p" = "b" && test "$ch" = "26"; then
+                continue
+              fi
+              d="$TOPIC_PROD_OUTPUT_DIR/pass_${p}/chunk_$(printf '%03d' "$ch")"
+              rm -rf "$d" /tmp/recovered_chunk
+              mkdir -p "$d" /tmp/recovered_chunk
+              name="topic-v36-recovery-complete-${p}-chunk-${ch}-$FAILED_RUN_ID"
+              gh run download "$FAILED_RUN_ID" -n "$name" -D /tmp/recovered_chunk
+              src="$(find /tmp/recovered_chunk -maxdepth 1 -type d -name 'chunk_*' | head -1)"
+              test -n "$src"
+              cp -a "$src"/. "$d"/
+              test -s "$d/complete.ok"
+            done
+          done
+
+      - name: Combine three independent Luna passes
+        run: Rscript R/run_topic_three_luna_production.R combine
+
+      - name: Deterministic integrity audit
+        run: Rscript R/run_topic_three_luna_production.R audit
+
+      - name: Upload final repaired production outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-v36-full-production-repaired-final-${{ github.run_id }}
+          path: |
+            outputs/workflow06_topic_v3_6_full_production/input_queue.csv
+            outputs/workflow06_topic_v3_6_full_production/queue_summary.json
+            outputs/workflow06_topic_v3_6_full_production/production_manifest.json
+            outputs/workflow06_topic_v3_6_full_production/all_pass_assignments.csv
+            outputs/workflow06_topic_v3_6_full_production/all_pass_record_results.csv
+            outputs/workflow06_topic_v3_6_full_production/all_pass_usage.csv
+            outputs/workflow06_topic_v3_6_full_production/three_luna_pathway_scores.csv
+            outputs/workflow06_topic_v3_6_full_production/combine_summary.json
+            outputs/workflow06_topic_v3_6_full_production/audit_review_flags.csv
+            outputs/workflow06_topic_v3_6_full_production/audit_summary.json
+            outputs/workflow06_topic_v3_6_full_production/AUDIT_PASS.ok
+          if-no-files-found: error
+          retention-days: 90
