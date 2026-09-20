@@ -1,5 +1,7 @@
 # Agent instructions for LivingEvidenceMap
 
+> **Read first:** repository-wide operating rules for AI assistants are in [AI_ASSISTANT_GUIDELINES.md](AI_ASSISTANT_GUIDELINES.md). Those rules govern artefact reuse, API-cost control, provenance, workflow minimisation, validation, and non-fabrication.
+
 ## Scope
 
 This repository maintains the salmon Living Evidence Map. When modifying the automated update infrastructure, use `REPO_MAP.yml` as the first dependency map and verify any change against the active GitHub Actions workflows.
