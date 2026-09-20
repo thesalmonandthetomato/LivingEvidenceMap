@@ -1,0 +1,19 @@
+{
+  "source": "scopus",
+  "snapshot_role": "foundational_full_search",
+  "snapshot_date": "2026-09-20",
+  "record_count": 19938,
+  "query": "TITLE-ABS-KEY((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+  "search_scope": [
+    "title",
+    "abstract",
+    "keywords"
+  ],
+  "source_workflow_run": 35500171094,
+  "source_artifact_id": 10602096757,
+  "source_artifact_name": "scopus-full-search-35500171094",
+  "source_artifact_sha256": "f66ebb54b728c9675e16592deb1bfac775c515b123d925939e01401740c445ba",
+  "durable_release_tag": "source-baselines-2026-09-20",
+  "canonical_json_modified": false,
+  "immutable": true
+}
