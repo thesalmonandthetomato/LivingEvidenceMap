@@ -1,0 +1,447 @@
+name: Source retrieval dispatcher
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Source to retrieve
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - lens
+          - scopus
+          - openalex
+          - agricola
+      mode:
+        description: Retrieval mode
+        required: true
+        type: choice
+        default: fortnightly
+        options:
+          - full
+          - fortnightly
+          - quarterly
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  BASE_QUERY_SCOPUS: 'TITLE-ABS-KEY((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))'
+  BASE_QUERY_AGRICOLA: 'SRC:AGR AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))'
+  BASE_QUERY_OPENALEX: 'works where title/abstract has (("salmon" or "salmonid*" or "Salmo" or "Oncorhynchus" or "rainbow trout") and ("farm*" or "cage*" or "pens" or "penned" or "pen" or "aquacultur*" or "commercial*"))'
+
+jobs:
+  lens:
+    if: ${{ inputs.source == 'all' || inputs.source == 'lens' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout control state
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: control
+
+      - name: Checkout Lens retrieval code
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-01-lens-ingestion
+          path: source
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependency
+        run: python -m pip install requests
+
+      - name: Resolve Lens window
+        id: cfg
+        env:
+          MODE: ${{ inputs.mode }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/window.env
+          import json, os
+          from datetime import datetime, timedelta, timezone
+          mode=os.environ["MODE"]
+          state=json.load(open("control/state/source_retrieval/lens.json"))
+          today=datetime.now(timezone.utc).date()
+          if mode in ("full","quarterly"):
+              start="1900-01-01"
+          else:
+              last=datetime.fromisoformat(state["last_successful_completed_at"].replace("Z","+00:00")).date()
+              start=(last-timedelta(days=int(state.get("fortnightly_overlap_days",14)))).isoformat()
+          print(f"START_DATE={start}")
+          print(f"END_DATE={today.isoformat()}")
+          PY
+          cat /tmp/window.env >> "$GITHUB_ENV"
+
+      - name: Run Lens retrieval
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python source/scripts/updater/lens_ingestion.py             --start-date "$START_DATE"             --end-date "$END_DATE"             --max-records 1000000             --query-file source/config/lens_search.json             --output-dir outputs/lens
+
+      - name: Upload Lens retrieval artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-${{ inputs.mode }}-${{ github.run_id }}
+          path: outputs/lens/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build Lens state candidate
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          mkdir -p state-candidate
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          p="control/state/source_retrieval/lens.json"
+          s=json.load(open(p))
+          m=json.load(open("outputs/lens/manifest.json"))
+          s.update({
+            "last_successful_completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
+            "last_mode": os.environ["MODE"],
+            "last_workflow_run": int(os.environ["GITHUB_RUN_ID"]),
+            "last_artifact_name": f'lens-{os.environ["MODE"]}-{os.environ["GITHUB_RUN_ID"]}',
+            "last_search_window": m.get("search_window"),
+            "last_records_retrieved": m.get("records_retrieved"),
+            "canonical_write": False
+          })
+          json.dump(s,open("state-candidate/lens.json","w"),indent=2); open("state-candidate/lens.json","a").write("\n")
+          PY
+
+      - name: Upload Lens state candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-state-lens-${{ github.run_id }}
+          path: state-candidate/lens.json
+          retention-days: 7
+
+  scopus:
+    if: ${{ inputs.source == 'all' || inputs.source == 'scopus' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout control state
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: control
+
+      - name: Checkout Scopus retrieval code
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00b-scopus-ingestion
+          path: source
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Resolve Scopus query
+        env:
+          MODE: ${{ inputs.mode }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/scopus.env
+          import json, os
+          from datetime import datetime, timedelta, timezone
+          mode=os.environ["MODE"]
+          q=os.environ["BASE_QUERY_SCOPUS"]
+          if mode=="fortnightly":
+              s=json.load(open("control/state/source_retrieval/scopus.json"))
+              last=datetime.fromisoformat(s["last_successful_completed_at"].replace("Z","+00:00")).date()
+              start=last-timedelta(days=int(s.get("fortnightly_overlap_days",14)))
+              q=f"({q}) AND LOAD-DATE AFT {start.strftime('%Y%m%d')}"
+          print("SCOPUS_QUERY<<EOF")
+          print(q)
+          print("EOF")
+          PY
+          cat /tmp/scopus.env >> "$GITHUB_ENV"
+
+      - name: Run Scopus retrieval
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript source/scripts/updater/workflow_00b_scopus_ingestion.R             --query "$SCOPUS_QUERY"             --page-size 200             --view STANDARD             --output-dir outputs/scopus
+
+      - name: Upload Scopus retrieval artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scopus-${{ inputs.mode }}-${{ github.run_id }}
+          path: outputs/scopus/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build Scopus state candidate
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          mkdir -p state-candidate
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          s=json.load(open("control/state/source_retrieval/scopus.json"))
+          m=json.load(open("outputs/scopus/manifest.json"))
+          s.update({
+            "last_successful_completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
+            "last_mode": os.environ["MODE"],
+            "last_workflow_run": int(os.environ["GITHUB_RUN_ID"]),
+            "last_artifact_name": f'scopus-{os.environ["MODE"]}-{os.environ["GITHUB_RUN_ID"]}',
+            "last_query": m.get("base_query"),
+            "last_records_retrieved": m.get("entries_retrieved"),
+            "last_pagination_mode": m.get("pagination_mode"),
+            "canonical_write": False
+          })
+          json.dump(s,open("state-candidate/scopus.json","w"),indent=2); open("state-candidate/scopus.json","a").write("\n")
+          PY
+
+      - name: Upload Scopus state candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-state-scopus-${{ github.run_id }}
+          path: state-candidate/scopus.json
+          retention-days: 7
+
+  openalex:
+    if: ${{ inputs.source == 'all' || inputs.source == 'openalex' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout control state
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: control
+
+      - name: Checkout OpenAlex retrieval code
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00c-openalex-ingestion
+          path: source
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Run OpenAlex retrieval
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript source/scripts/updater/workflow_00c_openalex_ingestion.R             --query "$BASE_QUERY_OPENALEX"             --max-records all             --page-size 100             --output-dir outputs/openalex
+
+      - name: Upload OpenAlex retrieval artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-${{ inputs.mode }}-${{ github.run_id }}
+          path: outputs/openalex/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build OpenAlex state candidate
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          mkdir -p state-candidate
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          s=json.load(open("control/state/source_retrieval/openalex.json"))
+          m=json.load(open("outputs/openalex/manifest.json"))
+          s.update({
+            "last_successful_completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
+            "last_mode": os.environ["MODE"],
+            "last_workflow_run": int(os.environ["GITHUB_RUN_ID"]),
+            "last_artifact_name": f'openalex-{os.environ["MODE"]}-{os.environ["GITHUB_RUN_ID"]}',
+            "last_strategy": "full_refresh_fallback" if os.environ["MODE"]=="fortnightly" else "full_reconciliation",
+            "last_records_retrieved": m.get("entries_retrieved"),
+            "last_cost_usd": m.get("cumulative_cost_usd"),
+            "canonical_write": False
+          })
+          json.dump(s,open("state-candidate/openalex.json","w"),indent=2); open("state-candidate/openalex.json","a").write("\n")
+          PY
+
+      - name: Upload OpenAlex state candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-state-openalex-${{ github.run_id }}
+          path: state-candidate/openalex.json
+          retention-days: 7
+
+  agricola:
+    if: ${{ inputs.source == 'all' || inputs.source == 'agricola' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout control state
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: control
+
+      - name: Checkout AGRICOLA retrieval code
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00d-agricola-ingestion
+          path: source
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Resolve AGRICOLA query
+        env:
+          MODE: ${{ inputs.mode }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/agricola.env
+          import json, os
+          from datetime import datetime, timedelta, timezone
+          mode=os.environ["MODE"]
+          q=os.environ["BASE_QUERY_AGRICOLA"]
+          if mode=="fortnightly":
+              s=json.load(open("control/state/source_retrieval/agricola.json"))
+              last=datetime.fromisoformat(s["last_successful_completed_at"].replace("Z","+00:00")).date()
+              start=last-timedelta(days=int(s.get("fortnightly_overlap_days",14)))
+              end=datetime.now(timezone.utc).date()
+              q=f"({q}) AND UPDATE_DATE:[{start.isoformat()} TO {end.isoformat()}]"
+          print("AGRICOLA_QUERY<<EOF")
+          print(q)
+          print("EOF")
+          PY
+          cat /tmp/agricola.env >> "$GITHUB_ENV"
+
+      - name: Run AGRICOLA retrieval
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript source/scripts/updater/workflow_00d_agricola_ingestion.R             --query "$AGRICOLA_QUERY"             --max-records all             --page-size 1000             --output-dir outputs/agricola
+
+      - name: Upload AGRICOLA retrieval artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agricola-${{ inputs.mode }}-${{ github.run_id }}
+          path: outputs/agricola/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build AGRICOLA state candidate
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          mkdir -p state-candidate
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          s=json.load(open("control/state/source_retrieval/agricola.json"))
+          m=json.load(open("outputs/agricola/manifest.json"))
+          s.update({
+            "last_successful_completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
+            "last_mode": os.environ["MODE"],
+            "last_workflow_run": int(os.environ["GITHUB_RUN_ID"]),
+            "last_artifact_name": f'agricola-{os.environ["MODE"]}-{os.environ["GITHUB_RUN_ID"]}',
+            "last_query": m.get("query"),
+            "last_records_retrieved": m.get("records_retrieved"),
+            "canonical_write": False
+          })
+          json.dump(s,open("state-candidate/agricola.json","w"),indent=2); open("state-candidate/agricola.json","a").write("\n")
+          PY
+
+      - name: Upload AGRICOLA state candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-state-agricola-${{ github.run_id }}
+          path: state-candidate/agricola.json
+          retention-days: 7
+
+  commit-state:
+    if: always() && !cancelled()
+    needs: [lens, scopus, openalex, agricola]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require selected retrieval jobs to succeed
+        env:
+          SOURCE: ${{ inputs.source }}
+          LENS_RESULT: ${{ needs.lens.result }}
+          SCOPUS_RESULT: ${{ needs.scopus.result }}
+          OPENALEX_RESULT: ${{ needs.openalex.result }}
+          AGRICOLA_RESULT: ${{ needs.agricola.result }}
+        run: |
+          set -euo pipefail
+          for src in lens scopus openalex agricola; do
+            if [ "$SOURCE" = "all" ] || [ "$SOURCE" = "$src" ]; then
+              key="$(echo "$src" | tr '[:lower:]' '[:upper:]')_RESULT"
+              result="${!key}"
+              test "$result" = "success" || { echo "$src retrieval result=$result"; exit 1; }
+            fi
+          done
+
+      - name: Checkout main for state update
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download successful state candidates
+        uses: actions/download-artifact@v4
+        with:
+          pattern: retrieval-state-*-${{ github.run_id }}
+          path: state-candidates
+          merge-multiple: true
+
+      - name: Commit successful source checkpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d state-candidates
+          for f in state-candidates/*.json; do
+            test -f "$f" || continue
+            cp "$f" "state/source_retrieval/$(basename "$f")"
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/source_retrieval
+          if git diff --cached --quiet; then
+            echo "No retrieval state changes."
+          else
+            git commit -m "Advance successful source retrieval state"
+            git push origin HEAD:main
+          fi
