@@ -133,7 +133,10 @@ choose_group_title <- function(entries) {
   keep <- !vapply(titles, is.null, logical(1))
   if (!any(keep)) return(NULL)
   titles <- titles[keep]
-  norms <- vapply(titles, function(x) norm_title(x) %||% "", character(1))
+  norms <- vapply(titles, function(x) {
+    z <- norm_title(x)
+    if (is.null(z)) "" else z
+  }, character(1))
   counts <- table(norms[nzchar(norms)])
   if (!length(counts)) return(NULL)
   max_count <- max(counts)
