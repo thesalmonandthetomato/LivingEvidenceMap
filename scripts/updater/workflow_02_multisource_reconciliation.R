@@ -458,15 +458,48 @@ cluster_rows <- list()
 cluster_id_by_idx <- character(nrow(meta))
 cluster_status_by_idx <- character(nrow(meta))
 representative_by_idx <- integer(nrow(meta))
+resolved_year_by_idx <- rep(NA_integer_, nrow(meta))
+year_resolution_rule_by_idx <- rep(NA_character_, nrow(meta))
+
+single_populated_value <- function(x) {
+  x <- x[!is.na(x) & nzchar(as.character(x))]
+  length(unique(x)) <= 1L
+}
+
+strict_year_consensus <- function(sub) {
+  years <- sub$year[!is.na(sub$year)]
+  if (length(years) < 2L) return(NULL)
+
+  counts <- sort(table(years), decreasing = TRUE)
+  if (!length(counts) || counts[[1L]] < 2L) return(NULL)
+  if (length(counts) > 1L && counts[[1L]] == counts[[2L]]) return(NULL)
+
+  # Require exact agreement on the strongest identity fields.
+  dois <- sub$doi[!is.na(sub$doi) & nzchar(sub$doi)]
+  titles <- sub$title_norm[!is.na(sub$title_norm) & nzchar(sub$title_norm)]
+  if (length(dois) != nrow(sub) || length(unique(dois)) != 1L) return(NULL)
+  if (length(titles) != nrow(sub) || length(unique(titles)) != 1L) return(NULL)
+
+  # Missing secondary metadata is allowed, but populated values may not conflict.
+  secondary_ok <- all(vapply(
+    list(sub$first_author, sub$journal_norm, sub$volume, sub$issue, sub$pages),
+    single_populated_value,
+    logical(1)
+  ))
+  if (!secondary_ok) return(NULL)
+
+  as.integer(names(counts)[[1L]])
+}
 
 for (g in groups) {
   sub <- meta[g, , drop = FALSE]
+  consensus_year <- strict_year_consensus(sub)
   conflicts <- FALSE
   if (length(g) > 1L) {
     gp <- pairs[pairs$record_i %in% g & pairs$record_j %in% g, , drop = FALSE]
     conflicts <- nrow(gp) && any(gp$classification %in% c("doi_conflict", "not_duplicate_human"))
     years <- sub$year[!is.na(sub$year)]
-    if (length(years) > 1L && diff(range(years)) > 2L) conflicts <- TRUE
+    if (length(years) > 1L && diff(range(years)) > 2L && is.null(consensus_year)) conflicts <- TRUE
   }
 
   cluster_key <- paste(sort(paste(sub$source, sub$source_record_id, sep = ":")), collapse = "|")
@@ -484,6 +517,10 @@ for (g in groups) {
   cluster_id_by_idx[g] <- cid
   cluster_status_by_idx[g] <- cluster_status
   representative_by_idx[g] <- rep_idx
+  if (!is.null(consensus_year)) {
+    resolved_year_by_idx[g] <- consensus_year
+    year_resolution_rule_by_idx[g] <- "strict_cross_source_consensus"
+  }
 
   cluster_rows[[length(cluster_rows) + 1L]] <- list(
     cluster_id = cid,
@@ -501,6 +538,12 @@ for (g in groups) {
     )),
     member_count = length(g),
     canonical_overlay_member_count = sum(sub$canonical_overlay_present),
+    resolved_year = if (is.null(consensus_year)) NULL else consensus_year,
+    year_resolution = if (is.null(consensus_year)) NULL else list(
+      rule = "strict_cross_source_consensus",
+      agreeing_source_record_count = sum(sub$year == consensus_year, na.rm = TRUE),
+      observed_years = as.list(sort(unique(sub$year[!is.na(sub$year)])))
+    ),
     created_at = now_utc()
   )
 }
@@ -509,6 +552,8 @@ meta$cluster_id <- cluster_id_by_idx
 meta$cluster_status <- cluster_status_by_idx
 meta$representative_idx <- representative_by_idx
 meta$is_representative <- meta$idx == meta$representative_idx
+meta$resolved_year <- resolved_year_by_idx
+meta$year_resolution_rule <- year_resolution_rule_by_idx
 
 merge_canonical_overlay <- function(incoming) {
   id <- lens_id(incoming)
@@ -590,6 +635,8 @@ for (src in names(paths)) {
       source_record_id = row$source_record_id[[1L]],
       canonical_overlay_applied = row$canonical_overlay_present[[1L]],
       prior_deduplication_preserved = existing_dedup_preserved,
+      resolved_year = if (is.na(row$resolved_year[[1L]])) NULL else row$resolved_year[[1L]],
+      year_resolution_rule = if (is.na(row$year_resolution_rule[[1L]])) NULL else row$year_resolution_rule[[1L]],
       canonical_ref = canonical_ref,
       canonical_commit = canonical_commit,
       reconciled_at = now_utc()
