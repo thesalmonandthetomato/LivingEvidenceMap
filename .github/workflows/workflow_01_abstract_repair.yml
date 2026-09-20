@@ -1,12 +1,6 @@
 name: Workflow 01 - Abstract repair
 
 on:
-  push:
-    branches:
-      - updater-workflow-01-abstract-enrichment
-    paths:
-      - '.github/workflows/workflow_01_abstract_repair.yml'
-      - 'scripts/updater/workflow_01_abstract_repair.py'
   workflow_dispatch:
     inputs:
       external_europe_pmc:
@@ -31,85 +25,40 @@ jobs:
           path: workflow01
           persist-credentials: false
 
-      - name: Checkout Scopus adapter
-        uses: actions/checkout@v4
-        with:
-          ref: updater-workflow-00b-scopus-ingestion
-          path: scopus-code
-          persist-credentials: false
-
-      - name: Checkout OpenAlex adapter
-        uses: actions/checkout@v4
-        with:
-          ref: updater-workflow-00c-openalex-ingestion
-          path: openalex-code
-          persist-credentials: false
-
-      - name: Checkout AGRICOLA adapter
-        uses: actions/checkout@v4
-        with:
-          ref: updater-workflow-00d-agricola-ingestion
-          path: agricola-code
-          persist-credentials: false
-
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: 'release'
-          use-public-rspm: true
-
-      - name: Install sidecar dependency
-        shell: Rscript {0}
-        run: install.packages('jsonlite')
-
-      - name: Download frozen source baselines
+      - name: Download frozen source baselines and sidecars
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p baselines
-          gh release download source-baselines-2026-09-20             --repo "$GITHUB_REPOSITORY"             --dir baselines             --pattern 'lens-baseline-2026-09-20.jsonl'             --pattern 'scopus-foundational-2026-09-20.tar.gz'             --pattern 'openalex-foundational-2026-09-20.tar.gz'             --pattern 'agricola-foundational-2026-09-20.tar.gz'             --pattern 'SHA256SUMS'
+          mkdir -p baselines sidecars/scopus sidecars/openalex sidecars/agricola
 
-      - name: Verify frozen baselines
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd baselines
-          sha256sum -c SHA256SUMS --ignore-missing
-          cd ..
-          mkdir -p inputs/scopus inputs/openalex inputs/agricola
-          tar -xzf baselines/scopus-foundational-2026-09-20.tar.gz -C inputs/scopus
-          tar -xzf baselines/openalex-foundational-2026-09-20.tar.gz -C inputs/openalex
-          tar -xzf baselines/agricola-foundational-2026-09-20.tar.gz -C inputs/agricola
+          gh release download source-baselines-2026-09-20 \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir baselines \
+            --pattern 'lens-baseline-2026-09-20.jsonl'
+
+          gh release download source-sidecars-2026-09-20 \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir sidecars-release \
+            --pattern 'scopus-sidecar-2026-09-20.jsonl.gz' \
+            --pattern 'openalex-sidecar-2026-09-20.jsonl.gz' \
+            --pattern 'agricola-sidecar-2026-09-20.jsonl.gz' \
+            --pattern 'SHA256SUMS'
+
+          (
+            cd sidecars-release
+            sha256sum -c SHA256SUMS --ignore-missing
+          )
+
+          gunzip -c sidecars-release/scopus-sidecar-2026-09-20.jsonl.gz > sidecars/scopus/scopus_sidecar_records.jsonl
+          gunzip -c sidecars-release/openalex-sidecar-2026-09-20.jsonl.gz > sidecars/openalex/openalex_sidecar_records.jsonl
+          gunzip -c sidecars-release/agricola-sidecar-2026-09-20.jsonl.gz > sidecars/agricola/agricola_sidecar_records.jsonl
+
           test -s baselines/lens-baseline-2026-09-20.jsonl
-          find_source_root() {
-            local base="$1"
-            local raw_file
-            raw_file="$(find "$base" -type f -path '*/raw/response_*.json' -print -quit)"
-            test -n "$raw_file"
-            dirname "$(dirname "$raw_file")"
-          }
-          SCOPUS_ROOT="$(find_source_root inputs/scopus)"
-          OPENALEX_ROOT="$(find_source_root inputs/openalex)"
-          AGRICOLA_ROOT="$(find_source_root inputs/agricola)"
-          test -d "$SCOPUS_ROOT/raw"
-          test -d "$OPENALEX_ROOT/raw"
-          test -d "$AGRICOLA_ROOT/raw"
-          echo "SCOPUS_ROOT=$SCOPUS_ROOT" >> "$GITHUB_ENV"
-          echo "OPENALEX_ROOT=$OPENALEX_ROOT" >> "$GITHUB_ENV"
-          echo "AGRICOLA_ROOT=$AGRICOLA_ROOT" >> "$GITHUB_ENV"
-          echo "Scopus root: $SCOPUS_ROOT"
-          echo "OpenAlex root: $OPENALEX_ROOT"
-          echo "AGRICOLA root: $AGRICOLA_ROOT"
-
-      - name: Rebuild source sidecars from frozen baselines
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scopus-code/scripts/updater/workflow_01s_scopus_sidecar_adapter.R             --input-dir inputs/scopus --output-dir sidecars/scopus
-          Rscript openalex-code/scripts/updater/workflow_01u_openalex_sidecar_adapter.R             --input-dir inputs/openalex --output-dir sidecars/openalex
-          Rscript agricola-code/scripts/updater/workflow_01v_agricola_sidecar_adapter.R             --input-dir inputs/agricola --output-dir sidecars/agricola
+          test -s sidecars/scopus/scopus_sidecar_records.jsonl
+          test -s sidecars/openalex/openalex_sidecar_records.jsonl
+          test -s sidecars/agricola/agricola_sidecar_records.jsonl
 
       - name: Run Workflow 01 abstract repair
         env:
@@ -141,6 +90,5 @@ jobs:
           name: workflow01-abstract-repair-${{ github.run_id }}
           path: |
             outputs/workflow01/
-            sidecars/*/compatibility_audit.json
           if-no-files-found: warn
           retention-days: 30
