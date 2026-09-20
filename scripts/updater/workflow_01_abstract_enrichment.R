@@ -46,7 +46,13 @@ clean_abstract <- function(value) {
   s <- gsub("<!--.*?-->", " ", s, perl = TRUE)
   s <- gsub("</?(abstract|abstract-text|body|br|div|p|sec|section|title)(\\s[^>]*)?>", " ", s, perl = TRUE, ignore.case = TRUE)
   s <- gsub("<[^>]+>", " ", s, perl = TRUE)
-  s <- htmltools::htmlUnescape(htmltools::htmlUnescape(s))
+  decode_entities <- function(x) {
+    tryCatch(
+      xml2::xml_text(xml2::read_html(paste0("<div>", x, "</div>"))),
+      error = function(e) x
+    )
+  }
+  s <- decode_entities(decode_entities(s))
   s <- gsub("\\s+", " ", s, perl = TRUE)
   s <- trimws(s)
   s <- sub("^abstract\\s*[:.\\-–—]?\\s*", "", s, ignore.case = TRUE, perl = TRUE)
