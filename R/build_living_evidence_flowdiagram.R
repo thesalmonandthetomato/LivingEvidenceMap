@@ -147,15 +147,15 @@ living_evidence_flow_data <- function(
 
 living_evidence_flowdiagram <- function(
     data,
-    fontsize = 10,
+    fontsize = 15,
     font = "Helvetica",
-    title_colour = "Goldenrod1",
-    greybox_colour = "Gainsboro",
-    section_colour = "LightSteelBlue2",
-    main_colour = "Black",
-    arrow_colour = "Black",
+    title_colour = "#ead2c5",
+    greybox_colour = "#c7d3d4",
+    section_colour = "#556c72",
+    main_colour = "#31444a",
+    arrow_colour = "#31444a",
     side_boxes = TRUE,
-    show_note = TRUE) {
+    show_note = FALSE) {
 
   required <- c(
     "database_results",
@@ -206,7 +206,7 @@ living_evidence_flowdiagram <- function(
     removal_lines <- c(
       removal_lines,
       paste0(
-        "Duplicate records removed (n = ",
+        "Duplicate records (n = ",
         display_n(data$duplicates_removed),
         ")"
       )
@@ -228,7 +228,7 @@ living_evidence_flowdiagram <- function(
         (is.na(data$duplicates_removed) ||
          is.na(data$other_removed_before_screening))) {
       removal_lines <- c(
-        "Duplicate records removed (n = TBC)",
+        "Duplicate records (n = TBC)",
         "Retractions and withdrawals (n = TBC)"
       )
     } else {
@@ -260,7 +260,7 @@ living_evidence_flowdiagram <- function(
   )
 
   topic_excluded_label <- paste0(
-    "Excluded from topic coding - missing abstracts\n(n = ",
+    "Records missing abstracts, not coded\n(n = ",
     display_n(data$excluded_topic_coding_missing_abstracts),
     ")"
   )
