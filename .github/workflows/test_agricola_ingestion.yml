@@ -1,0 +1,119 @@
+name: Test AGRICOLA Europe PMC ingestion
+
+on:
+  push:
+    branches:
+      - updater-workflow-00d-agricola-ingestion
+    paths:
+      - '.github/workflows/test_agricola_ingestion.yml'
+      - 'scripts/updater/workflow_00d_agricola_ingestion.R'
+      - 'scripts/updater/workflow_01v_agricola_sidecar_adapter.R'
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'Europe PMC AGRICOLA title/abstract query'
+        required: true
+        default: 'SRC:AGR AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))'
+        type: string
+      max_records:
+        description: 'Maximum AGRICOLA records for this test'
+        required: true
+        default: '100'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  agricola-ingestion-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout AGRICOLA integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00d-agricola-ingestion
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Resolve inputs
+        id: cfg
+        shell: bash
+        env:
+          INPUT_QUERY: ${{ inputs.query }}
+          INPUT_MAX_RECORDS: ${{ inputs.max_records }}
+        run: |
+          set -euo pipefail
+          query="${INPUT_QUERY:-SRC:AGR AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))}"
+          max_records="${INPUT_MAX_RECORDS:-100}"
+          {
+            echo "query<<EOF"
+            echo "$query"
+            echo "EOF"
+            echo "max_records=$max_records"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run lossless AGRICOLA ingestion
+        env:
+          AGRICOLA_QUERY: ${{ steps.cfg.outputs.query }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00d_agricola_ingestion.R \
+            --query "$AGRICOLA_QUERY" \
+            --max-records '${{ steps.cfg.outputs.max_records }}' \
+            --page-size 100 \
+            --output-dir outputs/updater/agricola_ingestion_test
+
+      - name: Build canonical-compatible AGRICOLA sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R \
+            --input-dir outputs/updater/agricola_ingestion_test \
+            --output-dir outputs/updater/agricola_sidecar_adapter
+
+      - name: Verify safeguards
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"canonical_json_modified": false' outputs/updater/agricola_ingestion_test/validation.json
+          grep -q '"canonical_json_modified": false' outputs/updater/agricola_sidecar_adapter/compatibility_audit.json
+          grep -q '"canonical_branch_written": false' outputs/updater/agricola_sidecar_adapter/compatibility_audit.json
+          test ! -e data/canonical/current/agricola
+          test ! -e data/canonical/current/agricola_sidecar_records.jsonl
+
+      - name: Show audits
+        if: always()
+        shell: bash
+        run: |
+          if [ -f outputs/updater/agricola_ingestion_test/manifest.json ]; then
+            cat outputs/updater/agricola_ingestion_test/manifest.json
+          fi
+          if [ -f outputs/updater/agricola_ingestion_test/validation.json ]; then
+            cat outputs/updater/agricola_ingestion_test/validation.json
+          fi
+          if [ -f outputs/updater/agricola_sidecar_adapter/compatibility_audit.json ]; then
+            cat outputs/updater/agricola_sidecar_adapter/compatibility_audit.json
+          fi
+
+      - name: Upload AGRICOLA test artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agricola-ingestion-test-${{ github.run_id }}
+          path: |
+            outputs/updater/agricola_ingestion_test/
+            outputs/updater/agricola_sidecar_adapter/
+          if-no-files-found: error
+          retention-days: 30
