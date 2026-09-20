@@ -4,6 +4,7 @@ suppressPackageStartupMessages({
   library(jsonlite)
   library(stringdist)
   library(digest)
+  library(xml2)
 })
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
@@ -40,8 +41,36 @@ scalar <- function(x) {
   y <- as.character(x[[1L]])
   if (!nzchar(trimws(y))) NULL else y
 }
-norm_text <- function(x) {
+strip_markup_text <- function(x) {
   x <- scalar(x)
+  if (is.null(x)) return(NULL)
+
+  # Parse as an HTML fragment so both ordinary HTML tags and JATS/XML-style
+  # formatting tags are removed while their enclosed text is retained.
+  # HTML entities are decoded by the parser. The original source fields are
+  # never modified; this function is used only to derive comparison text.
+  wrapped <- paste0("<div>", x, "</div>")
+  doc <- tryCatch(
+    suppressWarnings(read_html(wrapped, options = c("RECOVER", "NOERROR", "NOWARNING"))),
+    error = function(e) NULL
+  )
+  if (!is.null(doc)) {
+    node <- xml_find_first(doc, ".//div")
+    if (!inherits(node, "xml_missing")) x <- xml_text(node)
+  }
+
+  # Fallback for malformed fragments or any entities left after parsing.
+  x <- gsub("&nbsp;|&#160;", " ", x, ignore.case = TRUE, perl = TRUE)
+  x <- gsub("&amp;", "&", x, ignore.case = TRUE, perl = TRUE)
+  x <- gsub("&lt;", "<", x, ignore.case = TRUE, perl = TRUE)
+  x <- gsub("&gt;", ">", x, ignore.case = TRUE, perl = TRUE)
+  x <- gsub("&quot;|&#34;", "\"", x, ignore.case = TRUE, perl = TRUE)
+  x <- gsub("&#39;|&apos;", "'", x, ignore.case = TRUE, perl = TRUE)
+  x
+}
+
+norm_text <- function(x) {
+  x <- strip_markup_text(x)
   if (is.null(x)) return(NULL)
   x <- iconv(x, to = "ASCII//TRANSLIT")
   if (is.na(x)) return(NULL)
@@ -50,6 +79,16 @@ norm_text <- function(x) {
   x <- trimws(gsub("\\s+", " ", x, perl = TRUE))
   if (!nzchar(x)) NULL else x
 }
+
+# Regression checks for markup/entity normalisation used by deduplication.
+stopifnot(identical(
+  norm_text("Atlantic salmon, <i>Salmo salar</i>"),
+  norm_text("Atlantic salmon, Salmo salar")
+))
+stopifnot(identical(
+  norm_text("A &amp; B <italic>test</italic>"),
+  norm_text("A & B test")
+))
 norm_doi <- function(x) {
   x <- scalar(x)
   if (is.null(x)) return(NULL)
@@ -196,6 +235,7 @@ for (src in names(paths)) {
       doi = record_doi(r) %||% NA_character_,
       title = ttl %||% NA_character_,
       title_norm = norm_text(ttl) %||% NA_character_,
+      abstract_norm = norm_text(record_abstract(r)) %||% NA_character_,
       first_author = first_author(record_authors(r)) %||% NA_character_,
       year = yr,
       journal = record_journal(r) %||% NA_character_,
