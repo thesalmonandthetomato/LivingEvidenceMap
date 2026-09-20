@@ -125,3 +125,17 @@ A run explicitly records:
 - canonical commit SHA.
 
 A later promotion step can therefore be performed deliberately after the Lens canonical pipeline and multi-source reconciliation pipeline are both complete and validated.
+
+## Canonical schema v2 design gate
+
+Do not finalise the multi-source canonical bibliographic schema until the Web of Science (WoS) field inventory is available.
+
+Before schema finalisation, perform a cross-source field inventory covering at least:
+
+- Lens;
+- Scopus;
+- OpenAlex;
+- AGRICOLA;
+- Web of Science.
+
+Semantically equivalent fields must be mapped across providers before deciding which attributes belong in canonical core metadata, canonical extended metadata, source-specific metadata, or technical provenance only. The canonical datatype must be defined independently of any one provider and should not be frozen piecemeal before the WoS inventory has been assessed.
