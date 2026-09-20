@@ -484,18 +484,22 @@ merge_canonical_overlay <- function(incoming) {
   base
 }
 
-annotation_flag <- function(r, pattern) {
-  excluded <- c("lens","scopus","openalex","agricola","mapped_fields","canonical","identity",
-                "source","sidecar_identity","provenance","abstract_enrichment","reconciliation")
-  search_names <- function(x, depth = 0L) {
-    if (!is.list(x) || depth > 4L) return(character())
-    nm <- names(x) %||% character()
-    keep <- !(nm %in% excluded)
-    out <- nm[keep]
-    for (i in which(keep)) out <- c(out, search_names(x[[i]], depth + 1L))
-    unique(out)
-  }
-  any(grepl(pattern, search_names(r), ignore.case = TRUE, perl = TRUE))
+annotation_flags <- function(r) {
+  has_species_geography <- !is.null(r$annotations) && !is.null(r$annotations$species_geography)
+  has_species <- has_species_geography && !is.null(r$annotations$species_geography$species)
+  has_geography <- has_species_geography && !is.null(r$annotations$species_geography$geography)
+
+  topic_status <- tolower(scalar((r$topics %||% list())$status) %||% "")
+  has_topic <- !is.null(r$topics) && !topic_status %in% c("", "pending_llm")
+
+  has_publication <- !is.null(r$publication_status) || !is.null(r$notices)
+
+  list(
+    species = has_species,
+    geography = has_geography,
+    topic = has_topic,
+    publication_status = has_publication
+  )
 }
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -552,10 +556,11 @@ for (src in names(paths)) {
 
     if (isTRUE(row$is_representative[[1L]])) {
       rep_count <<- rep_count + 1L
-      has_species <- annotation_flag(out, "species")
-      has_geography <- annotation_flag(out, "geograph|country|location_annotation")
-      has_topic <- annotation_flag(out, "topic")
-      has_publication <- annotation_flag(out, "retract|notice|publication_status|expression_of_concern")
+      flags <- annotation_flags(out)
+      has_species <- flags$species
+      has_geography <- flags$geography
+      has_topic <- flags$topic
+      has_publication <- flags$publication_status
 
       annotation_counts[["species"]] <<- annotation_counts[["species"]] + as.integer(has_species)
       annotation_counts[["geography"]] <<- annotation_counts[["geography"]] + as.integer(has_geography)
