@@ -1,4 +1,5 @@
 #!/usr/bin/env Rscript
+# One-off rerun trigger for DOI repair validation
 
 suppressPackageStartupMessages({
   library(jsonlite)
