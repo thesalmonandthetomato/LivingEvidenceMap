@@ -1,0 +1,192 @@
+name: Workflow 04 - Multisource relevance screening
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow02_run_id:
+        description: 'Authoritative Workflow 02 multisource reconciliation run ID'
+        required: true
+        type: string
+      mode:
+        description: 'Workflow 04 mode'
+        required: true
+        default: validation_200
+        type: choice
+        options:
+          - validation_200
+          - production_queue
+      model:
+        description: 'OpenAI model'
+        required: true
+        default: gpt-5.6-luna
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  workflow04:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout multisource Workflow 04 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow04-multisource-relevance-screening
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(c('httr2','jsonlite','stringi','digest'))
+
+      - name: Validate R implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_04_multisource_relevance_screening.R')
+          cat('PASS: multisource Workflow 04 R implementation parses successfully\n')
+
+      - name: Download authoritative Workflow 02 artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW02_RUN_ID: ${{ inputs.workflow02_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p workflow02_input
+          gh run download "$WORKFLOW02_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-multisource-reconciliation-$WORKFLOW02_RUN_ID" \
+            --dir workflow02_input
+          test -s workflow02_input/representative_records.jsonl
+          test -s workflow02_input/report.json
+
+      - name: Build multisource relevance-screening queue
+        env:
+          MODE: ${{ inputs.mode }}
+          WORKFLOW02_RUN_ID: ${{ inputs.workflow02_run_id }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(jsonlite)
+            library(digest)
+          })
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          read_jsonl <- function(path) {
+            x <- readLines(path,warn=FALSE,encoding='UTF-8')
+            x <- x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          write_jsonl <- function(rows,path) {
+            dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+            con <- file(path,'wt',encoding='UTF-8')
+            on.exit(close(con),add=TRUE)
+            for(r in rows) writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
+          }
+          work_id <- function(r) as.character((r$reconciliation %||% list())$cluster_id %||% '')
+          records <- read_jsonl('workflow02_input/representative_records.jsonl')
+          if(!length(records)) stop('Workflow 02 representative records are empty')
+          ids <- vapply(records,work_id,character(1))
+          stopifnot(all(nzchar(ids)),!anyDuplicated(ids))
+
+          eligible <- Filter(function(r) {
+            rec <- r$reconciliation %||% list()
+            status <- as.character(rec$cluster_status %||% '')
+            if(!status %in% c('reconciled','singleton')) return(FALSE)
+            n <- r$notices %||% NULL
+            if(!is.null(n) && !isTRUE(n$record_downstream_eligible %||% n$downstream_eligible %||% TRUE)) return(FALSE)
+            TRUE
+          },records)
+
+          blocked_review <- sum(vapply(records,function(r) identical(as.character((r$reconciliation %||% list())$cluster_status %||% ''),'review_required'),logical(1)))
+          mode <- Sys.getenv('MODE')
+          queue <- eligible
+          selection <- 'all_resolved_representatives'
+          if(identical(mode,'validation_200')) {
+            if(length(eligible)<200L) stop('Fewer than 200 resolved representative records available')
+            keys <- vapply(eligible,function(r)digest(paste0('workflow04-multisource-validation-v1:',work_id(r)),algo='sha256',serialize=FALSE),character(1))
+            queue <- eligible[order(keys)][seq_len(200L)]
+            selection <- 'deterministic_sha256_sample_200'
+          } else if(!identical(mode,'production_queue')) {
+            stop('Unsupported Workflow 04 mode')
+          }
+
+          dir.create('outputs/workflow04',recursive=TRUE,showWarnings=FALSE)
+          write_jsonl(queue,'outputs/workflow04/screening_queue.jsonl')
+
+          src <- vapply(eligible,function(r)as.character((r$reconciliation %||% list())$source %||% 'unknown'),character(1))
+          manifest <- list(
+            workflow='04_multisource_relevance_screening',
+            workflow02_run_id=Sys.getenv('WORKFLOW02_RUN_ID'),
+            workflow02_representatives=length(records),
+            resolved_representatives=length(eligible),
+            review_required_blocked=blocked_review,
+            queue_records=length(queue),
+            queue_selection=selection,
+            resolved_representatives_by_representative_source=as.list(table(src)),
+            input='workflow02_input/representative_records.jsonl',
+            canonical_or_source_payload_modified=FALSE
+          )
+          writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/workflow04/input_manifest.json')
+          cat(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
+
+      - name: Run multisource R relevance screening
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_multisource_relevance_screening.R \
+            --input workflow02_input/representative_records.jsonl \
+            --queue outputs/workflow04/screening_queue.jsonl \
+            --output outputs/workflow04/screening_results.jsonl \
+            --checkpoint outputs/workflow04/checkpoint.json \
+            --summary outputs/workflow04/screening_summary.json \
+            --model "${{ inputs.model }}" \
+            --checkpoint-every 25 \
+            --mode openai
+
+      - name: Save exact prompt source
+        shell: Rscript {0}
+        run: |
+          source_file <- readLines('scripts/updater/workflow_04_multisource_relevance_screening.R',warn=FALSE,encoding='UTF-8')
+          start <- grep('^SYSTEM_PROMPT <- paste\\($',source_file)
+          stop <- grep('^PROMPT_VERSION <- ',source_file)
+          stopifnot(length(start)==1L,length(stop)==1L,stop>start)
+          writeLines(source_file[start:(stop-1L)],'outputs/workflow04/prompt_R_source.txt')
+
+      - name: Validate outputs
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          read_jsonl <- function(path) {
+            x <- readLines(path,warn=FALSE,encoding='UTF-8')
+            x <- x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          q <- read_jsonl('outputs/workflow04/screening_queue.jsonl')
+          r <- read_jsonl('outputs/workflow04/screening_results.jsonl')
+          stopifnot(length(q)==length(r))
+          qid <- vapply(q,function(x)as.character((x$reconciliation %||% list())$cluster_id %||% ''),character(1))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          rid <- vapply(r,function(x)as.character(x$work_id %||% ''),character(1))
+          stopifnot(all(nzchar(qid)),all(nzchar(rid)),!anyDuplicated(rid),setequal(qid,rid))
+          stopifnot(all(vapply(r,function(x)as.character(x$decision %||% '') %in% c('retain','exclude','uncertain'),logical(1))))
+          cat('PASS: multisource Workflow 04 output cardinality and work identities validated\n')
+
+      - name: Upload Workflow 04 artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-multisource-relevance-screening-${{ github.run_id }}
+          path: outputs/workflow04/
+          retention-days: 90
+          if-no-files-found: warn
