@@ -1,0 +1,218 @@
+name: Temporary RIS export - Workflow 02 run 35527630838
+
+on:
+  push:
+    branches:
+      - export-ris-35527630838
+    paths:
+      - '.github/workflows/tmp_export_ris_35527630838.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: export-ris-35527630838
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download authoritative Workflow 02 artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p wf02
+          gh run download 35527630838 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name workflow02-multisource-reconciliation-35527630838 \
+            --dir wf02
+          test -s wf02/representative_records.jsonl
+
+      - name: Export representative works to RIS
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+
+          textify <- function(x) {
+            if (is.null(x)) return("")
+            if (is.character(x)) return(paste(x[nzchar(x)], collapse="; "))
+            if (is.atomic(x)) return(paste(as.character(x), collapse="; "))
+            if (is.list(x)) {
+              vals <- unlist(lapply(x, textify), use.names=FALSE)
+              vals <- vals[nzchar(vals)]
+              return(paste(unique(vals), collapse="; "))
+            }
+            as.character(x)
+          }
+
+          scalar <- function(...) {
+            xs <- list(...)
+            for (x in xs) {
+              z <- textify(x)
+              if (nzchar(trimws(z))) return(trimws(z))
+            }
+            ""
+          }
+
+          clean <- function(x) {
+            x <- gsub("[\\r\\n]+", " ", as.character(x))
+            x <- gsub("[[:space:]]+", " ", x)
+            trimws(x)
+          }
+
+          get_can <- function(r) {
+            x <- r$canonical %||% list()
+            if (is.list(x)) x else list()
+          }
+
+          get_map <- function(r) {
+            x <- r$mapped_fields %||% list()
+            if (is.list(x)) x else list()
+          }
+
+          get_raw <- function(r) {
+            x <- ((r$lens %||% list())$raw_payload) %||% list()
+            if (is.list(x)) x else list()
+          }
+
+          author_names <- function(r) {
+            c <- get_can(r); m <- get_map(r); p <- get_raw(r)
+            a <- c$authors %||% m$authors %||% p$authors %||% p$author %||% list()
+            if (!is.list(a)) return(character())
+            out <- character()
+            for (au in a) {
+              if (is.character(au)) {
+                nm <- clean(au)
+              } else if (is.list(au)) {
+                nm <- scalar(
+                  au$name,
+                  au$display_name,
+                  au$full_name,
+                  paste(c(au$family %||% au$last_name %||% au$surname %||% "",
+                          au$given %||% au$first_name %||% au$given_name %||% ""), collapse=", ")
+                )
+                nm <- clean(gsub(",\\s*,", ",", nm))
+              } else nm <- ""
+              if (nzchar(nm)) out <- c(out,nm)
+            }
+            unique(out)
+          }
+
+          keywords <- function(r) {
+            c <- get_can(r); m <- get_map(r); p <- get_raw(r)
+            k <- c$keywords %||% m$keywords %||% p$keywords %||% p$keyword %||% p$author_keywords %||% list()
+            if (is.character(k)) {
+              if (length(k)==1L && grepl(";",k,fixed=TRUE)) k <- strsplit(k,";",fixed=TRUE)[[1]]
+              return(unique(trimws(k[nzchar(trimws(k))])))
+            }
+            if (is.list(k)) {
+              vals <- unlist(lapply(k,textify),use.names=FALSE)
+              vals <- trimws(vals[nzchar(trimws(vals))])
+              return(unique(vals))
+            }
+            character()
+          }
+
+          ris_type <- function(r) {
+            c <- get_can(r); m <- get_map(r); p <- get_raw(r)
+            typ <- tolower(scalar(c$publication_type,c$type,m$publication_type,m$type,p$publication_type,p$type,p$document_type))
+            if (grepl("book chapter|chapter",typ)) return("CHAP")
+            if (grepl("book",typ)) return("BOOK")
+            if (grepl("conference|proceeding",typ)) return("CPAPER")
+            if (grepl("thesis|dissertation",typ)) return("THES")
+            if (grepl("report",typ)) return("RPRT")
+            if (grepl("dataset|data set",typ)) return("DATA")
+            if (grepl("preprint",typ)) return("UNPB")
+            "JOUR"
+          }
+
+          con_in <- file("wf02/representative_records.jsonl","rt",encoding="UTF-8")
+          con_out <- file("LivingEvidenceMap_unique_records_355316.ris","wt",encoding="UTF-8")
+          on.exit({close(con_in); close(con_out)}, add=TRUE)
+
+          n <- 0L
+          with_title <- 0L
+          with_doi <- 0L
+          with_abs <- 0L
+
+          repeat {
+            ln <- readLines(con_in,n=1L,warn=FALSE)
+            if (!length(ln)) break
+            if (!nzchar(trimws(ln))) next
+            r <- fromJSON(ln,simplifyVector=FALSE)
+            c <- get_can(r); m <- get_map(r); p <- get_raw(r)
+            rec <- r$reconciliation %||% list()
+
+            id <- scalar(rec$cluster_id,(r$identity %||% list())$work_id,(r$identity %||% list())$lens_id,rec$source_record_id)
+            title <- clean(scalar(c$title,m$title,p$title))
+            abstract <- clean(scalar(c$abstract,m$abstract,p$abstract))
+            doi <- clean(scalar(c$doi,m$doi,(r$sidecar_identity %||% list())$doi,p$doi))
+            year <- clean(scalar(c$resolved_year,c$year,c$publication_year,m$year,m$publication_year,p$year,p$publication_year))
+            journal <- clean(scalar(c$source_title,c$journal,m$source_title,m$journal,p$source_title,p$journal,(p$source %||% list())$title,(p$publication %||% list())$title))
+            volume <- clean(scalar(c$volume,m$volume,p$volume))
+            issue <- clean(scalar(c$issue,m$issue,p$issue))
+            pages <- clean(scalar(c$pages,c$page_range,m$pages,m$page_range,p$pages,p$page_range))
+            start_page <- clean(scalar(c$start_page,m$start_page,p$start_page))
+            end_page <- clean(scalar(c$end_page,m$end_page,p$end_page))
+            url <- clean(scalar(c$url,m$url,p$url,p$link))
+            issn <- clean(scalar(c$issn,m$issn,p$issn))
+
+            writeLines(paste0("TY  - ",ris_type(r)),con_out)
+            if(nzchar(id)) writeLines(paste0("ID  - ",clean(id)),con_out)
+            if(nzchar(title)) { writeLines(paste0("TI  - ",title),con_out); with_title <- with_title+1L }
+            for(a in author_names(r)) writeLines(paste0("AU  - ",clean(a)),con_out)
+            if(nzchar(year)) writeLines(paste0("PY  - ",year),con_out)
+            if(nzchar(journal)) writeLines(paste0("JO  - ",journal),con_out)
+            if(nzchar(volume)) writeLines(paste0("VL  - ",volume),con_out)
+            if(nzchar(issue)) writeLines(paste0("IS  - ",issue),con_out)
+            if(nzchar(start_page)) writeLines(paste0("SP  - ",start_page),con_out)
+            if(nzchar(end_page)) writeLines(paste0("EP  - ",end_page),con_out)
+            if(!nzchar(start_page) && nzchar(pages)) writeLines(paste0("SP  - ",pages),con_out)
+            if(nzchar(doi)) { writeLines(paste0("DO  - ",doi),con_out); with_doi <- with_doi+1L }
+            if(nzchar(url)) writeLines(paste0("UR  - ",url),con_out)
+            if(nzchar(issn)) writeLines(paste0("SN  - ",issn),con_out)
+            for(k in keywords(r)) writeLines(paste0("KW  - ",clean(k)),con_out)
+            if(nzchar(abstract)) { writeLines(paste0("AB  - ",abstract),con_out); with_abs <- with_abs+1L }
+            writeLines("ER  - ",con_out)
+            writeLines("",con_out)
+
+            n <- n+1L
+          }
+
+          stopifnot(n==35316L)
+          summary <- list(
+            workflow02_run_id=35527630838,
+            representative_records=n,
+            records_with_title=with_title,
+            records_with_doi=with_doi,
+            records_with_abstract=with_abs,
+            output_file="LivingEvidenceMap_unique_records_355316.ris"
+          )
+          writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),"ris_export_summary.json")
+          cat(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),"\n")
+          cat("PASS: RIS export contains exactly 35,316 Workflow 02 representative records\n")
+
+      - name: Upload RIS
+        uses: actions/upload-artifact@v4
+        with:
+          name: living-evidence-map-ris-355316
+          path: |
+            LivingEvidenceMap_unique_records_355316.ris
+            ris_export_summary.json
+          retention-days: 30
+          if-no-files-found: error
