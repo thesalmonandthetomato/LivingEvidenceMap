@@ -493,7 +493,7 @@ living_evidence_flowdiagram <- function(
         txt.setAttribute('x', cx);
         txt.setAttribute('y', cy);
         txt.setAttribute('text-anchor', 'middle');
-        txt.setAttribute('dominant-baseline', 'middle');
+        txt.setAttribute('dominant-baseline', 'central');
         txt.setAttribute('transform', 'rotate(-90 ' + cx + ' ' + cy + ')');
         txt.setAttribute('fill', '#FFFFFF');
         txt.removeAttribute('style');
@@ -535,8 +535,44 @@ export_living_evidence_flow_svg <- function(widget, path) {
       stop("Could not locate static SVG side label node: ", node_id, call. = FALSE)
     }
 
-    x <- as.numeric(hit[4])
-    y <- as.numeric(hit[5]) - 3
+    # Centre the label from the actual rounded-rectangle path rather than
+    # estimating its centre from Graphviz's text baseline. This stays correct
+    # if the font size changes.
+    node_group_pattern <- paste0(
+      "<g[^>]*class=\\\"node\\\"[^>]*>[\\s\\S]*?<title>",
+      node_id,
+      "</title>[\\s\\S]*?</g>"
+    )
+    gm <- regexec(node_group_pattern, svg_text, perl = TRUE)
+    group_hit <- regmatches(svg_text, gm)[[1]]
+    if (!length(group_hit)) {
+      stop("Could not locate static SVG side-label group: ", node_id, call. = FALSE)
+    }
+
+    path_match <- regexec(
+      "<path[^>]*d=\\\"([^\\\"]+)\\\"",
+      group_hit[[1]],
+      perl = TRUE
+    )
+    path_hit <- regmatches(group_hit[[1]], path_match)[[1]]
+    if (length(path_hit) < 2) {
+      stop("Could not locate static SVG side-label shape: ", node_id, call. = FALSE)
+    }
+
+    coords <- suppressWarnings(as.numeric(
+      stringr::str_extract_all(
+        path_hit[[2]],
+        "-?[0-9]+(?:\\\\.[0-9]+)?"
+      )[[1]]
+    ))
+    if (length(coords) < 4 || length(coords) %% 2 != 0 || anyNA(coords)) {
+      stop("Could not parse static SVG side-label geometry: ", node_id, call. = FALSE)
+    }
+
+    xs <- coords[seq(1, length(coords), by = 2)]
+    ys <- coords[seq(2, length(coords), by = 2)]
+    x <- (min(xs) + max(xs)) / 2
+    y <- (min(ys) + max(ys)) / 2
 
     clean_text <- paste0(
       "<text text-anchor=\\\"middle\\\"",
@@ -545,7 +581,7 @@ export_living_evidence_flow_svg <- function(widget, path) {
       " font-family=\\\"Helvetica,sans-Serif\\\"",
       " font-size=\\\"11.00\\\"",
       " fill=\\\"#FFFFFF\\\"",
-      " dominant-baseline=\\\"middle\\\"",
+      " dominant-baseline=\\\"central\\\"",
       " transform=\\\"rotate(-90 ", x, " ", y, ")\\\">",
       label,
       "</text>"
