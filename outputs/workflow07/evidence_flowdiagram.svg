@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="720" viewBox="0 0 1000 720" role="img" aria-labelledby="title desc">
   <title id="title">Living Evidence Map flow diagram</title>
-  <desc id="desc">PRISMA-inspired living evidence map workflow showing five bibliographic databases: Lens, Scopus, Web of Science Core Collection, OpenAlex, and AGRICOLA.</desc>
+  <desc id="desc">PRISMA-inspired living evidence map workflow showing five bibliographic databases: AGRICOLA, Lens, OpenAlex, Scopus, and Web of Science Core Collection.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#31444a"/>
@@ -11,33 +11,33 @@
       .top { fill:#ead2c5; stroke:#31444a; stroke-width:1.5; }
       .section { fill:#556c72; stroke:#556c72; }
       .note { fill:#fff; stroke:#999; stroke-width:1.2; }
-      .label { font-family:Helvetica,Arial,sans-serif; font-size:16px; fill:#31444a; text-anchor:middle; }
-      .small { font-family:Helvetica,Arial,sans-serif; font-size:14px; fill:#31444a; text-anchor:middle; }
-      .sectiontext { font-family:Helvetica,Arial,sans-serif; font-size:16px; fill:#fff; text-anchor:middle; }
+      .label { font-family:Helvetica,Arial,sans-serif; font-size:15px; fill:#31444a; text-anchor:middle; }
+      .small { font-family:Helvetica,Arial,sans-serif; font-size:15px; fill:#31444a; text-anchor:middle; }
+      .sectiontext { font-family:Helvetica,Arial,sans-serif; font-size:15px; fill:#fff; text-anchor:middle; }
       .arrow { stroke:#31444a; stroke-width:1.8; fill:none; marker-end:url(#arrow); }
       .dash { stroke:#999; stroke-width:1.4; stroke-dasharray:7 6; fill:none; }
     </style>
   </defs>
 
   <!-- Identification -->
-  <rect class="section" x="28" y="48" width="54" height="142" rx="10"/>
-  <text class="sectiontext" x="55" y="119" dominant-baseline="middle" transform="rotate(-90 55 119)">Identification</text>
+  <rect class="section" x="28" y="48" width="54" height="132" rx="10"/>
+  <text class="sectiontext" x="55" y="114" dominant-baseline="middle" transform="rotate(-90 55 114)">Identification</text>
 
-  <rect class="top" x="150" y="28" width="420" height="182" rx="14"/>
+  <rect class="top" x="150" y="28" width="420" height="166" rx="14"/>
   <text class="label" x="360" y="56">
     <tspan x="360" dy="0" font-weight="700">Records identified from databases</tspan>
-    <tspan x="360" dy="25">Lens (n = TBC)</tspan>
+    <tspan x="360" dy="25">AGRICOLA (n = TBC)</tspan>
+    <tspan x="360" dy="22">Lens (n = TBC)</tspan>
+    <tspan x="360" dy="22">OpenAlex (n = TBC)</tspan>
     <tspan x="360" dy="22">Scopus (n = TBC)</tspan>
     <tspan x="360" dy="22">Web of Science Core Collection (n = TBC)</tspan>
-    <tspan x="360" dy="22">OpenAlex (n = TBC)</tspan>
-    <tspan x="360" dy="22">AGRICOLA (n = TBC)</tspan>
   </text>
 
-  <rect class="box" x="650" y="54" width="300" height="130"/>
-  <text class="small" x="800" y="80">
-    <tspan x="800" dy="0" font-weight="700">Records removed before screening</tspan>
-    <tspan x="800" dy="28">Duplicate records removed (n = TBC)</tspan>
-    <tspan x="800" dy="24">Retractions and withdrawals (n = TBC)</tspan>
+  <rect class="box" x="620" y="54" width="350" height="130"/>
+  <text class="small" x="795" y="80">
+    <tspan x="795" dy="0" font-weight="700">Records removed before screening</tspan>
+    <tspan x="795" dy="28">Duplicate records (n = TBC)</tspan>
+    <tspan x="795" dy="24">Retractions and withdrawals (n = TBC)</tspan>
   </text>
 
   <!-- Screening -->
@@ -46,14 +46,14 @@
 
   <rect class="box" x="150" y="255" width="420" height="100"/>
   <text class="label" x="360" y="294">
-    <tspan x="360" dy="0">Records screened at title and abstract</tspan>
+    <tspan x="360" dy="0" font-weight="700">Records screened at title and abstract</tspan>
     <tspan x="360" dy="27">(n = TBC)</tspan>
   </text>
 
-  <rect class="box" x="650" y="255" width="300" height="100"/>
-  <text class="small" x="800" y="294">
-    <tspan x="800" dy="0">Records excluded at title and abstract</tspan>
-    <tspan x="800" dy="27">(n = TBC)</tspan>
+  <rect class="box" x="620" y="255" width="350" height="100"/>
+  <text class="small" x="795" y="294">
+    <tspan x="795" dy="0" font-weight="700">Records excluded at title and abstract</tspan>
+    <tspan x="795" dy="27">(n = TBC)</tspan>
   </text>
 
   <!-- Included -->
@@ -66,10 +66,10 @@
     <tspan x="360" dy="27">(n = TBC)</tspan>
   </text>
 
-  <rect class="box" x="650" y="435" width="300" height="100"/>
-  <text class="small" x="800" y="474">
-    <tspan x="800" dy="0">Excluded from topic coding - missing abstracts</tspan>
-    <tspan x="800" dy="27">(n = TBC)</tspan>
+  <rect class="box" x="620" y="435" width="350" height="100"/>
+  <text class="small" x="795" y="474">
+    <tspan x="795" dy="0" font-weight="700">Records missing abstracts, not coded</tspan>
+    <tspan x="795" dy="27">(n = TBC)</tspan>
   </text>
 
   <!-- Topic coding -->
@@ -83,11 +83,11 @@
   </text>
 
   <!-- Arrows -->
-  <path class="arrow" d="M 360 210 L 360 255"/>
-  <path class="arrow" d="M 570 119 L 650 119"/>
-  <path class="arrow" d="M 570 305 L 650 305"/>
+  <path class="arrow" d="M 360 194 L 360 255"/>
+  <path class="arrow" d="M 570 111 L 620 111"/>
+  <path class="arrow" d="M 570 305 L 620 305"/>
   <path class="arrow" d="M 360 355 L 360 435"/>
-  <path class="arrow" d="M 570 485 L 650 485"/>
+  <path class="arrow" d="M 570 485 L 620 485"/>
   <path class="arrow" d="M 360 535 L 360 602"/>
 
   <!-- Note -->
