@@ -522,7 +522,7 @@ export_living_evidence_flow_svg <- function(widget, path) {
   # than appending attributes to Graphviz's original tag.
   rotate_static_label <- function(svg_text, node_id, label) {
     node_pattern <- paste0(
-      "(<g[^>]*class=\\\"node\\\"[^>]*>[\\s\\S]*?<title>",
+      "(<g[^>]*class=\\\"node\\\"[^>]*>\\s*<title>",
       node_id,
       "</title>[\\s\\S]*?)(<text[^>]*x=\\\"([^\\\"]+)\\\" ",
       "y=\\\"([^\\\"]+)\\\"[^>]*>[^<]*</text>)"
@@ -539,7 +539,7 @@ export_living_evidence_flow_svg <- function(widget, path) {
     # estimating its centre from Graphviz's text baseline. This stays correct
     # if the font size changes.
     node_group_pattern <- paste0(
-      "<g[^>]*class=\\\"node\\\"[^>]*>[\\s\\S]*?<title>",
+      "<g[^>]*class=\\\"node\\\"[^>]*>\\s*<title>",
       node_id,
       "</title>[\\s\\S]*?</g>"
     )
