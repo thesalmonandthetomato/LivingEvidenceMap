@@ -1,0 +1,48 @@
+name: Test Scopus Abstract Retrieval access
+
+on:
+  push:
+    branches:
+      - updater-workflow-00b-scopus-ingestion
+    paths:
+      - '.github/workflows/test_scopus_abstract_access.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  abstract-access-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Test META_ABS retrieval by EID
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          EID: '2-s2.0-105050010256'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/scopus_abstract_test
+          status=$(curl -sS \
+            -D outputs/scopus_abstract_test/headers.txt \
+            -o outputs/scopus_abstract_test/body.json \
+            -w '%{http_code}' \
+            -H "X-ELS-APIKey: $SCOPUS_API_TOKEN" \
+            -H 'Accept: application/json' \
+            "https://api.elsevier.com/content/abstract/eid/$EID?view=META_ABS")
+          echo "HTTP status: $status"
+          cat outputs/scopus_abstract_test/body.json
+          echo
+          if [ "$status" -ge 400 ]; then
+            exit 1
+          fi
+
+      - name: Upload diagnostic artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scopus-abstract-access-${{ github.run_id }}
+          path: outputs/scopus_abstract_test/
+          if-no-files-found: error
+          retention-days: 30
