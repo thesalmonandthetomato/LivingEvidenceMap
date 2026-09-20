@@ -99,47 +99,60 @@ started_at <- now_utc()
 overall_total <- count_query(base_query)
 if (is.na(overall_total)) stop("Could not determine unpartitioned Scopus total")
 
-# Build mutually exclusive year partitions. Scopus supports PUBYEAR numeric comparisons.
-current_year <- as.integer(format(Sys.Date(), "%Y")) + 1L
-year_counts <- list()
-for (yr in seq(1900L,current_year)) {
-  q <- sprintf("(%s) AND PUBYEAR = %d", base_query, yr)
-  n <- count_query(q)
-  if (!is.na(n) && n > 0L) {
-    if (n > 5000L) stop(sprintf("Year %d alone has %d results, exceeding offset ceiling; additional partitioning required",yr,n))
-    year_counts[[length(year_counts)+1L]] <- data.frame(
-      partition_id=sprintf("year_%04d",yr),
-      year=yr,
-      query=q,
-      expected_n=n,
-      stringsAsFactors=FALSE
-    )
+# Use direct offset pagination when the query result is within Scopus's 5,000-result
+# offset ceiling. This avoids dozens of unnecessary year-count requests for small
+# incremental LOAD-DATE updates. Larger/full searches retain mutually exclusive
+# PUBYEAR partitioning.
+if (overall_total <= 5000L) {
+  parts <- data.frame(
+    partition_id="all_results",
+    year=NA_integer_,
+    query=base_query,
+    expected_n=overall_total,
+    stringsAsFactors=FALSE
+  )
+  pagination_mode <- "direct_start_count"
+} else {
+  current_year <- as.integer(format(Sys.Date(), "%Y")) + 1L
+  year_counts <- list()
+  for (yr in seq(1900L,current_year)) {
+    q <- sprintf("(%s) AND PUBYEAR = %d", base_query, yr)
+    n <- count_query(q)
+    if (!is.na(n) && n > 0L) {
+      if (n > 5000L) stop(sprintf("Year %d alone has %d results, exceeding offset ceiling; additional partitioning required",yr,n))
+      year_counts[[length(year_counts)+1L]] <- data.frame(
+        partition_id=sprintf("year_%04d",yr),
+        year=yr,
+        query=q,
+        expected_n=n,
+        stringsAsFactors=FALSE
+      )
+    }
   }
-}
 
-parts <- do.call(rbind,year_counts)
-if (is.null(parts) || nrow(parts)==0L) stop("No year partitions found")
+  parts <- do.call(rbind,year_counts)
+  if (is.null(parts) || nrow(parts)==0L) stop("No year partitions found")
 
-# Include records lacking a publication year, if any, as a residual query.
-sum_year <- sum(parts$expected_n)
-residual_n <- overall_total - sum_year
-if (residual_n < 0L) stop(sprintf("Year partition counts (%d) exceed unpartitioned total (%d)",sum_year,overall_total))
-if (residual_n > 0L) {
-  # Scopus has no reliable NULL-PUBYEAR query documented; fail rather than silently omit.
-  stop(sprintf("Year partitions sum to %d but unpartitioned total is %d; %d records are not covered by PUBYEAR partitions",sum_year,overall_total,residual_n))
+  sum_year <- sum(parts$expected_n)
+  residual_n <- overall_total - sum_year
+  if (residual_n < 0L) stop(sprintf("Year partition counts (%d) exceed unpartitioned total (%d)",sum_year,overall_total))
+  if (residual_n > 0L) {
+    stop(sprintf("Year partitions sum to %d but unpartitioned total is %d; %d records are not covered by PUBYEAR partitions",sum_year,overall_total,residual_n))
+  }
+  pagination_mode <- "year_partitioned_start_count"
 }
 
 write.csv(parts,partitions_path,row.names=FALSE)
 
 manifest <- list(
-  workflow="00b_scopus_ingestion_year_partitioned",
+  workflow="00b_scopus_ingestion",
   implementation_language="R",
   status="running",
   started_at=started_at,
   endpoint=base_url,
   base_query=base_query,
   view=view,
-  pagination_mode="year_partitioned_start_count",
+  pagination_mode=pagination_mode,
   sort="+coverDate,+creator,+publicationName",
   unpartitioned_total=overall_total,
   partitions=nrow(parts),
@@ -198,7 +211,7 @@ for (pi in seq_len(nrow(parts))) {
     start <- start+n_entries
 
     write_json(list(
-      workflow="00b_scopus_ingestion_year_partitioned",
+      workflow="00b_scopus_ingestion",
       status="running",
       updated_at=now_utc(),
       overall_total=overall_total,
@@ -235,7 +248,7 @@ for (rf in raw_files) {
 dup_eids <- unique(eids[duplicated(eids)])
 dup_sids <- unique(scopus_ids[duplicated(scopus_ids)])
 validation <- list(
-  workflow="00b_scopus_ingestion_year_partitioned",
+  workflow="00b_scopus_ingestion",
   validated_at=now_utc(),
   unpartitioned_total=overall_total,
   partition_expected_total=sum(parts$expected_n),
@@ -270,7 +283,7 @@ manifest$output <- list(
 )
 write_json(manifest,manifest_path)
 write_json(list(
-  workflow="00b_scopus_ingestion_year_partitioned",
+  workflow="00b_scopus_ingestion",
   status="success",
   completed_at=now_utc(),
   entries_retrieved=recount,
@@ -278,4 +291,4 @@ write_json(list(
   canonical_json_modified=FALSE
 ),checkpoint_path)
 
-message(sprintf("PASS: Scopus year-partitioned harvest complete; %d records across %d pages.",recount,page_global))
+message(sprintf("PASS: Scopus harvest complete; %d records across %d pages (%s).",recount,page_global,pagination_mode))
