@@ -126,6 +126,7 @@ repeat {
   resp <- request_page(start, requested_count)
   body_text <- resp_body_string(resp)
   headers <- resp_headers(resp)
+  headers_json <- as.list(unclass(headers))
 
   raw_path <- file.path(raw_dir, sprintf("response_%06d.json", page))
   con <- file(raw_path, open = "wb")
@@ -133,7 +134,7 @@ repeat {
   close(con)
 
   header_path <- file.path(headers_dir, sprintf("response_%06d_headers.json", page))
-  write_json(as.list(headers), header_path)
+  write_json(headers_json, header_path)
 
   parsed <- tryCatch(
     fromJSON(body_text, simplifyVector = FALSE),
