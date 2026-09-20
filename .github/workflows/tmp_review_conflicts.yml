@@ -1,0 +1,62 @@
+name: Temporary Workflow 02 review-conflict report
+
+on:
+  push:
+    branches:
+      - workflow02-multisource-reconciliation
+    paths:
+      - '.github/workflows/tmp_review_conflicts.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download authoritative Workflow 02 artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 35527630838 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name workflow02-multisource-reconciliation-35527630838 \
+            --dir wf02
+
+      - name: Print ordered review-required clusters
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          read_jsonl <- function(path) {
+            con <- file(path, "rt", encoding = "UTF-8")
+            on.exit(close(con))
+            lapply(readLines(con, warn = FALSE), function(x) fromJSON(x, simplifyVector = FALSE))
+          }
+          clusters <- read_jsonl("wf02/clusters.jsonl")
+          reviews <- Filter(function(x) identical(x$status, "review_required"), clusters)
+          mans <- read_jsonl("wf02/multisource_manifestations.jsonl")
+          by_cluster <- split(mans, vapply(mans, function(x) x$reconciliation$cluster_id %||% "", character(1)))
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          scalar <- function(x) if (is.null(x) || !length(x)) NA_character_ else as.character(x[[1]])
+          title <- function(r) scalar(r$canonical$title %||% r$mapped_fields$title)
+          doi <- function(r) scalar(r$canonical$doi %||% r$mapped_fields$doi %||% r$sidecar_identity$doi)
+          year <- function(r) {
+            x <- r$canonical$year %||% r$canonical$publication_year %||% r$mapped_fields$year %||% r$mapped_fields$publication_year
+            scalar(x)
+          }
+          source <- function(r) scalar(r$reconciliation$source)
+          rid <- function(r) scalar(r$reconciliation$source_record_id)
+          for (i in seq_along(reviews)) {
+            cl <- reviews[[i]]
+            cat(sprintf("\n===== REVIEW %d =====\n", i))
+            cat("cluster_id:", cl$cluster_id, "\n")
+            if (!is.null(cl$resolved_year)) cat("resolved_year:", cl$resolved_year, "\n")
+            members <- by_cluster[[cl$cluster_id]]
+            for (r in members) {
+              cat(sprintf("SOURCE=%s | ID=%s | YEAR=%s | DOI=%s\nTITLE=%s\n",
+                          source(r), rid(r), year(r), doi(r), title(r)))
+            }
+          }
