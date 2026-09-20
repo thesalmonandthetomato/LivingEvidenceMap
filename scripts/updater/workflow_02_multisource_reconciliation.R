@@ -80,6 +80,13 @@ norm_text <- function(x) {
   if (!nzchar(x)) NULL else x
 }
 
+compact_text <- function(x) {
+  x <- norm_text(x)
+  if (is.null(x)) return(NULL)
+  x <- gsub(" ", "", x, fixed = TRUE)
+  if (!nzchar(x)) NULL else x
+}
+
 # Regression checks for markup/entity normalisation used by deduplication.
 stopifnot(identical(
   norm_text("Atlantic salmon, <i>Salmo salar</i>"),
@@ -89,6 +96,15 @@ stopifnot(identical(
   norm_text("A &amp; B <italic>test</italic>"),
   norm_text("A & B test")
 ))
+
+stopifnot(identical(
+  compact_text("Abundance of the Parasitic Copepod Caligus elongatus on Wild Pollock"),
+  compact_text("Abundance of the Parasitic CopepodCaligus elongatuson Wild Pollock")
+))
+stopifnot(identical(
+  doi_family("10.26434/chemrxiv-2023-g7n49/v2"),
+  "10.26434/chemrxiv-2023-g7n49"
+))
 norm_doi <- function(x) {
   x <- scalar(x)
   if (is.null(x)) return(NULL)
@@ -97,6 +113,15 @@ norm_doi <- function(x) {
   x <- sub("^doi:\\s*", "", x, perl = TRUE)
   x <- sub("\\.$", "", x)
   if (!nzchar(x)) NULL else x
+}
+
+doi_family <- function(x) {
+  x <- norm_doi(x)
+  if (is.null(x)) return(NULL)
+  # Repository DOI version suffixes identify versions of the same deposited work.
+  # Keep the raw/normalised DOI unchanged; this derived key is comparison-only.
+  x <- sub("/v[0-9]+$", "", x, perl = TRUE, ignore.case = TRUE)
+  x
 }
 norm_pages <- function(x) {
   x <- norm_text(x)
@@ -233,9 +258,12 @@ for (src in names(paths)) {
       source_record_id = rid,
       lens_id = lens_id(r) %||% NA_character_,
       doi = record_doi(r) %||% NA_character_,
+      doi_family = doi_family(record_doi(r)) %||% NA_character_,
       title = ttl %||% NA_character_,
       title_norm = norm_text(ttl) %||% NA_character_,
+      title_compact = compact_text(ttl) %||% NA_character_,
       abstract_norm = norm_text(record_abstract(r)) %||% NA_character_,
+      abstract_compact = compact_text(record_abstract(r)) %||% NA_character_,
       first_author = first_author(record_authors(r)) %||% NA_character_,
       year = yr,
       journal = record_journal(r) %||% NA_character_,
@@ -332,7 +360,10 @@ add_block_pairs <- function(values, block_name, max_group = 200L) {
 
 block_stats <- list(
   doi = add_block_pairs(meta$doi, "same_doi"),
+  doi_family = add_block_pairs(meta$doi_family, "same_doi_family"),
   exact_title = add_block_pairs(meta$title_norm, "exact_title"),
+  compact_title = add_block_pairs(meta$title_compact, "compact_title"),
+  exact_abstract = add_block_pairs(meta$abstract_norm, "exact_abstract"),
   author_year = add_block_pairs(ifelse(!is.na(meta$first_author) & !is.na(meta$year), paste(meta$first_author, meta$year, sep = "::"), NA), "first_author_year"),
   journal_volume_pages = add_block_pairs(ifelse(!is.na(meta$journal_norm) & !is.na(meta$volume) & !is.na(meta$pages), paste(meta$journal_norm, meta$volume, meta$pages, sep = "::"), NA), "journal_volume_pages")
 )
@@ -356,13 +387,23 @@ for (k in seq_along(pair_keys)) {
   b <- meta[z$j, , drop = FALSE]
   title_sim <- if (!is.na(a$title_norm) && !is.na(b$title_norm)) as.numeric(stringsim(a$title_norm, b$title_norm, method = "jw")) else NA_real_
   same_doi <- !is.na(a$doi) && !is.na(b$doi) && identical(a$doi, b$doi)
+  same_doi_family <- !is.na(a$doi_family) && !is.na(b$doi_family) && identical(a$doi_family, b$doi_family)
   different_doi <- !is.na(a$doi) && !is.na(b$doi) && !identical(a$doi, b$doi)
+  conflicting_doi_family <- different_doi && !same_doi_family
   author_match <- !is.na(a$first_author) && !is.na(b$first_author) && identical(a$first_author, b$first_author)
   year_diff <- if (!is.na(a$year) && !is.na(b$year)) abs(a$year - b$year) else NA_integer_
   year_compatible <- is.na(year_diff) || year_diff <= 1L
   journal_match <- !is.na(a$journal_norm) && !is.na(b$journal_norm) && identical(a$journal_norm, b$journal_norm)
   pages_match <- !is.na(a$pages) && !is.na(b$pages) && identical(a$pages, b$pages)
   exact_title <- !is.na(a$title_norm) && !is.na(b$title_norm) && identical(a$title_norm, b$title_norm)
+  compact_title_match <- !is.na(a$title_compact) && !is.na(b$title_compact) && identical(a$title_compact, b$title_compact)
+  exact_abstract <- !is.na(a$abstract_norm) && !is.na(b$abstract_norm) && identical(a$abstract_norm, b$abstract_norm)
+  abstract_sim <- if (!is.na(a$abstract_norm) && !is.na(b$abstract_norm) &&
+                      nchar(a$abstract_norm) >= 120L && nchar(b$abstract_norm) >= 120L &&
+                      (!is.na(title_sim) && title_sim >= 0.90 || exact_title || compact_title_match)) {
+    as.numeric(stringsim(a$abstract_norm, b$abstract_norm, method = "jw"))
+  } else NA_real_
+  strong_abstract_match <- exact_abstract || (!is.na(abstract_sim) && abstract_sim >= 0.985)
 
   classification <- "not_resolved"
   rule <- "candidate_only"
@@ -393,6 +434,21 @@ for (k in seq_along(pair_keys)) {
   } else if (same_doi && is.na(title_sim)) {
     classification <- "review"
     rule <- "same_doi_title_unavailable"
+  } else if (same_doi_family && different_doi && !is.na(title_sim) && title_sim >= 0.98) {
+    classification <- "duplicate"
+    rule <- "repository_version_doi_near_exact_title"
+  } else if (!conflicting_doi_family && exact_title && strong_abstract_match) {
+    classification <- "duplicate"
+    rule <- "exact_title_strong_abstract"
+  } else if (!conflicting_doi_family && compact_title_match && strong_abstract_match) {
+    classification <- "duplicate"
+    rule <- "compact_title_strong_abstract"
+  } else if (!conflicting_doi_family && !is.na(title_sim) && title_sim >= 0.97 && strong_abstract_match) {
+    classification <- "duplicate"
+    rule <- "near_exact_title_strong_abstract"
+  } else if (!conflicting_doi_family && exact_abstract && !is.na(title_sim) && title_sim >= 0.90) {
+    classification <- "duplicate"
+    rule <- "exact_abstract_title_compatible"
   } else if (!is.na(title_sim) && title_sim >= 0.985 && author_match && year_compatible) {
     classification <- "duplicate"
     rule <- "very_high_title_author_year"
@@ -412,7 +468,11 @@ for (k in seq_along(pair_keys)) {
     source_i = a$source, source_j = b$source,
     source_record_id_i = a$source_record_id, source_record_id_j = b$source_record_id,
     doi_i = a$doi, doi_j = b$doi,
+    doi_family_match = same_doi_family,
     title_similarity = round(title_sim, 6),
+    compact_title_match = compact_title_match,
+    exact_abstract_match = exact_abstract,
+    abstract_similarity = round(abstract_sim, 6),
     first_author_match = author_match,
     year_diff = year_diff,
     journal_match = journal_match,
