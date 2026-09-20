@@ -1,6 +1,12 @@
 name: Workflow 01 - Abstract enrichment
 
 on:
+  push:
+    branches:
+      - updater-workflow-01-abstract-enrichment
+    paths:
+      - '.github/workflows/workflow_01_abstract_enrichment.yml'
+      - 'scripts/updater/workflow_01_abstract_enrichment.py'
   workflow_dispatch:
     inputs:
       external_europe_pmc:
