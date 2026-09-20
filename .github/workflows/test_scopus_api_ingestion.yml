@@ -1,6 +1,12 @@
 name: Test updater Workflow 00B - Scopus API ingestion
 
 on:
+  push:
+    branches:
+      - updater-workflow-00b-scopus-ingestion
+    paths:
+      - '.github/workflows/test_scopus_api_ingestion.yml'
+      - 'scripts/updater/workflow_00b_scopus_ingestion.R'
   workflow_dispatch:
     inputs:
       query:
@@ -51,17 +57,41 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('httr2','jsonlite'))
 
+      - name: Resolve inputs
+        id: cfg
+        shell: bash
+        env:
+          INPUT_QUERY: ${{ inputs.query }}
+          INPUT_MAX_RECORDS: ${{ inputs.max_records }}
+          INPUT_PAGE_SIZE: ${{ inputs.page_size }}
+          INPUT_VIEW: ${{ inputs.view }}
+        run: |
+          set -euo pipefail
+          query="${INPUT_QUERY:-TITLE-ABS-KEY((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))}"
+          max_records="${INPUT_MAX_RECORDS:-100}"
+          page_size="${INPUT_PAGE_SIZE:-25}"
+          view="${INPUT_VIEW:-COMPLETE}"
+          {
+            echo "query<<EOF"
+            echo "$query"
+            echo "EOF"
+            echo "max_records=$max_records"
+            echo "page_size=$page_size"
+            echo "view=$view"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run lossless Scopus Search API ingestion
         env:
           SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_QUERY: ${{ steps.cfg.outputs.query }}
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_00b_scopus_ingestion.R \
-            --query '${{ inputs.query }}' \
-            --max-records '${{ inputs.max_records }}' \
-            --page-size '${{ inputs.page_size }}' \
-            --view '${{ inputs.view }}' \
+            --query "$SCOPUS_QUERY" \
+            --max-records '${{ steps.cfg.outputs.max_records }}' \
+            --page-size '${{ steps.cfg.outputs.page_size }}' \
+            --view '${{ steps.cfg.outputs.view }}' \
             --output-dir outputs/updater/scopus_ingestion_test
 
       - name: Show manifest
