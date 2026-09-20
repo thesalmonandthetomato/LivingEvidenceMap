@@ -20,6 +20,10 @@ jobs:
         with:
           r-version: 'release'
 
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
       - name: Download authoritative Workflow 02 artefact
         env:
           GH_TOKEN: ${{ github.token }}
