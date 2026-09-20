@@ -1,12 +1,6 @@
 name: Workflow 01 - Abstract enrichment
 
 on:
-  push:
-    branches:
-      - updater-workflow-01-abstract-enrichment
-    paths:
-      - '.github/workflows/workflow_01_abstract_enrichment.yml'
-      - 'scripts/updater/workflow_01_abstract_enrichment.R'
   workflow_dispatch:
     inputs:
       external_europe_pmc:
@@ -82,7 +76,7 @@ jobs:
 
       - name: Run Workflow 01 abstract enrichment
         env:
-          EXTERNAL: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.external_europe_pmc) }}
+          EXTERNAL: ${{ inputs.external_europe_pmc }}
         shell: bash
         run: |
           set -euo pipefail
