@@ -1,0 +1,79 @@
+version: 1
+updated: 2026-09-20
+
+modes:
+  full:
+    purpose: "Create a new complete source snapshot after a search-strategy change or explicit re-baselining."
+    automatic: false
+    preserve_raw: true
+    replace_foundational_baseline: false
+    note: "A full run creates a new snapshot. It never silently overwrites the 2026-09-20 foundational baseline."
+
+  fortnightly:
+    purpose: "Routine living-evidence update."
+    automatic_cadence_days: 14
+    preserve_raw: true
+    overlap_days: 14
+    state_rule: "Start from the last successful source checkpoint minus the overlap. Failed runs never advance state."
+
+  quarterly:
+    purpose: "Broader reconciliation sweep for delayed indexing, metadata changes, merges and records not exposed cleanly by incremental timestamps."
+    automatic: false
+    preserve_raw: true
+
+sources:
+  lens:
+    branch: updater-workflow-01-lens-ingestion
+    script: scripts/updater/lens_ingestion.py
+    full:
+      strategy: created_date_full_range
+      start_date: "1900-01-01"
+    fortnightly:
+      strategy: created_date_increment
+      field: created
+      overlap_days: 14
+    quarterly:
+      strategy: full_reconciliation
+      reason: "No equally suitable documented record-update timestamp is currently used by this pipeline."
+
+  scopus:
+    branch: updater-workflow-00b-scopus-ingestion
+    script: scripts/updater/workflow_00b_scopus_ingestion.R
+    full:
+      strategy: complete_query
+    fortnightly:
+      strategy: load_date_increment
+      field: LOAD-DATE
+      overlap_days: 14
+      note: "Direct deterministic offset pagination is used when <=5000 results; larger sets fall back to PUBYEAR partitioning."
+    quarterly:
+      strategy: full_reconciliation
+
+  openalex:
+    branch: updater-workflow-00c-openalex-ingestion
+    script: scripts/updater/workflow_00c_openalex_ingestion.R
+    full:
+      strategy: complete_oql_query
+    fortnightly:
+      strategy: full_refresh_fallback
+      note: "Premium from_updated_date sync is not assumed. Until entitlement is verified, rerun the complete ~28k search and diff/upsert by OpenAlex ID."
+    quarterly:
+      strategy: full_reconciliation
+
+  agricola:
+    provider: Europe PMC
+    branch: updater-workflow-00d-agricola-ingestion
+    script: scripts/updater/workflow_00d_agricola_ingestion.R
+    full:
+      strategy: complete_src_agr_query
+    fortnightly:
+      strategy: update_date_increment
+      field: UPDATE_DATE
+      overlap_days: 14
+    quarterly:
+      strategy: full_reconciliation
+
+baseline:
+  release_tag: source-baselines-2026-09-20
+  manifests_dir: data/source_snapshots/baselines
+  immutable: true
