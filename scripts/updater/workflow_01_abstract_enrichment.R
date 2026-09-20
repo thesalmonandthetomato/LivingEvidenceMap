@@ -393,7 +393,7 @@ for (source in names(paths)) {
       attempt <- lookup$attempt
 
       if (identical(attempt$outcome, "technical_error")) {
-        per_source[[source]]$external_technical_errors <- per_source[[source]]$external_technical_errors + 1L
+        per_source[[source]]$external_technical_errors <<- per_source[[source]]$external_technical_errors + 1L
         meta <- list(
           workflow = "01", provider = source, status = "external_technical_error",
           doi = doi, query_reason = reason, enriched_at = NULL,
@@ -416,9 +416,9 @@ for (source in names(paths)) {
           similarity <- best$similarity
 
           if (replacement_is_more_complete(existing_abstract(r), candidate$abstract, reason)) {
-            per_source[[source]]$abstracts_recovered_from_europe_pmc <- per_source[[source]]$abstracts_recovered_from_europe_pmc + 1L
+            per_source[[source]]$abstracts_recovered_from_europe_pmc <<- per_source[[source]]$abstracts_recovered_from_europe_pmc + 1L
             if (reason %in% c("ellipsis_truncated", "very_short")) {
-              per_source[[source]]$truncated_or_short_abstracts_replaced <- per_source[[source]]$truncated_or_short_abstracts_replaced + 1L
+              per_source[[source]]$truncated_or_short_abstracts_replaced <<- per_source[[source]]$truncated_or_short_abstracts_replaced + 1L
             }
             meta <- list(
               workflow = "01", provider = source,
@@ -434,7 +434,7 @@ for (source in names(paths)) {
             )
             out <- set_abstract(r, candidate$abstract, meta)
           } else {
-            per_source[[source]]$compatible_result_not_more_complete <- per_source[[source]]$compatible_result_not_more_complete + 1L
+            per_source[[source]]$compatible_result_not_more_complete <<- per_source[[source]]$compatible_result_not_more_complete + 1L
             meta <- list(
               workflow = "01", provider = source,
               status = "compatible_europe_pmc_abstract_not_more_complete",
@@ -449,7 +449,7 @@ for (source in names(paths)) {
             out <- annotate_record(r, meta)
           }
         } else {
-          per_source[[source]]$no_compatible_abstract_recovered <- per_source[[source]]$no_compatible_abstract_recovered + 1L
+          per_source[[source]]$no_compatible_abstract_recovered <<- per_source[[source]]$no_compatible_abstract_recovered + 1L
           meta <- list(
             workflow = "01", provider = source, status = "no_compatible_abstract_recovered",
             doi = doi, query_reason = reason, enriched_at = NULL,
