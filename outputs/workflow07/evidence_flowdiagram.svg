@@ -21,7 +21,7 @@
 
   <!-- Identification -->
   <rect class="section" x="28" y="48" width="54" height="142" rx="10"/>
-  <text class="sectiontext" transform="translate(55 119) rotate(-90)">Identification</text>
+  <text class="sectiontext" x="55" y="119" dominant-baseline="middle" transform="rotate(-90 55 119)">Identification</text>
 
   <rect class="top" x="150" y="28" width="420" height="182" rx="14"/>
   <text class="label" x="360" y="56">
@@ -42,7 +42,7 @@
 
   <!-- Screening -->
   <rect class="section" x="28" y="250" width="54" height="112" rx="10"/>
-  <text class="sectiontext" transform="translate(55 306) rotate(-90)">Screening</text>
+  <text class="sectiontext" x="55" y="306" dominant-baseline="middle" transform="rotate(-90 55 306)">Screening</text>
 
   <rect class="box" x="150" y="255" width="420" height="100"/>
   <text class="label" x="360" y="294">
@@ -58,7 +58,7 @@
 
   <!-- Included -->
   <rect class="section" x="28" y="430" width="54" height="112" rx="10"/>
-  <text class="sectiontext" transform="translate(55 486) rotate(-90)">Included</text>
+  <text class="sectiontext" x="55" y="486" dominant-baseline="middle" transform="rotate(-90 55 486)">Included</text>
 
   <rect class="box" x="150" y="435" width="420" height="100" style="stroke-width:2.4"/>
   <text class="label" x="360" y="474">
@@ -74,7 +74,7 @@
 
   <!-- Topic coding -->
   <rect class="section" x="28" y="602" width="54" height="88" rx="10"/>
-  <text class="sectiontext" transform="translate(55 646) rotate(-90)">Topic coding</text>
+  <text class="sectiontext" x="55" y="646" dominant-baseline="middle" transform="rotate(-90 55 646)">Topic coding</text>
 
   <rect class="box" x="150" y="602" width="420" height="88" style="stroke-width:2.4"/>
   <text class="label" x="360" y="638">
