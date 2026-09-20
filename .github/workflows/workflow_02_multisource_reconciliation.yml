@@ -72,7 +72,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','stringdist','digest'))
+        run: install.packages(c('jsonlite','stringdist','digest','xml2'))
 
       - name: Download Workflow 01 artefact
         env:
