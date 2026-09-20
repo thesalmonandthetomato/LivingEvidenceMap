@@ -33,7 +33,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','stringdist','httr2','xml2'))
+        run: install.packages(c('jsonlite','stringdist','httr2','xml2','digest'))
 
       - name: Validate Workflow 01 R syntax
         shell: Rscript {0}
