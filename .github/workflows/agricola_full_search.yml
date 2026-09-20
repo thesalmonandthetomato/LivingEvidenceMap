@@ -120,3 +120,5 @@ jobs:
             outputs/updater/agricola_full_sidecar/
           if-no-files-found: error
           retention-days: 30
+
+# trigger: full AGRICOLA harvest
