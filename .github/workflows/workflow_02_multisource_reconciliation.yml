@@ -45,7 +45,6 @@ jobs:
         run: parse(file='scripts/updater/workflow_02_multisource_reconciliation.R')
 
   reconcile:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     needs: syntax
@@ -60,7 +59,7 @@ jobs:
       - name: Checkout current canonical JSON read-only
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.canonical_ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.canonical_ref || 'canonical-repair-store' }}
           path: canonical_store
           lfs: true
           persist-credentials: false
@@ -78,7 +77,7 @@ jobs:
       - name: Download Workflow 01 artefact
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ inputs.workflow01_run_id }}
+          RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow01_run_id || '35507378528' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -97,8 +96,8 @@ jobs:
 
       - name: Run multi-source reconciliation
         env:
-          WORKFLOW01_RUN_ID: ${{ inputs.workflow01_run_id }}
-          CANONICAL_REF: ${{ inputs.canonical_ref }}
+          WORKFLOW01_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow01_run_id || '35507378528' }}
+          CANONICAL_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.canonical_ref || 'canonical-repair-store' }}
         shell: bash
         run: |
           set -euo pipefail
