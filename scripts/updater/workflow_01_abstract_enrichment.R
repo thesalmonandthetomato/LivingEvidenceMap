@@ -255,7 +255,7 @@ set_title_repair <- function(r, repaired_title, match_doi, abstract_match_sha256
     status = "title_repaired",
     original_value = original,
     repaired_value = repaired,
-    method = "exact_normalised_doi_plus_exact_normalised_abstract_cross_source_title_consensus",
+    method = "exact_normalised_doi_plus_exact_normalised_abstract_title_consensus",
     matched_doi = match_doi,
     abstract_match_sha256 = abstract_match_sha256,
     supporting_records = supporting_records,
@@ -480,8 +480,7 @@ for (source in names(paths)) {
 title_repair_index <- new.env(hash = TRUE, parent = emptyenv())
 for (key in names(title_match_groups)) {
   entries <- title_match_groups[[key]]
-  sources <- unique(vapply(entries, function(x) x$source, character(1)))
-  if (length(entries) < 2L || length(sources) < 2L) next
+  if (length(entries) < 2L) next
   chosen <- choose_group_title(entries)
   if (is.null(chosen)) next
   parts <- strsplit(key, "::", fixed = TRUE)[[1L]]
@@ -685,8 +684,8 @@ report <- list(
       "existing abstracts under %d cleaned characters are queried and replaced only by a substantially fuller title-compatible abstract",
       SHORT_ABSTRACT_CHARS
     ),
-    cross_source_matching_performed = "title repair only: exact normalised DOI plus exact normalised existing abstract across at least two source providers",
-    cross_source_title_repair = "repair mapped/canonical title deterministically from matching manifestations; raw source titles remain unchanged",
+    record_matching_performed = "title repair only: exact normalised DOI plus exact normalised existing abstract across at least two manifestations",
+    title_repair = "repair mapped/canonical title deterministically from matching manifestations; raw source titles remain unchanged",
     cross_source_abstract_transfer_performed = FALSE,
     deduplication_performed = FALSE,
     external_provider = "Europe PMC",
