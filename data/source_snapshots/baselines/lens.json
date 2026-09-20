@@ -1,0 +1,12 @@
+{
+  "source": "lens",
+  "snapshot_role": "baseline_at_multisource_integration",
+  "snapshot_date": "2026-09-20",
+  "storage_source": "canonical-repair-store:data/canonical/current/repair/records.jsonl",
+  "storage_format": "JSONL; each canonical record retains lens.raw_payload",
+  "note": "This is a lossless per-record Lens source snapshot embedded in the canonical repair store, not the original paginated Lens API response files.",
+  "lfs_sha256": "0c22f9a5678e70309cb81ea6b241e67eab9bcc561d6b4a570447c75faddff4ba",
+  "size_bytes": 309218349,
+  "durable_release_tag": "source-baselines-2026-09-20",
+  "immutable": true
+}
