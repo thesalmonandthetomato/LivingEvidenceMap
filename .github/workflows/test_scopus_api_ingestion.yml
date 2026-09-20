@@ -1,0 +1,82 @@
+name: Test updater Workflow 00B - Scopus API ingestion
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'Scopus Advanced Search query'
+        required: true
+        default: 'TITLE-ABS-KEY((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))'
+        type: string
+      max_records:
+        description: 'Maximum Scopus records to retrieve for this test'
+        required: true
+        default: '100'
+        type: string
+      page_size:
+        description: 'Records requested per API call'
+        required: true
+        default: '25'
+        type: string
+      view:
+        description: 'Scopus Search API response view'
+        required: true
+        default: 'COMPLETE'
+        type: choice
+        options:
+          - COMPLETE
+          - STANDARD
+
+permissions:
+  contents: read
+
+jobs:
+  scopus-ingestion-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Scopus ingestion test branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00b-scopus-ingestion
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Run lossless Scopus Search API ingestion
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00b_scopus_ingestion.R \
+            --query '${{ inputs.query }}' \
+            --max-records '${{ inputs.max_records }}' \
+            --page-size '${{ inputs.page_size }}' \
+            --view '${{ inputs.view }}' \
+            --output-dir outputs/updater/scopus_ingestion_test
+
+      - name: Show manifest
+        if: always()
+        shell: bash
+        run: |
+          if [ -f outputs/updater/scopus_ingestion_test/manifest.json ]; then
+            cat outputs/updater/scopus_ingestion_test/manifest.json
+          fi
+
+      - name: Upload Scopus ingestion artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-workflow-00b-scopus-ingestion-${{ github.run_id }}
+          path: outputs/updater/scopus_ingestion_test/
+          if-no-files-found: error
+          retention-days: 30
