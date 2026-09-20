@@ -1,4 +1,5 @@
 name: Workflow 06 - repair duplicate-path chunk and combine
+# Recovery of run 35450192652; no new classification batch is submitted.
 
 on:
   workflow_dispatch:
