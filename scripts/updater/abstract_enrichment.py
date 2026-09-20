@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Workflow 01B: Europe PMC-only abstract enrichment for DOI-bearing Lens records.
+"""Workflow 01: Europe PMC-only abstract repair/enrichment for DOI-bearing Lens records.
 
 Canonical abstracts are cleaned at the end of enrichment so downstream deduplication
 sees comparable plain text. The original source payload is never modified.
@@ -163,7 +163,7 @@ def main():
         enriched=dict(r)
         enriched["canonical"]=canonicalise(r,source_abstract,fill_defaults=not args.clean_only)
         if not args.clean_only:
-            enriched["abstract_enrichment"]={"workflow":"01B","provider":"europe_pmc","status":status,"doi":d,"retrieved_at":now() if recovered else None,"attempts":attempts,"cleaning":{"method":"html_jats_plaintext_v1","source_chars":len(source_abstract or ""),"cleaned_chars":len(cleaned_abstract or ""),"changed":bool(source_abstract and cleaned_abstract != source_abstract)}}
+            enriched["abstract_enrichment"]={"workflow":"01","provider":"europe_pmc","status":status,"doi":d,"retrieved_at":now() if recovered else None,"attempts":attempts,"cleaning":{"method":"html_jats_plaintext_v1","source_chars":len(source_abstract or ""),"cleaned_chars":len(cleaned_abstract or ""),"changed":bool(source_abstract and cleaned_abstract != source_abstract)}}
         canonical_changed=original_canonical != enriched["canonical"].get("abstract")
         out.append(enriched)
         audit.append({"lens_id":lens_id(r),"doi":d,"status":status,"abstract_chars":len(cleaned_abstract or ""),"abstract_source_chars":len(source_abstract or ""),"abstract_text_normalised":bool(source_abstract and cleaned_abstract != source_abstract),"canonical_abstract_changed":canonical_changed,"attempts":attempts})
@@ -174,7 +174,7 @@ def main():
     counts={}
     for x in audit: counts[x["status"]]=counts.get(x["status"],0)+1
     report={
-        "workflow":"01B_abstract_enrichment","provider":"europe_pmc","created_at":now(),
+        "workflow":"01_abstract_enrichment","provider":"europe_pmc","created_at":now(),
         "mode":"clean_only" if args.clean_only else "enrich_and_clean",
         "total_records":len(rows),"expected_records":args.expected_records,"status_counts":counts,
         "doi_missing_abstract_targets":sum(bool(x["doi"]) and x["status"] not in {"existing_abstract","missing_clean_only"} for x in audit),
