@@ -24,6 +24,8 @@ canonical_path <- arg("--canonical")
 output_dir <- arg("--output-dir")
 canonical_ref <- arg("--canonical-ref", "unknown")
 canonical_commit <- arg("--canonical-commit", "unknown")
+workflow_commit <- arg("--workflow-commit", "unknown")
+workflow01_run_id <- arg("--workflow01-run-id", "unknown")
 
 required_args <- list(lens_path, scopus_path, openalex_path, agricola_path, canonical_path, output_dir)
 if (any(vapply(required_args, is.null, logical(1)))) {
@@ -372,10 +374,11 @@ for (g in groups) {
   cid <- paste0("work-", substr(digest(cluster_key, algo = "sha256", serialize = FALSE), 1L, 16L))
   cluster_status <- if (conflicts) "review_required" else if (length(g) > 1L) "reconciled" else "singleton"
 
+  pub_type <- ifelse(is.na(sub$publication_type), "", sub$publication_type)
   score <- ifelse(sub$canonical_overlay_present, 1000, 0) +
     ifelse(sub$source == "lens", 100, 0) +
     ifelse(sub$has_abstract, 20, 0) +
-    ifelse(grepl("preprint|conference abstract|proceedings", tolower(sub$publication_type %||% ""), perl = TRUE), -10, 0)
+    ifelse(grepl("preprint|conference abstract|proceedings", tolower(pub_type), perl = TRUE), -10, 0)
   rep_idx <- g[which.max(score)]
 
   cluster_id_by_idx[g] <- cid
@@ -570,6 +573,10 @@ report <- list(
   implementation_language = "R",
   status = "success",
   created_at = now_utc(),
+  provenance = list(
+    workflow_commit = workflow_commit,
+    workflow01_run_id = workflow01_run_id
+  ),
   inputs = as.list(n_by_source),
   total_source_manifestations = nrow(meta),
   canonical_overlay = list(
