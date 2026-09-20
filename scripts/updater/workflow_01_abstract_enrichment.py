@@ -2,8 +2,8 @@
 """Workflow 01: source-independent external abstract enrichment.
 
 Each Workflow 00 source is handled independently. Existing source-native abstracts
-are cleaned but never replaced. Records still missing abstracts are queried against
-Europe PMC by exact normalised DOI, and an abstract is accepted only when the
+are retained unchanged and are not treated as enrichment. Records still missing
+abstracts are queried against Europe PMC by exact normalised DOI, and an abstract is accepted only when the
 record's own title is compatible with the Europe PMC title (Jaro-Winkler >= 0.90).
 
 A DOI lookup cache is shared only to avoid repeated Europe PMC requests. No
@@ -184,6 +184,11 @@ def jaro_winkler(a,b):
         prefix+=1
     return jaro + prefix*0.1*(1-jaro)
 
+def annotate(record,meta):
+    out=dict(record)
+    out["abstract_enrichment"]=meta
+    return out
+
 def set_abstract(record,text,meta):
     out=dict(record)
     cleaned=clean_abstract(text)
@@ -311,19 +316,19 @@ def main():
         for record in rows:
             doi=record_doi(record)
             title=record_title(record)
-            old=clean_abstract(existing_abstract(record))
-            if old:
+            old=existing_abstract(record)
+            if isinstance(old,str) and old.strip():
                 stats["existing_abstracts"]+=1
                 meta={
                     "workflow":"01",
                     "provider":source,
-                    "status":"existing_abstract",
+                    "status":"existing_abstract_not_queried",
                     "doi":doi,
                     "enriched_at":None,
-                    "method":"source_native",
+                    "method":None,
                     "canonical_store_modified":False,
                 }
-                out.append(set_abstract(record,old,meta))
+                out.append(annotate(record,meta))
             elif not doi:
                 stats["missing_without_doi"]+=1
                 meta={
@@ -335,7 +340,7 @@ def main():
                     "method":None,
                     "canonical_store_modified":False,
                 }
-                out.append(set_abstract(record,None,meta))
+                out.append(annotate(record,meta))
             elif not norm_title(title):
                 stats["missing_without_title"]+=1
                 meta={
@@ -360,7 +365,7 @@ def main():
                     "method":None,
                     "canonical_store_modified":False,
                 }
-                out.append(set_abstract(record,None,meta))
+                out.append(annotate(record,meta))
                 targets_by_doi[doi].append((source,idx,title))
         prepared[source]=out
         per_source[source]=stats
@@ -392,7 +397,7 @@ def main():
                         "attempt":attempt,
                         "canonical_store_modified":False,
                     }
-                    prepared[source][idx]=set_abstract(record,None,meta)
+                    prepared[source][idx]=annotate(record,meta)
                     continue
 
                 compatible=[]
@@ -433,7 +438,7 @@ def main():
                         "attempt":attempt,
                         "canonical_store_modified":False,
                     }
-                    prepared[source][idx]=set_abstract(record,None,meta)
+                    prepared[source][idx]=annotate(record,meta)
 
     outdir=Path(args.output_dir)
     outdir.mkdir(parents=True,exist_ok=True)
@@ -457,6 +462,8 @@ def main():
         "created_at":now(),
         "methodology":{
             "source_processing":"independent",
+            "existing_abstracts":"retained unchanged and not queried",
+            "missing_abstracts":"queried against Europe PMC when DOI and title are available",
             "cross_source_matching_performed":False,
             "cross_source_abstract_transfer_performed":False,
             "deduplication_performed":False,
