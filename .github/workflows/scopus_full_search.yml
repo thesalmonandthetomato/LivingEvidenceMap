@@ -116,3 +116,5 @@ jobs:
           retention-days: 30
 
 # trigger: cursor full harvest
+
+# trigger: year-partitioned full harvest
