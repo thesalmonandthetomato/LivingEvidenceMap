@@ -477,7 +477,7 @@ living_evidence_flowdiagram <- function(
         ['section_identification', 'Identification'],
         ['section_screening', 'Screening'],
         ['section_included', 'Included'],
-        ['section_topic_coding', 'Topic coding']
+        ['section_topic_coding', 'Mapping']
       ]);
       document.querySelectorAll('g.node').forEach(function(node) {
         const title = node.querySelector('title');
@@ -557,7 +557,7 @@ export_living_evidence_flow_svg <- function(widget, path) {
   svg <- rotate_static_label(svg, "section_identification", "Identification")
   svg <- rotate_static_label(svg, "section_screening", "Screening")
   svg <- rotate_static_label(svg, "section_included", "Included")
-  svg <- rotate_static_label(svg, "section_topic_coding", "Topic coding")
+  svg <- rotate_static_label(svg, "section_topic_coding", "Mapping")
 
   writeLines(svg, path, useBytes = TRUE)
   invisible(path)
