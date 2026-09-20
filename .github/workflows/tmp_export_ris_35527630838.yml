@@ -69,6 +69,11 @@ jobs:
             ""
           }
 
+          source_name <- function(x) {
+            if (is.list(x)) return(scalar(x$title,x$name))
+            scalar(x)
+          }
+
           clean <- function(x) {
             x <- gsub("[\\r\\n]+", " ", as.character(x))
             x <- gsub("[[:space:]]+", " ", x)
@@ -163,7 +168,7 @@ jobs:
             abstract <- clean(scalar(c$abstract,m$abstract,p$abstract))
             doi <- clean(scalar(c$doi,m$doi,(r$sidecar_identity %||% list())$doi,p$doi))
             year <- clean(scalar(c$resolved_year,c$year,c$publication_year,m$year,m$publication_year,p$year,p$publication_year))
-            journal <- clean(scalar(c$source_title,c$journal,m$source_title,m$journal,p$source_title,p$journal,(p$source %||% list())$title,(p$publication %||% list())$title))
+            journal <- clean(scalar(c$source_title,c$journal,m$source_title,m$journal,p$source_title,p$journal,source_name(p$source),source_name(p$publication)))
             volume <- clean(scalar(c$volume,m$volume,p$volume))
             issue <- clean(scalar(c$issue,m$issue,p$issue))
             pages <- clean(scalar(c$pages,c$page_range,m$pages,m$page_range,p$pages,p$page_range))
