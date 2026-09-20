@@ -67,8 +67,7 @@ for (i in seq_along(records)) {
       first_name = scalar(a$firstName),
       last_name = scalar(a$lastName),
       initials = scalar(a$initials),
-      author_id = scalar(a$authorId),
-      orcid = scalar(a$authorId) # retained as supplied; not assumed to be ORCID semantically
+      author_id = scalar(a$authorId)
     ))
   }
 
