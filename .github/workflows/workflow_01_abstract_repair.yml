@@ -1,0 +1,94 @@
+name: Workflow 01 - Abstract repair
+
+on:
+  workflow_dispatch:
+    inputs:
+      external_europe_pmc:
+        description: 'After preserved-source repair, query Europe PMC once per unresolved DOI'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  abstract-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout Workflow 01
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-01-abstract-enrichment
+          path: workflow01
+          persist-credentials: false
+
+      - name: Download frozen source baselines and sidecars
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p baselines sidecars/scopus sidecars/openalex sidecars/agricola
+
+          gh release download source-baselines-2026-09-20 \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir baselines \
+            --pattern 'lens-baseline-2026-09-20.jsonl'
+
+          gh release download source-sidecars-2026-09-20 \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir sidecars-release \
+            --pattern 'scopus-sidecar-2026-09-20.jsonl.gz' \
+            --pattern 'openalex-sidecar-2026-09-20.jsonl.gz' \
+            --pattern 'agricola-sidecar-2026-09-20.jsonl.gz' \
+            --pattern 'SHA256SUMS'
+
+          (
+            cd sidecars-release
+            sha256sum -c SHA256SUMS --ignore-missing
+          )
+
+          gunzip -c sidecars-release/scopus-sidecar-2026-09-20.jsonl.gz > sidecars/scopus/scopus_sidecar_records.jsonl
+          gunzip -c sidecars-release/openalex-sidecar-2026-09-20.jsonl.gz > sidecars/openalex/openalex_sidecar_records.jsonl
+          gunzip -c sidecars-release/agricola-sidecar-2026-09-20.jsonl.gz > sidecars/agricola/agricola_sidecar_records.jsonl
+
+          test -s baselines/lens-baseline-2026-09-20.jsonl
+          test -s sidecars/scopus/scopus_sidecar_records.jsonl
+          test -s sidecars/openalex/openalex_sidecar_records.jsonl
+          test -s sidecars/agricola/agricola_sidecar_records.jsonl
+
+      - name: Run Workflow 01 abstract repair
+        env:
+          EXTERNAL: ${{ github.event_name == 'workflow_dispatch' && inputs.external_europe_pmc || false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          extra='--no-external'
+          if [ "$EXTERNAL" = "true" ]; then extra=''; fi
+          python workflow01/scripts/updater/workflow_01_abstract_repair.py             --lens baselines/lens-baseline-2026-09-20.jsonl             --scopus sidecars/scopus/scopus_sidecar_records.jsonl             --openalex sidecars/openalex/openalex_sidecar_records.jsonl             --agricola sidecars/agricola/agricola_sidecar_records.jsonl             --output-dir outputs/workflow01             $extra
+          cat outputs/workflow01/report.json
+
+      - name: Validate Workflow 01 outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s outputs/workflow01/lens_records_for_deduplication.jsonl
+          test -s outputs/workflow01/scopus_records_for_deduplication.jsonl
+          test -s outputs/workflow01/openalex_records_for_deduplication.jsonl
+          test -s outputs/workflow01/agricola_records_for_deduplication.jsonl
+          test -s outputs/workflow01/report.json
+          grep -q '"canonical_store_modified": false' outputs/workflow01/report.json
+          grep -q '"source_payloads_modified": false' outputs/workflow01/report.json
+
+      - name: Upload Workflow 01 outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-abstract-repair-${{ github.run_id }}
+          path: |
+            outputs/workflow01/
+          if-no-files-found: warn
+          retention-days: 30
