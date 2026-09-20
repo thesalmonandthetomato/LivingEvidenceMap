@@ -45,7 +45,9 @@ write_json <- function(x, path) {
              path, useBytes = TRUE)
 }
 
-`%||%` <- function(x, y) if (is.null(x)) y else x\n\nscalar_text <- function(x, default = NA_character_) {
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+scalar_text <- function(x, default = NA_character_) {
   if (is.null(x) || length(x) == 0L) return(default)
   y <- as.character(x[[1L]])
   if (!nzchar(y)) default else y
