@@ -118,3 +118,5 @@ jobs:
 # trigger: cursor full harvest
 
 # trigger: year-partitioned full harvest
+
+# trigger: deterministic sorted harvest
