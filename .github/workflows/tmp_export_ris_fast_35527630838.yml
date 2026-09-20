@@ -1,0 +1,200 @@
+name: Temporary fast RIS export - Workflow 02 run 35527630838
+
+on:
+  push:
+    branches:
+      - export-ris-35527630838
+    paths:
+      - '.github/workflows/tmp_export_ris_fast_35527630838.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: export-ris-35527630838
+          persist-credentials: false
+
+      - name: Download authoritative Workflow 02 artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p wf02
+          gh run download 35527630838 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name workflow02-multisource-reconciliation-35527630838 \
+            --dir wf02
+          test -s wf02/representative_records.jsonl
+
+      - name: Export representative works to RIS
+        shell: python
+        run: |
+          import json, re
+
+          inp='wf02/representative_records.jsonl'
+          out='LivingEvidenceMap_unique_records_35316.ris'
+
+          def textify(x):
+              if x is None: return ''
+              if isinstance(x,str): return x
+              if isinstance(x,(int,float,bool)): return str(x)
+              if isinstance(x,list):
+                  return '; '.join(dict.fromkeys(v for v in (textify(i).strip() for i in x) if v))
+              if isinstance(x,dict):
+                  vals=[]
+                  for k in ('title','name','display_name','full_name','value'):
+                      v=textify(x.get(k)).strip()
+                      if v: vals.append(v)
+                  if vals: return '; '.join(dict.fromkeys(vals))
+                  return '; '.join(dict.fromkeys(v for v in (textify(i).strip() for i in x.values()) if v))
+              return str(x)
+
+          def scalar(*xs):
+              for x in xs:
+                  z=textify(x).strip()
+                  if z: return z
+              return ''
+
+          def clean(x):
+              return re.sub(r'\s+',' ',str(x)).strip()
+
+          def can(r):
+              x=r.get('canonical')
+              return x if isinstance(x,dict) else {}
+
+          def mapped(r):
+              x=r.get('mapped_fields')
+              return x if isinstance(x,dict) else {}
+
+          def raw(r):
+              x=((r.get('lens') or {}).get('raw_payload') if isinstance(r.get('lens'),dict) else None)
+              return x if isinstance(x,dict) else {}
+
+          def source_name(x):
+              if isinstance(x,dict): return scalar(x.get('title'),x.get('name'))
+              return scalar(x)
+
+          def authors(r):
+              c,m,p=can(r),mapped(r),raw(r)
+              a=c.get('authors') or m.get('authors') or p.get('authors') or p.get('author') or []
+              if isinstance(a,str): return [clean(a)] if a.strip() else []
+              if not isinstance(a,list): return []
+              out=[]
+              for au in a:
+                  if isinstance(au,str):
+                      nm=clean(au)
+                  elif isinstance(au,dict):
+                      nm=scalar(au.get('name'),au.get('display_name'),au.get('full_name'))
+                      if not nm:
+                          fam=scalar(au.get('family'),au.get('last_name'),au.get('surname'))
+                          giv=scalar(au.get('given'),au.get('first_name'),au.get('given_name'))
+                          nm=', '.join(x for x in (fam,giv) if x)
+                      nm=clean(nm)
+                  else:
+                      nm=''
+                  if nm and nm not in out: out.append(nm)
+              return out
+
+          def kws(r):
+              c,m,p=can(r),mapped(r),raw(r)
+              k=c.get('keywords') or m.get('keywords') or p.get('keywords') or p.get('keyword') or p.get('author_keywords') or []
+              if isinstance(k,str):
+                  vals=k.split(';') if ';' in k else [k]
+              elif isinstance(k,list):
+                  vals=[textify(i) for i in k]
+              else:
+                  vals=[]
+              out=[]
+              for v in vals:
+                  v=clean(v)
+                  if v and v not in out: out.append(v)
+              return out
+
+          def ris_type(r):
+              c,m,p=can(r),mapped(r),raw(r)
+              typ=scalar(c.get('publication_type'),c.get('type'),m.get('publication_type'),m.get('type'),p.get('publication_type'),p.get('type'),p.get('document_type')).lower()
+              if 'chapter' in typ: return 'CHAP'
+              if 'book' in typ: return 'BOOK'
+              if 'conference' in typ or 'proceeding' in typ: return 'CPAPER'
+              if 'thesis' in typ or 'dissertation' in typ: return 'THES'
+              if 'report' in typ: return 'RPRT'
+              if 'dataset' in typ or 'data set' in typ: return 'DATA'
+              if 'preprint' in typ: return 'UNPB'
+              return 'JOUR'
+
+          n=with_title=with_doi=with_abs=0
+          with open(inp,encoding='utf-8') as fi, open(out,'w',encoding='utf-8',newline='\n') as fo:
+              for line in fi:
+                  if not line.strip(): continue
+                  r=json.loads(line)
+                  c,m,p=can(r),mapped(r),raw(r)
+                  rec=r.get('reconciliation') if isinstance(r.get('reconciliation'),dict) else {}
+                  ident=r.get('identity') if isinstance(r.get('identity'),dict) else {}
+                  side=r.get('sidecar_identity') if isinstance(r.get('sidecar_identity'),dict) else {}
+
+                  rid=scalar(rec.get('cluster_id'),ident.get('work_id'),ident.get('lens_id'),rec.get('source_record_id'))
+                  title=clean(scalar(c.get('title'),m.get('title'),p.get('title')))
+                  abstract=clean(scalar(c.get('abstract'),m.get('abstract'),p.get('abstract')))
+                  doi=clean(scalar(c.get('doi'),m.get('doi'),side.get('doi'),p.get('doi')))
+                  year=clean(scalar(c.get('resolved_year'),c.get('year'),c.get('publication_year'),m.get('year'),m.get('publication_year'),p.get('year'),p.get('publication_year')))
+                  journal=clean(scalar(c.get('source_title'),c.get('journal'),m.get('source_title'),m.get('journal'),p.get('source_title'),p.get('journal'),source_name(p.get('source')),source_name(p.get('publication'))))
+                  volume=clean(scalar(c.get('volume'),m.get('volume'),p.get('volume')))
+                  issue=clean(scalar(c.get('issue'),m.get('issue'),p.get('issue')))
+                  pages=clean(scalar(c.get('pages'),c.get('page_range'),m.get('pages'),m.get('page_range'),p.get('pages'),p.get('page_range')))
+                  sp=clean(scalar(c.get('start_page'),m.get('start_page'),p.get('start_page')))
+                  ep=clean(scalar(c.get('end_page'),m.get('end_page'),p.get('end_page')))
+                  url=clean(scalar(c.get('url'),m.get('url'),p.get('url'),p.get('link')))
+                  issn=clean(scalar(c.get('issn'),m.get('issn'),p.get('issn')))
+
+                  fo.write(f'TY  - {ris_type(r)}\n')
+                  if rid: fo.write(f'ID  - {clean(rid)}\n')
+                  if title:
+                      fo.write(f'TI  - {title}\n'); with_title+=1
+                  for au in authors(r): fo.write(f'AU  - {au}\n')
+                  if year: fo.write(f'PY  - {year}\n')
+                  if journal: fo.write(f'JO  - {journal}\n')
+                  if volume: fo.write(f'VL  - {volume}\n')
+                  if issue: fo.write(f'IS  - {issue}\n')
+                  if sp: fo.write(f'SP  - {sp}\n')
+                  elif pages: fo.write(f'SP  - {pages}\n')
+                  if ep: fo.write(f'EP  - {ep}\n')
+                  if doi:
+                      fo.write(f'DO  - {doi}\n'); with_doi+=1
+                  if url: fo.write(f'UR  - {url}\n')
+                  if issn: fo.write(f'SN  - {issn}\n')
+                  for kw in kws(r): fo.write(f'KW  - {kw}\n')
+                  if abstract:
+                      fo.write(f'AB  - {abstract}\n'); with_abs+=1
+                  fo.write('ER  - \n\n')
+                  n+=1
+
+          assert n==35316, n
+          summary={
+              'workflow02_run_id':35527630838,
+              'representative_records':n,
+              'records_with_title':with_title,
+              'records_with_doi':with_doi,
+              'records_with_abstract':with_abs,
+              'output_file':out
+          }
+          with open('ris_export_summary.json','w',encoding='utf-8') as f:
+              json.dump(summary,f,indent=2)
+          print(json.dumps(summary,indent=2))
+          print('PASS: RIS export contains exactly 35,316 Workflow 02 representative records')
+
+      - name: Upload RIS
+        uses: actions/upload-artifact@v4
+        with:
+          name: living-evidence-map-ris-35316
+          path: |
+            LivingEvidenceMap_unique_records_35316.ris
+            ris_export_summary.json
+          retention-days: 30
+          if-no-files-found: error
