@@ -1,0 +1,9 @@
+{
+  "source": "lens",
+  "baseline_date": "2026-09-20",
+  "baseline_release_tag": "source-baselines-2026-09-20",
+  "last_successful_completed_at": "2026-09-20T00:00:00Z",
+  "fortnightly_overlap_days": 14,
+  "quarterly_strategy": "full_reconciliation",
+  "canonical_write": false
+}
