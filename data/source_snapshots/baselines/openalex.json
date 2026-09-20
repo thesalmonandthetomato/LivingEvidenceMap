@@ -1,0 +1,18 @@
+{
+  "source": "openalex",
+  "snapshot_role": "foundational_full_search",
+  "snapshot_date": "2026-09-20",
+  "record_count": 28111,
+  "search_scope": [
+    "title",
+    "abstract"
+  ],
+  "methodological_note": "OpenAlex OQL search is title/abstract only; this is not field-identical to Lens TITLE/ABSTRACT/keywords scope.",
+  "source_workflow_run": 35496950021,
+  "source_artifact_id": 10601286777,
+  "source_artifact_name": "openalex-full-search-35496950021",
+  "source_artifact_sha256": "fd9d0c8329c45a5bb9bc77b8924c3f6b5226a246ea9af2dea89918506d122679",
+  "durable_release_tag": "source-baselines-2026-09-20",
+  "canonical_json_modified": false,
+  "immutable": true
+}
