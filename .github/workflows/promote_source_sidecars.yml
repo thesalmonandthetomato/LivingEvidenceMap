@@ -1,0 +1,127 @@
+name: Promote source sidecars
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/promote_source_sidecars.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout OpenAlex adapter
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00c-openalex-ingestion
+          path: openalex-code
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install jsonlite
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download preserved Scopus full sidecar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source-sidecars/scopus
+          gh run download 35500920250             --repo "$GITHUB_REPOSITORY"             --name scopus-sidecar-adapter-35500920250             --dir source-sidecars/scopus
+          test -s source-sidecars/scopus/scopus_sidecar_records.jsonl
+
+      - name: Download frozen baseline archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p baselines
+          gh release download source-baselines-2026-09-20             --repo "$GITHUB_REPOSITORY"             --dir baselines             --pattern 'openalex-foundational-2026-09-20.tar.gz'             --pattern 'agricola-foundational-2026-09-20.tar.gz'
+
+      - name: Extract preserved AGRICOLA sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/agricola source-sidecars/agricola
+          tar -xzf baselines/agricola-foundational-2026-09-20.tar.gz -C tmp/agricola
+          src="$(find tmp/agricola -type f -name agricola_sidecar_records.jsonl -print -quit)"
+          test -n "$src"
+          cp "$src" source-sidecars/agricola/agricola_sidecar_records.jsonl
+          test -s source-sidecars/agricola/agricola_sidecar_records.jsonl
+
+      - name: Build OpenAlex full sidecar once
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/openalex source-sidecars/openalex
+          tar -xzf baselines/openalex-foundational-2026-09-20.tar.gz -C tmp/openalex
+          raw_file="$(find tmp/openalex -type f -path '*/raw/response_*.json' -print -quit)"
+          test -n "$raw_file"
+          root="$(dirname "$(dirname "$raw_file")")"
+          Rscript openalex-code/scripts/updater/workflow_01u_openalex_sidecar_adapter.R             --input-dir "$root"             --output-dir source-sidecars/openalex
+          test -s source-sidecars/openalex/openalex_sidecar_records.jsonl
+
+      - name: Validate sidecar cardinality and identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          checks={
+            "scopus":("source-sidecars/scopus/scopus_sidecar_records.jsonl",19938),
+            "openalex":("source-sidecars/openalex/openalex_sidecar_records.jsonl",28111),
+            "agricola":("source-sidecars/agricola/agricola_sidecar_records.jsonl",2744),
+          }
+          for src,(path,expected) in checks.items():
+              n=0; ids=set()
+              with open(path,encoding="utf-8") as f:
+                  for line in f:
+                      if not line.strip(): continue
+                      r=json.loads(line); n+=1
+                      rid=(r.get("sidecar_identity") or {}).get("sidecar_record_id")
+                      if not rid or rid in ids: raise SystemExit(f"{src}: invalid/duplicate id {rid}")
+                      ids.add(rid)
+              if n!=expected: raise SystemExit(f"{src}: {n} records != expected {expected}")
+              print(f"{src}: PASS {n} records, {len(ids)} unique ids")
+          PY
+
+      - name: Stage immutable sidecar release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gzip -c source-sidecars/scopus/scopus_sidecar_records.jsonl > release/scopus-sidecar-2026-09-20.jsonl.gz
+          gzip -c source-sidecars/openalex/openalex_sidecar_records.jsonl > release/openalex-sidecar-2026-09-20.jsonl.gz
+          gzip -c source-sidecars/agricola/agricola_sidecar_records.jsonl > release/agricola-sidecar-2026-09-20.jsonl.gz
+          (
+            cd release
+            sha256sum * > SHA256SUMS
+          )
+
+      - name: Create source-sidecar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="source-sidecars-2026-09-20"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refusing to overwrite."
+            exit 1
+          fi
+          gh release create "$tag"             --repo "$GITHUB_REPOSITORY"             --title "Source sidecars 2026-09-20"             --notes "Validated canonical-compatible source sidecars derived from the frozen 2026-09-20 source baselines. These are Workflow 00 derived artefacts for reuse by Workflow 01 and later stages. No canonical JSON is modified."             release/*
