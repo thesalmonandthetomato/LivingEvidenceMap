@@ -14,19 +14,26 @@ arg <- function(flag, default = NULL) {
 }
 
 query <- arg("--query")
-max_records <- as.integer(arg("--max-records", "100"))
+max_records_arg <- arg("--max-records", "100")
 page_size <- as.integer(arg("--page-size", "100"))
 output_dir <- arg("--output-dir", "outputs/updater/openalex_ingestion_test")
 base_url <- arg("--base-url", "https://api.openalex.org/")
 
 if (is.null(query) || !nzchar(trimws(query))) stop("--query is required")
-if (is.na(max_records) || max_records < 1L) stop("--max-records must be >= 1")
+full_harvest <- identical(tolower(max_records_arg), "all")
+if (!full_harvest) {
+  max_records <- suppressWarnings(as.integer(max_records_arg))
+  if (is.na(max_records) || max_records < 1L) stop("--max-records must be >= 1 or 'all'")
+} else {
+  max_records <- .Machine$integer.max
+}
 if (is.na(page_size) || page_size < 1L || page_size > 100L) stop("--page-size must be between 1 and 100")
 
 api_key <- Sys.getenv("OPENALEX_API_KEY", unset = "")
 if (!nzchar(api_key)) api_key <- Sys.getenv("OPENALEX_API_TOKEN", unset = "")
 if (!nzchar(api_key)) stop("Neither OPENALEX_API_KEY nor OPENALEX_API_TOKEN is available")
 
+`%||%` <- function(x, y) if (is.null(x)) y else x
 now_utc <- function() format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
 
 root <- normalizePath(output_dir, mustWork = FALSE)
@@ -37,13 +44,14 @@ dir.create(headers_dir, recursive = TRUE, showWarnings = FALSE)
 
 manifest_path <- file.path(root, "manifest.json")
 checkpoint_path <- file.path(root, "checkpoint.json")
+validation_path <- file.path(root, "validation.json")
 
 write_json <- function(x, path) {
-  writeLines(toJSON(x, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"),
-             path, useBytes = TRUE)
+  tmp <- paste0(path, ".tmp")
+  writeLines(toJSON(x, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null", digits = NA),
+             tmp, useBytes = TRUE)
+  if (!file.rename(tmp, path)) stop(sprintf("Could not atomically write %s", path))
 }
-
-`%||%` <- function(x, y) if (is.null(x)) y else x
 
 scalar_text <- function(x, default = NA_character_) {
   if (is.null(x) || length(x) == 0L) return(default)
@@ -58,7 +66,7 @@ request_page <- function(cursor, count) {
       req_headers(
         Accept = "application/json",
         Authorization = paste("Bearer", api_key),
-        `User-Agent` = "LivingEvidenceMap OpenAlex ingestion test"
+        `User-Agent` = "LivingEvidenceMap OpenAlex ingestion"
       ) |>
       req_url_query(
         oql = query,
@@ -96,29 +104,33 @@ cursor <- "*"
 retrieved <- 0L
 reported_total <- NA_integer_
 page_summaries <- list()
+cumulative_cost_usd <- 0
 
 manifest <- list(
-  workflow = "00c_openalex_ingestion_test",
+  workflow = "00c_openalex_ingestion",
   implementation_language = "R",
   status = "running",
   started_at = started_at,
   endpoint = base_url,
   query_parameter = "oql",
   query = query,
-  max_records = max_records,
+  max_records_requested = if (full_harvest) "all" else max_records,
   requested_page_size = page_size,
   source = "OpenAlex Works API",
   search_scope = c("title", "abstract"),
   lens_search_scope_reference = c("title", "abstract", "keywords"),
   methodological_difference = "OpenAlex OQL title/abstract search excludes full text. Lens additionally searched keywords, so field scope is still not identical.",
   raw_response_preservation = TRUE,
+  checkpoint_after_every_page = TRUE,
   canonicalisation_performed = FALSE,
+  canonical_json_modified = FALSE,
   downstream_processing_performed = FALSE
 )
 write_json(manifest, manifest_path)
 
 repeat {
-  requested_count <- min(page_size, max_records - retrieved)
+  requested_count <- page_size
+  if (!full_harvest) requested_count <- min(page_size, max_records - retrieved)
   if (requested_count <= 0L) break
 
   message(sprintf("Requesting OpenAlex page %d: cursor=%s count=%d",
@@ -148,21 +160,29 @@ repeat {
   if (is.null(results)) results <- list()
   if (!is.list(results)) stop(sprintf("Unexpected results structure on page %d", page))
 
+  this_total <- suppressWarnings(as.integer(meta[["count"]]))
   if (is.na(reported_total)) {
-    reported_total <- suppressWarnings(as.integer(meta[["count"]]))
+    reported_total <- this_total
+  } else if (!is.na(this_total) && !identical(this_total, reported_total)) {
+    message(sprintf("NOTE: OpenAlex reported total changed during harvest: first=%d current=%d",
+                    reported_total, this_total))
   }
 
   n_results <- length(results)
   next_cursor <- scalar_text(meta[["next_cursor"]], NA_character_)
+  page_cost <- suppressWarnings(as.numeric(meta[["cost_usd"]] %||% 0))
+  if (is.na(page_cost)) page_cost <- 0
+  cumulative_cost_usd <- cumulative_cost_usd + page_cost
 
   page_summary <- list(
     page = page,
     requested_count = requested_count,
     returned_results = n_results,
-    total_results = reported_total,
-    cost_usd = meta[["cost_usd"]] %||% NULL,
-    raw_file = sub(paste0("^", root, "/?"), "", raw_path),
-    headers_file = sub(paste0("^", root, "/?"), "", header_path),
+    total_results_reported = this_total,
+    cost_usd = page_cost,
+    cumulative_cost_usd = cumulative_cost_usd,
+    raw_file = file.path("raw", basename(raw_path)),
+    headers_file = file.path("headers", basename(header_path)),
     rate_limit = scalar_text(headers[["x-ratelimit-limit"]], NULL),
     rate_limit_remaining = scalar_text(headers[["x-ratelimit-remaining"]], NULL),
     rate_limit_credits_used = scalar_text(headers[["x-ratelimit-credits-used"]], NULL),
@@ -172,44 +192,98 @@ repeat {
 
   retrieved <- retrieved + n_results
   checkpoint <- list(
-    workflow = "00c_openalex_ingestion_test",
+    workflow = "00c_openalex_ingestion",
+    status = "running",
     updated_at = now_utc(),
     query = query,
-    total_results = reported_total,
+    total_results_reported_first_page = reported_total,
     pages_completed = page,
     entries_retrieved = retrieved,
-    next_cursor_present = !is.na(next_cursor) && nzchar(next_cursor),
-    max_records = max_records
+    next_cursor = if (!is.na(next_cursor) && nzchar(next_cursor)) next_cursor else NULL,
+    cumulative_cost_usd = cumulative_cost_usd,
+    max_records_requested = if (full_harvest) "all" else max_records
   )
   write_json(checkpoint, checkpoint_path)
 
-  message(sprintf("OpenAlex page %d returned %d works; cumulative=%d; total=%s",
+  message(sprintf("OpenAlex page %d returned %d works; cumulative=%d; first-page total=%s; cumulative cost=$%.6f",
                   page, n_results, retrieved,
-                  if (is.na(reported_total)) "unknown" else as.character(reported_total)))
+                  if (is.na(reported_total)) "unknown" else as.character(reported_total),
+                  cumulative_cost_usd))
 
   if (n_results == 0L) break
-  if (retrieved >= max_records) break
-  if (!is.na(reported_total) && retrieved >= reported_total) break
+  if (!full_harvest && retrieved >= max_records) break
+  if (full_harvest && !is.na(reported_total) && retrieved >= reported_total) break
   if (is.na(next_cursor) || !nzchar(next_cursor)) break
 
   cursor <- next_cursor
   page <- page + 1L
 }
 
+raw_files <- sort(list.files(raw_dir, pattern = "^response_[0-9]{6}\\.json$", full.names = TRUE))
+ids <- character()
+recount <- 0L
+for (rf in raw_files) {
+  x <- fromJSON(rf, simplifyVector = FALSE)
+  rs <- x[["results"]] %||% list()
+  recount <- recount + length(rs)
+  page_ids <- vapply(rs, function(w) scalar_text(w$id, ""), character(1))
+  if (any(!nzchar(page_ids))) stop(sprintf("Missing OpenAlex work ID in %s", basename(rf)))
+  ids <- c(ids, page_ids)
+}
+
+duplicate_ids <- unique(ids[duplicated(ids)])
+count_matches_pages <- identical(recount, retrieved)
+unique_id_count <- length(unique(ids))
+expected_complete <- full_harvest && !is.na(reported_total)
+count_matches_reported_total <- if (expected_complete) identical(recount, reported_total) else NA
+
+validation <- list(
+  workflow = "00c_openalex_ingestion",
+  validated_at = now_utc(),
+  raw_page_files = length(raw_files),
+  records_recounted_from_raw = recount,
+  records_tracked_during_harvest = retrieved,
+  count_matches_page_accumulator = count_matches_pages,
+  openalex_ids_present = length(ids),
+  unique_openalex_ids = unique_id_count,
+  duplicate_openalex_ids_n = length(duplicate_ids),
+  duplicate_openalex_ids = duplicate_ids,
+  full_harvest_requested = full_harvest,
+  first_page_total_reported_by_openalex = reported_total,
+  count_matches_first_page_total = count_matches_reported_total,
+  canonical_json_modified = FALSE
+)
+write_json(validation, validation_path)
+
+if (!count_matches_pages) stop("Validation failure: raw-page recount does not match running retrieved count")
+if (length(duplicate_ids) > 0L) stop(sprintf("Validation failure: %d duplicate OpenAlex work IDs", length(duplicate_ids)))
+if (expected_complete && !isTRUE(count_matches_reported_total)) {
+  stop(sprintf("Validation failure: full harvest retrieved %d records but OpenAlex first page reported %d",
+               recount, reported_total))
+}
+
 manifest$status <- "success"
 manifest$completed_at <- now_utc()
-manifest$total_results_reported_by_openalex <- reported_total
+manifest$total_results_reported_by_openalex_first_page <- reported_total
 manifest$entries_retrieved <- retrieved
 manifest$pages_retrieved <- length(page_summaries)
+manifest$cumulative_cost_usd <- cumulative_cost_usd
+manifest$validation = validation
 manifest$pages <- page_summaries
 manifest$output <- list(
   raw_responses = "raw/response_*.json",
   response_headers = "headers/response_*_headers.json",
   checkpoint = "checkpoint.json",
+  validation = "validation.json",
   manifest = "manifest.json"
 )
 write_json(manifest, manifest_path)
 
+checkpoint$status <- "success"
+checkpoint$completed_at <- now_utc()
+checkpoint$next_cursor <- NULL
+write_json(checkpoint, checkpoint_path)
+
 message(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"))
-message(sprintf("PASS: OpenAlex ingestion complete; %d raw works preserved across %d page(s).",
-                retrieved, length(page_summaries)))
+message(sprintf("PASS: OpenAlex ingestion complete; %d raw works preserved across %d page(s); cost=$%.6f.",
+                retrieved, length(page_summaries), cumulative_cost_usd))
