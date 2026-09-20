@@ -1,0 +1,170 @@
+name: Workflow 02 - Multi-source reconciliation
+
+on:
+  push:
+    branches:
+      - workflow02-multisource-reconciliation
+    paths:
+      - '.github/workflows/workflow_02_multisource_reconciliation.yml'
+      - 'scripts/updater/workflow_02_multisource_reconciliation.R'
+      - 'docs/updater_pipeline/WORKFLOW_02_MULTISOURCE_RECONCILIATION.md'
+  workflow_dispatch:
+    inputs:
+      workflow01_run_id:
+        description: 'Workflow 01 run ID whose artefact supplies Lens, Scopus, OpenAlex and AGRICOLA records'
+        required: true
+        type: string
+      canonical_ref:
+        description: 'Read-only canonical ref to overlay at run time'
+        required: true
+        default: 'canonical-repair-store'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow02-multisource-reconciliation
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Parse Workflow 02 R implementation
+        shell: Rscript {0}
+        run: parse(file='scripts/updater/workflow_02_multisource_reconciliation.R')
+
+  reconcile:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    needs: syntax
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow02-multisource-reconciliation
+          path: workflow02
+          persist-credentials: false
+
+      - name: Checkout current canonical JSON read-only
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.canonical_ref }}
+          path: canonical_store
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','stringdist','digest'))
+
+      - name: Download Workflow 01 artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.workflow01_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p workflow01_output
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow01-abstract-enrichment-$RUN_ID" \
+            --dir workflow01_output
+
+          for f in lens_records_for_deduplication.jsonl \
+                   scopus_records_for_deduplication.jsonl \
+                   openalex_records_for_deduplication.jsonl \
+                   agricola_records_for_deduplication.jsonl; do
+            test -n "$(find workflow01_output -type f -name "$f" -print -quit)"
+          done
+
+      - name: Run multi-source reconciliation
+        env:
+          WORKFLOW01_RUN_ID: ${{ inputs.workflow01_run_id }}
+          CANONICAL_REF: ${{ inputs.canonical_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02
+
+          LENS="$(find workflow01_output -type f -name lens_records_for_deduplication.jsonl -print -quit)"
+          SCOPUS="$(find workflow01_output -type f -name scopus_records_for_deduplication.jsonl -print -quit)"
+          OPENALEX="$(find workflow01_output -type f -name openalex_records_for_deduplication.jsonl -print -quit)"
+          AGRICOLA="$(find workflow01_output -type f -name agricola_records_for_deduplication.jsonl -print -quit)"
+          CANONICAL="canonical_store/data/canonical/current/repair/records.jsonl"
+
+          test -s "$LENS"
+          test -s "$SCOPUS"
+          test -s "$OPENALEX"
+          test -s "$AGRICOLA"
+          test -s "$CANONICAL"
+
+          WORKFLOW_COMMIT="$(git -C workflow02 rev-parse HEAD)"
+          CANONICAL_COMMIT="$(git -C canonical_store rev-parse HEAD)"
+
+          Rscript workflow02/scripts/updater/workflow_02_multisource_reconciliation.R \
+            --lens "$LENS" \
+            --scopus "$SCOPUS" \
+            --openalex "$OPENALEX" \
+            --agricola "$AGRICOLA" \
+            --canonical "$CANONICAL" \
+            --canonical-ref "$CANONICAL_REF" \
+            --canonical-commit "$CANONICAL_COMMIT" \
+            --workflow-commit "$WORKFLOW_COMMIT" \
+            --workflow01-run-id "$WORKFLOW01_RUN_ID" \
+            --output-dir outputs/workflow02
+
+      - name: Validate reconciliation outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in report.json multisource_manifestations.jsonl representative_records.jsonl \
+                   candidate_pairs.jsonl clusters.jsonl annotation_inventory.jsonl \
+                   needs_species_geography_annotation.jsonl needs_topic_coding.jsonl \
+                   needs_publication_status_check.jsonl; do
+            test -e "outputs/workflow02/$f"
+          done
+
+          grep -q '"canonical_json_modified": false' outputs/workflow02/report.json
+          grep -q '"existing_deduplication_overwritten": false' outputs/workflow02/report.json
+          grep -q '"external_api_calls": false' outputs/workflow02/report.json
+          grep -q '"model_calls": false' outputs/workflow02/report.json
+
+          Rscript - <<'RS'
+          library(jsonlite)
+          report <- fromJSON('outputs/workflow02/report.json', simplifyVector = FALSE)
+          stopifnot(identical(report$status, 'success'))
+          stopifnot(isFALSE(report$safeguards$canonical_json_modified))
+          stopifnot(isFALSE(report$safeguards$existing_deduplication_overwritten))
+          stopifnot(isFALSE(report$safeguards$unresolved_clusters_promoted))
+          reps <- sum(nzchar(trimws(readLines('outputs/workflow02/representative_records.jsonl', warn = FALSE))))
+          clusters <- sum(nzchar(trimws(readLines('outputs/workflow02/clusters.jsonl', warn = FALSE))))
+          stopifnot(reps == clusters)
+          cat('PASS: representative count equals cluster count:', reps, '\n')
+          RS
+
+      - name: Upload Workflow 02 artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-multisource-reconciliation-${{ github.run_id }}
+          path: outputs/workflow02/
+          if-no-files-found: warn
+          retention-days: 30
