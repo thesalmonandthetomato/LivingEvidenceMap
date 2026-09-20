@@ -561,7 +561,7 @@ export_living_evidence_flow_svg <- function(widget, path) {
 
     coord_pairs <- stringr::str_match_all(
       path_hit[[2]],
-      "(-?[0-9]+(?:\\\\.[0-9]+)?),(-?[0-9]+(?:\\\\.[0-9]+)?)"
+      "(-?[0-9]+(?:\\.[0-9]+)?),(-?[0-9]+(?:\\.[0-9]+)?)"
     )[[1]]
     if (nrow(coord_pairs) < 2) {
       stop("Could not parse static SVG side-label geometry: ", node_id, call. = FALSE)
