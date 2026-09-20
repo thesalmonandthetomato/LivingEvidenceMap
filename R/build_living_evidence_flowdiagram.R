@@ -559,18 +559,20 @@ export_living_evidence_flow_svg <- function(widget, path) {
       stop("Could not locate static SVG side-label shape: ", node_id, call. = FALSE)
     }
 
-    coords <- suppressWarnings(as.numeric(
-      stringr::str_extract_all(
-        path_hit[[2]],
-        "-?[0-9]+(?:\\\\.[0-9]+)?"
-      )[[1]]
-    ))
-    if (length(coords) < 4 || length(coords) %% 2 != 0 || anyNA(coords)) {
+    coord_pairs <- stringr::str_match_all(
+      path_hit[[2]],
+      "(-?[0-9]+(?:\\\\.[0-9]+)?),(-?[0-9]+(?:\\\\.[0-9]+)?)"
+    )[[1]]
+    if (nrow(coord_pairs) < 2) {
       stop("Could not parse static SVG side-label geometry: ", node_id, call. = FALSE)
     }
 
-    xs <- coords[seq(1, length(coords), by = 2)]
-    ys <- coords[seq(2, length(coords), by = 2)]
+    xs <- suppressWarnings(as.numeric(coord_pairs[, 2]))
+    ys <- suppressWarnings(as.numeric(coord_pairs[, 3]))
+    if (anyNA(xs) || anyNA(ys)) {
+      stop("Could not parse static SVG side-label coordinates: ", node_id, call. = FALSE)
+    }
+
     x <- (min(xs) + max(xs)) / 2
     y <- (min(ys) + max(ys)) / 2
 
