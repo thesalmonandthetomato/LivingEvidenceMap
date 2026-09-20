@@ -172,11 +172,11 @@ jobs:
             x <- x[nzchar(trimws(x))]
             lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
           }
+          `%||%` <- function(x,y) if (is.null(x)) y else x
           q <- read_jsonl('outputs/workflow04/screening_queue.jsonl')
           r <- read_jsonl('outputs/workflow04/screening_results.jsonl')
           stopifnot(length(q)==length(r))
           qid <- vapply(q,function(x)as.character((x$reconciliation %||% list())$cluster_id %||% ''),character(1))
-          `%||%` <- function(x,y) if (is.null(x)) y else x
           rid <- vapply(r,function(x)as.character(x$work_id %||% ''),character(1))
           stopifnot(all(nzchar(qid)),all(nzchar(rid)),!anyDuplicated(rid),setequal(qid,rid))
           stopifnot(all(vapply(r,function(x)as.character(x$decision %||% '') %in% c('retain','exclude','uncertain'),logical(1))))
