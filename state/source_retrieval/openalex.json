@@ -1,0 +1,12 @@
+{
+  "source": "openalex",
+  "baseline_date": "2026-09-20",
+  "baseline_release_tag": "source-baselines-2026-09-20",
+  "baseline_workflow_run": 35496950021,
+  "last_successful_completed_at": "2026-09-20T00:00:00Z",
+  "fortnightly_overlap_days": 14,
+  "fortnightly_strategy": "full_refresh_fallback",
+  "note": "Use from_updated_date when/if premium sync-filter entitlement is verified; until then the complete search is cheap and is diffed by OpenAlex ID.",
+  "quarterly_strategy": "full_reconciliation",
+  "canonical_write": false
+}
