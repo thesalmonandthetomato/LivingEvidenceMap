@@ -29,6 +29,8 @@ EPMC="https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 UA="LivingEvidenceMap Workflow 01 abstract enrichment"
 MAX_CHARS=12000
 TITLE_THRESHOLD=0.90
+SHORT_ABSTRACT_CHARS=300
+ELLIPSIS_RE=re.compile(r"(?:\.{3,}|…)[\s\]\)\}"']*$")
 
 SECTION_LABELS={
     "abstract","aim","aims","background","conclusion","conclusions","discussion",
@@ -184,6 +186,29 @@ def jaro_winkler(a,b):
         prefix+=1
     return jaro + prefix*0.1*(1-jaro)
 
+def abstract_query_reason(value):
+    cleaned=clean_abstract(value)
+    if not cleaned:
+        return "missing"
+    if ELLIPSIS_RE.search(cleaned):
+        return "ellipsis_truncated"
+    if len(cleaned)<SHORT_ABSTRACT_CHARS:
+        return "very_short"
+    return None
+
+def replacement_is_more_complete(existing,candidate,reason):
+    old=clean_abstract(existing) or ""
+    new=clean_abstract(candidate) or ""
+    if not new:
+        return False
+    if reason=="missing":
+        return True
+    if reason=="ellipsis_truncated":
+        return len(new)>len(old)+20
+    if reason=="very_short":
+        return len(new)>=SHORT_ABSTRACT_CHARS and len(new)>=max(len(old)+100,int(len(old)*1.5))
+    return False
+
 def annotate(record,meta):
     out=dict(record)
     out["abstract_enrichment"]=meta
@@ -305,11 +330,16 @@ def main():
         out=[]
         stats={
             "input_records":len(rows),
-            "existing_abstracts":0,
-            "missing_without_doi":0,
-            "missing_without_title":0,
+            "existing_complete_abstracts_not_queried":0,
+            "missing_abstract_targets":0,
+            "ellipsis_truncated_targets":0,
+            "very_short_targets":0,
+            "targets_without_doi":0,
+            "targets_without_title":0,
             "external_enrichment_targets":0,
             "abstracts_recovered_from_europe_pmc":0,
+            "truncated_or_short_abstracts_replaced":0,
+            "compatible_result_not_more_complete":0,
             "no_compatible_abstract_recovered":0,
             "external_technical_errors":0,
         }
@@ -317,56 +347,73 @@ def main():
             doi=record_doi(record)
             title=record_title(record)
             old=existing_abstract(record)
-            if isinstance(old,str) and old.strip():
-                stats["existing_abstracts"]+=1
+            reason=abstract_query_reason(old)
+
+            if reason is None:
+                stats["existing_complete_abstracts_not_queried"]+=1
                 meta={
                     "workflow":"01",
                     "provider":source,
-                    "status":"existing_abstract_not_queried",
+                    "status":"existing_complete_abstract_not_queried",
                     "doi":doi,
                     "enriched_at":None,
                     "method":None,
                     "canonical_store_modified":False,
                 }
                 out.append(annotate(record,meta))
-            elif not doi:
-                stats["missing_without_doi"]+=1
+                continue
+
+            stats[{
+                "missing":"missing_abstract_targets",
+                "ellipsis_truncated":"ellipsis_truncated_targets",
+                "very_short":"very_short_targets",
+            }[reason]]+=1
+
+            if not doi:
+                stats["targets_without_doi"]+=1
                 meta={
                     "workflow":"01",
                     "provider":source,
-                    "status":"missing_no_doi",
+                    "status":f"{reason}_no_doi",
                     "doi":None,
+                    "query_reason":reason,
                     "enriched_at":None,
                     "method":None,
                     "canonical_store_modified":False,
                 }
                 out.append(annotate(record,meta))
-            elif not norm_title(title):
-                stats["missing_without_title"]+=1
+                continue
+
+            if not norm_title(title):
+                stats["targets_without_title"]+=1
                 meta={
                     "workflow":"01",
                     "provider":source,
-                    "status":"missing_title_not_eligible_for_external_enrichment",
+                    "status":f"{reason}_no_title",
                     "doi":doi,
-                    "enriched_at":None,
-                    "method":None,
-                    "canonical_store_modified":False,
-                }
-                out.append(set_abstract(record,None,meta))
-            else:
-                stats["external_enrichment_targets"]+=1
-                idx=len(out)
-                meta={
-                    "workflow":"01",
-                    "provider":source,
-                    "status":"pending_external_enrichment" if not args.no_external else "external_enrichment_not_run",
-                    "doi":doi,
+                    "query_reason":reason,
                     "enriched_at":None,
                     "method":None,
                     "canonical_store_modified":False,
                 }
                 out.append(annotate(record,meta))
-                targets_by_doi[doi].append((source,idx,title))
+                continue
+
+            stats["external_enrichment_targets"]+=1
+            idx=len(out)
+            meta={
+                "workflow":"01",
+                "provider":source,
+                "status":"pending_external_enrichment" if not args.no_external else "external_enrichment_not_run",
+                "doi":doi,
+                "query_reason":reason,
+                "existing_abstract_chars":len(clean_abstract(old) or ""),
+                "enriched_at":None,
+                "method":None,
+                "canonical_store_modified":False,
+            }
+            out.append(annotate(record,meta))
+            targets_by_doi[doi].append((source,idx,title,reason,old))
         prepared[source]=out
         per_source[source]=stats
 
@@ -383,7 +430,7 @@ def main():
         for doi,targets in targets_by_doi.items():
             lookup=lookup_cache[doi]
             attempt=lookup["attempt"]
-            for source,idx,target_title in targets:
+            for source,idx,target_title,reason,existing_text in targets:
                 record=prepared[source][idx]
                 if attempt.get("outcome")=="technical_error":
                     per_source[source]["external_technical_errors"]+=1
@@ -409,23 +456,47 @@ def main():
 
                 if compatible:
                     similarity,candidate=compatible[0]
-                    per_source[source]["abstracts_recovered_from_europe_pmc"]+=1
-                    meta={
-                        "workflow":"01",
-                        "provider":source,
-                        "status":"abstract_enriched_europe_pmc",
-                        "doi":doi,
-                        "enriched_at":now(),
-                        "method":"europe_pmc_exact_doi_title_compatible",
-                        "title_similarity":round(similarity,6),
-                        "europe_pmc_id":{
-                            "pmid":candidate.get("pmid"),
-                            "pmcid":candidate.get("pmcid"),
-                        },
-                        "attempt":attempt,
-                        "canonical_store_modified":False,
-                    }
-                    prepared[source][idx]=set_abstract(record,candidate["abstract"],meta)
+                    candidate_text=candidate["abstract"]
+                    if replacement_is_more_complete(existing_text,candidate_text,reason):
+                        per_source[source]["abstracts_recovered_from_europe_pmc"]+=1
+                        if reason in {"ellipsis_truncated","very_short"}:
+                            per_source[source]["truncated_or_short_abstracts_replaced"]+=1
+                        meta={
+                            "workflow":"01",
+                            "provider":source,
+                            "status":"abstract_enriched_europe_pmc" if reason=="missing" else "abstract_repaired_europe_pmc",
+                            "doi":doi,
+                            "query_reason":reason,
+                            "existing_abstract_chars":len(clean_abstract(existing_text) or ""),
+                            "replacement_abstract_chars":len(clean_abstract(candidate_text) or ""),
+                            "enriched_at":now(),
+                            "method":"europe_pmc_exact_doi_title_compatible",
+                            "title_similarity":round(similarity,6),
+                            "europe_pmc_id":{
+                                "pmid":candidate.get("pmid"),
+                                "pmcid":candidate.get("pmcid"),
+                            },
+                            "attempt":attempt,
+                            "canonical_store_modified":False,
+                        }
+                        prepared[source][idx]=set_abstract(record,candidate_text,meta)
+                    else:
+                        per_source[source]["compatible_result_not_more_complete"]+=1
+                        meta={
+                            "workflow":"01",
+                            "provider":source,
+                            "status":"compatible_europe_pmc_abstract_not_more_complete",
+                            "doi":doi,
+                            "query_reason":reason,
+                            "existing_abstract_chars":len(clean_abstract(existing_text) or ""),
+                            "candidate_abstract_chars":len(clean_abstract(candidate_text) or ""),
+                            "enriched_at":None,
+                            "method":"europe_pmc_exact_doi_title_compatible",
+                            "title_similarity":round(similarity,6),
+                            "attempt":attempt,
+                            "canonical_store_modified":False,
+                        }
+                        prepared[source][idx]=annotate(record,meta)
                 else:
                     per_source[source]["no_compatible_abstract_recovered"]+=1
                     meta={
@@ -433,6 +504,7 @@ def main():
                         "provider":source,
                         "status":"no_compatible_abstract_recovered",
                         "doi":doi,
+                        "query_reason":reason,
                         "enriched_at":None,
                         "method":"europe_pmc_exact_doi_title_compatible",
                         "attempt":attempt,
@@ -462,8 +534,10 @@ def main():
         "created_at":now(),
         "methodology":{
             "source_processing":"independent",
-            "existing_abstracts":"retained unchanged and not queried",
+            "complete_existing_abstracts":"retained unchanged and not queried",
             "missing_abstracts":"queried against Europe PMC when DOI and title are available",
+            "ellipsis_truncated_abstracts":"queried against Europe PMC and replaced only by a longer title-compatible abstract",
+            "very_short_abstracts":f"existing abstracts under {SHORT_ABSTRACT_CHARS} cleaned characters are queried and replaced only by a substantially fuller title-compatible abstract",
             "cross_source_matching_performed":False,
             "cross_source_abstract_transfer_performed":False,
             "deduplication_performed":False,
