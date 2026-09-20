@@ -101,10 +101,6 @@ stopifnot(identical(
   compact_text("Abundance of the Parasitic Copepod Caligus elongatus on Wild Pollock"),
   compact_text("Abundance of the Parasitic CopepodCaligus elongatuson Wild Pollock")
 ))
-stopifnot(identical(
-  doi_family("10.26434/chemrxiv-2023-g7n49/v2"),
-  "10.26434/chemrxiv-2023-g7n49"
-))
 norm_doi <- function(x) {
   x <- scalar(x)
   if (is.null(x)) return(NULL)
@@ -123,6 +119,11 @@ doi_family <- function(x) {
   x <- sub("/v[0-9]+$", "", x, perl = TRUE, ignore.case = TRUE)
   x
 }
+
+stopifnot(identical(
+  doi_family("10.26434/chemrxiv-2023-g7n49/v2"),
+  "10.26434/chemrxiv-2023-g7n49"
+))
 norm_pages <- function(x) {
   x <- norm_text(x)
   if (is.null(x)) return(NULL)
