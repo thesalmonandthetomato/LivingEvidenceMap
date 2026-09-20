@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       external_europe_pmc:
-        description: 'After preserved-source enrichment, query Europe PMC once per unresolved DOI'
+        description: 'Query Europe PMC for source records missing abstracts'
         required: true
         default: false
         type: boolean
@@ -68,7 +68,7 @@ jobs:
 
       - name: Run Workflow 01 abstract enrichment
         env:
-          EXTERNAL: ${{ github.event_name == 'workflow_dispatch' && inputs.external_europe_pmc || false }}
+          EXTERNAL: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.external_europe_pmc) }}
         shell: bash
         run: |
           set -euo pipefail
