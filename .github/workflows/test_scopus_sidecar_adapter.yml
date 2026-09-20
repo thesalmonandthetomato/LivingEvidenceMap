@@ -1,0 +1,82 @@
+name: Test Scopus sidecar canonical compatibility
+
+on:
+  push:
+    branches:
+      - updater-workflow-00b-scopus-ingestion
+    paths:
+      - '.github/workflows/test_scopus_sidecar_adapter.yml'
+      - 'scripts/updater/workflow_01s_scopus_sidecar_adapter.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sidecar-adapter-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Scopus integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00b-scopus-ingestion
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download successful Scopus STANDARD artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: updater-workflow-00b-scopus-ingestion-35494321011
+          path: inputs/scopus_ingestion
+          github-token: ${{ github.token }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 35494321011
+
+      - name: Verify source artefact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f inputs/scopus_ingestion/manifest.json
+          test -d inputs/scopus_ingestion/raw
+          find inputs/scopus_ingestion -maxdepth 2 -type f -print | sort
+
+      - name: Build Scopus sidecar compatibility output
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R \
+            --input-dir inputs/scopus_ingestion \
+            --output-dir outputs/updater/scopus_sidecar_adapter
+
+      - name: Guard against canonical writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e data/canonical/current/scopus_sidecar_records.jsonl
+          test ! -e data/canonical/current/repair/scopus_sidecar_records.jsonl
+          grep -q '"canonical_json_modified": false' outputs/updater/scopus_sidecar_adapter/compatibility_audit.json
+          grep -q '"canonical_branch_written": false' outputs/updater/scopus_sidecar_adapter/compatibility_audit.json
+
+      - name: Show compatibility audit
+        shell: bash
+        run: cat outputs/updater/scopus_sidecar_adapter/compatibility_audit.json
+
+      - name: Upload sidecar diagnostic artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scopus-sidecar-adapter-${{ github.run_id }}
+          path: outputs/updater/scopus_sidecar_adapter/
+          if-no-files-found: error
+          retention-days: 30
