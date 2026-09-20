@@ -69,6 +69,7 @@ request_page <- function(query,start,count) {
         start=start,
         count=count,
         view=view,
+        sort="+coverDate,+creator,+publicationName",
         suppressNavLinks="false"
       ) |>
       req_error(is_error=function(resp) FALSE)
@@ -139,6 +140,7 @@ manifest <- list(
   base_query=base_query,
   view=view,
   pagination_mode="year_partitioned_start_count",
+  sort="+coverDate,+creator,+publicationName",
   unpartitioned_total=overall_total,
   partitions=nrow(parts),
   requested_page_size=page_size,
@@ -242,11 +244,13 @@ validation <- list(
   duplicate_scopus_eids_n=length(dup_eids),
   duplicate_scopus_ids_n=length(dup_sids),
   count_matches_unpartitioned_total=identical(recount,overall_total),
+  unique_eids_match_unpartitioned_total=identical(length(unique(eids)),overall_total),
   canonical_json_modified=FALSE
 )
 write_json(validation,validation_path)
 
-if (length(dup_eids)>0L) stop(sprintf("Validation failure: %d duplicate Scopus EIDs",length(dup_eids)))
+if (length(dup_eids)>0L) stop(sprintf("Validation failure: %d duplicate Scopus EIDs; offset pagination is not stable enough under the configured sort",length(dup_eids)))
+if (length(unique(eids)) != overall_total) stop(sprintf("Validation failure: only %d unique Scopus EIDs for unpartitioned total %d",length(unique(eids)),overall_total))
 if (length(dup_sids)>0L) stop(sprintf("Validation failure: %d duplicate Scopus IDs",length(dup_sids)))
 if (!identical(recount,overall_total)) stop(sprintf("Validation failure: harvested %d but unpartitioned total is %d",recount,overall_total))
 
