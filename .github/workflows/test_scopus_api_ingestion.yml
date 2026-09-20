@@ -27,7 +27,7 @@ on:
       view:
         description: 'Scopus Search API response view'
         required: true
-        default: 'COMPLETE'
+        default: 'STANDARD'
         type: choice
         options:
           - COMPLETE
@@ -70,7 +70,7 @@ jobs:
           query="${INPUT_QUERY:-TITLE-ABS-KEY((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))}"
           max_records="${INPUT_MAX_RECORDS:-100}"
           page_size="${INPUT_PAGE_SIZE:-25}"
-          view="${INPUT_VIEW:-COMPLETE}"
+          view="${INPUT_VIEW:-STANDARD}"
           {
             echo "query<<EOF"
             echo "$query"
