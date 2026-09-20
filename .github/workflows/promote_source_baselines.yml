@@ -1,0 +1,108 @@
+name: Promote source baselines
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/promote_source_baselines.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: repo
+
+      - name: Checkout Lens canonical repair store with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-repair-store
+          path: lens-store
+          lfs: true
+
+      - name: Download preserved Scopus baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: scopus-full-search-35500171094
+          path: baselines/scopus
+          github-token: ${{ github.token }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 35500171094
+
+      - name: Download preserved OpenAlex baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: openalex-full-search-35496950021
+          path: baselines/openalex
+          github-token: ${{ github.token }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 35496950021
+
+      - name: Download preserved AGRICOLA baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: agricola-full-search-35499553438
+          path: baselines/agricola
+          github-token: ${{ github.token }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 35499553438
+
+      - name: Stage immutable baseline archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          tar -C baselines/scopus -czf release/scopus-foundational-2026-09-20.tar.gz .
+          tar -C baselines/openalex -czf release/openalex-foundational-2026-09-20.tar.gz .
+          tar -C baselines/agricola -czf release/agricola-foundational-2026-09-20.tar.gz .
+          cp lens-store/data/canonical/current/repair/records.jsonl release/lens-baseline-2026-09-20.jsonl
+          cp repo/data/source_snapshots/baselines/*.json release/
+          (
+            cd release
+            sha256sum scopus-foundational-2026-09-20.tar.gz \
+                      openalex-foundational-2026-09-20.tar.gz \
+                      agricola-foundational-2026-09-20.tar.gz \
+                      lens-baseline-2026-09-20.jsonl > SHA256SUMS
+          )
+
+      - name: Verify Lens source payload is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s release/lens-baseline-2026-09-20.jsonl
+          grep -m1 -q '"lens"' release/lens-baseline-2026-09-20.jsonl
+          grep -m1 -q '"raw_payload"' release/lens-baseline-2026-09-20.jsonl
+
+      - name: Create immutable baseline release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="source-baselines-2026-09-20"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refusing to overwrite immutable baseline."
+            exit 1
+          fi
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "${GITHUB_SHA}" \
+            --title "Source baselines 2026-09-20" \
+            --notes "Immutable source snapshots for the LivingEvidenceMap multi-source integration baseline. Scopus, OpenAlex and AGRICOLA are preserved full-harvest artefacts. Lens is the per-record lossless source snapshot from canonical-repair-store, retaining lens.raw_payload; it is not the original paginated Lens API response." \
+            release/*
+
+      - name: Show release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release view source-baselines-2026-09-20 --repo "$GITHUB_REPOSITORY" --json url,assets
