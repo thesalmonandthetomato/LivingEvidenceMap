@@ -77,12 +77,7 @@ norm_doi <- function(value) {
   # because punctuation can legitimately occur inside DOI suffixes.
   s <- sub("\\?(?:utm_[a-z0-9_]+|fbclid|gclid)=[^[:space:]]*$", "", s, perl = TRUE, ignore.case = TRUE)
 
-  s <- sub("[[:space:][:punct:]]+$", function(m) {
-    # Preserve DOI-valid closing punctuation unless it is ordinary trailing
-    # bibliographic punctuation. This branch intentionally removes only the
-    # common terminal full stop/comma/semicolon/colon.
-    sub("[\\.,;:]+$", "", m, perl = TRUE)
-  }, s, perl = TRUE)
+  # Remove ordinary trailing bibliographic punctuation only.
   s <- sub("[\\.,;:]+$", "", s, perl = TRUE)
 
   if (!nzchar(s)) NULL else s
