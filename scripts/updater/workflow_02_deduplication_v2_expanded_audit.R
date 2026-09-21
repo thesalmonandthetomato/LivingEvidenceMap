@@ -4,6 +4,9 @@ suppressPackageStartupMessages({
   library(data.table)
   library(digest)
   library(stringdist)
+  library(jsonlite)
+  library(stringi)
+  library(xml2)
 })
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -15,12 +18,13 @@ arg <- function(flag, default = NULL) {
 }
 
 input_dir <- arg("--input-dir")
+upstream_dir <- arg("--upstream-dir")
 output_dir <- arg("--output-dir")
 target_n <- as.integer(arg("--target-n", "10000"))
 sample_key <- arg("--sample-key", "workflow02-v2-expanded-audit-v1")
 
-if (is.null(input_dir) || is.null(output_dir)) {
-  stop("Required: --input-dir --output-dir", call. = FALSE)
+if (is.null(input_dir) || is.null(upstream_dir) || is.null(output_dir)) {
+  stop("Required: --input-dir --upstream-dir --output-dir", call. = FALSE)
 }
 if (is.na(target_n) || target_n < 2000L) stop("--target-n must be >= 2000", call. = FALSE)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -37,6 +41,102 @@ find_one <- function(name) {
 meta <- fread(find_one("normalised_metadata.csv"), na.strings = c("", "NA"))
 all_pairs <- fread(find_one("all_candidate_pairs.csv"), na.strings = c("", "NA"))
 original <- fread(find_one("scored_sample.csv"), na.strings = c("", "NA"))
+
+scalar <- function(x) {
+  if (is.null(x) || !length(x)) return(NULL)
+  y <- as.character(x[[1L]])
+  if (!nzchar(trimws(y))) NULL else y
+}
+strip_markup_text <- function(x) {
+  x <- scalar(x)
+  if (is.null(x)) return(NULL)
+  wrapped <- paste0("<div>", x, "</div>")
+  doc <- tryCatch(
+    suppressWarnings(read_html(wrapped, options=c("RECOVER","NOERROR","NOWARNING"))),
+    error=function(e) NULL
+  )
+  if (!is.null(doc)) {
+    node <- xml_find_first(doc, ".//div")
+    if (!inherits(node, "xml_missing")) x <- xml_text(node)
+  }
+  x
+}
+norm_words <- function(x) {
+  x <- strip_markup_text(x)
+  if (is.null(x)) return(NULL)
+  x <- stri_trans_tolower(stri_trans_nfkc(x))
+  x <- stri_replace_all_regex(x, "[\\p{P}\\p{S}\\p{Z}\\s]+", " ")
+  x <- trimws(stri_replace_all_regex(x, "\\s+", " "))
+  if (!nzchar(x)) NULL else x
+}
+source_kind <- function(r) {
+  if (is.list(r$lens)) return("lens")
+  p <- scalar((r$source %||% list())$provider)
+  if (identical(p,"scopus")) return("scopus")
+  if (identical(p,"openalex")) return("openalex")
+  if (identical(p,"agricola_via_europe_pmc")) return("agricola")
+  stop(sprintf("Unknown source provider: %s", p %||% "<missing>"), call.=FALSE)
+}
+source_record_id <- function(r) {
+  if (source_kind(r)=="lens") return(as.character((r$identity %||% list())$lens_id %||% (r$identity %||% list())$record_id %||% ""))
+  as.character((r$sidecar_identity %||% list())$sidecar_record_id %||% "")
+}
+record_abstract <- function(r) {
+  if (source_kind(r)=="lens") return(scalar((r$canonical %||% list())$abstract %||% ((r$lens %||% list())$raw_payload %||% list())$abstract))
+  scalar((r$mapped_fields %||% list())$abstract)
+}
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+read_abstract_map <- function(path) {
+  con <- file(path, "rt", encoding="UTF-8")
+  on.exit(close(con), add=TRUE)
+  rows <- list()
+  repeat {
+    lines <- readLines(con, n=500L, warn=FALSE)
+    if (!length(lines)) break
+    for (line in lines) {
+      if (!nzchar(trimws(line))) next
+      r <- fromJSON(line, simplifyVector=FALSE)
+      src <- source_kind(r)
+      rid <- source_record_id(r)
+      abs <- norm_words(record_abstract(r))
+      rows[[length(rows)+1L]] <- data.table(
+        source=src, source_record_id=rid,
+        abstract_norm=if (is.null(abs)) NA_character_ else abs
+      )
+    }
+  }
+  rbindlist(rows, use.names=TRUE, fill=TRUE)
+}
+
+upstream_files <- c(
+  lens="lens_records_for_deduplication.jsonl",
+  scopus="scopus_records_for_deduplication.jsonl",
+  openalex="openalex_records_for_deduplication.jsonl",
+  agricola="agricola_records_for_deduplication.jsonl"
+)
+abs_maps <- lapply(upstream_files, function(nm) {
+  p <- file.path(upstream_dir, nm)
+  if (!file.exists(p)) {
+    hits <- list.files(upstream_dir, pattern=paste0("^", nm, "$"),
+                       recursive=TRUE, full.names=TRUE)
+    if (!length(hits)) stop(sprintf("Upstream source file missing: %s", nm), call.=FALSE)
+    p <- hits[[1L]]
+  }
+  read_abstract_map(p)
+})
+abs_map <- unique(rbindlist(abs_maps, use.names=TRUE, fill=TRUE),
+                  by=c("source","source_record_id"))
+setkey(abs_map, source, source_record_id)
+meta <- abs_map[meta, on=.(source,source_record_id)]
+if ("i.abstract_norm" %in% names(meta)) {
+  if ("abstract_norm" %in% names(meta)) {
+    meta[, abstract_norm := fifelse(!is.na(abstract_norm), abstract_norm, i.abstract_norm)]
+    meta[, i.abstract_norm := NULL]
+  } else {
+    setnames(meta, "i.abstract_norm", "abstract_norm")
+  }
+}
 
 stopifnot(all(c("idx","title","title_norm","doi_norm","doi_family","abstract_hash",
                 "author_norm","year","abstract_norm") %in% names(meta)))
