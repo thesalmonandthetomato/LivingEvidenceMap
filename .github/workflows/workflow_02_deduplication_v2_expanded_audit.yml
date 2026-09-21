@@ -1,0 +1,122 @@
+name: Workflow 02 - Deduplication v2 expanded audit
+
+on:
+  push:
+    branches:
+      - workflow02-multisource-reconciliation
+    paths:
+      - '.github/workflows/workflow_02_deduplication_v2_expanded_audit.yml'
+      - 'scripts/updater/workflow_02_deduplication_v2_expanded_audit.R'
+      - 'scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R'
+      - 'data/validation/workflow02_v2_human_labels_2026-09-21.csv'
+  workflow_dispatch:
+    inputs:
+      source_benchmark_run_id:
+        description: 'Saved Workflow 02 candidate benchmark run ID'
+        required: true
+        default: '35585544686'
+        type: string
+      target_n:
+        description: 'Expanded scored-pair sample size'
+        required: true
+        default: '10000'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  expanded-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Workflow 02 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow02-multisource-reconciliation
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite'))
+
+      - name: Parse expanded audit scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_02_deduplication_v2_expanded_audit.R')
+          parse(file='scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R')
+          cat('PASS: expanded audit R scripts parse successfully\n')
+
+      - name: Download saved candidate benchmark artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.source_benchmark_run_id || '35585544686' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prior_benchmark
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-candidate-benchmark-$SOURCE_RUN_ID" \
+            --dir prior_benchmark
+          test -n "$(find prior_benchmark -type f -name 'all_candidate_pairs.csv' -print -quit)"
+          test -n "$(find prior_benchmark -type f -name 'normalised_metadata.csv' -print -quit)"
+          test -n "$(find prior_benchmark -type f -name 'scored_sample.csv' -print -quit)"
+
+      - name: Build expanded deterministic sample
+        env:
+          TARGET_N: ${{ github.event_name == 'workflow_dispatch' && inputs.target_n || '10000' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02_v2_expanded_input
+          Rscript scripts/updater/workflow_02_deduplication_v2_expanded_audit.R \
+            --input-dir prior_benchmark \
+            --output-dir outputs/workflow02_v2_expanded_input \
+            --target-n "$TARGET_N"
+
+      - name: Apply frozen calibrated rescore
+        env:
+          SOURCE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.source_benchmark_run_id || '35585544686' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02_v2_expanded_rescore
+          Rscript scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R \
+            --input-dir outputs/workflow02_v2_expanded_input \
+            --output-dir outputs/workflow02_v2_expanded_rescore \
+            --source-run-id "$SOURCE_RUN_ID"
+
+      - name: Validate expanded audit outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          e <- fromJSON('outputs/workflow02_v2_expanded_input/expanded_summary.json', simplifyVector=FALSE)
+          r <- fromJSON('outputs/workflow02_v2_expanded_rescore/summary.json', simplifyVector=FALSE)
+          stopifnot(identical(e$status, 'success'))
+          stopifnot(identical(e$candidate_generation_repeated, FALSE))
+          stopifnot(identical(e$source_candidate_artifact_reused, TRUE))
+          stopifnot(e$scoring_sample_n == 10000)
+          stopifnot(identical(r$status, 'success'))
+          stopifnot(file.exists('outputs/workflow02_v2_expanded_rescore/human_validation_results.csv'))
+          stopifnot(file.exists('outputs/workflow02_v2_expanded_rescore/rescored_sample.csv'))
+          cat('PASS: expanded audit outputs verified\n')
+
+      - name: Upload expanded audit artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-deduplication-v2-expanded-audit-${{ github.run_id }}
+          path: |
+            outputs/workflow02_v2_expanded_input/
+            outputs/workflow02_v2_expanded_rescore/
+          retention-days: 90
+          if-no-files-found: warn
