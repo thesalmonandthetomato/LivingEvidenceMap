@@ -423,10 +423,12 @@ for (i in seq_len(nrow(x))) {
   }
 
   # Explicit preprint -> publication manifestations: DOI change is expected, not contradictory.
-  if (!promote && preprint_pair && exact_title && tlen >= 30L && yd_ok_2 &&
-      (pm$first_author_match || exact_abs || strong_abs)) {
+  # Human validation supports exact normalised title + compatible year as sufficient
+  # when one side is a recognised preprint manifestation and no structured-title
+  # identifier conflict has been found.
+  if (!promote && preprint_pair && exact_title && tlen >= 20L && yd_ok_2) {
     promote <- TRUE
-    reason <- "preprint_publication_manifestation"
+    reason <- "preprint_exact_title_compatible_year"
   }
 
 
