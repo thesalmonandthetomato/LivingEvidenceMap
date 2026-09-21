@@ -1,0 +1,140 @@
+name: Workflow 02 - Optimised classifier equivalence
+
+on:
+  push:
+    branches:
+      - workflow02-multisource-reconciliation
+    paths:
+      - '.github/workflows/workflow_02_deduplication_v2_optimised_equivalence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  equivalence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout Workflow 02 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow02-multisource-reconciliation
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2'))
+
+      - name: Download saved candidate benchmark artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: '35585544686'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prior_benchmark
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-candidate-benchmark-$SOURCE_RUN_ID" \
+            --dir prior_benchmark
+
+      - name: Download preserved Workflow 01 enrichment artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW01_RUN_ID: '35507378528'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prior_workflow01
+          gh run download "$WORKFLOW01_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow01-abstract-enrichment-$WORKFLOW01_RUN_ID" \
+            --dir prior_workflow01
+
+      - name: Download passed 10000-pair reference artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_RUN_ID: '35610356841'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reference
+          gh run download "$REF_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-expanded-audit-$REF_RUN_ID" \
+            --dir reference
+          test -n "$(find reference -type f -name 'rescored_sample.csv' -print -quit)"
+
+      - name: Run optimised scorer on identical 10000-pair sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/optimised_input outputs/optimised_rescore
+          Rscript scripts/updater/workflow_02_deduplication_v2_expanded_audit.R \
+            --input-dir prior_benchmark \
+            --upstream-dir prior_workflow01 \
+            --output-dir outputs/optimised_input \
+            --target-n 10000 \
+            --sample-key workflow02-v2-expanded-audit-v1
+          Rscript scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R \
+            --input-dir outputs/optimised_input \
+            --output-dir outputs/optimised_rescore \
+            --source-run-id 35585544686
+
+      - name: Require exact pair-level equivalence
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          ref_path <- list.files('reference', pattern='rescored_sample\\.csv$', recursive=TRUE, full.names=TRUE)[1]
+          ref <- fread(ref_path)
+          opt <- fread('outputs/optimised_rescore/rescored_sample.csv')
+          key <- function(x) paste(pmin(x$record_i,x$record_j), pmax(x$record_i,x$record_j), sep='::')
+          ref[, pair_key := key(ref)]
+          opt[, pair_key := key(opt)]
+          setkey(ref, pair_key); setkey(opt, pair_key)
+          stopifnot(nrow(ref) == 10000L, nrow(opt) == 10000L)
+          stopifnot(identical(ref$pair_key, opt$pair_key))
+          cols <- c('classification','rule','rescored_classification','rescored_rule','review_route','manual_review_needed')
+          comparison <- rbindlist(lapply(cols, function(nm) {
+            a <- as.character(ref[[nm]]); b <- as.character(opt[[nm]])
+            a[is.na(a)] <- '<NA>'; b[is.na(b)] <- '<NA>'
+            data.table(field=nm, differing=sum(a != b))
+          }))
+          fwrite(comparison, 'outputs/optimised_rescore/equivalence_counts.csv')
+          print(comparison)
+          if (any(comparison$differing != 0L)) {
+            bad <- unique(unlist(lapply(cols, function(nm) which(
+              fifelse(is.na(ref[[nm]]),'<NA>',as.character(ref[[nm]])) !=
+              fifelse(is.na(opt[[nm]]),'<NA>',as.character(opt[[nm]]))
+            ))))
+            audit <- merge(
+              ref[bad, .(pair_key, ref_classification=classification, ref_rule=rule,
+                          ref_rescored=rescored_classification, ref_rescored_rule=rescored_rule,
+                          ref_route=review_route)],
+              opt[bad, .(pair_key, opt_classification=classification, opt_rule=rule,
+                          opt_rescored=rescored_classification, opt_rescored_rule=rescored_rule,
+                          opt_route=review_route)],
+              by='pair_key', all=TRUE
+            )
+            fwrite(audit, 'outputs/optimised_rescore/equivalence_failures.csv')
+            stop(sprintf('FAIL: %d pairs differ from reference', length(bad)), call.=FALSE)
+          }
+          cat('PASS: optimised classifier is 100% pair-level equivalent on all 10000 reference pairs\n')
+
+      - name: Upload equivalence artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-optimised-equivalence-${{ github.run_id }}
+          path: outputs/optimised_rescore/
+          retention-days: 90
+          if-no-files-found: warn
