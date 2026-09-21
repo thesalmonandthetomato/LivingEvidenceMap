@@ -498,7 +498,10 @@ for (i in seq_len(nrow(x))) {
 }
 
 
-x[, review_route := "manual_review"]
+# Candidate generation is deliberately broad. A pair should require human
+# review only when a specific ambiguity rule has fired. All other unresolved
+# candidates are safely resolved as non-duplicates.
+x[, review_route := "non_duplicate"]
 for (i in seq_len(nrow(x))) {
   if (x$rescored_classification[[i]] == "duplicate") {
     x$review_route[[i]] <- "automatic_duplicate"
@@ -509,6 +512,8 @@ for (i in seq_len(nrow(x))) {
              is_library_guide_title(x$title_i[[i]]) ||
              is_library_guide_title(x$title_j[[i]])) {
     x$review_route[[i]] <- "workflow04_exclusion_candidate"
+  } else if (x$rescored_classification[[i]] == "review") {
+    x$review_route[[i]] <- "manual_review"
   }
 }
 x[, manual_review_needed := review_route == "manual_review"]
