@@ -1,4 +1,4 @@
-name: Workflow 02 - Deduplication v2 validation
+name: Workflow 02 - Deduplication v2 candidate benchmark
 
 on:
   push:
@@ -6,8 +6,7 @@ on:
       - workflow02-multisource-reconciliation
     paths:
       - '.github/workflows/workflow_02_deduplication_v2_validation.yml'
-      - 'scripts/updater/workflow_02_deduplication_v2_validation.R'
-      - 'docs/updater_pipeline/WORKFLOW_02_DEDUPLICATION_RULES_V2.md'
+      - 'scripts/updater/workflow_02_deduplication_v2_candidate_benchmark.R'
   workflow_dispatch:
     inputs:
       workflow01_run_id:
@@ -15,15 +14,15 @@ on:
         required: true
         default: '35507378528'
         type: string
-      sample_n:
-        description: 'Number of deterministic random anchor manifestations'
+      score_n:
+        description: 'Number of candidate pairs to score after full-corpus candidate generation'
         required: true
         default: '2000'
         type: string
       sample_key:
-        description: 'Fixed deterministic sample key'
+        description: 'Fixed deterministic scoring-sample key'
         required: true
-        default: 'workflow02-v2-validation-2000-v1'
+        default: 'workflow02-v2-candidate-benchmark-v1'
         type: string
 
 permissions:
@@ -31,9 +30,9 @@ permissions:
   actions: read
 
 jobs:
-  validate:
+  benchmark:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 120
 
     steps:
       - name: Checkout Workflow 02 branch
@@ -50,13 +49,13 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','stringdist','digest','xml2','stringi'))
+        run: install.packages(c('jsonlite','stringdist','digest','xml2','stringi','data.table'))
 
-      - name: Parse validation implementation
+      - name: Parse benchmark implementation
         shell: Rscript {0}
         run: |
-          parse(file='scripts/updater/workflow_02_deduplication_v2_validation.R')
-          cat('PASS: Workflow 02 v2 validation R script parses successfully\n')
+          parse(file='scripts/updater/workflow_02_deduplication_v2_candidate_benchmark.R')
+          cat('PASS: Workflow 02 v2 candidate benchmark parses successfully\n')
 
       - name: Download Workflow 01 all-source artefact
         env:
@@ -78,11 +77,11 @@ jobs:
             test -n "$(find workflow01_output -type f -name "$f" -print -quit)"
           done
 
-      - name: Run deterministic 2000-anchor validation
+      - name: Run full-corpus candidate benchmark
         env:
           RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow01_run_id || '35507378528' }}
-          SAMPLE_N: ${{ github.event_name == 'workflow_dispatch' && inputs.sample_n || '2000' }}
-          SAMPLE_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.sample_key || 'workflow02-v2-validation-2000-v1' }}
+          SCORE_N: ${{ github.event_name == 'workflow_dispatch' && inputs.score_n || '2000' }}
+          SAMPLE_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.sample_key || 'workflow02-v2-candidate-benchmark-v1' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -90,38 +89,38 @@ jobs:
           SCOPUS="$(find workflow01_output -type f -name scopus_records_for_deduplication.jsonl -print -quit)"
           OPENALEX="$(find workflow01_output -type f -name openalex_records_for_deduplication.jsonl -print -quit)"
           AGRICOLA="$(find workflow01_output -type f -name agricola_records_for_deduplication.jsonl -print -quit)"
-          mkdir -p outputs/workflow02_v2_validation
+          mkdir -p outputs/workflow02_v2_benchmark
 
-          Rscript scripts/updater/workflow_02_deduplication_v2_validation.R \
+          Rscript scripts/updater/workflow_02_deduplication_v2_candidate_benchmark.R \
             --lens "$LENS" \
             --scopus "$SCOPUS" \
             --openalex "$OPENALEX" \
             --agricola "$AGRICOLA" \
             --workflow01-run-id "$RUN_ID" \
-            --sample-n "$SAMPLE_N" \
+            --score-n "$SCORE_N" \
             --sample-key "$SAMPLE_KEY" \
-            --output-dir outputs/workflow02_v2_validation
+            --output-dir outputs/workflow02_v2_benchmark
 
-      - name: Validate validation outputs
+      - name: Validate benchmark outputs
         shell: Rscript {0}
         run: |
           library(jsonlite)
-          s <- fromJSON('outputs/workflow02_v2_validation/summary.json', simplifyVector = FALSE)
+          s <- fromJSON('outputs/workflow02_v2_benchmark/summary.json', simplifyVector = FALSE)
           stopifnot(identical(s$status, 'success'))
           stopifnot(identical(s$historic_human_adjudications_loaded, FALSE))
-          stopifnot(identical(s$safeguards$human_decisions_applied, FALSE))
-          stopifnot(identical(s$safeguards$clustering_performed, FALSE))
-          stopifnot(file.exists('outputs/workflow02_v2_validation/sampled_anchors.csv'))
-          stopifnot(file.exists('outputs/workflow02_v2_validation/candidate_pairs.csv'))
-          stopifnot(file.exists('outputs/workflow02_v2_validation/automatic_duplicates.csv'))
-          stopifnot(file.exists('outputs/workflow02_v2_validation/manual_review_candidates.csv'))
-          cat('PASS: Workflow 02 v2 validation outputs verified; no human decisions or clustering applied\n')
+          stopifnot(identical(s$clustering_performed, FALSE))
+          stopifnot(file.exists('outputs/workflow02_v2_benchmark/normalised_metadata.csv'))
+          stopifnot(file.exists('outputs/workflow02_v2_benchmark/all_candidate_pairs.csv'))
+          stopifnot(file.exists('outputs/workflow02_v2_benchmark/scoring_sample.csv'))
+          stopifnot(file.exists('outputs/workflow02_v2_benchmark/scored_sample.csv'))
+          stopifnot(file.exists('outputs/workflow02_v2_benchmark/checkpoint_progress.json'))
+          cat('PASS: full-corpus candidate benchmark outputs verified\n')
 
-      - name: Upload validation artefact
+      - name: Upload benchmark artefact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow02-deduplication-v2-validation-${{ github.run_id }}
-          path: outputs/workflow02_v2_validation/
+          name: workflow02-deduplication-v2-candidate-benchmark-${{ github.run_id }}
+          path: outputs/workflow02_v2_benchmark/
           retention-days: 90
           if-no-files-found: warn
