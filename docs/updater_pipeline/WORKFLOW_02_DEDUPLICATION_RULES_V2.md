@@ -159,6 +159,38 @@ Rules are evaluated in order. A pair is automatically merged when the first appl
 
 Exact DOI in rules 3, 5, 6 and 7 always means `doi_norm`, not `doi_family`.
 
+## Structured title-identifier contradiction safeguard
+
+Fuzzy title/content rules must not automatically merge records when the titles contain conflicting structured identifiers.
+
+The safeguard is applied **after candidate scoring but before automatic acceptance** for fuzzy-title rules that do not have an exact DOI identity edge. Exact-title rules cannot contain a title-identifier contradiction by definition, and exact-`doi_norm` rules retain precedence.
+
+Comparison uses the pre-normalised human-readable titles after Unicode NFKC/case normalisation. Extract the following structured identifier classes:
+
+- labelled numeric identifiers following terms such as `part`, `study`, `experiment`, `trial`, `report`, `no`, `number`, `interview`, `episode`, `chapter`, `section`, `series`, `volume`, `vol`, `issue`, `supplement`, `appendix`, and `phase`;
+- standalone Roman numerals such as `III` and `V`;
+- four-digit years embedded in titles;
+- other standalone Arabic numeric tokens when **both** titles contain such tokens.
+
+A contradiction is present when the same comparable identifier class is populated in both titles but the extracted values differ. For generic numeric tokens, both titles must contain at least one token and the token sets must differ.
+
+Examples that must trigger the safeguard include:
+
+- `Interview 08` vs `Interview 03`;
+- `Annual Report No. 60, 2015` vs `Annual Report No. 61, 2016`;
+- `Studies ... III` vs `Studies ... V`;
+- `Part 1` vs `Part 2`.
+
+A structured identifier contradiction converts an otherwise automatic fuzzy-title/content duplicate decision to **manual review**. It does not itself prove non-duplication.
+
+The safeguard applies to:
+
+- title containment + strong abstract match;
+- title similarity >= 0.97 + strong abstract match;
+- title similarity >= 0.95 + exact author + exact year.
+
+It does not override exact `doi_norm` rules.
+
 ## Manual-review rules
 
 Only the following categories are retained for manual review after automatic rules have been applied:
