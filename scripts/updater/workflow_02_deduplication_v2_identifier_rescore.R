@@ -434,7 +434,7 @@ for (i in seq_len(nrow(x))) {
 
 x[, review_route := "manual_review"]
 for (i in seq_len(nrow(x))) {
-  if (rescored_classification[[i]] == "duplicate") {
+  if (x$rescored_classification[[i]] == "duplicate") {
     x$review_route[[i]] <- "automatic_duplicate"
   } else if (is_downstream_exclusion_title(x$title_i[[i]]) ||
              is_downstream_exclusion_title(x$title_j[[i]])) {
