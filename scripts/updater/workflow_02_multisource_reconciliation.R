@@ -634,6 +634,51 @@ meta$is_representative <- meta$idx == meta$representative_idx
 meta$resolved_year <- resolved_year_by_idx
 meta$year_resolution_rule <- year_resolution_rule_by_idx
 
+deduplication_for_idx <- function(idx) {
+  cid <- meta$cluster_id[[idx]]
+  members <- which(meta$cluster_id == cid)
+  partners <- members[members != idx]
+
+  partner_records <- lapply(partners, function(j) {
+    list(
+      source = meta$source[[j]],
+      record_id = meta$source_record_id[[j]]
+    )
+  })
+
+  if (!length(partners)) {
+    return(list(
+      status = "not_duplicate",
+      partner_records = list(),
+      decision_method = "automatic",
+      rules = list()
+    ))
+  }
+
+  cluster_edges <- accepted[
+    accepted$i %in% members & accepted$j %in% members,
+    ,
+    drop = FALSE
+  ]
+  edge_rules <- sort(unique(cluster_edges$rule))
+  human_edge <- any(cluster_edges$rule == "human_reviewed_duplicate")
+  automatic_edge <- any(cluster_edges$rule != "human_reviewed_duplicate")
+  method <- if (human_edge && automatic_edge) {
+    "mixed"
+  } else if (human_edge) {
+    "human"
+  } else {
+    "automatic"
+  }
+
+  list(
+    status = "duplicate",
+    partner_records = partner_records,
+    decision_method = method,
+    rules = as.list(edge_rules)
+  )
+}
+
 merge_canonical_overlay <- function(incoming) {
   id <- lens_id(incoming)
   if (is.null(id) || !exists(id, envir = canonical_lines, inherits = FALSE)) return(incoming)
@@ -701,6 +746,9 @@ for (src in names(paths)) {
     out <- if (src == "lens") merge_canonical_overlay(incoming) else incoming
 
     existing_dedup_preserved <- !is.null(out$deduplication)
+    if (existing_dedup_preserved) out$prior_deduplication <- out$deduplication
+    out$deduplication <- deduplication_for_idx(idx_counter)
+
     out$reconciliation <- list(
       workflow = "02_multisource_reconciliation",
       cluster_id = row$cluster_id[[1L]],
