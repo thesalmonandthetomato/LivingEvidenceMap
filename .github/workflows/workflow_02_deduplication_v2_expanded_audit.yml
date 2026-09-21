@@ -46,7 +46,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite'))
+        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2'))
 
       - name: Parse expanded audit scripts
         shell: Rscript {0}
@@ -71,6 +71,23 @@ jobs:
           test -n "$(find prior_benchmark -type f -name 'normalised_metadata.csv' -print -quit)"
           test -n "$(find prior_benchmark -type f -name 'scored_sample.csv' -print -quit)"
 
+      - name: Download preserved Workflow 01 enrichment artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW01_RUN_ID: '35507378528'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prior_workflow01
+          gh run download "$WORKFLOW01_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow01-abstract-enrichment-$WORKFLOW01_RUN_ID" \
+            --dir prior_workflow01
+          test -n "$(find prior_workflow01 -type f -name 'lens_records_for_deduplication.jsonl' -print -quit)"
+          test -n "$(find prior_workflow01 -type f -name 'scopus_records_for_deduplication.jsonl' -print -quit)"
+          test -n "$(find prior_workflow01 -type f -name 'openalex_records_for_deduplication.jsonl' -print -quit)"
+          test -n "$(find prior_workflow01 -type f -name 'agricola_records_for_deduplication.jsonl' -print -quit)"
+
       - name: Build expanded deterministic sample
         env:
           TARGET_N: ${{ github.event_name == 'workflow_dispatch' && inputs.target_n || '10000' }}
@@ -80,6 +97,7 @@ jobs:
           mkdir -p outputs/workflow02_v2_expanded_input
           Rscript scripts/updater/workflow_02_deduplication_v2_expanded_audit.R \
             --input-dir prior_benchmark \
+            --upstream-dir prior_workflow01 \
             --output-dir outputs/workflow02_v2_expanded_input \
             --target-n "$TARGET_N"
 
