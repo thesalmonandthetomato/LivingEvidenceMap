@@ -233,6 +233,20 @@ title_length_norm <- function(s) {
   nchar(stri_replace_all_regex(stri_trans_tolower(stri_trans_nfkc(s)), "[\\p{P}\\p{S}\\p{Z}\\s]+", ""), type = "chars")
 }
 
+
+is_downstream_exclusion_title <- function(s) {
+  if (is.na(s) || !nzchar(trimws(s))) return(FALSE)
+  z <- stri_trans_tolower(stri_trans_nfkc(s))
+  grepl("\\b(?:additional|supplementary)\\s+file\\b|reviewer response|editor response|peer review", z, perl = TRUE)
+}
+
+is_generic_exact_title <- function(s) {
+  if (is.na(s) || !nzchar(trimws(s))) return(FALSE)
+  z <- stri_trans_tolower(stri_trans_nfkc(s))
+  z <- stri_replace_all_regex(z, "[\\p{P}\\p{S}\\p{Z}\\s]+", "")
+  z %in% c("occurrencedownload", "index", "bookreviews")
+}
+
 pair_meta <- function(i, j) {
   a <- meta[.(i)]
   b <- meta[.(j)]
@@ -279,6 +293,17 @@ for (n in seq_along(eligible)) {
   if (n == 1L || n %% 25L == 0L || n == length(eligible)) {
     progress("structured title identifiers checked", n, length(eligible))
     checkpoint("identifier_check", n, length(eligible), list(changed_so_far = sum(x$identifier_conflict)))
+  }
+}
+
+# Identifier conflicts are also required as a safeguard for review/unresolved pairs
+# before any later promotion rule can fire.
+for (i in seq_len(nrow(x))) {
+  if (isTRUE(x$identifier_conflict[[i]])) next
+  z <- identifier_conflict(x$title_i[[i]], x$title_j[[i]])
+  if (isTRUE(z$conflict)) {
+    x$identifier_conflict[[i]] <- TRUE
+    x$identifier_conflict_reason[[i]] <- z$reasons
   }
 }
 
@@ -353,6 +378,46 @@ for (i in seq_len(nrow(x))) {
     reason <- "preprint_publication_manifestation"
   }
 
+
+  # Preprint-publication pairs may legitimately change title and DOI. Very strong
+  # substantive content is sufficient when the preprint signal is explicit.
+  if (!promote && preprint_pair &&
+      !is.na(x$ordered_coverage[[i]]) && x$ordered_coverage[[i]] >= 0.98 &&
+      !is.na(x$shingle_containment[[i]]) && x$shingle_containment[[i]] >= 0.90) {
+    promote <- TRUE
+    reason <- "preprint_strong_content_manifestation"
+  }
+
+  # Strong near-identical content plus first-author agreement safely recovered
+  # additional publication manifestations in the human validation set.
+  if (!promote && pm$first_author_match &&
+      !is.na(tsim) && tsim >= 0.93 &&
+      !is.na(x$ordered_coverage[[i]]) && x$ordered_coverage[[i]] >= 0.92 &&
+      !is.na(x$shingle_containment[[i]]) && x$shingle_containment[[i]] >= 0.69) {
+    promote <- TRUE
+    reason <- "strong_content_first_author_title_agreement"
+  }
+
+  # Exact short titles can be safe when independently corroborated by both author
+  # and source/journal. Exclude known generic metadata titles.
+  if (!promote && exact_title && tlen >= 10L &&
+      pm$first_author_match && pm$journal_match &&
+      !is_generic_exact_title(x$title_i[[i]]) &&
+      !is_generic_exact_title(x$title_j[[i]])) {
+    promote <- TRUE
+    reason <- "exact_short_title_author_journal"
+  }
+
+  # Typographical title variants can be promoted at very high similarity when
+  # first author agrees, unless the record is a downstream-exclusion artefact.
+  if (!promote && !exact_title && !is.na(tsim) && tsim >= 0.995 &&
+      tlen >= 30L && pm$first_author_match &&
+      !is_downstream_exclusion_title(x$title_i[[i]]) &&
+      !is_downstream_exclusion_title(x$title_j[[i]])) {
+    promote <- TRUE
+    reason <- "near_exact_title_first_author"
+  }
+
   # Version-family DOI pairs with essentially the same title are manifestations of one work.
   if (!promote && isTRUE(x$same_doi_family[[i]]) && !is.na(tsim) && tsim >= 0.97 && tlen >= 30L) {
     promote <- TRUE
@@ -365,6 +430,18 @@ for (i in seq_len(nrow(x))) {
     x$promotion_reason[[i]] <- reason
   }
 }
+
+
+x[, review_route := "manual_review"]
+for (i in seq_len(nrow(x))) {
+  if (rescored_classification[[i]] == "duplicate") {
+    x$review_route[[i]] <- "automatic_duplicate"
+  } else if (is_downstream_exclusion_title(x$title_i[[i]]) ||
+             is_downstream_exclusion_title(x$title_j[[i]])) {
+    x$review_route[[i]] <- "workflow04_exclusion_candidate"
+  }
+}
+x[, manual_review_needed := review_route == "manual_review"]
 
 x[, decision_changed := classification != rescored_classification | rule != rescored_rule]
 
@@ -387,7 +464,8 @@ eval <- merge(
   labels,
   x[, .(pair_key, classification, rule, rescored_classification, rescored_rule,
         decision_changed, identifier_conflict, one_abstract_missing,
-        first_author_match, journal_match, preprint_pair)],
+        first_author_match, journal_match, preprint_pair,
+        review_route, manual_review_needed)],
   by = "pair_key",
   all.x = TRUE,
   sort = FALSE
