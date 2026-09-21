@@ -235,11 +235,11 @@ score_one <- function(i,j,blocks) {
   yd <- if (!is.na(a$year)&&!is.na(b$year)) abs(a$year-b$year) else NA_integer_
   brA <- grepl("(^|;)bramer_A(;|$)",blocks)
   brB <- grepl("(^|;)bramer_B(;|$)",blocks)
-  need_abs <- !exact_abs && !is.na(tsim) && (tsim>=0.90||containment||exact_title)
-  am <- if (need_abs && !is.na(a$abstract_norm)&&!is.na(b$abstract_norm))
-          abstract_metrics(a$abstract_norm,b$abstract_norm)
-        else list(lcs=NA_integer_,ordered=NA_real_,shingle=NA_real_,strong=FALSE)
 
+  # Apply cheap bibliographic rules before any token-level abstract comparison.
+  # This preserves the original rule precedence and classifications exactly,
+  # but avoids O(n*m) LCS work for pairs that are already decided.
+  am <- list(lcs=NA_integer_,ordered=NA_real_,shingle=NA_real_,strong=FALSE)
   auto <- NULL
   if(brA)auto<-"bramer_A"
   else if(brB)auto<-"bramer_B"
@@ -248,10 +248,16 @@ score_one <- function(i,j,blocks) {
   else if(same_doi&&containment)auto<-"exact_doi_title_containment"
   else if(same_doi&&!is.na(tsim)&&tsim>=0.985)auto<-"exact_doi_title_similarity_0.985"
   else if(same_doi&&exact_abs)auto<-"exact_doi_exact_abstract"
-  else if(exact_title&&am$strong)auto<-"exact_title_strong_abstract"
-  else if(containment&&am$strong)auto<-"title_containment_strong_abstract"
-  else if(!is.na(tsim)&&tsim>=0.97&&am$strong)auto<-"title_similarity_0.97_strong_abstract"
   else if(!is.na(tsim)&&tsim>=0.95&&exact_author&&exact_year)auto<-"title_similarity_0.95_exact_author_year"
+
+  need_abs <- is.null(auto) && !exact_abs && !is.na(tsim) &&
+    (tsim>=0.90||containment||exact_title)
+  if (need_abs && !is.na(a$abstract_norm)&&!is.na(b$abstract_norm)) {
+    am <- abstract_metrics(a$abstract_norm,b$abstract_norm)
+    if(exact_title&&am$strong)auto<-"exact_title_strong_abstract"
+    else if(containment&&am$strong)auto<-"title_containment_strong_abstract"
+    else if(!is.na(tsim)&&tsim>=0.97&&am$strong)auto<-"title_similarity_0.97_strong_abstract"
+  }
 
   cls <- "unresolved"; rule <- "candidate_only"
   if(!is.null(auto)) {
@@ -271,15 +277,28 @@ score_one <- function(i,j,blocks) {
 }
 
 out <- vector("list", nrow(score_sample))
+checkpoint_path <- file.path(output_dir, "scored_checkpoint.csv")
+if (file.exists(checkpoint_path)) file.remove(checkpoint_path)
+
 for (k in seq_len(nrow(score_sample))) {
   out[[k]] <- score_one(score_sample$record_i[[k]], score_sample$record_j[[k]], score_sample$blocks[[k]])
+
+  # Persist completed scoring in bounded chunks. This makes long full-corpus
+  # runs recoverable from an uploaded artefact if the runner is interrupted.
+  if (k %% 5000L == 0L || k == nrow(score_sample)) {
+    from <- max(1L, k - 4999L)
+    chunk <- rbindlist(out[from:k], fill=TRUE)
+    chunk[, stratum := score_sample$stratum[from:k]]
+    fwrite(chunk, checkpoint_path, append = file.exists(checkpoint_path),
+           col.names = !file.exists(checkpoint_path))
+  }
+
   if (k %% 500L == 0L || k == nrow(score_sample)) {
     cat(sprintf("Scored %d / %d pairs\n", k, nrow(score_sample)))
     flush.console()
   }
 }
-scored <- rbindlist(out, fill=TRUE)
-scored[, stratum := score_sample$stratum]
+scored <- fread(checkpoint_path, na.strings=c("", "NA"))
 
 # Preserve the exact original 2,000 scored rows to guarantee comparability.
 orig_keys <- original$pair_key
