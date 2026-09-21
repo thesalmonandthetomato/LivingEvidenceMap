@@ -205,14 +205,39 @@ lcs_len <- function(a,b) {
   }
   prev[[length(b)+1L]]
 }
-abstract_metrics <- function(a,b) {
-  ta<-tokens(a);tb<-tokens(b);shorter<-min(length(ta),length(tb))
+
+# Cache tokenisation and 5-word shingles once per record. The same abstract can
+# participate in many candidate pairs, so recomputing these structures per pair
+# is pure implementation overhead.
+abstract_cache <- new.env(hash=TRUE, parent=emptyenv())
+cached_abstract <- function(idx, abstract_norm) {
+  key <- as.character(idx)
+  if (exists(key, envir=abstract_cache, inherits=FALSE)) {
+    return(get(key, envir=abstract_cache, inherits=FALSE))
+  }
+  t <- tokens(abstract_norm)
+  z <- list(tokens=t, shingles=shingles5(t), n=length(t))
+  assign(key, z, envir=abstract_cache)
+  z
+}
+
+abstract_metrics <- function(idx_a,a,idx_b,b) {
+  ca <- cached_abstract(idx_a,a); cb <- cached_abstract(idx_b,b)
+  shorter <- min(ca$n,cb$n)
   if (!shorter) return(list(lcs=0L,ordered=NA_real_,shingle=NA_real_,strong=FALSE))
-  sa<-shingles5(ta);sb<-shingles5(tb)
-  sh<-if (!length(sa)||!length(sb)) NA_real_ else length(intersect(sa,sb))/min(length(sa),length(sb))
-  l<-lcs_len(ta,tb); oc<-l/shorter
-  strong <- (l>=80L && oc>=0.90 && !is.na(sh)&&sh>=0.60) ||
-            (l>=60L&&l<=79L&&oc>=0.95&&!is.na(sh)&&sh>=0.75)
+  sh <- if (!length(ca$shingles)||!length(cb$shingles)) NA_real_ else
+    length(intersect(ca$shingles,cb$shingles))/min(length(ca$shingles),length(cb$shingles))
+
+  # Every existing rule that uses ordered coverage/LCS also requires shingle
+  # containment >= 0.60 (usually >= 0.69 or >= 0.90). Therefore shingle < 0.60
+  # proves that LCS cannot affect any classification or rescore decision.
+  if (is.na(sh) || sh < 0.60) {
+    return(list(lcs=NA_integer_,ordered=NA_real_,shingle=sh,strong=FALSE))
+  }
+
+  l <- lcs_len(ca$tokens,cb$tokens); oc <- l/shorter
+  strong <- (l>=80L && oc>=0.90 && sh>=0.60) ||
+            (l>=60L&&l<=79L&&oc>=0.95&&sh>=0.75)
   list(lcs=l,ordered=oc,shingle=sh,strong=strong)
 }
 
@@ -236,10 +261,14 @@ score_one <- function(i,j,blocks) {
   brA <- grepl("(^|;)bramer_A(;|$)",blocks)
   brB <- grepl("(^|;)bramer_B(;|$)",blocks)
 
-  # Apply cheap bibliographic rules before any token-level abstract comparison.
-  # This preserves the original rule precedence and classifications exactly,
-  # but avoids O(n*m) LCS work for pairs that are already decided.
-  am <- list(lcs=NA_integer_,ordered=NA_real_,shingle=NA_real_,strong=FALSE)
+  # Preserve the reference method and rule precedence exactly. Abstract metrics
+  # are still available to the downstream rescorer even when an earlier base
+  # rule ultimately determines the base classification.
+  need_abs <- !exact_abs && !is.na(tsim) && (tsim>=0.90||containment||exact_title)
+  am <- if (need_abs && !is.na(a$abstract_norm)&&!is.na(b$abstract_norm))
+          abstract_metrics(i,a$abstract_norm,j,b$abstract_norm)
+        else list(lcs=NA_integer_,ordered=NA_real_,shingle=NA_real_,strong=FALSE)
+
   auto <- NULL
   if(brA)auto<-"bramer_A"
   else if(brB)auto<-"bramer_B"
@@ -248,16 +277,10 @@ score_one <- function(i,j,blocks) {
   else if(same_doi&&containment)auto<-"exact_doi_title_containment"
   else if(same_doi&&!is.na(tsim)&&tsim>=0.985)auto<-"exact_doi_title_similarity_0.985"
   else if(same_doi&&exact_abs)auto<-"exact_doi_exact_abstract"
+  else if(exact_title&&am$strong)auto<-"exact_title_strong_abstract"
+  else if(containment&&am$strong)auto<-"title_containment_strong_abstract"
+  else if(!is.na(tsim)&&tsim>=0.97&&am$strong)auto<-"title_similarity_0.97_strong_abstract"
   else if(!is.na(tsim)&&tsim>=0.95&&exact_author&&exact_year)auto<-"title_similarity_0.95_exact_author_year"
-
-  need_abs <- is.null(auto) && !exact_abs && !is.na(tsim) &&
-    (tsim>=0.90||containment||exact_title)
-  if (need_abs && !is.na(a$abstract_norm)&&!is.na(b$abstract_norm)) {
-    am <- abstract_metrics(a$abstract_norm,b$abstract_norm)
-    if(exact_title&&am$strong)auto<-"exact_title_strong_abstract"
-    else if(containment&&am$strong)auto<-"title_containment_strong_abstract"
-    else if(!is.na(tsim)&&tsim>=0.97&&am$strong)auto<-"title_similarity_0.97_strong_abstract"
-  }
 
   cls <- "unresolved"; rule <- "candidate_only"
   if(!is.null(auto)) {
