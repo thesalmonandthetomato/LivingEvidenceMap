@@ -1,0 +1,127 @@
+name: Workflow 02 - Deduplication v2 validation
+
+on:
+  push:
+    branches:
+      - workflow02-multisource-reconciliation
+    paths:
+      - '.github/workflows/workflow_02_deduplication_v2_validation.yml'
+      - 'scripts/updater/workflow_02_deduplication_v2_validation.R'
+      - 'docs/updater_pipeline/WORKFLOW_02_DEDUPLICATION_RULES_V2.md'
+  workflow_dispatch:
+    inputs:
+      workflow01_run_id:
+        description: 'Successful Workflow 01 all-source artefact run ID'
+        required: true
+        default: '35507378528'
+        type: string
+      sample_n:
+        description: 'Number of deterministic random anchor manifestations'
+        required: true
+        default: '2000'
+        type: string
+      sample_key:
+        description: 'Fixed deterministic sample key'
+        required: true
+        default: 'workflow02-v2-validation-2000-v1'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Workflow 02 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow02-multisource-reconciliation
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','stringdist','digest','xml2','stringi'))
+
+      - name: Parse validation implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_02_deduplication_v2_validation.R')
+          cat('PASS: Workflow 02 v2 validation R script parses successfully\n')
+
+      - name: Download Workflow 01 all-source artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow01_run_id || '35507378528' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p workflow01_output
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow01-abstract-enrichment-$RUN_ID" \
+            --dir workflow01_output
+
+          for f in lens_records_for_deduplication.jsonl \
+                   scopus_records_for_deduplication.jsonl \
+                   openalex_records_for_deduplication.jsonl \
+                   agricola_records_for_deduplication.jsonl; do
+            test -n "$(find workflow01_output -type f -name "$f" -print -quit)"
+          done
+
+      - name: Run deterministic 2000-anchor validation
+        env:
+          RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow01_run_id || '35507378528' }}
+          SAMPLE_N: ${{ github.event_name == 'workflow_dispatch' && inputs.sample_n || '2000' }}
+          SAMPLE_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.sample_key || 'workflow02-v2-validation-2000-v1' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LENS="$(find workflow01_output -type f -name lens_records_for_deduplication.jsonl -print -quit)"
+          SCOPUS="$(find workflow01_output -type f -name scopus_records_for_deduplication.jsonl -print -quit)"
+          OPENALEX="$(find workflow01_output -type f -name openalex_records_for_deduplication.jsonl -print -quit)"
+          AGRICOLA="$(find workflow01_output -type f -name agricola_records_for_deduplication.jsonl -print -quit)"
+          mkdir -p outputs/workflow02_v2_validation
+
+          Rscript scripts/updater/workflow_02_deduplication_v2_validation.R \
+            --lens "$LENS" \
+            --scopus "$SCOPUS" \
+            --openalex "$OPENALEX" \
+            --agricola "$AGRICOLA" \
+            --workflow01-run-id "$RUN_ID" \
+            --sample-n "$SAMPLE_N" \
+            --sample-key "$SAMPLE_KEY" \
+            --output-dir outputs/workflow02_v2_validation
+
+      - name: Validate validation outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/workflow02_v2_validation/summary.json', simplifyVector = FALSE)
+          stopifnot(identical(s$status, 'success'))
+          stopifnot(identical(s$historic_human_adjudications_loaded, FALSE))
+          stopifnot(identical(s$safeguards$human_decisions_applied, FALSE))
+          stopifnot(identical(s$safeguards$clustering_performed, FALSE))
+          stopifnot(file.exists('outputs/workflow02_v2_validation/sampled_anchors.csv'))
+          stopifnot(file.exists('outputs/workflow02_v2_validation/candidate_pairs.csv'))
+          stopifnot(file.exists('outputs/workflow02_v2_validation/automatic_duplicates.csv'))
+          stopifnot(file.exists('outputs/workflow02_v2_validation/manual_review_candidates.csv'))
+          cat('PASS: Workflow 02 v2 validation outputs verified; no human decisions or clustering applied\n')
+
+      - name: Upload validation artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-deduplication-v2-validation-${{ github.run_id }}
+          path: outputs/workflow02_v2_validation/
+          retention-days: 90
+          if-no-files-found: warn
