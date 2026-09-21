@@ -225,7 +225,8 @@ is_preprint_manifestation <- function(doi, journal) {
   grepl("^10\\.21203/rs\\.3\\.", d) ||
     grepl("^10\\.1101/", d) ||
     grepl("^10\\.2139/ssrn\\.", d) ||
-    grepl("biorxiv|medrxiv|researchsquare|socialscienceresearchnetwork|ssrn|arxiv|peerjpreprints", j)
+    grepl("^10\\.20944/", d) ||
+    grepl("biorxiv|medrxiv|researchsquare|socialscienceresearchnetwork|ssrn|arxiv|peerjpreprints|preprintsorg", j)
 }
 
 title_length_norm <- function(s) {
@@ -233,6 +234,24 @@ title_length_norm <- function(s) {
   nchar(stri_replace_all_regex(stri_trans_tolower(stri_trans_nfkc(s)), "[\\p{P}\\p{S}\\p{Z}\\s]+", ""), type = "chars")
 }
 
+
+
+is_downstream_exclusion_doi <- function(d) {
+  if (is.na(d) || !nzchar(trimws(d))) return(FALSE)
+  z <- tolower(trimws(d))
+  grepl("/supp(?:-|/)|/reviews?/", z, perl = TRUE)
+}
+
+is_library_guide_title <- function(s) {
+  if (is.na(s) || !nzchar(trimws(s))) return(FALSE)
+  z <- stri_trans_tolower(stri_trans_nfkc(s))
+  grepl("^library\\s+guides\\s*@|^libraryguides@", z, perl = TRUE)
+}
+
+journal_contains <- function(a, b) {
+  if (is.na(a) || is.na(b) || !nzchar(a) || !nzchar(b)) return(FALSE)
+  grepl(a, b, fixed = TRUE) || grepl(b, a, fixed = TRUE)
+}
 
 is_downstream_exclusion_title <- function(s) {
   if (is.na(s) || !nzchar(trimws(s))) return(FALSE)
@@ -258,10 +277,16 @@ pair_meta <- function(i, j) {
     abstract_missing_i = is.na(a$abstract_hash[[1L]]) || !nzchar(a$abstract_hash[[1L]]),
     abstract_missing_j = is.na(b$abstract_hash[[1L]]) || !nzchar(b$abstract_hash[[1L]]),
     first_author_match = !is.na(fa) && !is.na(fb) && identical(fa, fb),
+    exact_author_match = !is.na(a$author_norm[[1L]]) && !is.na(b$author_norm[[1L]]) &&
+      nzchar(a$author_norm[[1L]]) && nzchar(b$author_norm[[1L]]) &&
+      identical(a$author_norm[[1L]], b$author_norm[[1L]]),
     journal_match = !is.na(a$journal_norm[[1L]]) && !is.na(b$journal_norm[[1L]]) &&
       nzchar(a$journal_norm[[1L]]) && nzchar(b$journal_norm[[1L]]) &&
       identical(a$journal_norm[[1L]], b$journal_norm[[1L]]),
+    journal_containment = journal_contains(a$journal_norm[[1L]], b$journal_norm[[1L]]),
     year_diff = yd,
+    doi_i_present = !is.na(a$doi_norm[[1L]]) && nzchar(a$doi_norm[[1L]]),
+    doi_j_present = !is.na(b$doi_norm[[1L]]) && nzchar(b$doi_norm[[1L]]),
     preprint_i = is_preprint_manifestation(a$doi_norm[[1L]], a$journal_norm[[1L]]),
     preprint_j = is_preprint_manifestation(b$doi_norm[[1L]], b$journal_norm[[1L]])
   )
@@ -317,10 +342,36 @@ x[, journal_match := FALSE]
 x[, preprint_pair := FALSE]
 
 for (i in seq_len(nrow(x))) {
-  if (isTRUE(x$identifier_conflict[[i]])) next
-
   pm <- pair_meta(x$record_i[[i]], x$record_j[[i]])
   if (is.null(pm)) next
+
+  # Very narrow overrides for title-internal identifier discrepancies validated
+  # against the complete human-labelled set.
+  if (isTRUE(x$identifier_conflict[[i]])) {
+    one_doi_present <- xor(pm$doi_i_present, pm$doi_j_present)
+    both_doi_present <- pm$doi_i_present && pm$doi_j_present
+    exact_pub_year <- !is.na(pm$year_diff) && pm$year_diff == 0L
+
+    if (one_doi_present && pm$exact_author_match && exact_pub_year &&
+        !is.na(x$title_similarity[[i]]) && x$title_similarity[[i]] >= 0.99) {
+      x$rescored_classification[[i]] <- "duplicate"
+      x$rescored_rule[[i]] <- "identifier_conflict_single_doi_exact_author_year"
+      x$promotion_reason[[i]] <- "identifier_conflict_single_doi_exact_author_year"
+      next
+    }
+
+    if (both_doi_present && pm$exact_author_match && exact_pub_year &&
+        !is.na(x$title_similarity[[i]]) && x$title_similarity[[i]] >= 0.98 &&
+        !is.na(x$ordered_coverage[[i]]) && x$ordered_coverage[[i]] >= 0.98 &&
+        !is.na(x$shingle_containment[[i]]) && x$shingle_containment[[i]] >= 0.90) {
+      x$rescored_classification[[i]] <- "duplicate"
+      x$rescored_rule[[i]] <- "identifier_conflict_strong_content_exact_author_year"
+      x$promotion_reason[[i]] <- "identifier_conflict_strong_content_exact_author_year"
+      next
+    }
+
+    next
+  }
 
   one_missing <- xor(pm$abstract_missing_i, pm$abstract_missing_j)
   preprint_pair <- xor(pm$preprint_i, pm$preprint_j) || (pm$preprint_i || pm$preprint_j)
@@ -408,6 +459,19 @@ for (i in seq_len(nrow(x))) {
     reason <- "exact_short_title_author_journal"
   }
 
+
+  # Exact bibliographic title with same publication year and journal-name
+  # containment can resolve source-title variants even when author attribution differs.
+  if (!promote && exact_title && tlen >= 20L &&
+      !pm$doi_i_present && !pm$doi_j_present &&
+      !is.na(pm$year_diff) && pm$year_diff == 0L &&
+      pm$journal_containment &&
+      !is_generic_exact_title(x$title_i[[i]]) &&
+      !is_generic_exact_title(x$title_j[[i]])) {
+    promote <- TRUE
+    reason <- "exact_title_year_journal_containment_no_doi"
+  }
+
   # Typographical title variants can be promoted at very high similarity when
   # first author agrees, unless the record is a downstream-exclusion artefact.
   if (!promote && !exact_title && !is.na(tsim) && tsim >= 0.995 &&
@@ -437,7 +501,11 @@ for (i in seq_len(nrow(x))) {
   if (x$rescored_classification[[i]] == "duplicate") {
     x$review_route[[i]] <- "automatic_duplicate"
   } else if (is_downstream_exclusion_title(x$title_i[[i]]) ||
-             is_downstream_exclusion_title(x$title_j[[i]])) {
+             is_downstream_exclusion_title(x$title_j[[i]]) ||
+             is_downstream_exclusion_doi(x$doi_i[[i]]) ||
+             is_downstream_exclusion_doi(x$doi_j[[i]]) ||
+             is_library_guide_title(x$title_i[[i]]) ||
+             is_library_guide_title(x$title_j[[i]])) {
     x$review_route[[i]] <- "workflow04_exclusion_candidate"
   }
 }
