@@ -217,3 +217,31 @@ Before production replacement:
 8. only then run the v2 rules over the full corpus.
 
 The validation sample seed/key must be fixed and recorded so the same 2,000 anchors can be reproduced exactly.
+
+
+## Execution observability and checkpoint contract
+
+All substantive Workflow 02 processing is implemented in **R**. Shell in GitHub Actions is orchestration only: locating files, invoking R, and uploading artefacts. Python must not be introduced into the data-processing path.
+
+Long-running R operations must never remain silent for extended periods. They must:
+
+1. print timestamped progress to the GitHub Actions console at regular intervals and at every major stage;
+2. report both completed work and the known denominator where available, e.g. `candidate pairs scored: 5,000 / 31,842`;
+3. write an incremental machine-readable checkpoint in the output directory at each major stage and periodically during long loops;
+4. write useful partial outputs incrementally where practical rather than holding all results until successful completion;
+5. ensure the workflow has an `if: always()` artefact-upload step so checkpoints and partial outputs survive a failure or cancellation;
+6. record the last completed stage/item in the checkpoint so a stalled or failed run can be diagnosed without rerunning it;
+7. prefer resumable/artefact-first execution for expensive or slow upstream operations rather than repeating successful work.
+
+For validation runs, the minimum checkpoints are:
+
+- input inventory complete;
+- deterministic sample selected;
+- each candidate-generation block completed;
+- near-title candidate generation completed;
+- candidate-pair classification progress at least every 1,000 pairs;
+- final classification outputs written.
+
+The console should also report counts by classification/rule as soon as they become available.
+
+This contract applies to later production adoption of Workflow 02 v2 and should be followed by the other updater workflows when they are revised.
