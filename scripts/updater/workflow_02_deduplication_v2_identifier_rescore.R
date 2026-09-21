@@ -92,7 +92,10 @@ normalise_visible_title <- function(s) {
 }
 
 canonical_label <- function(x) {
-  x <- tolower(x)
+  x <- tolower(trimws(x))
+  x <- stri_replace_all_regex(x, "\\s+", " ")
+  if (identical(x, "supplementary file")) return("supplementary_file")
+  if (identical(x, "additional file")) return("additional_file")
   map <- c(
     "pt" = "part", "part" = "part",
     "study" = "study",
@@ -107,7 +110,8 @@ canonical_label <- function(x) {
     "series" = "series",
     "vol" = "volume", "volume" = "volume",
     "issue" = "issue",
-    "supplement" = "supplement",
+    "supplement" = "supplementary_file", "supplementary" = "supplementary_file",
+    "file" = "file", "additional" = "additional_file",
     "appendix" = "appendix",
     "phase" = "phase"
   )
@@ -119,7 +123,7 @@ labelled_ids <- function(s) {
   if (is.na(s)) return(list())
   pattern <- paste0(
     "(?i)(?<!\\p{L})",
-    "(part|pt|study|experiment|trial|report|no|number|interview|episode|chapter|section|series|vol|volume|issue|supplement|appendix|phase)",
+    "(supplementary\\s+file|additional\\s+file|part|pt|study|experiment|trial|report|no|number|interview|episode|chapter|section|series|vol|volume|issue|supplement|supplementary|file|appendix|phase)",
     "\\s*[\\.:#-]?\\s*",
     "([0-9]+(?:\\.[0-9]+)?|[ivxlcdm]+)",
     "(?!\\p{L})"
@@ -206,6 +210,8 @@ stopifnot(identifier_conflict("Annual Report No. 60, 2015", "Annual Report No. 6
 stopifnot(identifier_conflict("Studies on Viral Diseases of Japanese Fishes-III", "Studies on Viral Diseases of Japanese Fishes-V")$conflict)
 stopifnot(identifier_conflict("Experiment Part 1", "Experiment Part 2")$conflict)
 stopifnot(!identifier_conflict("A 3-dimensional positioning study", "A 3-dimensional positioning study")$conflict)
+stopifnot(identifier_conflict("Supplementary file 1.xlsx", "Supplementary file 8.xlsx")$conflict)
+stopifnot(identifier_conflict("Additional file 7: study data", "Additional file 2: study data")$conflict)
 
 
 first_author_from_norm <- function(x) {
@@ -310,9 +316,16 @@ for (i in seq_len(nrow(x))) {
   promote <- FALSE
   reason <- ""
 
+  # Long normalised title containment is a high-precision identity signal in the
+  # human-reviewed benchmark. Structured identifiers are checked above first.
+  if (containment && tlen >= 30L) {
+    promote <- TRUE
+    reason <- "long_title_containment_no_identifier_conflict"
+  }
+
   # Missing abstract on one manifestation must not act as negative evidence.
   # Require a long exact title, compatible year, and independent corroboration.
-  if (one_missing && exact_title && tlen >= 30L && yd_ok_1 &&
+  if (!promote && one_missing && exact_title && tlen >= 30L && yd_ok_1 &&
       (pm$first_author_match || pm$journal_match || preprint_pair)) {
     promote <- TRUE
     reason <- "exact_title_missing_abstract_corroborated"
