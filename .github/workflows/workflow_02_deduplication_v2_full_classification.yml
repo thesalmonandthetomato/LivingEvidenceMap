@@ -1,0 +1,137 @@
+name: Workflow 02 - Deduplication v2 full candidate classification
+
+on:
+  push:
+    branches:
+      - workflow02-multisource-reconciliation
+    paths:
+      - '.github/workflows/workflow_02_deduplication_v2_full_classification.yml'
+  workflow_dispatch:
+    inputs:
+      source_benchmark_run_id:
+        description: 'Saved Workflow 02 candidate benchmark run ID'
+        required: true
+        default: '35585544686'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  full-classification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Workflow 02 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow02-multisource-reconciliation
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2'))
+
+      - name: Parse full classification scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_02_deduplication_v2_expanded_audit.R')
+          parse(file='scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R')
+          cat('PASS: full-classification R scripts parse successfully\n')
+
+      - name: Download saved candidate benchmark artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.source_benchmark_run_id || '35585544686' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prior_benchmark
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-candidate-benchmark-$SOURCE_RUN_ID" \
+            --dir prior_benchmark
+          test -n "$(find prior_benchmark -type f -name 'all_candidate_pairs.csv' -print -quit)"
+          test -n "$(find prior_benchmark -type f -name 'normalised_metadata.csv' -print -quit)"
+          test -n "$(find prior_benchmark -type f -name 'scored_sample.csv' -print -quit)"
+
+      - name: Download preserved Workflow 01 enrichment artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW01_RUN_ID: '35507378528'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prior_workflow01
+          gh run download "$WORKFLOW01_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow01-abstract-enrichment-$WORKFLOW01_RUN_ID" \
+            --dir prior_workflow01
+          test -n "$(find prior_workflow01 -type f -name 'lens_records_for_deduplication.jsonl' -print -quit)"
+          test -n "$(find prior_workflow01 -type f -name 'scopus_records_for_deduplication.jsonl' -print -quit)"
+          test -n "$(find prior_workflow01 -type f -name 'openalex_records_for_deduplication.jsonl' -print -quit)"
+          test -n "$(find prior_workflow01 -type f -name 'agricola_records_for_deduplication.jsonl' -print -quit)"
+
+      - name: Score every saved candidate pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02_v2_full_input
+          Rscript scripts/updater/workflow_02_deduplication_v2_expanded_audit.R \
+            --input-dir prior_benchmark \
+            --upstream-dir prior_workflow01 \
+            --output-dir outputs/workflow02_v2_full_input \
+            --target-n 1000000 \
+            --sample-key workflow02-v2-full-corpus
+
+      - name: Apply frozen calibrated classifier
+        env:
+          SOURCE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.source_benchmark_run_id || '35585544686' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02_v2_full_rescore
+          Rscript scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R \
+            --input-dir outputs/workflow02_v2_full_input \
+            --output-dir outputs/workflow02_v2_full_rescore \
+            --source-run-id "$SOURCE_RUN_ID"
+
+      - name: Validate full classification outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(data.table)
+          e <- fromJSON('outputs/workflow02_v2_full_input/expanded_summary.json', simplifyVector=FALSE)
+          r <- fromJSON('outputs/workflow02_v2_full_rescore/summary.json', simplifyVector=FALSE)
+          x <- fread('outputs/workflow02_v2_full_rescore/rescored_sample.csv')
+          stopifnot(identical(e$status, 'success'))
+          stopifnot(identical(e$candidate_generation_repeated, FALSE))
+          stopifnot(identical(e$source_candidate_artifact_reused, TRUE))
+          stopifnot(e$full_candidate_n == 519917)
+          stopifnot(e$scoring_sample_n == 519917)
+          stopifnot(nrow(x) == 519917)
+          stopifnot(identical(r$status, 'success'))
+          stopifnot(all(x$review_route %in% c('automatic_duplicate','non_duplicate','manual_review','workflow04_exclusion_candidate')))
+          counts <- x[, .N, by=review_route][order(review_route)]
+          fwrite(counts, 'outputs/workflow02_v2_full_rescore/final_route_counts.csv')
+          cat('PASS: all 519917 saved candidate pairs classified\n')
+          print(counts)
+
+      - name: Upload full classification artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-deduplication-v2-full-classification-${{ github.run_id }}
+          path: |
+            outputs/workflow02_v2_full_input/expanded_summary.json
+            outputs/workflow02_v2_full_rescore/
+          retention-days: 90
+          if-no-files-found: warn
