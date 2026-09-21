@@ -160,6 +160,19 @@ if (need > 0L) {
   per_block <- max(50L, ceiling(need / max(1L, nb)))
   setorder(pool, primary_block, sample_hash)
   extra <- pool[, head(.SD, per_block), by=primary_block]
+
+  # Some strata can contain fewer than the nominal per-block quota.
+  # Top up deterministically from the remaining candidate pool so the
+  # expanded audit reaches the requested size without changing provenance
+  # or regenerating candidates.
+  if (nrow(extra) < need) {
+    selected_keys <- pair_key(extra$record_i, extra$record_j)
+    remainder <- pool[!pair_key(record_i, record_j) %in% selected_keys]
+    setorder(remainder, sample_hash)
+    topup_n <- min(need - nrow(extra), nrow(remainder))
+    if (topup_n > 0L) extra <- rbind(extra, remainder[seq_len(topup_n)], fill=TRUE)
+  }
+
   if (nrow(extra) > need) {
     setorder(extra, sample_hash)
     extra <- extra[seq_len(need)]
