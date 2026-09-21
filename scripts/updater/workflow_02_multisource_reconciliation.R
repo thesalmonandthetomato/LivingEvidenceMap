@@ -445,11 +445,11 @@ for (k in seq_along(pair_keys)) {
     classification <- "duplicate"
     rule <- "compact_title_strong_abstract"
   } else if (!conflicting_doi_family && !is.na(title_sim) && title_sim >= 0.97 && strong_abstract_match) {
-    classification <- "duplicate"
-    rule <- "near_exact_title_strong_abstract"
+    classification <- "review"
+    rule <- "near_exact_title_strong_abstract_review"
   } else if (!conflicting_doi_family && exact_abstract && !is.na(title_sim) && title_sim >= 0.90) {
-    classification <- "duplicate"
-    rule <- "exact_abstract_title_compatible"
+    classification <- "review"
+    rule <- "exact_abstract_title_compatible_review"
   } else if (!is.na(title_sim) && title_sim >= 0.985 && author_match && year_compatible) {
     classification <- "duplicate"
     rule <- "very_high_title_author_year"
@@ -569,8 +569,8 @@ for (g in groups) {
       "repository_version_doi_near_exact_title",
       "exact_title_strong_abstract",
       "compact_title_strong_abstract",
-      "near_exact_title_strong_abstract",
-      "exact_abstract_title_compatible"
+      "near_exact_title_strong_abstract_review",
+      "exact_abstract_title_compatible_review"
     )
     strong_content_identity <- nrow(gp) &&
       any(gp$classification == "duplicate" & gp$rule %in% content_identity_rules)
