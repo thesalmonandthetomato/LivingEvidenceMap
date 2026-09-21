@@ -34,6 +34,33 @@ if (is.na(sample_n) || sample_n < 1L) stop("--sample-n must be a positive intege
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
+timestamp_utc <- function() format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
+progress <- function(stage, completed = NULL, total = NULL, extra = NULL) {
+  msg <- paste0("[", timestamp_utc(), "] ", stage)
+  if (!is.null(completed)) {
+    msg <- paste0(msg, ": ", completed)
+    if (!is.null(total)) msg <- paste0(msg, " / ", total)
+  }
+  if (!is.null(extra) && nzchar(extra)) msg <- paste0(msg, " | ", extra)
+  cat(msg, "\n")
+  flush.console()
+}
+write_checkpoint <- function(stage, completed = NULL, total = NULL, extra = list()) {
+  chk <- c(list(
+    workflow = "02_deduplication_v2_validation",
+    updated_at = timestamp_utc(),
+    stage = stage,
+    completed = completed,
+    total = total
+  ), extra)
+  writeLines(
+    toJSON(chk, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"),
+    file.path(output_dir, "checkpoint_progress.json")
+  )
+}
+progress("validation started")
+write_checkpoint("validation_started")
+
 scalar <- function(x) {
   if (is.null(x) || length(x) == 0L) return(NULL)
   y <- as.character(x[[1L]])
@@ -270,12 +297,16 @@ for (src in names(paths)) {
 
 meta <- do.call(rbind, rows)
 if (anyDuplicated(paste(meta$source, meta$source_record_id, sep = "::"))) stop("Duplicate source namespace + record IDs", call. = FALSE)
+progress("input inventory complete", nrow(meta), nrow(meta), paste("sources:", paste(names(n_by_source), unname(n_by_source), collapse = "; ")))
+write_checkpoint("input_inventory_complete", nrow(meta), nrow(meta), list(source_counts = as.list(n_by_source)))
 
 sample_hash <- vapply(seq_len(nrow(meta)), function(i) {
   digest(paste(sample_key, meta$source[[i]], meta$source_record_id[[i]], sep = "|"), algo = "sha256", serialize = FALSE)
 }, character(1))
 anchor_idx <- order(sample_hash)[seq_len(min(sample_n, nrow(meta)))]
 anchor_flag <- seq_len(nrow(meta)) %in% anchor_idx
+progress("deterministic sample selected", length(anchor_idx), sample_n)
+write_checkpoint("sample_selected", length(anchor_idx), sample_n, list(sample_key = sample_key))
 
 pair_env <- new.env(hash = TRUE, parent = emptyenv())
 add_pair <- function(i, j, block) {
@@ -315,19 +346,31 @@ key_if_complete <- function(...) {
   out
 }
 
-# Bramer A-G candidate blocks.
-block_stats <- list(
-  bramer_A = add_anchor_block(key_if_complete(meta$author_norm, meta$year, meta$title_norm, meta$journal_norm), "bramer_A"),
-  bramer_B = add_anchor_block(key_if_complete(meta$author_norm, meta$year, meta$title_norm, meta$pages_norm), "bramer_B"),
-  bramer_C = add_anchor_block(key_if_complete(meta$title_norm, meta$volume_norm, meta$pages_norm), "bramer_C"),
-  bramer_D = add_anchor_block(key_if_complete(meta$author_norm, meta$volume_norm, meta$pages_norm), "bramer_D"),
-  bramer_E = add_anchor_block(key_if_complete(meta$year, meta$volume_norm, meta$issue_norm, meta$pages_norm), "bramer_E"),
-  bramer_F = add_anchor_block(meta$title_norm, "bramer_F"),
-  bramer_G = add_anchor_block(key_if_complete(meta$author_norm, meta$year), "bramer_G"),
-  exact_doi = add_anchor_block(meta$doi_norm, "exact_doi"),
-  doi_family = add_anchor_block(meta$doi_family, "doi_family"),
-  exact_abstract = add_anchor_block(meta$abstract_hash, "exact_abstract")
-)
+# Bramer A-G and exact-field candidate blocks, checkpointed after each block.
+block_stats <- list()
+run_block <- function(name, values) {
+  progress(paste("candidate block", name, "started"))
+  res <- add_anchor_block(values, name)
+  block_stats[[name]] <<- res
+  pair_count_now <- length(ls(pair_env, all.names = TRUE))
+  progress(paste("candidate block", name, "complete"), res$pairs, NULL, paste("candidate pairs:", pair_count_now))
+  write_checkpoint(
+    paste0("candidate_block_", name, "_complete"),
+    completed = pair_count_now,
+    total = NULL,
+    extra = list(block = name, block_result = res)
+  )
+}
+run_block("bramer_A", key_if_complete(meta$author_norm, meta$year, meta$title_norm, meta$journal_norm))
+run_block("bramer_B", key_if_complete(meta$author_norm, meta$year, meta$title_norm, meta$pages_norm))
+run_block("bramer_C", key_if_complete(meta$title_norm, meta$volume_norm, meta$pages_norm))
+run_block("bramer_D", key_if_complete(meta$author_norm, meta$volume_norm, meta$pages_norm))
+run_block("bramer_E", key_if_complete(meta$year, meta$volume_norm, meta$issue_norm, meta$pages_norm))
+run_block("bramer_F", meta$title_norm)
+run_block("bramer_G", key_if_complete(meta$author_norm, meta$year))
+run_block("exact_doi", meta$doi_norm)
+run_block("doi_family", meta$doi_family)
+run_block("exact_abstract", meta$abstract_hash)
 
 # Near-title candidate discovery: shared Unicode-normalised 3-character shingles.
 title_shingles <- function(x) {
@@ -361,6 +404,8 @@ for (a in anchor_idx) {
   cand <- cand[cand != a]
   for (b in cand) add_pair(a,b,"title_shingle_signature")
 }
+progress("near-title candidate generation complete", length(anchor_idx), length(anchor_idx), paste("candidate pairs:", length(ls(pair_env, all.names = TRUE))))
+write_checkpoint("near_title_candidate_generation_complete", length(ls(pair_env, all.names = TRUE)), NULL)
 
 tokens <- function(x) {
   if (is.na(x) || !nzchar(x)) return(character())
@@ -402,6 +447,10 @@ abstract_metrics <- function(a,b) {
 pair_keys <- ls(pair_env,all.names=TRUE)
 out <- vector("list",length(pair_keys))
 for (k in seq_along(pair_keys)) {
+  if (k == 1L || k %% 1000L == 0L || k == length(pair_keys)) {
+    progress("candidate pairs scored", k, length(pair_keys))
+    write_checkpoint("candidate_pair_scoring", k, length(pair_keys))
+  }
   z <- get(pair_keys[[k]],pair_env,inherits=FALSE)
   a <- meta[z$i,,drop=FALSE]; b <- meta[z$j,,drop=FALSE]
   same_doi <- !is.na(a$doi_norm) && !is.na(b$doi_norm) && identical(a$doi_norm,b$doi_norm)
@@ -501,6 +550,22 @@ write.csv(pairs[pairs$classification=="duplicate",,drop=FALSE],
           file.path(output_dir,"automatic_duplicates.csv"),row.names=FALSE,na="")
 write.csv(pairs[pairs$classification=="review",,drop=FALSE],
           file.path(output_dir,"manual_review_candidates.csv"),row.names=FALSE,na="")
+progress(
+  "classification outputs written",
+  nrow(pairs),
+  nrow(pairs),
+  paste("duplicates:", sum(pairs$classification=="duplicate"), "review:", sum(pairs$classification=="review"), "unresolved:", sum(pairs$classification=="unresolved"))
+)
+write_checkpoint(
+  "classification_outputs_written",
+  nrow(pairs),
+  nrow(pairs),
+  list(
+    duplicate_pairs = sum(pairs$classification=="duplicate"),
+    review_pairs = sum(pairs$classification=="review"),
+    unresolved_pairs = sum(pairs$classification=="unresolved")
+  )
+)
 
 rule_counts <- if (nrow(pairs)) as.list(table(pairs$rule)) else list()
 class_counts <- if (nrow(pairs)) as.list(table(pairs$classification)) else list()
@@ -528,3 +593,5 @@ summary <- list(
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
            file.path(output_dir,"summary.json"))
 cat(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),"\n")
+progress("validation complete", nrow(pairs), nrow(pairs))
+write_checkpoint("complete", nrow(pairs), nrow(pairs), list(status = "success"))
