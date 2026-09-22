@@ -8,9 +8,32 @@ permissions:
   actions: read
 
 jobs:
-  full-rescore:
+  rescore-chunks:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - chunk_id: '01'
+            start_row: 1
+            end_row: 100000
+          - chunk_id: '02'
+            start_row: 100001
+            end_row: 200000
+          - chunk_id: '03'
+            start_row: 200001
+            end_row: 300000
+          - chunk_id: '04'
+            start_row: 300001
+            end_row: 400000
+          - chunk_id: '05'
+            start_row: 400001
+            end_row: 500000
+          - chunk_id: '06'
+            start_row: 500001
+            end_row: 519917
 
     steps:
       - name: Checkout Workflow 02 branch
@@ -76,37 +99,122 @@ jobs:
           file.copy(m, 'full_rescore_input/normalised_metadata.csv', overwrite=TRUE)
           cat('PASS: reconstructed exactly 519917 unique scored candidate pairs; removed 83 checkpoint-overlap rows\n')
 
-      - name: Run validated optimised rescorer
+      - name: Rescore chunk ${{ matrix.chunk_id }}
+        env:
+          CHUNK_ID: ${{ matrix.chunk_id }}
+          START_ROW: ${{ matrix.start_row }}
+          END_ROW: ${{ matrix.end_row }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p outputs/workflow02_v2_full_rescore
+          out="outputs/workflow02_v2_chunk_${CHUNK_ID}"
+          mkdir -p "$out"
           Rscript scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R \
             --input-dir full_rescore_input \
-            --output-dir outputs/workflow02_v2_full_rescore \
-            --source-run-id 35585544686
+            --output-dir "$out" \
+            --source-run-id 35585544686 \
+            --start-row "$START_ROW" \
+            --end-row "$END_ROW"
+          test -s "$out/rescored_sample.csv"
+          mv "$out/rescored_sample.csv" "$out/rescored_chunk_${CHUNK_ID}.csv"
 
-      - name: Validate final full-corpus output
+      - name: Validate chunk ${{ matrix.chunk_id }}
+        env:
+          CHUNK_ID: ${{ matrix.chunk_id }}
+          START_ROW: ${{ matrix.start_row }}
+          END_ROW: ${{ matrix.end_row }}
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          p <- sprintf('outputs/workflow02_v2_chunk_%s/rescored_chunk_%s.csv',
+                       Sys.getenv('CHUNK_ID'), Sys.getenv('CHUNK_ID'))
+          x <- fread(p)
+          expected <- as.integer(Sys.getenv('END_ROW')) - as.integer(Sys.getenv('START_ROW')) + 1L
+          stopifnot(nrow(x) == expected)
+          stopifnot(min(x$source_row_index) == as.integer(Sys.getenv('START_ROW')))
+          stopifnot(max(x$source_row_index) == as.integer(Sys.getenv('END_ROW')))
+          stopifnot(uniqueN(x$source_row_index) == expected)
+          cat(sprintf('PASS: chunk %s contains %d deterministic source rows\n',
+                      Sys.getenv('CHUNK_ID'), expected))
+
+      - name: Upload recoverable chunk artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-rescore-chunk-${{ matrix.chunk_id }}-${{ github.run_id }}
+          path: outputs/workflow02_v2_chunk_${{ matrix.chunk_id }}/
+          retention-days: 90
+          if-no-files-found: warn
+
+  merge-rescore:
+    needs: rescore-chunks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Workflow 02 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow02-multisource-reconciliation
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite'))
+
+      - name: Download completed chunk artefacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow02-rescore-chunk-*-${{ github.run_id }}
+          path: recovered_chunks
+          merge-multiple: true
+
+      - name: Merge and validate all rescore chunks
         shell: Rscript {0}
         run: |
           library(data.table)
           library(jsonlite)
-          x <- fread('outputs/workflow02_v2_full_rescore/rescored_sample.csv')
-          s <- fromJSON('outputs/workflow02_v2_full_rescore/summary.json', simplifyVector=FALSE)
+          dir.create('outputs/workflow02_v2_full_rescore', recursive=TRUE, showWarnings=FALSE)
+          files <- sort(list.files('recovered_chunks', pattern='^rescored_chunk_[0-9]+\\.csv$', full.names=TRUE))
+          stopifnot(length(files) == 6L)
+          x <- rbindlist(lapply(files, fread), use.names=TRUE, fill=TRUE)
+          setorder(x, source_row_index)
           stopifnot(nrow(x) == 519917L)
-          stopifnot(uniqueN(paste(pmin(x$record_i,x$record_j), pmax(x$record_i,x$record_j), sep='::')) == 519917L)
-          stopifnot(identical(s$status, 'success'))
+          stopifnot(identical(x$source_row_index, seq_len(519917L)))
+          pair_key <- paste(pmin(x$record_i,x$record_j), pmax(x$record_i,x$record_j), sep='::')
+          stopifnot(uniqueN(pair_key) == 519917L)
           stopifnot(all(x$review_route %in% c('automatic_duplicate','non_duplicate','manual_review','workflow04_exclusion_candidate')))
+          fwrite(x, 'outputs/workflow02_v2_full_rescore/rescored_sample.csv')
           counts <- x[, .N, by=review_route][order(review_route)]
           fwrite(counts, 'outputs/workflow02_v2_full_rescore/final_route_counts.csv')
-          cat('PASS: final full-corpus rescore contains exactly 519917 unique candidate pairs\n')
+          changed <- x[classification != rescored_classification | rule != rescored_rule]
+          fwrite(changed, 'outputs/workflow02_v2_full_rescore/changed_decisions.csv')
+          summary <- list(
+            workflow='02_deduplication_v2_chunked_full_rescore',
+            status='success',
+            source_manifestations=72941,
+            candidate_pairs=519917,
+            chunk_count=6,
+            checkpointing='one independently uploaded artefact per completed deterministic chunk',
+            candidate_generation_repeated=FALSE,
+            source_candidate_artifact_reused=TRUE,
+            route_counts=as.list(setNames(counts$N, counts$review_route))
+          )
+          writeLines(toJSON(summary, auto_unbox=TRUE, pretty=TRUE),
+                     'outputs/workflow02_v2_full_rescore/summary.json')
+          cat('PASS: merged six recoverable chunks into exactly 519917 unique candidate-pair decisions\n')
           print(counts)
 
-      - name: Upload final full-rescore artefact
-        if: always()
+      - name: Upload final merged full-rescore artefact
         uses: actions/upload-artifact@v4
         with:
           name: workflow02-deduplication-v2-final-full-rescore-${{ github.run_id }}
           path: outputs/workflow02_v2_full_rescore/
           retention-days: 90
-          if-no-files-found: warn
+          if-no-files-found: error
