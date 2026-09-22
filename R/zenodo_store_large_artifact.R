@@ -32,15 +32,29 @@ if (!nzchar(token)) stop("ZENODO_ACCESS_TOKEN is required", call. = FALSE)
 
 api_root <- "https://zenodo.org/api"
 auth <- function(req) req |> req_headers(Authorization = paste("Bearer", token))
-perform_json <- function(req, expected) {
-  resp <- req |> req_retry(max_tries = 5, retry_on_failure = TRUE) |> req_timeout(600) |> req_perform()
+perform_json <- function(req, expected, label = "request") {
+  resp <- req |>
+    req_retry(max_tries = 8, retry_on_failure = TRUE) |>
+    req_timeout(600) |>
+    req_error(is_error = function(resp) FALSE) |>
+    req_perform()
   status <- resp_status(resp)
   if (!(status %in% expected)) {
     body <- tryCatch(resp_body_string(resp), error = function(e) "")
-    stop(sprintf("Zenodo API returned HTTP %d: %s", status, body), call. = FALSE)
+    stop(sprintf("Zenodo %s returned HTTP %d: %s", label, status, body), call. = FALSE)
   }
   resp_body_json(resp, simplifyVector = FALSE)
 }
+
+# Authentication/preflight check before any mutation.
+preflight <- perform_json(
+  request(paste0(api_root, "/deposit/depositions?size=1")) |>
+    req_method("GET") |>
+    auth(),
+  200L,
+  "authentication preflight"
+)
+cat("PASS: Zenodo authentication preflight succeeded\n")
 
 created <- perform_json(
   request(paste0(api_root, "/deposit/depositions")) |>
@@ -48,7 +62,8 @@ created <- perform_json(
     auth() |>
     req_headers("Content-Type" = "application/json") |>
     req_body_json(list()),
-  201L
+  201L,
+  "draft creation"
 )
 
 deposition_id <- as.character(created$id)
