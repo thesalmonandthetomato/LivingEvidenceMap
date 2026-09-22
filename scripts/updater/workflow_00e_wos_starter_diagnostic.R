@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 api_key <- Sys.getenv("WOS_STARTER_API", unset = "")
 if (!nzchar(api_key)) stop("WOS_STARTER_API secret is not available", call. = FALSE)
 
-query <- '(TI=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AB=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AK=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))'
+query <- '((TI=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AB=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AK=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))) AND DO=10.*'
 out_dir <- "outputs/updater/wos_starter_diagnostic"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
