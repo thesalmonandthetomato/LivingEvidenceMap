@@ -532,9 +532,9 @@ jobs:
           cp -R downloaded_search_records/* docs/search_record/
 
           if [ '${{ inputs.run_type }}' = 'expansion' ]; then
-            cp -R downloaded_expansion_reconciliation/outputs/updater/expansion_archive/docs/* docs/
+            cp -R downloaded_expansion_reconciliation/expansion_archive/docs/* docs/
             mkdir -p data/workflow00/source_id_registry
-            cp -R downloaded_expansion_reconciliation/outputs/updater/expansion_archive/data/workflow00/source_id_registry/* \
+            cp -R downloaded_expansion_reconciliation/expansion_archive/data/workflow00/source_id_registry/* \
               data/workflow00/source_id_registry/
           fi
 
