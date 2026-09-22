@@ -1,0 +1,143 @@
+name: Store large pipeline artifact on Zenodo
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: GitHub Actions run containing the source artifact
+        required: true
+        type: string
+      source_artifact_name:
+        description: Exact Actions artifact name to download
+        required: true
+        type: string
+      file_glob:
+        description: File glob within downloaded artifact, e.g. '**/records.jsonl'
+        required: true
+        type: string
+      snapshot_type:
+        description: Machine-readable snapshot type
+        required: true
+        default: pipeline_snapshot
+        type: string
+      title:
+        description: Zenodo deposition title
+        required: true
+        default: Living Evidence Map pipeline snapshot
+        type: string
+      description:
+        description: Zenodo deposition description
+        required: true
+        default: Large pipeline snapshot for the Living Evidence Map.
+        type: string
+      publish:
+        description: Publish publicly on Zenodo rather than leave as draft
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  store:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout storage workflow branch
+        uses: actions/checkout@v4
+        with:
+          ref: zenodo-large-artifact-storage
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::httr2
+            any::jsonlite
+            any::digest
+
+      - name: Download source Actions artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source_artifact
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$SOURCE_ARTIFACT_NAME" \
+            --dir source_artifact
+
+      - name: Resolve exactly one file
+        id: file
+        env:
+          FILE_GLOB: ${{ inputs.file_glob }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find source_artifact -type f -path "$FILE_GLOB" -print)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Expected exactly one file matching $FILE_GLOB; found ${#files[@]}" >&2
+            printf '%s\n' "${files[@]}" >&2
+            exit 1
+          fi
+          echo "path=${files[0]}" >> "$GITHUB_OUTPUT"
+          ls -lh "${files[0]}"
+
+      - name: Upload large snapshot to Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SNAPSHOT_TYPE: ${{ inputs.snapshot_type }}
+          TITLE: ${{ inputs.title }}
+          DESCRIPTION: ${{ inputs.description }}
+          PUBLISH: ${{ inputs.publish }}
+          FILE_PATH: ${{ steps.file.outputs.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ZENODO_ACCESS_TOKEN"
+          mkdir -p zenodo_manifest
+          Rscript R/zenodo_store_large_artifact.R \
+            --file "$FILE_PATH" \
+            --title "$TITLE" \
+            --description "$DESCRIPTION" \
+            --snapshot-type "$SNAPSHOT_TYPE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-commit "$GITHUB_SHA" \
+            --publish "$PUBLISH" \
+            --output-manifest zenodo_manifest/zenodo_snapshot_manifest.json
+
+      - name: Validate storage manifest contains no secret
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          p <- 'zenodo_manifest/zenodo_snapshot_manifest.json'
+          stopifnot(file.exists(p))
+          x <- fromJSON(p, simplifyVector=FALSE)
+          stopifnot(identical(x$storage, 'zenodo'))
+          stopifnot(isTRUE(x$authoritative_storage))
+          stopifnot(identical(x$git_lfs_required, FALSE))
+          txt <- paste(readLines(p, warn=FALSE), collapse='\n')
+          stopifnot(!grepl('access_token|ZENODO_ACCESS_TOKEN|Bearer ', txt, ignore.case=TRUE))
+          cat(sprintf('PASS: Zenodo manifest validated for deposition %s\n', x$deposition_id))
+
+      - name: Preserve small Zenodo manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenodo-storage-manifest-${{ github.run_id }}
+          path: zenodo_manifest/zenodo_snapshot_manifest.json
+          retention-days: 90
+          if-no-files-found: error
