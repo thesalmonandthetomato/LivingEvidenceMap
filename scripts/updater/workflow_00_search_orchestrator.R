@@ -53,7 +53,6 @@ oa_farm <- paste(vapply(oa_farm_terms,oa_quote,character(1)),collapse=" or ")
 openalex_query <- sprintf("works where title/abstract has ((%s) and (%s))",oa_species,oa_farm)
 
 agricola_query <- sprintf("SRC:AGR AND TITLE_ABS:((%s) AND (%s))",species,farm)
-europe_pmc_query <- sprintf("TITLE_ABS:((%s) AND (%s))",species,farm)
 
 wos_component <- function(tag, farm_terms_string) {
   sprintf("%s=((%s) AND (%s))",tag,species,farm_terms_string)
@@ -73,8 +72,6 @@ if (run_type=="fortnightly") {
                           scopus_query,format(from_date,"%Y%m%d"))
   agricola_query <- sprintf("(%s) AND FIRST_PDATE:[%s TO %s]",
                             agricola_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
-  europe_pmc_query <- sprintf("(%s) AND FIRST_PDATE:[%s TO %s]",
-                              europe_pmc_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
   wos_query <- sprintf("(%s) AND DOP=%s/%s",
                        wos_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
 }
@@ -84,7 +81,6 @@ queries <- list(
   scopus=scopus_query,
   openalex=openalex_query,
   agricola=agricola_query,
-  europe_pmc=europe_pmc_query,
   wos=wos_query
 )
 
@@ -93,7 +89,6 @@ support <- list(
   scopus=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE),
   openalex=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE),
   agricola=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE),
-  europe_pmc=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE),
   wos=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE)
 )
 
