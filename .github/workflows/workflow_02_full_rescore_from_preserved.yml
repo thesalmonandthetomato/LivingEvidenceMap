@@ -1,11 +1,6 @@
 name: Workflow 02 - Full rescore from preserved scoring
 
 on:
-  push:
-    branches:
-      - workflow02-multisource-reconciliation
-    paths:
-      - '.github/workflows/workflow_02_full_rescore_from_preserved.yml'
   workflow_dispatch:
 
 permissions:
