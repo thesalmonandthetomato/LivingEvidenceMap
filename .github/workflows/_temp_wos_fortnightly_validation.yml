@@ -1,4 +1,4 @@
-name: TEMP OpenAlex sync-filter key test
+name: TEMP five-source fortnightly integration
 
 on:
   push:
@@ -7,19 +7,22 @@ on:
     paths:
       - .github/workflows/_temp_wos_fortnightly_validation.yml
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Test OpenAlex from_updated_date access
-        env:
-          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          code="$(curl -sS -o /tmp/body.json -w '%{http_code}' -H "Authorization: Bearer $OPENALEX_API_KEY" "https://api.openalex.org/works?filter=from_updated_date:2026-09-21&per-page=1")"
-          echo "HTTP_STATUS=$code"
-          echo "META_COUNT=$(jq -r '.meta.count // empty' /tmp/body.json)"
-          echo "ERROR=$(jq -r '.error // empty' /tmp/body.json)"
-          echo "MESSAGE=$(jq -r '.message // empty' /tmp/body.json)"
-          if [ "$code" -ge 400 ]; then exit 1; fi
+  validate:
+    uses: ./.github/workflows/workflow_00_search_orchestrator.yml
+    with:
+      run_type: fortnightly
+      lens: true
+      scopus: true
+      openalex: true
+      agricola: true
+      wos: true
+      additional_farm_term: ''
+      resume_run_id: ''
+    secrets: inherit
+
+# five-source integration validation rerun after empty AGRICOLA fix
