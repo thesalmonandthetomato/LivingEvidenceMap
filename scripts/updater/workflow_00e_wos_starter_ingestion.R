@@ -200,6 +200,8 @@ for (page in seq.int(start_page, end_page)) {
     records_retrieved_in_chunk = retrieved,
     canonical_json_modified = FALSE
   ), checkpoint_path)
+
+  if (page < end_page) Sys.sleep(0.22)
 }
 
 dup_uids <- unique(uids[duplicated(uids)])
