@@ -1,6 +1,40 @@
 name: Workflow 00 - Search orchestrator
 
 on:
+  workflow_call:
+    inputs:
+      run_type:
+        required: true
+        type: string
+      lens:
+        required: false
+        default: false
+        type: boolean
+      scopus:
+        required: false
+        default: false
+        type: boolean
+      openalex:
+        required: false
+        default: false
+        type: boolean
+      agricola:
+        required: false
+        default: false
+        type: boolean
+      wos:
+        required: false
+        default: false
+        type: boolean
+      additional_farm_term:
+        required: false
+        default: ''
+        type: string
+      resume_run_id:
+        required: false
+        default: ''
+        type: string
+
   workflow_dispatch:
     inputs:
       run_type:
