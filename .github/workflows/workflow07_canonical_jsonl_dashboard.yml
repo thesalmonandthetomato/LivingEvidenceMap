@@ -1,0 +1,147 @@
+name: Workflow 07 - Canonical JSONL dashboard build
+
+on:
+  push:
+    branches:
+      - workflow07-canonical-jsonl-dashboard
+    paths:
+      - '.github/workflows/workflow07_canonical_jsonl_dashboard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  TOPIC_RUN_ID: '35524609662'
+  TOPIC_ARTIFACT: 'topic-v36-full-production-repaired-final-35524609662'
+  CANONICAL_REF: '3625c4b98a271d304464d7d3f8fa8fe9be9b5bfd'
+  TOPIC_ONTOLOGY_PATH: 'data/reference/topic_ontology_v3_6.csv'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout dashboard branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow07-canonical-jsonl-dashboard
+          fetch-depth: 1
+
+      - name: Checkout immutable canonical corpus
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANONICAL_REF }}
+          path: canonical_source
+          lfs: true
+          fetch-depth: 1
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::jsonlite
+            any::readr
+
+      - name: Download authoritative three-Luna topic output
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p topic_artifact
+          gh run download "$TOPIC_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$TOPIC_ARTIFACT" \
+            --dir topic_artifact
+          test -s topic_artifact/three_luna_pathway_scores.csv
+          test -s topic_artifact/input_queue.csv
+          test -s topic_artifact/production_manifest.json
+          test -s topic_artifact/AUDIT_PASS.ok
+
+      - name: Verify canonical source and embed topic assignments
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s canonical_source/data/canonical/current/repair/records.jsonl
+          mkdir -p outputs/workflow07
+          Rscript R/embed_v36_topics_in_canonical_jsonl.R \
+            canonical_source/data/canonical/current/repair/records.jsonl \
+            topic_artifact/three_luna_pathway_scores.csv \
+            topic_artifact/input_queue.csv \
+            topic_artifact/production_manifest.json \
+            outputs/workflow07/canonical_with_topics.jsonl
+
+      - name: Build public CSV and dashboard JS
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript R/workflow_dashboard_from_canonical_jsonl.R \
+            outputs/workflow07/canonical_with_topics.jsonl \
+            docs/living_evidence_map.csv \
+            docs/dashboard-data.js
+
+      - name: Validate dashboard outputs
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(jsonlite)
+            library(readr)
+          })
+
+          stopifnot(file.exists("docs/dashboard-redesign-temp.html"))
+          stopifnot(file.exists("docs/evidence_flowdiagram.svg"))
+          stopifnot(file.exists("docs/living_evidence_map.csv"))
+          stopifnot(file.exists("docs/dashboard-data.js"))
+          stopifnot(file.exists("docs/dashboard-data-manifest.json"))
+
+          csv <- read_csv("docs/living_evidence_map.csv", show_col_types=FALSE, progress=FALSE)
+          js <- paste(readLines("docs/dashboard-data.js", warn=FALSE, encoding="UTF-8"), collapse="\n")
+          prefix <- "window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA="
+          stopifnot(startsWith(js,prefix), endsWith(js,";"))
+          payload <- fromJSON(substr(js,nchar(prefix)+1L,nchar(js)-1L), simplifyVector=FALSE)
+          manifest <- read_json("docs/dashboard-data-manifest.json", simplifyVector=TRUE)
+
+          stopifnot(nrow(csv) == length(payload$records))
+          stopifnot(nrow(csv) == as.integer(manifest$records))
+          stopifnot(nrow(csv) == 13426L)
+          stopifnot(as.integer(manifest$topic_assignments) == 37304L)
+          stopifnot(as.integer(manifest$records_without_topics) == 187L)
+
+          for (rec in payload$records) {
+            if (length(rec$topic_stars)) {
+              vals <- as.integer(unlist(rec$topic_stars, use.names=FALSE))
+              stopifnot(all(vals %in% 1:3))
+            }
+          }
+
+          html <- paste(readLines("docs/dashboard-redesign-temp.html", warn=FALSE), collapse="\n")
+          stopifnot(grepl("dashboard-data\\.js",html))
+          stopifnot(grepl("evidence_flowdiagram\\.svg",html))
+
+          cat(sprintf(
+            "PASS: %d canonical records; %d topic assignments; %d uncoded records\n",
+            nrow(csv), as.integer(manifest$topic_assignments), as.integer(manifest$records_without_topics)
+          ))
+
+      - name: Package preview artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-canonical-jsonl-dashboard-${{ github.run_id }}
+          path: |
+            docs/dashboard-redesign-temp.html
+            docs/dashboard-data.js
+            docs/dashboard-data-manifest.json
+            docs/living_evidence_map.csv
+            docs/evidence_flowdiagram.svg
+            outputs/workflow07/canonical_with_topics.jsonl
+          if-no-files-found: error
+          retention-days: 30
