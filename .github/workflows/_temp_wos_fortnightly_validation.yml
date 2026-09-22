@@ -19,11 +19,7 @@ jobs:
           set -euo pipefail
           code="$(curl -sS -o /tmp/body.json -w '%{http_code}' -H "Authorization: Bearer $OPENALEX_API_KEY" "https://api.openalex.org/works?filter=from_updated_date:2026-09-21&per-page=1")"
           echo "HTTP_STATUS=$code"
-          python3 - <<'PY'
-import json
-x=json.load(open('/tmp/body.json'))
-print("META_COUNT=", (x.get("meta") or {}).get("count"))
-print("ERROR=", x.get("error"))
-print("MESSAGE=", x.get("message"))
-PY
+          echo "META_COUNT=$(jq -r '.meta.count // empty' /tmp/body.json)"
+          echo "ERROR=$(jq -r '.error // empty' /tmp/body.json)"
+          echo "MESSAGE=$(jq -r '.message // empty' /tmp/body.json)"
           if [ "$code" -ge 400 ]; then exit 1; fi
