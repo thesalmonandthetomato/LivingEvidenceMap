@@ -102,12 +102,22 @@ if (anyDuplicated(current_ids)) stop(sprintf("Current %s expansion harvest conta
 
 history <- extract_records(history_root,source)
 history_ids <- if(length(history)) unique(vapply(history,`[[`,character(1),"id")) else character()
+registry_files <- list.files(history_root,pattern="native_ids\\.txt$",recursive=TRUE,full.names=TRUE)
+registry_ids <- character()
+if (length(registry_files)) {
+  registry_ids <- unique(unlist(lapply(registry_files,function(p) {
+    x <- trimws(readLines(p,warn=FALSE,encoding="UTF-8"))
+    x[nzchar(x)]
+  }),use.names=FALSE))
+}
+history_ids <- unique(c(history_ids,registry_ids))
 
 known <- current_ids %in% history_ids
 new <- !known
 
 writeLines(current_ids[new],file.path(output_dir,"new_native_ids.txt"))
 writeLines(current_ids[known],file.path(output_dir,"already_known_native_ids.txt"))
+writeLines(sort(unique(c(history_ids,current_ids))),file.path(output_dir,"updated_native_ids.txt"))
 
 con <- file(file.path(output_dir,"new_records.jsonl"),"wt",encoding="UTF-8")
 for (r in current[new]) {
