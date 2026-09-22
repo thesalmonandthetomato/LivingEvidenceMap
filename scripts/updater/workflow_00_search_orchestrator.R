@@ -68,6 +68,8 @@ wos_query <- paste0(
 today <- Sys.Date()
 from_date <- today - 14L
 if (run_type=="fortnightly") {
+  scopus_query <- sprintf("(%s) AND ORIG-LOAD-DATE AFT %s",
+                          scopus_query,format(from_date,"%Y%m%d"))
   agricola_query <- sprintf("(%s) AND FIRST_PDATE:[%s TO %s]",
                             agricola_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
   wos_query <- sprintf("(%s) AND DOP=%s/%s",
@@ -84,7 +86,7 @@ queries <- list(
 
 support <- list(
   lens=list(full=TRUE,fortnightly=FALSE,quarterly=TRUE,expansion=TRUE),
-  scopus=list(full=TRUE,fortnightly=FALSE,quarterly=TRUE,expansion=TRUE),
+  scopus=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE),
   openalex=list(full=TRUE,fortnightly=FALSE,quarterly=TRUE,expansion=TRUE),
   agricola=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE),
   wos=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE)
