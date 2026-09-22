@@ -496,6 +496,12 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout documentation branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow00-search-orchestrator
+          fetch-depth: 0
+
       - name: Download child search records
         env:
           GH_TOKEN: ${{ github.token }}
@@ -517,12 +523,6 @@ jobs:
         with:
           name: workflow00-expansion-reconciliation-${{ github.run_id }}
           path: downloaded_expansion_reconciliation
-
-      - name: Checkout documentation branch
-        uses: actions/checkout@v4
-        with:
-          ref: workflow00-search-orchestrator
-          fetch-depth: 0
 
       - name: Archive search records and source-ID registries
         shell: bash
