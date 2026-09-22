@@ -27,3 +27,10 @@ data/raw/
 Thumbs.db
 .vscode/
 .idea/
+
+
+# Large generated canonical snapshots are stored on Zenodo, not Git/LFS.
+data/canonical/**/*.jsonl
+
+# Local/downloaded Zenodo payloads
+zenodo_payloads/
