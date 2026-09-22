@@ -24,6 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
+    env:
+      GIT_LFS_SKIP_SMUDGE: '1'
+
     steps:
       - name: Checkout dashboard branch
         uses: actions/checkout@v4
@@ -31,13 +34,25 @@ jobs:
           ref: workflow07-canonical-jsonl-dashboard
           fetch-depth: 1
 
-      - name: Checkout immutable canonical corpus
+      - name: Checkout immutable canonical corpus without automatic LFS smudge
         uses: actions/checkout@v4
         with:
           ref: ${{ env.CANONICAL_REF }}
           path: canonical_source
-          lfs: true
+          lfs: false
           fetch-depth: 1
+
+      - name: Fetch only canonical records JSONL from LFS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd canonical_source
+          git lfs pull --include="data/canonical/current/repair/records.jsonl" --exclude=""
+          test -s data/canonical/current/repair/records.jsonl
+          if head -1 data/canonical/current/repair/records.jsonl | grep -q '^version https://git-lfs.github.com/spec/v1'; then
+            echo "Canonical records file is still an LFS pointer" >&2
+            exit 1
+          fi
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
