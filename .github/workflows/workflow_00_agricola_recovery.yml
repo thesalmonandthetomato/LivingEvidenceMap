@@ -24,3 +24,5 @@ jobs:
       additional_farm_term: ''
       resume_run_id: ''
     secrets: inherit
+
+# rerun: full AGRICOLA with hardened Europe PMC payload validation
