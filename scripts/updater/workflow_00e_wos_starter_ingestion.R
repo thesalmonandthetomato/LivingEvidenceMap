@@ -19,6 +19,7 @@ page_size <- as.integer(arg("--page-size", "50"))
 start_page <- as.integer(arg("--start-page", "1"))
 end_page_arg <- arg("--end-page", NULL)
 count_only <- identical(tolower(arg("--count-only", "false")), "true")
+reported_total_arg <- arg("--reported-total", NULL)
 base_url <- arg("--base-url", "https://api.clarivate.com/apis/wos-starter/v1/documents")
 
 if (is.null(query) || !nzchar(trimws(query))) stop("--query is required", call. = FALSE)
@@ -92,9 +93,15 @@ parse_response <- function(resp, page) {
 }
 
 started_at <- now_utc()
-first <- parse_response(request_page(1L), 1L)
-reported_total <- first$total
-if (is.na(reported_total)) stop("WoS Starter response did not report metadata.total", call. = FALSE)
+first <- NULL
+if (is.null(reported_total_arg)) {
+  first <- parse_response(request_page(1L), 1L)
+  reported_total <- first$total
+  if (is.na(reported_total)) stop("WoS Starter response did not report metadata.total", call. = FALSE)
+} else {
+  reported_total <- suppressWarnings(as.integer(reported_total_arg))
+  if (is.na(reported_total) || reported_total < 0L) stop("--reported-total must be a non-negative integer", call. = FALSE)
+}
 total_pages <- max(1L, ceiling(reported_total / page_size))
 
 if (count_only) {
@@ -150,7 +157,7 @@ page_summaries <- list()
 
 for (page in seq.int(start_page, end_page)) {
   message(sprintf("Requesting WoS Starter page %d / %d", page, total_pages))
-  res <- if (page == 1L) first else parse_response(request_page(page), page)
+  res <- if (page == 1L && !is.null(first)) first else parse_response(request_page(page), page)
   if (!is.na(res$total) && res$total != reported_total) {
     stop(sprintf("WoS total changed during harvest: first=%d page_%d=%d", reported_total, page, res$total), call. = FALSE)
   }
