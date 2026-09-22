@@ -105,6 +105,7 @@ page <- 1L
 cursor <- "*"
 retrieved <- 0L
 reported_total <- NA_integer_
+reported_total_changed <- FALSE
 page_summaries <- list()
 cumulative_cost_usd <- 0
 
@@ -167,6 +168,7 @@ repeat {
   if (is.na(reported_total)) {
     reported_total <- this_total
   } else if (!is.na(this_total) && !identical(this_total, reported_total)) {
+    reported_total_changed <- TRUE
     message(sprintf("NOTE: OpenAlex reported total changed during harvest: first=%d current=%d",
                     reported_total, this_total))
   }
@@ -254,15 +256,23 @@ validation <- list(
   full_harvest_requested = full_harvest,
   first_page_total_reported_by_openalex = reported_total,
   count_matches_first_page_total = count_matches_reported_total,
+  reported_total_changed_during_harvest = reported_total_changed,
+  duplicate_policy = "Raw API responses are preserved unchanged; exact repeated OpenAlex Work IDs are recorded here and collapsed deterministically downstream before identifier-delta comparison.",
   canonical_json_modified = FALSE
 )
 write_json(validation, validation_path)
 
 if (!count_matches_pages) stop("Validation failure: raw-page recount does not match running retrieved count")
-if (length(duplicate_ids) > 0L) stop(sprintf("Validation failure: %d duplicate OpenAlex work IDs", length(duplicate_ids)))
-if (expected_complete && !isTRUE(count_matches_reported_total)) {
-  stop(sprintf("Validation failure: full harvest retrieved %d records but OpenAlex first page reported %d",
+if (length(duplicate_ids) > 0L) {
+  message(sprintf("NOTE: %d repeated OpenAlex Work IDs occurred across live cursor pages; raw responses remain unchanged and exact-ID repeats will be collapsed downstream.", length(duplicate_ids)))
+}
+if (expected_complete && !isTRUE(count_matches_reported_total) && !isTRUE(reported_total_changed)) {
+  stop(sprintf("Validation failure: full harvest retrieved %d records but OpenAlex first page reported %d without observed live-index count drift",
                recount, reported_total))
+}
+if (expected_complete && !isTRUE(count_matches_reported_total) && isTRUE(reported_total_changed)) {
+  message(sprintf("NOTE: full-harvest raw count (%d) differs from first-page count (%d), accepted because OpenAlex reported live-index count drift during pagination.",
+                  recount, reported_total))
 }
 
 manifest$status <- "success"
