@@ -96,6 +96,8 @@ wos_query <- if (run_type=="expansion") {
 today <- Sys.Date()
 from_date <- today - 14L
 if (run_type=="fortnightly") {
+  lens_query <- sprintf("(%s) AND created:[%s TO %s]",
+                        lens_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
   scopus_query <- sprintf("(%s) AND ORIG-LOAD-DATE AFT %s",
                           scopus_query,format(from_date,"%Y%m%d"))
   agricola_query <- sprintf("(%s) AND FIRST_PDATE:[%s TO %s]",
@@ -113,7 +115,7 @@ queries <- list(
 )
 
 support <- list(
-  lens=list(full=TRUE,fortnightly=FALSE,expansion=TRUE),
+  lens=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   scopus=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   openalex=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   agricola=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
