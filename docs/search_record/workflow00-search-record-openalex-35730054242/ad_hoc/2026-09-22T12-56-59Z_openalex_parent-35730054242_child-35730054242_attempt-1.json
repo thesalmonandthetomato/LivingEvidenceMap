@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "recorded_at_utc": "2026-09-22T12:56:59Z",
+  "source": "openalex",
+  "run_type": "expansion",
+  "search_version": "v1",
+  "additional_farm_term": "maricultur*",
+  "search_string": "works where title/abstract has ((\"salmon\" or \"salmonid*\" or \"Salmo\" or \"Oncorhynchus\" or \"rainbow trout\") and (\"maricultur*\") and not (\"farm*\" or \"cage*\" or \"pens\" or \"penned\" or \"pen\" or \"aquacultur*\" or \"commercial*\"))",
+  "reported_search_results": 48,
+  "successfully_downloaded_results": 48,
+  "complete_download": true,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "35730054242",
+    "child_workflow_run_id": "35730054242",
+    "run_attempt": "1",
+    "ref": "workflow00-search-orchestrator",
+    "sha": "c2869cdff62f8d92f6d0df0ca0313cf418776b0f"
+  },
+  "artifact_name": "workflow00-openalex-35730054242"
+}
