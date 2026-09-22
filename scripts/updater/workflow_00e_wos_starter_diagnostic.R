@@ -57,7 +57,8 @@ collect_paths <- function(x, prefix = "") {
 paths <- sort(unique(collect_paths(obj)))
 writeLines(paths, file.path(out_dir, "field_paths.txt"))
 
-\`%||%\` <- function(x,y) if (is.null(x)) y else x\nmetadata <- obj$metadata %||% list()
+`%||%` <- function(x,y) if (is.null(x)) y else x
+metadata <- obj$metadata %||% list()
 total <- metadata$total %||% NA_integer_
 
 # Locate the record array without assuming a single response schema.
