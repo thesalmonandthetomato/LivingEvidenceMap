@@ -14,6 +14,7 @@ arg <- function(flag, default = NULL) {
 }
 
 query <- arg("--query")
+filter_query <- trimws(arg("--filter", ""))
 max_records_arg <- arg("--max-records", "100")
 page_size <- as.integer(arg("--page-size", "100"))
 output_dir <- arg("--output-dir", "outputs/updater/openalex_ingestion_test")
@@ -70,6 +71,7 @@ request_page <- function(cursor, count) {
       ) |>
       req_url_query(
         oql = query,
+        filter = if (nzchar(filter_query)) filter_query else NULL,
         `per-page` = count,
         cursor = cursor
       ) |>
@@ -114,6 +116,7 @@ manifest <- list(
   endpoint = base_url,
   query_parameter = "oql",
   query = query,
+  filter = if (nzchar(filter_query)) filter_query else NULL,
   max_records_requested = if (full_harvest) "all" else max_records,
   requested_page_size = page_size,
   source = "OpenAlex Works API",
