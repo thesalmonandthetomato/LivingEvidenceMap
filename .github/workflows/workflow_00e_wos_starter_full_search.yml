@@ -1,0 +1,294 @@
+name: Workflow 00e - Full WoS Starter search
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'WoS Starter query (TI OR AB OR AK; Keywords Plus excluded)'
+        required: true
+        default: '(TI=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AB=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AK=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))'
+        type: string
+      resume_run_id:
+        description: 'Optional previous Workflow 00e run ID; completed chunk artefacts will be reused'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      total: ${{ steps.plan.outputs.total }}
+      total_pages: ${{ steps.plan.outputs.total_pages }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+
+    steps:
+      - name: Checkout WoS ingestion branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00e-wos-starter-ingestion
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Count records and construct deterministic chunk plan
+        id: plan
+        env:
+          WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+          WOS_QUERY: ${{ inputs.query }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/updater/wos_starter_plan
+          Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R \
+            --query "$WOS_QUERY" \
+            --page-size 50 \
+            --count-only true \
+            --output-dir outputs/updater/wos_starter_plan
+          Rscript - <<'RS'
+          library(jsonlite)
+          x <- fromJSON('outputs/updater/wos_starter_plan/manifest.json')
+          total <- as.integer(x$total_results)
+          pages <- as.integer(x$total_pages)
+          chunk_pages <- 50L
+          starts <- seq.int(1L, pages, by=chunk_pages)
+          ends <- pmin(starts + chunk_pages - 1L, pages)
+          chunks <- lapply(seq_along(starts), function(i) list(
+            chunk_id=sprintf('%02d', i),
+            start_page=starts[[i]],
+            end_page=ends[[i]]
+          ))
+          cat(sprintf('total=%d\n', total), file=Sys.getenv('GITHUB_OUTPUT'), append=TRUE)
+          cat(sprintf('total_pages=%d\n', pages), file=Sys.getenv('GITHUB_OUTPUT'), append=TRUE)
+          cat(paste0('matrix=', toJSON(list(include=chunks), auto_unbox=TRUE), '\n'),
+              file=Sys.getenv('GITHUB_OUTPUT'), append=TRUE)
+          cat(sprintf('PASS: WoS plan has %d records, %d pages, %d recoverable chunks\n',
+                      total, pages, length(chunks)))
+          RS
+
+      - name: Upload search plan artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wos-starter-plan-${{ github.run_id }}
+          path: outputs/updater/wos_starter_plan/
+          retention-days: 90
+          if-no-files-found: error
+
+  harvest:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+
+    steps:
+      - name: Checkout WoS ingestion branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00e-wos-starter-ingestion
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Reuse completed chunk from previous run when available
+        id: resume
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          CHUNK_ID: ${{ matrix.chunk_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="outputs/updater/wos_starter_chunk_${CHUNK_ID}"
+          mkdir -p "$out"
+          reused=false
+          if [ -n "$RESUME_RUN_ID" ]; then
+            if gh run download "$RESUME_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "wos-starter-chunk-${CHUNK_ID}-${RESUME_RUN_ID}" \
+              --dir "$out"; then
+              if [ -s "$out/manifest.json" ] && grep -q '"status": "success"' "$out/manifest.json"; then
+                reused=true
+              else
+                rm -rf "$out"
+                mkdir -p "$out"
+              fi
+            fi
+          fi
+          echo "reused=$reused" >> "$GITHUB_OUTPUT"
+
+      - name: Harvest WoS pages ${{ matrix.start_page }}-${{ matrix.end_page }}
+        if: steps.resume.outputs.reused != 'true'
+        env:
+          WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+          WOS_QUERY: ${{ inputs.query }}
+          WOS_TOTAL: ${{ needs.plan.outputs.total }}
+          CHUNK_ID: ${{ matrix.chunk_id }}
+          START_PAGE: ${{ matrix.start_page }}
+          END_PAGE: ${{ matrix.end_page }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R \
+            --query "$WOS_QUERY" \
+            --page-size 50 \
+            --reported-total "$WOS_TOTAL" \
+            --start-page "$START_PAGE" \
+            --end-page "$END_PAGE" \
+            --output-dir "outputs/updater/wos_starter_chunk_${CHUNK_ID}"
+
+      - name: Validate recoverable chunk
+        env:
+          CHUNK_ID: ${{ matrix.chunk_id }}
+          START_PAGE: ${{ matrix.start_page }}
+          END_PAGE: ${{ matrix.end_page }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- sprintf('outputs/updater/wos_starter_chunk_%s/manifest.json', Sys.getenv('CHUNK_ID'))
+          x <- fromJSON(p)
+          stopifnot(identical(x$status, 'success'))
+          stopifnot(as.integer(x$chunk_start_page) == as.integer(Sys.getenv('START_PAGE')))
+          stopifnot(as.integer(x$chunk_end_page) == as.integer(Sys.getenv('END_PAGE')))
+          stopifnot(as.integer(x$pages_retrieved) ==
+                    as.integer(Sys.getenv('END_PAGE')) - as.integer(Sys.getenv('START_PAGE')) + 1L)
+          stopifnot(as.integer(x$validation$duplicate_wos_uids_n) == 0L)
+          cat(sprintf('PASS: recoverable WoS chunk %s pages %s-%s validated\n',
+                      Sys.getenv('CHUNK_ID'), Sys.getenv('START_PAGE'), Sys.getenv('END_PAGE')))
+
+      - name: Upload recoverable WoS chunk artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wos-starter-chunk-${{ matrix.chunk_id }}-${{ github.run_id }}
+          path: outputs/updater/wos_starter_chunk_${{ matrix.chunk_id }}/
+          retention-days: 90
+          if-no-files-found: error
+
+  merge:
+    needs: [plan, harvest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout WoS ingestion branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00e-wos-starter-ingestion
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download all current-run WoS chunks
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wos-starter-chunk-*-${{ github.run_id }}
+          path: recovered_chunks
+
+      - name: Reconstruct and validate complete raw WoS harvest
+        env:
+          EXPECTED_TOTAL: ${{ needs.plan.outputs.total }}
+          EXPECTED_PAGES: ${{ needs.plan.outputs.total_pages }}
+          WOS_QUERY: ${{ inputs.query }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          `%||%` <- function(x,y) if (is.null(x)) y else x
+          total <- as.integer(Sys.getenv('EXPECTED_TOTAL'))
+          pages <- as.integer(Sys.getenv('EXPECTED_PAGES'))
+          root <- 'outputs/updater/wos_starter_full'
+          dir.create(file.path(root,'raw'), recursive=TRUE, showWarnings=FALSE)
+          dir.create(file.path(root,'headers'), recursive=TRUE, showWarnings=FALSE)
+
+          raws <- sort(list.files('recovered_chunks', pattern='^response_[0-9]{6}\\.json$',
+                                  recursive=TRUE, full.names=TRUE))
+          hdrs <- sort(list.files('recovered_chunks', pattern='^response_[0-9]{6}_headers\\.json$',
+                                  recursive=TRUE, full.names=TRUE))
+          stopifnot(length(raws) == pages)
+          stopifnot(length(unique(basename(raws))) == pages)
+          file.copy(raws, file.path(root,'raw',basename(raws)), overwrite=FALSE)
+          if (length(hdrs)) file.copy(hdrs, file.path(root,'headers',basename(hdrs)), overwrite=FALSE)
+
+          ids <- character()
+          n <- 0L
+          for (rf in sort(list.files(file.path(root,'raw'), full.names=TRUE))) {
+            x <- fromJSON(rf, simplifyVector=FALSE)
+            hs <- x$hits %||% list()
+            n <- n + length(hs)
+            ids <- c(ids, vapply(hs, function(h) as.character(h$uid %||% ''), character(1)))
+          }
+          stopifnot(n == total)
+          stopifnot(all(nzchar(ids)))
+          stopifnot(length(unique(ids)) == total)
+
+          manifest <- list(
+            workflow='00e_wos_starter_ingestion',
+            implementation_language='R',
+            status='success',
+            completed_at=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'),
+            endpoint='https://api.clarivate.com/apis/wos-starter/v1/documents',
+            database='WOS',
+            query=Sys.getenv('WOS_QUERY'),
+            search_scope=c('title','abstract','author_keywords'),
+            keywords_plus_included=FALSE,
+            records_retrieved=n,
+            unique_wos_uids=length(unique(ids)),
+            pages_retrieved=pages,
+            page_size=50,
+            checkpointing='independent 90-day artefact per deterministic page-range chunk',
+            canonicalisation_performed=FALSE,
+            canonical_json_modified=FALSE,
+            raw_response_preservation=TRUE
+          )
+          writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     file.path(root,'manifest.json'))
+          cat(sprintf('PASS: complete WoS harvest reconstructed: %d records, %d unique UIDs, %d pages\n',
+                      n,length(unique(ids)),pages))
+
+      - name: Build canonical-compatible WoS sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R \
+            --input-dir outputs/updater/wos_starter_full \
+            --output-dir outputs/updater/wos_starter_sidecar
+
+      - name: Upload complete WoS Workflow 00 artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wos-starter-full-search-${{ github.run_id }}
+          path: |
+            outputs/updater/wos_starter_full/
+            outputs/updater/wos_starter_sidecar/
+          retention-days: 90
+          if-no-files-found: error
