@@ -14,6 +14,7 @@ arg <- function(flag, default = NULL) {
 }
 
 query <- arg("--query")
+modified_time_span <- trimws(arg("--modified-time-span", ""))
 output_dir <- arg("--output-dir", "outputs/updater/wos_starter")
 page_size <- as.integer(arg("--page-size", "50"))
 start_page <- as.integer(arg("--start-page", "1"))
@@ -65,7 +66,8 @@ request_page <- function(page) {
         `X-ApiKey` = api_key,
         `User-Agent` = "LivingEvidenceMap WoS Starter ingestion"
       ) |>
-      req_url_query(q = query, db = "WOS", limit = page_size, page = page) |>
+      req_url_query(q = query, db = "WOS", limit = page_size, page = page,
+                    modifiedTimeSpan = if (nzchar(modified_time_span)) modified_time_span else NULL) |>
       req_error(is_error = function(resp) FALSE)
 
     resp <- tryCatch(req_perform(req), error = identity)
@@ -113,6 +115,7 @@ if (count_only) {
     endpoint = base_url,
     database = "WOS",
     query = query,
+    modified_time_span = if (nzchar(modified_time_span)) modified_time_span else NULL,
     search_scope = c("title", "abstract", "author_keywords"),
     keywords_plus_included = FALSE,
     total_results = reported_total,
@@ -136,6 +139,7 @@ manifest <- list(
   endpoint = base_url,
   database = "WOS",
   query = query,
+  modified_time_span = if (nzchar(modified_time_span)) modified_time_span else NULL,
   search_scope = c("title", "abstract", "author_keywords"),
   keywords_plus_included = FALSE,
   reported_total = reported_total,
