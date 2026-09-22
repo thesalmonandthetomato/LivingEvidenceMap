@@ -34,13 +34,22 @@ effective_farm_terms <- if (run_type=="expansion") additional_farm_term else far
 join_or <- function(x) paste(x,collapse=" OR ")
 species <- join_or(species_terms)
 farm <- join_or(effective_farm_terms)
+old_farm <- join_or(farm_terms)
 
 lens_block <- function(terms) {
   sprintf("(title:(%s) OR abstract:(%s) OR keyword:(%s))",terms,terms,terms)
 }
-lens_query <- sprintf("(%s AND %s)", lens_block(species), lens_block(farm))
+lens_query <- if (run_type=="expansion") {
+  sprintf("(%s AND %s AND NOT %s)", lens_block(species), lens_block(farm), lens_block(old_farm))
+} else {
+  sprintf("(%s AND %s)", lens_block(species), lens_block(farm))
+}
 
-scopus_query <- sprintf("TITLE-ABS-KEY((%s) AND (%s))", species, farm)
+scopus_query <- if (run_type=="expansion") {
+  sprintf("TITLE-ABS-KEY((%s) AND (%s)) AND NOT TITLE-ABS-KEY(%s)", species, farm, old_farm)
+} else {
+  sprintf("TITLE-ABS-KEY((%s) AND (%s))", species, farm)
+}
 
 oa_quote <- function(x) {
   # preserve already quoted phrases, quote individual OQL terms otherwise
@@ -50,18 +59,37 @@ oa_quote <- function(x) {
 oa_species <- paste(vapply(species_terms,oa_quote,character(1)),collapse=" or ")
 oa_farm_terms <- if (run_type=="expansion") additional_farm_term else farm_terms
 oa_farm <- paste(vapply(oa_farm_terms,oa_quote,character(1)),collapse=" or ")
-openalex_query <- sprintf("works where title/abstract has ((%s) and (%s))",oa_species,oa_farm)
+oa_old_farm <- paste(vapply(farm_terms,oa_quote,character(1)),collapse=" or ")
+openalex_query <- if (run_type=="expansion") {
+  sprintf("works where title/abstract has ((%s) and (%s) and not (%s))",oa_species,oa_farm,oa_old_farm)
+} else {
+  sprintf("works where title/abstract has ((%s) and (%s))",oa_species,oa_farm)
+}
 
-agricola_query <- sprintf("SRC:AGR AND TITLE_ABS:((%s) AND (%s))",species,farm)
+agricola_query <- if (run_type=="expansion") {
+  sprintf("SRC:AGR AND TITLE_ABS:((%s) AND (%s)) AND NOT TITLE_ABS:(%s)",species,farm,old_farm)
+} else {
+  sprintf("SRC:AGR AND TITLE_ABS:((%s) AND (%s))",species,farm)
+}
 
 wos_component <- function(tag, farm_terms_string) {
   sprintf("%s=((%s) AND (%s))",tag,species,farm_terms_string)
 }
-wos_query <- paste0(
+wos_new_block <- paste0(
   "(",wos_component("TI",farm),") OR (",
   wos_component("AB",farm),") OR (",
   wos_component("AK",farm),")"
 )
+wos_old_block <- paste0(
+  "(TI=(",old_farm,")) OR ",
+  "(AB=(",old_farm,")) OR ",
+  "(AK=(",old_farm,"))"
+)
+wos_query <- if (run_type=="expansion") {
+  paste0("(",wos_new_block,") NOT (",wos_old_block,")")
+} else {
+  wos_new_block
+}
 
 # Fortnightly date windows are source-specific. Only fields whose day-level semantics
 # have been explicitly verified are encoded here.
@@ -107,7 +135,7 @@ plan <- list(
     target="farm_terms_only",
     species_terms_mutable=FALSE,
     farm_terms_replaceable=FALSE,
-    retrieval_rule=if(run_type=="expansion") "immutable species block AND new farm term only; existing corpus reconciliation removes already-known records" else NULL
+    retrieval_rule=if(run_type=="expansion") "immutable species block AND new farm term AND NOT existing farm block; exact native source-ID reconciliation removes already-known manifestations before Workflow 01" else NULL
   ),
   fortnightly_window=if(run_type=="fortnightly") list(from=as.character(from_date),to=as.character(today)) else NULL,
   source_queries=queries,
