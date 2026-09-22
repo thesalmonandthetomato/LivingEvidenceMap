@@ -22,7 +22,6 @@ on:
         required: false
         default: ""
         type: string
-    secrets: inherit
 
 permissions:
   contents: read
