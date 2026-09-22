@@ -1,4 +1,5 @@
 name: Workflow 00 expansion smoke test
+# rerun: corrected orchestration child
 
 on:
   push:
