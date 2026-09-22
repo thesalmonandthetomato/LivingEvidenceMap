@@ -1,0 +1,207 @@
+name: Workflow 00 orchestrated source child
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        required: true
+        type: string
+      run_type:
+        required: true
+        type: string
+      query:
+        required: true
+        type: string
+      parent_run_id:
+        required: true
+        type: string
+      search_version:
+        required: true
+        type: string
+      additional_farm_term:
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Resolve implementation branch
+        id: impl
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.source }}" in
+            lens) echo "branch=main" >> "$GITHUB_OUTPUT" ;;
+            scopus) echo "branch=updater-workflow-00b-scopus-ingestion" >> "$GITHUB_OUTPUT" ;;
+            openalex) echo "branch=updater-workflow-00c-openalex-ingestion" >> "$GITHUB_OUTPUT" ;;
+            agricola) echo "branch=updater-workflow-00d-agricola-ingestion" >> "$GITHUB_OUTPUT" ;;
+            wos) echo "branch=updater-workflow-00e-wos-starter-ingestion" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Unsupported source: ${{ inputs.source }}" >&2; exit 2 ;;
+          esac
+
+      - name: Checkout source implementation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.impl.outputs.branch }}
+          persist-credentials: false
+
+      - name: Fetch common Workflow 00 documentation writer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin workflow00-search-orchestrator
+          git show origin/workflow00-search-orchestrator:scripts/updater/write_workflow00_search_record.R > /tmp/write_workflow00_search_record.R
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite","digest"))
+
+      - name: Locate previous OpenAlex harvest for fortnightly delta
+        if: ${{ inputs.source == 'openalex' && inputs.run_type == 'fortnightly' }}
+        id: previous_openalex
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_PARENT_RUN_ID: ${{ inputs.parent_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/previous_openalex
+          artifact_json="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" | jq -s '
+            [.[].artifacts[] |
+             select(.expired == false) |
+             select(.name | startswith("workflow00-openalex-harvest-")) |
+             select(.name != ("workflow00-openalex-harvest-" + env.CURRENT_PARENT_RUN_ID))] |
+            sort_by(.created_at) | reverse | .[0] // empty')"
+          if [ -z "$artifact_json" ] || [ "$artifact_json" = "null" ]; then
+            echo "baseline=false" >> "$GITHUB_OUTPUT"
+            echo "No previous orchestrated OpenAlex harvest artefact found; current run becomes baseline."
+            exit 0
+          fi
+          previous_run="$(echo "$artifact_json" | jq -r '.workflow_run.id')"
+          previous_name="$(echo "$artifact_json" | jq -r '.name')"
+          gh run download "$previous_run" --repo "$GITHUB_REPOSITORY" --name "$previous_name" --dir /tmp/previous_openalex
+          echo "baseline=true" >> "$GITHUB_OUTPUT"
+          echo "previous_run=$previous_run" >> "$GITHUB_OUTPUT"
+          echo "previous_name=$previous_name" >> "$GITHUB_OUTPUT"
+
+      - name: Run source search
+        env:
+          SOURCE: ${{ inputs.source }}
+          RUN_TYPE: ${{ inputs.run_type }}
+          SEARCH_QUERY: ${{ inputs.query }}
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+          WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/updater/source_child
+          case "$SOURCE" in
+            lens)
+              cp config/lens_search.json /tmp/lens_search.json
+              Rscript -e 'args <- commandArgs(trailingOnly=TRUE); q <- args[[1]]; p <- args[[2]]; x <- jsonlite::fromJSON(p, simplifyVector=FALSE); x$api_query$query$bool$must[[1]]$query_string$query <- q; jsonlite::write_json(x,p,auto_unbox=TRUE,pretty=TRUE)' "$SEARCH_QUERY" /tmp/lens_search.json
+              Rscript scripts/updater/workflow_00_full_lens_search.R --config /tmp/lens_search.json --output outputs/updater/source_child/records.jsonl --manifest outputs/updater/source_child/manifest.json --audit-dir outputs/updater/source_child/audit
+              ;;
+            scopus)
+              Rscript scripts/updater/workflow_00b_scopus_ingestion.R --query "$SEARCH_QUERY" --page-size 200 --view STANDARD --output-dir outputs/updater/source_child
+              ;;
+            openalex)
+              Rscript scripts/updater/workflow_00c_openalex_ingestion.R --query "$SEARCH_QUERY" --max-records all --page-size 100 --output-dir outputs/updater/source_child
+              ;;
+            agricola)
+              Rscript scripts/updater/workflow_00d_agricola_ingestion.R --query "$SEARCH_QUERY" --max-records all --page-size 1000 --output-dir outputs/updater/source_child
+              Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
+              ;;
+            wos)
+              Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$SEARCH_QUERY" --page-size 50 --start-page 1 --output-dir outputs/updater/source_child
+              Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
+              ;;
+          esac
+
+      - name: Build OpenAlex identifier delta against previous search
+        if: ${{ inputs.source == 'openalex' && inputs.run_type == 'fortnightly' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin workflow00-search-orchestrator
+          git show origin/workflow00-search-orchestrator:scripts/updater/workflow_00c_openalex_identifier_delta.R > /tmp/workflow_00c_openalex_identifier_delta.R
+          previous_args=()
+          if [ '${{ steps.previous_openalex.outputs.baseline }}' = 'true' ]; then
+            previous_args=(--previous-dir /tmp/previous_openalex)
+          fi
+          Rscript /tmp/workflow_00c_openalex_identifier_delta.R \
+            --current-dir outputs/updater/source_child \
+            "${previous_args[@]}" \
+            --output-dir outputs/updater/openalex_delta
+
+      - name: Extract source counts
+        id: counts
+        env:
+          SOURCE: ${{ inputs.source }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x <- fromJSON("outputs/updater/source_child/manifest.json", simplifyVector=FALSE)
+          pick <- function(...) {
+            vals <- list(...)
+            for (v in vals) if (!is.null(v) && length(v)) return(as.integer(v[[1]]))
+            NA_integer_
+          }
+          reported <- pick(x$reported_total, x$unpartitioned_total, x$total_results_reported_by_openalex_first_page, x$total_results_reported_first_page, x$total_results_reported, x$validation$first_page_total_reported, x$validation$unpartitioned_total)
+          downloaded <- pick(x$records_retrieved, x$entries_retrieved, x$validation$records_recounted_from_raw, x$validation$records_tracked_during_harvest)
+          if (Sys.getenv("SOURCE")=="lens") {
+            reported <- pick(x$lens_reported_total, x$reported_total, x$total_reported)
+            downloaded <- pick(x$unique_records_written, x$raw_records_retrieved, x$records_written, x$records_retrieved)
+          }
+          if (is.na(reported) || is.na(downloaded)) stop("Could not derive reported/downloaded counts from source manifest")
+          cat(sprintf("reported=%d\n",reported),file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+          cat(sprintf("downloaded=%d\n",downloaded),file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+
+      - name: Write child search archive record
+        env:
+          SOURCE: ${{ inputs.source }}
+          RUN_TYPE: ${{ inputs.run_type }}
+          SEARCH_QUERY: ${{ inputs.query }}
+          PARENT_RUN_ID: ${{ inputs.parent_run_id }}
+          SEARCH_VERSION: ${{ inputs.search_version }}
+          ADDITIONAL_FARM_TERM: ${{ inputs.additional_farm_term }}
+          REPORTED: ${{ steps.counts.outputs.reported }}
+          DOWNLOADED: ${{ steps.counts.outputs.downloaded }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$SEARCH_QUERY" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-farm-term "$ADDITIONAL_FARM_TERM" --artifact-name "workflow00-${SOURCE}-${GITHUB_RUN_ID}" --output-root outputs/updater/search_record
+
+      - name: Upload source harvest
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-${{ inputs.source }}-harvest-${{ inputs.parent_run_id }}
+          path: |
+            outputs/updater/source_child/
+            outputs/updater/source_child_sidecar/
+            outputs/updater/openalex_delta/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload child search record
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-search-record-${{ inputs.source }}-${{ inputs.parent_run_id }}
+          path: outputs/updater/search_record/
+          retention-days: 90
+          if-no-files-found: error
