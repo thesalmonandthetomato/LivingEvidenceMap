@@ -26,6 +26,10 @@ on:
         required: false
         default: ""
         type: string
+      fortnightly_to_date:
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -100,6 +104,167 @@ jobs:
           echo "baseline=true" >> "$GITHUB_OUTPUT"
           echo "previous_run=$previous_run" >> "$GITHUB_OUTPUT"
           echo "previous_name=$previous_name" >> "$GITHUB_OUTPUT"
+
+      - name: Locate prior WoS harvests for fortnightly UID reconciliation
+        if: ${{ inputs.source == 'wos' && inputs.run_type == 'fortnightly' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_PARENT_RUN_ID: ${{ inputs.parent_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wos_history
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.id,.name,.workflow_run.id,.expired] | @tsv' > /tmp/wos_artifacts.tsv
+          awk -F '\t' -v current="$CURRENT_PARENT_RUN_ID" '
+            $4=="false" &&
+            ($2 ~ /^workflow00-wos-harvest-/ || $2 ~ /^wos-starter-full-search-/) &&
+            $3 != current {print}
+          ' /tmp/wos_artifacts.tsv > /tmp/wos_candidates.tsv
+          if [ ! -s /tmp/wos_candidates.tsv ]; then
+            echo "No prior WoS harvest artifact found; cannot safely distinguish new from modified records." >&2
+            exit 2
+          fi
+          while IFS=        env:
+          SOURCE: ${{ inputs.source }}
+          RUN_TYPE: ${{ inputs.run_type }}
+          SEARCH_QUERY: ${{ inputs.query }}
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+          WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/updater/source_child
+          case "$SOURCE" in
+            lens)
+              cp config/lens_search.json /tmp/lens_search.json
+              Rscript -e 'args <- commandArgs(trailingOnly=TRUE); q <- args[[1]]; p <- args[[2]]; x <- jsonlite::fromJSON(p, simplifyVector=FALSE); x$api_query$query$bool$must[[1]]$query_string$query <- q; jsonlite::write_json(x,p,auto_unbox=TRUE,pretty=TRUE)' "$SEARCH_QUERY" /tmp/lens_search.json
+              git fetch origin workflow00-search-orchestrator
+              git show origin/workflow00-search-orchestrator:scripts/updater/workflow_00_lens_orchestrated_search.R > /tmp/workflow_00_lens_orchestrated_search.R
+              if [ "$RUN_TYPE" = "full" ]; then
+                sentinel_arg=true
+              else
+                sentinel_arg=false
+              fi
+              Rscript /tmp/workflow_00_lens_orchestrated_search.R --config /tmp/lens_search.json --output outputs/updater/source_child/records.jsonl --manifest outputs/updater/source_child/manifest.json --audit-dir outputs/updater/source_child/audit --require-sentinel "$sentinel_arg"
+              ;;
+            scopus)
+              Rscript scripts/updater/workflow_00b_scopus_ingestion.R --query "$SEARCH_QUERY" --page-size 25 --view STANDARD --output-dir outputs/updater/source_child
+              ;;
+            openalex)
+              Rscript scripts/updater/workflow_00c_openalex_ingestion.R --query "$SEARCH_QUERY" --max-records all --page-size 100 --output-dir outputs/updater/source_child
+              ;;
+            agricola)
+              Rscript scripts/updater/workflow_00d_agricola_ingestion.R --query "$SEARCH_QUERY" --max-records all --page-size 100 --output-dir outputs/updater/source_child
+              Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
+              ;;
+            wos)
+              if [ "$RUN_TYPE" = "fortnightly" ]; then
+                [ -n "$FORTNIGHTLY_FROM_DATE" ] && [ -n "$FORTNIGHTLY_TO_DATE" ] || { echo "Missing fortnightly date window for WoS" >&2; exit 2; }
+                Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$SEARCH_QUERY" --modified-time-span "$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE" --page-size 50 --start-page 1 --output-dir outputs/updater/source_child
+              else
+                Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$SEARCH_QUERY" --page-size 50 --start-page 1 --output-dir outputs/updater/source_child
+              fi
+              Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
+              ;;
+          esac
+
+      - name: Build OpenAlex identifier delta against previous search
+        if: ${{ inputs.source == 'openalex' && inputs.run_type == 'fortnightly' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin workflow00-search-orchestrator
+          git show origin/workflow00-search-orchestrator:scripts/updater/workflow_00c_openalex_identifier_delta.R > /tmp/workflow_00c_openalex_identifier_delta.R
+          previous_args=()
+          if [ '${{ steps.previous_openalex.outputs.baseline }}' = 'true' ]; then
+            previous_args=(--previous-dir /tmp/previous_openalex)
+          fi
+          Rscript /tmp/workflow_00c_openalex_identifier_delta.R \
+            --current-dir outputs/updater/source_child \
+            "${previous_args[@]}" \
+            --output-dir outputs/updater/openalex_delta
+
+      - name: Reconcile WoS fortnightly results by UID
+        if: ${{ inputs.source == 'wos' && inputs.run_type == 'fortnightly' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin workflow00-search-orchestrator
+          git show origin/workflow00-search-orchestrator:scripts/updater/workflow_00_native_id_reconcile.R > /tmp/workflow_00_native_id_reconcile.R
+          Rscript /tmp/workflow_00_native_id_reconcile.R \
+            --source wos \
+            --current-root outputs/updater/source_child \
+            --history-root /tmp/wos_history \
+            --output-dir outputs/updater/wos_delta
+
+      - name: Extract source counts
+        id: counts
+        env:
+          SOURCE: ${{ inputs.source }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x <- fromJSON("outputs/updater/source_child/manifest.json", simplifyVector=FALSE)
+          pick <- function(...) {
+            vals <- list(...)
+            for (v in vals) if (!is.null(v) && length(v)) return(as.integer(v[[1]]))
+            NA_integer_
+          }
+          reported <- pick(x$reported_total, x$unpartitioned_total, x$total_results_reported_by_openalex_first_page, x$total_results_reported_first_page, x$total_results_reported, x$validation$first_page_total_reported, x$validation$unpartitioned_total)
+          downloaded <- pick(x$records_retrieved, x$entries_retrieved, x$validation$records_recounted_from_raw, x$validation$records_tracked_during_harvest)
+          if (Sys.getenv("SOURCE")=="lens") {
+            reported <- pick(x$lens_reported_total, x$reported_total, x$total_reported)
+            downloaded <- pick(x$unique_records_written, x$raw_records_retrieved, x$records_written, x$records_retrieved)
+          }
+          if (is.na(reported) || is.na(downloaded)) stop("Could not derive reported/downloaded counts from source manifest")
+          cat(sprintf("reported=%d\n",reported),file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+          cat(sprintf("downloaded=%d\n",downloaded),file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+
+      - name: Write child search archive record
+        env:
+          SOURCE: ${{ inputs.source }}
+          RUN_TYPE: ${{ inputs.run_type }}
+          SEARCH_QUERY: ${{ inputs.query }}
+          PARENT_RUN_ID: ${{ inputs.parent_run_id }}
+          SEARCH_VERSION: ${{ inputs.search_version }}
+          ADDITIONAL_FARM_TERM: ${{ inputs.additional_farm_term }}
+          REPORTED: ${{ steps.counts.outputs.reported }}
+          DOWNLOADED: ${{ steps.counts.outputs.downloaded }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$SEARCH_QUERY" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-farm-term "$ADDITIONAL_FARM_TERM" --artifact-name "workflow00-${SOURCE}-${GITHUB_RUN_ID}" --output-root outputs/updater/search_record
+
+      - name: Upload source harvest
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-${{ inputs.source }}-harvest-${{ inputs.parent_run_id }}
+          path: |
+            outputs/updater/source_child/
+            outputs/updater/source_child_sidecar/
+            outputs/updater/openalex_delta/
+            outputs/updater/wos_delta/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload child search record
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-search-record-${{ inputs.source }}-${{ inputs.parent_run_id }}
+          path: outputs/updater/search_record/
+          retention-days: 90
+          if-no-files-found: error\t' read -r artifact_id artifact_name run_id expired; do
+            dest="/tmp/wos_history/$artifact_id"
+            mkdir -p "$dest"
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir "$dest" || true
+          done < /tmp/wos_candidates.tsv
+          count="$(find /tmp/wos_history -type f -name 'response_*.json' | wc -l | tr -d ' ')"
+          [ "$count" -gt 0 ] || { echo "Prior WoS artifacts contained no raw response pages." >&2; exit 2; }
+          echo "Prior WoS raw pages available for UID reconciliation: $count"
 
       - name: Run source search
         env:
