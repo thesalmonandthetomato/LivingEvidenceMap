@@ -1,4 +1,5 @@
 name: Workflow 07 - Canonical JSONL dashboard build
+# isolated validation branch; does not modify main
 
 on:
   push:
