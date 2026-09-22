@@ -38,7 +38,7 @@ on:
         default: true
         type: boolean
       europe_pmc:
-        description: 'Run general Europe PMC search (not yet implemented; AGRICOLA is separate)'
+        description: 'Run general Europe PMC search (AGRICOLA remains a separate source)'
         required: true
         default: false
         type: boolean
