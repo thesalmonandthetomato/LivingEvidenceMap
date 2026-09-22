@@ -116,16 +116,45 @@ repeat {
   if (requested<=0L) break
 
   message(sprintf("Requesting AGRICOLA page %d, count=%d",page,requested))
-  resp <- request_page(cursor,requested)
-  body <- resp_body_string(resp)
-  headers <- resp_headers(resp)
-  parsed <- fromJSON(body,simplifyVector=FALSE)
 
-  total <- scalar_int(parsed[["hitCount"]])
-  if (is.na(reported_total)) reported_total <- total
-  results <- parsed[["resultList"]][["result"]] %||% list()
-  n <- length(results)
-  next_cursor <- scalar_text(parsed[["nextCursorMark"]], NA_character_)
+  # Europe PMC can occasionally return HTTP 200 with an empty continuation page
+  # even though hitCount shows that more records remain. Treat that as a transient
+  # content-level failure: retry the same cursor, but never accept an incomplete
+  # harvest silently.
+  content_attempt <- 1L
+  repeat {
+    resp <- request_page(cursor,requested)
+    body <- resp_body_string(resp)
+    headers <- resp_headers(resp)
+    parsed <- fromJSON(body,simplifyVector=FALSE)
+
+    total <- scalar_int(parsed[["hitCount"]])
+    if (is.na(reported_total)) reported_total <- total
+    results <- parsed[["resultList"]][["result"]] %||% list()
+    n <- length(results)
+    next_cursor <- scalar_text(parsed[["nextCursorMark"]], NA_character_)
+
+    premature_empty <- n == 0L &&
+      !is.na(reported_total) &&
+      retrieved < reported_total
+
+    if (!premature_empty) break
+
+    if (content_attempt >= 5L) {
+      stop(sprintf(
+        "Europe PMC returned an empty continuation page %d times at AGRICOLA page %d before the reported total was reached (retrieved=%d, reported=%d)",
+        content_attempt, page, retrieved, reported_total
+      ))
+    }
+
+    wait_seconds <- min(30, 2^content_attempt)
+    message(sprintf(
+      "Transient empty AGRICOLA continuation page %d/%d at page %d; retrying same cursor after %ds",
+      content_attempt, 5L, page, wait_seconds
+    ))
+    Sys.sleep(wait_seconds)
+    content_attempt <- content_attempt + 1L
+  }
 
   raw_path <- file.path(raw_dir,sprintf("response_%06d.json",page))
   con <- file(raw_path,"wb"); writeBin(charToRaw(body),con); close(con)
