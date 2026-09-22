@@ -41,6 +41,8 @@ find_one <- function(name) {
 meta <- fread(find_one("normalised_metadata.csv"), na.strings = c("", "NA"))
 all_pairs <- fread(find_one("all_candidate_pairs.csv"), na.strings = c("", "NA"))
 original <- fread(find_one("scored_sample.csv"), na.strings = c("", "NA"))
+# Incremental mode: old calibration/decision pairs are preserved, never rescored.
+original <- original[0]
 
 scalar <- function(x) {
   if (is.null(x) || !length(x)) return(NULL)
