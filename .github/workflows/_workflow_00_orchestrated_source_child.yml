@@ -115,7 +115,14 @@ jobs:
             lens)
               cp config/lens_search.json /tmp/lens_search.json
               Rscript -e 'args <- commandArgs(trailingOnly=TRUE); q <- args[[1]]; p <- args[[2]]; x <- jsonlite::fromJSON(p, simplifyVector=FALSE); x$api_query$query$bool$must[[1]]$query_string$query <- q; jsonlite::write_json(x,p,auto_unbox=TRUE,pretty=TRUE)' "$SEARCH_QUERY" /tmp/lens_search.json
-              Rscript scripts/updater/workflow_00_full_lens_search.R --config /tmp/lens_search.json --output outputs/updater/source_child/records.jsonl --manifest outputs/updater/source_child/manifest.json --audit-dir outputs/updater/source_child/audit
+              git fetch origin workflow00-search-orchestrator
+              git show origin/workflow00-search-orchestrator:scripts/updater/workflow_00_lens_orchestrated_search.R > /tmp/workflow_00_lens_orchestrated_search.R
+              if [ "$RUN_TYPE" = "expansion" ]; then
+                sentinel_arg=false
+              else
+                sentinel_arg=true
+              fi
+              Rscript /tmp/workflow_00_lens_orchestrated_search.R --config /tmp/lens_search.json --output outputs/updater/source_child/records.jsonl --manifest outputs/updater/source_child/manifest.json --audit-dir outputs/updater/source_child/audit --require-sentinel "$sentinel_arg"
               ;;
             scopus)
               Rscript scripts/updater/workflow_00b_scopus_ingestion.R --query "$SEARCH_QUERY" --page-size 25 --view STANDARD --output-dir outputs/updater/source_child
