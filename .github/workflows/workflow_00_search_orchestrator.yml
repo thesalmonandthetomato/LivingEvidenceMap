@@ -90,6 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       search_version: ${{ steps.out.outputs.search_version }}
+      fortnightly_from_date: ${{ steps.out.outputs.fortnightly_from_date }}
       lens_query: ${{ steps.out.outputs.lens_query }}
       scopus_query: ${{ steps.out.outputs.scopus_query }}
       openalex_query: ${{ steps.out.outputs.openalex_query }}
@@ -163,6 +164,7 @@ jobs:
             cat(sprintf('%s<<EOF\n%s\nEOF\n',name,value),file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
           }
           emit('search_version',p$search_version)
+          emit('fortnightly_from_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$from)
           emit('lens_query',q$lens)
           emit('scopus_query',q$scopus)
           emit('openalex_query',q$openalex)
@@ -187,6 +189,7 @@ jobs:
       query: ${{ needs.validate-and-plan.outputs.lens_query }}
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
@@ -200,6 +203,7 @@ jobs:
       query: ${{ needs.validate-and-plan.outputs.scopus_query }}
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
@@ -213,6 +217,7 @@ jobs:
       query: ${{ needs.validate-and-plan.outputs.openalex_query }}
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
@@ -226,6 +231,7 @@ jobs:
       query: ${{ needs.validate-and-plan.outputs.agricola_query }}
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
@@ -239,6 +245,7 @@ jobs:
       query: ${{ needs.validate-and-plan.outputs.wos_query }}
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
