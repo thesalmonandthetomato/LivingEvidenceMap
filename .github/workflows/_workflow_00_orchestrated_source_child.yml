@@ -168,7 +168,14 @@ jobs:
               ;;
             agricola)
               Rscript scripts/updater/workflow_00d_agricola_ingestion.R --query "$SEARCH_QUERY" --max-records all --page-size 100 --output-dir outputs/updater/source_child
-              Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
+              agricola_n="$(Rscript -e 'x <- jsonlite::fromJSON("outputs/updater/source_child/manifest.json", simplifyVector=FALSE); vals <- c(x$records_retrieved, x$entries_retrieved, x$total_results_reported, x$reported_total); vals <- vals[!vapply(vals,is.null,logical(1))]; cat(if (length(vals)) as.integer(vals[[1]]) else 0L)')"
+              if [ "$agricola_n" -gt 0 ]; then
+                Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
+              else
+                echo "AGRICOLA returned 0 records; skipping sidecar adaptation."
+                mkdir -p outputs/updater/source_child_sidecar
+                printf '{"source":"agricola","records":0,"status":"empty_harvest"}\n' > outputs/updater/source_child_sidecar/empty_harvest.json
+              fi
               ;;
             wos)
               if [ "$RUN_TYPE" = "fortnightly" ]; then
