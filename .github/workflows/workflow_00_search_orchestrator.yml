@@ -91,6 +91,7 @@ jobs:
     outputs:
       search_version: ${{ steps.out.outputs.search_version }}
       fortnightly_from_date: ${{ steps.out.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ steps.out.outputs.fortnightly_to_date }}
       lens_query: ${{ steps.out.outputs.lens_query }}
       scopus_query: ${{ steps.out.outputs.scopus_query }}
       openalex_query: ${{ steps.out.outputs.openalex_query }}
@@ -165,6 +166,7 @@ jobs:
           }
           emit('search_version',p$search_version)
           emit('fortnightly_from_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$from)
+          emit('fortnightly_to_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$to)
           emit('lens_query',q$lens)
           emit('scopus_query',q$scopus)
           emit('openalex_query',q$openalex)
@@ -190,6 +192,7 @@ jobs:
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
@@ -204,6 +207,7 @@ jobs:
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
@@ -218,6 +222,7 @@ jobs:
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
@@ -232,6 +237,7 @@ jobs:
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
@@ -246,6 +252,7 @@ jobs:
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
