@@ -102,8 +102,6 @@ if (run_type=="fortnightly") {
                           scopus_query,format(from_date,"%Y%m%d"))
   agricola_query <- sprintf("(%s) AND FIRST_PDATE:[%s TO %s]",
                             agricola_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
-  wos_query <- sprintf("(%s) AND DOP=%s/%s",
-                       wos_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
 }
 
 queries <- list(
