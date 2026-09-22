@@ -100,14 +100,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
-            unsupported=''
-            [ '${{ inputs.lens }}' = 'true' ] && unsupported="$unsupported lens"
-            if [ -n "$unsupported" ]; then
-              echo "Fortnightly 14-day semantics are not yet verified for:$unsupported" >&2
-              exit 2
-            fi
-          fi
           if [ '${{ inputs.lens }}' != 'true' ] && [ '${{ inputs.scopus }}' != 'true' ] && [ '${{ inputs.openalex }}' != 'true' ] && [ '${{ inputs.agricola }}' != 'true' ] && [ '${{ inputs.wos }}' != 'true' ]; then
             echo 'Select at least one implemented source.' >&2
             exit 2
