@@ -1,0 +1,22 @@
+name: Workflow 00 expansion smoke test
+
+on:
+  push:
+    branches:
+      - workflow00-search-orchestrator
+    paths:
+      - .github/workflows/workflow_00_expansion_smoke.yml
+
+jobs:
+  smoke:
+    uses: ./.github/workflows/workflow_00_search_orchestrator.yml
+    with:
+      run_type: expansion
+      lens: false
+      scopus: false
+      openalex: true
+      agricola: false
+      wos: false
+      additional_farm_term: 'maricultur*'
+      resume_run_id: ''
+    secrets: inherit
