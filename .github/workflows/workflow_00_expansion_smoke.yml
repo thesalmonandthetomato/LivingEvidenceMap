@@ -1,5 +1,5 @@
 name: Workflow 00 expansion smoke test
-# rerun: archive download fix
+# rerun: preserve downloaded artifacts through checkout
 
 on:
   push:
