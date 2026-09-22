@@ -1,12 +1,6 @@
 name: Workflow 02 - Deduplication v2 identifier rescore
 
 on:
-  push:
-    branches:
-      - workflow02-multisource-reconciliation
-    paths:
-      - '.github/workflows/workflow_02_deduplication_v2_identifier_rescore.yml'
-      - 'scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R'
   workflow_dispatch:
     inputs:
       source_benchmark_run_id:
