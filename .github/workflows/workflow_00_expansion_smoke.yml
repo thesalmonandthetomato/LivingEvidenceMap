@@ -7,6 +7,10 @@ on:
     paths:
       - .github/workflows/workflow_00_expansion_smoke.yml
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   smoke:
     uses: ./.github/workflows/workflow_00_search_orchestrator.yml
