@@ -352,11 +352,17 @@ preprint_pair_vec <- x$preprint_i_vec | x$preprint_j_vec
 yd_ok_1_vec <- is.na(x$year_diff_vec) | x$year_diff_vec <= 1L
 yd_ok_2_vec <- is.na(x$year_diff_vec) | x$year_diff_vec <= 2L
 
+# Optional fields are absent in some saved scored artefacts. In the reference
+# row-wise implementation those branches evaluate as non-firing; represent that
+# explicitly here so a length-zero vector cannot collapse the whole mask.
+strong_abs_vec <- if ("strong_abstract" %in% names(x)) x$strong_abstract %in% TRUE else rep(FALSE, nrow(x))
+same_family_vec <- if ("same_doi_family" %in% names(x)) x$same_doi_family %in% TRUE else rep(FALSE, nrow(x))
+
 promotion_candidate <- (
   (x$title_containment %in% TRUE & tlen_vec >= 30L) |
   (one_missing_vec & x$exact_title %in% TRUE & tlen_vec >= 30L & yd_ok_1_vec) |
   (x$exact_abstract %in% TRUE & tlen_vec >= 30L & yd_ok_1_vec & !is.na(x$title_similarity) & x$title_similarity >= 0.95) |
-  ((!is.na(x$strong_abstract) & x$strong_abstract) & tlen_vec >= 30L) |
+  (strong_abs_vec & tlen_vec >= 30L) |
   (preprint_pair_vec & x$exact_title %in% TRUE & tlen_vec >= 20L & yd_ok_2_vec) |
   (preprint_pair_vec & !is.na(x$ordered_coverage) & x$ordered_coverage >= 0.98 &
      !is.na(x$shingle_containment) & x$shingle_containment >= 0.90) |
@@ -364,9 +370,9 @@ promotion_candidate <- (
   (x$exact_title %in% TRUE & tlen_vec >= 10L & x$first_author_match_vec & x$journal_match_vec) |
   (x$exact_title %in% TRUE & tlen_vec >= 20L & !x$doi_i_present_vec & !x$doi_j_present_vec &
      !is.na(x$year_diff_vec) & x$year_diff_vec == 0L & x$journal_containment_vec) |
-  (!x$exact_title %in% TRUE & !is.na(x$title_similarity) & x$title_similarity >= 0.995 &
+  (!(x$exact_title %in% TRUE) & !is.na(x$title_similarity) & x$title_similarity >= 0.995 &
      tlen_vec >= 30L & x$first_author_match_vec) |
-  (x$same_doi_family %in% TRUE & !is.na(x$title_similarity) & x$title_similarity >= 0.97 & tlen_vec >= 30L)
+  (same_family_vec & !is.na(x$title_similarity) & x$title_similarity >= 0.97 & tlen_vec >= 30L)
 )
 conflict_candidates <- unique(c(eligible, which(promotion_candidate)))
 progress("checking promotion-relevant structured title identifiers", 0L, length(conflict_candidates))
