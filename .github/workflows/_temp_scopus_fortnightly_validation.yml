@@ -1,0 +1,26 @@
+name: TEMP Scopus fortnightly validation
+
+on:
+  push:
+    branches:
+      - workflow00-search-orchestrator
+    paths:
+      - .github/workflows/_temp_scopus_fortnightly_validation.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/workflow_00_search_orchestrator.yml
+    with:
+      run_type: fortnightly
+      lens: false
+      scopus: true
+      openalex: false
+      agricola: false
+      wos: false
+      additional_farm_term: ''
+      resume_run_id: ''
+    secrets: inherit
