@@ -14,8 +14,8 @@ additional_farm_term <- trimws(arg("--additional-farm-term",""))
 config_path <- arg("--config","config/workflow00_search_strategy.json")
 output_dir <- arg("--output-dir","outputs/updater/workflow00_plan")
 
-if (!(run_type %in% c("full","fortnightly","quarterly","expansion"))) {
-  stop("--run-type must be full, fortnightly, quarterly, or expansion", call.=FALSE)
+if (!(run_type %in% c("full","fortnightly","expansion"))) {
+  stop("--run-type must be full, fortnightly, or expansion", call.=FALSE)
 }
 
 cfg <- fromJSON(config_path, simplifyVector=TRUE)
@@ -113,11 +113,11 @@ queries <- list(
 )
 
 support <- list(
-  lens=list(full=TRUE,fortnightly=FALSE,quarterly=TRUE,expansion=TRUE),
-  scopus=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE),
-  openalex=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE),
-  agricola=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE),
-  wos=list(full=TRUE,fortnightly=TRUE,quarterly=TRUE,expansion=TRUE)
+  lens=list(full=TRUE,fortnightly=FALSE,expansion=TRUE),
+  scopus=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
+  openalex=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
+  agricola=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
+  wos=list(full=TRUE,fortnightly=TRUE,expansion=TRUE)
 )
 
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
