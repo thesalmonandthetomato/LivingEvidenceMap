@@ -401,6 +401,11 @@ x[, journal_match := FALSE]
 x[, preprint_pair := FALSE]
 
 for (i in seq_len(nrow(x))) {
+  if (i == 1L || i %% 10000L == 0L || i == nrow(x)) {
+    progress("applying promotion and rescore rules", i, nrow(x))
+    checkpoint("promotion_rescore", i, nrow(x),
+               list(duplicates_so_far=sum(x$rescored_classification[seq_len(i)] == "duplicate", na.rm=TRUE)))
+  }
   pm <- list(
     abstract_missing_i=x$abstract_missing_i[[i]],
     abstract_missing_j=x$abstract_missing_j[[i]],
