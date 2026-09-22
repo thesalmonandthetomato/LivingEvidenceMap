@@ -31,9 +31,12 @@ read_works <- function(root) {
 
 current <- read_works(current_dir)
 if (!length(current)) stop("Current OpenAlex harvest contains no works",call.=FALSE)
-current_ids <- vapply(current,function(w) short_id(w$id %||% ""),character(1))
-if (any(!nzchar(current_ids))) stop("Current OpenAlex harvest contains missing work IDs",call.=FALSE)
-if (anyDuplicated(current_ids)) stop("Current OpenAlex harvest contains duplicate work IDs",call.=FALSE)
+current_ids_raw <- vapply(current,function(w) short_id(w$id %||% ""),character(1))
+if (any(!nzchar(current_ids_raw))) stop("Current OpenAlex harvest contains missing work IDs",call.=FALSE)
+duplicate_current_ids <- unique(current_ids_raw[duplicated(current_ids_raw)])
+keep_current <- !duplicated(current_ids_raw)
+current <- current[keep_current]
+current_ids <- current_ids_raw[keep_current]
 
 previous <- if (nzchar(previous_dir) && dir.exists(previous_dir)) read_works(previous_dir) else list()
 previous_ids <- if (length(previous)) vapply(previous,function(w) short_id(w$id %||% ""),character(1)) else character()
@@ -55,12 +58,17 @@ summary <- list(
   deduplication_key="OpenAlex Work ID",
   previous_baseline_available=length(previous_ids)>0L,
   previous_unique_ids=length(previous_ids),
+  current_raw_records=length(current_ids_raw),
   current_unique_ids=length(current_ids),
+  exact_duplicate_ids_suppressed=length(duplicate_current_ids),
+  duplicate_openalex_ids=duplicate_current_ids,
+  duplicate_policy="First occurrence of an exact repeated OpenAlex Work ID is retained for delta comparison; all raw source responses remain preserved unchanged.",
   already_known_ids=sum(!is_new),
   new_ids=sum(is_new),
   delta_jsonl="openalex_delta_records.jsonl"
 )
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null"),
            file.path(output_dir,"delta_summary.json"))
-message(sprintf("PASS: OpenAlex ID delta complete; current=%d previous=%d known=%d new=%d",
-                length(current_ids),length(previous_ids),sum(!is_new),sum(is_new)))
+message(sprintf("PASS: OpenAlex ID delta complete; raw=%d unique=%d duplicate IDs suppressed=%d previous=%d known=%d new=%d",
+                length(current_ids_raw),length(current_ids),length(duplicate_current_ids),
+                length(previous_ids),sum(!is_new),sum(is_new)))
