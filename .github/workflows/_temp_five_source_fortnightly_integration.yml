@@ -1,0 +1,22 @@
+name: TEMP - five-source fortnightly integration
+
+on:
+  push:
+    branches:
+      - workflow00-search-orchestrator
+    paths:
+      - '.github/workflows/_temp_five_source_fortnightly_integration.yml'
+
+jobs:
+  integration:
+    uses: ./.github/workflows/workflow_00_search_orchestrator.yml
+    with:
+      run_type: fortnightly
+      lens: true
+      scopus: true
+      openalex: true
+      agricola: true
+      wos: true
+      additional_farm_term: ''
+      resume_run_id: ''
+    secrets: inherit
