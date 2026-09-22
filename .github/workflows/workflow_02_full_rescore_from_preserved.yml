@@ -1,0 +1,117 @@
+name: Workflow 02 - Full rescore from preserved scoring
+
+on:
+  push:
+    branches:
+      - workflow02-multisource-reconciliation
+    paths:
+      - '.github/workflows/workflow_02_full_rescore_from_preserved.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  full-rescore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout Workflow 02 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow02-multisource-reconciliation
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','stringi'))
+
+      - name: Download preserved full-scoring artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL_RUN_ID: '35648866747'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preserved_full
+          gh run download "$FULL_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-full-classification-$FULL_RUN_ID" \
+            --dir preserved_full
+          test -n "$(find preserved_full -type f -name 'scored_checkpoint.csv' -print -quit)"
+
+      - name: Download saved benchmark metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BENCHMARK_RUN_ID: '35585544686'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preserved_benchmark
+          gh run download "$BENCHMARK_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-candidate-benchmark-$BENCHMARK_RUN_ID" \
+            --dir preserved_benchmark
+          test -n "$(find preserved_benchmark -type f -name 'normalised_metadata.csv' -print -quit)"
+
+      - name: Reconstruct unique full scored pair table
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          dir.create('full_rescore_input', recursive=TRUE, showWarnings=FALSE)
+          p <- list.files('preserved_full', pattern='scored_checkpoint\\.csv$', recursive=TRUE, full.names=TRUE)[1]
+          m <- list.files('preserved_benchmark', pattern='normalised_metadata\\.csv$', recursive=TRUE, full.names=TRUE)[1]
+          x <- fread(p, na.strings=c('', 'NA'))
+          stopifnot(nrow(x) == 520000L)
+          x[, pair_key := paste(pmin(record_i,record_j), pmax(record_i,record_j), sep='::')]
+          dup_n <- nrow(x) - uniqueN(x$pair_key)
+          stopifnot(dup_n == 83L)
+          x <- x[!duplicated(pair_key)]
+          stopifnot(nrow(x) == 519917L, uniqueN(x$pair_key) == 519917L)
+          x[, pair_key := NULL]
+          fwrite(x, 'full_rescore_input/scored_sample.csv')
+          file.copy(m, 'full_rescore_input/normalised_metadata.csv', overwrite=TRUE)
+          cat('PASS: reconstructed exactly 519917 unique scored candidate pairs; removed 83 checkpoint-overlap rows\n')
+
+      - name: Run validated optimised rescorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02_v2_full_rescore
+          Rscript scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R \
+            --input-dir full_rescore_input \
+            --output-dir outputs/workflow02_v2_full_rescore \
+            --source-run-id 35585544686
+
+      - name: Validate final full-corpus output
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          library(jsonlite)
+          x <- fread('outputs/workflow02_v2_full_rescore/rescored_sample.csv')
+          s <- fromJSON('outputs/workflow02_v2_full_rescore/summary.json', simplifyVector=FALSE)
+          stopifnot(nrow(x) == 519917L)
+          stopifnot(uniqueN(paste(pmin(x$record_i,x$record_j), pmax(x$record_i,x$record_j), sep='::')) == 519917L)
+          stopifnot(identical(s$status, 'success'))
+          stopifnot(all(x$review_route %in% c('automatic_duplicate','non_duplicate','manual_review','workflow04_exclusion_candidate')))
+          counts <- x[, .N, by=review_route][order(review_route)]
+          fwrite(counts, 'outputs/workflow02_v2_full_rescore/final_route_counts.csv')
+          cat('PASS: final full-corpus rescore contains exactly 519917 unique candidate pairs\n')
+          print(counts)
+
+      - name: Upload final full-rescore artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-deduplication-v2-final-full-rescore-${{ github.run_id }}
+          path: outputs/workflow02_v2_full_rescore/
+          retention-days: 90
+          if-no-files-found: warn
