@@ -19,6 +19,8 @@ arg <- function(flag, default = NULL) {
 input_dir <- arg("--input-dir")
 output_dir <- arg("--output-dir")
 source_run_id <- arg("--source-run-id", "35585544686")
+start_row <- as.integer(arg("--start-row", "1"))
+end_row_arg <- arg("--end-row", NULL)
 
 if (is.null(input_dir) || is.null(output_dir)) {
   stop("Required: --input-dir --output-dir", call. = FALSE)
@@ -64,8 +66,19 @@ if (!nrow(x)) stop("Saved scored sample is empty", call. = FALSE)
 required <- c("title_i","title_j","classification","rule","record_i","record_j")
 missing <- setdiff(required, names(x))
 if (length(missing)) stop(sprintf("Missing required columns: %s", paste(missing, collapse = ", ")), call. = FALSE)
-progress("saved sample loaded", nrow(x), nrow(x))
-checkpoint("sample_loaded", nrow(x), nrow(x))
+full_n <- nrow(x)
+end_row <- if (is.null(end_row_arg)) full_n else as.integer(end_row_arg)
+if (is.na(start_row) || is.na(end_row) || start_row < 1L || end_row < start_row || end_row > full_n) {
+  stop(sprintf("Invalid row range: %s-%s for %s rows", start_row, end_row, full_n), call. = FALSE)
+}
+x[, source_row_index := seq_len(.N)]
+if (start_row != 1L || end_row != full_n) {
+  x <- x[source_row_index >= start_row & source_row_index <= end_row]
+}
+progress("saved sample loaded", nrow(x), full_n,
+         sprintf("processing source rows %d-%d", start_row, end_row))
+checkpoint("sample_loaded", nrow(x), full_n,
+           list(start_row=start_row, end_row=end_row, chunk_rows=nrow(x)))
 
 meta_path <- file.path(input_dir, "normalised_metadata.csv")
 if (!file.exists(meta_path)) {
@@ -653,6 +666,9 @@ summary <- list(
   status = "success",
   source_benchmark_run_id = source_run_id,
   sample_n = nrow(x),
+  source_full_n = full_n,
+  start_row = start_row,
+  end_row = end_row,
   weak_auto_pairs_checked = length(eligible),
   decisions_changed_to_review = sum(x$decision_changed),
   original_classification_counts = as.list(table(x$classification)),
