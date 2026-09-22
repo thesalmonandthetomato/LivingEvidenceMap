@@ -189,7 +189,7 @@ jobs:
   lens:
     needs: validate-and-plan
     if: ${{ inputs.lens }}
-    uses: ./.github/workflows/_workflow_00_source_child.yml
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
     with:
       source: lens
       run_type: ${{ inputs.run_type }}
@@ -202,7 +202,7 @@ jobs:
   scopus:
     needs: validate-and-plan
     if: ${{ inputs.scopus }}
-    uses: ./.github/workflows/_workflow_00_source_child.yml
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
     with:
       source: scopus
       run_type: ${{ inputs.run_type }}
@@ -215,7 +215,7 @@ jobs:
   openalex:
     needs: validate-and-plan
     if: ${{ inputs.openalex }}
-    uses: ./.github/workflows/_workflow_00_source_child.yml
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
     with:
       source: openalex
       run_type: ${{ inputs.run_type }}
@@ -228,7 +228,7 @@ jobs:
   agricola:
     needs: validate-and-plan
     if: ${{ inputs.agricola }}
-    uses: ./.github/workflows/_workflow_00_source_child.yml
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
     with:
       source: agricola
       run_type: ${{ inputs.run_type }}
@@ -241,7 +241,7 @@ jobs:
   wos:
     needs: validate-and-plan
     if: ${{ inputs.wos }}
-    uses: ./.github/workflows/_workflow_00_source_child.yml
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
     with:
       source: wos
       run_type: ${{ inputs.run_type }}
