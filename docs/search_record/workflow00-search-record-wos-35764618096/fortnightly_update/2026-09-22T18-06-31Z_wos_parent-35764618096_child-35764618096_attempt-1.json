@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "recorded_at_utc": "2026-09-22T18:06:31Z",
+  "source": "wos",
+  "run_type": "fortnightly",
+  "search_version": "v1",
+  "additional_farm_term": null,
+  "search_string": "(TI=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AB=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AK=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) ; modifiedTimeSpan=2026-09-08+2026-09-22",
+  "reported_search_results": 111,
+  "successfully_downloaded_results": 111,
+  "complete_download": true,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "35764618096",
+    "child_workflow_run_id": "35764618096",
+    "run_attempt": "1",
+    "ref": "workflow00-search-orchestrator",
+    "sha": "2585e19549d78172a05f42c801f8f22fa86c6b7f"
+  },
+  "artifact_name": "workflow00-wos-35764618096"
+}

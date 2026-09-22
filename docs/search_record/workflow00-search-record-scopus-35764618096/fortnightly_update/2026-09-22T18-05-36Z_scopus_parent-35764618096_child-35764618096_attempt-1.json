@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "recorded_at_utc": "2026-09-22T18:05:36Z",
+  "source": "scopus",
+  "run_type": "fortnightly",
+  "search_version": "v1",
+  "additional_farm_term": null,
+  "search_string": "(TITLE-ABS-KEY((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) AND ORIG-LOAD-DATE AFT 20260908",
+  "reported_search_results": 20,
+  "successfully_downloaded_results": 20,
+  "complete_download": true,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "35764618096",
+    "child_workflow_run_id": "35764618096",
+    "run_attempt": "1",
+    "ref": "workflow00-search-orchestrator",
+    "sha": "2585e19549d78172a05f42c801f8f22fa86c6b7f"
+  },
+  "artifact_name": "workflow00-scopus-35764618096"
+}
