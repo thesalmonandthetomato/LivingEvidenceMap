@@ -1,0 +1,16 @@
+{
+  "workflow": "00_expansion_native_id_reconciliation",
+  "status": "success",
+  "reconciled_at": "2026-09-22T19:33:00Z",
+  "source": "wos",
+  "reconciliation_key": "Web of Science UID",
+  "current_expansion_records": 26,
+  "historical_unique_native_ids": 15206,
+  "already_known_native_ids": 26,
+  "new_native_ids": 0,
+  "records_passed_downstream": 0,
+  "bibliographic_deduplication_performed": false,
+  "doi_matching_performed": false,
+  "fuzzy_matching_performed": false,
+  "downstream_deduplication": "Workflow 02"
+}

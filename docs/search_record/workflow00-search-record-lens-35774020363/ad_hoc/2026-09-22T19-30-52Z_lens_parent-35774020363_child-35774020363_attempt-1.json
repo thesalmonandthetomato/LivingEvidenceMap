@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "recorded_at_utc": "2026-09-22T19:30:52Z",
+  "source": "lens",
+  "run_type": "expansion",
+  "search_version": "v1",
+  "additional_farm_term": "maricultur*",
+  "search_string": "((title:(salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR abstract:(salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR keyword:(salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\")) AND (title:(maricultur*) OR abstract:(maricultur*) OR keyword:(maricultur*)) AND NOT (title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))",
+  "reported_search_results": 40,
+  "successfully_downloaded_results": 40,
+  "complete_download": true,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "35774020363",
+    "child_workflow_run_id": "35774020363",
+    "run_attempt": "1",
+    "ref": "workflow00-search-orchestrator",
+    "sha": "a9dbf4df826c6b3552a066377049c03afc525861"
+  },
+  "artifact_name": "workflow00-lens-35774020363"
+}
