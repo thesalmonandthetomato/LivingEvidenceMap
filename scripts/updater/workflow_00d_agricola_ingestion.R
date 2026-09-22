@@ -128,30 +128,56 @@ repeat {
     headers <- resp_headers(resp)
     parsed <- fromJSON(body,simplifyVector=FALSE)
 
+    err_code <- scalar_text(parsed[["errCode"]], "")
+    err_msg <- scalar_text(parsed[["errMsg"]], "")
+    has_hit_count <- !is.null(parsed[["hitCount"]])
+    has_result_list <- !is.null(parsed[["resultList"]])
     total <- scalar_int(parsed[["hitCount"]])
-    if (is.na(reported_total)) reported_total <- total
+    if (is.na(reported_total) && !is.na(total)) reported_total <- total
     results <- parsed[["resultList"]][["result"]] %||% list()
     n <- length(results)
     next_cursor <- scalar_text(parsed[["nextCursorMark"]], NA_character_)
 
-    premature_empty <- n == 0L &&
+    invalid_payload <- nzchar(err_code) || nzchar(err_msg) || !has_hit_count || !has_result_list
+    premature_empty <- !invalid_payload &&
+      n == 0L &&
       !is.na(reported_total) &&
       retrieved < reported_total
 
-    if (!premature_empty) break
+    if (!invalid_payload && !premature_empty) break
+
+    invalid_dir <- file.path(root, "invalid_responses")
+    dir.create(invalid_dir, recursive=TRUE, showWarnings=FALSE)
+    invalid_body_path <- file.path(invalid_dir, sprintf("page_%06d_attempt_%02d.json", page, content_attempt))
+    invalid_headers_path <- file.path(invalid_dir, sprintf("page_%06d_attempt_%02d_headers.json", page, content_attempt))
+    con <- file(invalid_body_path, "wb"); writeBin(charToRaw(body), con); close(con)
+    write_json(as.list(unclass(headers)), invalid_headers_path)
 
     if (content_attempt >= 5L) {
+      if (invalid_payload) {
+        stop(sprintf(
+          "Europe PMC returned an invalid AGRICOLA payload %d times at page %d (errCode='%s', errMsg='%s', has_hitCount=%s, has_resultList=%s). Raw responses preserved in %s",
+          content_attempt, page, err_code, err_msg, has_hit_count, has_result_list, invalid_dir
+        ))
+      }
       stop(sprintf(
-        "Europe PMC returned an empty continuation page %d times at AGRICOLA page %d before the reported total was reached (retrieved=%d, reported=%d)",
-        content_attempt, page, retrieved, reported_total
+        "Europe PMC returned an empty continuation page %d times at AGRICOLA page %d before the reported total was reached (retrieved=%d, reported=%d). Raw responses preserved in %s",
+        content_attempt, page, retrieved, reported_total, invalid_dir
       ))
     }
 
     wait_seconds <- min(30, 2^content_attempt)
-    message(sprintf(
-      "Transient empty AGRICOLA continuation page %d/%d at page %d; retrying same cursor after %ds",
-      content_attempt, 5L, page, wait_seconds
-    ))
+    if (invalid_payload) {
+      message(sprintf(
+        "Invalid AGRICOLA payload %d/%d at page %d (errCode='%s', errMsg='%s', has_hitCount=%s, has_resultList=%s); retrying same cursor after %ds",
+        content_attempt, 5L, page, err_code, err_msg, has_hit_count, has_result_list, wait_seconds
+      ))
+    } else {
+      message(sprintf(
+        "Transient empty AGRICOLA continuation page %d/%d at page %d; retrying same cursor after %ds",
+        content_attempt, 5L, page, wait_seconds
+      ))
+    }
     Sys.sleep(wait_seconds)
     content_attempt <- content_attempt + 1L
   }
