@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   search:
@@ -68,6 +69,34 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c("httr2","jsonlite","digest"))
 
+      - name: Locate previous OpenAlex harvest for fortnightly delta
+        if: ${{ inputs.source == 'openalex' && inputs.run_type == 'fortnightly' }}
+        id: previous_openalex
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_PARENT_RUN_ID: ${{ inputs.parent_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/previous_openalex
+          artifact_json="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" | jq -s '
+            [.[].artifacts[] |
+             select(.expired == false) |
+             select(.name | startswith("workflow00-openalex-harvest-")) |
+             select(.name != ("workflow00-openalex-harvest-" + env.CURRENT_PARENT_RUN_ID))] |
+            sort_by(.created_at) | reverse | .[0] // empty')"
+          if [ -z "$artifact_json" ] || [ "$artifact_json" = "null" ]; then
+            echo "baseline=false" >> "$GITHUB_OUTPUT"
+            echo "No previous orchestrated OpenAlex harvest artefact found; current run becomes baseline."
+            exit 0
+          fi
+          previous_run="$(echo "$artifact_json" | jq -r '.workflow_run.id')"
+          previous_name="$(echo "$artifact_json" | jq -r '.name')"
+          gh run download "$previous_run" --repo "$GITHUB_REPOSITORY" --name "$previous_name" --dir /tmp/previous_openalex
+          echo "baseline=true" >> "$GITHUB_OUTPUT"
+          echo "previous_run=$previous_run" >> "$GITHUB_OUTPUT"
+          echo "previous_name=$previous_name" >> "$GITHUB_OUTPUT"
+
       - name: Run source search
         env:
           SOURCE: ${{ inputs.source }}
@@ -109,6 +138,22 @@ jobs:
               Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
               ;;
           esac
+
+      - name: Build OpenAlex identifier delta against previous search
+        if: ${{ inputs.source == 'openalex' && inputs.run_type == 'fortnightly' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin workflow00-search-orchestrator
+          git show origin/workflow00-search-orchestrator:scripts/updater/workflow_00c_openalex_identifier_delta.R > /tmp/workflow_00c_openalex_identifier_delta.R
+          previous_args=()
+          if [ '${{ steps.previous_openalex.outputs.baseline }}' = 'true' ]; then
+            previous_args=(--previous-dir /tmp/previous_openalex)
+          fi
+          Rscript /tmp/workflow_00c_openalex_identifier_delta.R \
+            --current-dir outputs/updater/source_child \
+            "${previous_args[@]}" \
+            --output-dir outputs/updater/openalex_delta
 
       - name: Extract source counts
         id: counts
