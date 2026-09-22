@@ -321,17 +321,70 @@ for (n in seq_along(eligible)) {
   }
 }
 
-# Identifier conflicts are also required as a safeguard for review/unresolved pairs
-# before any later promotion rule can fire.
-for (i in seq_len(nrow(x))) {
-  if (isTRUE(x$identifier_conflict[[i]])) next
-  z <- identifier_conflict(x$title_i[[i]], x$title_j[[i]])
-  if (isTRUE(z$conflict)) {
-    x$identifier_conflict[[i]] <- TRUE
-    x$identifier_conflict_reason[[i]] <- z$reasons
+# Join pair metadata once rather than performing two keyed table lookups for
+# every candidate pair. This changes execution only, not any decision rule.
+mi <- meta[x$record_i]
+mj <- meta[x$record_j]
+first_author_i <- vapply(mi$author_norm, first_author_from_norm, character(1))
+first_author_j <- vapply(mj$author_norm, first_author_from_norm, character(1))
+
+x[, abstract_missing_i := is.na(mi$abstract_hash) | !nzchar(mi$abstract_hash)]
+x[, abstract_missing_j := is.na(mj$abstract_hash) | !nzchar(mj$abstract_hash)]
+x[, first_author_match_vec := !is.na(first_author_i) & !is.na(first_author_j) & first_author_i == first_author_j]
+x[, exact_author_match_vec := !is.na(mi$author_norm) & !is.na(mj$author_norm) &
+     nzchar(mi$author_norm) & nzchar(mj$author_norm) & mi$author_norm == mj$author_norm]
+x[, journal_match_vec := !is.na(mi$journal_norm) & !is.na(mj$journal_norm) &
+     nzchar(mi$journal_norm) & nzchar(mj$journal_norm) & mi$journal_norm == mj$journal_norm]
+x[, journal_containment_vec := mapply(journal_contains, mi$journal_norm, mj$journal_norm, USE.NAMES=FALSE)]
+x[, year_diff_vec := fifelse(!is.na(mi$year) & !is.na(mj$year), abs(mi$year - mj$year), NA_integer_)]
+x[, doi_i_present_vec := !is.na(mi$doi_norm) & nzchar(mi$doi_norm)]
+x[, doi_j_present_vec := !is.na(mj$doi_norm) & nzchar(mj$doi_norm)]
+x[, preprint_i_vec := mapply(is_preprint_manifestation, mi$doi_norm, mi$journal_norm, USE.NAMES=FALSE)]
+x[, preprint_j_vec := mapply(is_preprint_manifestation, mj$doi_norm, mj$journal_norm, USE.NAMES=FALSE)]
+
+# Structured-title conflicts only influence the method where a later promotion
+# could otherwise fire. Build a deliberately broad superset of those rows.
+title_len_i <- vapply(x$title_i, title_length_norm, integer(1))
+title_len_j <- vapply(x$title_j, title_length_norm, integer(1))
+tlen_vec <- pmin(title_len_i, title_len_j)
+one_missing_vec <- xor(x$abstract_missing_i, x$abstract_missing_j)
+preprint_pair_vec <- x$preprint_i_vec | x$preprint_j_vec
+yd_ok_1_vec <- is.na(x$year_diff_vec) | x$year_diff_vec <= 1L
+yd_ok_2_vec <- is.na(x$year_diff_vec) | x$year_diff_vec <= 2L
+
+promotion_candidate <- (
+  (x$title_containment %in% TRUE & tlen_vec >= 30L) |
+  (one_missing_vec & x$exact_title %in% TRUE & tlen_vec >= 30L & yd_ok_1_vec) |
+  (x$exact_abstract %in% TRUE & tlen_vec >= 30L & yd_ok_1_vec & !is.na(x$title_similarity) & x$title_similarity >= 0.95) |
+  ((!is.na(x$strong_abstract) & x$strong_abstract) & tlen_vec >= 30L) |
+  (preprint_pair_vec & x$exact_title %in% TRUE & tlen_vec >= 20L & yd_ok_2_vec) |
+  (preprint_pair_vec & !is.na(x$ordered_coverage) & x$ordered_coverage >= 0.98 &
+     !is.na(x$shingle_containment) & x$shingle_containment >= 0.90) |
+  (x$first_author_match_vec & !is.na(x$title_similarity) & x$title_similarity >= 0.93) |
+  (x$exact_title %in% TRUE & tlen_vec >= 10L & x$first_author_match_vec & x$journal_match_vec) |
+  (x$exact_title %in% TRUE & tlen_vec >= 20L & !x$doi_i_present_vec & !x$doi_j_present_vec &
+     !is.na(x$year_diff_vec) & x$year_diff_vec == 0L & x$journal_containment_vec) |
+  (!x$exact_title %in% TRUE & !is.na(x$title_similarity) & x$title_similarity >= 0.995 &
+     tlen_vec >= 30L & x$first_author_match_vec) |
+  (x$same_doi_family %in% TRUE & !is.na(x$title_similarity) & x$title_similarity >= 0.97 & tlen_vec >= 30L)
+)
+conflict_candidates <- unique(c(eligible, which(promotion_candidate)))
+progress("checking promotion-relevant structured title identifiers", 0L, length(conflict_candidates))
+for (n in seq_along(conflict_candidates)) {
+  i <- conflict_candidates[[n]]
+  if (!isTRUE(x$identifier_conflict[[i]])) {
+    z <- identifier_conflict(x$title_i[[i]], x$title_j[[i]])
+    if (isTRUE(z$conflict)) {
+      x$identifier_conflict[[i]] <- TRUE
+      x$identifier_conflict_reason[[i]] <- z$reasons
+    }
+  }
+  if (n == 1L || n %% 1000L == 0L || n == length(conflict_candidates)) {
+    progress("promotion-relevant structured title identifiers checked", n, length(conflict_candidates))
+    checkpoint("promotion_identifier_check", n, length(conflict_candidates),
+               list(changed_so_far=sum(x$identifier_conflict)))
   }
 }
-
 
 # Second-stage high-confidence promotions learned from the human-reviewed queue.
 # Human labels are never used to make decisions; they are used only below for evaluation.
@@ -342,8 +395,19 @@ x[, journal_match := FALSE]
 x[, preprint_pair := FALSE]
 
 for (i in seq_len(nrow(x))) {
-  pm <- pair_meta(x$record_i[[i]], x$record_j[[i]])
-  if (is.null(pm)) next
+  pm <- list(
+    abstract_missing_i=x$abstract_missing_i[[i]],
+    abstract_missing_j=x$abstract_missing_j[[i]],
+    first_author_match=x$first_author_match_vec[[i]],
+    exact_author_match=x$exact_author_match_vec[[i]],
+    journal_match=x$journal_match_vec[[i]],
+    journal_containment=x$journal_containment_vec[[i]],
+    year_diff=x$year_diff_vec[[i]],
+    doi_i_present=x$doi_i_present_vec[[i]],
+    doi_j_present=x$doi_j_present_vec[[i]],
+    preprint_i=x$preprint_i_vec[[i]],
+    preprint_j=x$preprint_j_vec[[i]]
+  )
 
   # Very narrow overrides for title-internal identifier discrepancies validated
   # against the complete human-labelled set.
