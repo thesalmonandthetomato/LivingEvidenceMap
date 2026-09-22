@@ -237,7 +237,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$SEARCH_QUERY" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-farm-term "$ADDITIONAL_FARM_TERM" --artifact-name "workflow00-${SOURCE}-${GITHUB_RUN_ID}" --output-root outputs/updater/search_record
+          documented_query="$SEARCH_QUERY"
+          if [ "$SOURCE" = "wos" ] && [ "$RUN_TYPE" = "fortnightly" ]; then
+            documented_query="$SEARCH_QUERY ; modifiedTimeSpan=$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE"
+          fi
+          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-farm-term "$ADDITIONAL_FARM_TERM" --artifact-name "workflow00-${SOURCE}-${GITHUB_RUN_ID}" --output-root outputs/updater/search_record
 
       - name: Upload source harvest
         uses: actions/upload-artifact@v4
