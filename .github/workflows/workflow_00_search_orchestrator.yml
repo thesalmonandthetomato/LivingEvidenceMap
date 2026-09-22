@@ -79,7 +79,6 @@ jobs:
           if [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
             unsupported=''
             [ '${{ inputs.lens }}' = 'true' ] && unsupported="$unsupported lens"
-            [ '${{ inputs.scopus }}' = 'true' ] && unsupported="$unsupported scopus"
             [ '${{ inputs.openalex }}' = 'true' ] && unsupported="$unsupported openalex"
             if [ -n "$unsupported" ]; then
               echo "Fortnightly 14-day semantics are not yet verified for:$unsupported" >&2
