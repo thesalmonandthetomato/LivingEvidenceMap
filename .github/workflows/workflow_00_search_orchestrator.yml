@@ -37,11 +37,6 @@ on:
         required: true
         default: true
         type: boolean
-      europe_pmc:
-        description: 'Run general Europe PMC search (AGRICOLA remains a separate source)'
-        required: true
-        default: false
-        type: boolean
       additional_farm_term:
         description: 'Expansion only: add one farm/aquaculture synonym; species terms are immutable'
         required: false
@@ -66,7 +61,6 @@ jobs:
       scopus_query: ${{ steps.out.outputs.scopus_query }}
       openalex_query: ${{ steps.out.outputs.openalex_query }}
       agricola_query: ${{ steps.out.outputs.agricola_query }}
-      europe_pmc_query: ${{ steps.out.outputs.europe_pmc_query }}
       wos_query: ${{ steps.out.outputs.wos_query }}
     steps:
       - name: Validate selected source support
@@ -81,7 +75,7 @@ jobs:
               exit 2
             fi
           fi
-          if [ '${{ inputs.lens }}' != 'true' ] && [ '${{ inputs.scopus }}' != 'true' ] && [ '${{ inputs.openalex }}' != 'true' ] && [ '${{ inputs.agricola }}' != 'true' ] && [ '${{ inputs.europe_pmc }}' != 'true' ] && [ '${{ inputs.wos }}' != 'true' ]; then
+          if [ '${{ inputs.lens }}' != 'true' ] && [ '${{ inputs.scopus }}' != 'true' ] && [ '${{ inputs.openalex }}' != 'true' ] && [ '${{ inputs.agricola }}' != 'true' ] && [ '${{ inputs.wos }}' != 'true' ]; then
             echo 'Select at least one implemented source.' >&2
             exit 2
           fi
@@ -120,7 +114,6 @@ jobs:
           OPENALEX: ${{ inputs.openalex }}
           AGRICOLA: ${{ inputs.agricola }}
           WOS: ${{ inputs.wos }}
-          EUROPE_PMC: ${{ inputs.europe_pmc }}
         run: |
           library(jsonlite)
           p <- 'outputs/updater/workflow00_plan/search_plan.json'
@@ -130,8 +123,7 @@ jobs:
             scopus=identical(Sys.getenv('SCOPUS'),'true'),
             openalex=identical(Sys.getenv('OPENALEX'),'true'),
             agricola=identical(Sys.getenv('AGRICOLA'),'true'),
-            wos=identical(Sys.getenv('WOS'),'true'),
-            europe_pmc=identical(Sys.getenv('EUROPE_PMC'),'true')
+            wos=identical(Sys.getenv('WOS'),'true')
           )
           writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),p)
 
@@ -150,7 +142,6 @@ jobs:
           emit('scopus_query',q$scopus)
           emit('openalex_query',q$openalex)
           emit('agricola_query',q$agricola)
-          emit('europe_pmc_query',q$europe_pmc)
           emit('wos_query',q$wos)
 
       - name: Upload Workflow 00 plan
@@ -213,19 +204,6 @@ jobs:
       additional_farm_term: ${{ inputs.additional_farm_term }}
     secrets: inherit
 
-  europe_pmc:
-    needs: validate-and-plan
-    if: ${{ inputs.europe_pmc }}
-    uses: ./.github/workflows/_workflow_00_source_child.yml
-    with:
-      source: europe_pmc
-      run_type: ${{ inputs.run_type }}
-      query: ${{ needs.validate-and-plan.outputs.europe_pmc_query }}
-      parent_run_id: ${{ github.run_id }}
-      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
-      additional_farm_term: ${{ inputs.additional_farm_term }}
-    secrets: inherit
-
   wos:
     needs: validate-and-plan
     if: ${{ inputs.wos }}
@@ -240,7 +218,7 @@ jobs:
     secrets: inherit
 
   archive-search-records:
-    needs: [validate-and-plan, lens, scopus, openalex, agricola, europe_pmc, wos]
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, wos]
     if: ${{ always() && needs.validate-and-plan.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -251,13 +229,11 @@ jobs:
           OPENALEX_SELECTED: ${{ inputs.openalex }}
           AGRICOLA_SELECTED: ${{ inputs.agricola }}
           WOS_SELECTED: ${{ inputs.wos }}
-          EUROPE_PMC_SELECTED: ${{ inputs.europe_pmc }}
           LENS_RESULT: ${{ needs.lens.result }}
           SCOPUS_RESULT: ${{ needs.scopus.result }}
           OPENALEX_RESULT: ${{ needs.openalex.result }}
           AGRICOLA_RESULT: ${{ needs.agricola.result }}
           WOS_RESULT: ${{ needs.wos.result }}
-          EUROPE_PMC_RESULT: ${{ needs.europe_pmc.result }}
         shell: bash
         run: |
           set -euo pipefail
@@ -272,7 +248,6 @@ jobs:
           check "$SCOPUS_SELECTED" "$SCOPUS_RESULT" scopus
           check "$OPENALEX_SELECTED" "$OPENALEX_RESULT" openalex
           check "$AGRICOLA_SELECTED" "$AGRICOLA_RESULT" agricola
-          check "$EUROPE_PMC_SELECTED" "$EUROPE_PMC_RESULT" europe_pmc
           check "$WOS_SELECTED" "$WOS_RESULT" wos
 
       - name: Download child search records
