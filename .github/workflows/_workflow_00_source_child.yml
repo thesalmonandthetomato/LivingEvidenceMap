@@ -126,8 +126,8 @@ jobs:
           reported <- pick(x$reported_total, x$unpartitioned_total, x$total_results_reported_by_openalex_first_page, x$total_results_reported_first_page, x$total_results_reported, x$validation$first_page_total_reported, x$validation$unpartitioned_total)
           downloaded <- pick(x$records_retrieved, x$entries_retrieved, x$validation$records_recounted_from_raw, x$validation$records_tracked_during_harvest)
           if (Sys.getenv("SOURCE")=="lens") {
-            reported <- pick(x$reported_total, x$total_reported)
-            downloaded <- pick(x$unique_records, x$records_written, x$records_retrieved)
+            reported <- pick(x$lens_reported_total, x$reported_total, x$total_reported)
+            downloaded <- pick(x$unique_records_written, x$raw_records_retrieved, x$records_written, x$records_retrieved)
           }
           if (is.na(reported) || is.na(downloaded)) stop("Could not derive reported/downloaded counts from source manifest")
           cat(sprintf("reported=%d\n",reported),file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
