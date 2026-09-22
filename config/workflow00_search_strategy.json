@@ -1,0 +1,25 @@
+{
+  "search_version": "v1",
+  "species_terms": [
+    "salmon",
+    "salmonid*",
+    "Salmo",
+    "Oncorhynchus",
+    "\"rainbow trout\""
+  ],
+  "farm_terms": [
+    "farm*",
+    "cage*",
+    "pens",
+    "penned",
+    "pen",
+    "aquacultur*",
+    "commercial*"
+  ],
+  "expansion_policy": {
+    "allowed_target": "farm_terms_only",
+    "species_terms_mutable": false,
+    "farm_terms_replaceable": false,
+    "additional_farm_term_input": "additional_farm_term"
+  }
+}
