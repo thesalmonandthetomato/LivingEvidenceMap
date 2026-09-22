@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0-import",
+  "source": "agricola",
+  "run_type": "full",
+  "provenance_status": "imported_validated_legacy_full_search",
+  "search_executed_at_utc": "2026-09-20T08:27:56Z",
+  "original_workflow_run_id": "35499560948",
+  "original_artifact_name": "agricola-full-search-35499560948",
+  "original_artifact_id": "10600908896",
+  "original_artifact_sha256": "097aee50b73d984054f51235713ee81bc0f2f634d4f71f83c6a40d449a4d625e",
+  "search_string": "SRC:AGR AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+  "reported_search_results": 2744,
+  "successfully_downloaded_results": 2744,
+  "complete_download": true,
+  "canonical_json_modified": false,
+  "note": "Imported into Workflow 00 baseline structure on 2026-09-22 because Europe PMC AGRICOLA pagination was returning malformed/empty responses during the fresh baseline refresh. This record preserves the original 2026-09-20 search date and provenance."
+}
