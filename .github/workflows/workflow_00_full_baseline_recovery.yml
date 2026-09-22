@@ -1,0 +1,26 @@
+name: Workflow 00 full baseline recovery
+
+on:
+  push:
+    branches:
+      - workflow00-search-orchestrator
+    paths:
+      - .github/workflows/workflow_00_full_baseline_recovery.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  recover:
+    uses: ./.github/workflows/workflow_00_search_orchestrator.yml
+    with:
+      run_type: full
+      lens: false
+      scopus: true
+      openalex: false
+      agricola: true
+      wos: false
+      additional_farm_term: ''
+      resume_run_id: ''
+    secrets: inherit
