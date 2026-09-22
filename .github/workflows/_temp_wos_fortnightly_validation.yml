@@ -1,4 +1,4 @@
-name: TEMP OpenAlex fortnightly year-window validation
+name: TEMP all-source expansion integration validation
 
 on:
   push:
@@ -15,12 +15,12 @@ jobs:
   validate:
     uses: ./.github/workflows/workflow_00_search_orchestrator.yml
     with:
-      run_type: fortnightly
-      lens: false
-      scopus: false
+      run_type: expansion
+      lens: true
+      scopus: true
       openalex: true
-      agricola: false
-      wos: false
-      additional_farm_term: ''
+      agricola: true
+      wos: true
+      additional_farm_term: 'maricultur*'
       resume_run_id: ''
     secrets: inherit
