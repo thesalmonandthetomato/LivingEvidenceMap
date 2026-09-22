@@ -1,13 +1,6 @@
 name: Workflow 02 - Deduplication v2 full candidate classification
 
 on:
-  push:
-    branches:
-      - workflow02-multisource-reconciliation
-    paths:
-      - '.github/workflows/workflow_02_deduplication_v2_full_classification.yml'
-      - 'scripts/updater/workflow_02_deduplication_v2_expanded_audit.R'
-      - 'scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R'
   workflow_dispatch:
     inputs:
       source_benchmark_run_id:
