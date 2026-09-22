@@ -1,4 +1,4 @@
-name: TEMP five-source fortnightly integration
+name: TEMP OpenAlex fortnightly year-window validation
 
 on:
   push:
@@ -16,13 +16,11 @@ jobs:
     uses: ./.github/workflows/workflow_00_search_orchestrator.yml
     with:
       run_type: fortnightly
-      lens: true
-      scopus: true
+      lens: false
+      scopus: false
       openalex: true
-      agricola: true
-      wos: true
+      agricola: false
+      wos: false
       additional_farm_term: ''
       resume_run_id: ''
     secrets: inherit
-
-# five-source integration validation rerun after empty AGRICOLA fix
