@@ -14,7 +14,7 @@ suppressPackageStartupMessages({
 })
 
 args <- commandArgs(trailingOnly = TRUE)
-source_jsonll <- if (length(args) >= 1) args[[1]] else "data/canonical/current/repair/records.jsonl"
+source_jsonl <- if (length(args) >= 1) args[[1]] else "data/canonical/current/repair/records.jsonl"
 out_csv <- if (length(args) >= 2) args[[2]] else "docs/living_evidence_map_static.csv"
 out_js <- if (length(args) >= 3) args[[3]] else "docs/dashboard-data.js"
 
