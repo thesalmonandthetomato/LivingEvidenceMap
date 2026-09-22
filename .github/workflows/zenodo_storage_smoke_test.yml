@@ -1,4 +1,5 @@
 name: Zenodo storage smoke test - deduplication snapshot
+# retry with authenticated preflight and hardened Zenodo diagnostics
 
 on:
   push:
