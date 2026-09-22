@@ -1,4 +1,4 @@
-name: TEMP WoS fortnightly validation
+name: TEMP five-source fortnightly integration
 
 on:
   push:
@@ -16,13 +16,13 @@ jobs:
     uses: ./.github/workflows/workflow_00_search_orchestrator.yml
     with:
       run_type: fortnightly
-      lens: false
-      scopus: false
-      openalex: false
-      agricola: false
+      lens: true
+      scopus: true
+      openalex: true
+      agricola: true
       wos: true
       additional_farm_term: ''
       resume_run_id: ''
     secrets: inherit
 
-# rerun after YAML repair
+# five-source integration validation
