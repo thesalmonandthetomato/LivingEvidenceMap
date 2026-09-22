@@ -497,11 +497,19 @@ jobs:
           fi
 
       - name: Download child search records
-        uses: actions/download-artifact@v4
-        with:
-          pattern: workflow00-search-record-*-${{ github.run_id }}
-          path: downloaded_search_records
-          merge-multiple: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloaded_search_records
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --pattern "workflow00-search-record-*-${GITHUB_RUN_ID}" \
+            --dir downloaded_search_records
+          if ! find downloaded_search_records -type f -print -quit | grep -q .; then
+            echo "No child search-record files were downloaded." >&2
+            exit 1
+          fi
 
       - name: Download expansion reconciliation archive
         if: ${{ inputs.run_type == 'expansion' }}
