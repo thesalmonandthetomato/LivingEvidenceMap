@@ -1,0 +1,74 @@
+name: Workflow 00f - Full Europe PMC search
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'Europe PMC title/abstract query'
+        required: true
+        default: 'TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  full-europe-pmc-harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Europe PMC ingestion branch
+        uses: actions/checkout@v4
+        with:
+          ref: updater-workflow-00f-europe-pmc-ingestion
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Run full Europe PMC harvest
+        env:
+          EUROPE_PMC_QUERY: ${{ inputs.query }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00f_europe_pmc_ingestion.R \
+            --query "$EUROPE_PMC_QUERY" \
+            --max-records all \
+            --page-size 1000 \
+            --output-dir outputs/updater/europe_pmc_full_search
+
+      - name: Build canonical-compatible Europe PMC sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01x_europe_pmc_sidecar_adapter.R \
+            --input-dir outputs/updater/europe_pmc_full_search \
+            --output-dir outputs/updater/europe_pmc_full_sidecar
+
+      - name: Verify complete harvest
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"status": "success"' outputs/updater/europe_pmc_full_search/manifest.json
+          grep -q '"duplicate_source_record_keys_n": 0' outputs/updater/europe_pmc_full_search/validation.json
+          grep -q '"count_matches_first_page_total": true' outputs/updater/europe_pmc_full_search/validation.json
+          grep -q '"canonical_json_modified": false' outputs/updater/europe_pmc_full_search/validation.json
+          grep -q '"canonical_branch_written": false' outputs/updater/europe_pmc_full_sidecar/compatibility_audit.json
+
+      - name: Upload Europe PMC harvest
+        uses: actions/upload-artifact@v4
+        with:
+          name: europe-pmc-full-search-${{ github.run_id }}
+          path: |
+            outputs/updater/europe_pmc_full_search/
+            outputs/updater/europe_pmc_full_sidecar/
+          retention-days: 90
+          if-no-files-found: error
