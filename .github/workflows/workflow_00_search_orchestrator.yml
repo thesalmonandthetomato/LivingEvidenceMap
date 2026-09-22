@@ -38,29 +38,59 @@ on:
         default: true
         type: boolean
       europe_pmc:
-        description: 'Run Europe PMC'
+        description: 'Run general Europe PMC search (not yet implemented; AGRICOLA is separate)'
         required: true
-        default: true
+        default: false
         type: boolean
       additional_farm_term:
-        description: 'Expansion mode only: append one new farm/aquaculture synonym; species terms cannot be changed'
+        description: 'Expansion only: add one farm/aquaculture synonym; species terms are immutable'
         required: false
         default: ''
         type: string
       resume_run_id:
-        description: 'Optional prior Workflow 00 run ID for artefact reuse'
+        description: 'Reserved for child artefact reuse'
         required: false
         default: ''
         type: string
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
   validate-and-plan:
     runs-on: ubuntu-latest
+    outputs:
+      search_version: ${{ steps.out.outputs.search_version }}
+      lens_query: ${{ steps.out.outputs.lens_query }}
+      scopus_query: ${{ steps.out.outputs.scopus_query }}
+      openalex_query: ${{ steps.out.outputs.openalex_query }}
+      agricola_query: ${{ steps.out.outputs.agricola_query }}
+      wos_query: ${{ steps.out.outputs.wos_query }}
     steps:
+      - name: Validate selected source support
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ inputs.europe_pmc }}' = 'true' ]; then
+            echo 'General Europe PMC Workflow 00 search has not yet been implemented. AGRICOLA-via-Europe-PMC is a separate source.' >&2
+            exit 2
+          fi
+          if [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
+            unsupported=''
+            [ '${{ inputs.lens }}' = 'true' ] && unsupported="$unsupported lens"
+            [ '${{ inputs.scopus }}' = 'true' ] && unsupported="$unsupported scopus"
+            [ '${{ inputs.openalex }}' = 'true' ] && unsupported="$unsupported openalex"
+            if [ -n "$unsupported" ]; then
+              echo "Fortnightly 14-day semantics are not yet verified for:$unsupported" >&2
+              exit 2
+            fi
+          fi
+          if [ '${{ inputs.lens }}' != 'true' ] && [ '${{ inputs.scopus }}' != 'true' ] && [ '${{ inputs.openalex }}' != 'true' ] && [ '${{ inputs.agricola }}' != 'true' ] && [ '${{ inputs.wos }}' != 'true' ]; then
+            echo 'Select at least one implemented source.' >&2
+            exit 2
+          fi
+
       - name: Checkout Workflow 00 orchestration branch
         uses: actions/checkout@v4
         with:
@@ -70,14 +100,14 @@ jobs:
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
         with:
-          r-version: 'release'
+          r-version: release
           use-public-rspm: true
 
       - name: Install R dependency
         shell: Rscript {0}
         run: install.packages('jsonlite')
 
-      - name: Validate search controls and write plan
+      - name: Validate search controls and write source queries
         shell: bash
         run: |
           set -euo pipefail
@@ -89,19 +119,6 @@ jobs:
 
       - name: Record selected databases
         shell: Rscript {0}
-        run: |
-          library(jsonlite)
-          p <- 'outputs/updater/workflow00_plan/search_plan.json'
-          x <- fromJSON(p, simplifyVector=FALSE)
-          x$selected_databases <- list(
-            lens = identical(Sys.getenv('LENS'),'true'),
-            scopus = identical(Sys.getenv('SCOPUS'),'true'),
-            openalex = identical(Sys.getenv('OPENALEX'),'true'),
-            agricola = identical(Sys.getenv('AGRICOLA'),'true'),
-            wos = identical(Sys.getenv('WOS'),'true'),
-            europe_pmc = identical(Sys.getenv('EUROPE_PMC'),'true')
-          )
-          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),p)
         env:
           LENS: ${{ inputs.lens }}
           SCOPUS: ${{ inputs.scopus }}
@@ -109,11 +126,176 @@ jobs:
           AGRICOLA: ${{ inputs.agricola }}
           WOS: ${{ inputs.wos }}
           EUROPE_PMC: ${{ inputs.europe_pmc }}
+        run: |
+          library(jsonlite)
+          p <- 'outputs/updater/workflow00_plan/search_plan.json'
+          x <- fromJSON(p, simplifyVector=FALSE)
+          x$selected_databases <- list(
+            lens=identical(Sys.getenv('LENS'),'true'),
+            scopus=identical(Sys.getenv('SCOPUS'),'true'),
+            openalex=identical(Sys.getenv('OPENALEX'),'true'),
+            agricola=identical(Sys.getenv('AGRICOLA'),'true'),
+            wos=identical(Sys.getenv('WOS'),'true'),
+            europe_pmc=identical(Sys.getenv('EUROPE_PMC'),'true')
+          )
+          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),p)
+
+      - name: Export source queries
+        id: out
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- fromJSON('outputs/updater/workflow00_plan/search_plan.json')
+          q <- p$source_queries
+          emit <- function(name,value) {
+            cat(sprintf('%s<<EOF\n%s\nEOF\n',name,value),file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
+          }
+          emit('search_version',p$search_version)
+          emit('lens_query',q$lens)
+          emit('scopus_query',q$scopus)
+          emit('openalex_query',q$openalex)
+          emit('agricola_query',q$agricola)
+          emit('wos_query',q$wos)
 
       - name: Upload Workflow 00 plan
         uses: actions/upload-artifact@v4
         with:
           name: workflow00-search-plan-${{ github.run_id }}
           path: outputs/updater/workflow00_plan/
+          retention-days: 90
+          if-no-files-found: error
+
+  lens:
+    needs: validate-and-plan
+    if: ${{ inputs.lens }}
+    uses: ./.github/workflows/_workflow_00_source_child.yml
+    with:
+      source: lens
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.lens_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  scopus:
+    needs: validate-and-plan
+    if: ${{ inputs.scopus }}
+    uses: ./.github/workflows/_workflow_00_source_child.yml
+    with:
+      source: scopus
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.scopus_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  openalex:
+    needs: validate-and-plan
+    if: ${{ inputs.openalex }}
+    uses: ./.github/workflows/_workflow_00_source_child.yml
+    with:
+      source: openalex
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.openalex_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  agricola:
+    needs: validate-and-plan
+    if: ${{ inputs.agricola }}
+    uses: ./.github/workflows/_workflow_00_source_child.yml
+    with:
+      source: agricola
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.agricola_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  wos:
+    needs: validate-and-plan
+    if: ${{ inputs.wos }}
+    uses: ./.github/workflows/_workflow_00_source_child.yml
+    with:
+      source: wos
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.wos_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  archive-search-records:
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, wos]
+    if: ${{ always() && needs.validate-and-plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure selected child searches succeeded
+        env:
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          WOS_SELECTED: ${{ inputs.wos }}
+          LENS_RESULT: ${{ needs.lens.result }}
+          SCOPUS_RESULT: ${{ needs.scopus.result }}
+          OPENALEX_RESULT: ${{ needs.openalex.result }}
+          AGRICOLA_RESULT: ${{ needs.agricola.result }}
+          WOS_RESULT: ${{ needs.wos.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          check() {
+            local selected="$1" result="$2" source="$3"
+            if [ "$selected" = "true" ] && [ "$result" != "success" ]; then
+              echo "$source child search did not succeed: $result" >&2
+              exit 1
+            fi
+          }
+          check "$LENS_SELECTED" "$LENS_RESULT" lens
+          check "$SCOPUS_SELECTED" "$SCOPUS_RESULT" scopus
+          check "$OPENALEX_SELECTED" "$OPENALEX_RESULT" openalex
+          check "$AGRICOLA_SELECTED" "$AGRICOLA_RESULT" agricola
+          check "$WOS_SELECTED" "$WOS_RESULT" wos
+
+      - name: Download child search records
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow00-search-record-*-${{ github.run_id }}
+          path: downloaded_search_records
+          merge-multiple: true
+
+      - name: Checkout documentation branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow00-search-orchestrator
+          fetch-depth: 0
+
+      - name: Archive search records in repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/search_record
+          cp -R downloaded_search_records/* docs/search_record/
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/search_record
+          if git diff --cached --quiet; then
+            echo 'No new search records to commit.'
+            exit 0
+          fi
+          git commit -m "Archive Workflow 00 search records for run ${GITHUB_RUN_ID}"
+          git push origin HEAD:workflow00-search-orchestrator
+
+      - name: Upload consolidated search archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-search-record-archive-${{ github.run_id }}
+          path: docs/search_record/
           retention-days: 90
           if-no-files-found: error
