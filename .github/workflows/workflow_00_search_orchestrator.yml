@@ -1,0 +1,119 @@
+name: Workflow 00 - Search orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_type:
+        description: 'Run mode'
+        required: true
+        type: choice
+        options:
+          - full
+          - fortnightly
+          - quarterly
+          - expansion
+      lens:
+        description: 'Run Lens'
+        required: true
+        default: true
+        type: boolean
+      scopus:
+        description: 'Run Scopus'
+        required: true
+        default: true
+        type: boolean
+      openalex:
+        description: 'Run OpenAlex'
+        required: true
+        default: true
+        type: boolean
+      agricola:
+        description: 'Run AGRICOLA'
+        required: true
+        default: true
+        type: boolean
+      wos:
+        description: 'Run Web of Science'
+        required: true
+        default: true
+        type: boolean
+      europe_pmc:
+        description: 'Run Europe PMC'
+        required: true
+        default: true
+        type: boolean
+      additional_farm_term:
+        description: 'Expansion mode only: append one new farm/aquaculture synonym; species terms cannot be changed'
+        required: false
+        default: ''
+        type: string
+      resume_run_id:
+        description: 'Optional prior Workflow 00 run ID for artefact reuse'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-and-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Workflow 00 orchestration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow00-search-orchestrator
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Validate search controls and write plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type '${{ inputs.run_type }}' \
+            --additional-farm-term '${{ inputs.additional_farm_term }}' \
+            --config config/workflow00_search_strategy.json \
+            --output-dir outputs/updater/workflow00_plan
+
+      - name: Record selected databases
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- 'outputs/updater/workflow00_plan/search_plan.json'
+          x <- fromJSON(p, simplifyVector=FALSE)
+          x$selected_databases <- list(
+            lens = identical(Sys.getenv('LENS'),'true'),
+            scopus = identical(Sys.getenv('SCOPUS'),'true'),
+            openalex = identical(Sys.getenv('OPENALEX'),'true'),
+            agricola = identical(Sys.getenv('AGRICOLA'),'true'),
+            wos = identical(Sys.getenv('WOS'),'true'),
+            europe_pmc = identical(Sys.getenv('EUROPE_PMC'),'true')
+          )
+          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),p)
+        env:
+          LENS: ${{ inputs.lens }}
+          SCOPUS: ${{ inputs.scopus }}
+          OPENALEX: ${{ inputs.openalex }}
+          AGRICOLA: ${{ inputs.agricola }}
+          WOS: ${{ inputs.wos }}
+          EUROPE_PMC: ${{ inputs.europe_pmc }}
+
+      - name: Upload Workflow 00 plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-search-plan-${{ github.run_id }}
+          path: outputs/updater/workflow00_plan/
+          retention-days: 90
+          if-no-files-found: error
