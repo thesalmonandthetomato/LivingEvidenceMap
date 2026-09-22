@@ -44,7 +44,6 @@ on:
         options:
           - full
           - fortnightly
-          - quarterly
           - expansion
       lens:
         description: 'Run Lens'
