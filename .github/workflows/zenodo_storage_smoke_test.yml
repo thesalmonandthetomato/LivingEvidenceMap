@@ -1,0 +1,91 @@
+name: Zenodo storage smoke test - deduplication snapshot
+
+on:
+  push:
+    branches:
+      - zenodo-large-artifact-storage
+    paths:
+      - '.github/workflows/zenodo_storage_smoke_test.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout storage branch
+        uses: actions/checkout@v4
+        with:
+          ref: zenodo-large-artifact-storage
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::httr2
+            any::jsonlite
+            any::digest
+
+      - name: Download final deduplication rescore artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: '35711465359'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source_artifact
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-final-full-rescore-$SOURCE_RUN_ID" \
+            --dir source_artifact
+          test -s source_artifact/rescored_sample.csv
+          ls -lh source_artifact/rescored_sample.csv
+
+      - name: Upload 290 MB deduplication snapshot to Zenodo draft
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ZENODO_ACCESS_TOKEN"
+          mkdir -p zenodo_manifest
+          Rscript R/zenodo_store_large_artifact.R \
+            --file source_artifact/rescored_sample.csv \
+            --title "Living Evidence Map deduplication pair-decision snapshot - run 35711465359" \
+            --description "Preserved full deterministic deduplication pair-decision snapshot from GitHub Actions run 35711465359. Stored on Zenodo to avoid repeated long-term storage of large generated pipeline files in Git/LFS." \
+            --snapshot-type "deduplication_pair_decisions" \
+            --source-run-id "35711465359" \
+            --source-commit "$GITHUB_SHA" \
+            --publish false \
+            --output-manifest zenodo_manifest/zenodo_snapshot_manifest.json
+
+      - name: Validate manifest
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          x <- fromJSON('zenodo_manifest/zenodo_snapshot_manifest.json', simplifyVector=FALSE)
+          stopifnot(identical(x$status,'draft'))
+          stopifnot(identical(x$storage,'zenodo'))
+          stopifnot(as.numeric(x$size_bytes) > 250000000)
+          stopifnot(nchar(as.character(x$sha256)) == 64L)
+          cat(sprintf('PASS: Zenodo draft %s stores %s (%s bytes)\n',
+                      x$deposition_id,x$filename,x$size_bytes))
+
+      - name: Preserve storage manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenodo-dedup-smoke-test-manifest-${{ github.run_id }}
+          path: zenodo_manifest/zenodo_snapshot_manifest.json
+          retention-days: 90
+          if-no-files-found: error
