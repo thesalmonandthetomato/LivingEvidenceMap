@@ -24,19 +24,13 @@ jobs:
           ref: zenodo-large-artifact-storage
           persist-credentials: false
 
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          r-version: release
-          use-public-rspm: true
+          python-version: '3.12'
 
-      - name: Install R dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          packages: |
-            any::httr2
-            any::jsonlite
-            any::digest
+      - name: Install Python dependency
+        run: python -m pip install --disable-pip-version-check --no-input requests
 
       - name: Download final deduplication rescore artifact
         env:
@@ -64,27 +58,27 @@ jobs:
           set -euo pipefail
           test -n "$ZENODO_ACCESS_TOKEN"
           mkdir -p zenodo_manifest
-          Rscript R/zenodo_store_large_artifact.R \
+          python scripts/zenodo_store_large_artifact.py \
             --file source_artifact/rescored_sample.csv.gz \
             --title "Living Evidence Map deduplication pair-decision snapshot - run 35711465359" \
             --description "Losslessly gzip-compressed full deterministic deduplication pair-decision snapshot from GitHub Actions run 35711465359. The uncompressed source file is rescored_sample.csv. Stored on Zenodo to avoid repeated long-term storage of large generated pipeline files in Git/LFS." \
             --snapshot-type "deduplication_pair_decisions" \
             --source-run-id "35711465359" \
             --source-commit "$GITHUB_SHA" \
-            --publish false \
             --output-manifest zenodo_manifest/zenodo_snapshot_manifest.json
 
       - name: Validate manifest
-        shell: Rscript {0}
+        shell: python
         run: |
-          suppressPackageStartupMessages(library(jsonlite))
-          x <- fromJSON('zenodo_manifest/zenodo_snapshot_manifest.json', simplifyVector=FALSE)
-          stopifnot(identical(x$status,'draft'))
-          stopifnot(identical(x$storage,'zenodo'))
-          stopifnot(as.numeric(x$size_bytes) > 1000000)
-          stopifnot(nchar(as.character(x$sha256)) == 64L)
-          cat(sprintf('PASS: Zenodo draft %s stores %s (%s bytes)\n',
-                      x$deposition_id,x$filename,x$size_bytes))
+          import json
+          from pathlib import Path
+          p=Path('zenodo_manifest/zenodo_snapshot_manifest.json')
+          x=json.loads(p.read_text())
+          assert x['status']=='draft'
+          assert x['storage']=='zenodo'
+          assert int(x['size_bytes']) > 1000000
+          assert len(x['sha256']) == 64
+          print(f"PASS: Zenodo draft {x['deposition_id']} stores {x['filename']} ({x['size_bytes']} bytes)")
 
       - name: Preserve storage manifest
         uses: actions/upload-artifact@v4
