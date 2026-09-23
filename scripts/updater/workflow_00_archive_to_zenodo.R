@@ -100,6 +100,26 @@ if (length(archive_paths) > 100L) stop("Archive payload exceeds Zenodo 100-file 
 auth_req <- function(url) request(url) |> req_auth_bearer_token(token) |> req_timeout(180)
 body_json <- function(resp) resp_body_json(resp,simplifyVector=FALSE)
 
+description <- paste0(
+  "<p>Search archive for the Living Evidence Map Workflow 00 ingestion pipeline.</p>",
+  "<p>This record corresponds to GitHub Actions run <a href=\"",run_url,"\">",run_id,"</a> and ",
+  "contains the downloaded source search outputs, source manifests, search-plan documentation and provenance records ",
+  "for the selected databases. Files are restricted because source database/API terms may limit redistribution.</p>",
+  "<p>Run type: ",run_type,". Search strategy version: ",search_version,". Sources: ",
+  paste(sources,collapse=", "),".</p>"
+)
+metadata <- list(
+  upload_type="dataset",
+  publication_date=format(Sys.Date(),"%Y-%m-%d"),
+  title=expected_title,
+  creators=list(list(name="Haddaway, Neal")),
+  description=description,
+  access_right="restricted",
+  access_conditions="Files contain database/API search-result exports and are restricted because source licensing or terms may limit redistribution. Access may be granted by the depositor where permitted.",
+  keywords=c("Living Evidence Map","evidence synthesis","search archive","Workflow 00",marker),
+  related_identifiers=list(list(identifier=run_url,relation="isSupplementTo"))
+)
+
 lookup <- auth_req(api) |> req_url_query(q=marker,size=100) |> req_perform()
 existing <- body_json(lookup)
 if (!is.list(existing)) existing <- list()
@@ -161,38 +181,49 @@ if (length(draft_hits)) {
   }
 }
 
-create <- auth_req(api) |> req_method("POST") |> req_body_json(list()) |> req_perform()
-dep <- body_json(create)
+create_deposition_once <- function() {
+  auth_req(api) |>
+    req_method("POST") |>
+    req_body_json(list(metadata=metadata)) |>
+    req_error(is_error=function(resp) FALSE) |>
+    req_perform()
+}
+
+recover_created_draft <- function() {
+  r <- auth_req(api) |> req_url_query(q=marker,size=100) |> req_perform()
+  xs <- body_json(r)
+  if (!is.list(xs)) return(NULL)
+  ys <- Filter(function(x) {
+    kw <- or_else(x$metadata$keywords,character())
+    !isTRUE(x$submitted) && marker %in% unlist(kw,use.names=FALSE)
+  }, xs)
+  if (!length(ys)) NULL else ys[[1L]]
+}
+
+dep <- NULL
+for (attempt in 1:5) {
+  resp <- create_deposition_once()
+  status <- resp_status(resp)
+  if (status >= 200L && status < 300L) {
+    dep <- body_json(resp)
+    break
+  }
+  if (!(status %in% c(500L,502L,503L,504L))) {
+    stop(sprintf("Zenodo deposition creation failed with HTTP %d",status),call.=FALSE)
+  }
+  Sys.sleep(min(2^(attempt-1L),16L))
+  recovered <- recover_created_draft()
+  if (!is.null(recovered)) {
+    dep <- recovered
+    message(sprintf("Recovered Zenodo draft %s after transient HTTP %d",dep$id,status))
+    break
+  }
+  if (attempt == 5L) stop(sprintf("Zenodo deposition creation failed after 5 attempts; last HTTP status %d",status),call.=FALSE)
+}
 dep_id <- as.character(dep$id)
 writeLines(toJSON(list(status="draft_created",github_run_id=run_id,zenodo_deposition_id=dep_id),
                   auto_unbox=TRUE,pretty=TRUE),
            file.path(output_dir,"zenodo_draft_receipt.json"))
-
-title <- expected_title
-description <- paste0(
-  "<p>Search archive for the Living Evidence Map Workflow 00 ingestion pipeline.</p>",
-  "<p>This record corresponds to GitHub Actions run <a href=\"",run_url,"\">",run_id,"</a> and ",
-  "contains the downloaded source search outputs, source manifests, search-plan documentation and provenance records ",
-  "for the selected databases. Files are restricted because source database/API terms may limit redistribution.</p>",
-  "<p>Run type: ",run_type,". Search strategy version: ",search_version,". Sources: ",
-  paste(sources,collapse=", "),".</p>"
-)
-metadata <- list(
-  upload_type="dataset",
-  publication_date=format(Sys.Date(),"%Y-%m-%d"),
-  title=title,
-  creators=list(list(name="Haddaway, Neal")),
-  description=description,
-  access_right="restricted",
-  access_conditions="Files contain database/API search-result exports and are restricted because source licensing or terms may limit redistribution. Access may be granted by the depositor where permitted.",
-  keywords=c("Living Evidence Map","evidence synthesis","search archive","Workflow 00",marker),
-  related_identifiers=list(list(identifier=run_url,relation="isSupplementTo"))
-)
-
-auth_req(paste0(api,"/",dep_id)) |>
-  req_method("PUT") |>
-  req_body_json(list(metadata=metadata)) |>
-  req_perform()
 
 dep <- auth_req(paste0(api,"/",dep_id)) |> req_perform() |> body_json()
 bucket <- dep$links$bucket
@@ -225,7 +256,7 @@ receipt <- list(
   zenodo_deposition_id=as.character(published$id),
   doi=or_else(published$doi,NA_character_),
   record_url=or_else(published$record_url,or_else(published$links$html,NA_character_)),
-  title=title,
+  title=expected_title,
   visibility="restricted",
   total_bytes=total_bytes,
   archive_files=lapply(archive_paths,function(p) list(
