@@ -1,5 +1,5 @@
 name: Zenodo storage smoke test - deduplication snapshot
-# retry with authenticated preflight and hardened Zenodo diagnostics
+# retry using current InvenioRDM records API
 
 on:
   push:
