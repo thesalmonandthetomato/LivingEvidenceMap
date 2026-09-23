@@ -213,5 +213,7 @@ jobs:
             outputs/workflow01_incremental_score/
             outputs/workflow01_incremental_rescore/
             outputs/workflow01_full_five_source/
+            current/zenodo_restore_audits/
+            current/workflow00_zenodo_restore_audit.json
           retention-days: 7
           if-no-files-found: warn
