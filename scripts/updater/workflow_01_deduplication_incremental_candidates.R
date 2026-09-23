@@ -246,11 +246,40 @@ for (src in names(paths)) {
   checkpoint(paste0("normalised_",src),sum(n_by_source),NULL,list(source_counts=as.list(n_by_source)))
 }
 meta <- rbindlist(rows,use.names=TRUE,fill=TRUE)
-if (anyDuplicated(meta[,paste(source,source_record_id,sep="::")])) stop("Duplicate source namespace + record ID",call.=FALSE)
+meta[, corpus_key := paste(source,source_record_id,sep="::")]
+if (anyDuplicated(meta$corpus_key)) stop("Duplicate source namespace + record ID",call.=FALSE)
+
+# Provenance-critical incremental indexing:
+# retain the exact historical source/source_record_id row order, but use the
+# freshly normalised metadata values for those manifestations. Append only
+# manifestations absent from the historical corpus, in deterministic current
+# source order. Historic pair decisions therefore continue to address the same
+# manifestation indices without blocking legitimate metadata repairs.
+old_meta <- fread(old_metadata_path, na.strings=c("", "NA"))
+stopifnot(all(c("source","source_record_id") %in% names(old_meta)))
+old_keys <- paste(old_meta$source,old_meta$source_record_id,sep="::")
+if (anyDuplicated(old_keys)) stop("Historical metadata contains duplicate source namespace + record ID",call.=FALSE)
+
+old_pos <- match(old_keys,meta$corpus_key)
+if (anyNA(old_pos)) {
+  missing_prior <- old_keys[is.na(old_pos)]
+  writeLines(missing_prior,file.path(output_dir,"ERROR_prior_manifestations_missing_from_union.txt"))
+  stop(sprintf("Union input is missing %d prior-corpus manifestations",length(missing_prior)),call.=FALSE)
+}
+new_pos <- which(!(meta$corpus_key %in% old_keys))
+meta <- rbindlist(list(meta[old_pos],meta[new_pos]),use.names=TRUE,fill=TRUE)
+meta[, idx := seq_len(.N)]
+meta[, corpus_key := NULL]
+
+stopifnot(identical(as.character(meta$source[seq_along(old_keys)]),as.character(old_meta$source)))
+stopifnot(identical(as.character(meta$source_record_id[seq_along(old_keys)]),as.character(old_meta$source_record_id)))
+
 fwrite(meta[,.(idx,source,source_record_id,title,title_norm,doi_norm,doi_family,abstract_hash,author_norm,year,journal_norm,volume_norm,issue_norm,pages_norm)],
        file.path(output_dir,"normalised_metadata.csv"))
-progress("normalisation complete",nrow(meta),nrow(meta))
-checkpoint("normalisation_complete",nrow(meta),nrow(meta),list(source_counts=as.list(n_by_source)))
+progress("normalisation complete",nrow(meta),nrow(meta),
+         sprintf("historical prefix preserved=%d appended=%d",length(old_keys),length(new_pos)))
+checkpoint("normalisation_complete",nrow(meta),nrow(meta),
+           list(source_counts=as.list(n_by_source),historical_prefix_preserved=length(old_keys),appended_manifestations=length(new_pos)))
 
 pairs <- new.env(hash=TRUE,parent=emptyenv())
 add_pairs_from_groups <- function(dt,key_col,block,max_group=500L) {
@@ -363,16 +392,8 @@ candidate_dt <- rbindlist(light)
 # Incremental extension: preserve every decision from the prior 72,941-manifestation
 # corpus. Only candidate pairs involving at least one manifestation absent from the
 # prior normalised metadata are retained for scoring.
-old_meta <- fread(old_metadata_path, na.strings=c("", "NA"))
-stopifnot(all(c("source","source_record_id") %in% names(old_meta)))
-old_keys <- unique(paste(old_meta$source, old_meta$source_record_id, sep="::"))
-meta[, prior_corpus := paste(source,source_record_id,sep="::") %in% old_keys]
+meta[, prior_corpus := idx <= length(old_keys)]
 matched_prior <- sum(meta$prior_corpus)
-missing_prior <- setdiff(old_keys, paste(meta$source,meta$source_record_id,sep="::"))
-if (length(missing_prior)) {
-  writeLines(missing_prior, file.path(output_dir,"ERROR_prior_manifestations_missing_from_union.txt"))
-  stop(sprintf("Union input is missing %d prior-corpus manifestations", length(missing_prior)), call.=FALSE)
-}
 new_n <- sum(!meta$prior_corpus)
 if (matched_prior != length(old_keys)) stop("Prior-corpus cardinality mismatch", call.=FALSE)
 
