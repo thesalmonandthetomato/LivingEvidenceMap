@@ -2,16 +2,10 @@ name: Workflow 01 - Incremental five-source deduplication extension
 # provenance-ordering repair validated on run 35826197664
 
 on:
-  push:
-    branches:
-      - workflow01-zenodo-source-inputs
-    paths:
-      - '.github/workflows/workflow_01_incremental_five_source_deduplication.yml'
-      - 'scripts/updater/workflow_01_restore_workflow00_from_zenodo.R'
   workflow_dispatch:
     inputs:
-      workflow00_run_id:
-        description: 'Workflow 00 parent run ID archived on Zenodo; leave blank only for legacy baseline fallback'
+      workflow00_run_ids:
+        description: 'Comma-separated Workflow 00 run IDs archived on Zenodo; one ID for normal future runs'
         required: false
         default: ''
         type: string
@@ -75,34 +69,41 @@ jobs:
           test -n "$(find old_benchmark -name scored_sample.csv -type f -print -quit)"
           test -n "$(find old_decisions -name rescored_sample.csv -type f -print -quit)"
 
-      - name: Restore Workflow 00 source harvests from durable Zenodo archive
-        if: ${{ inputs.workflow00_run_id != '' }}
+      - name: Restore Workflow 00 source harvests from durable Zenodo archives
+        if: ${{ inputs.workflow00_run_ids != '' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          WORKFLOW00_RUN_ID: ${{ inputs.workflow00_run_id }}
+          WORKFLOW00_RUN_IDS: ${{ inputs.workflow00_run_ids }}
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin workflow00-search-orchestrator
-          mkdir -p /tmp/workflow00_pointer
-          pointer="/tmp/workflow00_pointer/run-${WORKFLOW00_RUN_ID}.json"
-          git show "origin/workflow00-search-orchestrator:docs/search_record/zenodo/run-${WORKFLOW00_RUN_ID}.json" > "$pointer"
-          test -s "$pointer"
+          mkdir -p /tmp/workflow00_pointer current current/zenodo_restore_audits
 
-          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
-            --pointer "$pointer" \
-            --sources lens,scopus,openalex,agricola,wos \
-            --output-root current
+          IFS=',' read -r -a run_ids <<< "$WORKFLOW00_RUN_IDS"
+          for raw_id in "${run_ids[@]}"; do
+            run_id="$(echo "$raw_id" | xargs)"
+            [ -n "$run_id" ] || continue
+            pointer="/tmp/workflow00_pointer/run-${run_id}.json"
+            git show "origin/workflow00-search-orchestrator:docs/search_record/zenodo/run-${run_id}.json" > "$pointer"
+            test -s "$pointer"
+
+            Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+              --pointer "$pointer" \
+              --output-root current
+
+            cp current/workflow00_zenodo_restore_audit.json \
+              "current/zenodo_restore_audits/run-${run_id}.json"
+          done
 
           for source in lens scopus openalex agricola wos; do
             test -d "current/$source"
             test -n "$(find "current/$source" -type f -print -quit)"
           done
-          test -s current/workflow00_zenodo_restore_audit.json
-          echo "PASS: restored all Workflow 00 source harvests from Zenodo run $WORKFLOW00_RUN_ID"
+          echo "PASS: restored all five Workflow 00 source harvests from durable Zenodo archives"
 
       - name: Legacy baseline fallback - download Workflow 00 GitHub artefacts
-        if: ${{ inputs.workflow00_run_id == '' }}
+        if: ${{ inputs.workflow00_run_ids == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
