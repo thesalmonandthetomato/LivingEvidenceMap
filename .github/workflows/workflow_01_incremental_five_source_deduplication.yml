@@ -4,10 +4,17 @@ name: Workflow 01 - Incremental five-source deduplication extension
 on:
   push:
     branches:
-      - workflow02-multisource-reconciliation
+      - workflow01-zenodo-source-inputs
     paths:
       - '.github/workflows/workflow_01_incremental_five_source_deduplication.yml'
+      - 'scripts/updater/workflow_01_restore_workflow00_from_zenodo.R'
   workflow_dispatch:
+    inputs:
+      workflow00_run_id:
+        description: 'Workflow 00 parent run ID archived on Zenodo; leave blank only for legacy baseline fallback'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -32,7 +39,7 @@ jobs:
       - name: Checkout deduplication branch
         uses: actions/checkout@v4
         with:
-          ref: workflow02-multisource-reconciliation
+          ref: workflow01-zenodo-source-inputs
           persist-credentials: false
 
       - name: Set up R
@@ -43,7 +50,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2'))
+        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2','httr2'))
 
       - name: Parse incremental R implementation
         shell: Rscript {0}
@@ -68,12 +75,40 @@ jobs:
           test -n "$(find old_benchmark -name scored_sample.csv -type f -print -quit)"
           test -n "$(find old_decisions -name rescored_sample.csv -type f -print -quit)"
 
-      - name: Download current full five-source harvests
+      - name: Restore Workflow 00 source harvests from durable Zenodo archive
+        if: ${{ inputs.workflow00_run_id != '' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          WORKFLOW00_RUN_ID: ${{ inputs.workflow00_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin workflow00-search-orchestrator
+          mkdir -p /tmp/workflow00_pointer
+          pointer="/tmp/workflow00_pointer/run-${WORKFLOW00_RUN_ID}.json"
+          git show "origin/workflow00-search-orchestrator:docs/search_record/zenodo/run-${WORKFLOW00_RUN_ID}.json" > "$pointer"
+          test -s "$pointer"
+
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+            --pointer "$pointer" \
+            --sources lens,scopus,openalex,agricola,wos \
+            --output-root current
+
+          for source in lens scopus openalex agricola wos; do
+            test -d "current/$source"
+            test -n "$(find "current/$source" -type f -print -quit)"
+          done
+          test -s current/workflow00_zenodo_restore_audit.json
+          echo "PASS: restored all Workflow 00 source harvests from Zenodo run $WORKFLOW00_RUN_ID"
+
+      - name: Legacy baseline fallback - download Workflow 00 GitHub artefacts
+        if: ${{ inputs.workflow00_run_id == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          echo "WARNING: using short-lived legacy Workflow 00 GitHub artefacts; supply workflow00_run_id for durable operation"
           mkdir -p current/lens current/openalex current/scopus current/agricola current/wos
           gh run download "$LENS_FULL_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "workflow00-lens-harvest-$LENS_FULL_RUN_ID" --dir current/lens
           gh run download "$OPENALEX_FULL_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "workflow00-openalex-harvest-$OPENALEX_FULL_RUN_ID" --dir current/openalex
@@ -177,5 +212,5 @@ jobs:
             outputs/workflow01_incremental_score/
             outputs/workflow01_incremental_rescore/
             outputs/workflow01_full_five_source/
-          retention-days: 90
+          retention-days: 7
           if-no-files-found: warn
