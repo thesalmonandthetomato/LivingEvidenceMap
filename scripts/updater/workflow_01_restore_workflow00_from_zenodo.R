@@ -123,12 +123,13 @@ download_one <- function(filename) {
     stop(sprintf("Zenodo deposition lacks required file: %s",filename),call.=FALSE)
   }
   rf <- remote_files[[filename]]
-  url <- rf$links$download
-  if (is.null(url) || !nzchar(url)) url <- rf$links$self
-  if (is.null(url) || !nzchar(url)) stop(sprintf("No download link for %s",filename),call.=FALSE)
+  bucket <- dep$links$bucket
+  if (is.null(bucket) || !nzchar(bucket)) stop("Published deposition lacks bucket link",call.=FALSE)
+  url <- paste0(sub("/$","",bucket),"/",URLencode(filename,reserved=TRUE))
 
   dest <- file.path(download_dir,filename)
   resp <- request(url) |>
+    req_method("GET") |>
     auth() |>
     req_timeout(1800) |>
     req_error(is_error=function(resp) FALSE) |>
