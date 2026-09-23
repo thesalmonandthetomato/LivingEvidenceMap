@@ -23,18 +23,18 @@ source_commit <- arg("--source-commit", "")
 output_manifest <- arg("--output-manifest", "zenodo_snapshot_manifest.json")
 publish <- identical(tolower(arg("--publish", "false")), "true")
 
-if (is.null(file_path) || !file.exists(file_path)) stop("Required --file does not exist", call. = FALSE)
-
+if (is.null(file_path) || !file.exists(file_path)) {
+  stop("Required --file does not exist", call. = FALSE)
+}
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN")
 if (!nzchar(token)) stop("ZENODO_ACCESS_TOKEN is required", call. = FALSE)
 
-api_root <- "https://zenodo.org/api"
+api <- "https://zenodo.org/api/deposit/depositions"
 auth <- function(req) req |> req_headers(Authorization = paste("Bearer", token))
 
-perform_json <- function(req, expected, label) {
+perform <- function(req, expected, label, timeout = 600) {
   resp <- req |>
-    req_retry(max_tries = 8, retry_on_failure = TRUE) |>
-    req_timeout(600) |>
+    req_timeout(timeout) |>
     req_error(is_error = function(resp) FALSE) |>
     req_perform()
   status <- resp_status(resp)
@@ -42,164 +42,102 @@ perform_json <- function(req, expected, label) {
     body <- tryCatch(resp_body_string(resp), error = function(e) "")
     stop(sprintf("Zenodo %s returned HTTP %d: %s", label, status, body), call. = FALSE)
   }
-  resp_body_json(resp, simplifyVector = FALSE)
+  resp
 }
 
-# Read-only authentication preflight against the current records API.
-preflight <- perform_json(
-  request(paste0(api_root, "/records?size=1")) |>
-    req_method("GET") |>
-    auth(),
-  200L,
-  "authentication preflight"
-)
-cat("PASS: Zenodo authentication preflight succeeded\n")
-
-today <- format(Sys.Date(), "%Y-%m-%d")
-draft_payload <- list(
-  access = list(
-    record = "public",
-    files = "public"
-  ),
-  files = list(enabled = TRUE),
-  metadata = list(
-    title = title,
-    publication_date = today,
-    resource_type = list(id = "dataset"),
-    creators = list(list(
-      person_or_org = list(
-        type = "personal",
-        family_name = "Haddaway",
-        given_name = "Neal"
-      )
-    )),
-    description = description,
-    subjects = list(
-      list(subject = "Living Evidence Map"),
-      list(subject = "salmon aquaculture"),
-      list(subject = "evidence synthesis"),
-      list(subject = snapshot_type)
-    )
-  )
-)
-
-created <- perform_json(
-  request(paste0(api_root, "/records")) |>
+# Mirror the proven fulltexttest implementation exactly:
+# POST legacy deposit endpoint with an empty JSON OBJECT, not an empty array.
+cat("ZENODO CREATE\n")
+created_resp <- perform(
+  request(api) |>
     req_method("POST") |>
     auth() |>
     req_headers("Content-Type" = "application/json") |>
-    req_body_json(draft_payload, auto_unbox = TRUE),
+    req_body_raw(charToRaw("{}"), type = "application/json"),
   201L,
-  "draft creation"
+  "draft creation",
+  60
 )
+dep <- resp_body_json(created_resp, simplifyVector = FALSE)
+dep_id <- as.character(dep$id)
+bucket <- as.character(dep$links$bucket)
+if (!nzchar(dep_id) || !nzchar(bucket)) stop("Zenodo draft response missing id/bucket", call. = FALSE)
+cat(sprintf("ZENODO DRAFT id=%s\n", dep_id))
 
-record_id <- as.character(created$id)
-if (!nzchar(record_id)) stop("Zenodo did not return a record ID", call. = FALSE)
-draft_url <- as.character(created$links$self)
-files_url <- as.character(created$links$files)
-publish_url <- as.character(created$links$publish)
-if (!nzchar(draft_url) || !nzchar(files_url)) stop("Zenodo draft response missing required links", call. = FALSE)
+notes <- "Pipeline storage snapshot."
+if (nzchar(source_run_id)) notes <- paste0(notes, " Source GitHub Actions run: ", source_run_id, ".")
+if (nzchar(source_commit)) notes <- paste0(notes, " Source commit: ", source_commit, ".")
+
+meta <- list(metadata = list(
+  title = title,
+  upload_type = "dataset",
+  description = description,
+  creators = list(list(name = "thesalmonandthetomato/LivingEvidenceMap")),
+  keywords = list("Living Evidence Map", "salmon aquaculture", "evidence synthesis", snapshot_type),
+  notes = notes
+))
+
+meta_resp <- perform(
+  request(paste0(api, "/", dep_id)) |>
+    req_method("PUT") |>
+    auth() |>
+    req_headers("Content-Type" = "application/json") |>
+    req_body_json(meta, auto_unbox = TRUE),
+  200L,
+  "metadata update",
+  60
+)
+dep <- resp_body_json(meta_resp, simplifyVector = FALSE)
 
 filename <- basename(file_path)
+upload_url <- paste0(bucket, "/", URLencode(filename, reserved = TRUE))
+cat(sprintf("ZENODO UPLOAD %s bytes=%s\n", filename, file.info(file_path)$size))
 
-# 1. Initialise the file key.
-initialised <- perform_json(
-  request(files_url) |>
-    req_method("POST") |>
+# Direct streamed PUT to the returned legacy bucket, matching fulltexttest.
+upload_resp <- perform(
+  request(upload_url) |>
+    req_method("PUT") |>
     auth() |>
-    req_headers("Content-Type" = "application/json") |>
-    req_body_json(list(list(key = filename)), auto_unbox = TRUE),
-  201L,
-  "file initialisation"
-)
-
-if (!length(initialised$entries)) stop("Zenodo file initialisation returned no entries", call. = FALSE)
-entry <- initialised$entries[[1L]]
-content_url <- as.character(entry$links$content)
-commit_url <- as.character(entry$links$commit)
-if (!nzchar(content_url) || !nzchar(commit_url)) stop("Zenodo file entry missing content/commit links", call. = FALSE)
-
-# 2. Stream file content with curl. This avoids R HTTP buffering/timeouts
-# for large binary transfers while preserving the same Zenodo content endpoint.
-curl_bin <- Sys.which("curl")
-if (!nzchar(curl_bin)) stop("curl is required for Zenodo large-file upload", call. = FALSE)
-
-status_file <- tempfile("zenodo_status_")
-body_file <- tempfile("zenodo_body_")
-curl_args <- c(
-  "--fail-with-body",
-  "--silent",
-  "--show-error",
-  "--location",
-  "--retry", "5",
-  "--retry-all-errors",
-  "--retry-delay", "5",
-  "--connect-timeout", "60",
-  "--max-time", "7200",
-  "--request", "PUT",
-  "--header", paste("Authorization: Bearer", token),
-  "--header", "Content-Type: application/octet-stream",
-  "--upload-file", file_path,
-  "--output", body_file,
-  "--write-out", "%{http_code}",
-  content_url
-)
-
-status_out <- tryCatch(
-  system2(curl_bin, curl_args, stdout = TRUE, stderr = TRUE),
-  warning = function(w) invokeRestart("muffleWarning"),
-  error = function(e) structure(character(), status = 99L)
-)
-curl_status <- attr(status_out, "status")
-http_code <- suppressWarnings(as.integer(tail(status_out, 1L)))
-if (is.na(http_code)) http_code <- 0L
-if (!is.null(curl_status) || !(http_code %in% c(200L, 201L))) {
-  body <- if (file.exists(body_file)) paste(readLines(body_file, warn = FALSE), collapse = "\n") else ""
-  stop(sprintf("Zenodo curl file upload failed (curl status %s, HTTP %d): %s",
-               if (is.null(curl_status)) "0" else curl_status, http_code, body), call. = FALSE)
-}
-cat(sprintf("PASS: Zenodo file content upload returned HTTP %d\n", http_code))
-
-# 3. Commit uploaded file.
-committed <- perform_json(
-  request(commit_url) |>
-    req_method("POST") |>
-    auth(),
+    req_headers(Expect = "") |>
+    req_body_file(file_path),
   c(200L, 201L),
-  "file commit"
+  "file upload",
+  900
 )
+uploaded <- resp_body_json(upload_resp, simplifyVector = FALSE)
+cat("ZENODO UPLOAD COMPLETE\n")
 
 published <- NULL
 if (publish) {
-  if (!nzchar(publish_url)) stop("Zenodo draft response missing publish link", call. = FALSE)
-  published <- perform_json(
-    request(publish_url) |>
+  pub_resp <- perform(
+    request(paste0(api, "/", dep_id, "/actions/publish")) |>
       req_method("POST") |>
       auth(),
     c(200L, 201L, 202L),
-    "publish"
+    "publish",
+    120
   )
+  published <- resp_body_json(pub_resp, simplifyVector = FALSE)
+  cat(sprintf("ZENODO PUBLISHED id=%s\n", dep_id))
 }
 
+obj <- if (!is.null(published)) published else dep
 sha256 <- digest(file = file_path, algo = "sha256", serialize = FALSE)
 bytes <- unname(file.info(file_path)$size)
-final_obj <- if (publish && !is.null(published)) published else created
-doi <- if (!is.null(final_obj$pids$doi$identifier)) as.character(final_obj$pids$doi$identifier) else NULL
-record_url <- if (!is.null(final_obj$links$self_html)) as.character(final_obj$links$self_html) else NULL
-checksum <- if (!is.null(committed$checksum)) as.character(committed$checksum) else NULL
 
 manifest <- list(
   storage = "zenodo",
-  api = "inveniordm_records",
+  api = "legacy_deposition_httr2_fulltexttest_semantics",
   status = if (publish) "published" else "draft",
   snapshot_type = snapshot_type,
-  record_id = record_id,
-  doi = doi,
-  record_url = record_url,
+  deposition_id = dep_id,
+  record_id = dep_id,
+  record_url = if (!is.null(obj$links$html)) obj$links$html else paste0("https://zenodo.org/deposit/", dep_id),
+  doi = if (!is.null(obj$doi)) obj$doi else NULL,
   filename = filename,
   size_bytes = bytes,
   sha256 = sha256,
-  zenodo_checksum = checksum,
+  zenodo_checksum = if (!is.null(uploaded$checksum)) uploaded$checksum else NULL,
   source_run_id = if (nzchar(source_run_id)) source_run_id else NULL,
   source_commit = if (nzchar(source_commit)) source_commit else NULL,
   uploaded_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ"),
@@ -209,6 +147,4 @@ manifest <- list(
 
 dir.create(dirname(output_manifest), recursive = TRUE, showWarnings = FALSE)
 write_json(manifest, output_manifest, pretty = TRUE, auto_unbox = TRUE, null = "null")
-cat(sprintf("PASS: uploaded %s (%s bytes) to Zenodo record %s [%s]\n",
-            filename, format(bytes, scientific = FALSE), record_id,
-            if (publish) "published" else "draft"))
+cat(sprintf("PASS: uploaded %s to Zenodo draft %s\n", filename, dep_id))
