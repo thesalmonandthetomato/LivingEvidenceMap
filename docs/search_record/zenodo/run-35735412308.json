@@ -1,0 +1,37 @@
+{
+  "status": "published",
+  "github_run_id": "35735412308",
+  "github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/35735412308",
+  "run_type": "full",
+  "search_version": "v1",
+  "sources": "agricola",
+  "zenodo_record_id": "22920797",
+  "zenodo_deposition_id": "22920797",
+  "doi": "10.5281/zenodo.22920797",
+  "record_url": "https://zenodo.org/records/22920797",
+  "title": "Living Evidence Map search archive | full | Workflow 00 run 35735412308",
+  "visibility": "restricted",
+  "total_bytes": 5873641,
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-35735412308_agricola-harvest.tar.gz",
+      "bytes": 5871218,
+      "sha256": "89abc9f1d7ce90a47db8147030bef0830044f8098f549be25b1bec57c03f257d",
+      "zenodo_checksum": "md5:91a177b691d4f887be598112bc455259"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-35735412308_search-documentation.tar.gz",
+      "bytes": 1462,
+      "sha256": "a074ed0a190940dc06399972921ac8b2749609c8a210df5388f728c1f66be37a",
+      "zenodo_checksum": "md5:8ffbb41288d65fab7100cc6add27e7d2"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-35735412308_manifest.json",
+      "bytes": 961,
+      "sha256": "e533469dafdf091be8849fbfc4354f7714b6c0fb7143d030cb7067b10b8a2b28",
+      "zenodo_checksum": "md5:b90dff94f67ba95be533b3defac0dae0"
+    }
+  ],
+  "manifest_sha256": "e533469dafdf091be8849fbfc4354f7714b6c0fb7143d030cb7067b10b8a2b28",
+  "published_at_utc": "2026-09-23T15:26:10Z"
+}
