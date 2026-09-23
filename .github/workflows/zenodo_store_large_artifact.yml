@@ -96,6 +96,25 @@ jobs:
           echo "path=${files[0]}" >> "$GITHUB_OUTPUT"
           ls -lh "${files[0]}"
 
+      - name: Compress large text datasets before Zenodo upload
+        id: prepared
+        env:
+          FILE_PATH: ${{ steps.prepared.outputs.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          path="$FILE_PATH"
+          case "$path" in
+            *.csv|*.json|*.jsonl|*.txt|*.ris|*.tsv)
+              gzip -9 -c "$path" > "$path.gz"
+              echo "path=$path.gz" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "path=$path" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          ls -lh "$(cat "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)"
+
       - name: Upload large snapshot to Zenodo
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
