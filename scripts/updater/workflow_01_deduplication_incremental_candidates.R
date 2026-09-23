@@ -29,6 +29,7 @@ output_dir <- arg("--output-dir")
 score_n <- as.integer(arg("--score-n", "2000"))
 sample_key <- arg("--sample-key", "workflow02-v2-candidate-benchmark-v1")
 workflow01_run_id <- arg("--workflow01-run-id", "unknown")
+validate_index_only <- identical(tolower(arg("--validate-index-only", "false")), "true")
 
 if (any(vapply(list(lens_path, scopus_path, openalex_path, agricola_path, wos_path, old_metadata_path, output_dir), is.null, logical(1)))) {
   stop("Required: --lens --scopus --openalex --agricola --wos --old-metadata --output-dir", call. = FALSE)
@@ -280,6 +281,12 @@ progress("normalisation complete",nrow(meta),nrow(meta),
          sprintf("historical prefix preserved=%d appended=%d",length(old_keys),length(new_pos)))
 checkpoint("normalisation_complete",nrow(meta),nrow(meta),
            list(source_counts=as.list(n_by_source),historical_prefix_preserved=length(old_keys),appended_manifestations=length(new_pos)))
+
+if (validate_index_only) {
+  cat(sprintf("PASS: metadata-only validation complete: %d historical rows preserved, %d appended manifestations\n",
+              length(old_keys), length(new_pos)))
+  quit(save="no", status=0L)
+}
 
 pairs <- new.env(hash=TRUE,parent=emptyenv())
 add_pairs_from_groups <- function(dt,key_col,block,max_group=500L) {
