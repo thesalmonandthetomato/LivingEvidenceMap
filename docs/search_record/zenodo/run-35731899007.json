@@ -1,0 +1,37 @@
+{
+  "status": "published",
+  "github_run_id": "35731899007",
+  "github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/35731899007",
+  "run_type": "full",
+  "search_version": "v1",
+  "sources": "scopus",
+  "zenodo_record_id": "22925311",
+  "zenodo_deposition_id": "22925311",
+  "doi": "10.5281/zenodo.22925311",
+  "record_url": "https://zenodo.org/records/22925311",
+  "title": "Living Evidence Map search archive | full | Workflow 00 run 35731899007",
+  "visibility": "restricted",
+  "total_bytes": 4641162,
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-35731899007_scopus-harvest.tar.gz",
+      "bytes": 4638739,
+      "sha256": "d87676dd7eb3e7d2d12caa5c537421d3fe7cbfc5e6bbbc856d00f482cfebff5b",
+      "zenodo_checksum": "md5:73771f4a3882472e67c8545d60088da1"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-35731899007_search-documentation.tar.gz",
+      "bytes": 1468,
+      "sha256": "3fee9fe656ce5d39c4296a39579667525e3e6deffcc3a91f677f9a708b2c14ff",
+      "zenodo_checksum": "md5:11d13260f28f870c34bd355ff2691571"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-35731899007_manifest.json",
+      "bytes": 955,
+      "sha256": "a33a3965590ffac27ece7c9341308ddda93af84a1761131d02ac6d496e6192f0",
+      "zenodo_checksum": "md5:d3c3c37e2a27e307bc32d3f37a764824"
+    }
+  ],
+  "manifest_sha256": "a33a3965590ffac27ece7c9341308ddda93af84a1761131d02ac6d496e6192f0",
+  "published_at_utc": "2026-09-23T20:47:16Z"
+}
