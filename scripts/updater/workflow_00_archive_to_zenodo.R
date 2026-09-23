@@ -203,16 +203,36 @@ for (i in seq_along(archive_paths)) {
   fn <- basename(p)
   upload_url <- paste0(bucket,"/",URLencode(fn,reserved=TRUE))
   cat(sprintf("ZENODO UPLOAD %s bytes=%s\n",fn,file.info(p)$size))
-  upload_resp <- perform(
-    request(upload_url) |>
+  upload_resp <- NULL
+  for (attempt in seq_len(5L)) {
+    resp <- request(upload_url) |>
       req_method("PUT") |>
       auth() |>
       req_headers(Expect = "") |>
-      req_body_file(p),
-    c(200L,201L),
-    paste0("file upload: ",fn),
-    1800
-  )
+      req_body_file(p) |>
+      req_timeout(1800) |>
+      req_error(is_error = function(resp) FALSE) |>
+      req_perform()
+    status <- resp_status(resp)
+    if (status %in% c(200L,201L)) {
+      upload_resp <- resp
+      break
+    }
+    body <- tryCatch(resp_body_string(resp),error=function(e) "")
+    transient <- status %in% c(429L,500L,502L,503L,504L)
+    if (!transient || attempt == 5L) {
+      stop(sprintf(
+        "Zenodo file upload failed for %s after %d attempt(s), HTTP %d: %s",
+        fn,attempt,status,body
+      ),call.=FALSE)
+    }
+    delay <- min(60,2^(attempt-1L) * 5)
+    message(sprintf(
+      "Transient Zenodo HTTP %d uploading %s; retry %d/5 after %ds",
+      status,fn,attempt+1L,delay
+    ))
+    Sys.sleep(delay)
+  }
   uploaded[[i]] <- resp_body_json(upload_resp,simplifyVector=FALSE)
 }
 
