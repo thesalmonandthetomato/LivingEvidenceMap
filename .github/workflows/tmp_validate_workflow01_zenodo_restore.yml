@@ -1,0 +1,75 @@
+name: Workflow 01 - Validate Workflow 00 Zenodo restore
+
+on:
+  push:
+    branches:
+      - workflow01-zenodo-source-inputs
+    paths:
+      - '.github/workflows/tmp_validate_workflow01_zenodo_restore.yml'
+      - 'scripts/updater/workflow_01_restore_workflow00_from_zenodo.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-zenodo-source-inputs
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch Workflow 00 Zenodo pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin workflow00-search-orchestrator
+          mkdir -p /tmp/workflow00_pointer
+          git show origin/workflow00-search-orchestrator:docs/search_record/zenodo/run-35735412308.json \
+            > /tmp/workflow00_pointer/run-35735412308.json
+          test -s /tmp/workflow00_pointer/run-35735412308.json
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install restore dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Restore AGRICOLA from restricted Zenodo archive
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+            --pointer /tmp/workflow00_pointer/run-35735412308.json \
+            --sources agricola \
+            --output-root restored
+
+      - name: Validate restored Workflow 00 layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d restored/agricola
+          test -n "$(find restored/agricola -name manifest.json -type f -print -quit)"
+          test -n "$(find restored/agricola -type f -print -quit)"
+          test -s restored/workflow00_zenodo_restore_audit.json
+          echo "PASS: Workflow 01 can restore AGRICOLA source input from restricted Zenodo archive"
+
+      - name: Preserve restore audit only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-zenodo-restore-audit-${{ github.run_id }}
+          path: restored/workflow00_zenodo_restore_audit.json
+          retention-days: 7
+          if-no-files-found: warn
