@@ -1,0 +1,81 @@
+name: Temporary validation - incremental deduplication indexing
+
+on:
+  push:
+    branches:
+      - workflow02-multisource-reconciliation
+    paths:
+      - '.github/workflows/tmp_validate_incremental_indexing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout deduplication branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow02-multisource-reconciliation
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install minimal R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2'))
+
+      - name: Reuse preserved failed-run union and historical metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovered old_benchmark
+          gh run download 35779172284 --repo "$GITHUB_REPOSITORY" \
+            --name "workflow01-five-source-deduplication-extension-35779172284" --dir recovered
+          gh run download 35585544686 --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-candidate-benchmark-35585544686" --dir old_benchmark
+          test -f recovered/workflow01_union/lens_records_for_deduplication.jsonl
+          test -f recovered/workflow01_union/scopus_records_for_deduplication.jsonl
+          test -f recovered/workflow01_union/openalex_records_for_deduplication.jsonl
+          test -f recovered/workflow01_union/agricola_records_for_deduplication.jsonl
+          test -f recovered/workflow01_union/wos_records_for_deduplication.jsonl
+
+      - name: Validate historical 72,941-row indexing only
+        shell: bash
+        run: |
+          set -euo pipefail
+          OLD_META="$(find old_benchmark -name normalised_metadata.csv -type f -print -quit)"
+          mkdir -p validation
+          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
+            --lens recovered/workflow01_union/lens_records_for_deduplication.jsonl \
+            --scopus recovered/workflow01_union/scopus_records_for_deduplication.jsonl \
+            --openalex recovered/workflow01_union/openalex_records_for_deduplication.jsonl \
+            --agricola recovered/workflow01_union/agricola_records_for_deduplication.jsonl \
+            --wos recovered/workflow01_union/wos_records_for_deduplication.jsonl \
+            --old-metadata "$OLD_META" \
+            --output-dir validation \
+            --score-n 1 \
+            --validate-index-only true
+
+      - name: Confirm exact prefix
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          old <- fread(list.files('old_benchmark',pattern='normalised_metadata\\.csv$',recursive=TRUE,full.names=TRUE)[1],
+                       na.strings=c('','NA'))
+          cur <- fread('validation/normalised_metadata.csv',na.strings=c('','NA'))
+          stopifnot(nrow(old)==72941L)
+          stopifnot(nrow(cur)==90137L)
+          stopifnot(identical(old$source,cur$source[seq_len(nrow(old))]))
+          stopifnot(identical(old$source_record_id,cur$source_record_id[seq_len(nrow(old))]))
+          cat('PASS: exact 72,941-row historical source-ID prefix preserved in 90,137-row union\n')
