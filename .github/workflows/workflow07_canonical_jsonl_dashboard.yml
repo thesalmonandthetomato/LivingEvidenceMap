@@ -73,7 +73,6 @@ jobs:
         run: |
           set -euo pipefail
           test -s canonical_source/data/canonical/current/repair/records.jsonl
-          Rscript -e 'suppressPackageStartupMessages(library(jsonlite)); x <- fromJSON(readLines("canonical_source/data/canonical/current/repair/records.jsonl", n=1), simplifyVector=FALSE); cat("TOP_LEVEL_KEYS=", paste(names(x), collapse=","), "\n", sep=""); if (!is.null(x$identity)) cat("IDENTITY_KEYS=", paste(names(x$identity), collapse=","), "\n", sep="")'
           if head -1 canonical_source/data/canonical/current/repair/records.jsonl | grep -q '^version https://git-lfs.github.com/spec/v1'; then
             echo "Canonical records file is still an LFS pointer" >&2
             exit 1
