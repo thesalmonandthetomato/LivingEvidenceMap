@@ -1,5 +1,5 @@
 name: Zenodo storage smoke test - deduplication snapshot
-# retry using current InvenioRDM records API with gzip-compressed payload
+# retry using current InvenioRDM records API with gzip-compressed payload via curl transfer
 
 on:
   push:
