@@ -58,15 +58,41 @@ topic_objects <- function(rid) {
   })
 }
 
-record_id_of <- function(rec) {
-  for (nm in c("record_id","lens_id","id")) {
-    x <- rec[[nm]]
-    if (!is.null(x) && length(x)) {
-      y <- trim(x[[1]])
-      if (nzchar(y)) return(y)
-    }
+record_id_of <- function(rec, record_number) {
+  identity <- rec$identity
+  canonical <- rec$canonical
+
+  if (is.null(identity) || !is.list(identity)) {
+    stopf("Canonical record %d is missing required identity object", record_number)
   }
-  ""
+
+  rid <- trim(identity$record_id)
+  lens_id <- trim(identity$lens_id)
+  rid_type <- trim(identity$record_id_type)
+
+  if (!nzchar(rid)) {
+    stopf("Canonical record %d is missing identity.record_id", record_number)
+  }
+  if (!nzchar(lens_id)) {
+    stopf("Canonical record %d is missing identity.lens_id", record_number)
+  }
+  if (!identical(rid_type, "lens_id")) {
+    stopf("Canonical record %d has unexpected identity.record_id_type: %s", record_number, rid_type)
+  }
+  if (!identical(rid, lens_id)) {
+    stopf("Canonical record %d has inconsistent identity.record_id and identity.lens_id", record_number)
+  }
+
+  if (is.null(canonical) || !is.list(canonical)) {
+    stopf("Canonical record %d is missing required canonical object", record_number)
+  }
+  canonical_rid <- trim(canonical$record_id)
+  canonical_lens <- trim(canonical$lens_id)
+  if (!identical(canonical_rid, rid) || !identical(canonical_lens, lens_id)) {
+    stopf("Canonical record %d has inconsistent identity and canonical IDs", record_number)
+  }
+
+  rid
 }
 
 dir.create(dirname(output_path), recursive=TRUE, showWarnings=FALSE)
@@ -86,7 +112,7 @@ repeat {
     n <- n + 1L
     rec <- tryCatch(fromJSON(line, simplifyVector=FALSE),
       error=function(e) stopf("Invalid canonical JSONL at record %d: %s", n, conditionMessage(e)))
-    rid <- record_id_of(rec)
+    rid <- record_id_of(rec, n)
     if (!nzchar(rid)) stopf("Canonical record %d has no stable record ID", n)
     if (rid %in% seen) stopf("Duplicate canonical record ID: %s", rid)
     seen <- c(seen, rid)
