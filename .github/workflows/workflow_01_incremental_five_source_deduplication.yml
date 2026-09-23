@@ -6,8 +6,7 @@ on:
     inputs:
       workflow00_run_ids:
         description: 'Comma-separated Workflow 00 run IDs archived on Zenodo; one ID for normal future runs'
-        required: false
-        default: ''
+        required: true
         type: string
 
 permissions:
@@ -70,7 +69,6 @@ jobs:
           test -n "$(find old_decisions -name rescored_sample.csv -type f -print -quit)"
 
       - name: Restore Workflow 00 source harvests from durable Zenodo archives
-        if: ${{ inputs.workflow00_run_ids != '' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           WORKFLOW00_RUN_IDS: ${{ inputs.workflow00_run_ids }}
@@ -101,21 +99,6 @@ jobs:
             test -n "$(find "current/$source" -type f -print -quit)"
           done
           echo "PASS: restored all five Workflow 00 source harvests from durable Zenodo archives"
-
-      - name: Legacy baseline fallback - download Workflow 00 GitHub artefacts
-        if: ${{ inputs.workflow00_run_ids == '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "WARNING: using short-lived legacy Workflow 00 GitHub artefacts; supply workflow00_run_id for durable operation"
-          mkdir -p current/lens current/openalex current/scopus current/agricola current/wos
-          gh run download "$LENS_FULL_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "workflow00-lens-harvest-$LENS_FULL_RUN_ID" --dir current/lens
-          gh run download "$OPENALEX_FULL_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "workflow00-openalex-harvest-$OPENALEX_FULL_RUN_ID" --dir current/openalex
-          gh run download "$SCOPUS_FULL_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "workflow00-scopus-harvest-$SCOPUS_FULL_RUN_ID" --dir current/scopus
-          gh run download "$AGRICOLA_FULL_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "workflow00-agricola-harvest-$AGRICOLA_FULL_RUN_ID" --dir current/agricola
-          gh run download "$WOS_FULL_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "workflow00-wos-harvest-$WOS_FULL_RUN_ID" --dir current/wos
 
       - name: Adapt current non-Lens source harvests
         shell: bash
