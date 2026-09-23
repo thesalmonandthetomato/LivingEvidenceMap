@@ -119,21 +119,46 @@ content_url <- as.character(entry$links$content)
 commit_url <- as.character(entry$links$commit)
 if (!nzchar(content_url) || !nzchar(commit_url)) stop("Zenodo file entry missing content/commit links", call. = FALSE)
 
-# 2. Stream file content.
-upload_resp <- request(content_url) |>
-  req_method("PUT") |>
-  auth() |>
-  req_headers("Content-Type" = "application/octet-stream") |>
-  req_body_file(file_path) |>
-  req_retry(max_tries = 5, retry_on_failure = TRUE) |>
-  req_timeout(3600) |>
-  req_error(is_error = function(resp) FALSE) |>
-  req_perform()
+# 2. Stream file content with curl. This avoids R HTTP buffering/timeouts
+# for large binary transfers while preserving the same Zenodo content endpoint.
+curl_bin <- Sys.which("curl")
+if (!nzchar(curl_bin)) stop("curl is required for Zenodo large-file upload", call. = FALSE)
 
-if (!(resp_status(upload_resp) %in% c(200L, 201L))) {
-  body <- tryCatch(resp_body_string(upload_resp), error = function(e) "")
-  stop(sprintf("Zenodo file upload returned HTTP %d: %s", resp_status(upload_resp), body), call. = FALSE)
+status_file <- tempfile("zenodo_status_")
+body_file <- tempfile("zenodo_body_")
+curl_args <- c(
+  "--fail-with-body",
+  "--silent",
+  "--show-error",
+  "--location",
+  "--retry", "5",
+  "--retry-all-errors",
+  "--retry-delay", "5",
+  "--connect-timeout", "60",
+  "--max-time", "7200",
+  "--request", "PUT",
+  "--header", paste("Authorization: Bearer", token),
+  "--header", "Content-Type: application/octet-stream",
+  "--upload-file", file_path,
+  "--output", body_file,
+  "--write-out", "%{http_code}",
+  content_url
+)
+
+status_out <- tryCatch(
+  system2(curl_bin, curl_args, stdout = TRUE, stderr = TRUE),
+  warning = function(w) invokeRestart("muffleWarning"),
+  error = function(e) structure(character(), status = 99L)
+)
+curl_status <- attr(status_out, "status")
+http_code <- suppressWarnings(as.integer(tail(status_out, 1L)))
+if (is.na(http_code)) http_code <- 0L
+if (!is.null(curl_status) || !(http_code %in% c(200L, 201L))) {
+  body <- if (file.exists(body_file)) paste(readLines(body_file, warn = FALSE), collapse = "\n") else ""
+  stop(sprintf("Zenodo curl file upload failed (curl status %s, HTTP %d): %s",
+               if (is.null(curl_status)) "0" else curl_status, http_code, body), call. = FALSE)
 }
+cat(sprintf("PASS: Zenodo file content upload returned HTTP %d\n", http_code))
 
 # 3. Commit uploaded file.
 committed <- perform_json(
