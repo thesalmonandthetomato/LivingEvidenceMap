@@ -52,6 +52,9 @@ jobs:
             --dir source_artifact
           test -s source_artifact/rescored_sample.csv
           ls -lh source_artifact/rescored_sample.csv
+          gzip -9 -c source_artifact/rescored_sample.csv > source_artifact/rescored_sample.csv.gz
+          test -s source_artifact/rescored_sample.csv.gz
+          ls -lh source_artifact/rescored_sample.csv.gz
 
       - name: Upload 290 MB deduplication snapshot to Zenodo draft
         env:
@@ -62,9 +65,9 @@ jobs:
           test -n "$ZENODO_ACCESS_TOKEN"
           mkdir -p zenodo_manifest
           Rscript R/zenodo_store_large_artifact.R \
-            --file source_artifact/rescored_sample.csv \
+            --file source_artifact/rescored_sample.csv.gz \
             --title "Living Evidence Map deduplication pair-decision snapshot - run 35711465359" \
-            --description "Preserved full deterministic deduplication pair-decision snapshot from GitHub Actions run 35711465359. Stored on Zenodo to avoid repeated long-term storage of large generated pipeline files in Git/LFS." \
+            --description "Losslessly gzip-compressed full deterministic deduplication pair-decision snapshot from GitHub Actions run 35711465359. The uncompressed source file is rescored_sample.csv. Stored on Zenodo to avoid repeated long-term storage of large generated pipeline files in Git/LFS." \
             --snapshot-type "deduplication_pair_decisions" \
             --source-run-id "35711465359" \
             --source-commit "$GITHUB_SHA" \
@@ -78,7 +81,7 @@ jobs:
           x <- fromJSON('zenodo_manifest/zenodo_snapshot_manifest.json', simplifyVector=FALSE)
           stopifnot(identical(x$status,'draft'))
           stopifnot(identical(x$storage,'zenodo'))
-          stopifnot(as.numeric(x$size_bytes) > 250000000)
+          stopifnot(as.numeric(x$size_bytes) > 1000000)
           stopifnot(nchar(as.character(x$sha256)) == 64L)
           cat(sprintf('PASS: Zenodo draft %s stores %s (%s bytes)\n',
                       x$deposition_id,x$filename,x$size_bytes))
