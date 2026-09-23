@@ -35,6 +35,9 @@ permissions:
   contents: read
   actions: read
 
+env:
+  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow00-zenodo-search-archive
+
 jobs:
   search:
     runs-on: ubuntu-latest
@@ -64,8 +67,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin workflow00-search-orchestrator
-          git show origin/workflow00-search-orchestrator:scripts/updater/write_workflow00_search_record.R > /tmp/write_workflow00_search_record.R
+          git fetch origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
+          git show origin/$WORKFLOW00_ORCHESTRATOR_BRANCH:scripts/updater/write_workflow00_search_record.R > /tmp/write_workflow00_search_record.R
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
@@ -151,8 +154,8 @@ jobs:
             lens)
               cp config/lens_search.json /tmp/lens_search.json
               Rscript -e 'args <- commandArgs(trailingOnly=TRUE); q <- args[[1]]; p <- args[[2]]; x <- jsonlite::fromJSON(p, simplifyVector=FALSE); x$api_query$query$bool$must[[1]]$query_string$query <- q; jsonlite::write_json(x,p,auto_unbox=TRUE,pretty=TRUE)' "$SEARCH_QUERY" /tmp/lens_search.json
-              git fetch origin workflow00-search-orchestrator
-              git show origin/workflow00-search-orchestrator:scripts/updater/workflow_00_lens_orchestrated_search.R > /tmp/workflow_00_lens_orchestrated_search.R
+              git fetch origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
+              git show origin/$WORKFLOW00_ORCHESTRATOR_BRANCH:scripts/updater/workflow_00_lens_orchestrated_search.R > /tmp/workflow_00_lens_orchestrated_search.R
               if [ "$RUN_TYPE" = "full" ]; then
                 sentinel_arg=true
               else
@@ -193,8 +196,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin workflow00-search-orchestrator
-          git show origin/workflow00-search-orchestrator:scripts/updater/workflow_00c_openalex_identifier_delta.R > /tmp/workflow_00c_openalex_identifier_delta.R
+          git fetch origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
+          git show origin/$WORKFLOW00_ORCHESTRATOR_BRANCH:scripts/updater/workflow_00c_openalex_identifier_delta.R > /tmp/workflow_00c_openalex_identifier_delta.R
           previous_args=()
           if [ '${{ steps.previous_openalex.outputs.baseline }}' = 'true' ]; then
             previous_args=(--previous-dir /tmp/previous_openalex)
@@ -209,8 +212,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin workflow00-search-orchestrator
-          git show origin/workflow00-search-orchestrator:scripts/updater/workflow_00_native_id_reconcile.R > /tmp/workflow_00_native_id_reconcile.R
+          git fetch origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
+          git show origin/$WORKFLOW00_ORCHESTRATOR_BRANCH:scripts/updater/workflow_00_native_id_reconcile.R > /tmp/workflow_00_native_id_reconcile.R
           Rscript /tmp/workflow_00_native_id_reconcile.R \
             --source wos \
             --current-root outputs/updater/source_child \
@@ -270,7 +273,7 @@ jobs:
             outputs/updater/source_child_sidecar/
             outputs/updater/openalex_delta/
             outputs/updater/wos_delta/
-          retention-days: 90
+          retention-days: 7
           if-no-files-found: error
 
       - name: Upload child search record
@@ -278,5 +281,5 @@ jobs:
         with:
           name: workflow00-search-record-${{ inputs.source }}-${{ inputs.parent_run_id }}
           path: outputs/updater/search_record/
-          retention-days: 90
+          retention-days: 7
           if-no-files-found: error

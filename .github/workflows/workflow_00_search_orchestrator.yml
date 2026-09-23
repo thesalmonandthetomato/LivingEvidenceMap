@@ -85,6 +85,9 @@ permissions:
   contents: write
   actions: read
 
+env:
+  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow00-zenodo-search-archive
+
 jobs:
   validate-and-plan:
     runs-on: ubuntu-latest
@@ -110,7 +113,7 @@ jobs:
       - name: Checkout Workflow 00 orchestration branch
         uses: actions/checkout@v4
         with:
-          ref: workflow00-search-orchestrator
+          ref: ${{ env.WORKFLOW00_ORCHESTRATOR_BRANCH }}
           persist-credentials: false
 
       - name: Set up R
@@ -178,7 +181,7 @@ jobs:
         with:
           name: workflow00-search-plan-${{ github.run_id }}
           path: outputs/updater/workflow00_plan/
-          retention-days: 90
+          retention-days: 7
           if-no-files-found: error
 
   lens:
@@ -292,7 +295,7 @@ jobs:
       - name: Checkout Workflow 00 orchestration branch
         uses: actions/checkout@v4
         with:
-          ref: workflow00-search-orchestrator
+          ref: ${{ env.WORKFLOW00_ORCHESTRATOR_BRANCH }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -459,7 +462,7 @@ jobs:
           path: |
             outputs/updater/expansion_reconciliation/
             outputs/updater/expansion_archive/
-          retention-days: 90
+          retention-days: 7
           if-no-files-found: error
 
   archive-search-records:
@@ -504,7 +507,7 @@ jobs:
       - name: Checkout documentation branch
         uses: actions/checkout@v4
         with:
-          ref: workflow00-search-orchestrator
+          ref: ${{ env.WORKFLOW00_ORCHESTRATOR_BRANCH }}
           fetch-depth: 0
 
       - name: Download child search records
@@ -556,12 +559,124 @@ jobs:
           fi
 
           git commit -m "Archive Workflow 00 search records for run ${GITHUB_RUN_ID}"
-          git push origin HEAD:workflow00-search-orchestrator
+          git push origin "HEAD:$WORKFLOW00_ORCHESTRATOR_BRANCH"
 
       - name: Upload consolidated search archive
         uses: actions/upload-artifact@v4
         with:
           name: workflow00-search-record-archive-${{ github.run_id }}
           path: docs/search_record/
-          retention-days: 90
+          retention-days: 7
           if-no-files-found: error
+
+  archive-search-to-zenodo:
+    needs: [validate-and-plan, archive-search-records]
+    if: ${{ always() && needs.validate-and-plan.result == 'success' && needs.archive-search-records.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout Workflow 00 archive branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW00_ORCHESTRATOR_BRANCH }}
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install Zenodo archive dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Stage complete Workflow 00 search
+        id: stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          WOS_SELECTED: ${{ inputs.wos }}
+          RUN_TYPE: ${{ inputs.run_type }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p zenodo_staging/plan zenodo_staging/harvests zenodo_staging/search_records
+
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "workflow00-search-plan-$GITHUB_RUN_ID" \
+            --dir zenodo_staging/plan
+
+          sources=()
+          for source in lens scopus openalex agricola wos; do
+            upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
+            selected="${!upper}"
+            [ "$selected" = "true" ] || continue
+            sources+=("$source")
+            mkdir -p "zenodo_staging/harvests/$source" "zenodo_staging/search_records/$source"
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-${source}-harvest-$GITHUB_RUN_ID" \
+              --dir "zenodo_staging/harvests/$source"
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-search-record-${source}-$GITHUB_RUN_ID" \
+              --dir "zenodo_staging/search_records/$source"
+          done
+
+          if [ "$RUN_TYPE" = "expansion" ]; then
+            mkdir -p zenodo_staging/expansion_reconciliation
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-expansion-reconciliation-$GITHUB_RUN_ID" \
+              --dir zenodo_staging/expansion_reconciliation
+          fi
+
+          joined="$(IFS=,; echo "${sources[*]}")"
+          [ -n "$joined" ] || { echo "No selected sources staged" >&2; exit 2; }
+          echo "sources=$joined" >> "$GITHUB_OUTPUT"
+          echo "PASS: staged Workflow 00 run $GITHUB_RUN_ID for sources $joined"
+
+      - name: Publish restricted Zenodo search archive
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_archive_to_zenodo.R \
+            --staging-root zenodo_staging \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-type '${{ inputs.run_type }}' \
+            --search-version '${{ needs.validate-and-plan.outputs.search_version }}' \
+            --sources '${{ steps.stage.outputs.sources }}' \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/updater/workflow00_zenodo
+
+      - name: Update repository Zenodo search registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_update_zenodo_registry.R \
+            --receipt outputs/updater/workflow00_zenodo/zenodo_receipt.json \
+            --registry docs/search_record/zenodo_registry.csv \
+            --pointer-dir docs/search_record/zenodo
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/search_record/zenodo_registry.csv docs/search_record/zenodo/
+          if git diff --cached --quiet; then
+            echo 'Zenodo registry already contains this Workflow 00 run.'
+          else
+            git commit -m "Register Zenodo archive for Workflow 00 run $GITHUB_RUN_ID"
+            git push origin "HEAD:$WORKFLOW00_ORCHESTRATOR_BRANCH"
+          fi
+
+      - name: Upload Zenodo receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-zenodo-receipt-${{ github.run_id }}
+          path: outputs/updater/workflow00_zenodo/
+          retention-days: 7
+          if-no-files-found: warn
+
