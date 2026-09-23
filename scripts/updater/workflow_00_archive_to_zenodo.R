@@ -97,8 +97,27 @@ if (!is.finite(total_bytes) || total_bytes <= 0) stop("Archive payload is empty"
 if (total_bytes > 49 * 1024^3) stop("Archive payload exceeds 49 GiB preflight limit",call.=FALSE)
 if (length(archive_paths) > 100L) stop("Archive payload exceeds Zenodo 100-file limit",call.=FALSE)
 
-auth_req <- function(url) request(url) |> req_auth_bearer_token(token) |> req_timeout(180)
-body_json <- function(resp) resp_body_json(resp,simplifyVector=FALSE)
+# Use the exact legacy-deposition semantics already validated for the
+# deduplication large-artifact uploader in this repository.
+auth <- function(req) req |> req_headers(Authorization = paste("Bearer", token))
+
+perform <- function(req, expected, label, timeout = 600) {
+  resp <- req |>
+    req_timeout(timeout) |>
+    req_error(is_error = function(resp) FALSE) |>
+    req_perform()
+  status <- resp_status(resp)
+  if (!(status %in% expected)) {
+    body <- tryCatch(resp_body_string(resp), error = function(e) "")
+    stop(sprintf("Zenodo %s returned HTTP %d: %s", label, status, body), call. = FALSE)
+  }
+  resp
+}
+
+expected_title <- sprintf(
+  "Living Evidence Map search archive | %s | Workflow 00 run %s",
+  run_type, run_id
+)
 
 description <- paste0(
   "<p>Search archive for the Living Evidence Map Workflow 00 ingestion pipeline.</p>",
@@ -108,142 +127,105 @@ description <- paste0(
   "<p>Run type: ",run_type,". Search strategy version: ",search_version,". Sources: ",
   paste(sources,collapse=", "),".</p>"
 )
-metadata <- list(
-  upload_type="dataset",
-  publication_date=format(Sys.Date(),"%Y-%m-%d"),
-  title=expected_title,
-  creators=list(list(name="Haddaway, Neal")),
-  description=description,
-  access_right="restricted",
-  access_conditions="Files contain database/API search-result exports and are restricted because source licensing or terms may limit redistribution. Access may be granted by the depositor where permitted.",
-  keywords=c("Living Evidence Map","evidence synthesis","search archive","Workflow 00",marker),
-  related_identifiers=list(list(identifier=run_url,relation="isSupplementTo"))
+
+metadata <- list(metadata = list(
+  title = expected_title,
+  upload_type = "dataset",
+  publication_date = format(Sys.Date(), "%Y-%m-%d"),
+  description = description,
+  creators = list(list(name = "Haddaway, Neal")),
+  access_right = "restricted",
+  access_conditions = paste(
+    "Files contain database/API search-result exports and are restricted",
+    "because source licensing or terms may limit redistribution.",
+    "Access may be granted by the depositor where permitted."
+  ),
+  keywords = list(
+    "Living Evidence Map",
+    "evidence synthesis",
+    "search archive",
+    "Workflow 00",
+    marker
+  ),
+  notes = paste0(
+    "Source GitHub Actions run: ",run_id,
+    ". Search strategy version: ",search_version,
+    ". Sources: ",paste(sources,collapse=", "),"."
+  )
+))
+
+cat("ZENODO CREATE\n")
+created_resp <- perform(
+  request(api) |>
+    req_method("POST") |>
+    auth() |>
+    req_headers("Content-Type" = "application/json") |>
+    req_body_raw(charToRaw("{}"), type = "application/json"),
+  201L,
+  "draft creation",
+  60
+)
+dep <- resp_body_json(created_resp, simplifyVector = FALSE)
+dep_id <- as.character(dep$id)
+bucket <- as.character(dep$links$bucket)
+if (!nzchar(dep_id) || !nzchar(bucket)) {
+  stop("Zenodo draft response missing id/bucket",call.=FALSE)
+}
+cat(sprintf("ZENODO DRAFT id=%s\n",dep_id))
+
+writeLines(
+  toJSON(
+    list(
+      status="draft_created",
+      github_run_id=run_id,
+      zenodo_deposition_id=dep_id
+    ),
+    auto_unbox=TRUE,
+    pretty=TRUE
+  ),
+  file.path(output_dir,"zenodo_draft_receipt.json")
 )
 
-lookup <- auth_req(api) |> req_url_query(q=marker,size=100) |> req_perform()
-existing <- body_json(lookup)
-if (!is.list(existing)) existing <- list()
-
-expected_title <- sprintf("Living Evidence Map search archive | %s | Workflow 00 run %s",run_type,run_id)
-is_ours <- function(x) {
-  kw <- or_else(x$metadata$keywords,character())
-  identical(or_else(x$title,""),expected_title) || marker %in% unlist(kw,use.names=FALSE)
-}
-hits <- Filter(is_ours,existing)
-published_hits <- Filter(function(x) isTRUE(x$submitted),hits)
-draft_hits <- Filter(function(x) !isTRUE(x$submitted),hits)
-
-if (length(published_hits)) {
-  x <- published_hits[[1L]]
-  remote <- x$files
-  if (is.null(remote)) remote <- list()
-  local_md5 <- setNames(vapply(archive_paths,function(p) digest(file=p,algo="md5",serialize=FALSE),character(1)),
-                        basename(archive_paths))
-  remote_md5 <- setNames(vapply(remote,function(z) sub("^md5:","",or_else(z$checksum,"")),character(1)),
-                         vapply(remote,function(z) or_else(z$filename,or_else(z$key,"")),character(1)))
-  if (!setequal(names(local_md5),names(remote_md5)) ||
-      any(local_md5[sort(names(local_md5))] != remote_md5[sort(names(remote_md5))])) {
-    stop(sprintf("Published Zenodo archive already exists for run %s but its files do not match the reproducible local payload",run_id),call.=FALSE)
-  }
-  receipt <- list(
-    status="published",
-    github_run_id=run_id,
-    github_run_url=run_url,
-    run_type=run_type,
-    search_version=search_version,
-    sources=sources,
-    zenodo_record_id=as.character(or_else(x$record_id,x$id)),
-    zenodo_deposition_id=as.character(x$id),
-    doi=or_else(x$doi,NA_character_),
-    record_url=or_else(x$record_url,or_else(x$links$html,NA_character_)),
-    title=or_else(x$title,expected_title),
-    visibility="restricted",
-    total_bytes=total_bytes,
-    archive_files=lapply(archive_paths,function(p) list(
-      filename=basename(p),
-      bytes=unname(file.info(p)$size),
-      sha256=digest(file=p,algo="sha256",serialize=FALSE)
-    )),
-    manifest_sha256=digest(file=manifest_path,algo="sha256",serialize=FALSE),
-    published_at_utc=or_else(x$modified,or_else(x$created,NA_character_))
-  )
-  writeLines(toJSON(receipt,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
-             file.path(output_dir,"zenodo_receipt.json"))
-  cat(sprintf("PASS: verified existing published Zenodo archive %s for Workflow 00 run %s\n",
-              receipt$zenodo_record_id,run_id))
-  quit(save="no",status=0L)
-}
-if (length(draft_hits)) {
-  for (x in draft_hits) {
-    id <- as.character(x$id)
-    auth_req(paste0(api,"/",id)) |> req_method("DELETE") |> req_perform()
-    message(sprintf("Deleted incomplete workflow-generated Zenodo draft %s for run %s",id,run_id))
-  }
-}
-
-create_deposition_once <- function() {
-  auth_req(api) |>
-    req_method("POST") |>
-    req_body_json(list(metadata=metadata)) |>
-    req_error(is_error=function(resp) FALSE) |>
-    req_perform()
-}
-
-recover_created_draft <- function() {
-  r <- auth_req(api) |> req_url_query(q=marker,size=100) |> req_perform()
-  xs <- body_json(r)
-  if (!is.list(xs)) return(NULL)
-  ys <- Filter(function(x) {
-    kw <- or_else(x$metadata$keywords,character())
-    !isTRUE(x$submitted) && marker %in% unlist(kw,use.names=FALSE)
-  }, xs)
-  if (!length(ys)) NULL else ys[[1L]]
-}
-
-dep <- NULL
-for (attempt in 1:5) {
-  resp <- create_deposition_once()
-  status <- resp_status(resp)
-  if (status >= 200L && status < 300L) {
-    dep <- body_json(resp)
-    break
-  }
-  if (!(status %in% c(500L,502L,503L,504L))) {
-    stop(sprintf("Zenodo deposition creation failed with HTTP %d",status),call.=FALSE)
-  }
-  Sys.sleep(min(2^(attempt-1L),16L))
-  recovered <- recover_created_draft()
-  if (!is.null(recovered)) {
-    dep <- recovered
-    message(sprintf("Recovered Zenodo draft %s after transient HTTP %d",dep$id,status))
-    break
-  }
-  if (attempt == 5L) stop(sprintf("Zenodo deposition creation failed after 5 attempts; last HTTP status %d",status),call.=FALSE)
-}
-dep_id <- as.character(dep$id)
-writeLines(toJSON(list(status="draft_created",github_run_id=run_id,zenodo_deposition_id=dep_id),
-                  auto_unbox=TRUE,pretty=TRUE),
-           file.path(output_dir,"zenodo_draft_receipt.json"))
-
-dep <- auth_req(paste0(api,"/",dep_id)) |> req_perform() |> body_json()
-bucket <- dep$links$bucket
-if (is.null(bucket) || !nzchar(bucket)) stop("Zenodo deposition did not expose an upload bucket",call.=FALSE)
-
-for (p in archive_paths) {
-  fn <- basename(p)
-  message(sprintf("Uploading %s (%s bytes)",fn,file.info(p)$size))
-  upload_url <- paste0(sub("/$","",bucket),"/",URLencode(fn,reserved=TRUE))
-  auth_req(upload_url) |>
+perform(
+  request(paste0(api,"/",dep_id)) |>
     req_method("PUT") |>
-    req_timeout(1800) |>
-    req_body_file(p,type="application/octet-stream") |>
-    req_perform()
+    auth() |>
+    req_headers("Content-Type" = "application/json") |>
+    req_body_json(metadata, auto_unbox = TRUE),
+  200L,
+  "metadata update",
+  60
+)
+
+uploaded <- vector("list",length(archive_paths))
+for (i in seq_along(archive_paths)) {
+  p <- archive_paths[[i]]
+  fn <- basename(p)
+  upload_url <- paste0(bucket,"/",URLencode(fn,reserved=TRUE))
+  cat(sprintf("ZENODO UPLOAD %s bytes=%s\n",fn,file.info(p)$size))
+  upload_resp <- perform(
+    request(upload_url) |>
+      req_method("PUT") |>
+      auth() |>
+      req_headers(Expect = "") |>
+      req_body_file(p),
+    c(200L,201L),
+    paste0("file upload: ",fn),
+    1800
+  )
+  uploaded[[i]] <- resp_body_json(upload_resp,simplifyVector=FALSE)
 }
 
-published <- auth_req(paste0(api,"/",dep_id,"/actions/publish")) |>
-  req_method("POST") |>
-  req_perform() |>
-  body_json()
+pub_resp <- perform(
+  request(paste0(api,"/",dep_id,"/actions/publish")) |>
+    req_method("POST") |>
+    auth(),
+  c(200L,201L,202L),
+  "publish",
+  120
+)
+published <- resp_body_json(pub_resp,simplifyVector=FALSE)
+cat(sprintf("ZENODO PUBLISHED id=%s\n",dep_id))
 
 receipt <- list(
   status="published",
@@ -252,22 +234,32 @@ receipt <- list(
   run_type=run_type,
   search_version=search_version,
   sources=sources,
-  zenodo_record_id=as.character(or_else(published$record_id,published$id)),
-  zenodo_deposition_id=as.character(published$id),
-  doi=or_else(published$doi,NA_character_),
-  record_url=or_else(published$record_url,or_else(published$links$html,NA_character_)),
+  zenodo_record_id=as.character(if (is.null(published$record_id)) published$id else published$record_id),
+  zenodo_deposition_id=dep_id,
+  doi=if (is.null(published$doi)) NA_character_ else published$doi,
+  record_url=if (!is.null(published$links$html)) published$links$html else paste0("https://zenodo.org/records/",dep_id),
   title=expected_title,
   visibility="restricted",
   total_bytes=total_bytes,
-  archive_files=lapply(archive_paths,function(p) list(
-    filename=basename(p),
-    bytes=unname(file.info(p)$size),
-    sha256=digest(file=p,algo="sha256",serialize=FALSE)
-  )),
+  archive_files=lapply(seq_along(archive_paths),function(i) {
+    p <- archive_paths[[i]]
+    z <- uploaded[[i]]
+    list(
+      filename=basename(p),
+      bytes=unname(file.info(p)$size),
+      sha256=digest(file=p,algo="sha256",serialize=FALSE),
+      zenodo_checksum=if (is.null(z$checksum)) NULL else z$checksum
+    )
+  }),
   manifest_sha256=digest(file=manifest_path,algo="sha256",serialize=FALSE),
   published_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
-writeLines(toJSON(receipt,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
-           file.path(output_dir,"zenodo_receipt.json"))
-cat(sprintf("PASS: published restricted Zenodo search archive %s for Workflow 00 run %s\n",
-            receipt$zenodo_record_id,run_id))
+
+writeLines(
+  toJSON(receipt,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
+  file.path(output_dir,"zenodo_receipt.json")
+)
+cat(sprintf(
+  "PASS: published restricted Zenodo search archive %s for Workflow 00 run %s\n",
+  receipt$zenodo_record_id,run_id
+))

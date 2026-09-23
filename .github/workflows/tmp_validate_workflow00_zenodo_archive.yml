@@ -6,6 +6,7 @@ on:
       - workflow00-zenodo-search-archive
     paths:
       - '.github/workflows/tmp_validate_workflow00_zenodo_archive.yml'
+      - 'scripts/updater/workflow_00_archive_to_zenodo.R'
   workflow_dispatch:
 
 permissions:
