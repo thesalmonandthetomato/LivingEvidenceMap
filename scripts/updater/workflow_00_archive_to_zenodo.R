@@ -27,6 +27,7 @@ if (any(vapply(list(run_id,run_type,search_version,repository,output_dir),is.nul
   stop("Required: --staging-root --run-id --run-type --search-version --sources --repository --output-dir",call.=FALSE)
 }
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
+output_dir <- normalizePath(output_dir,mustWork=TRUE)
 
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN")
 if (!nzchar(token)) stop("ZENODO_ACCESS_TOKEN is not set",call.=FALSE)
@@ -85,7 +86,6 @@ manifest <- list(
   search_version=search_version,
   sources=sources,
   file_visibility="restricted",
-  generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
   files=file_meta
 )
 manifest_path <- file.path(archive_dir,sprintf("LivingEvidenceMap_workflow00_run-%s_manifest.json",run_id))
@@ -115,19 +115,43 @@ draft_hits <- Filter(function(x) !isTRUE(x$submitted),hits)
 
 if (length(published_hits)) {
   x <- published_hits[[1L]]
+  remote <- x$files
+  if (is.null(remote)) remote <- list()
+  local_md5 <- setNames(vapply(archive_paths,function(p) digest(file=p,algo="md5",serialize=FALSE),character(1)),
+                        basename(archive_paths))
+  remote_md5 <- setNames(vapply(remote,function(z) sub("^md5:","",or_else(z$checksum,"")),character(1)),
+                         vapply(remote,function(z) or_else(z$filename,or_else(z$key,"")),character(1)))
+  if (!setequal(names(local_md5),names(remote_md5)) ||
+      any(local_md5[sort(names(local_md5))] != remote_md5[sort(names(remote_md5))])) {
+    stop(sprintf("Published Zenodo archive already exists for run %s but its files do not match the reproducible local payload",run_id),call.=FALSE)
+  }
   receipt <- list(
-    status="already_published",
+    status="published",
     github_run_id=run_id,
+    github_run_url=run_url,
+    run_type=run_type,
+    search_version=search_version,
+    sources=sources,
     zenodo_record_id=as.character(or_else(x$record_id,x$id)),
+    zenodo_deposition_id=as.character(x$id),
     doi=or_else(x$doi,NA_character_),
     record_url=or_else(x$record_url,or_else(x$links$html,NA_character_)),
-    title=or_else(x$title,NA_character_),
+    title=or_else(x$title,expected_title),
     visibility="restricted",
-    manifest_sha256=digest(file=manifest_path,algo="sha256",serialize=FALSE)
+    total_bytes=total_bytes,
+    archive_files=lapply(archive_paths,function(p) list(
+      filename=basename(p),
+      bytes=unname(file.info(p)$size),
+      sha256=digest(file=p,algo="sha256",serialize=FALSE)
+    )),
+    manifest_sha256=digest(file=manifest_path,algo="sha256",serialize=FALSE),
+    published_at_utc=or_else(x$modified,or_else(x$created,NA_character_))
   )
   writeLines(toJSON(receipt,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
              file.path(output_dir,"zenodo_receipt.json"))
-  stop(sprintf("A published Zenodo archive already exists for Workflow 00 run %s; refusing duplicate publication",run_id),call.=FALSE)
+  cat(sprintf("PASS: verified existing published Zenodo archive %s for Workflow 00 run %s\n",
+              receipt$zenodo_record_id,run_id))
+  quit(save="no",status=0L)
 }
 if (length(draft_hits)) {
   for (x in draft_hits) {
