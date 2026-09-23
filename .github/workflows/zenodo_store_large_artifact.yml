@@ -52,13 +52,19 @@ jobs:
           ref: zenodo-large-artifact-storage
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
         with:
-          python-version: '3.12'
+          r-version: release
+          use-public-rspm: true
 
-      - name: Install Python dependency
-        run: python -m pip install --disable-pip-version-check --no-input requests
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::httr2
+            any::jsonlite
+            any::digest
 
       - name: Download source Actions artifact
         env:
@@ -123,35 +129,28 @@ jobs:
           set -euo pipefail
           test -n "$ZENODO_ACCESS_TOKEN"
           mkdir -p zenodo_manifest
-          args=(
-            python scripts/zenodo_store_large_artifact.py
-            --file "$FILE_PATH"
-            --title "$TITLE"
-            --description "$DESCRIPTION"
-            --snapshot-type "$SNAPSHOT_TYPE"
-            --source-run-id "$SOURCE_RUN_ID"
-            --source-commit "$GITHUB_SHA"
+          Rscript R/zenodo_store_large_artifact.R \
+            --file "$FILE_PATH" \
+            --title "$TITLE" \
+            --description "$DESCRIPTION" \
+            --snapshot-type "$SNAPSHOT_TYPE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-commit "$GITHUB_SHA" \
+            --publish "$PUBLISH" \
             --output-manifest zenodo_manifest/zenodo_snapshot_manifest.json
-          )
-          if [ "$PUBLISH" = "true" ]; then
-            args+=(--publish)
-          fi
-          "${args[@]}"
 
       - name: Validate storage manifest contains no secret
-        shell: python
+        shell: Rscript {0}
         run: |
-          import json
-          from pathlib import Path
-          p=Path('zenodo_manifest/zenodo_snapshot_manifest.json')
-          x=json.loads(p.read_text())
-          assert x['storage']=='zenodo'
-          assert x['authoritative_storage'] is True
-          assert x['git_lfs_required'] is False
-          txt=p.read_text()
-          assert 'ZENODO_ACCESS_TOKEN' not in txt
-          assert 'Bearer ' not in txt
-          print(f"PASS: Zenodo manifest validated for deposition {x['deposition_id']}")
+          suppressPackageStartupMessages(library(jsonlite))
+          p <- 'zenodo_manifest/zenodo_snapshot_manifest.json'
+          x <- fromJSON(p, simplifyVector=FALSE)
+          stopifnot(identical(x$storage,'zenodo'))
+          stopifnot(isTRUE(x$authoritative_storage))
+          stopifnot(identical(x$git_lfs_required,FALSE))
+          txt <- paste(readLines(p,warn=FALSE),collapse='\n')
+          stopifnot(!grepl('ZENODO_ACCESS_TOKEN|Bearer ',txt))
+          cat(sprintf('PASS: Zenodo manifest validated for deposition %s\n',x$deposition_id))
 
       - name: Preserve small Zenodo manifest
         uses: actions/upload-artifact@v4
