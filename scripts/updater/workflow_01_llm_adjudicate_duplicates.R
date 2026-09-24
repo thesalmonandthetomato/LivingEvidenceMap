@@ -49,9 +49,11 @@ schema <- list(
   properties=list(
     decision=list(type="string",enum=list("duplicate","not_duplicate","uncertain")),
     confidence=list(type="number",minimum=0,maximum=1),
-    rationale=list(type="string")
+    rationale=list(type="string"),
+    abstract_consistent_with_record_i=list(type="boolean"),
+    abstract_consistent_with_record_j=list(type="boolean")
   ),
-  required=c("decision","confidence","rationale")
+  required=c("decision","confidence","rationale","abstract_consistent_with_record_i","abstract_consistent_with_record_j")
 )
 
 system_prompt <- paste(
@@ -63,6 +65,9 @@ system_prompt <- paste(
   "CRITICAL DISTINCTION: the same underlying study, experiment, dataset, trial, cohort, farm, sampling campaign or research project can produce multiple distinct publications. Shared study identity is not sufficient for a duplicate decision. Classify as duplicate only when the two records are manifestations of the same publication/work, not merely outputs from the same underlying study.",
   "Companion papers, secondary analyses, follow-up papers, methods papers, protocol papers, conference outputs and full papers should be treated as distinct publications unless the evidence shows they are versions/manifestations of the same work.",
   "Use title, abstract, keywords, authors, journal/source, year, volume, issue, pages and identifiers together.",
+  "CRITICAL ABSTRACT-INTEGRITY CHECK: when abstracts are identical or near-identical, independently ask whether that abstract is semantically consistent with record i's title and whether it is semantically consistent with record j's title. A shared abstract that fits only one title is evidence of metadata contamination, not evidence that the records are duplicate publications.",
+  "For distinct publications from the same study, one shared or copied abstract must not override different publication identities.",
+  "Set abstract_consistent_with_record_i and abstract_consistent_with_record_j explicitly. If either is false, do not return a high-confidence duplicate solely from the shared abstract.",
   "Return uncertain whenever identity is not clear enough to resolve safely.",
   "Return JSON only under the supplied schema.",
   sep="\n"
@@ -96,7 +101,8 @@ call_model <- function(case) {
   )),recursive=FALSE)
   if (!length(text_items)) stop("No output_text returned",call.=FALSE)
   parsed <- fromJSON(text_items[[1L]]$text,simplifyVector=FALSE)
-  if (is.null(parsed$decision)||is.null(parsed$confidence)||is.null(parsed$rationale)) stop("Incomplete model result",call.=FALSE)
+  if (is.null(parsed$decision)||is.null(parsed$confidence)||is.null(parsed$rationale)||
+      is.null(parsed$abstract_consistent_with_record_i)||is.null(parsed$abstract_consistent_with_record_j)) stop("Incomplete model result",call.=FALSE)
   if (!(parsed$decision %in% c("duplicate","not_duplicate","uncertain"))) stop("Invalid model decision",call.=FALSE)
   conf <- as.numeric(parsed$confidence)
   if (!is.finite(conf)||conf<0||conf>1) stop("Invalid model confidence",call.=FALSE)
@@ -106,6 +112,8 @@ call_model <- function(case) {
     decision=parsed$decision,
     confidence=conf,
     rationale=rat,
+    abstract_consistent_with_record_i=isTRUE(parsed$abstract_consistent_with_record_i),
+    abstract_consistent_with_record_j=isTRUE(parsed$abstract_consistent_with_record_j),
     response_id=if(is.null(resp$id)) NULL else as.character(resp$id),
     resolved_model=if(is.null(resp$model)) model else as.character(resp$model),
     usage=resp$usage
@@ -124,12 +132,17 @@ for (n in seq_along(lines)) {
          response_id=NULL,resolved_model=model,usage=NULL,technical_error=conditionMessage(e))
   })
   technical_error <- if(is.null(result$technical_error)) NULL else result$technical_error
+  exact_abstract_guard <- identical(case$deterministic_evidence$classifier_rule,"exact_abstract_insufficient_metadata") &&
+    identical(result$decision,"duplicate") &&
+    (!isTRUE(result$abstract_consistent_with_record_i) || !isTRUE(result$abstract_consistent_with_record_j))
   promotion <- if (!is.null(technical_error)) "human_review" else if (
-    identical(result$decision,"uncertain") || result$confidence < threshold
+    identical(result$decision,"uncertain") || result$confidence < threshold || exact_abstract_guard
   ) "human_review" else result$decision
   promotion_reason <- if (!is.null(technical_error)) "technical_failure" else if (
     identical(result$decision,"uncertain")
-  ) "model_uncertain" else if (result$confidence < threshold) "below_auto_threshold" else "high_confidence_model_decision"
+  ) "model_uncertain" else if (result$confidence < threshold) "below_auto_threshold" else if (
+    exact_abstract_guard
+  ) "abstract_title_inconsistency_guard" else "high_confidence_model_decision"
 
   rec <- c(case,list(
     workflow="01_duplicate_llm_adjudication",
@@ -140,6 +153,8 @@ for (n in seq_along(lines)) {
     model_decision=result$decision,
     model_confidence=result$confidence,
     model_rationale=result$rationale,
+    abstract_consistent_with_record_i=result$abstract_consistent_with_record_i,
+    abstract_consistent_with_record_j=result$abstract_consistent_with_record_j,
     technical_error=technical_error,
     auto_threshold=threshold,
     promotion=promotion,
