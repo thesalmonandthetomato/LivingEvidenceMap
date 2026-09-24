@@ -114,7 +114,7 @@ md <- c(
   "",
   "## Downstream handoff",
   "",
-  "The authoritative handoff is the canonical JSONL stored in the restricted Workflow 01 Zenodo record. Workflow 03 restores this file, verifies its checksum, and scans manifestations for missing titles and abstracts.",
+  "The authoritative handoff is the canonical JSONL stored in the restricted Workflow 01 Zenodo record. Workflow 02 restores this file, verifies its checksum, and scans manifestations for missing titles and abstracts.",
   ""
 )
 writeLines(md,out_md,useBytes=TRUE)
