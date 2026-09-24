@@ -10,6 +10,7 @@ labels<-setNames(vapply(d,function(z)as.character(z$decision),character(1)),vapp
 drop<-c("workflow","requested_model","resolved_model","response_id","api_usage","model_decision","model_confidence","model_rationale","technical_error","auto_threshold","promotion","promotion_reason","adjudicated_at_utc","abstract_consistent_with_record_i","abstract_consistent_with_record_j")
 sel<-Filter(function(z)!is.null(labels[[as.character(z$review_case_id)]]) &&
   identical(z$deterministic_evidence$classifier_rule,"exact_abstract_insufficient_metadata") &&
+  identical(z$promotion,"duplicate") &&
   labels[[as.character(z$review_case_id)]] %in% c("duplicate","not_duplicate"),source)
 if(length(sel)!=34L) stop(sprintf("Expected 34 labelled exact-abstract cases, found %d",length(sel)))
 con<-file(out_path,"wt",encoding="UTF-8");on.exit(close(con),add=TRUE)
