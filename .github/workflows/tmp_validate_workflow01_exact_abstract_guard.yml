@@ -63,19 +63,24 @@ jobs:
           n <- length(x)
           human_dup <- vapply(x,function(z)identical(z$human_validation_label,'duplicate'),logical(1))
           human_nd <- vapply(x,function(z)identical(z$human_validation_label,'not_duplicate'),logical(1))
-          unsafe <- vapply(x,function(z)human_nd[[which(vapply(x,identical,logical(1),z))[1]]] && identical(z$promotion,'duplicate'),logical(1))
-          # Avoid object-identity indexing ambiguity: recompute directly.
-          unsafe <- vapply(x,function(z)identical(z$human_validation_label,'not_duplicate') && identical(z$promotion,'duplicate'),logical(1))
+          wrong_auto <- vapply(x,function(z) {
+            identical(z$promotion,'duplicate') && identical(z$human_validation_label,'not_duplicate') ||
+              identical(z$promotion,'not_duplicate') && identical(z$human_validation_label,'duplicate')
+          },logical(1))
+          false_duplicate <- vapply(x,function(z)identical(z$human_validation_label,'not_duplicate') && identical(z$promotion,'duplicate'),logical(1))
+          false_not_duplicate <- vapply(x,function(z)identical(z$human_validation_label,'duplicate') && identical(z$promotion,'not_duplicate'),logical(1))
           auto_dup_correct <- sum(vapply(x,function(z)identical(z$human_validation_label,'duplicate') && identical(z$promotion,'duplicate'),logical(1)))
           human_review <- sum(vapply(x,function(z)identical(z$promotion,'human_review'),logical(1)))
           correct_nd <- sum(vapply(x,function(z)identical(z$human_validation_label,'not_duplicate') && identical(z$promotion,'not_duplicate'),logical(1)))
-          if(any(unsafe)) {
-            bad <- vapply(x[unsafe],function(z)z$review_case_id,character(1))
-            stop(sprintf('SAFETY FAIL: human not_duplicate still auto-promoted duplicate: %s',paste(bad,collapse=', ')))
+          if(any(wrong_auto)) {
+            bad <- vapply(x[wrong_auto],function(z)paste(z$review_case_id,z$human_validation_label,z$promotion,sep=':'),character(1))
+            stop(sprintf('VALIDATION FAIL: wrong automatic decisions remain: %s',paste(bad,collapse=', ')))
           }
-          out <- list(schema='workflow01-exact-abstract-guard-validation-v1',cases=n,
+          out <- list(schema='workflow01-exact-abstract-guard-validation-v2',cases=n,
                       human_duplicate=sum(human_dup),human_not_duplicate=sum(human_nd),
-                      unsafe_false_duplicate_promotions=sum(unsafe),
+                      false_duplicate_promotions=sum(false_duplicate),
+                      false_not_duplicate_promotions=sum(false_not_duplicate),
+                      wrong_automatic_promotions=sum(wrong_auto),
                       correct_automatic_duplicates=auto_dup_correct,
                       correct_automatic_not_duplicates=correct_nd,
                       routed_to_human_review=human_review)
