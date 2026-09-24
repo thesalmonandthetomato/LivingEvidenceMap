@@ -7,9 +7,9 @@ args <- commandArgs(trailingOnly = TRUE)
 input <- if (length(args) >= 1) args[[1]] else "data/master/current/living_evidence_map_master.csv"
 out <- if (length(args) >= 2) args[[2]] else "scopus_api_test_20.csv"
 
-api_key <- Sys.getenv("SCOPUS_API_KEY")
+api_key <- Sys.getenv("SCOPUS_API_TOKEN")
 insttoken <- Sys.getenv("SCOPUS_INSTTOKEN")
-if (!nzchar(api_key)) stop("SCOPUS_API_KEY is missing")
+if (!nzchar(api_key)) stop("SCOPUS_API_TOKEN is missing")
 if (!nzchar(insttoken)) stop("SCOPUS_INSTTOKEN is missing")
 if (!file.exists(input)) stop("Input missing: ", input)
 
