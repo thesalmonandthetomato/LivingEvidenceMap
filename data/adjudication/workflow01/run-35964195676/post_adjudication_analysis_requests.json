@@ -1,0 +1,10 @@
+{
+  "schema": "living-evidence-map-workflow01-post-adjudication-analysis-request-v1",
+  "requested_by": "Neal Haddaway",
+  "requested_at_utc": "2026-09-24T16:33:46.875Z",
+  "analyses": [
+    "Analyse which source databases contribute most of the incorrect/misaligned abstracts identified during human adjudication.",
+    "Analyse which source databases contribute most ancillary records such as supplementary files, data files, figures, images, tables and other additional files.",
+    "Report after human adjudication is complete, using source provenance from the adjudication cases and repair log."
+  ]
+}
