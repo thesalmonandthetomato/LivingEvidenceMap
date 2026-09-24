@@ -60,6 +60,8 @@ system_prompt <- paste(
   "A DOI is supporting evidence but may be wrong and is never decisive by itself.",
   "Preprint-to-journal, early-online-to-final, conference-abstract-to-full-paper, and database-source duplicates may legitimately differ in DOI, title wording, pagination or journal metadata.",
   "Different experiments, parts, reports, years, volumes, issues, numbered supplements, or genuinely different publications are not duplicates merely because abstracts or topics are similar.",
+  "CRITICAL DISTINCTION: the same underlying study, experiment, dataset, trial, cohort, farm, sampling campaign or research project can produce multiple distinct publications. Shared study identity is not sufficient for a duplicate decision. Classify as duplicate only when the two records are manifestations of the same publication/work, not merely outputs from the same underlying study.",
+  "Companion papers, secondary analyses, follow-up papers, methods papers, protocol papers, conference outputs and full papers should be treated as distinct publications unless the evidence shows they are versions/manifestations of the same work.",
   "Use title, abstract, keywords, authors, journal/source, year, volume, issue, pages and identifiers together.",
   "Return uncertain whenever identity is not clear enough to resolve safely.",
   "Return JSON only under the supplied schema.",
