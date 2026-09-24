@@ -63,7 +63,7 @@ human_by_id <- setNames(human,human_ids)
 
 # Abstract/title mismatch detected during duplicate adjudication is a metadata-cleaning
 # action, not a second deduplication stage. Emit immutable source-record strip actions
-# for the downstream corpus materialisation step. Workflow 03 will then discover the
+# for the downstream corpus materialisation step. Workflow 02 will then discover the
 # resulting missing abstracts through its normal corpus scan.
 strip_by_key <- list()
 for (a in llm) {
@@ -198,7 +198,7 @@ summary <- list(
   human_final_decisions=sum(vapply(audit,function(x)identical(x$decision_source,"human"),logical(1))),
   abstract_strip_actions=length(strip_actions),
   abstract_strip_actions_file="abstract_strip_actions.jsonl",
-  workflow03_discovers_stripped_abstracts_via_normal_missing_abstract_scan=TRUE,
+  workflow02_discovers_stripped_abstracts_via_normal_missing_abstract_scan=TRUE,
   unresolved_pair_decisions=nrow(remaining),
   automatic_duplicate_edges=nrow(dup),
   clusters=nrow(sizes),
