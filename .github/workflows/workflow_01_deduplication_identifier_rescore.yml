@@ -1,0 +1,91 @@
+name: Workflow 01 - Deduplication identifier rescore
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_benchmark_run_id:
+        description: 'Historical candidate benchmark run ID to reuse for regression testing'
+        required: true
+        default: '35585544686'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  rescore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','stringi'))
+
+      - name: Parse rescore implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_01_deduplication_identifier_rescore.R')
+          cat('PASS: identifier rescore R script parses successfully\n')
+
+      - name: Download saved benchmark artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.source_benchmark_run_id || '35585544686' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prior_benchmark
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-candidate-benchmark-$SOURCE_RUN_ID" \
+            --dir prior_benchmark
+          test -n "$(find prior_benchmark -type f -name 'scored_sample.csv' -print -quit)"
+
+      - name: Rescore saved 2000-pair sample
+        env:
+          SOURCE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.source_benchmark_run_id || '35585544686' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow01_identifier_rescore
+          Rscript scripts/updater/workflow_01_deduplication_identifier_rescore.R \
+            --input-dir prior_benchmark \
+            --output-dir outputs/workflow01_identifier_rescore \
+            --source-run-id "$SOURCE_RUN_ID"
+
+      - name: Validate rescore outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/workflow01_identifier_rescore/summary.json', simplifyVector = FALSE)
+          stopifnot(identical(s$status, 'success'))
+          stopifnot(identical(s$candidate_generation_repeated, FALSE))
+          stopifnot(identical(s$source_candidate_artifact_reused, TRUE))
+          stopifnot(file.exists('outputs/workflow01_identifier_rescore/rescored_sample.csv'))
+          stopifnot(file.exists('outputs/workflow01_identifier_rescore/changed_decisions.csv'))
+          stopifnot(file.exists('outputs/workflow01_identifier_rescore/weak_rule_audit.csv'))
+          stopifnot(file.exists('outputs/workflow01_identifier_rescore/checkpoint_progress.json'))
+          cat('PASS: identifier rescore outputs verified\n')
+
+      - name: Upload rescore artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-deduplication-identifier-rescore-${{ github.run_id }}
+          path: outputs/workflow01_identifier_rescore/
+          retention-days: 90
+          if-no-files-found: warn
