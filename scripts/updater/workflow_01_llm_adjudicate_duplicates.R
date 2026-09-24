@@ -132,17 +132,26 @@ for (n in seq_along(lines)) {
          response_id=NULL,resolved_model=model,usage=NULL,technical_error=conditionMessage(e))
   })
   technical_error <- if(is.null(result$technical_error)) NULL else result$technical_error
-  exact_abstract_guard <- identical(case$deterministic_evidence$classifier_rule,"exact_abstract_insufficient_metadata") &&
-    identical(result$decision,"duplicate") &&
+  exact_abstract_rule <- identical(case$deterministic_evidence$classifier_rule,"exact_abstract_insufficient_metadata")
+  abstract_title_inconsistency_guard <- exact_abstract_rule &&
     (!isTRUE(result$abstract_consistent_with_record_i) || !isTRUE(result$abstract_consistent_with_record_j))
+  title_i_missing <- is.null(case$record_i$title) || !nzchar(trimws(as.character(case$record_i$title)))
+  title_j_missing <- is.null(case$record_j$title) || !nzchar(trimws(as.character(case$record_j$title)))
+  exact_abstract_missing_title_nd_guard <- exact_abstract_rule &&
+    identical(result$decision,"not_duplicate") &&
+    (title_i_missing || title_j_missing)
+
   promotion <- if (!is.null(technical_error)) "human_review" else if (
-    identical(result$decision,"uncertain") || result$confidence < threshold || exact_abstract_guard
+    identical(result$decision,"uncertain") || result$confidence < threshold ||
+      abstract_title_inconsistency_guard || exact_abstract_missing_title_nd_guard
   ) "human_review" else result$decision
   promotion_reason <- if (!is.null(technical_error)) "technical_failure" else if (
     identical(result$decision,"uncertain")
   ) "model_uncertain" else if (result$confidence < threshold) "below_auto_threshold" else if (
-    exact_abstract_guard
-  ) "abstract_title_inconsistency_guard" else "high_confidence_model_decision"
+    abstract_title_inconsistency_guard
+  ) "abstract_title_inconsistency_guard" else if (
+    exact_abstract_missing_title_nd_guard
+  ) "exact_abstract_missing_title_not_duplicate_guard" else "high_confidence_model_decision"
 
   rec <- c(case,list(
     workflow="01_duplicate_llm_adjudication",
