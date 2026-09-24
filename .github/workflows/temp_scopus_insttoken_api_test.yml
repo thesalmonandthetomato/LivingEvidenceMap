@@ -34,7 +34,7 @@ jobs:
       - name: Run 20-record Scopus API test
         shell: bash
         env:
-          SCOPUS_API_KEY: ${{ secrets.SCOPUS_API_KEY }}
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
           SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
         run: |
           set -euo pipefail
