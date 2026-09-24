@@ -110,3 +110,13 @@
 {"review_case_id":"hr-55d27f34e6bd17525e3d","decision":"not_duplicate","rationale":"Human adjudication: not duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:58:58.542Z"}
 {"review_case_id":"hr-507735571e6f6c1a01e6","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:00:21.145Z"}
 {"review_case_id":"hr-be7f0851b79e9e12dfba","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:00:21.145Z"}
+{"review_case_id":"hr-7c5dde3425379cb32b6d","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
+{"review_case_id":"hr-00bfba9b7bf7fa345ee2","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
+{"review_case_id":"hr-f1e9e4d046211445424f","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
+{"review_case_id":"hr-d5230ed16e8f27102f6b","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
+{"review_case_id":"hr-b04656a31871b89cd57d","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
+{"review_case_id":"hr-185b74b865479cad3d21","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
+{"review_case_id":"hr-03a3b9cb47e85e7e6bb7","decision":"not_duplicate","rationale":"Human adjudication: not duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
+{"review_case_id":"hr-3d6dfda997322c2cc362","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
+{"review_case_id":"hr-821d3a02699b09dd52c2","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
+{"review_case_id":"hr-fdaf0d014fe6893e11c7","decision":"duplicate","rationale":"Human adjudication: duplicate. Prefer record A as main/canonical manifestation.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T17:05:45.758Z"}
