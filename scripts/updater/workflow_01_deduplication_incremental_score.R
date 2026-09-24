@@ -40,9 +40,9 @@ find_one <- function(name) {
 
 meta <- fread(find_one("normalised_metadata.csv"), na.strings = c("", "NA"))
 all_pairs <- fread(find_one("all_candidate_pairs.csv"), na.strings = c("", "NA"))
-original <- fread(find_one("scored_sample.csv"), na.strings = c("", "NA"))
-# Incremental mode: old calibration/decision pairs are preserved, never rescored.
-original <- original[0]
+# Incremental mode preserves prior decisions and never needs a historic
+# calibration/scored-sample artefact. Keep an empty schema-compatible table.
+original <- data.table(record_i=integer(),record_j=integer(),blocks=character())
 
 scalar <- function(x) {
   if (is.null(x) || !length(x)) return(NULL)
