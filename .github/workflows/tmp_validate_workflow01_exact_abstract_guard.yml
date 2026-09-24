@@ -1,0 +1,90 @@
+name: Workflow 01 - Validate exact-abstract safety guard
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'scripts/updater/workflow_01_llm_adjudicate_duplicates.R'
+      - 'scripts/updater/workflow_01_build_exact_abstract_guard_validation.R'
+      - '.github/workflows/tmp_validate_workflow01_exact_abstract_guard.yml'
+permissions:
+  contents: read
+  actions: read
+env:
+  SOURCE_RUN_ID: '35968951674'
+  SOURCE_ARTIFACT: 'workflow01-llm-adjudication-complete-35968951674'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+      - name: Download original LLM artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source outputs
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir source
+      - name: Build 34-case labelled validation set
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_01_build_exact_abstract_guard_validation.R \
+            --source source/all_adjudications.jsonl \
+            --original-decisions data/adjudication/workflow01/run-35964195676/blinded_validation_decisions.jsonl \
+            --targeted-decisions data/adjudication/workflow01/run-35964195676/targeted_exact_abstract_audit_decisions.jsonl \
+            --output outputs/cases.jsonl
+      - name: Run revised adjudicator
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          Rscript scripts/updater/workflow_01_llm_adjudicate_duplicates.R \
+            --input outputs/cases.jsonl \
+            --output outputs/revised.jsonl \
+            --human-review-output outputs/revised_human.jsonl \
+            --model gpt-5.6-luna \
+            --auto-threshold 0.95
+      - name: Compare against locked human labels
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x <- lapply(readLines('outputs/revised.jsonl'),fromJSON,simplifyVector=FALSE)
+          n <- length(x)
+          human_dup <- vapply(x,function(z)identical(z$human_validation_label,'duplicate'),logical(1))
+          human_nd <- vapply(x,function(z)identical(z$human_validation_label,'not_duplicate'),logical(1))
+          unsafe <- vapply(x,function(z)human_nd[[which(vapply(x,identical,logical(1),z))[1]]] && identical(z$promotion,'duplicate'),logical(1))
+          # Avoid object-identity indexing ambiguity: recompute directly.
+          unsafe <- vapply(x,function(z)identical(z$human_validation_label,'not_duplicate') && identical(z$promotion,'duplicate'),logical(1))
+          auto_dup_correct <- sum(vapply(x,function(z)identical(z$human_validation_label,'duplicate') && identical(z$promotion,'duplicate'),logical(1)))
+          human_review <- sum(vapply(x,function(z)identical(z$promotion,'human_review'),logical(1)))
+          correct_nd <- sum(vapply(x,function(z)identical(z$human_validation_label,'not_duplicate') && identical(z$promotion,'not_duplicate'),logical(1)))
+          if(any(unsafe)) {
+            bad <- vapply(x[unsafe],function(z)z$review_case_id,character(1))
+            stop(sprintf('SAFETY FAIL: human not_duplicate still auto-promoted duplicate: %s',paste(bad,collapse=', ')))
+          }
+          out <- list(schema='workflow01-exact-abstract-guard-validation-v1',cases=n,
+                      human_duplicate=sum(human_dup),human_not_duplicate=sum(human_nd),
+                      unsafe_false_duplicate_promotions=sum(unsafe),
+                      correct_automatic_duplicates=auto_dup_correct,
+                      correct_automatic_not_duplicates=correct_nd,
+                      routed_to_human_review=human_review)
+          writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE),'outputs/validation_summary.json')
+          cat(toJSON(out,auto_unbox=TRUE,pretty=TRUE),'\n')
+      - name: Upload validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-exact-abstract-guard-validation-${{ github.run_id }}
+          path: outputs/
+          retention-days: 30
