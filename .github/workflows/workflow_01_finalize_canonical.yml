@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/legacy_normalised
-          Rscript scripts/updater/workflow_01_normalise_legacy_diverted_state.R             --combined-decisions outputs/legacy_normalised/combined_pair_decisions.normalised.csv             --recovered-adjudications inputs/recovery/all_adjudications.jsonl             --rule-decisions inputs/recovery_resolution/rule_resolved_duplicates.jsonl             --human-decisions data/adjudication/workflow01/run-36049567027/human_decisions.jsonl             --output-dir outputs/legacy_normalised             --base-run-id "${{ inputs.base_dedup_run_id || '35964195676' }}"             --recovery-run-id "$RECOVERY_RUN_ID"             --resolution-run-id "$RECOVERY_RESOLUTION_RUN_ID"
+          Rscript scripts/updater/workflow_01_normalise_legacy_diverted_state.R             --combined-decisions inputs/base/workflow01_full_five_source/combined_pair_decisions.csv             --recovered-adjudications inputs/recovery/all_adjudications.jsonl             --rule-decisions inputs/recovery_resolution/rule_resolved_duplicates.jsonl             --human-decisions data/adjudication/workflow01/run-36049567027/human_decisions.jsonl             --output-dir outputs/legacy_normalised             --base-run-id "${{ inputs.base_dedup_run_id || '35964195676' }}"             --recovery-run-id "$RECOVERY_RUN_ID"             --resolution-run-id "$RECOVERY_RESOLUTION_RUN_ID"
           test -s outputs/legacy_normalised/combined_pair_decisions.normalised.csv
           test -s outputs/legacy_normalised/recovered_730_application_audit.jsonl
           test -s outputs/legacy_normalised/candidate_only_route_migration_audit.jsonl
