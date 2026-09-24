@@ -1,0 +1,313 @@
+name: Workflow 01 - Recover and adjudicate 730 legacy-diverted pairs
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_01_recover_diverted_pairs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  BASE_DEDUP_RUN_ID: '35964195676'
+  BASE_DEDUP_ARTIFACT: 'workflow01-five-source-deduplication-finalized-35964195676'
+  WORKFLOW00_REPORTING_BRANCH: workflow00-search-orchestrator
+  WORKFLOW00_MULTI_SOURCE_POINTER: docs/search_record/zenodo/run-35730574878.json
+  WORKFLOW00_SCOPUS_POINTER: docs/search_record/zenodo/run-35731899007.json
+  WORKFLOW00_AGRICOLA_POINTER: docs/search_record/zenodo/run-35735412308.json
+  MODEL: 'gpt-5.6-luna'
+  AUTO_THRESHOLD: '0.95'
+
+jobs:
+  build_cases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Checkout Workflow 00 durable-source pointers
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW00_REPORTING_BRANCH }}
+          path: workflow00_registry
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2'))
+
+      - name: Download immutable Workflow 01 deduplication state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/base
+          gh run download "$BASE_DEDUP_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$BASE_DEDUP_ARTIFACT" --dir inputs/base
+          test -s inputs/base/workflow01_full_five_source/workflow04_exclusion_candidates.csv
+          test -s inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv
+
+      - name: Verify the recovered pair set before source retrieval
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          p <- fread('inputs/base/workflow01_full_five_source/workflow04_exclusion_candidates.csv')
+          stopifnot(nrow(p)==730L)
+          stopifnot(!anyDuplicated(p$pair_key))
+          stopifnot(all(p$review_route=='workflow04_exclusion_candidate'))
+          stopifnot(all(p$rescored_classification %in% c('review','unresolved')))
+          cat(sprintf('PASS: immutable recovery set contains exactly %d unique diverted pairs\n',nrow(p)))
+
+      - name: Restore exact Workflow 00 source harvests from Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p restored
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+            --pointer "workflow00_registry/$WORKFLOW00_MULTI_SOURCE_POINTER" \
+            --sources "lens,openalex,wos" --output-root restored
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+            --pointer "workflow00_registry/$WORKFLOW00_SCOPUS_POINTER" \
+            --sources "scopus" --output-root restored
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+            --pointer "workflow00_registry/$WORKFLOW00_AGRICOLA_POINTER" \
+            --sources "agricola" --output-root restored
+
+      - name: Recreate source sidecars used by Workflow 01
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p canonical_sources/{lens,scopus,openalex,agricola,wos}
+          LENS="$(find restored/lens -name records.jsonl -type f -print -quit)"
+          SCOPUS_DIR="$(find restored/scopus -type d -name source_child -print -quit)"
+          OPENALEX_DIR="$(find restored/openalex -type d -name source_child -print -quit)"
+          AGRICOLA_DIR="$(find restored/agricola -type d -name source_child -print -quit)"
+          WOS_DIR="$(find restored/wos -type d -name source_child -print -quit)"
+          test -n "$LENS" && test -n "$SCOPUS_DIR" && test -n "$OPENALEX_DIR" && test -n "$AGRICOLA_DIR" && test -n "$WOS_DIR"
+          cp "$LENS" canonical_sources/lens/records.jsonl
+          Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R --input-dir "$SCOPUS_DIR" --output-dir canonical_sources/scopus
+          Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R --input-dir "$OPENALEX_DIR" --output-dir canonical_sources/openalex
+          Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir "$AGRICOLA_DIR" --output-dir canonical_sources/agricola
+          Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir "$WOS_DIR" --output-dir canonical_sources/wos
+          Rscript scripts/updater/workflow_01_locate_restored_sources.R \
+            --root canonical_sources --output outputs/source_files.json
+
+      - name: Build the 730 ordinary Workflow 01 adjudication cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/recovery
+          Rscript scripts/updater/workflow_01_build_recovered_diverted_adjudication_cases.R \
+            --pairs inputs/base/workflow01_full_five_source/workflow04_exclusion_candidates.csv \
+            --manifestation-map inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --source-files outputs/source_files.json \
+            --output outputs/recovery/cases.jsonl
+
+      - name: Validate recovered case identity and count
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x <- lapply(readLines('outputs/recovery/cases.jsonl'),fromJSON,simplifyVector=FALSE)
+          stopifnot(length(x)==730L)
+          ids <- vapply(x,function(z)z$review_case_id,character(1))
+          keys <- vapply(x,function(z)z$pair_key,character(1))
+          stopifnot(!anyDuplicated(ids),!anyDuplicated(keys))
+          stopifnot(all(vapply(x,function(z)identical(z$schema,'living-evidence-map-workflow01-duplicate-adjudication-case-v1'),logical(1))))
+          cat('PASS: 730 recovered cases are unique and structurally valid\n')
+
+      - name: Upload recovered cases
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-recovered-730-cases-${{ github.run_id }}
+          path: outputs/recovery/
+          retention-days: 14
+          if-no-files-found: error
+
+  adjudicate:
+    needs: build_cases
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { start: 1, end: 365, chunk: '001' }
+          - { start: 366, end: 730, chunk: '002' }
+
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install API dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Download recovered cases
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow01-recovered-730-cases-${{ github.run_id }}
+          path: cases
+
+      - name: Adjudicate recovered chunk
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_DUPLICATE_MODEL: ${{ env.MODEL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="outputs/chunk-${{ matrix.chunk }}"
+          mkdir -p "$OUT"
+          Rscript scripts/updater/workflow_01_llm_adjudicate_duplicates.R \
+            --input cases/cases.jsonl \
+            --output "$OUT/adjudications.jsonl" \
+            --human-review-output "$OUT/human_review.jsonl" \
+            --model "$MODEL" \
+            --auto-threshold "$AUTO_THRESHOLD" \
+            --start-row "${{ matrix.start }}" \
+            --end-row "${{ matrix.end }}"
+
+      - name: Validate recovered chunk
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- 'outputs/chunk-${{ matrix.chunk }}/adjudications.jsonl'
+          x <- lapply(readLines(p,warn=FALSE),fromJSON,simplifyVector=FALSE)
+          stopifnot(length(x)==(${{ matrix.end }}-${{ matrix.start }}+1L))
+          stopifnot(!anyDuplicated(vapply(x,function(z)z$review_case_id,character(1))))
+          stopifnot(all(vapply(x,function(z)z$promotion %in% c('duplicate','not_duplicate','human_review'),logical(1))))
+          cat(sprintf('PASS: recovered chunk ${{ matrix.chunk }} has %d adjudications\n',length(x)))
+
+      - name: Upload recovered adjudication chunk
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-recovered-adjudication-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/chunk-${{ matrix.chunk }}/
+          retention-days: 14
+          if-no-files-found: error
+
+  merge:
+    needs: adjudicate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      pending_count: ${{ steps.merge.outputs.pending_count }}
+
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install merge dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Download recovered source cases
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow01-recovered-730-cases-${{ github.run_id }}
+          path: cases
+
+      - name: Download both adjudication chunks
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow01-recovered-adjudication-chunk-*-${{ github.run_id }}
+          path: chunks
+
+      - name: Merge and validate all 730 recovered decisions
+        id: merge
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          source <- lapply(readLines('cases/cases.jsonl'),fromJSON,simplifyVector=FALSE)
+          source_ids <- vapply(source,function(z)z$review_case_id,character(1))
+          files <- list.files('chunks',pattern='adjudications\\.jsonl$',recursive=TRUE,full.names=TRUE)
+          stopifnot(length(files)==2L)
+          model <- unlist(lapply(files,function(p)lapply(readLines(p),fromJSON,simplifyVector=FALSE)),recursive=FALSE)
+          ids <- vapply(model,function(z)z$review_case_id,character(1))
+          stopifnot(length(model)==730L,!anyDuplicated(ids),setequal(ids,source_ids))
+          model <- model[match(source_ids,ids)]
+          dir.create('outputs/recovered_adjudication',recursive=TRUE,showWarnings=FALSE)
+          con <- file('outputs/recovered_adjudication/all_adjudications.jsonl','wt',encoding='UTF-8')
+          for(z in model) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null'),con,useBytes=TRUE)
+          close(con)
+          human <- Filter(function(z)identical(z$promotion,'human_review'),model)
+          hc <- file('outputs/recovered_adjudication/human_review.jsonl','wt',encoding='UTF-8')
+          for(z in human) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null'),hc,useBytes=TRUE)
+          close(hc)
+          dup <- sum(vapply(model,function(z)identical(z$promotion,'duplicate'),logical(1)))
+          nd <- sum(vapply(model,function(z)identical(z$promotion,'not_duplicate'),logical(1)))
+          technical <- sum(vapply(model,function(z)!is.null(z$technical_error),logical(1)))
+          summary <- list(
+            schema='living-evidence-map-workflow01-recovered-adjudication-summary-v1',
+            status=if(length(human))'awaiting_human_review' else 'complete',
+            recovered_cases=730L,
+            model=Sys.getenv('MODEL'),
+            auto_threshold=as.numeric(Sys.getenv('AUTO_THRESHOLD')),
+            automatic_duplicate=dup,
+            automatic_not_duplicate=nd,
+            human_review_required=length(human),
+            technical_failures=technical,
+            source_cases_sha256=digest(file='cases/cases.jsonl',algo='sha256',serialize=FALSE),
+            adjudications_sha256=digest(file='outputs/recovered_adjudication/all_adjudications.jsonl',algo='sha256',serialize=FALSE)
+          )
+          writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'outputs/recovered_adjudication/summary.json')
+          cat(sprintf('pending_count=%d\n',length(human)),file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
+          cat(sprintf('PASS: recovered 730 adjudications: duplicate=%d not_duplicate=%d human=%d technical=%d\n',
+                      dup,nd,length(human),technical))
+
+      - name: Build human-review package if required
+        if: ${{ steps.merge.outputs.pending_count != '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_build_human_review_package.R \
+            --input outputs/recovered_adjudication/human_review.jsonl \
+            --output-dir outputs/recovered_adjudication/review_package \
+            --source-run-id "$BASE_DEDUP_RUN_ID" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY"
+
+      - name: Upload complete recovered adjudication state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-recovered-730-adjudication-complete-${{ github.run_id }}
+          path: outputs/recovered_adjudication/
+          retention-days: 90
+          if-no-files-found: error
