@@ -1,2 +1,3 @@
 Trigger final Workflow 01 canonicalisation and Zenodo archival for the validated five-source deduplication state.
 Retry after fixing push-trigger defaults.
+Retry after clearing stale manual-review route on adjudicated pairs.
