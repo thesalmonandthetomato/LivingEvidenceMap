@@ -40,6 +40,30 @@ find_one <- function(name) {
 
 meta <- fread(find_one("normalised_metadata.csv"), na.strings = c("", "NA"))
 all_pairs <- fread(find_one("all_candidate_pairs.csv"), na.strings = c("", "NA"))
+if (!nrow(all_pairs)) {
+  dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
+  empty <- data.table(
+    record_i=integer(),record_j=integer(),source_i=character(),source_j=character(),
+    title_i=character(),title_j=character(),doi_i=character(),doi_j=character(),
+    blocks=character(),title_similarity=numeric(),title_containment=logical(),
+    exact_title=logical(),exact_abstract=logical(),ordered_coverage=numeric(),
+    shingle_containment=numeric(),lcs_tokens=integer(),classification=character(),
+    rule=character(),stratum=character()
+  )
+  fwrite(empty,file.path(output_dir,"scored_sample.csv"))
+  fwrite(meta,file.path(output_dir,"normalised_metadata.csv"))
+  fwrite(data.table(record_i=integer(),record_j=integer(),blocks=character(),stratum=character()),
+         file.path(output_dir,"expanded_scoring_sample.csv"))
+  summary <- list(
+    status="success",source_candidate_artifact_reused=TRUE,candidate_generation_repeated=FALSE,
+    total_candidate_pairs=0L,original_calibration_pairs=0L,expanded_pairs=0L,
+    scoring_sample_n=0L,stratum_counts=list(),base_classification_counts=list(),base_rule_counts=list()
+  )
+  writeLines(jsonlite::toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
+             file.path(output_dir,"expanded_summary.json"))
+  cat("PASS: zero incremental duplicate candidate pairs; wrote empty scored state\n")
+  quit(save="no",status=0L)
+}
 # Incremental mode preserves prior decisions and never needs a historic
 # calibration/scored-sample artefact. Keep an empty schema-compatible table.
 original <- data.table(record_i=integer(),record_j=integer(),blocks=character())
