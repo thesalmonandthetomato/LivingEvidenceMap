@@ -1,5 +1,5 @@
 name: Workflow 01 - Validate adjudication case construction
-# rerun after nested field extraction fix
+# rerun with explicit missing-field provenance
 
 on:
   push:
@@ -85,14 +85,15 @@ jobs:
           required <- c('title','abstract','keywords','journal','year','authors','volume','issue','pages','doi','source','source_record_id')
           check <- function(r) all(required %in% names(r))
           stopifnot(all(vapply(x,function(z)check(z$record_i)&&check(z$record_j),logical(1))))
-          # Abstracts may legitimately be unavailable, but each record must retain title and source identity.
-          stopifnot(all(vapply(x,function(z)nzchar(z$record_i$title)&&nzchar(z$record_j$title),logical(1))))
-          stopifnot(all(vapply(x,function(z)nzchar(z$record_i$source_record_id)&&nzchar(z$record_j$source_record_id),logical(1))))
-          abstract_present <- sum(vapply(x,function(z){
-            a <- z$record_i$abstract; b <- z$record_j$abstract
-            (!is.null(a)&&!is.na(a)&&nzchar(a)) || (!is.null(b)&&!is.na(b)&&nzchar(b))
-          },logical(1)))
-          cat(sprintf('PASS: 3027 stable adjudication cases; at least one abstract present in %d cases\n',abstract_present))
+          # Missing bibliographic fields are preserved explicitly as null; source identity must never be missing.
+          present <- function(v) !is.null(v) && length(v) && !is.na(v) && nzchar(v)
+          stopifnot(all(vapply(x,function(z)present(z$record_i$source_record_id)&&present(z$record_j$source_record_id),logical(1))))
+          title_missing_records <- sum(vapply(x,function(z)!present(z$record_i$title),logical(1))) +
+                                   sum(vapply(x,function(z)!present(z$record_j$title),logical(1)))
+          pairs_with_abstract <- sum(vapply(x,function(z)present(z$record_i$abstract)||present(z$record_j$abstract),logical(1)))
+          pairs_with_neither_title <- sum(vapply(x,function(z)!present(z$record_i$title)&&!present(z$record_j$title),logical(1)))
+          cat(sprintf('PASS: 3027 stable adjudication cases; title-missing record manifestations=%d; pairs with at least one abstract=%d; pairs with neither title=%d\n',
+                      title_missing_records,pairs_with_abstract,pairs_with_neither_title))
 
       - name: Upload validation case package
         uses: actions/upload-artifact@v4
