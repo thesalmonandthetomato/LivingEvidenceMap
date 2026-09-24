@@ -1,0 +1,14 @@
+{
+  "schema": "living-evidence-map-openai-pricing-v1",
+  "currency": "USD",
+  "as_of": "2026-09-24",
+  "source": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+  "models": {
+    "gpt-5.6-luna": {
+      "input_per_million_tokens": 0.20,
+      "cached_input_per_million_tokens": 0.02,
+      "output_per_million_tokens": 1.20,
+      "notes": "Reasoning tokens are included within output_tokens and are not charged a second time."
+    }
+  }
+}
