@@ -1,0 +1,111 @@
+name: Workflow 01 - Validate legacy diverted-state normalisation
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_01_normalise_legacy_diverted_state.yml'
+      - 'scripts/updater/workflow_01_normalise_legacy_diverted_state.R'
+      - 'data/adjudication/workflow01/run-36049567027/human_decisions.jsonl'
+      - 'data/adjudication/workflow01/run-36049567027/decision_manifest.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  BASE_RUN_ID: '35964195676'
+  BASE_ARTIFACT: 'workflow01-five-source-deduplication-finalized-35964195676'
+  RECOVERY_RUN_ID: '36049567027'
+  RECOVERY_ARTIFACT: 'workflow01-recovered-730-adjudication-complete-36049567027'
+  RESOLUTION_RUN_ID: '36056439618'
+  RESOLUTION_ARTIFACT: 'workflow01-recovered-title-rules-36056439618'
+
+jobs:
+  normalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest'))
+
+      - name: Download immutable Workflow 01 state artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/base inputs/recovery inputs/resolution
+          gh run download "$BASE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$BASE_ARTIFACT" --dir inputs/base
+          gh run download "$RECOVERY_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$RECOVERY_ARTIFACT" --dir inputs/recovery
+          gh run download "$RESOLUTION_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$RESOLUTION_ARTIFACT" --dir inputs/resolution
+          test -s inputs/base/workflow01_full_five_source/combined_pair_decisions.csv
+          test -s inputs/recovery/all_adjudications.jsonl
+          test -s inputs/resolution/rule_resolved_duplicates.jsonl
+
+      - name: Apply recovered decisions and normalise legacy candidate routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/normalised
+          Rscript scripts/updater/workflow_01_normalise_legacy_diverted_state.R \
+            --combined-decisions inputs/base/workflow01_full_five_source/combined_pair_decisions.csv \
+            --recovered-adjudications inputs/recovery/all_adjudications.jsonl \
+            --rule-decisions inputs/resolution/rule_resolved_duplicates.jsonl \
+            --human-decisions data/adjudication/workflow01/run-36049567027/human_decisions.jsonl \
+            --output-dir outputs/normalised \
+            --base-run-id "$BASE_RUN_ID" \
+            --recovery-run-id "$RECOVERY_RUN_ID" \
+            --resolution-run-id "$RESOLUTION_RUN_ID"
+
+      - name: Validate migrated state
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          library(jsonlite)
+          s <- fromJSON('outputs/normalised/legacy_state_normalisation_summary.json',simplifyVector=FALSE)
+          stopifnot(s$legacy_diverted_rows==3004L)
+          stopifnot(s$recovered_review_rows==730L)
+          stopifnot(s$candidate_only_rows==2274L)
+          stopifnot(s$legacy_routes_remaining==0L)
+          stopifnot(s$unresolved_manual_review_from_recovered_legacy_rows==0L)
+
+          x <- fread('outputs/normalised/combined_pair_decisions.normalised.csv')
+          stopifnot(sum(x$review_route=='workflow04_exclusion_candidate')==0L)
+
+          ca <- lapply(readLines('outputs/normalised/candidate_only_route_migration_audit.jsonl'),fromJSON,simplifyVector=FALSE)
+          ra <- lapply(readLines('outputs/normalised/recovered_730_application_audit.jsonl'),fromJSON,simplifyVector=FALSE)
+          stopifnot(length(ca)==2274L,length(ra)==730L)
+          stopifnot(all(vapply(ca,function(z)identical(z$route_after,'non_duplicate'),logical(1))))
+          stopifnot(all(vapply(ca,function(z)identical(z$classifier_state$rescored_classification,'unresolved'),logical(1))))
+          stopifnot(all(vapply(ca,function(z)identical(z$classifier_state$rescored_rule,'candidate_only'),logical(1))))
+          stopifnot(!anyDuplicated(vapply(ca,function(z)z$pair_key,character(1))))
+          stopifnot(!anyDuplicated(vapply(ra,function(z)z$pair_key,character(1))))
+          cat('PASS: 730 recovered decisions + 2274 candidate_only migrations validated with no legacy route remaining\n')
+
+      - name: Upload auditable normalised state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-legacy-state-normalised-${{ github.run_id }}
+          path: outputs/normalised/
+          retention-days: 30
+          if-no-files-found: error
