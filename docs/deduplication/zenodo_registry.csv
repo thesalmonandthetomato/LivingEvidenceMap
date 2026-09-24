@@ -1,0 +1,2 @@
+github_run_id,state,source_manifestations,preserved_pair_decisions,incremental_pair_decisions,manual_review_pairs,zenodo_record_id,doi,record_url,visibility,manifest_sha256,published_at_utc
+35964195676,pre_adjudication,90137,519917,298711,3027,22932524,10.5281/zenodo.22932524,https://zenodo.org/records/22932524,restricted,d0d94822f18e31f6f47b063b3d6c560b9503acc036e3320d12b1d2a7d236395f,2026-09-24T06:49:37Z
