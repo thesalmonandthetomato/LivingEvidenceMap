@@ -1,11 +1,6 @@
 name: Workflow 01 - Resume cancelled five-source deduplication
 
 on:
-  push:
-    branches:
-      - workflow01-persistent-dedup-index
-    paths:
-      - '.github/workflows/workflow_01_resume_cancelled_five_source.yml'
   workflow_dispatch:
 
 permissions:
@@ -202,8 +197,12 @@ jobs:
           stopifnot(c$prior_manifestations == 72941)
           stopifnot(nrow(old) == 519917L)
           stopifnot(nrow(new) == 300000L)
+          pair_key <- paste(pmin(new$record_i,new$record_j),pmax(new$record_i,new$record_j),sep='::')
+          unique_incremental_pairs <- uniqueN(pair_key)
           stopifnot(f$preserved_pair_decisions == 519917L)
-          stopifnot(f$incremental_pair_decisions == nrow(new))
+          stopifnot(f$incremental_candidate_rows == nrow(new))
+          stopifnot(f$incremental_pair_decisions == unique_incremental_pairs)
+          stopifnot(f$exact_duplicate_candidate_rows_removed == nrow(new) - unique_incremental_pairs)
           stopifnot(f$source_manifestations == u$union_manifestations)
           stopifnot(file.exists('outputs/workflow01_full_five_source/clusters.jsonl'))
           stopifnot(file.exists('outputs/workflow01_full_five_source/manual_review_pairs.csv'))
