@@ -19,7 +19,95 @@ env:
   OLD_BENCHMARK_RUN_ID: '35585544686'
 
 jobs:
-  resume:
+  classify:
+    name: classify rows ${{ matrix.start }}-${{ matrix.end }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { start: 1, end: 25000, chunk: '001' }
+          - { start: 25001, end: 50000, chunk: '002' }
+          - { start: 50001, end: 75000, chunk: '003' }
+          - { start: 75001, end: 100000, chunk: '004' }
+          - { start: 100001, end: 125000, chunk: '005' }
+          - { start: 125001, end: 150000, chunk: '006' }
+          - { start: 150001, end: 175000, chunk: '007' }
+          - { start: 175001, end: 200000, chunk: '008' }
+          - { start: 200001, end: 225000, chunk: '009' }
+          - { start: 225001, end: 250000, chunk: '010' }
+          - { start: 250001, end: 275000, chunk: '011' }
+          - { start: 275001, end: 300000, chunk: '012' }
+
+    steps:
+      - name: Checkout persistent-index branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-persistent-dedup-index
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2'))
+
+      - name: Parse classifier implementation
+        shell: Rscript {0}
+        run: parse(file='scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R')
+
+      - name: Download preserved scored-pair checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovered
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$SOURCE_ARTIFACT" --dir recovered
+          test -n "$(find recovered -name scored_sample.csv -path '*workflow01_incremental_score*' -type f -print -quit)"
+          test -n "$(find recovered -name normalised_metadata.csv -path '*workflow01_candidates*' -type f -print -quit)"
+
+      - name: Apply frozen calibrated classifier to chunk
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCORE_DIR="$(dirname "$(find recovered -name scored_sample.csv -path '*workflow01_incremental_score*' -type f -print -quit)")"
+          OUT="outputs/workflow01_incremental_rescore/chunk-${{ matrix.chunk }}"
+          mkdir -p "$OUT"
+          Rscript scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R \
+            --input-dir "$SCORE_DIR" \
+            --output-dir "$OUT" \
+            --source-run-id "$OLD_BENCHMARK_RUN_ID" \
+            --start-row "${{ matrix.start }}" \
+            --end-row "${{ matrix.end }}"
+
+      - name: Validate chunk
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          p <- 'outputs/workflow01_incremental_rescore/chunk-${{ matrix.chunk }}/rescored_sample.csv'
+          x <- fread(p)
+          stopifnot(nrow(x) == (${{ matrix.end }} - ${{ matrix.start }} + 1L))
+          stopifnot(identical(x$source_row_index, seq.int(${{ matrix.start }}, ${{ matrix.end }})))
+          cat('PASS: chunk ${{ matrix.chunk }} complete\n')
+
+      - name: Upload classifier chunk
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-rescore-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/workflow01_incremental_rescore/chunk-${{ matrix.chunk }}/
+          retention-days: 7
+          if-no-files-found: error
+
+  finalize:
+    name: merge chunks and reconstruct clusters
+    needs: classify
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -40,49 +128,45 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2'))
 
-      - name: Parse resume implementation
+      - name: Parse merge implementation
         shell: Rscript {0}
-        run: |
-          parse(file='scripts/updater/workflow_01_deduplication_merge_clusters.R')
-          parse(file='scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R')
+        run: parse(file='scripts/updater/workflow_01_deduplication_merge_clusters.R')
 
-      - name: Download recoverable cancelled-run artefact
+      - name: Download preserved source checkpoint and historical decisions
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p recovered
+          mkdir -p recovered old_decisions
           gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
             --name "$SOURCE_ARTIFACT" --dir recovered
-          test -n "$(find recovered -name scored_sample.csv -path '*workflow01_incremental_score*' -type f -print -quit)"
-          test -n "$(find recovered -name normalised_metadata.csv -path '*workflow01_candidates*' -type f -print -quit)"
-          test -n "$(find recovered -name union_manifest.json -path '*workflow01_union*' -type f -print -quit)"
-          echo "PASS: recovered scored pairs, metadata, and union provenance from run $SOURCE_RUN_ID"
-
-      - name: Download preserved historical pair decisions
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p old_decisions
           gh run download "$OLD_RESCORE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
             --name "workflow02-deduplication-v2-final-full-rescore-$OLD_RESCORE_RUN_ID" --dir old_decisions
-          OLD="$(find old_decisions -name rescored_sample.csv -type f -print -quit)"
-          test -n "$OLD"
-          Rscript -e "library(data.table); x<-fread('$OLD'); stopifnot(nrow(x)==519917L); cat('PASS: 519,917 preserved historical decisions loaded\n')"
+          test -n "$(find recovered -name normalised_metadata.csv -path '*workflow01_candidates*' -type f -print -quit)"
+          test -n "$(find recovered -name union_manifest.json -path '*workflow01_union*' -type f -print -quit)"
+          test -n "$(find old_decisions -name rescored_sample.csv -type f -print -quit)"
 
-      - name: Apply frozen calibrated classifier to recovered scored pairs
-        shell: bash
+      - name: Download classifier chunks
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow01-rescore-chunk-*-${{ github.run_id }}
+          path: downloaded_chunks
+
+      - name: Merge and validate classifier chunks
+        shell: Rscript {0}
         run: |
-          set -euo pipefail
-          SCORE_DIR="$(dirname "$(find recovered -name scored_sample.csv -path '*workflow01_incremental_score*' -type f -print -quit)")"
-          mkdir -p outputs/workflow01_incremental_rescore
-          Rscript scripts/updater/workflow_02_deduplication_v2_identifier_rescore.R \
-            --input-dir "$SCORE_DIR" \
-            --output-dir outputs/workflow01_incremental_rescore \
-            --source-run-id "$OLD_BENCHMARK_RUN_ID"
+          library(data.table)
+          files <- list.files('downloaded_chunks', pattern='rescored_sample\\.csv$', recursive=TRUE, full.names=TRUE)
+          stopifnot(length(files) == 12L)
+          parts <- lapply(files, fread)
+          x <- rbindlist(parts, use.names=TRUE, fill=FALSE)
+          setorder(x, source_row_index)
+          stopifnot(nrow(x) == 300000L)
+          stopifnot(identical(x$source_row_index, seq_len(300000L)))
+          dir.create('outputs/workflow01_incremental_rescore', recursive=TRUE, showWarnings=FALSE)
+          fwrite(x, 'outputs/workflow01_incremental_rescore/rescored_sample.csv')
+          cat('PASS: 12 classifier chunks merged into 300,000-row rescore\n')
 
       - name: Reconstruct five-source clusters
         shell: bash
@@ -117,6 +201,7 @@ jobs:
           stopifnot(u$preserved_prior_manifestations == 72941)
           stopifnot(c$prior_manifestations == 72941)
           stopifnot(nrow(old) == 519917L)
+          stopifnot(nrow(new) == 300000L)
           stopifnot(f$preserved_pair_decisions == 519917L)
           stopifnot(f$incremental_pair_decisions == nrow(new))
           stopifnot(f$source_manifestations == u$union_manifestations)
@@ -129,12 +214,11 @@ jobs:
           ))
 
       - name: Upload completed five-source deduplication state
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workflow01-five-source-deduplication-completed-${{ github.run_id }}
           path: |
-            outputs/workflow01_incremental_rescore/
+            outputs/workflow01_incremental_rescore/rescored_sample.csv
             outputs/workflow01_full_five_source/
-          retention-days: 90
-          if-no-files-found: warn
+          retention-days: 7
+          if-no-files-found: error
