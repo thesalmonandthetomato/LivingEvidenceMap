@@ -12,7 +12,7 @@ arg <- function(flag,default=NULL) {
   if (i==length(args)) stop(sprintf("Missing value after %s",flag),call.=FALSE)
   args[[i+1L]]
 }
-\`%||%\` <- function(x,y) {
+`%||%` <- function(x,y) {
   if (is.null(x)||!length(x)||is.na(x)||!nzchar(as.character(x))) y else as.character(x)
 }
 
