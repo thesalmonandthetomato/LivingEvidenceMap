@@ -1,6 +1,11 @@
 name: Temporary Scopus insttoken API test
 
 on:
+  push:
+    branches:
+      - temp-scopus-insttoken-test-2026-09-24
+    paths:
+      - '.github/workflows/temp_scopus_insttoken_api_test.yml'
   workflow_dispatch:
 
 permissions:
