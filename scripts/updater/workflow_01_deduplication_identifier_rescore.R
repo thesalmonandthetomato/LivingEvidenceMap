@@ -62,7 +62,32 @@ if (!file.exists(scored_path)) {
 
 progress("reading saved scored benchmark sample")
 x <- fread(scored_path, na.strings = c("", "NA"))
-if (!nrow(x)) stop("Saved scored sample is empty", call. = FALSE)
+if (!nrow(x)) {
+  required0 <- c("title_i","title_j","classification","rule","record_i","record_j")
+  missing0 <- setdiff(required0,names(x))
+  if(length(missing0)) stop(sprintf("Empty scored state missing required columns: %s",paste(missing0,collapse=", ")),call.=FALSE)
+  x[, `:=`(
+    rescored_classification=classification,
+    rescored_rule=rule,
+    review_route=character(.N),
+    manual_review_needed=logical(.N),
+    decision_changed=logical(.N)
+  )]
+  fwrite(x,file.path(output_dir,"rescored_sample.csv"))
+  summary <- list(
+    workflow="01_deduplication_identifier_rescore",status="success",
+    source_benchmark_run_id=source_run_id,sample_n=0L,source_full_n=0L,
+    start_row=1L,end_row=0L,weak_auto_pairs_checked=0L,decisions_changed_to_review=0L,
+    original_classification_counts=list(),rescored_classification_counts=list(),
+    changed_by_original_rule=list(),remaining_automatic_by_rule=list(),
+    historic_human_adjudications_loaded=FALSE,candidate_generation_repeated=FALSE,
+    source_candidate_artifact_reused=TRUE
+  )
+  writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
+             file.path(output_dir,"summary.json"))
+  cat("PASS: zero scored duplicate candidates; wrote empty rescored state\n")
+  quit(save="no",status=0L)
+}
 required <- c("title_i","title_j","classification","rule","record_i","record_j")
 missing <- setdiff(required, names(x))
 if (length(missing)) stop(sprintf("Missing required columns: %s", paste(missing, collapse = ", ")), call. = FALSE)
