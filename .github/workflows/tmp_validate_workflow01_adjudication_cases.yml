@@ -1,0 +1,100 @@
+name: Workflow 01 - Validate adjudication case construction
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_workflow01_adjudication_cases.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_STATE_RUN_ID: '35826740658'
+  SOURCE_STATE_ARTIFACT: 'workflow01-five-source-deduplication-extension-35826740658'
+  FINAL_RUN_ID: '35964195676'
+  FINAL_ARTIFACT: 'workflow01-five-source-deduplication-finalized-35964195676'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest'))
+
+      - name: Parse adjudication scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_01_build_duplicate_adjudication_cases.R')
+          parse(file='scripts/updater/workflow_01_llm_adjudicate_duplicates.R')
+          parse(file='scripts/updater/workflow_01_build_human_review_package.R')
+          parse(file='scripts/updater/workflow_01_send_review_email.R')
+
+      - name: Download exact source state and final review queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source_state final_state
+          gh run download "$SOURCE_STATE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$SOURCE_STATE_ARTIFACT" --dir source_state
+          gh run download "$FINAL_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$FINAL_ARTIFACT" --dir final_state
+
+      - name: Build full-evidence adjudication cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_build_duplicate_adjudication_cases.R \
+            --review-pairs final_state/workflow01_full_five_source/manual_review_pairs.csv \
+            --metadata source_state/workflow01_incremental_score/normalised_metadata.csv \
+            --union-dir source_state/workflow01_union \
+            --output outputs/workflow01_adjudication/cases.jsonl
+
+      - name: Validate case coverage and bibliographic structure
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(data.table)
+          lines <- readLines('outputs/workflow01_adjudication/cases.jsonl',warn=FALSE)
+          stopifnot(length(lines)==3027L)
+          x <- lapply(lines,fromJSON,simplifyVector=FALSE)
+          ids <- vapply(x,function(z)z$review_case_id,character(1))
+          stopifnot(!anyDuplicated(ids))
+          required <- c('title','abstract','keywords','journal','year','authors','volume','issue','pages','doi','source','source_record_id')
+          check <- function(r) all(required %in% names(r))
+          stopifnot(all(vapply(x,function(z)check(z$record_i)&&check(z$record_j),logical(1))))
+          # Abstracts may legitimately be unavailable, but each record must retain title and source identity.
+          stopifnot(all(vapply(x,function(z)nzchar(z$record_i$title)&&nzchar(z$record_j$title),logical(1))))
+          stopifnot(all(vapply(x,function(z)nzchar(z$record_i$source_record_id)&&nzchar(z$record_j$source_record_id),logical(1))))
+          abstract_present <- sum(vapply(x,function(z){
+            a <- z$record_i$abstract; b <- z$record_j$abstract
+            (!is.null(a)&&!is.na(a)&&nzchar(a)) || (!is.null(b)&&!is.na(b)&&nzchar(b))
+          },logical(1)))
+          cat(sprintf('PASS: 3027 stable adjudication cases; at least one abstract present in %d cases\n',abstract_present))
+
+      - name: Upload validation case package
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-adjudication-cases-validation-${{ github.run_id }}
+          path: outputs/workflow01_adjudication/
+          retention-days: 7
+          if-no-files-found: error
