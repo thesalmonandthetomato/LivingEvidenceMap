@@ -48,3 +48,14 @@
 {"review_case_id":"hr-594a90f99bece53ac583","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:13:04.355Z"}
 {"review_case_id":"hr-55f4d89c5109be256cf8","decision":"not_duplicate","rationale":"Human adjudication: not duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:13:04.355Z"}
 {"review_case_id":"hr-2f9d6f3ee9f0d427fcfd","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:13:04.355Z"}
+{"review_case_id":"hr-654e89ff7be607624191","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-ec57925f11a3ac82ab30","decision":"duplicate","rationale":"Human adjudication: duplicate. Supplementary file belongs to parent article.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-badd6436c25ef8a6a733","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-9225825d5a65270f7d6d","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-a2698baa350d498c4f83","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-0016b0db60c8d73d19f4","decision":"not_duplicate","rationale":"Human adjudication: not duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-5d395ceab9f6dda59efb","decision":"not_duplicate","rationale":"Human adjudication: not duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-ade31b4519a55b909ba3","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-56d6bf7133f48880d973","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-149f1a6696e3dbb1615f","decision":"duplicate","rationale":"Human adjudication: duplicate.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z"}
+{"review_case_id":"hr-a9e639dab4e8bf7cc79c","decision":"duplicate","rationale":"Superseding human adjudication: duplicate. Corrects earlier not_duplicate judgement for consistency after reviewing equivalent cases.","reviewer":"Neal Haddaway","resolved_at_utc":"2026-09-24T16:18:19.790Z","supersedes_previous_decision":true}
