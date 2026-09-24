@@ -138,7 +138,7 @@ for (src in sort(unique(wanted_meta$source))) {
       if (!nzchar(trimws(line))) next
       r <- fromJSON(line,simplifyVector=FALSE)
       rid <- source_record_id(r,src)
-      if (is.na(rid) || !nzchar(rid) || is.null(needed_set[[rid]])) next
+      if (is.na(rid) || !nzchar(rid) || !(rid %in% names(needed_set))) next
       m <- wanted_meta[source==src & source_record_id==rid]
       if (nrow(m)!=1L) stop(sprintf("Metadata mapping not unique for %s::%s",src,rid),call.=FALSE)
       assign(paste(src,rid,sep="::"),extract_record(r,src,m),envir=records)
