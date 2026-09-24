@@ -1,6 +1,11 @@
 name: Workflow 01 - Finalise canonical corpus and archive
 
 on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflow01_finalize_trigger.txt'
   workflow_dispatch:
     inputs:
       base_dedup_run_id:
