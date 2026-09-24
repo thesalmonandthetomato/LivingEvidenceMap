@@ -61,6 +61,42 @@ if (!is.null(integrity$active_decisions) && as.integer(integrity$active_decision
 }
 human_by_id <- setNames(human,human_ids)
 
+# Abstract/title mismatch detected during duplicate adjudication is a metadata-cleaning
+# action, not a second deduplication stage. Emit immutable source-record strip actions
+# for the downstream corpus materialisation step. Workflow 03 will then discover the
+# resulting missing abstracts through its normal corpus scan.
+strip_by_key <- list()
+for (a in llm) {
+  for (side in c("record_i","record_j")) {
+    flag_name <- if (identical(side,"record_i")) "abstract_consistent_with_record_i" else "abstract_consistent_with_record_j"
+    if (is.null(a[[flag_name]]) || isTRUE(a[[flag_name]])) next
+    rec <- a[[side]]
+    if (is.null(rec$source) || is.null(rec$source_record_id)) {
+      stop(sprintf("Abstract mismatch for %s lacks immutable source identity",a$review_case_id),call.=FALSE)
+    }
+    key <- paste(as.character(rec$source),as.character(rec$source_record_id),sep=":")
+    if (is.null(strip_by_key[[key]])) {
+      strip_by_key[[key]] <- list(
+        source=as.character(rec$source),
+        source_record_id=as.character(rec$source_record_id),
+        action="strip_abstract",
+        reason="title_abstract_mismatch_detected_during_deduplication",
+        original_abstract=if(is.null(rec$abstract)) NULL else rec$abstract,
+        supporting_review_case_ids=as.character(a$review_case_id),
+        pair_keys=as.character(a$pair_key)
+      )
+    } else {
+      strip_by_key[[key]]$supporting_review_case_ids <- unique(c(strip_by_key[[key]]$supporting_review_case_ids,as.character(a$review_case_id)))
+      strip_by_key[[key]]$pair_keys <- unique(c(strip_by_key[[key]]$pair_keys,as.character(a$pair_key)))
+    }
+  }
+}
+strip_actions <- unname(strip_by_key)
+strip_path <- file.path(output_dir,"abstract_strip_actions.jsonl")
+strip_con <- file(strip_path,"wt",encoding="UTF-8")
+if(length(strip_actions)) for(z in strip_actions) writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null"),strip_con,useBytes=TRUE)
+close(strip_con)
+
 audit <- vector("list",length(llm))
 for (i in seq_along(llm)) {
   a <- llm[[i]]
@@ -160,6 +196,9 @@ summary <- list(
   adjudicated_cases=length(llm),
   llm_final_decisions=sum(vapply(audit,function(x)identical(x$decision_source,"llm"),logical(1))),
   human_final_decisions=sum(vapply(audit,function(x)identical(x$decision_source,"human"),logical(1))),
+  abstract_strip_actions=length(strip_actions),
+  abstract_strip_actions_file="abstract_strip_actions.jsonl",
+  workflow03_discovers_stripped_abstracts_via_normal_missing_abstract_scan=TRUE,
   unresolved_pair_decisions=nrow(remaining),
   automatic_duplicate_edges=nrow(dup),
   clusters=nrow(sizes),
