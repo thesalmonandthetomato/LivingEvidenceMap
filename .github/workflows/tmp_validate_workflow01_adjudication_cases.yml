@@ -1,5 +1,5 @@
 name: Workflow 01 - Validate adjudication case construction
-# rerun after source-ID membership fix
+# rerun after nested field extraction fix
 
 on:
   push:
