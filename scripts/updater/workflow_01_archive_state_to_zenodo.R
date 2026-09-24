@@ -49,7 +49,7 @@ if (length(all_paths)) suppressWarnings(Sys.setFileTime(all_paths,as.POSIXct("20
 state_filename <- sprintf("LivingEvidenceMap_workflow01_run-%s_%s-state.tar.gz",run_id,state)
 state_path <- file.path(archive_dir,state_filename)
 old <- setwd(staging_root); on.exit(setwd(old),add=TRUE)
-members <- c("workflow01_incremental_rescore","workflow01_full_five_source","canonical","reports","provenance")
+members <- c("workflow01_seed","workflow01_incremental_rescore","workflow01_full_five_source","canonical","reports","provenance")
 members <- members[file.exists(members)]
 if (!length(members)) stop("No Workflow 01 state members found",call.=FALSE)
 utils::tar(state_path,files=members,compression="gzip",tar="internal")
