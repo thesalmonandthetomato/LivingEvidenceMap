@@ -1,0 +1,163 @@
+name: Workflow 01 - Human review integrity safeguards test
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'scripts/updater/workflow_01_render_human_review_batch.R'
+      - 'scripts/updater/workflow_01_validate_human_review_batch.R'
+      - 'scripts/updater/workflow_01_migrate_human_review_state.R'
+      - 'scripts/updater/workflow_01_validate_human_review_state.R'
+      - '.github/workflows/tmp_test_workflow01_human_review_integrity.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  REVIEW_RUN_ID: '35986405369'
+  REVIEW_ARTIFACT: 'workflow01-blinded-human-review-35986405369'
+
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout safeguard branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Download locked blinded queue
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.REVIEW_ARTIFACT }}
+          path: locked_review
+          run-id: ${{ env.REVIEW_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Normalise current human state to immutable source IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_migrate_human_review_state.R \
+            --queue locked_review/human_review_132_blinded.jsonl \
+            --decisions data/adjudication/workflow01/run-35964195676/human_decisions.jsonl \
+            --repairs data/adjudication/workflow01/run-35964195676/data_quality_repairs.jsonl \
+            --output-dir outputs/normalised
+
+      - name: Final state integrity gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_validate_human_review_state.R \
+            --queue locked_review/human_review_132_blinded.jsonl \
+            --decisions outputs/normalised/human_decisions.normalised.jsonl \
+            --repairs outputs/normalised/data_quality_repairs.normalised.jsonl \
+            --output outputs/state_integrity.json \
+            --require-complete true
+
+      - name: Render batch mechanically from queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_render_human_review_batch.R \
+            --queue locked_review/human_review_132_blinded.jsonl \
+            --start 91 --size 10 \
+            --output-dir outputs/batch91
+
+      - name: Build valid batch submission from locked active decisions
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          q <- lapply(readLines('outputs/batch91/batch.jsonl'),fromJSON,simplifyVector=FALSE)
+          m <- fromJSON('outputs/batch91/batch_manifest.json',simplifyVector=FALSE)
+          d <- lapply(readLines('outputs/normalised/human_decisions.normalised.jsonl'),fromJSON,simplifyVector=FALSE)
+          d <- setNames(d,vapply(d,function(x)x$review_case_id,character(1)))
+          out <- lapply(q,function(x) {
+            z <- d[[x$review_case_id]]
+            z$batch_id <- m$batch_id
+            z$queue_sha256 <- m$queue_sha256
+            z
+          })
+          con <- file('outputs/batch91/decisions.jsonl','wt',encoding='UTF-8')
+          for(z in out) writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con)
+          close(con)
+          writeLines(character(), 'outputs/batch91/repairs.jsonl')
+
+      - name: Validate exact batch membership
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_validate_human_review_batch.R \
+            --queue locked_review/human_review_132_blinded.jsonl \
+            --batch-manifest outputs/batch91/batch_manifest.json \
+            --decisions outputs/batch91/decisions.jsonl \
+            --repairs outputs/batch91/repairs.jsonl \
+            --output-dir outputs/batch91_validation
+
+      - name: Negative control - fabricated case ID must fail
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp outputs/batch91/decisions.jsonl outputs/batch91/fabricated.jsonl
+          sed -i '1s/"review_case_id":"[^"]*"/"review_case_id":"hr-fabricated-case"/' outputs/batch91/fabricated.jsonl
+          if Rscript scripts/updater/workflow_01_validate_human_review_batch.R \
+              --queue locked_review/human_review_132_blinded.jsonl \
+              --batch-manifest outputs/batch91/batch_manifest.json \
+              --decisions outputs/batch91/fabricated.jsonl \
+              --repairs outputs/batch91/repairs.jsonl \
+              --output-dir outputs/negative_should_not_exist; then
+            echo "FAIL: fabricated case ID was accepted"
+            exit 1
+          fi
+          echo "PASS: fabricated case ID rejected"
+
+      - name: Negative control - repair outside pair must fail
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          q <- lapply(readLines('outputs/batch91/batch.jsonl'),fromJSON,simplifyVector=FALSE)
+          m <- fromJSON('outputs/batch91/batch_manifest.json',simplifyVector=FALSE)
+          r <- list(
+            review_case_id=q[[1]]$review_case_id,
+            batch_id=m$batch_id,
+            queue_sha256=m$queue_sha256,
+            source='openalex',
+            source_record_id='openalex:W999999999999',
+            action='strip_abstract',
+            reason='negative control',
+            recorded_by='integrity test',
+            recorded_at_utc='2026-09-24T00:00:00Z'
+          )
+          writeLines(toJSON(r,auto_unbox=TRUE,null='null'),'outputs/batch91/bad_repair.jsonl')
+          status <- system2('Rscript',c(
+            'scripts/updater/workflow_01_validate_human_review_batch.R',
+            '--queue','locked_review/human_review_132_blinded.jsonl',
+            '--batch-manifest','outputs/batch91/batch_manifest.json',
+            '--decisions','outputs/batch91/decisions.jsonl',
+            '--repairs','outputs/batch91/bad_repair.jsonl',
+            '--output-dir','outputs/bad_repair_should_not_exist'
+          ))
+          if(status==0) stop('FAIL: out-of-pair repair was accepted')
+          cat('PASS: out-of-pair repair rejected\n')
+
+      - name: Upload safeguard verification outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-human-review-integrity-${{ github.run_id }}
+          path: outputs/
+          retention-days: 7
+          if-no-files-found: error
