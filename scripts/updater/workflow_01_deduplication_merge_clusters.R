@@ -32,7 +32,30 @@ pair_key <- function(x) paste(pmin(x$record_i,x$record_j),pmax(x$record_i,x$reco
 old[,pair_key:=pair_key(old)]
 new[,pair_key:=pair_key(new)]
 if (anyDuplicated(old$pair_key)) stop("Duplicate preserved pair key",call.=FALSE)
-if (anyDuplicated(new$pair_key)) stop("Duplicate incremental pair key",call.=FALSE)
+
+incremental_candidate_rows <- nrow(new)
+duplicate_keys <- unique(new$pair_key[duplicated(new$pair_key) | duplicated(new$pair_key, fromLast=TRUE)])
+duplicate_candidate_rows_removed <- 0L
+if (length(duplicate_keys)) {
+  audit <- new[pair_key %in% duplicate_keys]
+  compare_cols <- setdiff(names(audit), c("source_row_index","pair_key"))
+  distinct_rows <- unique(audit[, c("pair_key", compare_cols), with=FALSE])
+  discordant <- distinct_rows[, .N, by=pair_key][N > 1L]
+  if (nrow(discordant)) {
+    stop(sprintf("Found %d discordant duplicate incremental pair keys", nrow(discordant)), call.=FALSE)
+  }
+  fwrite(audit, file.path(output_dir,"incremental_duplicate_pair_audit.csv"))
+  before <- nrow(new)
+  setorder(new, pair_key, source_row_index)
+  new <- new[!duplicated(pair_key)]
+  duplicate_candidate_rows_removed <- before - nrow(new)
+  cat(sprintf(
+    "PASS: collapsed %d exact duplicate candidate rows across %d pair keys; %d unique incremental pairs remain\n",
+    duplicate_candidate_rows_removed, length(duplicate_keys), nrow(new)
+  ))
+}
+
+if (anyDuplicated(new$pair_key)) stop("Duplicate incremental pair key remains after exact-duplicate collapse",call.=FALSE)
 overlap <- intersect(old$pair_key,new$pair_key)
 if (length(overlap)) stop(sprintf("Incremental scorer recomputed %d preserved pairs",length(overlap)),call.=FALSE)
 
@@ -100,7 +123,10 @@ summary <- list(
   status="success",
   source_manifestations=nrow(meta),
   preserved_pair_decisions=nrow(old),
+  incremental_candidate_rows=incremental_candidate_rows,
   incremental_pair_decisions=nrow(new),
+  exact_duplicate_candidate_rows_removed=duplicate_candidate_rows_removed,
+  exact_duplicate_pair_keys=length(duplicate_keys),
   total_candidate_pair_decisions=nrow(all),
   automatic_duplicate_edges=nrow(dup),
   manual_review_pairs=nrow(review),
