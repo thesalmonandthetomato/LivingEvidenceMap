@@ -1,0 +1,180 @@
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(httr2)
+  library(jsonlite)
+  library(digest)
+})
+
+args <- commandArgs(trailingOnly=TRUE)
+arg <- function(flag,default=NULL) {
+  i <- match(flag,args)
+  if (is.na(i)) return(default)
+  if (i == length(args)) stop(sprintf("Missing value after %s",flag),call.=FALSE)
+  args[[i+1L]]
+}
+
+input_path <- arg("--input")
+output_path <- arg("--output")
+human_path <- arg("--human-review-output")
+model <- arg("--model",Sys.getenv("OPENAI_DUPLICATE_MODEL","gpt-5.6-luna"))
+threshold <- as.numeric(arg("--auto-threshold","0.95"))
+start_row <- as.integer(arg("--start-row","1"))
+end_arg <- arg("--end-row",NULL)
+if (any(vapply(list(input_path,output_path,human_path),is.null,logical(1)))) {
+  stop("Required: --input --output --human-review-output",call.=FALSE)
+}
+if (!is.finite(threshold) || threshold < 0 || threshold > 1) stop("Invalid --auto-threshold",call.=FALSE)
+token <- Sys.getenv("OPENAI_API_KEY")
+if (!nzchar(token)) stop("OPENAI_API_KEY is required",call.=FALSE)
+
+lines <- readLines(input_path,warn=FALSE,encoding="UTF-8")
+lines <- lines[nzchar(trimws(lines))]
+full_n <- length(lines)
+end_row <- if (is.null(end_arg)) full_n else as.integer(end_arg)
+if (is.na(start_row)||is.na(end_row)||start_row<1L||end_row<start_row||end_row>full_n) {
+  stop("Invalid adjudication row range",call.=FALSE)
+}
+lines <- lines[start_row:end_row]
+
+dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
+dir.create(dirname(human_path),recursive=TRUE,showWarnings=FALSE)
+out <- file(output_path,"wt",encoding="UTF-8")
+human <- file(human_path,"wt",encoding="UTF-8")
+on.exit({try(close(out),silent=TRUE);try(close(human),silent=TRUE)},add=TRUE)
+
+schema <- list(
+  type="object",
+  additionalProperties=FALSE,
+  properties=list(
+    decision=list(type="string",enum=list("duplicate","not_duplicate","uncertain")),
+    confidence=list(type="number",minimum=0,maximum=1),
+    rationale=list(type="string")
+  ),
+  required=c("decision","confidence","rationale")
+)
+
+system_prompt <- paste(
+  "You adjudicate whether two bibliographic records are manifestations of the same scholarly work.",
+  "Use publication identity evidence, not topical similarity.",
+  "A DOI is supporting evidence but may be wrong and is never decisive by itself.",
+  "Preprint-to-journal, early-online-to-final, conference-abstract-to-full-paper, and database-source duplicates may legitimately differ in DOI, title wording, pagination or journal metadata.",
+  "Different experiments, parts, reports, years, volumes, issues, numbered supplements, or genuinely different publications are not duplicates merely because abstracts or topics are similar.",
+  "Use title, abstract, keywords, authors, journal/source, year, volume, issue, pages and identifiers together.",
+  "Return uncertain whenever identity is not clear enough to resolve safely.",
+  "Return JSON only under the supplied schema.",
+  sep="\n"
+)
+
+call_model <- function(case) {
+  body <- list(
+    model=model,
+    store=FALSE,
+    reasoning=list(effort="low"),
+    input=list(
+      list(role="system",content=list(list(type="input_text",text=system_prompt))),
+      list(role="user",content=list(list(type="input_text",text=toJSON(case,auto_unbox=TRUE,null="null",na="null"))))
+    ),
+    text=list(
+      verbosity="low",
+      format=list(type="json_schema",name="duplicate_adjudication",strict=TRUE,schema=schema)
+    )
+  )
+  resp <- request("https://api.openai.com/v1/responses") |>
+    req_auth_bearer_token(token) |>
+    req_body_json(body,auto_unbox=TRUE) |>
+    req_timeout(180) |>
+    req_retry(max_tries=4,backoff=~2^.x) |>
+    req_perform() |>
+    resp_body_json(simplifyVector=FALSE)
+
+  messages <- Filter(function(x)is.list(x)&&identical(x$type,"message"),resp$output)
+  text_items <- unlist(lapply(messages,function(x)Filter(
+    function(y)is.list(y)&&identical(y$type,"output_text")&&!is.null(y$text),x$content
+  )),recursive=FALSE)
+  if (!length(text_items)) stop("No output_text returned",call.=FALSE)
+  parsed <- fromJSON(text_items[[1L]]$text,simplifyVector=FALSE)
+  if (is.null(parsed$decision)||is.null(parsed$confidence)||is.null(parsed$rationale)) stop("Incomplete model result",call.=FALSE)
+  if (!(parsed$decision %in% c("duplicate","not_duplicate","uncertain"))) stop("Invalid model decision",call.=FALSE)
+  conf <- as.numeric(parsed$confidence)
+  if (!is.finite(conf)||conf<0||conf>1) stop("Invalid model confidence",call.=FALSE)
+  rat <- as.character(parsed$rationale)
+  if (!length(rat)||!nzchar(trimws(rat))) stop("Empty model rationale",call.=FALSE)
+  list(
+    decision=parsed$decision,
+    confidence=conf,
+    rationale=rat,
+    response_id=if(is.null(resp$id)) NULL else as.character(resp$id),
+    resolved_model=if(is.null(resp$model)) model else as.character(resp$model),
+    usage=resp$usage
+  )
+}
+
+human_n <- 0L
+auto_n <- 0L
+technical_n <- 0L
+for (n in seq_along(lines)) {
+  case <- fromJSON(lines[[n]],simplifyVector=FALSE)
+  started <- format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
+  result <- tryCatch(call_model(case),error=function(e) {
+    technical_n <<- technical_n + 1L
+    list(decision="uncertain",confidence=0,rationale="Model adjudication failed; human review required.",
+         response_id=NULL,resolved_model=model,usage=NULL,technical_error=conditionMessage(e))
+  })
+  technical_error <- if(is.null(result$technical_error)) NULL else result$technical_error
+  promotion <- if (!is.null(technical_error)) "human_review" else if (
+    identical(result$decision,"uncertain") || result$confidence < threshold
+  ) "human_review" else result$decision
+  promotion_reason <- if (!is.null(technical_error)) "technical_failure" else if (
+    identical(result$decision,"uncertain")
+  ) "model_uncertain" else if (result$confidence < threshold) "below_auto_threshold" else "high_confidence_model_decision"
+
+  rec <- c(case,list(
+    workflow="01_duplicate_llm_adjudication",
+    requested_model=model,
+    resolved_model=result$resolved_model,
+    response_id=result$response_id,
+    model_decision=result$decision,
+    model_confidence=result$confidence,
+    model_rationale=result$rationale,
+    technical_error=technical_error,
+    auto_threshold=threshold,
+    promotion=promotion,
+    promotion_reason=promotion_reason,
+    adjudicated_at_utc=started
+  ))
+  line <- toJSON(rec,auto_unbox=TRUE,null="null",na="null")
+  writeLines(line,out,useBytes=TRUE)
+  if (identical(promotion,"human_review")) {
+    human_n <- human_n + 1L
+    writeLines(line,human,useBytes=TRUE)
+  } else auto_n <- auto_n + 1L
+
+  if (n==1L || n%%25L==0L || n==length(lines)) {
+    cat(sprintf("LLM adjudication %d/%d in chunk; automatic=%d human=%d technical_failures=%d\n",
+                n,length(lines),auto_n,human_n,technical_n))
+    flush.console()
+  }
+}
+close(out); close(human)
+on.exit(NULL,add=FALSE)
+
+manifest <- list(
+  schema="living-evidence-map-workflow01-llm-adjudication-manifest-v1",
+  requested_model=model,
+  auto_threshold=threshold,
+  source_case_count=full_n,
+  start_row=start_row,
+  end_row=end_row,
+  processed_cases=length(lines),
+  automatic_cases=auto_n,
+  human_review_cases=human_n,
+  technical_failures=technical_n,
+  input_sha256=digest(file=input_path,algo="sha256",serialize=FALSE),
+  output_sha256=digest(file=output_path,algo="sha256",serialize=FALSE),
+  human_review_sha256=digest(file=human_path,algo="sha256",serialize=FALSE)
+)
+writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),
+           paste0(output_path,".manifest.json"))
+cat(sprintf("PASS: LLM adjudicated %d cases: %d automatic, %d require human review\n",
+            length(lines),auto_n,human_n))
