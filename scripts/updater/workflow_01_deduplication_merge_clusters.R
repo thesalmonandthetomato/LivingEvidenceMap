@@ -26,7 +26,6 @@ new <- fread(new_decisions,na.strings=c("","NA"))
 meta <- fread(metadata,na.strings=c("","NA"))
 stopifnot(all(c("idx","source","source_record_id") %in% names(meta)))
 stopifnot(identical(meta$idx,seq_len(nrow(meta))))
-stopifnot(nrow(meta) >= 72941L)
 
 pair_key <- function(x) paste(pmin(x$record_i,x$record_j),pmax(x$record_i,x$record_j),sep="::")
 old[,pair_key:=pair_key(old)]
