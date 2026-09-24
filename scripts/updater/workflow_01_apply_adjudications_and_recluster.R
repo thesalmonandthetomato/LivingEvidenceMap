@@ -19,6 +19,7 @@ manifestation_map_path <- arg("--manifestation-map")
 llm_path <- arg("--llm-adjudications")
 human_path <- arg("--human-decisions",NULL)
 integrity_path <- arg("--human-integrity-manifest",NULL)
+data_quality_repairs_path <- arg("--data-quality-repairs",NULL)
 output_dir <- arg("--output-dir")
 if (any(vapply(list(combined_path,manifestation_map_path,llm_path,human_path,integrity_path,output_dir),is.null,logical(1)))) {
   stop("Required: --combined-decisions --manifestation-map --llm-adjudications --human-decisions --human-integrity-manifest --output-dir",call.=FALSE)
@@ -88,6 +89,37 @@ for (a in llm) {
     } else {
       strip_by_key[[key]]$supporting_review_case_ids <- unique(c(strip_by_key[[key]]$supporting_review_case_ids,as.character(a$review_case_id)))
       strip_by_key[[key]]$pair_keys <- unique(c(strip_by_key[[key]]$pair_keys,as.character(a$pair_key)))
+    }
+  }
+}
+# Explicit human data-quality repairs are authoritative when they request
+# stripping an abstract from a specific immutable source manifestation. Other
+# repair types are not applied here; Workflow 02 handles later metadata repair.
+if (!is.null(data_quality_repairs_path) && file.exists(data_quality_repairs_path)) {
+  repairs <- read_jsonl(data_quality_repairs_path)
+  for (r in repairs) {
+    if (is.null(r$action) || !identical(as.character(r$action),"strip_abstract")) next
+    if (is.null(r$source) || is.null(r$source_record_id)) {
+      stop(sprintf("Human strip_abstract repair %s lacks immutable source identity",r$review_case_id),call.=FALSE)
+    }
+    key <- paste(as.character(r$source),as.character(r$source_record_id),sep=":")
+    if (is.null(strip_by_key[[key]])) {
+      strip_by_key[[key]] <- list(
+        source=as.character(r$source),
+        source_record_id=as.character(r$source_record_id),
+        action="strip_abstract",
+        reason=if(is.null(r$reason)) "human_data_quality_repair" else as.character(r$reason),
+        original_abstract=NULL,
+        supporting_review_case_ids=as.character(r$review_case_id),
+        pair_keys=character(),
+        decision_source="human_data_quality_repair"
+      )
+    } else {
+      strip_by_key[[key]]$supporting_review_case_ids <- unique(c(
+        strip_by_key[[key]]$supporting_review_case_ids,
+        as.character(r$review_case_id)
+      ))
+      strip_by_key[[key]]$decision_source <- "llm_and_or_human_data_quality_repair"
     }
   }
 }
