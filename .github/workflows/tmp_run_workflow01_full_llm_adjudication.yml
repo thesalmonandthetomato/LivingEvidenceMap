@@ -1,0 +1,251 @@
+name: Workflow 01 - Full LLM duplicate adjudication
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_workflow01_full_llm_adjudication.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CASE_RUN_ID: '35968356562'
+  CASE_ARTIFACT: 'workflow01-adjudication-cases-validation-35968356562'
+  SOURCE_WORKFLOW01_RUN_ID: '35964195676'
+  MODEL: 'gpt-5.6-luna'
+  AUTO_THRESHOLD: '0.95'
+
+jobs:
+  adjudicate:
+    name: adjudicate cases ${{ matrix.start }}-${{ matrix.end }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { start: 1, end: 505, chunk: '001' }
+          - { start: 506, end: 1010, chunk: '002' }
+          - { start: 1011, end: 1515, chunk: '003' }
+          - { start: 1516, end: 2020, chunk: '004' }
+          - { start: 2021, end: 2525, chunk: '005' }
+          - { start: 2526, end: 3027, chunk: '006' }
+
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install API dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Download validated full-evidence cases
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CASE_ARTIFACT }}
+          path: cases
+          run-id: ${{ env.CASE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Adjudicate chunk
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_DUPLICATE_MODEL: ${{ env.MODEL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="outputs/chunk-${{ matrix.chunk }}"
+          mkdir -p "$OUT"
+          Rscript scripts/updater/workflow_01_llm_adjudicate_duplicates.R \
+            --input cases/cases.jsonl \
+            --output "$OUT/adjudications.jsonl" \
+            --human-review-output "$OUT/human_review.jsonl" \
+            --model "$MODEL" \
+            --auto-threshold "$AUTO_THRESHOLD" \
+            --start-row "${{ matrix.start }}" \
+            --end-row "${{ matrix.end }}"
+
+      - name: Validate chunk
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- 'outputs/chunk-${{ matrix.chunk }}/adjudications.jsonl'
+          x <- lapply(readLines(p,warn=FALSE),fromJSON,simplifyVector=FALSE)
+          stopifnot(length(x)==(${{ matrix.end }}-${{ matrix.start }}+1L))
+          stopifnot(!anyDuplicated(vapply(x,function(z)z$review_case_id,character(1))))
+          stopifnot(all(vapply(x,function(z)z$promotion %in% c('duplicate','not_duplicate','human_review'),logical(1))))
+          technical <- sum(vapply(x,function(z)!is.null(z$technical_error),logical(1)))
+          cat(sprintf('PASS: chunk ${{ matrix.chunk }} complete: %d cases; technical failures=%d\n',length(x),technical))
+
+      - name: Upload adjudication chunk
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-llm-adjudication-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/chunk-${{ matrix.chunk }}/
+          retention-days: 7
+          if-no-files-found: error
+
+  merge:
+    name: merge LLM decisions and build conditional human review
+    needs: adjudicate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      pending_count: ${{ steps.summary.outputs.pending_count }}
+
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install merge dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Download validated source cases
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CASE_ARTIFACT }}
+          path: cases
+          run-id: ${{ env.CASE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Download all LLM chunks
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow01-llm-adjudication-chunk-*-${{ github.run_id }}
+          path: chunks
+
+      - name: Merge and validate complete model decision set
+        id: summary
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+
+          source_lines <- readLines('cases/cases.jsonl',warn=FALSE)
+          source_cases <- lapply(source_lines,fromJSON,simplifyVector=FALSE)
+          source_ids <- vapply(source_cases,function(z)z$review_case_id,character(1))
+
+          files <- list.files('chunks',pattern='adjudications\\.jsonl$',recursive=TRUE,full.names=TRUE)
+          stopifnot(length(files)==6L)
+          model_lines <- unlist(lapply(files,readLines,warn=FALSE),use.names=FALSE)
+          model <- lapply(model_lines,fromJSON,simplifyVector=FALSE)
+          model_ids <- vapply(model,function(z)z$review_case_id,character(1))
+
+          stopifnot(length(model)==3027L)
+          stopifnot(!anyDuplicated(model_ids))
+          stopifnot(setequal(model_ids,source_ids))
+          model <- model[match(source_ids,model_ids)]
+
+          dir.create('outputs/workflow01_adjudication',recursive=TRUE,showWarnings=FALSE)
+          out <- file('outputs/workflow01_adjudication/all_adjudications.jsonl','wt',encoding='UTF-8')
+          for(z in model) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null'),out,useBytes=TRUE)
+          close(out)
+
+          human <- Filter(function(z)identical(z$promotion,'human_review'),model)
+          hout <- file('outputs/workflow01_adjudication/human_review.jsonl','wt',encoding='UTF-8')
+          for(z in human) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null'),hout,useBytes=TRUE)
+          close(hout)
+
+          automatic_dup <- sum(vapply(model,function(z)identical(z$promotion,'duplicate'),logical(1)))
+          automatic_nondup <- sum(vapply(model,function(z)identical(z$promotion,'not_duplicate'),logical(1)))
+          technical <- sum(vapply(model,function(z)!is.null(z$technical_error),logical(1)))
+          summary <- list(
+            schema='living-evidence-map-workflow01-llm-adjudication-summary-v1',
+            status=if(length(human)) 'awaiting_human_review' else 'llm_adjudication_complete',
+            source_workflow01_run_id=Sys.getenv('SOURCE_WORKFLOW01_RUN_ID'),
+            model=Sys.getenv('MODEL'),
+            auto_threshold=as.numeric(Sys.getenv('AUTO_THRESHOLD')),
+            total_cases=length(model),
+            automatic_duplicate=automatic_dup,
+            automatic_not_duplicate=automatic_nondup,
+            human_review_required=length(human),
+            technical_failures=technical,
+            source_cases_sha256=digest(file='cases/cases.jsonl',algo='sha256',serialize=FALSE),
+            adjudications_sha256=digest(file='outputs/workflow01_adjudication/all_adjudications.jsonl',algo='sha256',serialize=FALSE),
+            human_review_sha256=digest(file='outputs/workflow01_adjudication/human_review.jsonl',algo='sha256',serialize=FALSE)
+          )
+          writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'outputs/workflow01_adjudication/summary.json')
+          cat(sprintf('pending_count=%d\n',length(human)),file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
+          cat(sprintf('PASS: 3027 LLM adjudications merged: duplicate=%d not_duplicate=%d human=%d technical=%d\n',
+                      automatic_dup,automatic_nondup,length(human),technical))
+
+      - name: Build conditional human-review package
+        if: ${{ steps.summary.outputs.pending_count != '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_build_human_review_package.R \
+            --input outputs/workflow01_adjudication/human_review.jsonl \
+            --output-dir outputs/workflow01_adjudication/review_package \
+            --source-run-id "$SOURCE_WORKFLOW01_RUN_ID" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY"
+
+      - name: Record automatic-continuation state
+        if: ${{ steps.summary.outputs.pending_count == '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '{"status":"continue_automatically","source_workflow01_run_id":"%s","adjudication_run_id":"%s"}\n' \
+            "$SOURCE_WORKFLOW01_RUN_ID" "$GITHUB_RUN_ID" \
+            > outputs/workflow01_adjudication/CONTINUE_AUTOMATICALLY.json
+
+      - name: Upload merged adjudication state
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-llm-adjudication-complete-${{ github.run_id }}
+          path: outputs/workflow01_adjudication/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Add direct artefact link to email payload
+        if: ${{ steps.summary.outputs.pending_count != '0' }}
+        shell: Rscript {0}
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        run: |
+          library(jsonlite)
+          p <- 'outputs/workflow01_adjudication/review_package/email_payload.json'
+          x <- fromJSON(p,simplifyVector=FALSE)
+          url <- sprintf('https://github.com/%s/actions/runs/%s/artifacts/%s',
+                         Sys.getenv('GITHUB_REPOSITORY'),Sys.getenv('GITHUB_RUN_ID'),Sys.getenv('ARTIFACT_ID'))
+          x$artifact_url <- url
+          x$body_text <- paste0(x$body_text,'\n\nDirect review artefact: ',url,'\n')
+          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),p)
+
+      - name: Send human-review notification
+        if: ${{ steps.summary.outputs.pending_count != '0' }}
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_send_review_email.R \
+            --payload outputs/workflow01_adjudication/review_package/email_payload.json
