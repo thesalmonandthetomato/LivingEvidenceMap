@@ -1,0 +1,11 @@
+{
+  "schema": "living-evidence-map-workflow01-targeted-exact-abstract-audit-v1",
+  "seed": "workflow01-targeted-exact-abstract-audit-v1-2026-09-24",
+  "population_rule": "promotion=duplicate AND deterministic_evidence.classifier_rule=exact_abstract_insufficient_metadata",
+  "full_population": 384,
+  "excluded_original_validation_ids": 14,
+  "targeted_sample_size": 20,
+  "selection": "deterministic SHA-256 ordering after excluding cases already in the original 40-case validation sample",
+  "labels_withheld": true,
+  "purpose": "Estimate false-duplicate risk specifically in the exact-abstract/insufficient-metadata route after two errors were observed in the blinded validation."
+}
