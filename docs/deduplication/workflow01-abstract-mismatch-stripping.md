@@ -8,7 +8,7 @@ When duplicate adjudication identifies that a record's abstract is semantically 
 2. Record an `abstract_strip_actions.jsonl` action keyed by immutable `source` + `source_record_id`.
 3. Preserve the original abstract and the review-case/pair provenance in that audit action.
 4. The downstream corpus materialisation step applies the strip, so the affected record enters the post-dedup corpus with a missing abstract.
-5. Workflow 03 discovers that record through its normal missing-title/missing-abstract scan. Records with a DOI are therefore automatically eligible for the existing DOI-based abstract repair logic.
-6. Workflow 01 does not create a special Workflow 03 repair queue.
+5. Workflow 02 discovers that record through its normal missing-title/missing-abstract scan. Records with a DOI are therefore automatically eligible for the existing DOI-based abstract repair logic.
+6. Workflow 01 does not create a special Workflow 02 repair queue.
 
 The paired record's abstract must never be copied across as a replacement merely because both records originally shared it.
