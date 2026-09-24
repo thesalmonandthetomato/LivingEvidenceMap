@@ -270,7 +270,7 @@ for(cid in sort(names(clusters))){
       source_manifestation_count=length(mans)
     ),
     abstract_enrichment=list(
-      status="pending_workflow03",
+      status="pending_workflow02",
       manifestations_missing_abstract=sum(vapply(mans,function(m)is.null(m$abstract),logical(1)))
     ),
     deduplication=list(
