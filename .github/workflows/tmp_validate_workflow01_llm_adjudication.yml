@@ -1,0 +1,114 @@
+name: Workflow 01 - Validate LLM duplicate adjudication
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_workflow01_llm_adjudication.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CASE_RUN_ID: '35968356562'
+  CASE_ARTIFACT: 'workflow01-adjudication-cases-validation-35968356562'
+  SOURCE_WORKFLOW01_RUN_ID: '35964195676'
+  MODEL: 'gpt-5.6-luna'
+  AUTO_THRESHOLD: '0.95'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Download validated full-evidence cases
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CASE_ARTIFACT }}
+          path: cases
+          run-id: ${{ env.CASE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Validate case artefact
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          p <- 'cases/cases.jsonl'
+          stopifnot(file.exists(p))
+          x <- readLines(p,warn=FALSE)
+          stopifnot(length(x)==3027L)
+          m <- fromJSON('cases/cases.jsonl.manifest.json')
+          stopifnot(m$cases==3027L)
+          stopifnot(identical(digest(file=p,algo='sha256',serialize=FALSE),m$output_sha256))
+          cat('PASS: validated 3027-case adjudication input artefact\n')
+
+      - name: Run ten real LLM adjudications
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_DUPLICATE_MODEL: ${{ env.MODEL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/llm_validation
+          Rscript scripts/updater/workflow_01_llm_adjudicate_duplicates.R \
+            --input cases/cases.jsonl \
+            --output outputs/llm_validation/adjudications.jsonl \
+            --human-review-output outputs/llm_validation/human_review.jsonl \
+            --model "$MODEL" \
+            --auto-threshold "$AUTO_THRESHOLD" \
+            --start-row 1 \
+            --end-row 10
+
+      - name: Validate model contract
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x <- lapply(readLines('outputs/llm_validation/adjudications.jsonl'),fromJSON,simplifyVector=FALSE)
+          stopifnot(length(x)==10L)
+          stopifnot(all(vapply(x,function(z)z$model_decision %in% c('duplicate','not_duplicate','uncertain'),logical(1))))
+          stopifnot(all(vapply(x,function(z)is.numeric(z$model_confidence)&&z$model_confidence>=0&&z$model_confidence<=1,logical(1))))
+          stopifnot(all(vapply(x,function(z)nzchar(z$model_rationale),logical(1))))
+          stopifnot(all(vapply(x,function(z)z$promotion %in% c('duplicate','not_duplicate','human_review'),logical(1))))
+          technical <- sum(vapply(x,function(z)!is.null(z$technical_error),logical(1)))
+          auto <- sum(vapply(x,function(z)z$promotion %in% c('duplicate','not_duplicate'),logical(1)))
+          human <- sum(vapply(x,function(z)identical(z$promotion,'human_review'),logical(1)))
+          cat(sprintf('PASS: 10 model results satisfy contract; automatic=%d human=%d technical_failures=%d\n',auto,human,technical))
+
+      - name: Build validation human-review handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_build_human_review_package.R \
+            --input outputs/llm_validation/human_review.jsonl \
+            --output-dir outputs/llm_validation/review_package \
+            --source-run-id "$SOURCE_WORKFLOW01_RUN_ID" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY"
+
+      - name: Upload LLM validation outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-llm-adjudication-validation-${{ github.run_id }}
+          path: outputs/llm_validation/
+          retention-days: 7
+          if-no-files-found: error
