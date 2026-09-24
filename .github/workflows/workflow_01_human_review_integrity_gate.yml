@@ -1,0 +1,98 @@
+name: Workflow 01 - Human review integrity gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      queue_run_id:
+        description: 'Run ID containing the locked human-review queue artifact'
+        required: true
+        type: string
+      queue_artifact:
+        description: 'Artifact name containing the queue'
+        required: true
+        type: string
+      queue_file:
+        description: 'Queue JSONL filename within the artifact'
+        required: true
+        default: 'human_review_queue.jsonl'
+        type: string
+      expected_queue_sha256:
+        description: 'Locked SHA-256 of the queue JSONL'
+        required: true
+        type: string
+      decisions_path:
+        description: 'Repository path to active human decisions JSONL'
+        required: true
+        type: string
+      repairs_path:
+        description: 'Repository path to active repair actions JSONL'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout current ref
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Download locked queue artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.queue_artifact }}
+          path: locked_review
+          run-id: ${{ inputs.queue_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Require exact queue file
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "locked_review/${{ inputs.queue_file }}"
+
+      - name: Normalise legacy state to immutable source IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_migrate_human_review_state.R \
+            --queue "locked_review/${{ inputs.queue_file }}" \
+            --decisions "${{ inputs.decisions_path }}" \
+            --repairs "${{ inputs.repairs_path }}" \
+            --output-dir outputs/normalised
+
+      - name: Enforce final human-review integrity barrier
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_validate_human_review_state.R \
+            --queue "locked_review/${{ inputs.queue_file }}" \
+            --decisions outputs/normalised/human_decisions.normalised.jsonl \
+            --repairs outputs/normalised/data_quality_repairs.normalised.jsonl \
+            --output outputs/human_review_integrity.json \
+            --expected-queue-sha256 "${{ inputs.expected_queue_sha256 }}" \
+            --require-complete true
+
+      - name: Upload integrity-gated state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-human-review-gated-${{ github.run_id }}
+          path: outputs/
+          retention-days: 90
+          if-no-files-found: error

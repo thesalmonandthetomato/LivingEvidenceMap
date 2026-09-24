@@ -18,6 +18,7 @@ permissions:
 env:
   REVIEW_RUN_ID: '35986405369'
   REVIEW_ARTIFACT: 'workflow01-blinded-human-review-35986405369'
+  LOCKED_QUEUE_SHA256: '285a1f90a5468d07f9286e270979cc8cb48a75c929f92b6965a541bf7c9210d5'
 
 jobs:
   integrity:
@@ -67,6 +68,7 @@ jobs:
             --decisions outputs/normalised/human_decisions.normalised.jsonl \
             --repairs outputs/normalised/data_quality_repairs.normalised.jsonl \
             --output outputs/state_integrity.json \
+            --expected-queue-sha256 "$LOCKED_QUEUE_SHA256" \
             --require-complete true
 
       - name: Render batch mechanically from queue
@@ -106,7 +108,8 @@ jobs:
             --batch-manifest outputs/batch91/batch_manifest.json \
             --decisions outputs/batch91/decisions.jsonl \
             --repairs outputs/batch91/repairs.jsonl \
-            --output-dir outputs/batch91_validation
+            --output-dir outputs/batch91_validation \
+            --expected-queue-sha256 "$LOCKED_QUEUE_SHA256"
 
       - name: Negative control - fabricated case ID must fail
         shell: bash
@@ -119,7 +122,8 @@ jobs:
               --batch-manifest outputs/batch91/batch_manifest.json \
               --decisions outputs/batch91/fabricated.jsonl \
               --repairs outputs/batch91/repairs.jsonl \
-              --output-dir outputs/negative_should_not_exist; then
+              --output-dir outputs/negative_should_not_exist \
+              --expected-queue-sha256 "$LOCKED_QUEUE_SHA256"; then
             echo "FAIL: fabricated case ID was accepted"
             exit 1
           fi

@@ -1,0 +1,11 @@
+{
+  "schema": "living-evidence-map-workflow01-human-review-queue-lock-v1",
+  "source_llm_run_id": 35968951674,
+  "blinded_review_run_id": 35986405369,
+  "blinded_review_artifact_id": 10802541608,
+  "blinded_review_artifact_name": "workflow01-blinded-human-review-35986405369",
+  "queue_file": "human_review_132_blinded.jsonl",
+  "queue_cases": 132,
+  "queue_sha256": "285a1f90a5468d07f9286e270979cc8cb48a75c929f92b6965a541bf7c9210d5",
+  "purpose": "Locks the human-review queue used for final adjudication. Resume is permitted only against this exact queue hash."
+}

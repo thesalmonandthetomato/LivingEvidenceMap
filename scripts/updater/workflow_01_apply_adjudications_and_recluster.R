@@ -18,9 +18,10 @@ combined_path <- arg("--combined-decisions")
 manifestation_map_path <- arg("--manifestation-map")
 llm_path <- arg("--llm-adjudications")
 human_path <- arg("--human-decisions",NULL)
+integrity_path <- arg("--human-integrity-manifest",NULL)
 output_dir <- arg("--output-dir")
-if (any(vapply(list(combined_path,manifestation_map_path,llm_path,output_dir),is.null,logical(1)))) {
-  stop("Required: --combined-decisions --manifestation-map --llm-adjudications --output-dir",call.=FALSE)
+if (any(vapply(list(combined_path,manifestation_map_path,llm_path,human_path,integrity_path,output_dir),is.null,logical(1)))) {
+  stop("Required: --combined-decisions --manifestation-map --llm-adjudications --human-decisions --human-integrity-manifest --output-dir",call.=FALSE)
 }
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
@@ -39,8 +40,26 @@ read_jsonl <- function(path) {
   lapply(x,fromJSON,simplifyVector=FALSE)
 }
 llm <- read_jsonl(llm_path)
-human <- if (!is.null(human_path) && file.exists(human_path)) read_jsonl(human_path) else list()
-human_by_id <- if(length(human)) setNames(human,vapply(human,function(x)as.character(x$review_case_id),character(1))) else list()
+human <- read_jsonl(human_path)
+integrity <- fromJSON(integrity_path,simplifyVector=FALSE)
+if (is.null(integrity$resume_allowed) || !isTRUE(integrity$resume_allowed)) {
+  stop("Human-review integrity manifest does not permit resume",call.=FALSE)
+}
+
+human_review_ids <- vapply(Filter(function(x)identical(x$promotion,"human_review"),llm),
+                           function(x)as.character(x$review_case_id),character(1))
+if (anyDuplicated(human_review_ids)) stop("LLM adjudications contain duplicate human-review IDs",call.=FALSE)
+human_ids <- vapply(human,function(x)as.character(x$review_case_id),character(1))
+if (anyDuplicated(human_ids)) stop("Human decisions contain duplicate review_case_id",call.=FALSE)
+unknown_human <- setdiff(human_ids,human_review_ids)
+missing_human <- setdiff(human_review_ids,human_ids)
+if (length(unknown_human)) stop(sprintf("Human decisions contain %d IDs outside the LLM human-review queue",length(unknown_human)),call.=FALSE)
+if (length(missing_human)) stop(sprintf("Human decisions are missing %d required LLM human-review IDs",length(missing_human)),call.=FALSE)
+if (length(human_ids) != length(human_review_ids)) stop("Human decision count does not exactly match human-review queue",call.=FALSE)
+if (!is.null(integrity$active_decisions) && as.integer(integrity$active_decisions) != length(human_ids)) {
+  stop("Human-review integrity manifest decision count does not match supplied decisions",call.=FALSE)
+}
+human_by_id <- setNames(human,human_ids)
 
 audit <- vector("list",length(llm))
 for (i in seq_along(llm)) {
