@@ -1,0 +1,229 @@
+name: Workflow 01 - Finalise canonical corpus and archive
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_dedup_run_id:
+        description: 'Workflow 01 pre-adjudication deduplication run'
+        required: true
+        default: '35964195676'
+        type: string
+      llm_run_id:
+        description: 'Workflow 01 LLM adjudication run'
+        required: true
+        default: '35968951674'
+        type: string
+      human_queue_run_id:
+        description: 'Locked blinded human-review queue run'
+        required: true
+        default: '35986405369'
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  WORKFLOW01_BRANCH: workflow01-final-architecture
+  WORKFLOW00_REPORTING_BRANCH: workflow00-search-orchestrator
+  WORKFLOW00_MULTI_SOURCE_POINTER: docs/search_record/zenodo/run-35730574878.json
+  WORKFLOW00_SCOPUS_POINTER: docs/search_record/zenodo/run-35731899007.json
+  WORKFLOW00_AGRICOLA_POINTER: docs/search_record/zenodo/run-35735412308.json
+
+jobs:
+  finalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW01_BRANCH }}
+          fetch-depth: 0
+
+      - name: Checkout Workflow 00 durable-source pointers
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW00_REPORTING_BRANCH }}
+          path: workflow00_registry
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2'))
+
+      - name: Download deduplication, LLM and locked human-review artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_RUN: ${{ inputs.base_dedup_run_id }}
+          LLM_RUN: ${{ inputs.llm_run_id }}
+          QUEUE_RUN: ${{ inputs.human_queue_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/base inputs/llm inputs/review
+          gh run download "$BASE_RUN" --repo "$GITHUB_REPOSITORY"             --name "workflow01-five-source-deduplication-finalized-$BASE_RUN" --dir inputs/base
+          gh run download "$LLM_RUN" --repo "$GITHUB_REPOSITORY"             --name "workflow01-llm-adjudication-complete-$LLM_RUN" --dir inputs/llm
+          gh run download "$QUEUE_RUN" --repo "$GITHUB_REPOSITORY"             --name "workflow01-blinded-human-review-$QUEUE_RUN" --dir inputs/review
+          test -s inputs/base/workflow01_full_five_source/combined_pair_decisions.csv
+          test -s inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv
+          test -s inputs/base/workflow01_full_five_source/summary.json
+          test -s inputs/llm/all_adjudications.jsonl
+          test -s inputs/review/human_review_132_blinded.jsonl
+
+      - name: Normalise and validate complete human-review state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/human_gate
+          Rscript scripts/updater/workflow_01_migrate_human_review_state.R             --queue inputs/review/human_review_132_blinded.jsonl             --decisions data/adjudication/workflow01/run-35964195676/human_decisions.jsonl             --repairs data/adjudication/workflow01/run-35964195676/data_quality_repairs.jsonl             --output-dir outputs/human_gate
+          expected="$(Rscript -e 'x<-jsonlite::fromJSON("data/adjudication/workflow01/run-35964195676/human_review_queue_lock.json");cat(x$queue_sha256)')"
+          Rscript scripts/updater/workflow_01_validate_human_review_state.R             --queue inputs/review/human_review_132_blinded.jsonl             --decisions outputs/human_gate/human_decisions.normalised.jsonl             --repairs outputs/human_gate/data_quality_repairs.normalised.jsonl             --output outputs/human_gate/human_review_integrity.json             --expected-queue-sha256 "$expected"             --require-complete true
+
+      - name: Apply final adjudications and reconstruct final clusters
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/final
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R             --combined-decisions inputs/base/workflow01_full_five_source/combined_pair_decisions.csv             --manifestation-map inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv             --llm-adjudications inputs/llm/all_adjudications.jsonl             --human-decisions outputs/human_gate/human_decisions.normalised.jsonl             --human-integrity-manifest outputs/human_gate/human_review_integrity.json             --output-dir outputs/final
+
+      - name: Merge preserved pre-adjudication state metrics into final summary
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          pre <- fromJSON('inputs/base/workflow01_full_five_source/summary.json',simplifyVector=FALSE)
+          fin <- fromJSON('outputs/final/summary.json',simplifyVector=FALSE)
+          for (nm in c('preserved_pair_decisions','incremental_candidate_rows','incremental_pair_decisions',
+                       'exact_duplicate_candidate_rows_removed','manual_review_pairs')) {
+            if (is.null(fin[[nm]]) && !is.null(pre[[nm]])) fin[[nm]] <- pre[[nm]]
+          }
+          writeLines(toJSON(fin,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/final/summary.json')
+
+      - name: Restore exact Workflow 00 source harvests from Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p restored
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R             --pointer "workflow00_registry/$WORKFLOW00_MULTI_SOURCE_POINTER"             --sources "lens,openalex,wos" --output-root restored
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R             --pointer "workflow00_registry/$WORKFLOW00_SCOPUS_POINTER"             --sources "scopus" --output-root restored
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R             --pointer "workflow00_registry/$WORKFLOW00_AGRICOLA_POINTER"             --sources "agricola" --output-root restored
+
+      - name: Recreate source sidecars used by deduplication
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p canonical_sources/{lens,scopus,openalex,agricola,wos}
+          LENS="$(find restored/lens -name records.jsonl -type f -print -quit)"
+          test -n "$LENS"
+          cp "$LENS" canonical_sources/lens/records.jsonl
+          SCOPUS_DIR="$(find restored/scopus -type d -name source_child -print -quit)"
+          OPENALEX_DIR="$(find restored/openalex -type d -name source_child -print -quit)"
+          AGRICOLA_DIR="$(find restored/agricola -type d -name source_child -print -quit)"
+          WOS_DIR="$(find restored/wos -type d -name source_child -print -quit)"
+          test -n "$SCOPUS_DIR" && test -n "$OPENALEX_DIR" && test -n "$AGRICOLA_DIR" && test -n "$WOS_DIR"
+          Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R --input-dir "$SCOPUS_DIR" --output-dir canonical_sources/scopus
+          Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R --input-dir "$OPENALEX_DIR" --output-dir canonical_sources/openalex
+          Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir "$AGRICOLA_DIR" --output-dir canonical_sources/agricola
+          Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir "$WOS_DIR" --output-dir canonical_sources/wos
+          Rscript scripts/updater/workflow_01_locate_restored_sources.R             --root canonical_sources --output outputs/source_files.json
+
+      - name: Build source-agnostic canonical JSONL
+        env:
+          RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/canonical
+          getpath(){ Rscript -e "x<-jsonlite::fromJSON('outputs/source_files.json');cat(x\$files[['$1']])"; }
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R             --cluster-map outputs/final/manifestation_cluster_map.csv             --strip-actions outputs/final/abstract_strip_actions.jsonl             --lens "$(getpath lens)"             --scopus "$(getpath scopus)"             --openalex "$(getpath openalex)"             --agricola "$(getpath agricola)"             --wos "$(getpath wos)"             --run-id "$RUN_ID"             --output outputs/canonical/records.jsonl             --manifest outputs/canonical/canonical_manifest.json
+
+      - name: Validate canonical cardinality and schema boundary
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          m <- fromJSON('outputs/canonical/canonical_manifest.json')
+          s <- fromJSON('outputs/final/summary.json')
+          stopifnot(m$source_manifestations == s$source_manifestations)
+          stopifnot(m$records == s$clusters)
+          stopifnot(m$source_manifestations == 90137L)
+          stopifnot(m$records > 0L)
+          con <- file('outputs/canonical/records.jsonl','rt',encoding='UTF-8')
+          first <- fromJSON(readLines(con,n=1L,warn=FALSE),simplifyVector=FALSE)
+          close(con)
+          stopifnot(first$schema_version == 'living-evidence-map-canonical-v1')
+          stopifnot(first$identity$record_id_type == 'deduplication_cluster_id')
+          stopifnot(length(first$manifestations) >= 1L)
+          cat(sprintf('PASS: canonical boundary validated: %d works from %d manifestations\n',m$records,m$source_manifestations))
+
+      - name: Write pre-archive run report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/reports
+          Rscript scripts/updater/workflow_01_write_run_report.R             --summary outputs/final/summary.json             --canonical-manifest outputs/canonical/canonical_manifest.json             --run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --out-md outputs/reports/run-$GITHUB_RUN_ID.md             --out-json outputs/reports/run-$GITHUB_RUN_ID.json
+
+      - name: Stage complete final state for durable archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p zenodo_stage/{workflow01_full_five_source,canonical,reports,provenance}
+          cp -a outputs/final/. zenodo_stage/workflow01_full_five_source/
+          cp outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json zenodo_stage/canonical/
+          cp outputs/reports/* zenodo_stage/reports/
+          cp outputs/human_gate/human_review_integrity.json zenodo_stage/provenance/
+          cp inputs/base/workflow01_full_five_source/summary.json zenodo_stage/provenance/pre_adjudication_summary.json
+
+      - name: Archive final Workflow 01 state and canonical corpus to Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/zenodo
+          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R             --staging-root zenodo_stage             --run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --state final             --output-dir outputs/zenodo
+
+      - name: Register Zenodo record and write final docs report
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_update_zenodo_registry.R             --receipt outputs/zenodo/zenodo_receipt.json             --registry docs/deduplication/zenodo_registry.csv             --pointer-dir docs/deduplication/zenodo
+          mkdir -p docs/deduplication/runs
+          Rscript scripts/updater/workflow_01_write_run_report.R             --summary outputs/final/summary.json             --canonical-manifest outputs/canonical/canonical_manifest.json             --zenodo-receipt outputs/zenodo/zenodo_receipt.json             --run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --out-md docs/deduplication/runs/run-$GITHUB_RUN_ID.md             --out-json docs/deduplication/runs/run-$GITHUB_RUN_ID.json
+
+      - name: Commit lightweight Workflow 01 provenance to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/deduplication/zenodo_registry.csv docs/deduplication/zenodo/ docs/deduplication/runs/
+          if git diff --cached --quiet; then
+            echo "No documentation changes to commit."
+          else
+            git commit -m "Record final Workflow 01 run $GITHUB_RUN_ID"
+            git push origin HEAD:$WORKFLOW01_BRANCH
+          fi
+
+      - name: Upload short-lived recovery artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-final-canonical-${{ github.run_id }}
+          path: |
+            outputs/final/summary.json
+            outputs/final/abstract_strip_actions.jsonl
+            outputs/canonical/canonical_manifest.json
+            outputs/canonical/records.jsonl
+            outputs/reports/
+            outputs/zenodo/
+          retention-days: 7
+          if-no-files-found: warn
