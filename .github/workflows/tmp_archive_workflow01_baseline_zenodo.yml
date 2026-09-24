@@ -1,0 +1,122 @@
+name: Workflow 01 - Archive completed baseline to Zenodo
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_archive_workflow01_baseline_zenodo.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  SOURCE_RUN_ID: '35964195676'
+  SOURCE_ARTIFACT: 'workflow01-five-source-deduplication-finalized-35964195676'
+  SOURCE_ARTIFACT_ID: '10793172985'
+  SOURCE_ARTIFACT_SHA256: 'e37dc524ad3cc22792ce799d9da64157a7c458701f72c6e3f8a3a41ac34793d4'
+  WORKFLOW01_STATE: 'pre_adjudication'
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Workflow 01 integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install archive dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Download completed Workflow 01 state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$SOURCE_ARTIFACT" --dir staging
+          test -s staging/workflow01_incremental_rescore/rescored_sample.csv
+          test -s staging/workflow01_full_five_source/summary.json
+          test -s staging/workflow01_full_five_source/clusters.jsonl
+          test -s staging/workflow01_full_five_source/manifestation_cluster_map.csv
+          test -s staging/workflow01_full_five_source/manual_review_pairs.csv
+          test -s staging/workflow01_full_five_source/incremental_duplicate_pair_audit.csv
+          echo "PASS: completed Workflow 01 baseline restored from run $SOURCE_RUN_ID"
+
+      - name: Write archive provenance
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create('staging/provenance',recursive=TRUE,showWarnings=FALSE)
+          summary <- fromJSON('staging/workflow01_full_five_source/summary.json')
+          p <- list(
+            schema='living-evidence-map-workflow01-archive-provenance-v1',
+            workflow='01',
+            state=Sys.getenv('WORKFLOW01_STATE'),
+            source_github_run_id=Sys.getenv('SOURCE_RUN_ID'),
+            source_github_run_url=sprintf('https://github.com/%s/actions/runs/%s',Sys.getenv('GITHUB_REPOSITORY'),Sys.getenv('SOURCE_RUN_ID')),
+            source_artifact_name=Sys.getenv('SOURCE_ARTIFACT'),
+            source_artifact_id=Sys.getenv('SOURCE_ARTIFACT_ID'),
+            source_artifact_sha256=Sys.getenv('SOURCE_ARTIFACT_SHA256'),
+            archive_workflow_run_id=Sys.getenv('GITHUB_RUN_ID'),
+            archive_git_sha=Sys.getenv('GITHUB_SHA'),
+            source_manifestations=summary$source_manifestations,
+            preserved_pair_decisions=summary$preserved_pair_decisions,
+            incremental_candidate_rows=summary$incremental_candidate_rows,
+            incremental_pair_decisions=summary$incremental_pair_decisions,
+            exact_duplicate_candidate_rows_removed=summary$exact_duplicate_candidate_rows_removed,
+            manual_review_pairs=summary$manual_review_pairs
+          )
+          writeLines(toJSON(p,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'staging/provenance/archive_provenance.json')
+
+      - name: Publish restricted Workflow 01 state to Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \
+            --staging-root staging \
+            --run-id "$SOURCE_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --state "$WORKFLOW01_STATE" \
+            --output-dir outputs/workflow01_zenodo
+
+      - name: Register Workflow 01 Zenodo snapshot in repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_update_zenodo_registry.R \
+            --receipt outputs/workflow01_zenodo/zenodo_receipt.json \
+            --registry docs/deduplication/zenodo_registry.csv \
+            --pointer-dir docs/deduplication/zenodo
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/deduplication/zenodo_registry.csv docs/deduplication/zenodo/
+          git commit -m "Register Zenodo archive for Workflow 01 run $SOURCE_RUN_ID"
+          git push origin HEAD:workflow01-final-architecture
+
+      - name: Upload Zenodo receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-zenodo-receipt-${{ github.run_id }}
+          path: outputs/workflow01_zenodo/
+          retention-days: 7
+          if-no-files-found: warn
