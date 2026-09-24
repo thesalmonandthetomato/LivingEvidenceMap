@@ -46,6 +46,8 @@ jobs:
           parse(file='scripts/updater/workflow_01_llm_adjudicate_duplicates.R')
           parse(file='scripts/updater/workflow_01_build_human_review_package.R')
           parse(file='scripts/updater/workflow_01_send_review_email.R')
+          parse(file='scripts/updater/workflow_01_validate_human_decisions.R')
+          parse(file='scripts/updater/workflow_01_apply_adjudications_and_recluster.R')
 
       - name: Download exact source state and final review queue
         env:
