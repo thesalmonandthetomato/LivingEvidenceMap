@@ -102,7 +102,7 @@ jobs:
           library(jsonlite)
           r <- fromJSON('outputs/workflow02_trial/report.json',simplifyVector=FALSE)
           stopifnot(identical(r$workflow,'02_metadata_enrichment'))
-          stopifnot(identical(r$provider_order,c('europe_pmc','scopus')))
+          stopifnot(identical(unlist(r$provider_order,use.names=FALSE),c('europe_pmc','scopus')))
           stopifnot(r$counts$eligible_doi_missing_metadata==20L)
           stopifnot(r$counts$scopus_attempted>=0L)
           stopifnot(file.exists('outputs/workflow02_trial/enriched.jsonl'))
