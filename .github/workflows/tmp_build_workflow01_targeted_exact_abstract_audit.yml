@@ -1,0 +1,74 @@
+name: Workflow 01 - Build targeted exact-abstract audit
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'scripts/updater/workflow_01_build_targeted_exact_abstract_audit.R'
+      - '.github/workflows/tmp_build_workflow01_targeted_exact_abstract_audit.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  LLM_RUN_ID: '35968951674'
+  LLM_ARTIFACT: 'workflow01-llm-adjudication-complete-35968951674'
+  BLIND_RUN_ID: '35986405369'
+  BLIND_ARTIFACT: 'workflow01-blinded-human-review-35986405369'
+  SAMPLE_SEED: 'workflow01-targeted-exact-abstract-audit-v1-2026-09-24'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+      - name: Download source artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source blind
+          gh run download "$LLM_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$LLM_ARTIFACT" --dir source
+          gh run download "$BLIND_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$BLIND_ARTIFACT" --dir blind
+      - name: Build deterministic blinded targeted sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_build_targeted_exact_abstract_audit.R \
+            --input source/all_adjudications.jsonl \
+            --exclude blind/validation_sample_40_blinded.jsonl \
+            --output-dir outputs/targeted_audit \
+            --seed "$SAMPLE_SEED" \
+            --n 20
+      - name: Validate sample
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          m <- fromJSON('outputs/targeted_audit/targeted_exact_abstract_audit_manifest.json')
+          x <- lapply(readLines('outputs/targeted_audit/targeted_exact_abstract_audit_20_blinded.jsonl'),fromJSON,simplifyVector=FALSE)
+          stopifnot(m$full_population==384L,m$targeted_sample_size==20L,length(x)==20L)
+          forbidden <- c('model_decision','model_confidence','model_rationale','promotion','promotion_reason')
+          stopifnot(all(vapply(x,function(z)!any(forbidden %in% names(z)),logical(1))))
+          stopifnot(!anyDuplicated(vapply(x,function(z)z$review_case_id,character(1))))
+          cat('PASS: deterministic targeted audit sample validated\n')
+      - name: Upload targeted audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-targeted-exact-abstract-audit-${{ github.run_id }}
+          path: outputs/targeted_audit/
+          retention-days: 90
+          if-no-files-found: error
