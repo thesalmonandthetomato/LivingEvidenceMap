@@ -134,9 +134,8 @@ scopus_extract <- function(obj){
   list(title=title,abstract=abstract,doi=doi,eid=eid)
 }
 
-scopus_lookup <- function(d){
-  endpoint <- paste0("https://api.elsevier.com/content/abstract/doi/",URLencode(d,reserved=TRUE))
-  req <- request(endpoint) |>
+scopus_headers <- function(req) {
+  req |>
     req_headers(
       `X-ELS-APIKey`=scopus_key,
       `X-ELS-Insttoken`=scopus_insttoken,
@@ -144,15 +143,81 @@ scopus_lookup <- function(d){
     ) |>
     req_user_agent("LivingEvidenceMap-Workflow02/1.0") |>
     req_error(is_error=function(resp) FALSE)
+}
+
+scopus_search_doi <- function(d){
+  req <- request("https://api.elsevier.com/content/search/scopus") |>
+    req_url_query(query=sprintf("DOI(%s)",d),count=5,view="STANDARD") |>
+    scopus_headers()
   z <- perform_retry(req)
   st <- resp_status(z$resp)
-  if(st>=400L) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,outcome=paste0("http_",st),attempts=z$attempts))
+  if(st>=400L) return(list(status=st,entries=list(),outcome=paste0("http_",st),attempts=z$attempts))
   parsed <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
-  if(is.null(parsed)) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,outcome="invalid_json",attempts=z$attempts))
+  if(is.null(parsed)) return(list(status=st,entries=list(),outcome="invalid_json",attempts=z$attempts))
+  entries <- ((parsed[["search-results"]] %||% list())[["entry"]] %||% list())
+  list(status=st,entries=entries,outcome=if(length(entries))"search_hits" else "no_hits",attempts=z$attempts)
+}
+
+scopus_lookup_eid <- function(eid){
+  endpoint <- paste0("https://api.elsevier.com/content/abstract/eid/",URLencode(eid,reserved=TRUE))
+  req <- request(endpoint) |>
+    req_url_query(view="META_ABS") |>
+    scopus_headers()
+  z <- perform_retry(req)
+  st <- resp_status(z$resp)
+  if(st>=400L) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,eid=eid,outcome=paste0("http_",st),attempts=z$attempts))
+  parsed <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
+  if(is.null(parsed)) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,eid=eid,outcome="invalid_json",attempts=z$attempts))
   ex <- scopus_extract(parsed)
-  list(status=st,title=ex$title,abstract=ex$abstract,returned_doi=ex$doi,eid=ex$eid,
+  list(status=st,title=ex$title,abstract=ex$abstract,returned_doi=ex$doi,eid=ex$eid %||% eid,
        outcome=if(!is.null(ex$title)||!is.null(ex$abstract))"metadata_returned" else "success_no_metadata",
        attempts=z$attempts)
+}
+
+scopus_lookup <- function(d){
+  endpoint <- paste0("https://api.elsevier.com/content/abstract/doi/",URLencode(d,reserved=TRUE))
+  req <- request(endpoint) |>
+    req_url_query(view="META_ABS") |>
+    scopus_headers()
+  z <- perform_retry(req)
+  st <- resp_status(z$resp)
+  if(st>=200L && st<400L){
+    parsed <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
+    if(!is.null(parsed)){
+      ex <- scopus_extract(parsed)
+      if(!is.null(ex$title) || !is.null(ex$abstract) || !is.null(ex$doi)){
+        return(list(status=st,title=ex$title,abstract=ex$abstract,returned_doi=ex$doi,eid=ex$eid,
+                    outcome="direct_doi_metadata_returned",attempts=z$attempts,route="direct_doi"))
+      }
+    }
+  }
+
+  # DOI endpoint may miss records that are still indexed in Scopus. Search by DOI,
+  # then retrieve the uniquely compatible hit by EID using META_ABS.
+  sr <- scopus_search_doi(d)
+  if(!length(sr$entries)){
+    return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,
+                outcome=paste0("direct_",ifelse(st>=400L,paste0("http_",st),"no_metadata"),";search_",sr$outcome),
+                attempts=z$attempts+sr$attempts,route="doi_then_search"))
+  }
+
+  exact <- Filter(function(e) identical(norm_doi(e[["prism:doi"]] %||% e[["doi"]]),d),sr$entries)
+  if(!length(exact)){
+    return(list(status=sr$status,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,
+                outcome="search_hits_no_exact_doi",attempts=z$attempts+sr$attempts,route="doi_then_search"))
+  }
+
+  eids <- unique(vapply(exact,function(e)clean_text(e[["eid"]] %||% e[["dc:identifier"]]),character(1)))
+  eids <- eids[nzchar(eids)]
+  if(length(eids)!=1L){
+    return(list(status=sr$status,title=NULL,abstract=NULL,returned_doi=d,eid=NULL,
+                outcome="search_exact_doi_nonunique_eid",attempts=z$attempts+sr$attempts,route="doi_then_search"))
+  }
+
+  er <- scopus_lookup_eid(eids[[1L]])
+  er$route <- "doi_then_search_eid"
+  er$attempts <- z$attempts + sr$attempts + (er$attempts %||% 0L)
+  er
 }
 
 read_jsonl <- function(path){
@@ -291,7 +356,7 @@ report <- list(
     eligibility="DOI present and title or abstract missing",
     overwrite_existing_fields=FALSE,
     europe_pmc_match="exact normalised DOI",
-    scopus_match="exact normalised DOI returned by DOI Abstract Retrieval endpoint",
+    scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
     abstract_title_guard="if a title is present on both sides, Jaro-Winkler similarity must be >= 0.90; otherwise quarantine",
     provider_fallback="Scopus queried only if metadata remain missing after Europe PMC"
   ),
