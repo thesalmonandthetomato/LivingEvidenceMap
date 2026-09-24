@@ -134,6 +134,7 @@ for (n in seq_along(lines)) {
     requested_model=model,
     resolved_model=result$resolved_model,
     response_id=result$response_id,
+    api_usage=result$usage,
     model_decision=result$decision,
     model_confidence=result$confidence,
     model_rationale=result$rationale,
@@ -159,6 +160,26 @@ for (n in seq_along(lines)) {
 close(out); close(human)
 on.exit(NULL,add=FALSE)
 
+usage_lines <- readLines(output_path,warn=FALSE,encoding="UTF-8")
+usage_records <- lapply(usage_lines[nzchar(trimws(usage_lines))],fromJSON,simplifyVector=FALSE)
+usage_num <- function(z,name) {
+  if (is.null(z$api_usage) || is.null(z$api_usage[[name]])) return(0)
+  v <- suppressWarnings(as.numeric(z$api_usage[[name]]))
+  if (!length(v) || is.na(v)) 0 else v
+}
+detail_num <- function(z,group,name) {
+  if (is.null(z$api_usage) || is.null(z$api_usage[[group]]) || is.null(z$api_usage[[group]][[name]])) return(0)
+  v <- suppressWarnings(as.numeric(z$api_usage[[group]][[name]]))
+  if (!length(v) || is.na(v)) 0 else v
+}
+usage_summary <- list(
+  input_tokens=sum(vapply(usage_records,usage_num,numeric(1),name="input_tokens")),
+  output_tokens=sum(vapply(usage_records,usage_num,numeric(1),name="output_tokens")),
+  total_tokens=sum(vapply(usage_records,usage_num,numeric(1),name="total_tokens")),
+  cached_input_tokens=sum(vapply(usage_records,detail_num,numeric(1),group="input_tokens_details",name="cached_tokens")),
+  reasoning_output_tokens=sum(vapply(usage_records,detail_num,numeric(1),group="output_tokens_details",name="reasoning_tokens"))
+)
+
 manifest <- list(
   schema="living-evidence-map-workflow01-llm-adjudication-manifest-v1",
   requested_model=model,
@@ -170,6 +191,7 @@ manifest <- list(
   automatic_cases=auto_n,
   human_review_cases=human_n,
   technical_failures=technical_n,
+  api_usage=usage_summary,
   input_sha256=digest(file=input_path,algo="sha256",serialize=FALSE),
   output_sha256=digest(file=output_path,algo="sha256",serialize=FALSE),
   human_review_sha256=digest(file=human_path,algo="sha256",serialize=FALSE)
