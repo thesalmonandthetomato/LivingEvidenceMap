@@ -187,12 +187,8 @@ con <- file(file.path(output_dir,"clusters.jsonl"),"wt",encoding="UTF-8")
 for(z in cluster_rows) writeLines(toJSON(z,auto_unbox=TRUE,null="null"),con,useBytes=TRUE)
 close(con)
 
-deferred_exclusion <- pairs[
-  rescored_classification=="review" & review_route=="workflow04_exclusion_candidate"
-]
 remaining <- pairs[
-  (rescored_classification=="review" | review_route=="manual_review") &
-    review_route!="workflow04_exclusion_candidate"
+  rescored_classification=="review" | review_route=="manual_review" | review_route=="workflow04_exclusion_candidate"
 ]
 sizes <- map[,.(cluster_size=.N),by=cluster_id]
 summary <- list(
@@ -207,16 +203,12 @@ summary <- list(
   abstract_strip_actions_file="abstract_strip_actions.jsonl",
   workflow02_discovers_stripped_abstracts_via_normal_missing_abstract_scan=TRUE,
   unresolved_pair_decisions=nrow(remaining),
-  deferred_downstream_exclusion_candidate_pairs=nrow(deferred_exclusion),
   automatic_duplicate_edges=nrow(dup),
   clusters=nrow(sizes),
   duplicate_clusters=sum(sizes$cluster_size>1L),
   singleton_clusters=sum(sizes$cluster_size==1L),
   manifestations_in_duplicate_clusters=sum(sizes$cluster_size[sizes$cluster_size>1L])
 )
-if (nrow(deferred_exclusion)) {
-  fwrite(deferred_exclusion,file.path(output_dir,"deferred_downstream_exclusion_candidate_pairs.csv"))
-}
 if (nrow(remaining)) {
   fwrite(remaining,file.path(output_dir,"unresolved_pairs.csv"))
   stop(sprintf("Finalisation blocked: %d unresolved pair decisions remain",nrow(remaining)),call.=FALSE)
