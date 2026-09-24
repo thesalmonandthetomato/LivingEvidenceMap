@@ -214,7 +214,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p zenodo_stage/{workflow01_full_five_source,canonical,reports,provenance}
+          mkdir -p zenodo_stage/{workflow01_seed,workflow01_full_five_source,canonical,reports,provenance}
+          cp canonical_sources/lens/records.jsonl zenodo_stage/workflow01_seed/lens_records_for_deduplication.jsonl
+          cp canonical_sources/scopus/scopus_sidecar_records.jsonl zenodo_stage/workflow01_seed/scopus_records_for_deduplication.jsonl
+          cp canonical_sources/openalex/openalex_sidecar_records.jsonl zenodo_stage/workflow01_seed/openalex_records_for_deduplication.jsonl
+          cp canonical_sources/agricola/agricola_sidecar_records.jsonl zenodo_stage/workflow01_seed/agricola_records_for_deduplication.jsonl
+          cp canonical_sources/wos/wos_starter_sidecar_records.jsonl zenodo_stage/workflow01_seed/wos_records_for_deduplication.jsonl
           cp -a outputs/final/. zenodo_stage/workflow01_full_five_source/
           cp outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json zenodo_stage/canonical/
           cp outputs/reports/* zenodo_stage/reports/
