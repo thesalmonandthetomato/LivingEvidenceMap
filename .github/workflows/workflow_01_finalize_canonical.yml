@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/legacy_normalised
-          Rscript scripts/updater/workflow_01_normalise_legacy_diverted_state.R             --combined-decisions outputs/legacy_normalised/combined_pair_decisions.normalised.csv             --recovered-adjudications inputs/recovery/all_adjudications.jsonl             --rule-decisions inputs/recovery_resolution/rule_resolved_duplicates.jsonl             --human-decisions data/adjudication/workflow01/run-36049567027/human_decisions.jsonl             --output-dir outputs/legacy_normalised             --base-run-id "$BASE_RUN"             --recovery-run-id "$RECOVERY_RUN_ID"             --resolution-run-id "$RECOVERY_RESOLUTION_RUN_ID"
+          Rscript scripts/updater/workflow_01_normalise_legacy_diverted_state.R             --combined-decisions outputs/legacy_normalised/combined_pair_decisions.normalised.csv             --recovered-adjudications inputs/recovery/all_adjudications.jsonl             --rule-decisions inputs/recovery_resolution/rule_resolved_duplicates.jsonl             --human-decisions data/adjudication/workflow01/run-36049567027/human_decisions.jsonl             --output-dir outputs/legacy_normalised             --base-run-id "${{ inputs.base_dedup_run_id || '35964195676' }}"             --recovery-run-id "$RECOVERY_RUN_ID"             --resolution-run-id "$RECOVERY_RESOLUTION_RUN_ID"
           test -s outputs/legacy_normalised/combined_pair_decisions.normalised.csv
           test -s outputs/legacy_normalised/recovered_730_application_audit.jsonl
           test -s outputs/legacy_normalised/candidate_only_route_migration_audit.jsonl
@@ -131,7 +131,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/final
-          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R             --combined-decisions inputs/base/workflow01_full_five_source/combined_pair_decisions.csv             --manifestation-map inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv             --llm-adjudications inputs/llm/all_adjudications.jsonl             --human-decisions outputs/human_gate/human_decisions.normalised.jsonl             --human-integrity-manifest outputs/human_gate/human_review_integrity.json             --output-dir outputs/final
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R             --combined-decisions inputs/base/workflow01_full_five_source/combined_pair_decisions.csv             --manifestation-map inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv             --llm-adjudications inputs/llm/all_adjudications.jsonl             --human-decisions outputs/human_gate/human_decisions.normalised.jsonl             --human-integrity-manifest outputs/human_gate/human_review_integrity.json             --data-quality-repairs outputs/human_gate/data_quality_repairs.normalised.jsonl             --output-dir outputs/final
 
       - name: Merge preserved pre-adjudication state metrics into final summary
         shell: Rscript {0}
