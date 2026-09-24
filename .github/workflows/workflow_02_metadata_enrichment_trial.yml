@@ -1,0 +1,127 @@
+name: Workflow 02 - Metadata enrichment trial (Europe PMC then Scopus)
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_02_metadata_enrichment_trial.yml'
+      - 'scripts/updater/workflow_02_metadata_enrichment.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','stringdist','digest'))
+
+      - name: Build deterministic 20-record canonical trial input
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- 'data/master/current/living_evidence_map_master.csv'
+          if(!file.exists(p)) stop('Current master CSV missing: ',p)
+          d <- read.csv(p,stringsAsFactors=FALSE,check.names=FALSE)
+          nms <- names(d); low <- tolower(nms)
+          pick <- function(cands){
+            i <- match(cands,low,nomatch=0L); i <- i[i>0L]
+            if(length(i)) nms[i[[1L]]] else NA_character_
+          }
+          doi_col <- pick(c('doi','prism:doi','digital_object_identifier'))
+          title_col <- pick(c('title','dc:title','article_title'))
+          abstract_col <- pick(c('abstract','dc:description','description','abstract_text'))
+          if(any(is.na(c(doi_col,title_col,abstract_col)))) stop('Required DOI/title/abstract columns not found')
+          clean <- function(x){x<-as.character(x);x[is.na(x)]<-'';trimws(x)}
+          doi <- clean(d[[doi_col]]); title <- clean(d[[title_col]]); abstract <- clean(d[[abstract_col]])
+          idx <- which(nzchar(doi) & (!nzchar(title) | !nzchar(abstract)))
+          if(length(idx)<20L) stop('Fewer than 20 DOI-bearing records with missing title/abstract')
+          set.seed(24092026)
+          idx <- sort(sample(idx,20L,replace=FALSE))
+          dir.create('outputs/workflow02_trial',recursive=TRUE,showWarnings=FALSE)
+          con <- file('outputs/workflow02_trial/input.jsonl','wt',encoding='UTF-8')
+          for(i in idx){
+            rec <- list(
+              schema_version='living-evidence-map-canonical-v1',
+              identity=list(record_id=sprintf('trial-%06d',i),record_id_type='trial_master_row'),
+              canonical=list(
+                title=if(nzchar(title[[i]]))title[[i]] else NULL,
+                abstract=if(nzchar(abstract[[i]]))abstract[[i]] else NULL,
+                doi=doi[[i]]
+              ),
+              manifestations=list(),
+              provenance=list(trial_source='data/master/current/living_evidence_map_master.csv',row_index=i)
+            )
+            writeLines(toJSON(rec,auto_unbox=TRUE,null='null',na='null'),con,useBytes=TRUE)
+          }
+          close(con)
+          writeLines(toJSON(list(
+            selected_rows=idx,
+            eligible_records=length(which(nzchar(doi) & (!nzchar(title) | !nzchar(abstract)))),
+            selected=length(idx),
+            doi_column=doi_col,title_column=title_col,abstract_column=abstract_col
+          ),auto_unbox=TRUE,pretty=TRUE),'outputs/workflow02_trial/input_manifest.json')
+
+      - name: Run Workflow 02 combined metadata enrichment trial
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_metadata_enrichment.R \
+            --input outputs/workflow02_trial/input.jsonl \
+            --output outputs/workflow02_trial/enriched.jsonl \
+            --audit outputs/workflow02_trial/audit.jsonl \
+            --report outputs/workflow02_trial/report.json \
+            --limit 20 \
+            --delay 0.2
+
+      - name: Validate trial outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          r <- fromJSON('outputs/workflow02_trial/report.json',simplifyVector=FALSE)
+          stopifnot(identical(r$workflow,'02_metadata_enrichment'))
+          stopifnot(identical(r$provider_order,c('europe_pmc','scopus')))
+          stopifnot(r$counts$eligible_doi_missing_metadata==20L)
+          stopifnot(r$counts$scopus_attempted>=0L)
+          stopifnot(file.exists('outputs/workflow02_trial/enriched.jsonl'))
+          stopifnot(file.exists('outputs/workflow02_trial/audit.jsonl'))
+          input_n <- length(readLines('outputs/workflow02_trial/input.jsonl'))
+          output_n <- length(readLines('outputs/workflow02_trial/enriched.jsonl'))
+          stopifnot(input_n==20L,output_n==20L)
+          cat(sprintf(
+            'PASS: Workflow 02 trial: Europe PMC title=%d abstract=%d; Scopus attempted=%d title=%d abstract=%d; quarantined=%d; still missing=%d\n',
+            r$counts$europepmc_title_filled,r$counts$europepmc_abstract_filled,
+            r$counts$scopus_attempted,r$counts$scopus_title_filled,r$counts$scopus_abstract_filled,
+            r$counts$conflicts_quarantined,r$counts$still_missing_after
+          ))
+
+      - name: Upload trial audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-metadata-enrichment-trial-${{ github.run_id }}
+          path: outputs/workflow02_trial/
+          retention-days: 30
+          if-no-files-found: warn
