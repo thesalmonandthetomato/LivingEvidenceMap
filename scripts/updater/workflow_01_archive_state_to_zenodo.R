@@ -49,7 +49,7 @@ if (length(all_paths)) suppressWarnings(Sys.setFileTime(all_paths,as.POSIXct("20
 state_filename <- sprintf("LivingEvidenceMap_workflow01_run-%s_%s-state.tar.gz",run_id,state)
 state_path <- file.path(archive_dir,state_filename)
 old <- setwd(staging_root); on.exit(setwd(old),add=TRUE)
-members <- c("workflow01_incremental_rescore","workflow01_full_five_source","provenance")
+members <- c("workflow01_incremental_rescore","workflow01_full_five_source","canonical","reports","provenance")
 members <- members[file.exists(members)]
 if (!length(members)) stop("No Workflow 01 state members found",call.=FALSE)
 utils::tar(state_path,files=members,compression="gzip",tar="internal")
@@ -59,8 +59,11 @@ on.exit(NULL,add=FALSE)
 
 run_url <- sprintf("https://github.com/%s/actions/runs/%s",repository,run_id)
 state_sha <- digest(file=state_path,algo="sha256",serialize=FALSE)
+canonical_manifest_path <- file.path(staging_root,"canonical","canonical_manifest.json")
+canonical_manifest <- if (file.exists(canonical_manifest_path)) fromJSON(canonical_manifest_path,simplifyVector=FALSE) else NULL
+
 manifest <- list(
-  schema="living-evidence-map-workflow01-deduplication-state-v1",
+  schema="living-evidence-map-workflow01-deduplication-state-v2",
   workflow="01",
   state=state,
   github_run_id=run_id,
@@ -72,6 +75,9 @@ manifest <- list(
   incremental_pair_decisions=as.integer(summary$incremental_pair_decisions),
   exact_duplicate_candidate_rows_removed=as.integer(summary$exact_duplicate_candidate_rows_removed),
   manual_review_pairs=as.integer(summary$manual_review_pairs),
+  canonical_records=if(is.null(canonical_manifest)) NULL else as.integer(canonical_manifest$records),
+  canonical_jsonl_sha256=if(is.null(canonical_manifest)) NULL else as.character(canonical_manifest$canonical_jsonl_sha256),
+  canonical_jsonl_bytes=if(is.null(canonical_manifest)) NULL else as.numeric(canonical_manifest$canonical_jsonl_bytes),
   file_visibility="restricted",
   files=list(
     state_archive=list(
@@ -110,7 +116,7 @@ description <- paste0(
   ". Unique incremental pair decisions: ",summary$incremental_pair_decisions,
   ". Residual manual-review pairs: ",summary$manual_review_pairs,".</p>",
   "<p>The archive preserves the pair-decision state, cluster reconstruction outputs, ",
-  "manual-review queue and duplicate-candidate audit required to reproduce or resume Workflow 01. ",
+  "adjudication audit and, for final state archives, the source-agnostic canonical JSONL used by downstream workflows. ",
   "Files are restricted because the state includes bibliographic metadata derived from licensed/API sources.</p>"
 )
 metadata <- list(metadata=list(
@@ -204,6 +210,9 @@ receipt <- list(
   incremental_pair_decisions=as.integer(summary$incremental_pair_decisions),
   exact_duplicate_candidate_rows_removed=as.integer(summary$exact_duplicate_candidate_rows_removed),
   manual_review_pairs=as.integer(summary$manual_review_pairs),
+  canonical_records=if(is.null(canonical_manifest)) NULL else as.integer(canonical_manifest$records),
+  canonical_jsonl_sha256=if(is.null(canonical_manifest)) NULL else as.character(canonical_manifest$canonical_jsonl_sha256),
+  canonical_jsonl_bytes=if(is.null(canonical_manifest)) NULL else as.numeric(canonical_manifest$canonical_jsonl_bytes),
   zenodo_record_id=as.character(if (is.null(published$record_id)) published$id else published$record_id),
   zenodo_deposition_id=dep_id,
   doi=if (is.null(published$doi)) NA_character_ else published$doi,
