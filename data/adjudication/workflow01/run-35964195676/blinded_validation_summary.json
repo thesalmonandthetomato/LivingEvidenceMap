@@ -1,0 +1,66 @@
+{
+  "schema": "living-evidence-map-workflow01-blinded-validation-summary-v1",
+  "sample_size": 40,
+  "sample_design": "20 automatic duplicate + 20 automatic not_duplicate, labels withheld from reviewer",
+  "reviewer": "Neal Haddaway",
+  "strict_adjudicable_cases": 39,
+  "uncertain_cases": 1,
+  "strict_agreements": 36,
+  "strict_disagreements": 3,
+  "strict_agreement_rate": 0.9230769230769231,
+  "strict_agreement_95pct_clopper_pearson": [
+    0.7912980788,
+    0.9838466997
+  ],
+  "automatic_duplicate": {
+    "sampled": 20,
+    "agreements": 18,
+    "disagreements": 2,
+    "agreement_rate": 0.9,
+    "agreement_95pct_clopper_pearson": [
+      0.683017286,
+      0.9876514728
+    ]
+  },
+  "automatic_not_duplicate": {
+    "sampled": 20,
+    "strict_adjudicable": 19,
+    "agreements": 18,
+    "disagreements": 1,
+    "agreement_rate": 0.9473684210526315,
+    "agreement_95pct_clopper_pearson": [
+      0.7397193458,
+      0.9986683712
+    ]
+  },
+  "disagreements": [
+    {
+      "validation_ordinal": 9,
+      "review_case_id": "hr-dd9087c97616483320e3",
+      "model": "duplicate",
+      "human": "not_duplicate",
+      "note": "Identical abstract was attached to bibliographically incompatible records; reviewer noted low priority because record is irrelevant."
+    },
+    {
+      "validation_ordinal": 18,
+      "review_case_id": "hr-3efadcc676ba175fc397",
+      "model": "duplicate",
+      "human": "not_duplicate",
+      "note": "Abstract error in record A caused false duplicate inference."
+    },
+    {
+      "validation_ordinal": 24,
+      "review_case_id": "hr-3e08903ef0f4d1418343",
+      "model": "not_duplicate",
+      "human": "duplicate",
+      "note": "Distinct chapters of same whole book; reviewer treats as duplicate provided the whole book is represented; operational consequence negligible."
+    }
+  ],
+  "principal_risk_stratum": {
+    "classifier_rule": "exact_abstract_insufficient_metadata",
+    "automatic_duplicate_cases_in_full_run": 384,
+    "sampled_in_blinded_validation": 14,
+    "disagreements_in_sample": 2,
+    "note": "Both clear false-duplicate errors occurred in this stratum; targeted blinded audit required before accepting automatic duplicates from this route."
+  }
+}
