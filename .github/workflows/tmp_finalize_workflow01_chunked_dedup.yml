@@ -1,0 +1,135 @@
+name: Workflow 01 - Finalize preserved chunked deduplication
+
+on:
+  push:
+    branches:
+      - workflow01-persistent-dedup-index
+    paths:
+      - '.github/workflows/tmp_finalize_workflow01_chunked_dedup.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_RUN_ID: '35826740658'
+  SOURCE_ARTIFACT: 'workflow01-five-source-deduplication-extension-35826740658'
+  OLD_RESCORE_RUN_ID: '35711465359'
+  CHUNK_RUN_ID: '35962871947'
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout persistent-index branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-persistent-dedup-index
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest'))
+
+      - name: Download preserved source checkpoint and historical decisions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovered old_decisions
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$SOURCE_ARTIFACT" --dir recovered
+          gh run download "$OLD_RESCORE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-deduplication-v2-final-full-rescore-$OLD_RESCORE_RUN_ID" --dir old_decisions
+          test -n "$(find recovered -name normalised_metadata.csv -path '*workflow01_candidates*' -type f -print -quit)"
+          test -n "$(find recovered -name union_manifest.json -path '*workflow01_union*' -type f -print -quit)"
+          test -n "$(find old_decisions -name rescored_sample.csv -type f -print -quit)"
+
+      - name: Download preserved classifier chunks
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow01-rescore-chunk-*-${{ env.CHUNK_RUN_ID }}
+          path: downloaded_chunks
+          run-id: ${{ env.CHUNK_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Merge and validate classifier chunks
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          files <- list.files('downloaded_chunks', pattern='rescored_sample\\.csv$', recursive=TRUE, full.names=TRUE)
+          stopifnot(length(files) == 12L)
+          x <- rbindlist(lapply(files, fread), use.names=TRUE, fill=FALSE)
+          setorder(x, source_row_index)
+          stopifnot(nrow(x) == 300000L)
+          stopifnot(identical(x$source_row_index, seq_len(300000L)))
+          pair_key <- paste(pmin(x$record_i,x$record_j),pmax(x$record_i,x$record_j),sep='::')
+          stopifnot(uniqueN(pair_key) == 298711L)
+          dir.create('outputs/workflow01_incremental_rescore', recursive=TRUE, showWarnings=FALSE)
+          fwrite(x, 'outputs/workflow01_incremental_rescore/rescored_sample.csv')
+          cat('PASS: restored 300,000 scored rows representing 298,711 unique pairs\n')
+
+      - name: Reconstruct five-source clusters
+        shell: bash
+        run: |
+          set -euo pipefail
+          OLD="$(find old_decisions -name rescored_sample.csv -type f -print -quit)"
+          META="$(find recovered -name normalised_metadata.csv -path '*workflow01_candidates*' -type f -print -quit)"
+          mkdir -p outputs/workflow01_full_five_source
+          Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
+            --old-decisions "$OLD" \
+            --new-decisions outputs/workflow01_incremental_rescore/rescored_sample.csv \
+            --metadata "$META" \
+            --output-dir outputs/workflow01_full_five_source
+
+      - name: Final integrity checks
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(data.table)
+          union_path <- list.files('recovered',pattern='union_manifest\\.json$',recursive=TRUE,full.names=TRUE)[1]
+          old_path <- list.files('old_decisions',pattern='rescored_sample\\.csv$',recursive=TRUE,full.names=TRUE)[1]
+          u <- fromJSON(union_path)
+          f <- fromJSON('outputs/workflow01_full_five_source/summary.json')
+          old <- fread(old_path)
+          new <- fread('outputs/workflow01_incremental_rescore/rescored_sample.csv')
+          pair_key <- paste(pmin(new$record_i,new$record_j),pmax(new$record_i,new$record_j),sep='::')
+          unique_incremental_pairs <- uniqueN(pair_key)
+
+          stopifnot(u$preserved_prior_manifestations == 72941)
+          stopifnot(nrow(old) == 519917L)
+          stopifnot(nrow(new) == 300000L)
+          stopifnot(unique_incremental_pairs == 298711L)
+          stopifnot(f$preserved_pair_decisions == 519917L)
+          stopifnot(f$incremental_candidate_rows == 300000L)
+          stopifnot(f$incremental_pair_decisions == 298711L)
+          stopifnot(f$exact_duplicate_candidate_rows_removed == 1289L)
+          stopifnot(f$source_manifestations == u$union_manifestations)
+          stopifnot(file.exists('outputs/workflow01_full_five_source/clusters.jsonl'))
+          stopifnot(file.exists('outputs/workflow01_full_five_source/manual_review_pairs.csv'))
+          stopifnot(file.exists('outputs/workflow01_full_five_source/incremental_duplicate_pair_audit.csv'))
+
+          cat(sprintf(
+            'PASS: five-source deduplication finalised: %d manifestations, %d unique incremental pairs, %d exact duplicate candidate rows removed, %d manual-review pairs\n',
+            f$source_manifestations, f$incremental_pair_decisions,
+            f$exact_duplicate_candidate_rows_removed, f$manual_review_pairs
+          ))
+
+      - name: Upload completed five-source deduplication state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-five-source-deduplication-finalized-${{ github.run_id }}
+          path: |
+            outputs/workflow01_incremental_rescore/rescored_sample.csv
+            outputs/workflow01_full_five_source/
+          retention-days: 7
+          if-no-files-found: error
