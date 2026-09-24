@@ -51,7 +51,7 @@ normalise five-source manifestations
              '----> stripped manifestation metadata
                                        |
                                        v
-                                  Workflow 03
+                                  Workflow 02
                          missing-title/abstract repair scan
 ```
 
@@ -104,7 +104,7 @@ Human-review cases are mechanically rendered from the locked queue rather than r
 
 ### Abstract mismatch handling
 
-If adjudication identifies an abstract that is semantically inconsistent with its own record title, Workflow 01 records an immutable strip action and removes the abstract during canonical materialisation. It does not repair the abstract and does not rerun deduplication. Workflow 03 subsequently discovers the resulting missing abstract through its normal corpus scan and performs any DOI-based or other verified enrichment.
+If adjudication identifies an abstract that is semantically inconsistent with its own record title, Workflow 01 records an immutable strip action and removes the abstract during canonical materialisation. It does not repair the abstract and does not rerun deduplication. Workflow 02 subsequently discovers the resulting missing abstract through its normal corpus scan and performs any DOI-based or other verified enrichment.
 
 ### Canonical JSONL materialisation
 
@@ -117,7 +117,7 @@ Each canonical object retains:
 - all source manifestations and their source-native identifiers;
 - field-level provenance for canonical bibliographic values;
 - Workflow 01 provenance and deduplication status;
-- Workflow 03 abstract-enrichment status;
+- Workflow 02 abstract-enrichment status;
 - placeholders for downstream screening, species, geography and topic annotations.
 
 Canonical field selection is deterministic and source-agnostic. Non-empty values are compared across manifestations; the most-supported normalised value is selected, with deterministic tie-breaking. Source manifestations remain available so no source provenance is lost.
@@ -170,7 +170,7 @@ The repository stores the Zenodo DOI, record identifier, archive checksums and c
 
 The authoritative Workflow 01 handoff is the checksum-verified canonical JSONL stored in the final restricted Zenodo archive.
 
-Workflow 03 restores this file from the registered Zenodo record. It scans the canonical manifestations for missing titles and abstracts, including abstracts stripped by Workflow 01 because of detected metadata contamination. All later screening, species, geography and topic stages operate on the same canonical work records rather than reconstructing deduplication.
+Workflow 02 restores this file from the registered Zenodo record. It scans the canonical manifestations for missing titles and abstracts, including abstracts stripped by Workflow 01 because of detected metadata contamination. All later screening, species, geography and topic stages operate on the same canonical work records rather than reconstructing deduplication.
 
 ## Methods text for research reporting
 
