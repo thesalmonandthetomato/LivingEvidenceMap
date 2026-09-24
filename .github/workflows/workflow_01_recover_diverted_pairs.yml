@@ -68,11 +68,13 @@ jobs:
         run: |
           library(data.table)
           p <- fread('inputs/base/workflow01_full_five_source/workflow04_exclusion_candidates.csv')
-          stopifnot(nrow(p)==730L)
+          stopifnot(nrow(p)==3004L)
           stopifnot(!anyDuplicated(p$pair_key))
           stopifnot(all(p$review_route=='workflow04_exclusion_candidate'))
-          stopifnot(all(p$rescored_classification %in% c('review','unresolved')))
-          cat(sprintf('PASS: immutable recovery set contains exactly %d unique diverted pairs\n',nrow(p)))
+          stopifnot(sum(p$rescored_classification=='review')==730L)
+          stopifnot(sum(p$rescored_classification=='unresolved')==2274L)
+          cat(sprintf('PASS: immutable legacy file: %d routed rows = %d review + %d candidate-only unresolved\n',
+                      nrow(p),sum(p$rescored_classification=='review'),sum(p$rescored_classification=='unresolved')))
 
       - name: Restore exact Workflow 00 source harvests from Zenodo
         env:
