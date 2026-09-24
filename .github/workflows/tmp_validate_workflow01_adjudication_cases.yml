@@ -49,6 +49,7 @@ jobs:
           parse(file='scripts/updater/workflow_01_send_review_email.R')
           parse(file='scripts/updater/workflow_01_validate_human_decisions.R')
           parse(file='scripts/updater/workflow_01_apply_adjudications_and_recluster.R')
+          cat('PASS: all Workflow 01 adjudication scripts parse\n')
 
       - name: Download exact source state and final review queue
         env:
