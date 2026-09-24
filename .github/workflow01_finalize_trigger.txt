@@ -2,3 +2,4 @@ Trigger final Workflow 01 canonicalisation and Zenodo archival for the validated
 Retry after fixing push-trigger defaults.
 Retry after clearing stale manual-review route on adjudicated pairs.
 Retry final canonicalisation after deferred pair handling update.
+Trigger authoritative Workflow 01 finalisation after recovered duplicate adjudications and legacy-route normalisation.
