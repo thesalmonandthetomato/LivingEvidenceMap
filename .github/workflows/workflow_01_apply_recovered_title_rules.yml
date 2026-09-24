@@ -1,0 +1,92 @@
+name: Workflow 01 - Apply recovered title-class duplicate rules
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_01_apply_recovered_title_rules.yml'
+      - 'scripts/updater/workflow_01_apply_recovered_title_rules.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  RECOVERY_RUN_ID: 36049567027
+  RECOVERY_ARTIFACT: workflow01-recovered-730-adjudication-complete-36049567027
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Download recovered 730 adjudication artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.RECOVERY_ARTIFACT }}
+          path: recovered
+          repository: ${{ github.repository }}
+          run-id: ${{ env.RECOVERY_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Apply user-approved title-class duplicate rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/recovered_title_rules
+          Rscript scripts/updater/workflow_01_apply_recovered_title_rules.R \
+            --input recovered/human_review.jsonl \
+            --resolved outputs/recovered_title_rules/rule_resolved_duplicates.jsonl \
+            --remaining outputs/recovered_title_rules/remaining_human_review.jsonl \
+            --summary outputs/recovered_title_rules/summary.json \
+            --source-run-id "$RECOVERY_RUN_ID"
+
+      - name: Build 19-case human-review package
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_build_human_review_package.R \
+            --input outputs/recovered_title_rules/remaining_human_review.jsonl \
+            --output-dir outputs/recovered_title_rules/review_package \
+            --source-run-id "$RECOVERY_RUN_ID" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY"
+
+      - name: Validate exact decision counts
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/recovered_title_rules/summary.json',simplifyVector=FALSE)
+          stopifnot(s$input_human_review_cases==277L)
+          stopifnot(s$rule_resolved_duplicates==258L)
+          stopifnot(s$remaining_human_review==19L)
+          rr <- readLines('outputs/recovered_title_rules/rule_resolved_duplicates.jsonl')
+          hr <- readLines('outputs/recovered_title_rules/remaining_human_review.jsonl')
+          stopifnot(length(rr)==258L,length(hr)==19L)
+          stopifnot(all(vapply(lapply(rr,fromJSON,simplifyVector=FALSE),function(x)identical(x$decision,'duplicate'),logical(1))))
+          cat('PASS: exactly 258 user-approved rule duplicates and 19 remaining human-review cases\n')
+
+      - name: Upload resolved state and 19-case review package
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-recovered-title-rules-${{ github.run_id }}
+          path: outputs/recovered_title_rules/
+          retention-days: 90
+          if-no-files-found: error
