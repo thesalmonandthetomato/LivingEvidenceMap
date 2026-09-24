@@ -181,8 +181,36 @@ scopus_search_doi <- function(d){
   if(st>=400L) return(list(status=st,entries=list(),outcome=paste0("http_",st),attempts=z$attempts))
   parsed <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
   if(is.null(parsed)) return(list(status=st,entries=list(),outcome="invalid_json",attempts=z$attempts))
-  entries <- ((parsed[["search-results"]] %||% list())[["entry"]] %||% list())
-  list(status=st,entries=entries,outcome=if(length(entries))"search_hits" else "no_hits",attempts=z$attempts)
+  sr <- parsed[["search-results"]] %||% list()
+  total_raw <- sr[["opensearch:totalResults"]] %||% sr[["totalResults"]] %||% "0"
+  total <- suppressWarnings(as.integer(as.character(total_raw[[1L]] %||% total_raw)))
+  if(is.na(total)) total <- 0L
+  entries <- sr[["entry"]] %||% list()
+
+  # Elsevier may return HTTP 200 with an entry-like error/empty object even when
+  # totalResults is zero. Treat totalResults as authoritative for presence.
+  if(total <= 0L) {
+    return(list(status=st,entries=list(),total_results=0L,outcome="no_hits",attempts=z$attempts))
+  }
+
+  # Keep only genuine record-like entries. Error-only objects are not Scopus hits.
+  if(is.list(entries) && length(entries)) {
+    looks_like_record <- function(e) {
+      if(!is.list(e)) return(FALSE)
+      has_id <- any(c("eid","dc:identifier","scopus-id","scopus_id") %in% names(e))
+      has_biblio <- any(c("dc:title","prism:doi","prism:publicationName") %in% names(e))
+      !(!is.null(e[["error"]]) && !has_id && !has_biblio) && (has_id || has_biblio)
+    }
+    entries <- Filter(looks_like_record, entries)
+  }
+
+  list(
+    status=st,
+    entries=entries,
+    total_results=total,
+    outcome=if(length(entries))"search_hits" else "total_results_without_usable_entry",
+    attempts=z$attempts
+  )
 }
 
 scopus_lookup_eid <- function(eid){
