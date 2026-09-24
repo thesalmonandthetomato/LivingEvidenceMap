@@ -201,22 +201,37 @@ scopus_lookup <- function(d){
                 attempts=z$attempts+sr$attempts,route="doi_then_search"))
   }
 
-  exact <- Filter(function(e) identical(norm_doi(e[["prism:doi"]] %||% e[["doi"]]),d),sr$entries)
-  if(!length(exact)){
+  # DOI search responses do not reliably expose prism:doi in every returned
+  # entry/view. If the search result itself exposes DOI, use it to narrow. If it
+  # does not, a single search hit may still be followed to EID, but the full
+  # META_ABS record must then return the exact requested DOI before it is usable.
+  entry_dois <- vapply(sr$entries,function(e){
+    norm_doi(e[["prism:doi"]] %||% e[["doi"]]) %||% ""
+  },character(1))
+  exact_idx <- which(nzchar(entry_dois) & entry_dois==d)
+  candidates <- if(length(exact_idx)) sr$entries[exact_idx] else if(length(sr$entries)==1L) sr$entries else list()
+
+  if(!length(candidates)){
     return(list(status=sr$status,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,
-                outcome="search_hits_no_exact_doi",attempts=z$attempts+sr$attempts,route="doi_then_search"))
+                outcome=if(any(nzchar(entry_dois)))"search_hits_no_exact_doi" else "search_hits_nonunique_without_doi",
+                attempts=z$attempts+sr$attempts,route="doi_then_search"))
   }
 
-  eids <- unique(vapply(exact,function(e)clean_text(e[["eid"]] %||% e[["dc:identifier"]]),character(1)))
+  eids <- unique(vapply(candidates,function(e)clean_text(e[["eid"]] %||% e[["dc:identifier"]]) %||% "",character(1)))
   eids <- eids[nzchar(eids)]
   if(length(eids)!=1L){
-    return(list(status=sr$status,title=NULL,abstract=NULL,returned_doi=d,eid=NULL,
-                outcome="search_exact_doi_nonunique_eid",attempts=z$attempts+sr$attempts,route="doi_then_search"))
+    return(list(status=sr$status,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,
+                outcome="search_candidate_nonunique_eid",attempts=z$attempts+sr$attempts,route="doi_then_search"))
   }
 
   er <- scopus_lookup_eid(eids[[1L]])
   er$route <- "doi_then_search_eid"
   er$attempts <- z$attempts + sr$attempts + (er$attempts %||% 0L)
+  if(!identical(er$returned_doi,d)){
+    er$title <- NULL
+    er$abstract <- NULL
+    er$outcome <- if(is.null(er$returned_doi))"eid_retrieval_no_doi" else "eid_retrieval_doi_mismatch"
+  }
   er
 }
 
