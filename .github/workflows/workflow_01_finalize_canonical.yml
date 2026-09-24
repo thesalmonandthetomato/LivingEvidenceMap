@@ -34,6 +34,10 @@ env:
   WORKFLOW00_MULTI_SOURCE_POINTER: docs/search_record/zenodo/run-35730574878.json
   WORKFLOW00_SCOPUS_POINTER: docs/search_record/zenodo/run-35731899007.json
   WORKFLOW00_AGRICOLA_POINTER: docs/search_record/zenodo/run-35735412308.json
+  RECOVERY_RUN_ID: '36049567027'
+  RECOVERY_ARTIFACT: 'workflow01-recovered-730-adjudication-complete-36049567027'
+  RECOVERY_RESOLUTION_RUN_ID: '36056439618'
+  RECOVERY_RESOLUTION_ARTIFACT: 'workflow01-recovered-title-rules-36056439618'
 
 jobs:
   finalise:
@@ -73,15 +77,45 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p inputs/base inputs/llm inputs/review
+          mkdir -p inputs/base inputs/llm inputs/review inputs/recovery inputs/recovery_resolution
           gh run download "$BASE_RUN" --repo "$GITHUB_REPOSITORY"             --name "workflow01-five-source-deduplication-finalized-$BASE_RUN" --dir inputs/base
           gh run download "$LLM_RUN" --repo "$GITHUB_REPOSITORY"             --name "workflow01-llm-adjudication-complete-$LLM_RUN" --dir inputs/llm
           gh run download "$QUEUE_RUN" --repo "$GITHUB_REPOSITORY"             --name "workflow01-blinded-human-review-$QUEUE_RUN" --dir inputs/review
+          gh run download "$RECOVERY_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "$RECOVERY_ARTIFACT" --dir inputs/recovery
+          gh run download "$RECOVERY_RESOLUTION_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "$RECOVERY_RESOLUTION_ARTIFACT" --dir inputs/recovery_resolution
           test -s inputs/base/workflow01_full_five_source/combined_pair_decisions.csv
           test -s inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv
           test -s inputs/base/workflow01_full_five_source/summary.json
           test -s inputs/llm/all_adjudications.jsonl
           test -s inputs/review/human_review_132_blinded.jsonl
+          test -s inputs/recovery/all_adjudications.jsonl
+          test -s inputs/recovery_resolution/rule_resolved_duplicates.jsonl
+          test -s data/adjudication/workflow01/run-36049567027/human_decisions.jsonl
+
+      - name: Apply recovered decisions and normalise legacy diverted state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/legacy_normalised
+          Rscript scripts/updater/workflow_01_normalise_legacy_diverted_state.R             --combined-decisions outputs/legacy_normalised/combined_pair_decisions.normalised.csv             --recovered-adjudications inputs/recovery/all_adjudications.jsonl             --rule-decisions inputs/recovery_resolution/rule_resolved_duplicates.jsonl             --human-decisions data/adjudication/workflow01/run-36049567027/human_decisions.jsonl             --output-dir outputs/legacy_normalised             --base-run-id "$BASE_RUN"             --recovery-run-id "$RECOVERY_RUN_ID"             --resolution-run-id "$RECOVERY_RESOLUTION_RUN_ID"
+          test -s outputs/legacy_normalised/combined_pair_decisions.normalised.csv
+          test -s outputs/legacy_normalised/recovered_730_application_audit.jsonl
+          test -s outputs/legacy_normalised/candidate_only_route_migration_audit.jsonl
+
+      - name: Validate recovered and migrated pair state
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(data.table)
+          s <- fromJSON('outputs/legacy_normalised/legacy_state_normalisation_summary.json',simplifyVector=FALSE)
+          stopifnot(s$legacy_diverted_rows==3004L)
+          stopifnot(s$recovered_review_rows==730L)
+          stopifnot(s$candidate_only_rows==2274L)
+          stopifnot(s$legacy_routes_remaining==0L)
+          stopifnot(s$unresolved_manual_review_from_recovered_legacy_rows==0L)
+          x <- fread('outputs/legacy_normalised/combined_pair_decisions.normalised.csv')
+          stopifnot(sum(x$review_route=='workflow04_exclusion_candidate')==0L)
+          cat('PASS: recovered 730 decisions and 2274 legacy candidate-only routes are normalised before final adjudication\n')
 
       - name: Normalise and validate complete human-review state
         shell: bash
@@ -185,6 +219,11 @@ jobs:
           cp outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json zenodo_stage/canonical/
           cp outputs/reports/* zenodo_stage/reports/
           cp outputs/human_gate/human_review_integrity.json zenodo_stage/provenance/
+          cp outputs/legacy_normalised/legacy_state_normalisation_summary.json zenodo_stage/provenance/
+          cp outputs/legacy_normalised/recovered_730_application_audit.jsonl zenodo_stage/provenance/
+          cp outputs/legacy_normalised/candidate_only_route_migration_audit.jsonl zenodo_stage/provenance/
+          cp data/adjudication/workflow01/run-36049567027/human_decisions.jsonl zenodo_stage/provenance/recovered_19_human_decisions.jsonl
+          cp data/adjudication/workflow01/run-36049567027/decision_manifest.json zenodo_stage/provenance/recovered_decision_manifest.json
           cp inputs/base/workflow01_full_five_source/summary.json zenodo_stage/provenance/pre_adjudication_summary.json
 
       - name: Archive final Workflow 01 state and canonical corpus to Zenodo
