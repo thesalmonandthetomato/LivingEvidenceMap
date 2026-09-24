@@ -93,15 +93,18 @@ extract_record <- function(r,src,idx,rid){
   )
 }
 
-pairs <- fread(pairs_path,na.strings=c("","NA"))
+legacy_pairs <- fread(pairs_path,na.strings=c("","NA"))
+pairs <- legacy_pairs[rescored_classification=="review"]
 map <- fread(map_path,na.strings=c("","NA"))
 required_pairs <- c("record_i","record_j","pair_key","review_route","rescored_classification","rescored_rule",
                     "title_similarity","blocks")
 required_map <- c("idx","source","source_record_id")
 if(length(setdiff(required_pairs,names(pairs)))) stop("Recovered pair file missing required columns",call.=FALSE)
 if(length(setdiff(required_map,names(map)))) stop("Manifestation map missing required columns",call.=FALSE)
-if(nrow(pairs)!=730L) stop(sprintf("Expected exactly 730 diverted pairs, found %d",nrow(pairs)),call.=FALSE)
-if(any(pairs$review_route!="workflow04_exclusion_candidate")) stop("Recovered input contains rows outside the legacy diverted route",call.=FALSE)
+if(nrow(legacy_pairs)!=3004L) stop(sprintf("Expected 3004 rows in immutable legacy routed file, found %d",nrow(legacy_pairs)),call.=FALSE)
+if(nrow(pairs)!=730L) stop(sprintf("Expected exactly 730 review-class diverted pairs, found %d",nrow(pairs)),call.=FALSE)
+if(any(legacy_pairs$review_route!="workflow04_exclusion_candidate")) stop("Legacy recovery file contains rows outside the old diverted route",call.=FALSE)
+if(any(pairs$review_route!="workflow04_exclusion_candidate")) stop("Recovered review set contains rows outside the old diverted route",call.=FALSE)
 if(anyDuplicated(pairs$pair_key)) stop("Recovered pair set contains duplicate pair keys",call.=FALSE)
 if(any(!c(pairs$record_i,pairs$record_j) %in% map$idx)) stop("Recovered pairs reference missing manifestation indices",call.=FALSE)
 setkey(map,idx)
@@ -183,6 +186,8 @@ close(out)
 
 manifest <- list(
   schema="living-evidence-map-workflow01-recovered-diverted-adjudication-input-v1",
+  legacy_routed_rows=nrow(legacy_pairs),
+  legacy_candidate_only_rows=sum(legacy_pairs$rescored_classification=="unresolved"),
   cases=nrow(pairs),
   unique_bibliographic_records=length(wanted_keys),
   source_counts=as.list(table(wanted_map$source)),
