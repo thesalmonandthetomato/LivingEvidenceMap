@@ -88,8 +88,8 @@ for(x in rows){
   ti <- title_type(x$record_i$title)
   tj <- title_type(x$record_j$title)
   pc <- pair_class(ti,tj)
-  rule <- unname(rule_map[[pc]])
-  if(!is.null(rule) && nzchar(rule)){
+  rule <- unname(rule_map[pc])
+  if(length(rule)==1L && !is.na(rule) && nzchar(rule)){
     counts[[rule]] <- counts[[rule]] + 1L
     resolved[[length(resolved)+1L]] <- list(
       schema="living-evidence-map-workflow01-rule-decision-v1",
