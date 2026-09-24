@@ -64,7 +64,7 @@ for (i in seq_along(llm)) {
   } else stop(sprintf("Invalid promotion for %s",a$review_case_id),call.=FALSE)
 
   before <- pairs[.(key),rescored_classification]
-  pairs[.(key),\`:=\`(
+  pairs[.(key),`:=`(
     rescored_classification=final_decision,
     rescored_rule=paste0("workflow01_",provenance,"_adjudication")
   )]
