@@ -67,9 +67,9 @@ jobs:
       - name: Download deduplication, LLM and locked human-review artifacts
         env:
           GH_TOKEN: ${{ github.token }}
-          BASE_RUN: ${{ inputs.base_dedup_run_id }}
-          LLM_RUN: ${{ inputs.llm_run_id }}
-          QUEUE_RUN: ${{ inputs.human_queue_run_id }}
+          BASE_RUN: ${{ inputs.base_dedup_run_id || '35964195676' }}
+          LLM_RUN: ${{ inputs.llm_run_id || '35968951674' }}
+          QUEUE_RUN: ${{ inputs.human_queue_run_id || '35986405369' }}
         shell: bash
         run: |
           set -euo pipefail
