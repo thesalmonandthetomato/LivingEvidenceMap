@@ -146,6 +146,32 @@ scopus_headers <- function(req) {
     req_error(is_error=function(resp) FALSE)
 }
 
+extract_scopus_eid <- function(entry){
+  vals <- c(
+    clean_text(entry[["eid"]]),
+    clean_text(entry[["dc:identifier"]]),
+    clean_text(entry[["scopus-id"]]),
+    clean_text(entry[["scopus_id"]])
+  )
+  vals <- vals[!vapply(vals,is.null,logical(1))]
+  vals <- trimws(as.character(vals))
+  vals <- vals[nzchar(vals)]
+  if(!length(vals)) return(NULL)
+
+  normalise_id <- function(x){
+    y <- trimws(x)
+    y <- sub("^SCOPUS_ID:\\s*","",y,ignore.case=TRUE,perl=TRUE)
+    y <- sub("^EID:\\s*","",y,ignore.case=TRUE,perl=TRUE)
+    if(grepl("^2-s2\\.0-",y,ignore.case=TRUE)) return(y)
+    if(grepl("^[0-9]+$",y)) return(paste0("2-s2.0-",y))
+    y
+  }
+
+  vals <- unique(vapply(vals,normalise_id,character(1)))
+  vals <- vals[nzchar(vals)]
+  if(!length(vals)) NULL else vals
+}
+
 scopus_search_doi <- function(d){
   req <- request("https://api.elsevier.com/content/search/scopus") |>
     req_url_query(query=sprintf("DOI(%s)",d),count=5,view="STANDARD") |>
@@ -218,14 +244,15 @@ scopus_lookup <- function(d){
                 attempts=z$attempts+sr$attempts,route="doi_then_search"))
   }
 
-  eids <- unique(vapply(candidates,function(e)clean_text(e[["eid"]] %||% e[["dc:identifier"]]) %||% "",character(1)))
-  eids <- eids[nzchar(eids)]
-  if(length(eids)!=1L){
+  candidate_eids <- unlist(lapply(candidates,extract_scopus_eid),use.names=FALSE)
+  candidate_eids <- unique(candidate_eids[nzchar(candidate_eids)])
+  if(length(candidate_eids)!=1L){
     return(list(status=sr$status,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,
-                outcome="search_candidate_nonunique_eid",attempts=z$attempts+sr$attempts,route="doi_then_search"))
+                outcome=if(!length(candidate_eids))"search_candidate_missing_eid" else "search_candidate_nonunique_eid",
+                attempts=z$attempts+sr$attempts,route="doi_then_search"))
   }
 
-  er <- scopus_lookup_eid(eids[[1L]])
+  er <- scopus_lookup_eid(candidate_eids[[1L]])
   er$route <- "doi_then_search_eid"
   er$attempts <- z$attempts + sr$attempts + (er$attempts %||% 0L)
   if(!identical(er$returned_doi,d)){
