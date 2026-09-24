@@ -47,6 +47,7 @@ norm_doi <- function(x){
   s <- sub("^https?://(dx\\.)?doi\\.org/","",s,perl=TRUE)
   s <- sub("^doi:\\s*","",s,perl=TRUE)
   s <- sub("[[:space:]]+$","",s)
+  s <- sub("[[:space:][:punct:]]+$","",s)
   if(!nzchar(s)) NULL else s
 }
 norm_title <- function(x){
