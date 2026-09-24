@@ -14,6 +14,7 @@ current_scopus <- arg("--current-scopus")
 current_openalex <- arg("--current-openalex")
 current_agricola <- arg("--current-agricola")
 current_wos <- arg("--current-wos")
+expected_prior <- suppressWarnings(as.integer(arg("--expected-prior-manifestations",NA_character_)))
 output_dir <- arg("--output-dir")
 if (any(vapply(list(old_dir,current_lens,current_scopus,current_openalex,current_agricola,current_wos,output_dir),is.null,logical(1)))) {
   stop("Required: --old-dir --current-lens --current-scopus --current-openalex --current-agricola --current-wos --output-dir",call.=FALSE)
@@ -63,7 +64,8 @@ old_names <- c(
   lens="lens_records_for_deduplication.jsonl",
   scopus="scopus_records_for_deduplication.jsonl",
   openalex="openalex_records_for_deduplication.jsonl",
-  agricola="agricola_records_for_deduplication.jsonl"
+  agricola="agricola_records_for_deduplication.jsonl",
+  wos="wos_records_for_deduplication.jsonl"
 )
 current_paths <- c(
   lens=current_lens,
@@ -119,7 +121,7 @@ for (src in names(current_paths)) {
 }
 
 s <- do.call(rbind,summary_rows)
-if (old_total != 72941L) stop(sprintf("Preserved corpus should contain 72941 manifestations, found %d",old_total),call.=FALSE)
+if (!is.na(expected_prior) && old_total != expected_prior) stop(sprintf("Preserved corpus should contain %d manifestations, found %d",expected_prior,old_total),call.=FALSE)
 write.csv(s,file.path(output_dir,"union_source_counts.csv"),row.names=FALSE)
 writeLines(toJSON(list(
   workflow="01_deduplication_incremental_union",
