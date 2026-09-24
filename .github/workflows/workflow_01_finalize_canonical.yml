@@ -131,7 +131,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/final
-          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R             --combined-decisions inputs/base/workflow01_full_five_source/combined_pair_decisions.csv             --manifestation-map inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv             --llm-adjudications inputs/llm/all_adjudications.jsonl             --human-decisions outputs/human_gate/human_decisions.normalised.jsonl             --human-integrity-manifest outputs/human_gate/human_review_integrity.json             --data-quality-repairs outputs/human_gate/data_quality_repairs.normalised.jsonl             --output-dir outputs/final
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R             --combined-decisions outputs/legacy_normalised/combined_pair_decisions.normalised.csv             --manifestation-map inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv             --llm-adjudications inputs/llm/all_adjudications.jsonl             --human-decisions outputs/human_gate/human_decisions.normalised.jsonl             --human-integrity-manifest outputs/human_gate/human_review_integrity.json             --data-quality-repairs outputs/human_gate/data_quality_repairs.normalised.jsonl             --output-dir outputs/final
 
       - name: Merge preserved pre-adjudication state metrics into final summary
         shell: Rscript {0}
