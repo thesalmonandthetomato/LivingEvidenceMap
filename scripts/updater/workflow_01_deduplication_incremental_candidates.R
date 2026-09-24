@@ -24,15 +24,19 @@ scopus_path <- arg("--scopus")
 openalex_path <- arg("--openalex")
 agricola_path <- arg("--agricola")
 wos_path <- arg("--wos")
-old_metadata_path <- arg("--old-metadata")
+old_metadata_path <- arg("--old-metadata",NULL)
+old_manifestation_map_path <- arg("--old-manifestation-map",NULL)
 output_dir <- arg("--output-dir")
 score_n <- as.integer(arg("--score-n", "2000"))
 sample_key <- arg("--sample-key", "workflow02-v2-candidate-benchmark-v1")
 workflow01_run_id <- arg("--workflow01-run-id", "unknown")
 validate_index_only <- identical(tolower(arg("--validate-index-only", "false")), "true")
 
-if (any(vapply(list(lens_path, scopus_path, openalex_path, agricola_path, wos_path, old_metadata_path, output_dir), is.null, logical(1)))) {
-  stop("Required: --lens --scopus --openalex --agricola --wos --old-metadata --output-dir", call. = FALSE)
+if (any(vapply(list(lens_path, scopus_path, openalex_path, agricola_path, wos_path, output_dir), is.null, logical(1)))) {
+  stop("Required: --lens --scopus --openalex --agricola --wos --output-dir", call. = FALSE)
+}
+if (is.null(old_metadata_path) && is.null(old_manifestation_map_path)) {
+  stop("Provide either --old-metadata or --old-manifestation-map", call.=FALSE)
 }
 if (is.na(score_n) || score_n < 1L) stop("--score-n must be positive", call. = FALSE)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -256,10 +260,12 @@ if (anyDuplicated(meta$corpus_key)) stop("Duplicate source namespace + record ID
 # manifestations absent from the historical corpus, in deterministic current
 # source order. Historic pair decisions therefore continue to address the same
 # manifestation indices without blocking legitimate metadata repairs.
-old_meta <- fread(old_metadata_path, na.strings=c("", "NA"))
+old_state_path <- if (!is.null(old_metadata_path)) old_metadata_path else old_manifestation_map_path
+old_meta <- fread(old_state_path, na.strings=c("", "NA"))
 stopifnot(all(c("source","source_record_id") %in% names(old_meta)))
+if ("idx" %in% names(old_meta)) setorder(old_meta,idx)
 old_keys <- paste(old_meta$source,old_meta$source_record_id,sep="::")
-if (anyDuplicated(old_keys)) stop("Historical metadata contains duplicate source namespace + record ID",call.=FALSE)
+if (anyDuplicated(old_keys)) stop("Historical state contains duplicate source namespace + record ID",call.=FALSE)
 
 old_pos <- match(old_keys,meta$corpus_key)
 if (anyNA(old_pos)) {
