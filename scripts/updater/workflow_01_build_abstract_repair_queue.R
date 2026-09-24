@@ -24,11 +24,14 @@ read_jsonl <- function(path){
 rows <- read_jsonl(input_path)
 out <- list()
 for(z in rows){
-  if(!identical(z$promotion_reason,"abstract_title_inconsistency_guard")) next
+  # Workflow 01 only identifies suspected abstract contamination during deduplication.
+  # Any model-indicated title/abstract mismatch is handed forward after deduplication;
+  # Workflow 01 does not refill abstracts and does not rerun deduplication.
   sides <- c(
     if(!isTRUE(z$abstract_consistent_with_record_i)) "record_i" else NULL,
     if(!isTRUE(z$abstract_consistent_with_record_j)) "record_j" else NULL
   )
+  if(!length(sides)) next
   for(side in sides){
     rec <- z[[side]]
     out[[length(out)+1L]] <- list(
@@ -43,8 +46,10 @@ for(z in rows){
       year=rec$year,
       doi=rec$doi,
       current_abstract=rec$abstract,
-      repair_status="pending_verified_replacement",
-      allowed_actions=c("replace_abstract","strip_abstract_no_verified_replacement"),
+      workflow01_action="strip_incorrect_abstract",
+      downstream_workflow="03",
+      downstream_queue="abstract_repair",
+      downstream_status="pending_abstract_repair",
       replacement_abstract=NULL,
       replacement_source=NULL,
       replacement_match_basis=NULL
@@ -59,10 +64,10 @@ for(z in out) writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null"),con,use
 close(con); on.exit(NULL,add=FALSE)
 
 manifest <- list(
-  schema="living-evidence-map-workflow01-abstract-repair-queue-manifest-v1",
+  schema="living-evidence-map-workflow01-workflow03-abstract-repair-handoff-manifest-v1",
   source_adjudication_sha256=digest(file=input_path,algo="sha256",serialize=FALSE),
   repair_items=length(out),
   unique_source_records=length(unique(vapply(out,function(z)paste(z$source,z$source_record_id,sep=":"),character(1))))
 )
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),paste0(output_path,".manifest.json"),useBytes=TRUE)
-cat(sprintf("PASS: built abstract repair queue with %d items\n",length(out)))
+cat(sprintf("PASS: built Workflow 03 abstract-repair handoff with %d records\n",length(out)))

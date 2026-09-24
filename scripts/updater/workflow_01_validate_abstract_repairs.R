@@ -13,9 +13,8 @@ arg <- function(flag,default=NULL){
   args[[i+1L]]
 }
 queue_path <- arg("--queue")
-repairs_path <- arg("--repairs")
 output_path <- arg("--output")
-if(any(vapply(list(queue_path,repairs_path,output_path),is.null,logical(1)))) stop("Required: --queue --repairs --output",call.=FALSE)
+if(any(vapply(list(queue_path,output_path),is.null,logical(1)))) stop("Required: --queue --output",call.=FALSE)
 
 read_jsonl <- function(path){
   x <- readLines(path,warn=FALSE,encoding="UTF-8")
@@ -23,41 +22,31 @@ read_jsonl <- function(path){
   lapply(x,fromJSON,simplifyVector=FALSE)
 }
 q <- read_jsonl(queue_path)
-r <- read_jsonl(repairs_path)
 
-key <- function(z) paste(as.character(z$review_case_id),as.character(z$source),as.character(z$source_record_id),sep="|")
-qkeys <- vapply(q,key,character(1))
-rkeys <- vapply(r,key,character(1))
-if(anyDuplicated(qkeys)) stop("Repair queue contains duplicate keys",call.=FALSE)
-if(anyDuplicated(rkeys)) stop("Repair decisions contain duplicate keys",call.=FALSE)
-if(length(setdiff(rkeys,qkeys))) stop("Repair decisions contain records not present in repair queue",call.=FALSE)
-missing <- setdiff(qkeys,rkeys)
-if(length(missing)) stop(sprintf("%d abstract repair items remain unresolved",length(missing)),call.=FALSE)
-
-allowed <- c("replace_abstract","strip_abstract_no_verified_replacement")
-for(z in r){
-  if(is.null(z$action)||!(z$action %in% allowed)) stop("Invalid abstract repair action",call.=FALSE)
-  if(is.null(z$verified_by)||!nzchar(trimws(as.character(z$verified_by)))) stop("verified_by is required",call.=FALSE)
-  if(is.null(z$verified_at_utc)||!nzchar(trimws(as.character(z$verified_at_utc)))) stop("verified_at_utc is required",call.=FALSE)
-  if(identical(z$action,"replace_abstract")){
-    if(is.null(z$replacement_abstract)||!nzchar(trimws(as.character(z$replacement_abstract)))) stop("Replacement abstract is required",call.=FALSE)
-    if(is.null(z$replacement_source)||!nzchar(trimws(as.character(z$replacement_source)))) stop("Replacement source is required",call.=FALSE)
-    if(is.null(z$replacement_match_basis)||!nzchar(trimws(as.character(z$replacement_match_basis)))) stop("Replacement match basis is required",call.=FALSE)
-    if(grepl("^copied_from_pair$",as.character(z$replacement_match_basis),ignore.case=TRUE)) stop("Copying an abstract from the paired record is not permitted as a verification basis",call.=FALSE)
-  }
+keys <- character()
+for(z in q){
+  required <- c("review_case_id","pair_key","source","source_record_id","workflow01_action",
+                "downstream_workflow","downstream_queue","downstream_status")
+  miss <- required[vapply(required,function(n)is.null(z[[n]])||!nzchar(trimws(as.character(z[[n]]))),logical(1))]
+  if(length(miss)) stop(sprintf("Handoff item missing fields: %s",paste(miss,collapse=", ")),call.=FALSE)
+  if(!identical(as.character(z$workflow01_action),"strip_incorrect_abstract")) stop("Invalid Workflow 01 action",call.=FALSE)
+  if(!identical(as.character(z$downstream_workflow),"03")) stop("Abstract mismatch must hand off to Workflow 03",call.=FALSE)
+  if(!identical(as.character(z$downstream_queue),"abstract_repair")) stop("Invalid Workflow 03 queue",call.=FALSE)
+  key <- paste(z$source,z$source_record_id,sep=":")
+  if(key %in% keys) stop(sprintf("Duplicate source record in Workflow 03 handoff: %s",key),call.=FALSE)
+  keys <- c(keys,key)
 }
 
 dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
 manifest <- list(
-  schema="living-evidence-map-workflow01-abstract-repair-validation-v1",
+  schema="living-evidence-map-workflow01-workflow03-handoff-validation-v1",
   queue_sha256=digest(file=queue_path,algo="sha256",serialize=FALSE),
-  repairs_sha256=digest(file=repairs_path,algo="sha256",serialize=FALSE),
-  queue_items=length(q),
-  resolved_items=length(r),
-  replacement_abstracts=sum(vapply(r,function(z)identical(z$action,"replace_abstract"),logical(1))),
-  stripped_without_replacement=sum(vapply(r,function(z)identical(z$action,"strip_abstract_no_verified_replacement"),logical(1))),
-  complete=TRUE,
-  deduplication_may_resume=TRUE
+  handoff_records=length(q),
+  unique_source_records=length(keys),
+  workflow01_deduplication_complete_independently=TRUE,
+  downstream_workflow="03",
+  downstream_queue="abstract_repair",
+  rerun_deduplication=FALSE
 )
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),output_path,useBytes=TRUE)
-cat(sprintf("PASS: validated %d/%d abstract repairs; deduplication may resume\n",length(r),length(q)))
+cat(sprintf("PASS: validated %d-record Workflow 03 abstract-repair handoff; no deduplication rerun required\n",length(q)))
