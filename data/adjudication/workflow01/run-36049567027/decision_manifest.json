@@ -1,0 +1,27 @@
+{
+  "schema": "living-evidence-map-workflow01-human-decision-manifest-v1",
+  "purpose": "Final human adjudication of the 19 residual cases from the recovered 730 legacy-routed Workflow 01 duplicate candidates.",
+  "recovery_run_id": "36049567027",
+  "recovery_artifact": "workflow01-recovered-730-adjudication-complete-36049567027",
+  "recovery_artifact_sha256": "25d6ae8c84757795a7ca7ab8fb655fcf944eb93ae0a37d5901356fa9b49d76f4",
+  "title_rule_resolution_run_id": "36056439618",
+  "title_rule_resolution_artifact": "workflow01-recovered-title-rules-36056439618",
+  "title_rule_resolution_artifact_sha256": "add52a67d355faf68a76aa313d7bf02e0749145e246e823690d60580e528a320",
+  "rule_resolved_duplicate_cases": 258,
+  "residual_human_review_cases": 19,
+  "residual_human_decisions": {
+    "duplicate": 19,
+    "not_duplicate": 0,
+    "uncertain": 0
+  },
+  "residual_decision_file": "human_decisions.jsonl",
+  "residual_decision_file_git_blob_sha": "0e2d9405c85621d0ef56b514e46a2c8dc9a7090c",
+  "reviewer": "Neal Haddaway",
+  "decision_source": "explicit_user_human_adjudication",
+  "recorded_at_utc": "2026-09-24T20:47:23Z",
+  "recovered_human_review_state_after_these_decisions": {
+    "total": 277,
+    "resolved": 277,
+    "unresolved": 0
+  }
+}
