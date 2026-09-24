@@ -16,8 +16,12 @@ arg <- function(flag, default=NULL) {
 or_else <- function(x,y) if (is.null(x) || !length(x)) y else x
 scalar <- function(x) {
   if (is.null(x) || !length(x)) return(NA_character_)
-  z <- as.character(x[[1L]])
-  if (!length(z) || is.na(z) || !nzchar(trimws(z))) NA_character_ else z
+  z <- suppressWarnings(as.character(unlist(x,use.names=FALSE)))
+  z <- z[!is.na(z)]
+  if (!length(z)) return(NA_character_)
+  z <- trimws(z)
+  z <- z[nzchar(z)]
+  if (!length(z)) NA_character_ else z[[1L]]
 }
 collapse_text <- function(x) {
   if (is.null(x) || !length(x)) return(NA_character_)
