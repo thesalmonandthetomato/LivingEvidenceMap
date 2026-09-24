@@ -121,7 +121,8 @@ for (i in seq_along(llm)) {
   before <- pairs[.(key),rescored_classification]
   pairs[.(key),`:=`(
     rescored_classification=final_decision,
-    rescored_rule=paste0("workflow01_",provenance,"_adjudication")
+    rescored_rule=paste0("workflow01_",provenance,"_adjudication"),
+    review_route="resolved_adjudication"
   )]
   audit[[i]] <- list(
     review_case_id=a$review_case_id,
