@@ -1,0 +1,179 @@
+name: Workflow 02 - Validate production architecture
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_02_production.yml'
+      - '.github/workflows/workflow_02_validate_production_architecture.yml'
+      - 'scripts/updater/workflow_02_metadata_enrichment.R'
+      - 'scripts/updater/workflow_02_build_patch.R'
+      - 'scripts/updater/workflow_02_apply_patch.R'
+      - 'scripts/updater/workflow_02_merge_patches.R'
+      - 'scripts/updater/workflow_02_inventory_state.R'
+      - 'scripts/updater/workflow_02_restore_state_from_zenodo.R'
+      - 'scripts/updater/workflow_02_archive_state_to_zenodo.R'
+      - 'scripts/updater/workflow_02_update_zenodo_registry.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','stringdist'))
+
+      - name: Parse all production scripts
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_02_metadata_enrichment.R',
+            'scripts/updater/workflow_02_build_patch.R',
+            'scripts/updater/workflow_02_apply_patch.R',
+            'scripts/updater/workflow_02_merge_patches.R',
+            'scripts/updater/workflow_02_inventory_state.R',
+            'scripts/updater/workflow_02_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_02_archive_state_to_zenodo.R',
+            'scripts/updater/workflow_02_update_zenodo_registry.R'
+          )
+          invisible(lapply(files,parse))
+          cat('PASS: all Workflow 02 production R scripts parse\n')
+
+      - name: Download validated first-run real-record fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p fixture
+          gh run download 36130593009 --repo "$GITHUB_REPOSITORY" \
+            --name workflow02-handoff-validation-36130593009 \
+            --dir fixture
+
+      - name: Build and replay first cumulative patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs
+          Rscript scripts/updater/workflow_02_build_patch.R \
+            --input fixture/real_sample_10.jsonl \
+            --enriched fixture/enriched_10.jsonl \
+            --audit fixture/enrichment_audit.jsonl \
+            --enrichment-report fixture/enrichment_report.json \
+            --patch outputs/first_patch.jsonl \
+            --retry-queue outputs/first_retry.jsonl \
+            --report outputs/first_patch_report.json
+          : > outputs/empty_previous.jsonl
+          Rscript scripts/updater/workflow_02_merge_patches.R \
+            --previous outputs/empty_previous.jsonl \
+            --current outputs/first_patch.jsonl \
+            --output outputs/cumulative_1.jsonl
+          Rscript scripts/updater/workflow_02_apply_patch.R \
+            --input fixture/real_sample_10.jsonl \
+            --patch outputs/cumulative_1.jsonl \
+            --output outputs/reconstructed_1.jsonl \
+            --report outputs/reconstructed_1_report.json \
+            --mode exact
+          Rscript -e "library(digest);stopifnot(digest(file='outputs/reconstructed_1.jsonl',algo='sha256',serialize=FALSE)==digest(file='fixture/enriched_10.jsonl',algo='sha256',serialize=FALSE));cat('PASS: first cumulative patch exact\n')"
+
+      - name: Simulate immediate second production run with no API calls due
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_metadata_enrichment.R \
+            --input outputs/reconstructed_1.jsonl \
+            --output outputs/second_enriched.jsonl \
+            --audit outputs/second_audit.jsonl \
+            --report outputs/second_report.json \
+            --recheck-after-days 90 \
+            --delay 0
+          Rscript -e "library(jsonlite);r<-fromJSON('outputs/second_report.json');stopifnot(r\$counts\$deferred_recent_attempts==6L,r\$counts\$scopus_attempted==0L);cat('PASS: recent unresolved attempts deferred; zero Scopus calls\n')"
+
+      - name: Verify zero second-run patch and stable cumulative state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_build_patch.R \
+            --input outputs/reconstructed_1.jsonl \
+            --enriched outputs/second_enriched.jsonl \
+            --audit outputs/second_audit.jsonl \
+            --enrichment-report outputs/second_report.json \
+            --patch outputs/second_patch.jsonl \
+            --retry-queue outputs/second_retry.jsonl \
+            --report outputs/second_patch_report.json
+          test ! -s outputs/second_patch.jsonl
+          Rscript scripts/updater/workflow_02_merge_patches.R \
+            --previous outputs/cumulative_1.jsonl \
+            --current outputs/second_patch.jsonl \
+            --output outputs/cumulative_2.jsonl
+          cmp outputs/cumulative_1.jsonl outputs/cumulative_2.jsonl
+          Rscript scripts/updater/workflow_02_apply_patch.R \
+            --input fixture/real_sample_10.jsonl \
+            --patch outputs/cumulative_2.jsonl \
+            --output outputs/reconstructed_2.jsonl \
+            --report outputs/reconstructed_2_report.json \
+            --mode exact
+          Rscript -e "library(digest);stopifnot(digest(file='outputs/reconstructed_2.jsonl',algo='sha256',serialize=FALSE)==digest(file='fixture/enriched_10.jsonl',algo='sha256',serialize=FALSE));cat('PASS: cumulative state stable across no-op second run\n')"
+
+      - name: Inventory reconstructed state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_inventory_state.R \
+            --input outputs/reconstructed_2.jsonl \
+            --report outputs/inventory.json \
+            --missing-both-queue outputs/missing_both.jsonl
+
+      - name: Validate registry writer using synthetic receipt
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create('outputs/registry_test',recursive=TRUE,showWarnings=FALSE)
+          x <- list(status='published',workflow='02',state='enrichment_patch',github_run_id='999',
+                    upstream_workflow01_canonical_sha256='abc',cumulative_patch_records=10,
+                    previous_workflow02=NULL,zenodo_record_id='123',doi='10.5281/zenodo.123',
+                    record_url='https://zenodo.org/records/123',visibility='restricted',
+                    manifest_sha256='def',published_at_utc='2026-09-25T00:00:00Z')
+          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/registry_test/receipt.json')
+
+      - name: Run registry writer
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_update_zenodo_registry.R \
+            --receipt outputs/registry_test/receipt.json \
+            --registry outputs/registry_test/registry.csv \
+            --pointer-dir outputs/registry_test/pointers
+          test -s outputs/registry_test/registry.csv
+          test -s outputs/registry_test/pointers/run-999.json
+
+      - name: Upload architecture validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-production-architecture-${{ github.run_id }}
+          path: outputs/
+          retention-days: 30
+          if-no-files-found: warn
