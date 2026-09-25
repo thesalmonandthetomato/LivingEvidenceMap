@@ -1,2 +1,3 @@
-github_run_id,state,source_manifestations,preserved_pair_decisions,incremental_pair_decisions,manual_review_pairs,zenodo_record_id,doi,record_url,visibility,manifest_sha256,published_at_utc
-35964195676,pre_adjudication,90137,519917,298711,3027,22932524,10.5281/zenodo.22932524,https://zenodo.org/records/22932524,restricted,d0d94822f18e31f6f47b063b3d6c560b9503acc036e3320d12b1d2a7d236395f,2026-09-24T06:49:37Z
+github_run_id,state,source_manifestations,preserved_pair_decisions,incremental_pair_decisions,manual_review_pairs,zenodo_record_id,doi,record_url,visibility,manifest_sha256,published_at_utc,canonical_records,canonical_jsonl_sha256,canonical_jsonl_bytes
+35964195676,pre_adjudication,90137,519917,298711,3027,22932524,10.5281/zenodo.22932524,https://zenodo.org/records/22932524,restricted,d0d94822f18e31f6f47b063b3d6c560b9503acc036e3320d12b1d2a7d236395f,2026-09-24T06:49:37Z,,,
+36103542054,final,90137,519917,298711,3027,22953437,10.5281/zenodo.22953437,https://zenodo.org/records/22953437,restricted,e4308191b3b04de6f2c591a4f08323d3833b7ef39c660c42b5549a3613fbeb85,2026-09-25T07:16:18Z,32292,40eaf26efc73a59a427b05c0ef7d30af33e993edf9c9993ba1d7984c06e4bd9b,243621769
