@@ -5,3 +5,4 @@ Retry final canonicalisation after deferred pair handling update.
 Trigger authoritative Workflow 01 finalisation after recovered duplicate adjudications and legacy-route normalisation.
 Retry authoritative Workflow 01 finalisation after fixing legacy-normalisation input path.
 Retry authoritative Workflow 01 finalisation after wiring normalised pair state into reclustering.
+Retry after reconstructing exact historical old+current source union for 90,137 manifestations.
