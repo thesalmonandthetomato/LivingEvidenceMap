@@ -4,7 +4,9 @@
 
 Workflow 02 enriches the canonical work records produced by Workflow 01 when bibliographic metadata remain incomplete. It operates only on canonical records with a DOI and a missing title and/or abstract, queries Europe PMC first and Scopus second, applies only verified missing-field fills, quarantines conflicting provider metadata, and preserves Workflow 01 work identity, source manifestations and existing populated metadata.
 
-Workflow 02 is implemented as a sparse enrichment layer over the immutable Workflow 01 canonical corpus. It does not republish the complete canonical JSONL on every run. Instead, it stores a cumulative patch ledger keyed by stable Workflow 01 `record_id`, plus provider audit, retry state and corpus-quality reports. The fully enriched canonical JSONL is reconstructed deterministically by applying that patch ledger to the exact upstream Workflow 01 canonical checksum.
+Workflow 02 is implemented as a sparse enrichment layer over the immutable Workflow 01 canonical corpus. It does not republish the complete canonical JSONL on every run. Instead, the automated production process stores a cumulative enrichment patch keyed by stable Workflow 01 `record_id`, plus provider audit, retry state and corpus-quality reports. The enriched canonical JSONL is reconstructed deterministically by applying that patch to the exact upstream Workflow 01 canonical checksum.
+
+After validation of the first full enrichment baseline, a small number of metadata conflicts were reviewed outside the automated enrichment process. Six explicitly approved one-off title/abstract corrections were stored as a separate sparse canonical-correction patch rather than incorporated into the automated matching rules. One reviewed conflict was deliberately left unrepaired. This correction layer preserves the automated Workflow 02 methodology while making the adjudicated canonical state reproducible without storing another full canonical corpus.
 
 This document serves two purposes:
 
@@ -74,7 +76,20 @@ scan canonical records
        post-enrichment inventory
               |
               v
-  restricted Zenodo Workflow 02 state
+  restricted Zenodo automated enrichment state
+              |
+              v
+ optional one-off canonical correction layer
+ (explicitly adjudicated corrections only)
+              |
+              v
+ exact correction-patch replay + validation
+              |
+              v
+ restricted Zenodo correction state
+              |
+              v
+ authoritative post-Workflow-02 canonical state
               |
               v
            Workflow 03
@@ -97,6 +112,10 @@ scan canonical records
 | `scripts/updater/workflow_02_restore_state_from_zenodo.R` | Restores and checksum-verifies a previous Workflow 02 sparse state from restricted Zenodo. |
 | `scripts/updater/workflow_02_archive_state_to_zenodo.R` | Archives the cumulative sparse enrichment state and lineage to restricted Zenodo. |
 | `scripts/updater/workflow_02_update_zenodo_registry.R` | Registers published Workflow 02 states and writes lightweight repository pointers. |
+| `.github/workflows/workflow_02_oneoff_canonical_corrections_2026-09-25.yml` | One-off correction controller used to apply and validate explicitly adjudicated canonical metadata corrections without modifying the automated enrichment workflow. |
+| `scripts/updater/workflow_02_apply_canonical_correction_patch.R` | Applies a sparse canonical correction patch to a reconstructed Workflow 02 canonical JSONL while verifying record identity, DOI and expected pre-correction state. |
+| `scripts/updater/workflow_02_archive_correction_state_to_zenodo.R` | Archives only the sparse canonical correction layer, decision audit and lineage/checksum reports to restricted Zenodo. |
+| `data/adjudication/workflow02/oneoff_canonical_corrections_2026-09-25.jsonl` | Immutable seven-decision ledger underlying the one-off correction state: six accepted corrections and one explicit do-not-repair decision. |
 
 ## Inputs and methodological rules
 
@@ -247,18 +266,42 @@ Workflow 02 inventories the final enriched corpus and records:
 
 A separate queue is written for records missing both fields.
 
-### 12. Publish durable sparse state
+### 12. Publish durable automated enrichment state
 
-When publication is enabled, only the sparse Workflow 02 state is archived to restricted Zenodo.
+When publication is enabled, only the sparse automated Workflow 02 enrichment state is archived to restricted Zenodo.
 
-The complete canonical JSONL can therefore be reconstructed from:
+The enriched canonical JSONL can therefore be reconstructed from:
 
 ```text
 authoritative Workflow 01 canonical JSONL
     +
 Workflow 02 cumulative enrichment patch
     =
-enriched canonical JSONL
+automatically enriched canonical JSONL
+```
+
+### 13. Apply separately adjudicated one-off canonical corrections when required
+
+Manual adjudication is not part of the automated Workflow 02 enrichment process. Where a finite set of conflicts is reviewed separately, accepted corrections are stored in an explicit one-off correction ledger and converted into a sparse canonical-correction patch.
+
+The correction patch may set an explicitly approved replacement title and/or fill a missing abstract. It is replayed against the exact automatically enriched canonical checksum. The application fails if the target record ID or DOI does not match the expected record or if the expected pre-correction field state has changed.
+
+Rejected or `do_not_repair` decisions are retained in the decision audit but do not alter the canonical record.
+
+### 14. Validate and archive the canonical correction layer
+
+The one-off correction patch is applied to the automatically enriched canonical JSONL and validated before archival. Only the sparse correction patch, decision audit, reports, checksums and lineage are stored on Zenodo; the full corrected canonical JSONL is not duplicated.
+
+The authoritative post-Workflow-02 canonical state is therefore reconstructed as:
+
+```text
+authoritative Workflow 01 canonical JSONL
+    +
+Workflow 02 cumulative enrichment patch
+    +
+Workflow 02 canonical correction patch
+    =
+authoritative post-Workflow-02 canonical JSONL
 ```
 
 ## Provenance and documentation
@@ -287,7 +330,11 @@ Workflow 02 records, where applicable:
 - GitHub Actions run ID;
 - Zenodo record identifier and DOI;
 - archive size and SHA-256;
-- archive manifest SHA-256.
+- archive manifest SHA-256;
+- separately adjudicated one-off correction decisions, where applicable;
+- correction-patch SHA-256;
+- exact pre-correction and post-correction canonical SHA-256 values; and
+- lineage from the correction layer to the automated Workflow 02 enrichment state.
 
 ## Storage and archival model
 
@@ -321,9 +368,11 @@ These artefacts are not the durable source of truth.
 
 Each accepted Workflow 02 state is deposited as a restricted Zenodo record.
 
-The archive contains the cumulative sparse patch, enrichment audit, retry state, inventory and replay/provenance reports. It does not duplicate the complete Workflow 01 canonical corpus.
+The automated enrichment archive contains the cumulative sparse enrichment patch, enrichment audit, retry state, inventory and replay/provenance reports. It does not duplicate the complete Workflow 01 canonical corpus.
 
-Each archive records the exact upstream Workflow 01 canonical checksum and, for subsequent runs, the previous Workflow 02 state.
+A separately adjudicated correction layer is archived independently and contains only the changed canonical fields, the decision audit and correction/replay reports. It records lineage to both the exact Workflow 01 canonical checksum and the preceding automated Workflow 02 state. This avoids storing another complete canonical JSONL while preserving exact reproducibility.
+
+Each durable state is represented in `docs/enrichment/zenodo_registry.csv` and by a lightweight JSON pointer under `docs/enrichment/zenodo/`.
 
 ## Validated baseline
 
@@ -384,20 +433,61 @@ The archive manifest SHA-256 is:
 
 `405d54e01a4578ca6477820ea836f1142a3ca1a57647cf3028bed04da8ed20e2`
 
+## Validated one-off canonical correction layer
+
+Following review of the residual metadata conflicts from the full automated enrichment run, seven records were explicitly adjudicated outside the automated Workflow 02 matching process.
+
+Decisions:
+
+- six records received approved canonical metadata corrections;
+- one record, `work-7e50c9d8a89e9519` (DOI `10.1038/sj.leu.2400523`), was explicitly left without an abstract because the candidate provider abstract belonged to a different publication.
+
+The six accepted corrections comprised:
+
+- one record with an explicitly corrected canonical title plus a missing abstract fill; and
+- five records with approved missing-abstract fills.
+
+The correction layer was validated against the automatically enriched 32,292-record canonical JSONL. Exactly six records changed and the deliberately unrepaired record remained without an abstract.
+
+Correction lineage:
+
+- input canonical SHA-256: `c88d36631512b5b30853fb3ae271db2e456b2a8b5b94925ccf0840e8f8d9156b`;
+- correction patch records: 6;
+- output canonical SHA-256: `4229257bca67c1ff1ebec4b3642ff9df4ac83d9eae99b584b15cbc9c49845902`.
+
+The sparse correction state is stored as restricted Zenodo record `22963024`, DOI `10.5281/zenodo.22963024`.
+
+Repository pointer:
+
+`docs/enrichment/zenodo/run-36159140553.json`
+
+The correction archive contains only the six-record patch, seven-decision audit and associated reports/checksums. The full corrected canonical JSONL is not stored as a second complete corpus.
+
+The correction archive SHA-256 is:
+
+`e7ee76b5d069a22b2eba7501cc219e0153fc742c3c44b90f5c7e62578fb2b452`
+
+The correction manifest SHA-256 is:
+
+`a19d90288f7e4086b946650ad9eb9d0c9198ae9d2f201b79fcb3c3f3cac59160`
+
 ## Downstream handoff
 
-The authoritative Workflow 02 handoff is the enriched canonical JSONL reconstructed from:
+The authoritative Workflow 02 handoff is the post-Workflow-02 canonical JSONL reconstructed from:
 
-1. the exact registered Workflow 01 canonical state; and
-2. the registered Workflow 02 cumulative patch.
+1. the exact registered Workflow 01 canonical state;
+2. the registered Workflow 02 automated cumulative enrichment patch; and
+3. the registered Workflow 02 canonical correction patch.
 
-Downstream workflows must preserve the stable Workflow 01 `record_id` and may verify the reconstructed handoff against the Workflow 02 enriched canonical SHA-256.
+The expected authoritative handoff SHA-256 is:
 
-Workflow 03 should therefore consume the reconstructed enriched canonical JSONL directly, not rebuild bibliographic enrichment independently.
+`4229257bca67c1ff1ebec4b3642ff9df4ac83d9eae99b584b15cbc9c49845902`
+
+Downstream workflows must preserve the stable Workflow 01 `record_id` and source manifestations. Workflow 03 should reconstruct this exact state from the registered sparse layers and verify the resulting checksum before performing retraction surveillance. It must not rebuild bibliographic enrichment independently.
 
 ## Methods text for research reporting
 
-> **Workflow 02: bibliographic metadata enrichment.** Canonical records with a DOI but a missing title and/or abstract were subjected to deterministic metadata enrichment. Europe PMC was queried first, with metadata accepted only where the returned DOI exactly matched the requested normalised DOI. Records remaining incomplete were queried against Scopus using direct DOI-based abstract retrieval and, where necessary, DOI search followed by EID retrieval. Existing populated canonical fields were never overwritten. Returned abstracts were accepted only when provider and canonical titles were consistent, using a Jaro-Winkler similarity threshold of 0.90 where both titles were available; conflicting metadata were quarantined rather than applied. Enrichment was stored as a sparse patch keyed to stable canonical work identifiers rather than as a duplicate full corpus. Both the current patch and cumulative enrichment state were replayed against the authoritative upstream corpus and required to reproduce the target enriched JSONL exactly before archival. Provider outcomes, conflicts, retry state, corpus-level missing-metadata counts and upstream checksums were retained for provenance, and accepted enrichment state was deposited as a restricted Zenodo record.
+> **Workflow 02: bibliographic metadata enrichment.** Canonical records with a DOI but a missing title and/or abstract were subjected to deterministic metadata enrichment. Europe PMC was queried first, with metadata accepted only where the returned DOI exactly matched the requested normalised DOI. Records remaining incomplete were queried against Scopus using direct DOI-based abstract retrieval and, where necessary, DOI search followed by EID retrieval. Existing populated canonical fields were never overwritten by the automated process. Returned abstracts were accepted only when provider and canonical titles were consistent, using a Jaro-Winkler similarity threshold of 0.90 where both titles were available; conflicting metadata were quarantined rather than applied. Automated enrichment was stored as a sparse patch keyed to stable canonical work identifiers rather than as a duplicate full corpus, and both current and cumulative patch states were replayed against the authoritative upstream corpus before archival. A finite set of residual conflicts was subsequently reviewed outside the automated workflow; six approved metadata corrections were retained as a separate sparse correction layer and one candidate abstract was explicitly rejected. The resulting post-enrichment canonical state remained reproducible from the Workflow 01 corpus plus the registered Workflow 02 enrichment and correction layers, with all provider outcomes, decisions, checksums and lineage retained for provenance.
 
 ## Reporting status
 
@@ -413,7 +503,13 @@ Workflow 02 is considered validated when:
 - the current sparse patch exactly reproduces the direct enrichment output;
 - the cumulative patch applied to authoritative Workflow 01 exactly reproduces the final enriched canonical JSONL;
 - residual missing metadata are inventoried;
-- the sparse Workflow 02 state is deposited to restricted Zenodo; and
-- the Zenodo pointer and lineage are registered in the repository.
+- the automated sparse Workflow 02 enrichment state is deposited to restricted Zenodo;
+- any separately adjudicated canonical corrections are stored as a distinct sparse layer rather than altering the automated matching rules;
+- the correction layer, where present, is replayed against the exact automatically enriched state and changes only explicitly approved records;
+- the final post-Workflow-02 canonical checksum is recorded;
+- all Zenodo pointers and lineage are registered in the repository; and
+- Workflow 03 can reconstruct the authoritative post-Workflow-02 state without another complete canonical JSONL archive.
 
-These conditions were satisfied by production run `36137804187`.
+The automated enrichment conditions were satisfied by production run `36137804187`. The subsequent one-off correction state was validated and published from run `36159140553` and is registered as Zenodo record `22963024`. The authoritative post-Workflow-02 canonical SHA-256 is `4229257bca67c1ff1ebec4b3642ff9df4ac83d9eae99b584b15cbc9c49845902`.
+
+**Workflow 02 status: complete and ready for downstream Workflow 03 consumption.**
