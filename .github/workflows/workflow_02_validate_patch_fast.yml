@@ -1,0 +1,93 @@
+name: Workflow 02 - Fast patch/replay validation
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'scripts/updater/workflow_02_build_patch.R'
+      - 'scripts/updater/workflow_02_apply_patch.R'
+      - '.github/workflows/workflow_02_validate_patch_fast.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install minimal R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Parse Workflow 02 patch scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_02_build_patch.R')
+          parse(file='scripts/updater/workflow_02_apply_patch.R')
+          cat('PASS: Workflow 02 patch scripts parse\n')
+
+      - name: Download validated real-record enrichment artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p fixture
+          gh run download 36130593009 --repo "$GITHUB_REPOSITORY" \
+            --name workflow02-handoff-validation-36130593009 \
+            --dir fixture
+          test -s fixture/real_sample_10.jsonl
+          test -s fixture/enriched_10.jsonl
+          test -s fixture/enrichment_audit.jsonl
+          test -s fixture/enrichment_report.json
+
+      - name: Build sparse patch and retry ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs
+          Rscript scripts/updater/workflow_02_build_patch.R \
+            --input fixture/real_sample_10.jsonl \
+            --enriched fixture/enriched_10.jsonl \
+            --audit fixture/enrichment_audit.jsonl \
+            --enrichment-report fixture/enrichment_report.json \
+            --patch outputs/patch.jsonl \
+            --retry-queue outputs/retry_queue.jsonl \
+            --report outputs/patch_report.json
+
+      - name: Exact patch replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_apply_patch.R \
+            --input fixture/real_sample_10.jsonl \
+            --patch outputs/patch.jsonl \
+            --output outputs/replayed.jsonl \
+            --report outputs/replay_report.json \
+            --mode exact
+          Rscript -e "library(digest);stopifnot(digest(file='outputs/replayed.jsonl',algo='sha256',serialize=FALSE)==digest(file='fixture/enriched_10.jsonl',algo='sha256',serialize=FALSE));cat('PASS: Workflow 02 patch replay exactly reproduces validated enriched JSONL\n')"
+
+      - name: Upload validation audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-patch-validation-${{ github.run_id }}
+          path: outputs/
+          retention-days: 30
+          if-no-files-found: warn
