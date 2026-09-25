@@ -202,8 +202,10 @@ missing_strip <- setdiff(prev_strip$keys,cur_strip$keys)
 if(length(missing_strip)) stop(sprintf("%d previous abstract-strip actions disappeared",length(missing_strip)),call.=FALSE)
 prev_line <- setNames(prev_strip$lines,prev_strip$keys)
 cur_line <- setNames(cur_strip$lines,cur_strip$keys)
-strip_upsert_keys <- names(cur_line)[vapply(names(cur_line),function(k)
-  is.null(prev_line[[k]]) || !identical(unname(prev_line[[k]]),unname(cur_line[[k]])),logical(1))]
+strip_upsert_keys <- names(cur_line)[vapply(names(cur_line),function(k){
+  p <- prev_line[k]
+  length(p)==0L || is.na(p[[1L]]) || !identical(unname(p[[1L]]),unname(cur_line[[k]]))
+},logical(1))]
 write_lines(unname(cur_line[strip_upsert_keys]),file.path(output_dir,"abstract_strip_action_upserts.jsonl"))
 
 manifest <- list(
