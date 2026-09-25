@@ -446,7 +446,9 @@ counts <- list(
   conflicts_quarantined=0L,
   still_missing_after=0L,
   deferred_recent_attempts=0L,
-  technical_error_records=0L
+  technical_error_records=0L,
+  title_guard_accepts=0L,
+  bibliographic_concordance_accepts=0L
 )
 processed_eligible <- 0L
 
@@ -500,6 +502,7 @@ for(i in seq_along(rows)){
     if(is_missing(r$canonical$abstract) && !is.null(ep$abstract)){
       md <- metadata_match_decision(r,ep)
       if(isTRUE(md$accept)){
+        if(identical(md$route,"bibliographic_concordance")) counts$bibliographic_concordance_accepts <- counts$bibliographic_concordance_accepts + 1L else counts$title_guard_accepts <- counts$title_guard_accepts + 1L
         r$canonical$abstract <- ep$abstract
         counts$europepmc_abstract_filled <- counts$europepmc_abstract_filled + 1L
         rec_audit$applied <- c(rec_audit$applied,list(list(
@@ -534,6 +537,7 @@ for(i in seq_along(rows)){
       if(still_missing_abstract && !is.null(sc$abstract)){
         md <- metadata_match_decision(r,sc)
         if(isTRUE(md$accept)){
+          if(identical(md$route,"bibliographic_concordance")) counts$bibliographic_concordance_accepts <- counts$bibliographic_concordance_accepts + 1L else counts$title_guard_accepts <- counts$title_guard_accepts + 1L
           r$canonical$abstract <- sc$abstract
           counts$scopus_abstract_filled <- counts$scopus_abstract_filled + 1L
           rec_audit$applied <- c(rec_audit$applied,list(list(
