@@ -338,19 +338,52 @@ jobs:
             --workflow-run-id "$GITHUB_RUN_ID" \
             --repository "$GITHUB_REPOSITORY"
 
-      - name: Create human-review checkpoint artifact
+      - name: Build compact human-review checkpoint
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p outputs/pending_checkpoint
-          cp outputs/workflow01_incremental_rescore/rescored_sample.csv outputs/pending_checkpoint/
-          cp outputs/workflow01_union/union_manifest.json outputs/pending_checkpoint/
-          cp outputs/adjudication/merged/all_adjudications.jsonl outputs/pending_checkpoint/
-          cp -a outputs/adjudication/human_review_package outputs/pending_checkpoint/
-          cp "${{ inputs.previous_workflow01_pointer_path }}" outputs/pending_checkpoint/previous_workflow01_pointer.json
-          cp "workflow00_registry/${{ inputs.workflow00_pointer_path }}" outputs/pending_checkpoint/workflow00_pointer.json
-          echo "Human review required; final delta publication is intentionally paused."
+          Rscript scripts/updater/workflow_01_build_pending_checkpoint.R \
+            --previous-root previous_state \
+            --current-seed-root outputs/workflow01_union \
+            --incremental-rescore outputs/workflow01_incremental_rescore/rescored_sample.csv \
+            --adjudications outputs/adjudication/merged/all_adjudications.jsonl \
+            --review-package outputs/adjudication/human_review_package \
+            --pre-summary outputs/workflow01_pre_adjudication/summary.json \
+            --previous-pointer "${{ inputs.previous_workflow01_pointer_path }}" \
+            --workflow00-pointer "workflow00_registry/${{ inputs.workflow00_pointer_path }}" \
+            --output-dir outputs/pending_checkpoint \
+            --run-id "$GITHUB_RUN_ID"
+
+      - name: Archive compact human-review checkpoint
+        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/checkpoint_zenodo
+          Rscript scripts/updater/workflow_01_archive_pending_checkpoint_to_zenodo.R \
+            --checkpoint-dir outputs/pending_checkpoint \
+            --run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/checkpoint_zenodo
+
+      - name: Register human-review checkpoint pointer
+        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/deduplication/checkpoints
+          cp outputs/checkpoint_zenodo/zenodo_receipt.json "docs/deduplication/checkpoints/run-$GITHUB_RUN_ID.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/deduplication/checkpoints/
+          if ! git diff --cached --quiet; then
+            git commit -m "Record Workflow 01 human-review checkpoint $GITHUB_RUN_ID"
+            git push origin "HEAD:$WORKFLOW01_BRANCH"
+          fi
+          echo "Human review required; final Workflow 01 delta publication is intentionally paused."
 
       - name: Create empty human-review gate for automatic continuation
         if: ${{ steps.adjudication.outputs.pending_count == '0' }}
@@ -508,6 +541,7 @@ jobs:
             outputs/adjudication/merged/
             outputs/adjudication/human_review_package/
             outputs/pending_checkpoint/
+            outputs/checkpoint_zenodo/
             outputs/final/summary.json
             outputs/final/cluster_id_aliases.csv
             outputs/canonical/canonical_manifest.json
