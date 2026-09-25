@@ -1,1 +1,1 @@
-trigger post-W02 lean canonical compaction validation
+trigger post-W02 lean canonical compaction validation after dependency fix
