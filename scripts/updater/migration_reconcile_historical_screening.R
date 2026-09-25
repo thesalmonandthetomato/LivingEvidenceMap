@@ -237,6 +237,10 @@ write_jsonl(novel,file.path(output_dir,"novel_screening_queue.jsonl"))
 write_jsonl(blocked_novel,file.path(output_dir,"workflow03_blocked_without_historical_decision.jsonl"))
 write_jsonl(audit,file.path(output_dir,"reconciliation_audit.jsonl"))
 
+unused_ids<-setdiff(names(hist_map),unique(c(used_historical_ids,unlist(lapply(conflicts,function(x)x$matched_historical_lens_ids),use.names=FALSE))))
+unused_rows<-lapply(sort(unused_ids),historical_bib)
+write_jsonl(unused_rows,file.path(output_dir,"unused_historical_representatives.jsonl"))
+
 summary<-list(
   schema="living-evidence-map-workflow04-historical-migration-audit-v1",
   status=if(length(conflicts)==0L)"PASS_NO_CONFLICTS" else "REVIEW_REQUIRED",
