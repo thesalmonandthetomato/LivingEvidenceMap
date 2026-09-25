@@ -1,0 +1,76 @@
+name: Workflow 02 - Render quarantine review package
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/enrichment/.run_workflow02_quarantine_review'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','data.table','stringdist','stringi','digest','httr2'))
+
+      - name: Restore Workflow 01 canonical state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-36128255337.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root workflow01_state
+
+      - name: Restore Workflow 02 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
+            --pointer docs/enrichment/zenodo/run-36137804187.json \
+            --output-dir workflow02_state
+          AUDIT="$(find workflow02_state -name enrichment_audit.jsonl -type f -print -quit)"
+          test -n "$AUDIT"
+          echo "AUDIT=$AUDIT" >> "$GITHUB_ENV"
+
+      - name: Render all 199 quarantined conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/quarantine_review
+          Rscript scripts/updater/workflow_02_render_quarantine_review.R \
+            --canonical workflow01_state/canonical/records.jsonl \
+            --audit "$AUDIT" \
+            --out-csv outputs/quarantine_review/workflow02_quarantined_199.csv \
+            --out-jsonl outputs/quarantine_review/workflow02_quarantined_199.jsonl \
+            --summary outputs/quarantine_review/summary.json
+
+      - name: Upload review package
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-quarantine-review-${{ github.run_id }}
+          path: outputs/quarantine_review/
+          retention-days: 30
