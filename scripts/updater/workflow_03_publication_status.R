@@ -55,10 +55,12 @@ resolve_code <- function(oa,title){
   if(identical(clean(oa$type),"erratum")) positives <- c(positives,"corrected")
   if(isTRUE(title$matched) && nzchar(clean(title$code))) positives <- c(positives,title$code)
   positives <- unique(positives)
-  if(!length(positives)) return(list(code="normal",conflict=FALSE,positive_codes=character()))
+  if(!length(positives)) return(list(code="normal",conflict=FALSE,multiple_positive_signals=FALSE,positive_codes=character()))
   ord <- order(precedence[positives],na.last=TRUE)
   code <- positives[[ord[[1L]]]]
-  list(code=code,conflict=length(positives)>1L,positive_codes=positives)
+  # Multiple positive status signals are not an unresolved conflict when
+  # deterministic precedence yields a definitive analytical code.
+  list(code=code,conflict=FALSE,multiple_positive_signals=length(positives)>1L,positive_codes=positives)
 }
 
 read_records <- function(path,limit=0L){
@@ -140,7 +142,7 @@ for(i in seq_along(meta)){
 dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
 dir.create(dirname(audit_path),recursive=TRUE,showWarnings=FALSE)
 outcon<-file(output_path,"wt",encoding="UTF-8");on.exit(close(outcon),add=TRUE)
-counts<-setNames(integer(length(precedence)),names(precedence)); conflicts<-0L; excluded<-0L; found<-0L; notfound<-0L; unavailable<-0L
+counts<-setNames(integer(length(precedence)),names(precedence)); conflicts<-0L; multiple_signals<-0L; excluded<-0L; found<-0L; notfound<-0L; unavailable<-0L
 
 for(i in seq_along(meta)){
   z<-meta[[i]]
@@ -161,6 +163,7 @@ for(i in seq_along(meta)){
   code<-res$code
   counts[[code]]<-counts[[code]]+1L
   if(isTRUE(res$conflict))conflicts<-conflicts+1L
+  if(isTRUE(res$multiple_positive_signals))multiple_signals<-multiple_signals+1L
   excl<-code%in%c("retracted","withdrawn")
   if(excl)excluded<-excluded+1L
 
@@ -171,6 +174,7 @@ for(i in seq_along(meta)){
       exclude_from_workflow04=excl,
       needs_review=FALSE,
       evidence_conflict=isTRUE(res$conflict),
+      multiple_positive_signals=isTRUE(res$multiple_positive_signals),
       positive_codes=if(length(res$positive_codes))res$positive_codes else list(),
       lookup=list(identifier_type=lookup_type,identifier=lookup_id,status=oa$lookup_status),
       evidence=list(
@@ -197,6 +201,7 @@ report<-list(
   code_counts=as.list(counts),
   exclude_from_workflow04=excluded,
   evidence_conflicts=conflicts,
+  multiple_positive_signals=multiple_signals,
   openalex_lookup=list(found=found,not_found=notfound,unavailable_or_error=unavailable),
   output_sha256=digest(file=output_path,algo="sha256",serialize=FALSE),
   checked_at=checked_at
