@@ -179,17 +179,17 @@ manifest <- list(
     full_authors = 0,
     keywords = 0
   ),
-  lens_canonical_schema_compatibility = list(
-    current_lens_identity_fields = c('lens_id', 'record_id', 'record_id_type'),
-    current_lens_canonical_fields = c('record_id', 'lens_id', 'title', 'abstract', 'authors', 'year', 'source', 'doi', 'keywords', 'publication_type'),
+  workflow01_schema_compatibility = list(
+    canonical_bibliographic_fields = c('title', 'abstract', 'authors', 'year', 'source', 'doi', 'keywords', 'publication_type'),
     safely_mappable_now = c('title', 'year', 'source', 'doi', 'publication_type'),
     partially_mappable_now = c('authors:first_author_only'),
     unavailable_in_standard_search_sample = c('abstract', 'full_authors', 'keywords'),
-    deliberately_not_written = c('identity.lens_id', 'identity.record_id', 'identity.record_id_type', 'canonical.*'),
-    note = 'Diagnostic sidecar only. This does not propose or require any change to the Lens canonical JSON schema.'
+    source_specific_identity = c('scopus_eid','scopus_id'),
+    canonical_materialisation_deferred = TRUE,
+    note = 'Diagnostic source sidecar only. Canonical materialisation is performed later by the source-agnostic Workflow 01 canonical builder.'
   )
 )
 writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = 'null', na = 'null'), file.path(output_dir, 'compatibility_audit.json'))
 
 message(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = 'null', na = 'null'))
-message(sprintf('PASS: wrote %d Scopus sidecar records; Lens canonical JSON untouched.', length(records)))
+message(sprintf('PASS: wrote %d Scopus source-manifestation sidecar records; canonical materialisation deferred.', length(records)))
