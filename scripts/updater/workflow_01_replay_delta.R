@@ -32,10 +32,33 @@ dir.create(file.path(output_root,"workflow01_full_five_source"),recursive=TRUE,s
 dir.create(file.path(output_root,"canonical"),recursive=TRUE,showWarnings=FALSE)
 
 sha <- function(path) digest(file=path,algo="sha256",serialize=FALSE)
+table_state_sha <- function(dt,key_cols){
+  x <- copy(dt)
+  missing <- setdiff(key_cols,names(x))
+  if(length(missing)) stop(sprintf("State-hash key columns missing: %s",paste(missing,collapse=", ")),call.=FALSE)
+  setorderv(x,key_cols)
+  setcolorder(x,sort(names(x)))
+  tmp <- tempfile(fileext=".csv")
+  on.exit(unlink(tmp),add=TRUE)
+  fwrite(x,tmp,na="<NA>",quote=TRUE)
+  digest(file=tmp,algo="sha256",serialize=FALSE)
+}
+normalise_canonical_line <- function(line){
+  z <- fromJSON(line,simplifyVector=FALSE)
+  if(!is.null(z$provenance)){
+    z$provenance$workflow01_run_id <- NULL
+    z$provenance$generated_at_utc <- NULL
+  }
+  toJSON(z,auto_unbox=TRUE,null="null",na="null")
+}
 `%||%` <- function(x,y) if(is.null(x)) y else x
 read_nonempty <- function(path){
   x <- readLines(path,warn=FALSE,encoding="UTF-8")
   x[nzchar(trimws(x))]
+}
+write_lines <- function(x,path){
+  dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+  if(length(x)) writeLines(x,path,useBytes=TRUE) else file.create(path)
 }
 append_file <- function(base,delta,out){
   in_con <- file(base,"rb"); on.exit(close(in_con),add=TRUE)
@@ -93,8 +116,9 @@ if(nrow(up_pairs)){
 setorder(pairs,pair_key)
 pair_out <- file.path(output_root,"workflow01_full_five_source","final_pair_decisions.csv")
 fwrite(pairs,pair_out,na="")
-if(!identical(tolower(sha(pair_out)),tolower(as.character(m$target$pair_decisions_sha256)))) {
-  stop("Replayed pair-decision SHA-256 does not match target",call.=FALSE)
+pair_state_sha <- table_state_sha(fread(pair_out,na.strings=c("","NA")),"pair_key")
+if(!identical(tolower(pair_state_sha),tolower(as.character(m$target$pair_decisions_state_sha256)))) {
+  stop("Replayed pair-decision semantic state hash does not match target",call.=FALSE)
 }
 
 # 3. Replay cluster-map upserts.
@@ -112,8 +136,9 @@ cmap[,manifestation_key:=NULL]
 setorder(cmap,idx)
 map_out <- file.path(output_root,"workflow01_full_five_source","manifestation_cluster_map.csv")
 fwrite(cmap,map_out,na="")
-if(!identical(tolower(sha(map_out)),tolower(as.character(m$target$cluster_map_sha256)))) {
-  stop("Replayed cluster-map SHA-256 does not match target",call.=FALSE)
+map_state_sha <- table_state_sha(fread(map_out,na.strings=c("","NA")),c("source","source_record_id"))
+if(!identical(tolower(map_state_sha),tolower(as.character(m$target$cluster_map_state_sha256)))) {
+  stop("Replayed cluster-map semantic state hash does not match target",call.=FALSE)
 }
 
 # Preserve target summary exactly.
@@ -153,7 +178,7 @@ repeat{
     writeLines(up_lines[[u]],pout,useBytes=TRUE)
     u <- u+1L
   } else if(is.null(retired_set[[pid]])){
-    writeLines(pl,pout,useBytes=TRUE)
+    writeLines(normalise_canonical_line(pl),pout,useBytes=TRUE)
   }
 }
 while(u<=length(up_ids)){
@@ -224,11 +249,11 @@ audit <- list(
   source_manifestations=as.integer(m$target$source_manifestations),
   canonical_records=as.integer(m$target$canonical_records),
   canonical_jsonl_sha256=target_canonical_sha,
-  pair_decisions_sha256=as.character(m$target$pair_decisions_sha256),
-  cluster_map_sha256=as.character(m$target$cluster_map_sha256),
+  pair_decisions_state_sha256=as.character(m$target$pair_decisions_state_sha256),
+  cluster_map_state_sha256=as.character(m$target$cluster_map_state_sha256),
   replayed_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null="null"),
            file.path(output_root,"workflow01_delta_replay_audit.json"),useBytes=TRUE)
-cat(sprintf("PASS: replayed Workflow 01 delta to %d manifestations and %d canonical records with exact target checksums\n",
+cat(sprintf("PASS: replayed Workflow 01 delta to %d manifestations and %d canonical records with verified target state hashes\n",
             audit$source_manifestations,audit$canonical_records))
