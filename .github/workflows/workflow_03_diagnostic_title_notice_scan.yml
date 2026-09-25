@@ -1,0 +1,98 @@
+name: Workflow 03 - Diagnostic title notice scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/retractions/.run_workflow03_title_notice_scan'
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","dplyr","stringr","readr","httr2","digest","data.table"))
+
+      - name: Restore Workflow 01 canonical state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-36128255337.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root workflow01_state
+          test -s workflow01_state/canonical/records.jsonl
+
+      - name: Restore automated Workflow 02 enrichment state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
+            --pointer docs/enrichment/zenodo/run-36137804187.json \
+            --output-dir workflow02_enrichment
+          PATCH="$(find workflow02_enrichment -name cumulative_patch.jsonl -type f -print -quit)"
+          test -n "$PATCH"
+          Rscript scripts/updater/workflow_02_apply_patch.R \
+            --input workflow01_state/canonical/records.jsonl \
+            --patch "$PATCH" \
+            --output canonical_w02_enriched.jsonl \
+            --report w02_enrichment_replay.json \
+            --mode exact
+
+      - name: Restore and apply Workflow 02 canonical correction state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
+            --pointer docs/enrichment/zenodo/run-36159140553.json \
+            --output-dir workflow02_correction
+          CORR="$(find workflow02_correction -name canonical_corrections.jsonl -type f -print -quit)"
+          test -n "$CORR"
+          Rscript scripts/updater/workflow_02_apply_canonical_correction_patch.R \
+            --input canonical_w02_enriched.jsonl \
+            --patch "$CORR" \
+            --output canonical_post_w02.jsonl \
+            --report w02_correction_replay.json
+          SHA="$(Rscript -e 'cat(digest::digest(file="canonical_post_w02.jsonl",algo="sha256",serialize=FALSE))')"
+          test "$SHA" = "4229257bca67c1ff1ebec4b3642ff9df4ac83d9eae99b584b15cbc9c49845902"
+
+      - name: Scan title prefixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_scan_title_notice_candidates.R \
+            --input canonical_post_w02.jsonl \
+            --output-dir outputs/workflow03_title_notice_scan
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow03-title-notice-scan-${{ github.run_id }}
+          path: outputs/workflow03_title_notice_scan/
+          retention-days: 30
+          if-no-files-found: error
