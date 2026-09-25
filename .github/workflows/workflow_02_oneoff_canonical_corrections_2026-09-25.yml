@@ -9,7 +9,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  actions: read
 
 jobs:
   correct:
@@ -20,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
-          persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
@@ -44,7 +45,7 @@ jobs:
             --output-root workflow01_state
           test -s workflow01_state/canonical/records.jsonl
 
-      - name: Restore authoritative published Workflow 02 state
+      - name: Restore authoritative published Workflow 02 enrichment state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
@@ -68,146 +69,163 @@ jobs:
             --output outputs/canonical_before_oneoff.jsonl \
             --report outputs/w02_replay_report.json \
             --mode exact
-          SHA="$(Rscript -e "cat(digest::digest(file='outputs/canonical_before_oneoff.jsonl',algo='sha256',serialize=FALSE))")"
-          test "$SHA" = "c88d36631512b5b30853fb3ae271db2e456b2a8b5b94925ccf0840e8f8d9156"
+          Rscript -e "library(jsonlite);r<-fromJSON('outputs/w02_replay_report.json');stopifnot(r$status=='PASS',r$input_records==32292L,r$patch_records==3434L,r$matched_patch_records==3434L,length(r$conflicts)==0L,r$output_sha256=='c88d36631512b5b30853fb3ae271db2e456b2a8b5b94925ccf0840e8f8d9156b');cat('PASS: authoritative Workflow 02 enrichment state reconstructed exactly\n')"
 
-      - name: Apply one-off canonical corrections
+      - name: Build sparse one-off correction state
         shell: Rscript {0}
         run: |
           library(jsonlite)
           library(digest)
 
           ledger_path <- 'data/adjudication/workflow02/oneoff_canonical_corrections_2026-09-25.jsonl'
-          input_path <- 'outputs/canonical_before_oneoff.jsonl'
-          output_path <- 'outputs/canonical_corrected.jsonl'
-          audit_path <- 'outputs/oneoff_correction_audit.jsonl'
-          report_path <- 'outputs/oneoff_correction_report.json'
+          state_dir <- 'outputs/correction_state'
+          dir.create(state_dir,recursive=TRUE,showWarnings=FALSE)
 
           readjl <- function(p){
             x <- readLines(p,warn=FALSE,encoding='UTF-8')
             x <- x[nzchar(trimws(x))]
             lapply(x,fromJSON,simplifyVector=FALSE)
           }
-          clean <- function(x){
-            if(is.null(x)||!length(x)) return(NULL)
-            s <- trimws(gsub('[[:space:]]+',' ',as.character(x[[1L]])))
-            if(is.na(s)||!nzchar(s)) NULL else s
+          writejl <- function(xs,p){
+            con <- file(p,'wt',encoding='UTF-8'); on.exit(close(con),add=TRUE)
+            if(length(xs)) for(z in xs) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null'),con,useBytes=TRUE)
           }
 
           ledger <- readjl(ledger_path)
           ids <- vapply(ledger,function(z)as.character(z$record_id),character(1))
           stopifnot(length(ledger)==7L,!anyDuplicated(ids))
-          lmap <- setNames(ledger,ids)
+          accepted <- Filter(function(z)!identical(as.character(z$action),'do_not_repair'),ledger)
+          rejected <- Filter(function(z)identical(as.character(z$action),'do_not_repair'),ledger)
+          stopifnot(length(accepted)==6L,length(rejected)==1L)
 
-          pin <- file(input_path,'rt',encoding='UTF-8')
-          pout <- file(output_path,'wt',encoding='UTF-8')
-          aud <- list(); seen <- character(); n <- 0L; changed <- 0L
+          # Capture exact current title for the one explicit title replacement.
+          in_lines <- readLines('outputs/canonical_before_oneoff.jsonl',warn=FALSE,encoding='UTF-8')
+          rows <- lapply(in_lines[nzchar(trimws(in_lines))],fromJSON,simplifyVector=FALSE)
+          rmap <- setNames(rows,vapply(rows,function(r)as.character(r$identity$record_id),character(1)))
+          patches <- lapply(accepted,function(z){
+            r <- rmap[[as.character(z$record_id)]]
+            stopifnot(!is.null(r))
+            p <- list(record_id=z$record_id,doi=z$doi)
+            if(identical(as.character(z$action),'set_title_and_abstract')){
+              p$expected_title <- r$canonical$title
+              p$title <- z$title
+              p$abstract <- z$abstract
+            } else if(identical(as.character(z$action),'fill_abstract')){
+              p$abstract <- z$abstract
+            } else stop(sprintf('Unsupported accepted action %s',z$action))
+            p
+          })
+          writejl(patches,file.path(state_dir,'canonical_corrections.jsonl'))
+          file.copy(ledger_path,file.path(state_dir,'decision_audit.jsonl'),overwrite=TRUE)
 
-          repeat{
-            line <- readLines(pin,n=1L,warn=FALSE)
-            if(!length(line)) break
-            if(!nzchar(trimws(line))) next
-            n <- n+1L
-            r <- fromJSON(line,simplifyVector=FALSE)
-            rid <- as.character(r$identity$record_id)
-            z <- lmap[[rid]]
-            if(!is.null(z)){
-              seen <- c(seen,rid)
-              stopifnot(tolower(clean(r$canonical$doi))==tolower(clean(z$doi)))
-              before <- list(title=r$canonical$title,abstract=r$canonical$abstract)
-              action <- as.character(z$action)
-
-              if(action=='do_not_repair'){
-                stopifnot(is.null(clean(r$canonical$abstract)))
-                after <- before
-              } else if(action=='fill_abstract'){
-                stopifnot(is.null(clean(r$canonical$abstract)))
-                r$canonical$abstract <- as.character(z$abstract)
-                after <- list(title=r$canonical$title,abstract=r$canonical$abstract)
-                changed <- changed+1L
-              } else if(action=='set_title_and_abstract'){
-                stopifnot(is.null(clean(r$canonical$abstract)))
-                r$canonical$title <- as.character(z$title)
-                r$canonical$abstract <- as.character(z$abstract)
-                after <- list(title=r$canonical$title,abstract=r$canonical$abstract)
-                changed <- changed+1L
-              } else stop(sprintf('Unsupported one-off action: %s',action))
-
-              aud[[length(aud)+1L]] <- list(
-                record_id=rid,doi=z$doi,action=action,decision=z$decision,
-                reason=z$reason,before=before,after=after
-              )
-            }
-            writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),pout,useBytes=TRUE)
-          }
-          close(pin); close(pout)
-
-          stopifnot(n==32292L,setequal(seen,ids),changed==6L)
-
-          # Verify exactly six records changed and all seven decisions are represented.
-          before <- file(input_path,'rt',encoding='UTF-8')
-          after <- file(output_path,'rt',encoding='UTF-8')
-          changed_ids <- character(); row <- 0L
-          repeat{
-            a <- readLines(before,n=1L,warn=FALSE)
-            b <- readLines(after,n=1L,warn=FALSE)
-            if(!length(a) && !length(b)) break
-            stopifnot(length(a)==1L,length(b)==1L)
-            row <- row+1L
-            if(!identical(a,b)){
-              ra <- fromJSON(a,simplifyVector=FALSE)
-              rb <- fromJSON(b,simplifyVector=FALSE)
-              id <- as.character(ra$identity$record_id)
-              stopifnot(identical(ra$identity,rb$identity))
-              stopifnot(identical(ra$manifestations,rb$manifestations))
-              ca <- ra$canonical; cb <- rb$canonical
-              ca$title <- NULL; ca$abstract <- NULL
-              cb$title <- NULL; cb$abstract <- NULL
-              stopifnot(identical(ca,cb))
-              ra$canonical$title <- NULL; ra$canonical$abstract <- NULL
-              rb$canonical$title <- NULL; rb$canonical$abstract <- NULL
-              stopifnot(identical(ra,rb))
-              changed_ids <- c(changed_ids,id)
-            }
-          }
-          close(before); close(after)
-          stopifnot(length(changed_ids)==6L)
-          expected_changed <- ids[vapply(ledger,function(z)!identical(z$action,'do_not_repair'),logical(1))]
-          stopifnot(setequal(changed_ids,expected_changed))
-
-          # Write audit and report.
-          con <- file(audit_path,'wt',encoding='UTF-8')
-          for(z in aud) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null'),con,useBytes=TRUE)
-          close(con)
-
-          report <- list(
-            schema='living-evidence-map-workflow02-oneoff-canonical-correction-v1',
+          summary <- list(
+            schema='living-evidence-map-workflow02-canonical-correction-build-v1',
             status='PASS',
             source_workflow02_run_id='36137804187',
-            input_sha256=digest(file=input_path,algo='sha256',serialize=FALSE),
-            output_sha256=digest(file=output_path,algo='sha256',serialize=FALSE),
-            ledger_sha256=digest(file=ledger_path,algo='sha256',serialize=FALSE),
-            records=n,
+            input_canonical_sha256=digest(file='outputs/canonical_before_oneoff.jsonl',algo='sha256',serialize=FALSE),
             decisions=length(ledger),
-            changed_records=length(changed_ids),
-            changed_record_ids=changed_ids,
-            deliberately_unrepaired_record_id='work-7e50c9d8a89e9519',
+            accepted_repairs=length(accepted),
+            do_not_repair=length(rejected),
+            patch_records=length(patches),
+            deliberately_unrepaired_record_id=as.character(rejected[[1]]$record_id)
+          )
+          writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),file.path(state_dir,'build_report.json'),useBytes=TRUE)
+          cat('PASS: built sparse six-record correction patch from seven decisions\n')
+
+      - name: Apply sparse correction patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_apply_canonical_correction_patch.R \
+            --input outputs/canonical_before_oneoff.jsonl \
+            --patch outputs/correction_state/canonical_corrections.jsonl \
+            --output outputs/canonical_corrected.jsonl \
+            --report outputs/correction_state/correction_report.json
+
+      - name: Validate corrected canonical state
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+
+          app <- fromJSON('outputs/correction_state/correction_report.json')
+          build <- fromJSON('outputs/correction_state/build_report.json')
+          stopifnot(app$status=='PASS',app$records==32292L,app$patch_records==6L,length(app$changed_record_ids)==6L)
+
+          # Ensure the explicit do-not-repair record still has no abstract.
+          target <- 'work-7e50c9d8a89e9519'
+          lines <- readLines('outputs/canonical_corrected.jsonl',warn=FALSE,encoding='UTF-8')
+          hit <- NULL
+          for(ln in lines[nzchar(trimws(lines))]){
+            r <- fromJSON(ln,simplifyVector=FALSE)
+            if(identical(as.character(r$identity$record_id),target)){hit<-r;break}
+          }
+          stopifnot(!is.null(hit))
+          a <- hit$canonical$abstract
+          stopifnot(is.null(a) || !nzchar(trimws(as.character(a))))
+
+          # Final state lineage report used by Zenodo archive and Workflow 03 handoff.
+          final <- list(
+            schema='living-evidence-map-workflow02-canonical-correction-final-v1',
+            status='PASS',
+            source_workflow02_run_id='36137804187',
+            input_canonical_sha256=app$input_sha256,
+            output_canonical_sha256=app$output_sha256,
+            patch_sha256=app$patch_sha256,
+            records=app$records,
+            patch_records=app$patch_records,
+            changed_record_ids=app$changed_record_ids,
+            deliberately_unrepaired_record_id=target,
             deliberately_unrepaired_abstract_missing=TRUE
           )
-          writeLines(toJSON(report,auto_unbox=TRUE,pretty=TRUE,null='null'),report_path,useBytes=TRUE)
-          cat(sprintf('PASS: applied %d one-off corrections to %d-record canonical JSONL; 1 explicit do-not-repair left unchanged\n',length(changed_ids),n))
-          cat(sprintf('OUTPUT_SHA256=%s\n',report$output_sha256))
+          writeLines(toJSON(final,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/correction_state/final_report.json',useBytes=TRUE)
+          cat(sprintf('PASS: six corrections validated; output SHA256=%s\n',app$output_sha256))
 
-      - name: Upload corrected canonical JSONL and audit
+      - name: Publish sparse Workflow 02 correction state to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          W01_SHA="$(Rscript -e "cat(digest::digest(file='workflow01_state/canonical/records.jsonl',algo='sha256',serialize=FALSE))")"
+          INPUT_SHA="$(Rscript -e "x<-jsonlite::fromJSON('outputs/correction_state/final_report.json');cat(x$input_canonical_sha256)")"
+          OUTPUT_SHA="$(Rscript -e "x<-jsonlite::fromJSON('outputs/correction_state/final_report.json');cat(x$output_canonical_sha256)")"
+          mkdir -p outputs/correction_zenodo
+          Rscript scripts/updater/workflow_02_archive_correction_state_to_zenodo.R \
+            --state-dir outputs/correction_state \
+            --run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/correction_zenodo \
+            --workflow01-canonical-sha256 "$W01_SHA" \
+            --previous-pointer docs/enrichment/zenodo/run-36137804187.json \
+            --input-canonical-sha256 "$INPUT_SHA" \
+            --output-canonical-sha256 "$OUTPUT_SHA"
+
+      - name: Register Workflow 02 correction state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_update_zenodo_registry.R \
+            --receipt outputs/correction_zenodo/zenodo_receipt.json \
+            --registry docs/enrichment/zenodo_registry.csv \
+            --pointer-dir docs/enrichment/zenodo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/enrichment/zenodo_registry.csv "docs/enrichment/zenodo/run-$GITHUB_RUN_ID.json"
+          if ! git diff --cached --quiet; then
+            git commit -m "Register Workflow 02 canonical correction state $GITHUB_RUN_ID"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload compact correction audit
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workflow02-oneoff-canonical-corrections-${{ github.run_id }}
           path: |
-            outputs/canonical_corrected.jsonl
-            outputs/oneoff_correction_audit.jsonl
-            outputs/oneoff_correction_report.json
             outputs/w02_replay_report.json
+            outputs/correction_state/
+            outputs/correction_zenodo/
             data/adjudication/workflow02/oneoff_canonical_corrections_2026-09-25.jsonl
           retention-days: 30
           if-no-files-found: warn
