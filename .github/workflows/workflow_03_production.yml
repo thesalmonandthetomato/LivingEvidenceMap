@@ -17,7 +17,7 @@ on:
     branches:
       - workflow01-final-architecture
     paths:
-      - 'docs/publication_status/.run_workflow03_trial'
+      - 'docs/publication_status/.run_workflow03_full'
 
 permissions:
   contents: read
@@ -66,8 +66,8 @@ jobs:
       - name: Run publication-status scan
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
-          LIMIT: ${{ inputs.limit || '20' }}
-          BATCH_SIZE: ${{ inputs.batch_size || '100' }}
+          LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.limit || '0' }}
+          BATCH_SIZE: ${{ github.event_name == 'workflow_dispatch' && inputs.batch_size || '100' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -82,7 +82,7 @@ jobs:
 
       - name: Validate Workflow 03 output
         env:
-          LIMIT: ${{ inputs.limit || '20' }}
+          LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.limit || '0' }}
         shell: Rscript {0}
         run: |
           library(jsonlite)
@@ -94,7 +94,12 @@ jobs:
           allowed<-c('normal','retracted','withdrawn','corrected','expression_of_concern','warning')
           counts<-unlist(x$code_counts)
           stopifnot(all(names(counts)%in%allowed),sum(as.integer(counts))==as.integer(x$records_scanned))
-          cat('PASS: Workflow 03 output schema/count validation complete\n')
+          lines<-readLines('outputs/workflow03/publication_status.jsonl',warn=FALSE,encoding='UTF-8')
+          lines<-lines[nzchar(trimws(lines))]
+          stopifnot(length(lines)==as.integer(x$records_scanned))
+          ids<-vapply(lines,function(z)as.character(fromJSON(z,simplifyVector=FALSE)$record_id),character(1))
+          stopifnot(all(nzchar(ids)),!anyDuplicated(ids))
+          cat('PASS: Workflow 03 output schema/count/record_id validation complete\n')
 
       - name: Upload Workflow 03 trial state
         uses: actions/upload-artifact@v4
