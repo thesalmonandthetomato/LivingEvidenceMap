@@ -125,7 +125,7 @@ jobs:
             --human-integrity-manifest fixtures/integrity.json \
             --previous-cluster-map fixtures/previous_map.csv \
             --output-dir outputs/merge
-          Rscript -e "library(data.table);a<-fread('outputs/merge/cluster_id_aliases.csv');stopifnot(nrow(a)==1L,a$retired_cluster_id=='work-old-b',a$surviving_cluster_id=='work-old-a');cat('PASS: existing-work merge creates deterministic alias\n')"
+          Rscript -e "library(data.table);a<-fread('outputs/merge/cluster_id_aliases.csv');stopifnot(nrow(a)==1L,a\$retired_cluster_id=='work-old-b',a\$surviving_cluster_id=='work-old-a');cat('PASS: existing-work merge creates deterministic alias\\n')"
 
       - name: Validate split rejection
         shell: bash
