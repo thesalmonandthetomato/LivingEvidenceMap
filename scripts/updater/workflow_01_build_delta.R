@@ -47,11 +47,16 @@ table_state_sha <- function(dt,key_cols){
   missing <- setdiff(key_cols,names(x))
   if(length(missing)) stop(sprintf("State-hash key columns missing: %s",paste(missing,collapse=", ")),call.=FALSE)
   setorderv(x,key_cols)
-  setcolorder(x,sort(names(x)))
-  tmp <- tempfile(fileext=".csv")
-  on.exit(unlink(tmp),add=TRUE)
-  fwrite(x,tmp,na="<NA>",quote=TRUE)
-  digest(file=tmp,algo="sha256",serialize=FALSE)
+  cols <- sort(names(x))
+  vals <- lapply(x[,..cols],function(v){
+    if(inherits(v,"integer64")) v <- as.character(v)
+    z <- as.character(v)
+    z[is.na(z)] <- "<NA>"
+    z
+  })
+  rows <- if(nrow(x)) do.call(paste,c(vals,sep="\u001f")) else character()
+  payload <- paste(c(paste(cols,collapse="\u001f"),rows),collapse="\n")
+  digest(payload,algo="sha256",serialize=FALSE)
 }
 normalise_canonical_line <- function(line){
   z <- fromJSON(line,simplifyVector=FALSE)
