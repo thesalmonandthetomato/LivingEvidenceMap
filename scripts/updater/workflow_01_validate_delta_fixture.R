@@ -39,8 +39,10 @@ for(src in c("scopus","openalex","agricola","wos")) {
 file.copy(file.path(prev,"workflow01_seed","lens_records_for_deduplication.jsonl"),
           file.path(cur_seed,"lens_records_for_deduplication.jsonl"))
 for(src in c("scopus","openalex","agricola","wos")) {
-  file.copy(file.path(prev,"workflow01_seed",paste0(src,"_records_for_deduplication.jsonl")),
-            file.path(cur_seed,paste0(src,"_records_for_deduplication.jsonl"))
+  file.copy(
+    file.path(prev,"workflow01_seed",paste0(src,"_records_for_deduplication.jsonl")),
+    file.path(cur_seed,paste0(src,"_records_for_deduplication.jsonl"))
+  )
 }
 
 pairs <- data.table(
