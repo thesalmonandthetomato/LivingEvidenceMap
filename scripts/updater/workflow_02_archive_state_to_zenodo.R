@@ -6,7 +6,12 @@ arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default)
 state_dir<-normalizePath(arg("--state-dir"),mustWork=TRUE)
 run_id<-arg("--run-id"); repository<-arg("--repository"); output_dir<-arg("--output-dir")
 workflow01_sha<-arg("--workflow01-canonical-sha256")
+previous_pointer<-arg("--previous-pointer","")
 if(any(vapply(list(run_id,repository,output_dir,workflow01_sha),is.null,logical(1)))) stop("Required: --state-dir --run-id --repository --output-dir --workflow01-canonical-sha256",call.=FALSE)
+previous_state<-if(nzchar(previous_pointer)){
+  if(!file.exists(previous_pointer)) stop("Previous Workflow 02 pointer not found",call.=FALSE)
+  fromJSON(previous_pointer,simplifyVector=FALSE)
+}else NULL
 patch_path<-file.path(state_dir,"cumulative_patch.jsonl")
 report_path<-file.path(state_dir,"enrichment_report.json")
 if(!file.exists(patch_path)||!file.exists(report_path)) stop("Workflow 02 state missing cumulative_patch.jsonl or enrichment_report.json",call.=FALSE)
@@ -34,6 +39,11 @@ manifest<-list(
   github_run_url=run_url,
   repository=repository,
   upstream_workflow01_canonical_sha256=workflow01_sha,
+  previous_workflow02=if(is.null(previous_state)) NULL else list(
+    github_run_id=as.character(previous_state$github_run_id),
+    zenodo_record_id=as.character(previous_state$zenodo_record_id),
+    manifest_sha256=as.character(previous_state$manifest_sha256)
+  ),
   cumulative_patch_records=length(patch_lines),
   enrichment_counts=er$counts,
   file_visibility="restricted",
@@ -92,6 +102,11 @@ receipt<-list(
   status="published",workflow="02",state="enrichment_patch",
   github_run_id=as.character(run_id),github_run_url=run_url,
   upstream_workflow01_canonical_sha256=workflow01_sha,
+  previous_workflow02=if(is.null(previous_state)) NULL else list(
+    github_run_id=as.character(previous_state$github_run_id),
+    zenodo_record_id=as.character(previous_state$zenodo_record_id),
+    manifest_sha256=as.character(previous_state$manifest_sha256)
+  ),
   cumulative_patch_records=length(patch_lines),
   zenodo_record_id=record_id,zenodo_deposition_id=dep_id,
   doi=if(is.null(published$doi))NA_character_ else published$doi,
