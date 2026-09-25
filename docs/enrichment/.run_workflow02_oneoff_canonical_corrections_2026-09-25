@@ -1,2 +1,2 @@
 source_workflow02_run=36137804187
-purpose=apply_user_approved_oneoff_canonical_corrections
+purpose=publish_sparse_canonical_correction_state_to_zenodo
