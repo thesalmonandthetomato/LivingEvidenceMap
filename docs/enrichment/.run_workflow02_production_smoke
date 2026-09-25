@@ -1,4 +1,4 @@
 workflow01_pointer=docs/deduplication/zenodo/run-36128255337.json
 limit=10
 publish=false
-purpose=production_controller_smoke
+purpose=production_controller_smoke_retry_after_quote_fix
