@@ -1,2 +1,2 @@
-purpose=retry_citesource_database_contribution_cran_install
+purpose=retry_citesource_database_contribution_with_restore_dependencies
 canonical_records=32292
