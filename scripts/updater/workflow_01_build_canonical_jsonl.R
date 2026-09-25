@@ -312,6 +312,7 @@ for(cid in sort(names(clusters))){
 
     if(stripped) stripped_manifestations <- stripped_manifestations+1L
     if(is.null(a)) missing_abstract_manifestations <- missing_abstract_manifestations+1L
+    preferred_flags[[i]] <- preferred
     mans[[i]] <- list(
       source=as.character(cm$source[[i]]),
       source_record_id=as.character(cm$source_record_id[[i]]),
@@ -324,8 +325,6 @@ for(cid in sort(names(clusters))){
       volume=field(r,"volume"),
       issue=field(r,"issue"),
       pages=field(r,"pages"),
-      canonical_preference=preferred,
-      data_quality_repairs=if(length(applied_repairs)) applied_repairs else NULL,
       abstract_stripped=stripped,
       abstract_strip_provenance=if(keys[[i]] %in% strip_keys) strip_audit[[keys[[i]]]] else NULL
     )
@@ -333,7 +332,7 @@ for(cid in sort(names(clusters))){
   manifestations_total <- manifestations_total+length(mans)
   if(length(mans)>1L) duplicate_clusters <- duplicate_clusters+1L
   mk <- vapply(mans,function(m)paste(m$source,m$source_record_id,sep=":"),character(1))
-  preferred_ix <- which(vapply(mans,function(m)isTRUE(m$canonical_preference),logical(1)))
+  preferred_ix <- which(preferred_flags)
 
   # Human canonical-preference decisions are pairwise and can legitimately
   # identify more than one preferred manifestation within a deduplicated work.
@@ -386,13 +385,7 @@ for(cid in sort(names(clusters))){
         title=title_pick$source_key,abstract=abstract_pick$source_key,doi=doi_pick$source_key,
         authors=authors_pick$source_key,year=year_pick$source_key,journal=journal_pick$source_key,
         volume=volume_pick$source_key,issue=issue_pick$source_key,pages=pages_pick$source_key
-      ),
-      field_selection=list(
-        title=title_pick$selection,abstract=abstract_pick$selection,doi=doi_pick$selection,
-        authors=authors_pick$selection,year=year_pick$selection,journal=journal_pick$selection,
-        volume=volume_pick$selection,issue=issue_pick$selection,pages=pages_pick$selection
-      )
-    ),
+      )    ),
     manifestations=mans,
     provenance=list(
       source_manifestation_count=length(mans)
