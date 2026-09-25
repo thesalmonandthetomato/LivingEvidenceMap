@@ -238,16 +238,16 @@ manifest <- list(
     keywords = round(100 * mean(coverage$keywords_present), 1),
     institutions = round(100 * mean(coverage$institutions_present), 1)
   ),
-  lens_canonical_schema_compatibility = list(
-    current_lens_identity_fields = c('lens_id', 'record_id', 'record_id_type'),
-    current_lens_canonical_fields = c('record_id', 'lens_id', 'title', 'abstract', 'authors', 'year', 'source', 'doi', 'keywords', 'publication_type'),
+  workflow01_schema_compatibility = list(
+    canonical_bibliographic_fields = c('title','abstract','authors','year','source','doi','keywords','publication_type'),
     safely_mappable_now = c('title','abstract','authors','year','source','doi','keywords','publication_type'),
     additional_openalex_fields_retained_sidecar_only = c('openalex_id','publication_date','institutions','open_access','primary_location'),
-    deliberately_not_written = c('identity.lens_id','identity.record_id','identity.record_id_type','canonical.*'),
-    note = 'Diagnostic sidecar only. This does not propose or require any change to the Lens canonical JSON schema.'
+    source_specific_identity = 'openalex_id',
+    canonical_materialisation_deferred = TRUE,
+    note = 'Diagnostic source sidecar only. Canonical materialisation is performed later by the source-agnostic Workflow 01 canonical builder.'
   )
 )
 writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = 'null', na = 'null'), file.path(output_dir, 'compatibility_audit.json'))
 
 message(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = 'null', na = 'null'))
-message(sprintf('PASS: wrote %d OpenAlex sidecar records; Lens canonical JSON untouched.', length(records)))
+message(sprintf('PASS: wrote %d OpenAlex source-manifestation sidecar records; canonical materialisation deferred.', length(records)))
