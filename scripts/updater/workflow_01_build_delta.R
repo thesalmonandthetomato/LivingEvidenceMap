@@ -21,6 +21,7 @@ current_canonical <- arg("--current-canonical")
 current_canonical_manifest <- arg("--current-canonical-manifest")
 previous_pointer_path <- arg("--previous-pointer")
 repair_audit_path <- arg("--repair-audit",NULL)
+repair_ledger_path <- arg("--repair-ledger",NULL)
 output_dir <- arg("--output-dir")
 run_id <- arg("--run-id")
 required <- list(previous_root,current_seed_root,current_final_root,current_canonical,
@@ -179,6 +180,31 @@ file.copy(current_canonical_manifest,file.path(output_dir,"target_canonical_mani
 if(!is.null(repair_audit_path) && file.exists(repair_audit_path)) {
   file.copy(repair_audit_path,file.path(output_dir,"data_quality_repair_application.jsonl"),overwrite=TRUE)
 }
+if(!is.null(repair_ledger_path) && file.exists(repair_ledger_path)) {
+  file.copy(repair_ledger_path,file.path(output_dir,"data_quality_repair_upserts.jsonl"),overwrite=TRUE)
+} else {
+  file.create(file.path(output_dir,"data_quality_repair_upserts.jsonl"))
+}
+
+# Preserve newly introduced/changed abstract-strip actions as provenance upserts.
+read_jsonl_keyed <- function(path){
+  if(!file.exists(path)) return(list(lines=character(),keys=character()))
+  lines <- read_nonempty(path)
+  if(!length(lines)) return(list(lines=character(),keys=character()))
+  objs <- lapply(lines,fromJSON,simplifyVector=FALSE)
+  keys <- vapply(objs,function(z)paste(z$source,z$source_record_id,sep="::"),character(1))
+  if(anyDuplicated(keys)) stop(sprintf("Duplicate abstract-strip action keys in %s",path),call.=FALSE)
+  list(lines=lines,keys=keys)
+}
+prev_strip <- read_jsonl_keyed(file.path(previous_root,"workflow01_full_five_source","abstract_strip_actions.jsonl"))
+cur_strip <- read_jsonl_keyed(file.path(current_final_root,"abstract_strip_actions.jsonl"))
+missing_strip <- setdiff(prev_strip$keys,cur_strip$keys)
+if(length(missing_strip)) stop(sprintf("%d previous abstract-strip actions disappeared",length(missing_strip)),call.=FALSE)
+prev_line <- setNames(prev_strip$lines,prev_strip$keys)
+cur_line <- setNames(cur_strip$lines,cur_strip$keys)
+strip_upsert_keys <- names(cur_line)[vapply(names(cur_line),function(k)
+  is.null(prev_line[[k]]) || !identical(unname(prev_line[[k]]),unname(cur_line[[k]])),logical(1))]
+write_lines(unname(cur_line[strip_upsert_keys]),file.path(output_dir,"abstract_strip_action_upserts.jsonl"))
 
 manifest <- list(
   schema="living-evidence-map-workflow01-delta-v1",
@@ -210,14 +236,18 @@ manifest <- list(
     new_manifestations=length(new_manifestation_keys),
     changed_existing_manifestations=length(changed_manifestation_keys),
     canonical_upserts=canonical_upsert_count,
-    canonical_retired_ids=length(retired_ids)
+    canonical_retired_ids=length(retired_ids),
+    data_quality_repair_upserts=length(read_nonempty(file.path(output_dir,"data_quality_repair_upserts.jsonl"))),
+    abstract_strip_action_upserts=length(strip_upsert_keys)
   ),
   files=list(
     pair_decision_upserts_sha256=sha(file.path(output_dir,"pair_decision_upserts.csv")),
     cluster_map_upserts_sha256=sha(file.path(output_dir,"cluster_map_upserts.csv")),
     cluster_id_aliases_sha256=sha(file.path(output_dir,"cluster_id_aliases.csv")),
     canonical_upserts_sha256=sha(canonical_upserts_path),
-    canonical_retired_ids_sha256=sha(file.path(output_dir,"canonical_retired_ids.txt"))
+    canonical_retired_ids_sha256=sha(file.path(output_dir,"canonical_retired_ids.txt")),
+    data_quality_repair_upserts_sha256=sha(file.path(output_dir,"data_quality_repair_upserts.jsonl")),
+    abstract_strip_action_upserts_sha256=sha(file.path(output_dir,"abstract_strip_action_upserts.jsonl"))
   ),
   created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
