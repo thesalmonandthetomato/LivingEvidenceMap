@@ -4,6 +4,7 @@ args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 input<-arg("--input");report<-arg("--report");queue<-arg("--missing-both-queue")
 if(any(vapply(list(input,report,queue),is.null,logical(1)))) stop("Required: --input --report --missing-both-queue",call.=FALSE)
+`%||%`<-function(x,y)if(is.null(x))y else x
 clean<-function(x){if(is.null(x)||!length(x))return(NULL);s<-trimws(gsub("[[:space:]]+"," ",as.character(x[[1L]])));if(is.na(s)||!nzchar(s))NULL else s}
 miss<-function(x)is.null(clean(x))
 con<-file(input,"rt",encoding="UTF-8");on.exit(close(con))
@@ -24,4 +25,3 @@ dir.create(dirname(queue),recursive=TRUE,showWarnings=FALSE);qc<-file(queue,"wt"
 out<-list(schema="living-evidence-map-workflow02-inventory-v1",status="PASS",canonical_records=n,records_with_doi=doi_n,missing_title=mt,missing_abstract=ma,missing_both=mb,input_sha256=digest(file=input,algo="sha256",serialize=FALSE),missing_both_queue_sha256=digest(file=queue,algo="sha256",serialize=FALSE),created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"))
 dir.create(dirname(report),recursive=TRUE,showWarnings=FALSE);writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null="null"),report,useBytes=TRUE)
 cat(sprintf("PASS: Workflow 02 inventory: %d records; missing title=%d abstract=%d both=%d\n",n,mt,ma,mb))
-`%||%`<-function(x,y)if(is.null(x))y else x
