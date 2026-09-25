@@ -133,7 +133,9 @@ modal_pick <- function(values, keys, normalise=function(x)x){
   if(!any(ok)) return(list(value=NULL,source_key=NULL))
   vals <- values[ok]; ks <- keys[ok]
   disp <- vapply(vals,function(v){
-    if(is.list(v)||length(v)>1L) paste(as.character(unlist(v,use.names=FALSE)),collapse="; ") else as.character(v)
+    if(is.null(v) || length(v)==0L) return("")
+    z <- if(is.list(v)||length(v)>1L) paste(as.character(unlist(v,use.names=FALSE)),collapse="; ") else as.character(v[[1L]])
+    if(length(z)==0L || is.na(z[[1L]])) "" else as.character(z[[1L]])
   },character(1))
   norm <- vapply(disp,function(v){
     z <- normalise(v)
