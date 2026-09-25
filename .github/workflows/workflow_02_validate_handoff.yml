@@ -1,0 +1,144 @@
+name: Workflow 02 - Validate canonical handoff and enrichment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/deduplication/.run_workflow02_handoff_validation'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','stringdist','data.table'))
+
+      - name: Parse Workflow 02 handoff and enrichment scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_02_validate_canonical_handoff.R')
+          parse(file='scripts/updater/workflow_02_metadata_enrichment.R')
+          cat('PASS: Workflow 02 R parse validation\n')
+
+      - name: Restore published Workflow 01 baseline
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_state_from_zenodo.R \
+            --pointer docs/deduplication/zenodo/run-36103542054.json \
+            --output-root baseline
+
+      - name: Download validated Workflow 01 repair delta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repair_validation
+          gh run download 36128255337 --repo "$GITHUB_REPOSITORY" \
+            --name workflow01-repair-validation-36128255337 \
+            --dir repair_validation
+          test -s repair_validation/delta/delta_manifest.json
+          test -s repair_validation/canonical/canonical_manifest.json
+
+      - name: Reconstruct exact repaired Workflow 01 canonical state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_replay_delta.R \
+            --previous-root baseline \
+            --delta-dir repair_validation/delta \
+            --output-root workflow01_repaired
+          Rscript -e "library(jsonlite);library(digest);m<-fromJSON('repair_validation/canonical/canonical_manifest.json');p<-'workflow01_repaired/canonical/records.jsonl';stopifnot(digest(file=p,algo='sha256',serialize=FALSE)==m\$canonical_jsonl_sha256);cat('PASS: reconstructed repaired Workflow 01 canonical checksum exactly\n')"
+
+      - name: Validate full Workflow 01 to 02 canonical interface
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02_handoff
+          Rscript scripts/updater/workflow_02_validate_canonical_handoff.R \
+            --input workflow01_repaired/canonical/records.jsonl \
+            --sample outputs/workflow02_handoff/real_sample_10.jsonl \
+            --report outputs/workflow02_handoff/handoff_report.json \
+            --sample-n 10 \
+            --expected-records 32292 \
+            --expected-manifestations 90137
+
+      - name: Run Workflow 02 enrichment on real canonical records
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_metadata_enrichment.R \
+            --input outputs/workflow02_handoff/real_sample_10.jsonl \
+            --output outputs/workflow02_handoff/enriched_10.jsonl \
+            --audit outputs/workflow02_handoff/enrichment_audit.jsonl \
+            --report outputs/workflow02_handoff/enrichment_report.json \
+            --limit 10 \
+            --delay 0.2
+
+      - name: Validate Workflow 02 preservation contract
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          readjl <- function(p) lapply(readLines(p,warn=FALSE),fromJSON,simplifyVector=FALSE)
+          inp <- readjl('outputs/workflow02_handoff/real_sample_10.jsonl')
+          out <- readjl('outputs/workflow02_handoff/enriched_10.jsonl')
+          stopifnot(length(inp)==10L,length(out)==10L)
+          for(i in seq_along(inp)){
+            a <- inp[[i]]; b <- out[[i]]
+            stopifnot(identical(a$identity,b$identity))
+            stopifnot(identical(a$manifestations,b$manifestations))
+            stopifnot(identical(a$canonical$doi,b$canonical$doi))
+            if(!is.null(a$canonical$title) && nzchar(trimws(a$canonical$title))) stopifnot(identical(a$canonical$title,b$canonical$title))
+            if(!is.null(a$canonical$abstract) && nzchar(trimws(a$canonical$abstract))) stopifnot(identical(a$canonical$abstract,b$canonical$abstract))
+            aa <- a; bb <- b
+            aa$canonical$title <- NULL; aa$canonical$abstract <- NULL
+            bb$canonical$title <- NULL; bb$canonical$abstract <- NULL
+            bb$metadata_enrichment <- NULL
+            stopifnot(identical(aa,bb))
+          }
+          h <- fromJSON('outputs/workflow02_handoff/handoff_report.json')
+          e <- fromJSON('outputs/workflow02_handoff/enrichment_report.json')
+          stopifnot(identical(e$input_sha256,h$sample_sha256))
+          stopifnot(e$counts$total_records==10L)
+          stopifnot(e$counts$eligible_doi_missing_metadata==10L)
+          cat(sprintf('PASS: Workflow 02 preserved identity/provenance for 10 real canonical records; filled title=%d abstract=%d; quarantined=%d; still missing=%d\n',
+                      e$counts$europepmc_title_filled+e$counts$scopus_title_filled,
+                      e$counts$europepmc_abstract_filled+e$counts$scopus_abstract_filled,
+                      e$counts$conflicts_quarantined,e$counts$still_missing_after))
+
+      - name: Upload Workflow 02 handoff validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-handoff-validation-${{ github.run_id }}
+          path: outputs/workflow02_handoff/
+          retention-days: 30
+          if-no-files-found: warn
