@@ -164,7 +164,6 @@ record_id <- function(line){
 prev_path <- file.path(previous_root,"canonical","records.jsonl")
 up_path <- file.path(delta_dir,"canonical_upserts.jsonl")
 retired <- read_nonempty(file.path(delta_dir,"canonical_retired_ids.txt"))
-retired_set <- setNames(rep(TRUE,length(retired)),retired)
 
 up_lines <- read_nonempty(up_path)
 up_ids <- if(length(up_lines)) vapply(up_lines,record_id,character(1)) else character()
@@ -188,7 +187,7 @@ repeat{
   if(u<=length(up_ids) && identical(up_ids[[u]],pid)){
     writeLines(up_lines[[u]],pout,useBytes=TRUE)
     u <- u+1L
-  } else if(is.null(retired_set[[pid]])){
+  } else if(!(pid %in% retired)){
     writeLines(normalise_canonical_line(pl),pout,useBytes=TRUE)
   }
 }
