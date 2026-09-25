@@ -1,0 +1,112 @@
+name: Workflow 02 - Post-W02 lean canonical compaction
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/enrichment/.run_post_w02_lean_compaction'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Parse compaction script
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_02_compact_post_w02_canonical.R')
+          cat('PASS: compaction script parses\n')
+
+      - name: Restore authoritative Workflow 01 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-36128255337.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root workflow01_state
+          test -s workflow01_state/canonical/records.jsonl
+
+      - name: Restore authoritative Workflow 02 enrichment
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
+            --pointer docs/enrichment/zenodo/run-36137804187.json \
+            --output-dir workflow02_enrichment
+          PATCH="$(find workflow02_enrichment -name cumulative_patch.jsonl -type f -print -quit)"
+          test -n "$PATCH"
+          Rscript scripts/updater/workflow_02_apply_patch.R \
+            --input workflow01_state/canonical/records.jsonl \
+            --patch "$PATCH" \
+            --output canonical_w02_enriched.jsonl \
+            --report w02_enrichment_replay.json \
+            --mode exact
+
+      - name: Restore and apply authoritative Workflow 02 corrections
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
+            --pointer docs/enrichment/zenodo/run-36159140553.json \
+            --output-dir workflow02_correction
+          CORR="$(find workflow02_correction -name canonical_corrections.jsonl -type f -print -quit)"
+          test -n "$CORR"
+          Rscript scripts/updater/workflow_02_apply_canonical_correction_patch.R \
+            --input canonical_w02_enriched.jsonl \
+            --patch "$CORR" \
+            --output canonical_post_w02.jsonl \
+            --report w02_correction_replay.json
+          SHA="$(Rscript -e 'cat(digest::digest(file="canonical_post_w02.jsonl",algo="sha256",serialize=FALSE))')"
+          test "$SHA" = "4229257bca67c1ff1ebec4b3642ff9df4ac83d9eae99b584b15cbc9c49845902"
+
+      - name: Compact to lean canonical JSONL and validate exact replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/post_w02_lean
+          Rscript scripts/updater/workflow_02_compact_post_w02_canonical.R \
+            --input canonical_post_w02.jsonl \
+            --output outputs/post_w02_lean/canonical_lean.jsonl \
+            --report outputs/post_w02_lean/compaction_report.json \
+            --expected-input-sha256 4229257bca67c1ff1ebec4b3642ff9df4ac83d9eae99b584b15cbc9c49845902
+          Rscript -e 'x<-jsonlite::fromJSON("outputs/post_w02_lean/compaction_report.json");stopifnot(x$status=="PASS",x$canonical_records==32292L,x$record_ids_unchanged,x$non_manifestation_fields_unchanged,x$manifestation_refs_exact);cat("PASS: lean canonical validation complete\n")'
+
+      - name: Upload lean checkpoint trial
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-w02-lean-canonical-${{ github.run_id }}
+          path: |
+            outputs/post_w02_lean/
+            w02_enrichment_replay.json
+            w02_correction_replay.json
+          retention-days: 30
+          if-no-files-found: error
