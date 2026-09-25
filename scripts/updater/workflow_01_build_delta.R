@@ -154,7 +154,9 @@ index_jsonl <- function(path,write_upserts=NULL,previous_hashes=NULL){
       if(!nzchar(id)) stop("Canonical record lacks identity.record_id",call.=FALSE)
       h <- digest(line,algo="sha256",serialize=FALSE)
       n <- n+1L; ids[[n]] <- id; hashes[[n]] <- h
-      if(!is.null(out) && (is.null(previous_hashes[[id]]) || !identical(previous_hashes[[id]],h))) {
+      prev_h <- previous_hashes[id]
+      changed <- length(prev_h)==0L || is.na(prev_h[[1L]]) || !identical(unname(prev_h[[1L]]),h)
+      if(!is.null(out) && changed) {
         writeLines(line,out,useBytes=TRUE)
       }
     }
