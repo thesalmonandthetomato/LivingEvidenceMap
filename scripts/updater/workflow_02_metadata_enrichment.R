@@ -21,6 +21,8 @@ audit_path <- arg("--audit")
 report_path <- arg("--report")
 limit_arg <- arg("--limit",NULL)
 delay <- as.numeric(arg("--delay","0.2"))
+recheck_after_days <- as.numeric(arg("--recheck-after-days","90"))
+if(is.na(recheck_after_days) || recheck_after_days < 0) stop("--recheck-after-days must be >= 0",call.=FALSE)
 if(any(vapply(list(input_path,output_path,audit_path,report_path),is.null,logical(1)))) {
   stop("Required: --input --output --audit --report",call.=FALSE)
 }
@@ -316,9 +318,22 @@ counts <- list(
   scopus_abstract_filled=0L,
   scopus_http_404=0L,
   conflicts_quarantined=0L,
-  still_missing_after=0L
+  still_missing_after=0L,
+  deferred_recent_attempts=0L,
+  technical_error_records=0L
 )
 processed_eligible <- 0L
+
+previous_attempt_due <- function(meta){
+  if(is.null(meta) || !is.list(meta)) return(TRUE)
+  if(isTRUE(meta$technical_error)) return(TRUE)
+  completed <- clean_text(meta$completed_at)
+  if(is.null(completed)) return(TRUE)
+  t <- suppressWarnings(as.POSIXct(completed,tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"))
+  if(is.na(t)) return(TRUE)
+  age_days <- as.numeric(difftime(Sys.time(),t,units="days"))
+  is.na(age_days) || age_days >= recheck_after_days
+}
 
 for(i in seq_along(rows)){
   r <- rows[[i]]
@@ -329,6 +344,10 @@ for(i in seq_along(rows)){
   eligible <- !is.null(d) && (missing_title_before || missing_abstract_before)
   if(!eligible) next
   counts$eligible_doi_missing_metadata <- counts$eligible_doi_missing_metadata + 1L
+  if(!previous_attempt_due(r$metadata_enrichment)){
+    counts$deferred_recent_attempts <- counts$deferred_recent_attempts + 1L
+    next
+  }
   if(processed_eligible>=limit) next
   processed_eligible <- processed_eligible + 1L
 
@@ -402,6 +421,11 @@ for(i in seq_along(rows)){
   still_missing_abstract <- is_missing(r$canonical$abstract)
   if(still_missing_title || still_missing_abstract) counts$still_missing_after <- counts$still_missing_after + 1L
 
+  technical_error <- identical(clean_text(ep$outcome),"technical_error") ||
+    (!is.null(rec_audit$scopus) && identical(clean_text(rec_audit$scopus$outcome),"technical_error"))
+  if(technical_error) counts$technical_error_records <- counts$technical_error_records + 1L
+  filled_fields <- vapply(rec_audit$applied,function(z) clean_text(z$field) %||% "",character(1))
+  filled_fields <- unique(filled_fields[nzchar(filled_fields)])
   r$metadata_enrichment <- list(
     workflow="workflow_02_metadata_enrichment",
     implementation_language="R",
@@ -409,7 +433,12 @@ for(i in seq_along(rows)){
     completed_at=now_utc(),
     doi=d,
     title_missing_after=still_missing_title,
-    abstract_missing_after=still_missing_abstract
+    abstract_missing_after=still_missing_abstract,
+    europe_pmc_outcome=clean_text(ep$outcome),
+    scopus_outcome=if(is.null(rec_audit$scopus)) NULL else clean_text(rec_audit$scopus$outcome),
+    technical_error=technical_error,
+    filled_fields=filled_fields,
+    recheck_after_days=recheck_after_days
   )
   rows[[i]] <- r
   audit[[length(audit)+1L]] <- rec_audit
@@ -429,7 +458,8 @@ report <- list(
     europe_pmc_match="exact normalised DOI",
     scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
     abstract_title_guard="if a title is present on both sides, Jaro-Winkler similarity must be >= 0.90; otherwise quarantine",
-    provider_fallback="Scopus queried only if metadata remain missing after Europe PMC"
+    provider_fallback="Scopus queried only if metadata remain missing after Europe PMC",
+    repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days)
   ),
   trial_limit=if(is.infinite(limit)) NULL else limit,
   counts=counts,
