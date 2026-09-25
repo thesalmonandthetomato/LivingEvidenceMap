@@ -1,1 +1,1 @@
-trigger full Workflow 03 publication-status sweep over all 32,292 lean canonical records
+rerun full Workflow 03 publication-status sweep after resolved-signal fix
