@@ -1,2 +1,2 @@
-purpose=retry_citesource_database_contribution_with_restore_dependencies
+purpose=retry_citesource_database_contribution_with_glpk
 canonical_records=32292
