@@ -116,6 +116,7 @@ jobs:
             --current-canonical-manifest outputs/canonical/canonical_manifest.json \
             --previous-pointer docs/deduplication/zenodo/run-36103542054.json \
             --repair-audit outputs/canonical/data_quality_repair_application.jsonl \
+            --repair-ledger outputs/human_gate/data_quality_repairs.normalised.jsonl \
             --output-dir outputs/delta \
             --run-id "$GITHUB_RUN_ID"
 
