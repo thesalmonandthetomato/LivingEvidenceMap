@@ -20,6 +20,7 @@ llm_path <- arg("--llm-adjudications")
 human_path <- arg("--human-decisions",NULL)
 integrity_path <- arg("--human-integrity-manifest",NULL)
 data_quality_repairs_path <- arg("--data-quality-repairs",NULL)
+previous_cluster_map_path <- arg("--previous-cluster-map",NULL)
 output_dir <- arg("--output-dir")
 if (any(vapply(list(combined_path,manifestation_map_path,llm_path,human_path,integrity_path,output_dir),is.null,logical(1)))) {
   stop("Required: --combined-decisions --manifestation-map --llm-adjudications --human-decisions --human-integrity-manifest --output-dir",call.=FALSE)
@@ -196,23 +197,87 @@ if(nrow(dup)) for(i in seq_len(nrow(dup))) union_nodes(dup$record_i[[i]],dup$rec
 roots <- vapply(seq_len(nrow(meta)),find_root,integer(1))
 groups <- split(seq_len(nrow(meta)),roots)
 
+previous <- NULL
+previous_key_to_cluster <- character()
+previous_cluster_first_idx <- integer()
+if(!is.null(previous_cluster_map_path)){
+  if(!file.exists(previous_cluster_map_path)) stop("Previous cluster map not found",call.=FALSE)
+  previous <- fread(previous_cluster_map_path,na.strings=c("","NA"))
+  req_prev <- c("source","source_record_id","cluster_id")
+  if(length(setdiff(req_prev,names(previous)))) stop("Previous cluster map missing required columns",call.=FALSE)
+  previous[,key:=paste(source,source_record_id,sep="::")]
+  if(anyDuplicated(previous$key)) stop("Previous cluster map contains duplicate manifestation keys",call.=FALSE)
+  current_keys <- paste(meta$source,meta$source_record_id,sep="::")
+  missing_prev <- setdiff(previous$key,current_keys)
+  if(length(missing_prev)) stop(sprintf("%d previous manifestations are absent from current state",length(missing_prev)),call.=FALSE)
+  previous_key_to_cluster <- setNames(as.character(previous$cluster_id),previous$key)
+  if("idx" %in% names(previous)){
+    previous_cluster_first_idx <- previous[,.(first_idx=min(idx)),by=cluster_id]
+  } else {
+    previous_cluster_first_idx <- previous[,.(first_idx=.I[1L]),by=cluster_id]
+  }
+}
+
 cluster_rows <- vector("list",length(groups))
 map_rows <- vector("list",length(groups))
+alias_rows <- list()
+previous_cluster_targets <- list()
 k <- 0L
 for(g in groups) {
   k <- k+1L
-  keys <- paste(meta$source[g],meta$source_record_id[g],sep=":")
-  cid <- paste0("work-",substr(digest(paste(sort(keys),collapse="|"),algo="sha256",serialize=FALSE),1,16))
+  keys_colon <- paste(meta$source[g],meta$source_record_id[g],sep=":")
+  keys_lookup <- paste(meta$source[g],meta$source_record_id[g],sep="::")
+  prior_ids <- if(length(previous_key_to_cluster)) unique(unname(previous_key_to_cluster[keys_lookup])) else character()
+  prior_ids <- prior_ids[!is.na(prior_ids) & nzchar(prior_ids)]
+
+  id_origin <- "new"
+  retired_ids <- character()
+  if(length(prior_ids)==0L){
+    cid <- paste0("work-",substr(digest(paste(sort(keys_colon),collapse="|"),algo="sha256",serialize=FALSE),1,16))
+  } else if(length(prior_ids)==1L){
+    cid <- prior_ids[[1L]]
+    id_origin <- "preserved"
+  } else {
+    cand <- previous_cluster_first_idx[cluster_id %in% prior_ids]
+    setorder(cand,first_idx,cluster_id)
+    cid <- as.character(cand$cluster_id[[1L]])
+    retired_ids <- setdiff(prior_ids,cid)
+    id_origin <- "merged_existing"
+    for(old_id in retired_ids){
+      alias_rows[[length(alias_rows)+1L]] <- data.table(
+        retired_cluster_id=old_id,
+        surviving_cluster_id=cid,
+        reason="duplicate_cluster_merge",
+        workflow01_output_cluster_member_count=length(g)
+      )
+    }
+  }
+
+  if(length(prior_ids)){
+    for(pid in prior_ids) previous_cluster_targets[[pid]] <- unique(c(previous_cluster_targets[[pid]],cid))
+  }
+
   cluster_rows[[k]] <- list(
     cluster_id=cid,
+    cluster_id_origin=id_origin,
+    retired_cluster_ids=retired_ids,
     status=if(length(g)>1L)"reconciled" else "singleton",
     member_count=length(g),
     members=lapply(g,function(i)list(idx=meta$idx[[i]],source=meta$source[[i]],source_record_id=meta$source_record_id[[i]]))
   )
-  map_rows[[k]] <- data.table(idx=g,source=meta$source[g],source_record_id=meta$source_record_id[g],
-                              cluster_id=cid,cluster_size=length(g))
+  map_rows[[k]] <- data.table(
+    idx=g,source=meta$source[g],source_record_id=meta$source_record_id[g],
+    cluster_id=cid,cluster_size=length(g),cluster_id_origin=id_origin
+  )
+}
+if(length(previous_cluster_targets)){
+  split_ids <- names(previous_cluster_targets)[vapply(previous_cluster_targets,function(x)length(unique(x))>1L,logical(1))]
+  if(length(split_ids)) stop(sprintf("%d previous work IDs would split across multiple current clusters; explicit correction required",length(split_ids)),call.=FALSE)
 }
 map <- rbindlist(map_rows)
+aliases <- if(length(alias_rows)) unique(rbindlist(alias_rows,use.names=TRUE,fill=TRUE)) else
+  data.table(retired_cluster_id=character(),surviving_cluster_id=character(),reason=character(),workflow01_output_cluster_member_count=integer())
+fwrite(aliases,file.path(output_dir,"cluster_id_aliases.csv"))
 setorder(map,idx)
 fwrite(map,file.path(output_dir,"manifestation_cluster_map.csv"))
 con <- file(file.path(output_dir,"clusters.jsonl"),"wt",encoding="UTF-8")
@@ -239,7 +304,12 @@ summary <- list(
   clusters=nrow(sizes),
   duplicate_clusters=sum(sizes$cluster_size>1L),
   singleton_clusters=sum(sizes$cluster_size==1L),
-  manifestations_in_duplicate_clusters=sum(sizes$cluster_size[sizes$cluster_size>1L])
+  manifestations_in_duplicate_clusters=sum(sizes$cluster_size[sizes$cluster_size>1L]),
+  previous_cluster_map_supplied=!is.null(previous_cluster_map_path),
+  preserved_work_ids=if(is.null(previous)) 0L else sum(unique(map[,.(cluster_id,cluster_id_origin)])$cluster_id_origin=="preserved"),
+  merged_existing_work_ids=nrow(aliases),
+  new_work_ids=sum(unique(map[,.(cluster_id,cluster_id_origin)])$cluster_id_origin=="new"),
+  cluster_id_aliases_file="cluster_id_aliases.csv"
 )
 if (nrow(remaining)) {
   fwrite(remaining,file.path(output_dir,"unresolved_pairs.csv"))
