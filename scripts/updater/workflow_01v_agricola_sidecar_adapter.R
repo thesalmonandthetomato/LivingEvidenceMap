@@ -168,13 +168,12 @@ audit <- list(
     keywords=pct(cov$keywords_present),
     publication_type=pct(cov$publication_type_present)
   ),
-  lens_canonical_schema_compatibility=list(
-    current_lens_identity_fields=c("lens_id","record_id","record_id_type"),
-    current_lens_canonical_fields=c("record_id","lens_id","title","abstract","authors","year","source","doi","keywords","publication_type"),
+  workflow01_schema_compatibility=list(
+    canonical_bibliographic_fields=c("title","abstract","authors","year","source","doi","keywords","publication_type"),
     safely_mappable_now=c("title","abstract","authors","year","source","doi","keywords","publication_type"),
     source_specific_identity="agricola_id",
-    deliberately_not_written=c("identity.lens_id","identity.record_id","identity.record_id_type","canonical.*"),
-    note="Canonical-compatible diagnostic sidecar only. No change to the Lens canonical JSON schema or store."
+    canonical_materialisation_deferred=TRUE,
+    note="Diagnostic source sidecar only. Canonical materialisation is performed later by the source-agnostic Workflow 01 canonical builder."
   )
 )
 writeLines(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),file.path(output_dir,"compatibility_audit.json"))
