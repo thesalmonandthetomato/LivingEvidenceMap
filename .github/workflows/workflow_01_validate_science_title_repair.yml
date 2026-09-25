@@ -1,0 +1,122 @@
+name: Workflow 01 - Validate targeted Science title repair
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/deduplication/.run_w01_science_title_repair'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2'))
+
+      - name: Restore authoritative Workflow 01
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-36128255337.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root previous_state
+
+      - name: Merge targeted repair into cumulative repair ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/final
+          PREV="previous_state/provenance/cumulative_data_quality_repairs.jsonl"
+          test -s "$PREV"
+          : > outputs/empty_strips.jsonl
+          Rscript scripts/updater/workflow_01_merge_cumulative_repairs.R \
+            --previous-repairs "$PREV" \
+            --new-repairs data/adjudication/workflow01/manual_title_repair_science_1156578.jsonl \
+            --previous-strips previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --new-strips outputs/empty_strips.jsonl \
+            --output-repairs outputs/final/cumulative_data_quality_repairs.jsonl \
+            --output-strips outputs/final/abstract_strip_actions.jsonl
+
+      - name: Rebuild canonical state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/canonical
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R \
+            --cluster-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --strip-actions outputs/final/abstract_strip_actions.jsonl \
+            --data-quality-repairs outputs/final/cumulative_data_quality_repairs.jsonl \
+            --repair-audit outputs/canonical/data_quality_repair_application.jsonl \
+            --lens previous_state/workflow01_seed/lens_records_for_deduplication.jsonl \
+            --scopus previous_state/workflow01_seed/scopus_records_for_deduplication.jsonl \
+            --openalex previous_state/workflow01_seed/openalex_records_for_deduplication.jsonl \
+            --agricola previous_state/workflow01_seed/agricola_records_for_deduplication.jsonl \
+            --wos previous_state/workflow01_seed/wos_records_for_deduplication.jsonl \
+            --run-id "$GITHUB_RUN_ID" \
+            --output outputs/canonical/records.jsonl \
+            --manifest outputs/canonical/canonical_manifest.json
+
+      - name: Verify exact targeted change
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          target <- 'work-1c16bc1976435cbb'
+          expected <- 'Response to Comment on "Declining Wild Salmon Populations in Relation to Parasites from Farm Salmon"'
+          old <- stream_in(file('previous_state/canonical/records.jsonl'),verbose=FALSE)
+          new <- stream_in(file('outputs/canonical/records.jsonl'),verbose=FALSE)
+          stopifnot(nrow(old)==32292L,nrow(new)==32292L)
+          i <- match(target,vapply(new$identity,function(z)z$record_id,character(1)))
+          stopifnot(!is.na(i),new$canonical[[i]]$title==expected,new$canonical[[i]]$doi=='10.1126/science.1156578')
+          cat('PASS: targeted DOI title repair applied before canonical selection\n')
+
+      - name: Build and replay sparse repair delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_build_delta.R \
+            --previous-root previous_state \
+            --current-seed-root previous_state/workflow01_seed \
+            --current-final-root previous_state/workflow01_full_five_source \
+            --current-canonical outputs/canonical/records.jsonl \
+            --current-canonical-manifest outputs/canonical/canonical_manifest.json \
+            --previous-pointer docs/deduplication/zenodo/run-36128255337.json \
+            --repair-audit outputs/canonical/data_quality_repair_application.jsonl \
+            --repair-ledger data/adjudication/workflow01/manual_title_repair_science_1156578.jsonl \
+            --output-dir outputs/delta \
+            --run-id "$GITHUB_RUN_ID"
+          Rscript scripts/updater/workflow_01_replay_delta.R \
+            --previous-root previous_state \
+            --delta-dir outputs/delta \
+            --output-root outputs/replayed
+          Rscript -e "library(digest);stopifnot(digest(file='outputs/replayed/canonical/records.jsonl',algo='sha256',serialize=FALSE)==digest(file='outputs/canonical/records.jsonl',algo='sha256',serialize=FALSE));cat('PASS: targeted repair delta replays exactly\n')"
+
+      - name: Upload validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-science-title-repair-${{ github.run_id }}
+          path: outputs/
+          retention-days: 30
+          if-no-files-found: warn
