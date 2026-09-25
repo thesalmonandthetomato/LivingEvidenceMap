@@ -36,6 +36,8 @@ env:
   WORKFLOW00_AGRICOLA_POINTER: docs/search_record/zenodo/run-35735412308.json
   RECOVERY_RUN_ID: '36049567027'
   RECOVERY_ARTIFACT: 'workflow01-recovered-730-adjudication-complete-36049567027'
+  OLD_UPSTREAM_RUN_ID: '35507378528'
+  OLD_UPSTREAM_ARTIFACT: 'workflow01-abstract-enrichment-35507378528'
   RECOVERY_RESOLUTION_RUN_ID: '36056439618'
   RECOVERY_RESOLUTION_ARTIFACT: 'workflow01-recovered-title-rules-36056439618'
 
@@ -77,12 +79,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p inputs/base inputs/llm inputs/review inputs/recovery inputs/recovery_resolution
+          mkdir -p inputs/base inputs/llm inputs/review inputs/recovery inputs/recovery_resolution inputs/old_upstream
           gh run download "$BASE_RUN" --repo "$GITHUB_REPOSITORY"             --name "workflow01-five-source-deduplication-finalized-$BASE_RUN" --dir inputs/base
           gh run download "$LLM_RUN" --repo "$GITHUB_REPOSITORY"             --name "workflow01-llm-adjudication-complete-$LLM_RUN" --dir inputs/llm
           gh run download "$QUEUE_RUN" --repo "$GITHUB_REPOSITORY"             --name "workflow01-blinded-human-review-$QUEUE_RUN" --dir inputs/review
           gh run download "$RECOVERY_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "$RECOVERY_ARTIFACT" --dir inputs/recovery
           gh run download "$RECOVERY_RESOLUTION_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "$RECOVERY_RESOLUTION_ARTIFACT" --dir inputs/recovery_resolution
+          gh run download "$OLD_UPSTREAM_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "$OLD_UPSTREAM_ARTIFACT" --dir inputs/old_upstream
           test -s inputs/base/workflow01_full_five_source/combined_pair_decisions.csv
           test -s inputs/base/workflow01_full_five_source/manifestation_cluster_map.csv
           test -s inputs/base/workflow01_full_five_source/summary.json
@@ -91,6 +94,7 @@ jobs:
           test -s inputs/recovery/all_adjudications.jsonl
           test -s inputs/recovery_resolution/rule_resolved_duplicates.jsonl
           test -s data/adjudication/workflow01/run-36049567027/human_decisions.jsonl
+          test -n "$(find inputs/old_upstream -name lens_records_for_deduplication.jsonl -type f -print -quit)"
 
       - name: Apply recovered decisions and normalise legacy diverted state
         shell: bash
@@ -156,7 +160,7 @@ jobs:
           Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R             --pointer "workflow00_registry/$WORKFLOW00_SCOPUS_POINTER"             --sources "scopus" --output-root restored
           Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R             --pointer "workflow00_registry/$WORKFLOW00_AGRICOLA_POINTER"             --sources "agricola" --output-root restored
 
-      - name: Recreate source sidecars used by deduplication
+      - name: Recreate current source sidecars and exact deduplication union
         shell: bash
         run: |
           set -euo pipefail
@@ -173,7 +177,28 @@ jobs:
           Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R --input-dir "$OPENALEX_DIR" --output-dir canonical_sources/openalex
           Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir "$AGRICOLA_DIR" --output-dir canonical_sources/agricola
           Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir "$WOS_DIR" --output-dir canonical_sources/wos
-          Rscript scripts/updater/workflow_01_locate_restored_sources.R             --root canonical_sources --output outputs/source_files.json
+
+          # The original five-source deduplication preserved historical manifestations
+          # even when a later source snapshot no longer returned them. Reconstruct that
+          # exact old+current union rather than canonicalising from current snapshots only.
+          touch inputs/old_upstream/wos_records_for_deduplication.jsonl
+          mkdir -p outputs/canonical_union
+          Rscript scripts/updater/workflow_01_deduplication_build_union.R             --old-dir inputs/old_upstream             --current-lens canonical_sources/lens/records.jsonl             --current-scopus canonical_sources/scopus/scopus_sidecar_records.jsonl             --current-openalex canonical_sources/openalex/openalex_sidecar_records.jsonl             --current-agricola canonical_sources/agricola/agricola_sidecar_records.jsonl             --current-wos canonical_sources/wos/wos_starter_sidecar_records.jsonl             --expected-prior-manifestations 72941             --output-dir outputs/canonical_union
+
+          Rscript scripts/updater/workflow_01_locate_restored_sources.R             --root outputs/canonical_union --output outputs/source_files.json
+
+      - name: Verify canonical source union exactly matches cluster manifestations
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          cm <- fread('outputs/final/manifestation_cluster_map.csv')
+          expected <- cm[, .N, by=source][order(source)]
+          u <- fread('outputs/canonical_union/union_source_counts.csv')
+          actual <- u[, .(source, N=union_total)][order(source)]
+          stopifnot(identical(expected$source,actual$source))
+          stopifnot(identical(as.integer(expected$N),as.integer(actual$N)))
+          stopifnot(sum(actual$N)==nrow(cm))
+          cat('PASS: reconstructed source union exactly matches all cluster-map manifestations\n')
 
       - name: Build source-agnostic canonical JSONL
         env:
@@ -215,11 +240,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p zenodo_stage/{workflow01_seed,workflow01_full_five_source,canonical,reports,provenance}
-          cp canonical_sources/lens/records.jsonl zenodo_stage/workflow01_seed/lens_records_for_deduplication.jsonl
-          cp canonical_sources/scopus/scopus_sidecar_records.jsonl zenodo_stage/workflow01_seed/scopus_records_for_deduplication.jsonl
-          cp canonical_sources/openalex/openalex_sidecar_records.jsonl zenodo_stage/workflow01_seed/openalex_records_for_deduplication.jsonl
-          cp canonical_sources/agricola/agricola_sidecar_records.jsonl zenodo_stage/workflow01_seed/agricola_records_for_deduplication.jsonl
-          cp canonical_sources/wos/wos_starter_sidecar_records.jsonl zenodo_stage/workflow01_seed/wos_records_for_deduplication.jsonl
+          cp outputs/canonical_union/lens_records_for_deduplication.jsonl zenodo_stage/workflow01_seed/lens_records_for_deduplication.jsonl
+          cp outputs/canonical_union/scopus_records_for_deduplication.jsonl zenodo_stage/workflow01_seed/scopus_records_for_deduplication.jsonl
+          cp outputs/canonical_union/openalex_records_for_deduplication.jsonl zenodo_stage/workflow01_seed/openalex_records_for_deduplication.jsonl
+          cp outputs/canonical_union/agricola_records_for_deduplication.jsonl zenodo_stage/workflow01_seed/agricola_records_for_deduplication.jsonl
+          cp outputs/canonical_union/wos_records_for_deduplication.jsonl zenodo_stage/workflow01_seed/wos_records_for_deduplication.jsonl
           cp -a outputs/final/. zenodo_stage/workflow01_full_five_source/
           cp outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json zenodo_stage/canonical/
           cp outputs/reports/* zenodo_stage/reports/
