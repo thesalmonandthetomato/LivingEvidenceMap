@@ -1,0 +1,95 @@
+name: Workflow 03 - Publish validated baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/publication_status/.publish_validated_baseline'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Download validated Workflow 03 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow03-publication-status-36172718538
+          path: source_artifact
+          github-token: ${{ github.token }}
+          run-id: 36172718538
+
+      - name: Verify validated source state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s source_artifact/outputs/workflow03/publication_status.jsonl
+          test -s source_artifact/outputs/workflow03/report.json
+          mkdir -p workflow03_state
+          cp source_artifact/outputs/workflow03/publication_status.jsonl workflow03_state/
+          cp source_artifact/outputs/workflow03/report.json workflow03_state/
+          if [ -f source_artifact/outputs/workflow03/api_audit.jsonl ]; then cp source_artifact/outputs/workflow03/api_audit.jsonl workflow03_state/; fi
+          Rscript -e 'x<-jsonlite::fromJSON("workflow03_state/report.json",simplifyVector=FALSE);stopifnot(x$status=="PASS",as.integer(x$records_scanned)==32292L,as.integer(x$exclude_from_workflow04)==9L,as.integer(x$evidence_conflicts)==0L);cat("PASS: validated Workflow 03 baseline artifact\n")'
+
+      - name: Publish restricted Workflow 03 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow03_zenodo
+          Rscript scripts/updater/workflow_03_archive_state_to_zenodo.R \
+            --state-dir workflow03_state \
+            --source-run-id 36172718538 \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow03_zenodo \
+            --upstream-lean-sha256 1d3977537c1498a728c9fe04ff958874f4a7727ad344a02ba3ef00adb2f755c7
+
+      - name: Register authoritative Workflow 03 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_03_update_zenodo_registry.R \
+            --receipt outputs/workflow03_zenodo/zenodo_receipt.json \
+            --registry docs/publication_status/zenodo_registry.csv \
+            --pointer-dir docs/publication_status/zenodo
+          git add docs/publication_status/zenodo_registry.csv docs/publication_status/zenodo/run-36172718538.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Register authoritative Workflow 03 publication-status state"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow03-zenodo-publication-${{ github.run_id }}
+          path: outputs/workflow03_zenodo/
+          retention-days: 30
+          if-no-files-found: warn
