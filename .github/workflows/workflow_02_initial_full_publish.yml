@@ -7,6 +7,10 @@ on:
     paths:
       - 'docs/enrichment/.run_workflow02_initial_full_publish'
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   run:
     uses: ./.github/workflows/workflow_02_production.yml
