@@ -89,17 +89,27 @@ year_value <- function(x){
 author_surnames <- function(x){
   if(is.null(x)||!length(x)) return(character())
   one <- function(z){
-    if(is.character(z)) s <- clean_text(z)
-    else if(is.list(z)) s <- clean_text(z$surname %||% z$last_name %||% z$family %||% z$fullName %||% z$full_name %||% z$name %||% z$display_name)
-    else s <- NULL
+    explicit <- NULL
+    if(is.list(z)){
+      pref <- z[["preferred-name"]] %||% list()
+      explicit <- clean_text(
+        z[["ce:surname"]] %||% z$surname %||% z$lastName %||% z$last_name %||%
+        z$family %||% pref[["ce:surname"]]
+      )
+      if(!is.null(explicit)) s <- explicit
+      else s <- clean_text(z$fullName %||% z$full_name %||% z$name %||% z$display_name %||% z[["ce:indexed-name"]])
+    } else if(is.character(z)) s <- clean_text(z) else s <- NULL
     if(is.null(s)) return("")
     s <- iconv(s,from="",to="ASCII//TRANSLIT",sub="")
     if(is.na(s)) return("")
     s <- tolower(trimws(s))
-    # For full-name strings, the final token is the most portable surname proxy.
-    parts <- unlist(strsplit(gsub("[^a-z0-9 -]+"," ",s),"[[:space:]-]+"))
+    if(is.null(explicit) && grepl(",",s,fixed=TRUE)) s <- sub(",.*$","",s)
+    parts <- unlist(strsplit(gsub("[^a-z0-9 -]+"," ",s),"[[:space:]]+"))
     parts <- parts[nzchar(parts)]
-    if(!length(parts)) "" else tail(parts,1L)
+    if(!length(parts)) return("")
+    if(!is.null(explicit)) return(paste(parts,collapse=" "))
+    # Canonical strings are commonly "Surname, Given" or "Initials Surname".
+    tail(parts,1L)
   }
   vals <- if(is.character(x)) vapply(as.list(x),one,character(1)) else vapply(x,one,character(1))
   unique(vals[nzchar(vals)])
@@ -110,10 +120,47 @@ field_values <- function(r,name){
   if(length(mans)) vals <- c(vals,lapply(mans,function(m)m[[name]]))
   vals
 }
-compare_text_any <- function(provider_value,record_values){
+token_similarity <- function(a,b){
+  aa <- norm_simple(a); bb <- norm_simple(b)
+  if(is.null(aa)||is.null(bb)) return(c(jaccard=NA_real_,containment=NA_real_))
+  ta <- unique(strsplit(aa," ",fixed=TRUE)[[1L]])
+  tb <- unique(strsplit(bb," ",fixed=TRUE)[[1L]])
+  inter <- length(intersect(ta,tb))
+  c(jaccard=inter/length(union(ta,tb)),containment=inter/min(length(ta),length(tb)))
+}
+compare_journal_any <- function(provider_value,record_values){
   p <- norm_compact(provider_value)
   if(is.null(p)) return("missing")
-  vals <- unique(Filter(Negate(is.null),lapply(record_values,norm_compact)))
+  vals_raw <- Filter(Negate(is.null),record_values)
+  if(!length(vals_raw)) return("missing")
+  vals <- unique(Filter(Negate(is.null),lapply(vals_raw,norm_compact)))
+  if(any(vals==p)) return("support")
+  for(v in vals_raw){
+    vc <- norm_compact(v)
+    if(!is.null(vc) && (grepl(p,vc,fixed=TRUE)||grepl(vc,p,fixed=TRUE))) return("support")
+    m <- token_similarity(provider_value,v)
+    if(!is.na(m[["containment"]]) && (m[["containment"]]>=0.80 || m[["jaccard"]]>=0.70)) return("support")
+  }
+  "conflict"
+}
+normalise_number_range <- function(x){
+  s <- norm_simple(x)
+  if(is.null(s)) return(NULL)
+  s <- gsub("^(vol|volume|issue|no|number|pages|page|pp) ","",s)
+  s <- gsub(" ","",s,fixed=TRUE)
+  m <- regexec("^([0-9]+)-([0-9]+)$",s)
+  z <- regmatches(s,m)[[1L]]
+  if(length(z)==3L){
+    a <- z[[2L]]; b <- z[[3L]]
+    if(nchar(b)<nchar(a)) b <- paste0(substr(a,1L,nchar(a)-nchar(b)),b)
+    return(paste0(as.integer(a),"-",as.integer(b)))
+  }
+  s
+}
+compare_numeric_text_any <- function(provider_value,record_values){
+  p <- normalise_number_range(provider_value)
+  if(is.null(p)) return("missing")
+  vals <- unique(Filter(Negate(is.null),lapply(record_values,normalise_number_range)))
   if(!length(vals)) return("missing")
   if(any(vals==p)) "support" else "conflict"
 }
@@ -130,23 +177,33 @@ compare_authors_any <- function(provider_authors,record_values){
   vals <- unique(unlist(lapply(record_values,author_surnames),use.names=FALSE))
   vals <- vals[nzchar(vals)]
   if(!length(vals)) return("missing")
-  # Require at least one shared surname. First-author agreement is retained separately in audit.
   if(length(intersect(p,vals))>0L) "support" else "conflict"
+}
+title_equivalence <- function(a,b){
+  aa <- norm_title(a); bb <- norm_title(b)
+  if(is.null(aa)||is.null(bb)) return(FALSE)
+  sim <- title_similarity(a,b)
+  if(!is.na(sim) && sim>=0.90) return(TRUE)
+  # Covers bilingual titles and provider-appended translations.
+  minchars <- min(nchar(aa),nchar(bb))
+  minchars>=30L && (grepl(aa,bb,fixed=TRUE)||grepl(bb,aa,fixed=TRUE))
 }
 bibliographic_concordance <- function(r,provider){
   statuses <- c(
     authors=compare_authors_any(provider$authors,field_values(r,"authors")),
     year=compare_year_any(provider$year,field_values(r,"year")),
-    journal=compare_text_any(provider$journal,field_values(r,"journal")),
-    volume=compare_text_any(provider$volume,field_values(r,"volume")),
-    issue=compare_text_any(provider$issue,field_values(r,"issue")),
-    pages=compare_text_any(provider$pages,field_values(r,"pages"))
+    journal=compare_journal_any(provider$journal,field_values(r,"journal")),
+    volume=compare_numeric_text_any(provider$volume,field_values(r,"volume")),
+    issue=compare_numeric_text_any(provider$issue,field_values(r,"issue")),
+    pages=compare_numeric_text_any(provider$pages,field_values(r,"pages"))
   )
   comparable <- statuses!="missing"
   support <- names(statuses)[statuses=="support"]
   conflict <- names(statuses)[statuses=="conflict"]
+  high_value_conflict <- intersect(conflict,c("authors","year"))
+  weighted_support <- sum(c(authors=3,year=2,journal=2,volume=1,issue=1,pages=1)[support])
   high_specificity <- intersect(support,c("authors","journal","volume","pages"))
-  accept <- sum(comparable)>=2L && length(support)>=2L && length(conflict)==0L && length(high_specificity)>=1L
+  accept <- sum(comparable)>=2L && weighted_support>=4L && length(high_value_conflict)==0L && length(high_specificity)>=1L
   list(
     accept=accept,
     statuses=as.list(statuses),
@@ -158,7 +215,7 @@ bibliographic_concordance <- function(r,provider){
 }
 metadata_match_decision <- function(r,provider){
   sim <- title_similarity((r$canonical %||% list())$title,provider$title)
-  title_pass <- is.null(provider$title) || is_missing((r$canonical %||% list())$title) || is.na(sim) || sim>=0.90
+  title_pass <- is.null(provider$title) || is_missing((r$canonical %||% list())$title) || is.na(sim) || title_equivalence((r$canonical %||% list())$title,provider$title)
   bib <- bibliographic_concordance(r,provider)
   list(
     accept=title_pass || isTRUE(bib$accept),
@@ -599,7 +656,7 @@ report <- list(
     overwrite_existing_fields=FALSE,
     europe_pmc_match="exact normalised DOI",
     scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
-    metadata_match_guard="exact DOI required; accept when title Jaro-Winkler similarity is >= 0.90, or when at least two non-title bibliographic fields agree with no comparable-field conflicts and at least one supporting field is authors, journal, volume or pages",
+    metadata_match_guard="exact DOI required; accept on strong normalised title equivalence, including bilingual/appended-title containment, or on weighted bibliographic concordance across authors, year, journal, volume, issue and pages; author/year contradictions block concordance acceptance",
     provider_fallback="Scopus queried only if metadata remain missing after Europe PMC",
     repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days)
   ),
