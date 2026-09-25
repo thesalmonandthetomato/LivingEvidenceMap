@@ -51,12 +51,13 @@ same_without_allowed <- function(a,b){
 inp <- readjl(input_path); out <- readjl(enriched_path); aud <- readjl(audit_path)
 er <- fromJSON(enrichment_report_path,simplifyVector=FALSE)
 if(length(inp)!=length(out)) stop("Input/output record counts differ",call.=FALSE)
-if(length(aud) != as.integer(er$counts$eligible_doi_missing_metadata %||% length(aud))) {
-  # With --limit, audit contains processed eligible records only. Accept report trial_limit.
-  lim <- er$trial_limit %||% Inf
-  if(length(aud) != min(as.integer(er$counts$eligible_doi_missing_metadata),as.integer(lim))) {
-    stop("Audit cardinality does not match processed eligible records",call.=FALSE)
-  }
+eligible_total <- as.integer(er$counts$eligible_doi_missing_metadata %||% length(aud))
+deferred <- as.integer(er$counts$deferred_recent_attempts %||% 0L)
+attemptable <- max(0L,eligible_total-deferred)
+lim <- er$trial_limit %||% Inf
+expected_audit <- if(is.infinite(lim)) attemptable else min(attemptable,as.integer(lim))
+if(length(aud) != expected_audit) {
+  stop(sprintf("Audit cardinality does not match processed eligible records: expected %d found %d",expected_audit,length(aud)),call.=FALSE)
 }
 aud_by_id <- setNames(aud,vapply(aud,function(x) clean(x$record_id) %||% "",character(1)))
 if(anyDuplicated(names(aud_by_id))) stop("Duplicate record IDs in enrichment audit",call.=FALSE)
