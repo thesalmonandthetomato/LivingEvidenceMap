@@ -90,6 +90,41 @@ if(length(h_idx)!=22605L || sum(h_dec=="retain")!=16068L || sum(h_dec=="exclude"
 }
 
 hist_map<-setNames(h_dec,h_ids[h_idx])
+hist_record_map<-setNames(historical,h_ids)
+bib_text<-function(r,field){
+  can<-r$canonical %||% list()
+  raw<-((r$lens %||% list())$raw_payload %||% list())
+  v<-can[[field]] %||% raw[[field]] %||% r[[field]] %||% NULL
+  if(is.null(v)||!length(v)) return("")
+  if(is.character(v)) return(paste(v,collapse="; "))
+  if(is.atomic(v)) return(paste(as.character(v),collapse="; "))
+  ""
+}
+canonical_bib<-function(r){
+  can<-r$canonical %||% list()
+  list(
+    title=scalar(can$title %||% r$title),
+    abstract=scalar(can$abstract %||% r$abstract),
+    doi=scalar(can$doi %||% (r$identity %||% list())$doi),
+    year=scalar(can$year %||% r$year),
+    journal=scalar(can$journal %||% can$source_title %||% r$journal)
+  )
+}
+historical_bib<-function(id){
+  r<-hist_record_map[[id]]
+  if(is.null(r)) return(list(lens_id=id))
+  can<-r$canonical %||% list()
+  raw<-((r$lens %||% list())$raw_payload %||% list())
+  list(
+    lens_id=id,
+    decision=unname(hist_map[[id]]),
+    title=scalar(can$title %||% raw$title),
+    abstract=scalar(can$abstract %||% raw$abstract),
+    doi=scalar(can$doi %||% raw$doi),
+    year=scalar(can$year %||% raw$year),
+    journal=scalar(can$journal %||% can$source_title %||% raw$journal %||% raw$source_title)
+  )
+}
 hist_prov<-setNames(lapply(seq_along(h_idx),function(i){
   r<-historical[[h_idx[[i]]]]
   s<-r$screening %||% list()
@@ -145,9 +180,11 @@ for(i in seq_along(canonical)){
     counts["conflict"]<-counts["conflict"]+1L
     conflicts[[length(conflicts)+1L]]<-list(
       record_id=rid,
+      canonical=canonical_bib(r),
       lens_manifestation_refs=sort(refs),
       matched_historical_lens_ids=sort(matched),
       historical_decisions=unname(as.list(hist_map[matched])),
+      historical_manifestations=lapply(sort(matched),historical_bib),
       workflow03_code=pcode,
       workflow03_excluded=excluded
     )
