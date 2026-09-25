@@ -1,0 +1,19 @@
+name: Workflow 02 - Initial full enrichment publication
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/enrichment/.run_workflow02_initial_full_publish'
+
+jobs:
+  run:
+    uses: ./.github/workflows/workflow_02_production.yml
+    with:
+      workflow01_pointer_path: docs/deduplication/zenodo/run-36128255337.json
+      previous_workflow02_pointer_path: ''
+      limit: '0'
+      recheck_after_days: '90'
+      publish: true
+    secrets: inherit
