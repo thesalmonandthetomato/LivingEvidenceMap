@@ -208,7 +208,7 @@ jobs:
           set -euo pipefail
           mkdir -p outputs/canonical
           getpath(){ Rscript -e "x<-jsonlite::fromJSON('outputs/source_files.json');cat(x\$files[['$1']])"; }
-          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R             --cluster-map outputs/final/manifestation_cluster_map.csv             --strip-actions outputs/final/abstract_strip_actions.jsonl             --lens "$(getpath lens)"             --scopus "$(getpath scopus)"             --openalex "$(getpath openalex)"             --agricola "$(getpath agricola)"             --wos "$(getpath wos)"             --run-id "$RUN_ID"             --output outputs/canonical/records.jsonl             --manifest outputs/canonical/canonical_manifest.json
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R             --cluster-map outputs/final/manifestation_cluster_map.csv             --strip-actions outputs/final/abstract_strip_actions.jsonl             --data-quality-repairs outputs/human_gate/data_quality_repairs.normalised.jsonl             --repair-audit outputs/canonical/data_quality_repair_application.jsonl             --lens "$(getpath lens)"             --scopus "$(getpath scopus)"             --openalex "$(getpath openalex)"             --agricola "$(getpath agricola)"             --wos "$(getpath wos)"             --run-id "$RUN_ID"             --output outputs/canonical/records.jsonl             --manifest outputs/canonical/canonical_manifest.json
 
       - name: Validate canonical cardinality and schema boundary
         shell: Rscript {0}
@@ -246,7 +246,7 @@ jobs:
           cp outputs/canonical_union/agricola_records_for_deduplication.jsonl zenodo_stage/workflow01_seed/agricola_records_for_deduplication.jsonl
           cp outputs/canonical_union/wos_records_for_deduplication.jsonl zenodo_stage/workflow01_seed/wos_records_for_deduplication.jsonl
           cp -a outputs/final/. zenodo_stage/workflow01_full_five_source/
-          cp outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json zenodo_stage/canonical/
+          cp outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json outputs/canonical/data_quality_repair_application.jsonl zenodo_stage/canonical/
           cp outputs/reports/* zenodo_stage/reports/
           cp outputs/human_gate/human_review_integrity.json zenodo_stage/provenance/
           cp outputs/legacy_normalised/legacy_state_normalisation_summary.json zenodo_stage/provenance/
