@@ -1,0 +1,15 @@
+{
+  "schema": "living-evidence-map-workflow03-initial-lean-checkpoint-v1",
+  "workflow": "03",
+  "role": "initial_input_checkpoint",
+  "note": "Workflow 03 consumes the validated lean canonical checkpoint created from the authoritative post-Workflow 02 canonical state. The historical Zenodo receipt labels the archive workflow=02 because it was published before the compaction stage was formally assigned to Workflow 03; that receipt remains immutable provenance.",
+  "historical_pointer": "docs/compaction/zenodo/run-36166883249.json",
+  "zenodo_record_id": "22964354",
+  "doi": "10.5281/zenodo.22964354",
+  "input_post_workflow02_sha256": "4229257bca67c1ff1ebec4b3642ff9df4ac83d9eae99b584b15cbc9c49845902",
+  "lean_canonical_sha256": "1d3977537c1498a728c9fe04ff958874f4a7727ad344a02ba3ef00adb2f755c7",
+  "canonical_records": 32292,
+  "manifestations_referenced": 90137,
+  "source_compaction_run_id": "36166883249",
+  "source_publication_run_id": "36168506899"
+}
