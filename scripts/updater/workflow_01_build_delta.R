@@ -42,6 +42,25 @@ write_lines <- function(x,path){
   if(length(x)) writeLines(x,path,useBytes=TRUE) else file.create(path)
 }
 sha <- function(path) digest(file=path,algo="sha256",serialize=FALSE)
+table_state_sha <- function(dt,key_cols){
+  x <- copy(dt)
+  missing <- setdiff(key_cols,names(x))
+  if(length(missing)) stop(sprintf("State-hash key columns missing: %s",paste(missing,collapse=", ")),call.=FALSE)
+  setorderv(x,key_cols)
+  setcolorder(x,sort(names(x)))
+  tmp <- tempfile(fileext=".csv")
+  on.exit(unlink(tmp),add=TRUE)
+  fwrite(x,tmp,na="<NA>",quote=TRUE)
+  digest(file=tmp,algo="sha256",serialize=FALSE)
+}
+normalise_canonical_line <- function(line){
+  z <- fromJSON(line,simplifyVector=FALSE)
+  if(!is.null(z$provenance)){
+    z$provenance$workflow01_run_id <- NULL
+    z$provenance$generated_at_utc <- NULL
+  }
+  toJSON(z,auto_unbox=TRUE,null="null",na="null")
+}
 align_cols <- function(a,b){
   cols <- union(names(a),names(b))
   for(nm in setdiff(cols,names(a))) a[[nm]] <- NA
@@ -59,8 +78,8 @@ row_signature <- function(dt,cols){
 }
 
 previous_pointer <- fromJSON(previous_pointer_path,simplifyVector=FALSE)
-if(!identical(previous_pointer$status,"published") || !identical(previous_pointer$state,"final")) {
-  stop("Previous Workflow 01 pointer must reference published final state",call.=FALSE)
+if(!identical(previous_pointer$status,"published") || !(previous_pointer$state %in% c("final","delta"))) {
+  stop("Previous Workflow 01 pointer must reference a published final or delta state",call.=FALSE)
 }
 current_manifest <- fromJSON(current_canonical_manifest,simplifyVector=FALSE)
 
@@ -158,7 +177,8 @@ index_jsonl <- function(path,write_upserts=NULL,previous_hashes=NULL){
       z <- fromJSON(line,simplifyVector=FALSE)
       id <- as.character(z$identity$record_id)
       if(!nzchar(id)) stop("Canonical record lacks identity.record_id",call.=FALSE)
-      h <- digest(line,algo="sha256",serialize=FALSE)
+      stable_line <- normalise_canonical_line(line)
+      h <- digest(stable_line,algo="sha256",serialize=FALSE)
       n <- n+1L; ids[[n]] <- id; hashes[[n]] <- h
       prev_h <- previous_hashes[id]
       changed <- length(prev_h)==0L || is.na(prev_h[[1L]]) || !identical(unname(prev_h[[1L]]),h)
@@ -229,8 +249,8 @@ manifest <- list(
     canonical_records=as.integer(current_manifest$records),
     canonical_jsonl_sha256=as.character(current_manifest$canonical_jsonl_sha256),
     canonical_jsonl_bytes=as.numeric(current_manifest$canonical_jsonl_bytes),
-    pair_decisions_sha256=sha(cur_pairs_path),
-    cluster_map_sha256=sha(cur_map_path),
+    pair_decisions_state_sha256=table_state_sha(fread(cur_pairs_path,na.strings=c("","NA")),"pair_key"),
+    cluster_map_state_sha256=table_state_sha(fread(cur_map_path,na.strings=c("","NA")),c("source","source_record_id")),
     source_files=source_target
   ),
   delta=list(
