@@ -121,6 +121,19 @@ jobs:
             --output-dir outputs/delta \
             --run-id "$GITHUB_RUN_ID"
 
+      - name: Validate repair-only delta sparsity
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          d <- fromJSON('outputs/delta/delta_manifest.json')
+          stopifnot(d$delta$new_source_manifestations == 0L)
+          stopifnot(d$delta$pair_decision_upserts == 0L)
+          stopifnot(d$delta$cluster_map_upserts == 0L)
+          stopifnot(d$delta$canonical_retired_ids == 0L)
+          stopifnot(d$delta$canonical_upserts <= 32L)
+          cat(sprintf('PASS: repair-only delta is sparse: %d canonical upserts for 32 approved repairs\n',
+                      d$delta$canonical_upserts))
+
       - name: Replay repair delta and require exact target checksums
         shell: bash
         run: |
