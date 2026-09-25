@@ -1,0 +1,97 @@
+name: Workflow 02 - Publish post-W02 lean checkpoint
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/compaction/.run_publish_post_w02_lean_checkpoint'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Download validated lean checkpoint artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: post-w02-lean-canonical-36166883249
+          path: source_artifact
+          github-token: ${{ github.token }}
+          run-id: 36166883249
+
+      - name: Verify source checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s source_artifact/outputs/post_w02_lean/canonical_lean.jsonl
+          test -s source_artifact/outputs/post_w02_lean/compaction_report.json
+          mkdir -p lean_state
+          cp source_artifact/outputs/post_w02_lean/canonical_lean.jsonl lean_state/
+          cp source_artifact/outputs/post_w02_lean/compaction_report.json lean_state/
+          SHA="$(Rscript -e 'cat(digest::digest(file="lean_state/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
+          test "$SHA" = "1d3977537c1498a728c9fe04ff958874f4a7727ad344a02ba3ef00adb2f755c7"
+          Rscript -e 'x<-jsonlite::fromJSON("lean_state/compaction_report.json");stopifnot(x$status=="PASS",x$canonical_records==32292L,x$manifestations==90137L,x$manifestation_refs==90137L,x$record_ids_unchanged,x$non_manifestation_fields_unchanged,x$manifestation_refs_exact);cat("PASS: validated source lean checkpoint artifact\n")'
+
+      - name: Publish restricted Zenodo checkpoint
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/lean_checkpoint_zenodo
+          Rscript scripts/updater/workflow_02_archive_lean_checkpoint_to_zenodo.R \
+            --state-dir lean_state \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-run-id 36166883249 \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/lean_checkpoint_zenodo \
+            --input-canonical-sha256 4229257bca67c1ff1ebec4b3642ff9df4ac83d9eae99b584b15cbc9c49845902 \
+            --lean-canonical-sha256 1d3977537c1498a728c9fe04ff958874f4a7727ad344a02ba3ef00adb2f755c7
+
+      - name: Register lean checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_02_update_lean_checkpoint_registry.R \
+            --receipt outputs/lean_checkpoint_zenodo/zenodo_receipt.json \
+            --registry docs/compaction/zenodo_registry.csv \
+            --pointer-dir docs/compaction/zenodo
+          git add docs/compaction/zenodo_registry.csv docs/compaction/zenodo/run-36166883249.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Register post-W02 lean canonical checkpoint"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-w02-lean-checkpoint-publication-${{ github.run_id }}
+          path: outputs/lean_checkpoint_zenodo/
+          retention-days: 30
+          if-no-files-found: warn
