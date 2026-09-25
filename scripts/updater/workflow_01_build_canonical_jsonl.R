@@ -246,6 +246,7 @@ for(cid in sort(names(clusters))){
   cm <- clusters[[cid]]
   setorder(cm,source,source_record_id)
   mans <- vector("list",nrow(cm))
+  preferred_flags <- logical(nrow(cm))
   keys <- cm$key
   for(i in seq_len(nrow(cm))){
     r <- get(keys[[i]],records,inherits=FALSE)
