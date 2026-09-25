@@ -87,10 +87,10 @@ jobs:
         run: |
           set -euo pipefail
           test -s "$W01_POINTER"
-          Rscript -e "x<-jsonlite::fromJSON(Sys.getenv('W01_POINTER'));stopifnot(x$status=='published',x$state %in% c('final','delta'),x$visibility=='restricted')"
+          Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W01_POINTER"));stopifnot(x$status=="published",x$state %in% c("final","delta"),x$visibility=="restricted")'
           if [ -n "$PREV_W02_POINTER" ]; then
             test -s "$PREV_W02_POINTER"
-            Rscript -e "x<-jsonlite::fromJSON(Sys.getenv('PREV_W02_POINTER'));stopifnot(x$status=='published',x$workflow=='02',x$visibility=='restricted')"
+            Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("PREV_W02_POINTER"));stopifnot(x$status=="published",x$workflow=="02",x$visibility=="restricted")'
           fi
 
       - name: Restore authoritative Workflow 01 canonical state
