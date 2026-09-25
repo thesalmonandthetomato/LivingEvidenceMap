@@ -32,7 +32,7 @@ jobs:
       - name: Install R dependencies and CiteSource
         shell: Rscript {0}
         run: |
-          install.packages(c("jsonlite", "dplyr", "tidyr", "CiteSource"))
+          install.packages(c("jsonlite", "dplyr", "tidyr", "httr2", "digest", "CiteSource"))
 
       - name: Restore authoritative canonical JSONL
         env:
