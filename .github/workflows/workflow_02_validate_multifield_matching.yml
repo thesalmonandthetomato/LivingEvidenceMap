@@ -1,0 +1,149 @@
+name: Workflow 02 - Validate multi-field matching
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/enrichment/.run_workflow02_multifield_validation'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','stringdist','data.table'))
+
+      - name: Parse revised enrichment script
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_02_metadata_enrichment.R')
+          cat('PASS: revised Workflow 02 enrichment script parses\n')
+
+      - name: Restore Workflow 01
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-36128255337.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root workflow01_state
+
+      - name: Restore published Workflow 02 baseline
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
+            --pointer docs/enrichment/zenodo/run-36137804187.json \
+            --output-dir workflow02_state
+          PATCH="$(find workflow02_state -name cumulative_patch.jsonl -type f -print -quit)"
+          AUDIT="$(find workflow02_state -name enrichment_audit.jsonl -type f -print -quit)"
+          test -n "$PATCH"
+          test -n "$AUDIT"
+          echo "PATCH=$PATCH" >> "$GITHUB_ENV"
+          echo "AUDIT=$AUDIT" >> "$GITHUB_ENV"
+
+      - name: Reconstruct published enriched canonical state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs
+          Rscript scripts/updater/workflow_02_apply_patch.R \
+            --input workflow01_state/canonical/records.jsonl \
+            --patch "$PATCH" \
+            --output outputs/published_enriched.jsonl \
+            --report outputs/published_replay.json \
+            --mode exact
+
+      - name: Select 20 original quarantined records
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          audit_lines <- readLines(Sys.getenv('AUDIT'),warn=FALSE)
+          audit <- lapply(audit_lines[nzchar(trimws(audit_lines))],fromJSON,simplifyVector=FALSE)
+          qids <- character()
+          for(a in audit){
+            qs <- a$quarantined
+            if(is.null(qs) || !length(qs)) next
+            if(any(vapply(qs,function(q) identical(q$reason,'title_mismatch'),logical(1)))) qids <- c(qids,a$record_id)
+          }
+          qids <- unique(qids)
+          stopifnot(length(qids)==199L)
+          target <- head(qids,20L)
+          inp <- file('outputs/published_enriched.jsonl','rt')
+          out <- file('outputs/quarantine_sample20.jsonl','wt')
+          n <- 0L
+          repeat{
+            ln <- readLines(inp,n=1L,warn=FALSE)
+            if(!length(ln)) break
+            if(!nzchar(trimws(ln))) next
+            r <- fromJSON(ln,simplifyVector=FALSE)
+            if(r$identity$record_id %in% target){
+              writeLines(ln,out,useBytes=TRUE)
+              n <- n+1L
+            }
+          }
+          close(inp);close(out)
+          stopifnot(n==20L)
+          writeLines(target,'outputs/sample_ids.txt')
+
+      - name: Re-evaluate 20 quarantined records with multi-field matcher
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_metadata_enrichment.R \
+            --input outputs/quarantine_sample20.jsonl \
+            --output outputs/reevaluated20.jsonl \
+            --audit outputs/reevaluated20_audit.jsonl \
+            --report outputs/reevaluated20_report.json \
+            --recheck-after-days 0 \
+            --delay 0.2
+
+      - name: Validate and summarise decisions
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          r <- fromJSON('outputs/reevaluated20_report.json')
+          stopifnot(r$counts$total_records==20L)
+          stopifnot(r$counts$technical_error_records==0L)
+          cat(sprintf(
+            'RESULT: title_guard_accepts=%d bibliographic_concordance_accepts=%d quarantined=%d still_missing=%d\n',
+            r$counts$title_guard_accepts,
+            r$counts$bibliographic_concordance_accepts,
+            r$counts$conflicts_quarantined,
+            r$counts$still_missing_after
+          ))
+
+      - name: Upload validation package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-multifield-validation-${{ github.run_id }}
+          path: outputs/
+          retention-days: 30
+          if-no-files-found: warn
