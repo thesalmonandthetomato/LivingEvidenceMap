@@ -1,5 +1,5 @@
 name: Workflow 01 - Validate complete metadata repairs
-# Retrigger after canonical empty-list handling fix.
+# Retrigger after canonical preferred-subset handling fix.
 
 on:
   push:
