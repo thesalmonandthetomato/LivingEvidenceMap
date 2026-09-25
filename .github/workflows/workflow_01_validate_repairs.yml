@@ -104,6 +104,31 @@ jobs:
             nrow(a),m$records,m$source_manifestations
           ))
 
+      - name: Build repair-only delta from published baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_build_delta.R \
+            --previous-root baseline \
+            --current-seed-root baseline/workflow01_seed \
+            --current-final-root baseline/workflow01_full_five_source \
+            --current-canonical outputs/canonical/records.jsonl \
+            --current-canonical-manifest outputs/canonical/canonical_manifest.json \
+            --previous-pointer docs/deduplication/zenodo/run-36103542054.json \
+            --repair-audit outputs/canonical/data_quality_repair_application.jsonl \
+            --output-dir outputs/delta \
+            --run-id "$GITHUB_RUN_ID"
+
+      - name: Replay repair delta and require exact target checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_replay_delta.R \
+            --previous-root baseline \
+            --delta-dir outputs/delta \
+            --output-root outputs/replayed
+          Rscript -e "library(jsonlite);library(digest);m<-fromJSON('outputs/canonical/canonical_manifest.json');stopifnot(digest(file='outputs/replayed/canonical/records.jsonl',algo='sha256',serialize=FALSE)==m\$canonical_jsonl_sha256);cat('PASS: baseline plus repair delta reproduces repaired canonical JSONL exactly\n')"
+
       - name: Upload repair-validation audit only
         if: always()
         uses: actions/upload-artifact@v4
@@ -112,5 +137,7 @@ jobs:
           path: |
             outputs/canonical/canonical_manifest.json
             outputs/canonical/data_quality_repair_application.jsonl
+            outputs/delta/
+            outputs/replayed/workflow01_delta_replay_audit.json
           retention-days: 30
           if-no-files-found: warn
