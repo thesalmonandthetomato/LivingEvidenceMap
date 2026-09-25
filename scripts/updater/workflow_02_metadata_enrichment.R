@@ -66,6 +66,107 @@ title_similarity <- function(a,b){
   if(is.null(aa)||is.null(bb)) return(NA_real_)
   1 - stringdist(aa,bb,method="jw",p=0.1)
 }
+norm_simple <- function(x){
+  s <- clean_text(x)
+  if(is.null(s)) return(NULL)
+  s <- iconv(s,from="",to="ASCII//TRANSLIT",sub="")
+  if(is.na(s)) return(NULL)
+  s <- tolower(s)
+  s <- trimws(gsub("[^a-z0-9]+"," ",s))
+  if(!nzchar(s)) NULL else s
+}
+norm_compact <- function(x){
+  s <- norm_simple(x)
+  if(is.null(s)) NULL else gsub(" ","",s,fixed=TRUE)
+}
+year_value <- function(x){
+  s <- clean_text(x)
+  if(is.null(s)) return(NULL)
+  m <- regexpr("(18|19|20|21)[0-9]{2}",s,perl=TRUE)
+  if(m[[1L]]<0L) return(NULL)
+  as.integer(regmatches(s,m)[[1L]])
+}
+author_surnames <- function(x){
+  if(is.null(x)||!length(x)) return(character())
+  one <- function(z){
+    if(is.character(z)) s <- clean_text(z)
+    else if(is.list(z)) s <- clean_text(z$surname %||% z$last_name %||% z$family %||% z$fullName %||% z$full_name %||% z$name %||% z$display_name)
+    else s <- NULL
+    if(is.null(s)) return("")
+    s <- iconv(s,from="",to="ASCII//TRANSLIT",sub="")
+    if(is.na(s)) return("")
+    s <- tolower(trimws(s))
+    # For full-name strings, the final token is the most portable surname proxy.
+    parts <- unlist(strsplit(gsub("[^a-z0-9 -]+"," ",s),"[[:space:]-]+"))
+    parts <- parts[nzchar(parts)]
+    if(!length(parts)) "" else tail(parts,1L)
+  }
+  vals <- if(is.character(x)) vapply(as.list(x),one,character(1)) else vapply(x,one,character(1))
+  unique(vals[nzchar(vals)])
+}
+field_values <- function(r,name){
+  vals <- list((r$canonical %||% list())[[name]])
+  mans <- r$manifestations %||% list()
+  if(length(mans)) vals <- c(vals,lapply(mans,function(m)m[[name]]))
+  vals
+}
+compare_text_any <- function(provider_value,record_values){
+  p <- norm_compact(provider_value)
+  if(is.null(p)) return("missing")
+  vals <- unique(Filter(Negate(is.null),lapply(record_values,norm_compact)))
+  if(!length(vals)) return("missing")
+  if(any(vals==p)) "support" else "conflict"
+}
+compare_year_any <- function(provider_value,record_values){
+  p <- year_value(provider_value)
+  if(is.null(p)) return("missing")
+  vals <- unique(na.omit(vapply(record_values,function(z){y<-year_value(z);if(is.null(y))NA_integer_ else y},integer(1))))
+  if(!length(vals)) return("missing")
+  if(any(abs(vals-p)<=1L)) "support" else "conflict"
+}
+compare_authors_any <- function(provider_authors,record_values){
+  p <- author_surnames(provider_authors)
+  if(!length(p)) return("missing")
+  vals <- unique(unlist(lapply(record_values,author_surnames),use.names=FALSE))
+  vals <- vals[nzchar(vals)]
+  if(!length(vals)) return("missing")
+  # Require at least one shared surname. First-author agreement is retained separately in audit.
+  if(length(intersect(p,vals))>0L) "support" else "conflict"
+}
+bibliographic_concordance <- function(r,provider){
+  statuses <- c(
+    authors=compare_authors_any(provider$authors,field_values(r,"authors")),
+    year=compare_year_any(provider$year,field_values(r,"year")),
+    journal=compare_text_any(provider$journal,field_values(r,"journal")),
+    volume=compare_text_any(provider$volume,field_values(r,"volume")),
+    issue=compare_text_any(provider$issue,field_values(r,"issue")),
+    pages=compare_text_any(provider$pages,field_values(r,"pages"))
+  )
+  comparable <- statuses!="missing"
+  support <- names(statuses)[statuses=="support"]
+  conflict <- names(statuses)[statuses=="conflict"]
+  high_specificity <- intersect(support,c("authors","journal","volume","pages"))
+  accept <- sum(comparable)>=2L && length(support)>=2L && length(conflict)==0L && length(high_specificity)>=1L
+  list(
+    accept=accept,
+    statuses=as.list(statuses),
+    comparable_fields=sum(comparable),
+    supporting_fields=support,
+    conflicting_fields=conflict,
+    high_specificity_support=high_specificity
+  )
+}
+metadata_match_decision <- function(r,provider){
+  sim <- title_similarity((r$canonical %||% list())$title,provider$title)
+  title_pass <- is.null(provider$title) || is_missing((r$canonical %||% list())$title) || is.na(sim) || sim>=0.90
+  bib <- bibliographic_concordance(r,provider)
+  list(
+    accept=title_pass || isTRUE(bib$accept),
+    route=if(title_pass)"title_guard_pass" else if(isTRUE(bib$accept))"bibliographic_concordance" else "quarantine",
+    title_similarity=sim,
+    bibliographic=bib
+  )
+}
 clean_abstract <- function(x){
   s <- clean_text(x)
   if(is.null(s)) return(NULL)
@@ -108,11 +209,20 @@ epmc_lookup <- function(d){
   exact <- Filter(function(h) identical(norm_doi(h$doi),d),hits)
   if(!length(exact)) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,outcome="no_exact_doi_match",attempts=z$attempts))
   h <- exact[[1L]]
+  authors <- (h$authorList %||% list())$author %||% list()
+  journal_info <- h$journalInfo %||% list()
+  journal_obj <- journal_info$journal %||% list()
   list(
     status=st,
     title=clean_text(h$title),
     abstract=clean_abstract(h$abstractText),
     returned_doi=norm_doi(h$doi),
+    authors=authors,
+    year=h$pubYear %||% h$firstPublicationDate,
+    journal=clean_text(journal_obj$title %||% h$journalTitle),
+    volume=clean_text(journal_info$volume %||% h$journalVolume),
+    issue=clean_text(journal_info$issue %||% h$issue),
+    pages=clean_text(h$pageInfo %||% h$page),
     outcome=if(!is.null(clean_abstract(h$abstractText))||!is.null(clean_text(h$title)))"exact_doi_metadata_returned" else "exact_doi_no_metadata",
     attempts=z$attempts
   )
@@ -134,7 +244,21 @@ scopus_extract <- function(obj){
       if(!is.null(biblio)) abstract <- clean_abstract(paste(unlist(biblio,use.names=FALSE),collapse=" "))
     }
   }
-  list(title=title,abstract=abstract,doi=doi,eid=eid)
+  authors_obj <- rr[["authors"]] %||% list()
+  authors <- authors_obj[["author"]] %||% list()
+  if(!length(authors)){
+    creator <- core[["dc:creator"]] %||% core[["creator"]]
+    if(!is.null(creator)) authors <- as.list(creator)
+  }
+  list(
+    title=title,abstract=abstract,doi=doi,eid=eid,
+    authors=authors,
+    year=core[["prism:coverDate"]] %||% core[["prism:coverDisplayDate"]] %||% core[["coverDate"]],
+    journal=clean_text(core[["prism:publicationName"]] %||% core[["publicationName"]]),
+    volume=clean_text(core[["prism:volume"]] %||% core[["volume"]]),
+    issue=clean_text(core[["prism:issueIdentifier"]] %||% core[["issueIdentifier"]]),
+    pages=clean_text(core[["prism:pageRange"]] %||% core[["pageRange"]] %||% core[["article-number"]])
+  )
 }
 
 scopus_headers <- function(req) {
@@ -227,6 +351,7 @@ scopus_lookup_eid <- function(eid){
   if(is.null(parsed)) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,eid=eid,outcome="invalid_json",attempts=z$attempts))
   ex <- scopus_extract(parsed)
   list(status=st,title=ex$title,abstract=ex$abstract,returned_doi=ex$doi,eid=ex$eid %||% eid,
+       authors=ex$authors,year=ex$year,journal=ex$journal,volume=ex$volume,issue=ex$issue,pages=ex$pages,
        outcome=if(!is.null(ex$title)||!is.null(ex$abstract))"metadata_returned" else "success_no_metadata",
        attempts=z$attempts)
 }
@@ -244,6 +369,7 @@ scopus_lookup <- function(d){
       ex <- scopus_extract(parsed)
       if(!is.null(ex$title) || !is.null(ex$abstract) || !is.null(ex$doi)){
         return(list(status=st,title=ex$title,abstract=ex$abstract,returned_doi=ex$doi,eid=ex$eid,
+                    authors=ex$authors,year=ex$year,journal=ex$journal,volume=ex$volume,issue=ex$issue,pages=ex$pages,
                     outcome="direct_doi_metadata_returned",attempts=z$attempts,route="direct_doi"))
       }
     }
@@ -372,14 +498,20 @@ for(i in seq_along(rows)){
       rec_audit$applied <- c(rec_audit$applied,list(list(provider="europe_pmc",field="title")))
     }
     if(is_missing(r$canonical$abstract) && !is.null(ep$abstract)){
-      sim <- title_similarity(r$canonical$title,ep$title)
-      if(is.null(ep$title) || is_missing(r$canonical$title) || is.na(sim) || sim>=0.90){
+      md <- metadata_match_decision(r,ep)
+      if(isTRUE(md$accept)){
         r$canonical$abstract <- ep$abstract
         counts$europepmc_abstract_filled <- counts$europepmc_abstract_filled + 1L
-        rec_audit$applied <- c(rec_audit$applied,list(list(provider="europe_pmc",field="abstract",title_similarity=sim)))
+        rec_audit$applied <- c(rec_audit$applied,list(list(
+          provider="europe_pmc",field="abstract",match_route=md$route,
+          title_similarity=md$title_similarity,bibliographic=md$bibliographic
+        )))
       } else {
         counts$conflicts_quarantined <- counts$conflicts_quarantined + 1L
-        rec_audit$quarantined <- c(rec_audit$quarantined,list(list(provider="europe_pmc",field="abstract",reason="title_mismatch",title_similarity=sim)))
+        rec_audit$quarantined <- c(rec_audit$quarantined,list(list(
+          provider="europe_pmc",field="abstract",reason="insufficient_bibliographic_concordance",
+          title_similarity=md$title_similarity,bibliographic=md$bibliographic
+        )))
       }
     }
   }
@@ -400,14 +532,20 @@ for(i in seq_along(rows)){
         rec_audit$applied <- c(rec_audit$applied,list(list(provider="scopus",field="title",eid=sc$eid)))
       }
       if(still_missing_abstract && !is.null(sc$abstract)){
-        sim <- title_similarity(r$canonical$title,sc$title)
-        if(is.null(sc$title) || is_missing(r$canonical$title) || is.na(sim) || sim>=0.90){
+        md <- metadata_match_decision(r,sc)
+        if(isTRUE(md$accept)){
           r$canonical$abstract <- sc$abstract
           counts$scopus_abstract_filled <- counts$scopus_abstract_filled + 1L
-          rec_audit$applied <- c(rec_audit$applied,list(list(provider="scopus",field="abstract",eid=sc$eid,title_similarity=sim)))
+          rec_audit$applied <- c(rec_audit$applied,list(list(
+            provider="scopus",field="abstract",eid=sc$eid,match_route=md$route,
+            title_similarity=md$title_similarity,bibliographic=md$bibliographic
+          )))
         } else {
           counts$conflicts_quarantined <- counts$conflicts_quarantined + 1L
-          rec_audit$quarantined <- c(rec_audit$quarantined,list(list(provider="scopus",field="abstract",reason="title_mismatch",title_similarity=sim,eid=sc$eid)))
+          rec_audit$quarantined <- c(rec_audit$quarantined,list(list(
+            provider="scopus",field="abstract",reason="insufficient_bibliographic_concordance",
+            title_similarity=md$title_similarity,eid=sc$eid,bibliographic=md$bibliographic
+          )))
         }
       }
     } else if(!is.null(sc$returned_doi)){
@@ -457,7 +595,7 @@ report <- list(
     overwrite_existing_fields=FALSE,
     europe_pmc_match="exact normalised DOI",
     scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
-    abstract_title_guard="if a title is present on both sides, Jaro-Winkler similarity must be >= 0.90; otherwise quarantine",
+    metadata_match_guard="exact DOI required; accept when title Jaro-Winkler similarity is >= 0.90, or when at least two non-title bibliographic fields agree with no comparable-field conflicts and at least one supporting field is authors, journal, volume or pages",
     provider_fallback="Scopus queried only if metadata remain missing after Europe PMC",
     repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days)
   ),
