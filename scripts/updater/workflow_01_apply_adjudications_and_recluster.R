@@ -211,6 +211,28 @@ if(!is.null(previous_cluster_map_path)){
   missing_prev <- setdiff(previous$key,current_keys)
   if(length(missing_prev)) stop(sprintf("%d previous manifestations are absent from current state",length(missing_prev)),call.=FALSE)
   previous_key_to_cluster <- setNames(as.character(previous$cluster_id),previous$key)
+
+  # Detect a split before assigning any persistent IDs. Each previous work must
+  # map wholly to exactly one current union-find component. Checking this after
+  # ID preservation is unsafe because two split components could both inherit
+  # the same previous cluster_id and mask the split.
+  current_key_to_root <- setNames(
+    as.character(roots),
+    paste(meta$source,meta$source_record_id,sep="::")
+  )
+  previous[,current_root:=unname(current_key_to_root[key])]
+  if(any(is.na(previous$current_root))) {
+    stop("Could not map every previous manifestation to a current union-find root",call.=FALSE)
+  }
+  previous_root_counts <- previous[,.(current_root_count=uniqueN(current_root)),by=cluster_id]
+  split_ids_pre <- previous_root_counts[current_root_count>1L,cluster_id]
+  if(length(split_ids_pre)){
+    stop(sprintf(
+      "%d previous work IDs would split across multiple current clusters; explicit correction required",
+      length(split_ids_pre)
+    ),call.=FALSE)
+  }
+
   if("idx" %in% names(previous)){
     previous_cluster_first_idx <- previous[,.(first_idx=min(idx)),by=cluster_id]
   } else {
@@ -269,10 +291,6 @@ for(g in groups) {
     idx=g,source=meta$source[g],source_record_id=meta$source_record_id[g],
     cluster_id=cid,cluster_size=length(g),cluster_id_origin=id_origin
   )
-}
-if(length(previous_cluster_targets)){
-  split_ids <- names(previous_cluster_targets)[vapply(previous_cluster_targets,function(x)length(unique(x))>1L,logical(1))]
-  if(length(split_ids)) stop(sprintf("%d previous work IDs would split across multiple current clusters; explicit correction required",length(split_ids)),call.=FALSE)
 }
 map <- rbindlist(map_rows)
 aliases <- if(length(alias_rows)) unique(rbindlist(alias_rows,use.names=TRUE,fill=TRUE)) else
