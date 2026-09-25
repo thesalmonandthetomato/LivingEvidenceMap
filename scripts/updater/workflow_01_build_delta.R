@@ -135,9 +135,14 @@ map_upserts[,manifestation_key:=NULL]
 fwrite(map_upserts,file.path(output_dir,"cluster_map_upserts.csv"),na="")
 
 aliases_path <- file.path(current_final_root,"cluster_id_aliases.csv")
-if(file.exists(aliases_path)) file.copy(aliases_path,file.path(output_dir,"cluster_id_aliases.csv"),overwrite=TRUE)
-else fwrite(data.table(retired_cluster_id=character(),surviving_cluster_id=character(),reason=character()),
-            file.path(output_dir,"cluster_id_aliases.csv"))
+if(file.exists(aliases_path)) {
+  file.copy(aliases_path,file.path(output_dir,"cluster_id_aliases.csv"),overwrite=TRUE)
+} else {
+  fwrite(
+    data.table(retired_cluster_id=character(),surviving_cluster_id=character(),reason=character()),
+    file.path(output_dir,"cluster_id_aliases.csv")
+  )
+}
 
 # 4. Canonical upserts and retired IDs. Only changed/new work records are stored.
 index_jsonl <- function(path,write_upserts=NULL,previous_hashes=NULL){
