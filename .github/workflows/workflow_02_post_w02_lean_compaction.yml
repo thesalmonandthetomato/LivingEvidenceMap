@@ -31,7 +31,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2'))
+        run: install.packages(c('jsonlite','digest','httr2','data.table'))
 
       - name: Parse compaction script
         shell: Rscript {0}
