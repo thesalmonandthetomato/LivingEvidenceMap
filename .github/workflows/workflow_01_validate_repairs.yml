@@ -3,11 +3,7 @@ name: Workflow 01 - Validate complete metadata repairs
 # Retrigger after stable canonical provenance and semantic replay hashing fix.
 
 on:
-  push:
-    branches:
-      - workflow01-final-architecture
-    paths:
-      - '.github/workflows/workflow_01_validate_repairs.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
