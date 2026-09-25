@@ -1,6 +1,34 @@
 name: Workflow 02 - Production metadata enrichment and repair
 
 on:
+  workflow_call:
+    inputs:
+      workflow01_pointer_path:
+        required: true
+        type: string
+      previous_workflow02_pointer_path:
+        required: false
+        default: ''
+        type: string
+      limit:
+        required: false
+        default: '0'
+        type: string
+      recheck_after_days:
+        required: false
+        default: '90'
+        type: string
+      publish:
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+      SCOPUS_API_TOKEN:
+        required: true
+      SCOPUS_INSTTOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       workflow01_pointer_path:
