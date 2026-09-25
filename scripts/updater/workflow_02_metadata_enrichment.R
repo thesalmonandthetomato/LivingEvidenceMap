@@ -103,12 +103,20 @@ author_surnames <- function(x){
     s <- iconv(s,from="",to="ASCII//TRANSLIT",sub="")
     if(is.na(s)) return("")
     s <- tolower(trimws(s))
-    if(is.null(explicit) && grepl(",",s,fixed=TRUE)) s <- sub(",.*$","",s)
+    comma_form <- is.null(explicit) && grepl(",",s,fixed=TRUE)
+    if(comma_form) s <- sub(",.*$","",s)
     parts <- unlist(strsplit(gsub("[^a-z0-9 -]+"," ",s),"[[:space:]]+"))
     parts <- parts[nzchar(parts)]
     if(!length(parts)) return("")
     if(!is.null(explicit)) return(paste(parts,collapse=" "))
-    # Canonical strings are commonly "Surname, Given" or "Initials Surname".
+    if(comma_form){
+      # Canonical forms such as "Zarate M., Ivar" encode surname first,
+      # optionally followed by initials before the comma. Remove trailing
+      # one-character initials rather than treating them as surnames.
+      while(length(parts)>1L && nchar(tail(parts,1L))==1L) parts <- head(parts,-1L)
+      return(paste(parts,collapse=" "))
+    }
+    # Non-comma canonical strings are usually "Initials Surname".
     tail(parts,1L)
   }
   vals <- if(is.character(x)) vapply(as.list(x),one,character(1)) else vapply(x,one,character(1))
