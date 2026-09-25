@@ -84,13 +84,17 @@ jobs:
           audit_lines <- readLines(Sys.getenv('AUDIT'),warn=FALSE)
           audit <- lapply(audit_lines[nzchar(trimws(audit_lines))],fromJSON,simplifyVector=FALSE)
           qids <- character()
+          events <- 0L
           for(a in audit){
             qs <- a$quarantined
             if(is.null(qs) || !length(qs)) next
-            if(any(vapply(qs,function(q) identical(q$reason,'title_mismatch'),logical(1)))) qids <- c(qids,a$record_id)
+            hits <- vapply(qs,function(q) identical(q$reason,'title_mismatch'),logical(1))
+            events <- events + sum(hits)
+            if(any(hits)) qids <- c(qids,a$record_id)
           }
           qids <- unique(qids)
-          stopifnot(length(qids)==199L)
+          stopifnot(events==199L)
+          stopifnot(length(qids)==188L)
           target <- head(qids,20L)
           inp <- file('outputs/published_enriched.jsonl','rt')
           out <- file('outputs/quarantine_sample20.jsonl','wt')
