@@ -1,0 +1,145 @@
+name: Workflow 01 - Validate stable work IDs
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_01_validate_stable_ids.yml'
+      - 'scripts/updater/workflow_01_apply_adjudications_and_recluster.R'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest'))
+
+      - name: Build stable-ID fixtures
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          library(jsonlite)
+          dir.create('fixtures',showWarnings=FALSE)
+
+          fwrite(data.table(
+            idx=1:4,
+            source=c('lens','scopus','openalex','wos'),
+            source_record_id=c('L1','S1','O1','W1'),
+            cluster_id=c('pre-a','pre-b','unused','unused'),
+            cluster_size=1L
+          ),'fixtures/current_map.csv')
+
+          fwrite(data.table(
+            idx=1:2,
+            source=c('lens','scopus'),
+            source_record_id=c('L1','S1'),
+            cluster_id=c('work-old-a','work-old-b'),
+            cluster_size=1L
+          ),'fixtures/previous_map.csv')
+
+          fwrite(data.table(
+            pair_key=c('1::3'),
+            record_i=1L,record_j=3L,
+            rescored_classification='duplicate',
+            rescored_rule='fixture',
+            review_route='automatic_duplicate'
+          ),'fixtures/pairs_preserve.csv')
+
+          fwrite(data.table(
+            pair_key=c('1::2'),
+            record_i=1L,record_j=2L,
+            rescored_classification='duplicate',
+            rescored_rule='fixture',
+            review_route='automatic_duplicate'
+          ),'fixtures/pairs_merge.csv')
+
+          file.create('fixtures/llm_empty.jsonl')
+          file.create('fixtures/human_empty.jsonl')
+          writeLines(toJSON(list(resume_allowed=TRUE,active_decisions=0L),auto_unbox=TRUE),
+                     'fixtures/integrity.json')
+
+          fwrite(data.table(
+            idx=1:2,
+            source=c('lens','scopus'),
+            source_record_id=c('L1','S1'),
+            cluster_id=c('pre-split','pre-split'),
+            cluster_size=2L
+          ),'fixtures/current_split_map.csv')
+          fwrite(data.table(
+            idx=1:2,
+            source=c('lens','scopus'),
+            source_record_id=c('L1','S1'),
+            cluster_id=c('work-old-shared','work-old-shared'),
+            cluster_size=2L
+          ),'fixtures/previous_split_map.csv')
+          fwrite(data.table(
+            pair_key='1::2',
+            record_i=1L,record_j=2L,
+            rescored_classification='not_duplicate',
+            rescored_rule='fixture',
+            review_route='non_duplicate'
+          ),'fixtures/pairs_split.csv')
+
+      - name: Validate preservation and new work IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
+            --combined-decisions fixtures/pairs_preserve.csv \
+            --manifestation-map fixtures/current_map.csv \
+            --llm-adjudications fixtures/llm_empty.jsonl \
+            --human-decisions fixtures/human_empty.jsonl \
+            --human-integrity-manifest fixtures/integrity.json \
+            --previous-cluster-map fixtures/previous_map.csv \
+            --output-dir outputs/preserve
+          Rscript -e "library(data.table);x<-fread('outputs/preserve/manifestation_cluster_map.csv');stopifnot(unique(x[idx %in% c(1,3),cluster_id])=='work-old-a');stopifnot(unique(x[idx==2,cluster_id])=='work-old-b');stopifnot(grepl('^work-',unique(x[idx==4,cluster_id])));cat('PASS: preserved IDs and new ID assignment\n')"
+
+      - name: Validate merge alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
+            --combined-decisions fixtures/pairs_merge.csv \
+            --manifestation-map fixtures/current_map.csv \
+            --llm-adjudications fixtures/llm_empty.jsonl \
+            --human-decisions fixtures/human_empty.jsonl \
+            --human-integrity-manifest fixtures/integrity.json \
+            --previous-cluster-map fixtures/previous_map.csv \
+            --output-dir outputs/merge
+          Rscript -e "library(data.table);a<-fread('outputs/merge/cluster_id_aliases.csv');stopifnot(nrow(a)==1L,a$retired_cluster_id=='work-old-b',a$surviving_cluster_id=='work-old-a');cat('PASS: existing-work merge creates deterministic alias\n')"
+
+      - name: Validate split rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          if Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
+            --combined-decisions fixtures/pairs_split.csv \
+            --manifestation-map fixtures/current_split_map.csv \
+            --llm-adjudications fixtures/llm_empty.jsonl \
+            --human-decisions fixtures/human_empty.jsonl \
+            --human-integrity-manifest fixtures/integrity.json \
+            --previous-cluster-map fixtures/previous_split_map.csv \
+            --output-dir outputs/split; then
+            echo "ERROR: split should have been rejected"
+            exit 1
+          fi
+          echo "PASS: previous work split is rejected"
