@@ -29,6 +29,12 @@ jobs:
           r-version: release
           use-public-rspm: true
 
+      - name: Install system dependency for igraph
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglpk-dev
+
       - name: Install R dependencies and CiteSource
         shell: Rscript {0}
         run: |
