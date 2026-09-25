@@ -1,4 +1,5 @@
 name: Workflow 01 - Validate complete metadata repairs
+# Retrigger after preferred_flags scope fix.
 # Retrigger after stable canonical provenance and semantic replay hashing fix.
 
 on:
