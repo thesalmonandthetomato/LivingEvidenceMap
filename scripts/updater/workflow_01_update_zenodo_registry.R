@@ -41,6 +41,15 @@ row <- data.frame(
 if (file.exists(registry_path)) {
   old <- read.csv(registry_path,stringsAsFactors=FALSE,check.names=FALSE)
   old <- old[as.character(old$github_run_id) != row$github_run_id,,drop=FALSE]
+
+  # Registry schema may grow as Workflow 01 gains additional provenance fields.
+  # Preserve all historical rows and backfill newly introduced columns with NA
+  # rather than requiring old registry rows to be rewritten manually.
+  cols <- union(names(old),names(row))
+  for (nm in setdiff(cols,names(old))) old[[nm]] <- NA
+  for (nm in setdiff(cols,names(row))) row[[nm]] <- NA
+  old <- old[,cols,drop=FALSE]
+  row <- row[,cols,drop=FALSE]
   out <- rbind(old,row)
 } else out <- row
 out <- out[order(suppressWarnings(as.numeric(out$github_run_id))),,drop=FALSE]
