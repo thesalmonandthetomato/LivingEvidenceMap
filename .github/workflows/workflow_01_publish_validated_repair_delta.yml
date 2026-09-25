@@ -1,0 +1,105 @@
+name: Workflow 01 - Publish validated repair delta
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/deduplication/.publish_validated_repair_delta'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','data.table'))
+
+      - name: Restore published baseline
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_state_from_zenodo.R \
+            --pointer docs/deduplication/zenodo/run-36103542054.json \
+            --output-root baseline
+
+      - name: Download already validated repair delta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p validated
+          gh run download 36128255337 --repo "$GITHUB_REPOSITORY" \
+            --name workflow01-repair-validation-36128255337 \
+            --dir validated
+          test -s validated/delta/delta_manifest.json
+          test -s validated/canonical/canonical_manifest.json
+
+      - name: Reverify exact replay before durable publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_replay_delta.R \
+            --previous-root baseline \
+            --delta-dir validated/delta \
+            --output-root replayed
+          Rscript -e "library(jsonlite);library(digest);m<-fromJSON('validated/canonical/canonical_manifest.json');stopifnot(digest(file='replayed/canonical/records.jsonl',algo='sha256',serialize=FALSE)==m\$canonical_jsonl_sha256);cat('PASS: validated repair delta replayed exactly before publication\n')"
+
+      - name: Publish validated repair delta to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p zenodo_out
+          Rscript scripts/updater/workflow_01_archive_delta_to_zenodo.R \
+            --delta-dir validated/delta \
+            --run-id 36128255337 \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir zenodo_out
+
+      - name: Register durable Workflow 01 repair state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_update_zenodo_registry.R \
+            --receipt zenodo_out/zenodo_receipt.json \
+            --registry docs/deduplication/zenodo_registry.csv \
+            --pointer-dir docs/deduplication/zenodo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/deduplication/zenodo_registry.csv docs/deduplication/zenodo/run-36128255337.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Register validated Workflow 01 repair delta"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-repair-delta-publication-${{ github.run_id }}
+          path: zenodo_out/
+          retention-days: 30
+          if-no-files-found: warn
