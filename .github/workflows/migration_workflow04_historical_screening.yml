@@ -1,0 +1,114 @@
+name: One-off migrate historical Workflow 04 decisions
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/publication_status/.run_workflow04_historical_migration_audit'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout new pipeline implementation
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Checkout completed historical Workflow 04 corpus
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-dedup-v2-2026-09-14
+          path: historical_store
+          lfs: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Validate migration implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/migration_reconcile_historical_screening.R')
+          parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
+          parse(file='scripts/updater/workflow_03_restore_state_from_zenodo.R')
+          cat('PASS: migration scripts parse\n')
+
+      - name: Restore authoritative lean canonical state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer docs/compaction/zenodo/run-36166883249.json \
+            --output-dir workflow03_input
+
+      - name: Restore authoritative Workflow 03 publication-status layer
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
+            --pointer docs/publication_status/zenodo/run-36172718538.json \
+            --output-dir workflow03_status
+
+      - name: Validate completed historical state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s historical_store/data/canonical/current/repair/records.jsonl
+          test -s historical_store/data/canonical/current/repair/manifest.json
+          test "$(head -n 1 historical_store/data/canonical/current/repair/records.jsonl)" != "version https://git-lfs.github.com/spec/v1"
+          Rscript -e 'x<-jsonlite::fromJSON("historical_store/data/canonical/current/repair/manifest.json",simplifyVector=FALSE);stopifnot(x$pipeline_stage=="relevance_screening_complete",x$workflow04_relevance_screening_completion$status=="complete",as.integer(x$workflow04_relevance_screening_completion$unresolved)==0L);cat("PASS: completed historical Workflow 04 state available\n")'
+
+      - name: Reconcile historical decisions to stable canonical record IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/migration_reconcile_historical_screening.R \
+            --canonical workflow03_input/canonical_lean.jsonl \
+            --workflow03-status workflow03_status/publication_status.jsonl \
+            --historical-records historical_store/data/canonical/current/repair/records.jsonl \
+            --historical-manifest historical_store/data/canonical/current/repair/manifest.json \
+            --output-dir outputs/workflow04_historical_migration
+
+      - name: Validate reconciliation cardinality
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x<-fromJSON('outputs/workflow04_historical_migration/reconciliation_summary.json',simplifyVector=FALSE)
+          stopifnot(as.integer(x$canonical_records)==32292L)
+          stopifnot(as.integer(x$workflow03_excluded)==9L)
+          stopifnot(as.integer(x$workflow03_eligible)==32283L)
+          stopifnot(as.integer(x$historical_completed_representatives)==22605L)
+          stopifnot(as.integer(x$historical_retain)==16068L)
+          stopifnot(as.integer(x$historical_exclude)==6537L)
+          stopifnot(as.integer(x$llm_calls)==0L)
+          cat('PASS: one-off reconciliation cardinality validated\n')
+
+      - name: Upload reconciliation audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-historical-migration-audit-${{ github.run_id }}
+          path: outputs/workflow04_historical_migration/
+          retention-days: 90
+          if-no-files-found: error
