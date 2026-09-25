@@ -369,15 +369,14 @@ for(cid in sort(names(clusters))){
       issue=issue_pick$value,
       pages=pages_pick$value,
       field_provenance=list(
-        title=list(source=title_pick$source_key,selection=title_pick$selection),
-        abstract=list(source=abstract_pick$source_key,selection=abstract_pick$selection),
-        doi=list(source=doi_pick$source_key,selection=doi_pick$selection),
-        authors=list(source=authors_pick$source_key,selection=authors_pick$selection),
-        year=list(source=year_pick$source_key,selection=year_pick$selection),
-        journal=list(source=journal_pick$source_key,selection=journal_pick$selection),
-        volume=list(source=volume_pick$source_key,selection=volume_pick$selection),
-        issue=list(source=issue_pick$source_key,selection=issue_pick$selection),
-        pages=list(source=pages_pick$source_key,selection=pages_pick$selection)
+        title=title_pick$source_key,abstract=abstract_pick$source_key,doi=doi_pick$source_key,
+        authors=authors_pick$source_key,year=year_pick$source_key,journal=journal_pick$source_key,
+        volume=volume_pick$source_key,issue=issue_pick$source_key,pages=pages_pick$source_key
+      ),
+      field_selection=list(
+        title=title_pick$selection,abstract=abstract_pick$selection,doi=doi_pick$selection,
+        authors=authors_pick$selection,year=year_pick$selection,journal=journal_pick$selection,
+        volume=volume_pick$selection,issue=issue_pick$selection,pages=pages_pick$selection
       )
     ),
     manifestations=mans,
