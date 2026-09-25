@@ -188,8 +188,8 @@ jobs:
         run: |
           set -euo pipefail
           W01_SHA="$(Rscript -e "cat(digest::digest(file='workflow01_state/canonical/records.jsonl',algo='sha256',serialize=FALSE))")"
-          INPUT_SHA="$(Rscript -e "x<-jsonlite::fromJSON('outputs/correction_state/final_report.json');cat(x$input_canonical_sha256)")"
-          OUTPUT_SHA="$(Rscript -e "x<-jsonlite::fromJSON('outputs/correction_state/final_report.json');cat(x$output_canonical_sha256)")"
+          INPUT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/correction_state/final_report.json");cat(x$input_canonical_sha256)')"
+          OUTPUT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/correction_state/final_report.json");cat(x$output_canonical_sha256)')"
           mkdir -p outputs/correction_zenodo
           Rscript scripts/updater/workflow_02_archive_correction_state_to_zenodo.R \
             --state-dir outputs/correction_state \
