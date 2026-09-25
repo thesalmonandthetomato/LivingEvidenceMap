@@ -334,14 +334,26 @@ for(cid in sort(names(clusters))){
   if(length(mans)>1L) duplicate_clusters <- duplicate_clusters+1L
   mk <- vapply(mans,function(m)paste(m$source,m$source_record_id,sep=":"),character(1))
   preferred_ix <- which(vapply(mans,function(m)isTRUE(m$canonical_preference),logical(1)))
-  if(length(preferred_ix)>1L){
-    stop(sprintf("Cluster %s has %d conflicting canonical-preference manifestations",cid,length(preferred_ix)),call.=FALSE)
-  }
+
+  # Human canonical-preference decisions are pairwise and can legitimately
+  # identify more than one preferred manifestation within a deduplicated work.
+  # Treat them as a preferred subset, not as mutually exclusive single-record
+  # choices. For each field, select deterministically within that subset when
+  # it contains usable values; otherwise fall back to the full cluster.
   pick_field <- function(name,normalise=function(x)x,transform=function(x)x){
-    if(length(preferred_ix)==1L){
-      v <- mans[[preferred_ix]][[name]]
-      if(!is.null(v) && length(v) && !(is.character(v)&&!nzchar(trimws(paste(v,collapse=""))))){
-        return(list(value=transform(v),source_key=mk[[preferred_ix]],selection="human_canonical_preference"))
+    if(length(preferred_ix)){
+      vals <- lapply(mans[preferred_ix],`[[`,name)
+      keys <- mk[preferred_ix]
+      usable <- vapply(vals,function(v){
+        if(is.null(v) || length(v)==0L) return(FALSE)
+        z <- paste(as.character(unlist(v,use.names=FALSE)),collapse=" ")
+        nzchar(trimws(z))
+      },logical(1))
+      if(any(usable)){
+        z <- modal_pick(vals[usable],keys[usable],normalise)
+        z$value <- transform(z$value)
+        z$selection <- if(sum(usable)==1L) "human_canonical_preference" else "human_preferred_subset_modal"
+        return(z)
       }
     }
     z <- modal_pick(lapply(mans,`[[`,name),mk,normalise)
