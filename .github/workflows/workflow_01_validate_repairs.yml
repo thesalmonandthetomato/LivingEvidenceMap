@@ -1,5 +1,5 @@
 name: Workflow 01 - Validate complete metadata repairs
-# Retrigger after canonical preferred-subset handling fix.
+# Retrigger after stable canonical provenance and semantic replay hashing fix.
 
 on:
   push:
