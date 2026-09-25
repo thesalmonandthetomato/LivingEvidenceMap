@@ -14,6 +14,9 @@ output_dir <- arg("--output-dir","outputs/workflow04_consensus")
 model <- arg("--model",Sys.getenv("OPENAI_RELEVANCE_MODEL","gpt-5.6-luna"))
 checkpoint_every <- as.integer(arg("--checkpoint-every","25"))
 max_records <- as.integer(arg("--max-records","0"))
+shard_index <- as.integer(arg("--shard-index","1"))
+shard_count <- as.integer(arg("--shard-count","1"))
+if(is.na(shard_index)||is.na(shard_count)||shard_count<1L||shard_index<1L||shard_index>shard_count) stop("Invalid shard index/count",call.=FALSE)
 if(is.null(canonical_path)||is.null(w03_path)) stop("Required: --canonical --workflow03-status",call.=FALSE)
 if(!nzchar(Sys.getenv("OPENAI_API_KEY"))) stop("OPENAI_API_KEY is required",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
@@ -232,8 +235,15 @@ if(length(w03)!=32292L||any(!nzchar(wids))||anyDuplicated(wids)||!setequal(cids,
 wm<-setNames(w03,wids)
 eligible_idx<-which(!vapply(cids,function(id)w03_excluded(wm[[id]]),logical(1)))
 if(length(eligible_idx)!=32283L)stop(sprintf("Expected 32,283 W03-eligible records, found %d",length(eligible_idx)),call.=FALSE)
-eligible<-canonical_records[eligible_idx]
+eligible_all<-canonical_records[eligible_idx]
+eligible_all_ids<-vapply(eligible_all,record_id,character(1))
+ord<-order(eligible_all_ids)
+eligible_all<-eligible_all[ord]
+eligible_all_ids<-eligible_all_ids[ord]
+shard_membership<-((seq_along(eligible_all)-1L) %% shard_count)+1L
+eligible<-eligible_all[shard_membership==shard_index]
 if(max_records>0L) eligible<-eligible[seq_len(min(max_records,length(eligible)))]
+if(!length(eligible)) stop("Selected shard is empty",call.=FALSE)
 
 p1_path<-file.path(output_dir,"pass1.jsonl")
 p2_path<-file.path(output_dir,"pass2.jsonl")
@@ -288,6 +298,7 @@ summary<-list(
   canonical_records=length(canonical_records),
   workflow03_excluded=length(canonical_records)-length(eligible_idx),
   workflow03_eligible=length(eligible_idx),
+  shard_index=shard_index,shard_count=shard_count,
   records_screened=length(eligible),
   pass1_records=length(p1),pass2_records=length(p2),
   third_pass_records=length(need3),
