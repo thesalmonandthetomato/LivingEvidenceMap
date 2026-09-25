@@ -1,0 +1,116 @@
+name: Workflow 01 - Validate complete metadata repairs
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_01_validate_repairs.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2'))
+
+      - name: Restore published Workflow 01 baseline
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_state_from_zenodo.R \
+            --pointer docs/deduplication/zenodo/run-36103542054.json \
+            --output-root baseline
+
+      - name: Download locked human-review queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/review
+          gh run download 35986405369 --repo "$GITHUB_REPOSITORY" \
+            --name workflow01-blinded-human-review-35986405369 \
+            --dir inputs/review
+          test -s inputs/review/human_review_132_blinded.jsonl
+
+      - name: Regenerate normalised repair ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_migrate_human_review_state.R \
+            --queue inputs/review/human_review_132_blinded.jsonl \
+            --decisions data/adjudication/workflow01/run-35964195676/human_decisions.jsonl \
+            --repairs data/adjudication/workflow01/run-35964195676/data_quality_repairs.jsonl \
+            --output-dir outputs/human_gate
+          test -s outputs/human_gate/data_quality_repairs.normalised.jsonl
+
+      - name: Rebuild canonical JSONL with complete repair ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/canonical
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R \
+            --cluster-map baseline/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --strip-actions baseline/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --data-quality-repairs outputs/human_gate/data_quality_repairs.normalised.jsonl \
+            --repair-audit outputs/canonical/data_quality_repair_application.jsonl \
+            --lens baseline/workflow01_seed/lens_records_for_deduplication.jsonl \
+            --scopus baseline/workflow01_seed/scopus_records_for_deduplication.jsonl \
+            --openalex baseline/workflow01_seed/openalex_records_for_deduplication.jsonl \
+            --agricola baseline/workflow01_seed/agricola_records_for_deduplication.jsonl \
+            --wos baseline/workflow01_seed/wos_records_for_deduplication.jsonl \
+            --run-id "$GITHUB_RUN_ID" \
+            --output outputs/canonical/records.jsonl \
+            --manifest outputs/canonical/canonical_manifest.json
+
+      - name: Validate complete repair application
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          m <- fromJSON('outputs/canonical/canonical_manifest.json')
+          a <- stream_in(file('outputs/canonical/data_quality_repair_application.jsonl'),verbose=FALSE)
+          stopifnot(m$records == 32292L)
+          stopifnot(m$source_manifestations == 90137L)
+          stopifnot(m$approved_data_quality_repairs == 32L)
+          stopifnot(m$applied_data_quality_repairs == 32L)
+          stopifnot(nrow(a) == 32L)
+          stopifnot(all(a$status == 'applied'))
+          expected <- c('strip_abstract','replace_abstract','set_doi','set_title','set_canonical_preference')
+          stopifnot(setequal(unique(a$action),expected))
+          cat(sprintf(
+            'PASS: all %d approved repairs applied across %d canonical works and %d manifestations\n',
+            nrow(a),m$records,m$source_manifestations
+          ))
+
+      - name: Upload repair-validation audit only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-repair-validation-${{ github.run_id }}
+          path: |
+            outputs/canonical/canonical_manifest.json
+            outputs/canonical/data_quality_repair_application.jsonl
+          retention-days: 30
+          if-no-files-found: warn
