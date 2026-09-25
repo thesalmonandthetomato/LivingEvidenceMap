@@ -4,6 +4,11 @@ name: Workflow 01 - Validate complete metadata repairs
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/deduplication/.run_workflow01_full_validation'
 
 permissions:
   contents: read
