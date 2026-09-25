@@ -395,8 +395,6 @@ for(cid in sort(names(clusters))){
     ),
     manifestations=mans,
     provenance=list(
-      workflow01_run_id=as.character(run_id),
-      generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
       source_manifestation_count=length(mans)
     ),
     abstract_enrichment=list(
