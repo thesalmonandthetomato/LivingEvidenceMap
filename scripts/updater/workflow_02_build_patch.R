@@ -81,10 +81,11 @@ for(i in seq_along(inp)){
   if(achg) changed_abstract<-changed_abstract+1L
 
   meta <- b$metadata_enrichment
-  if(!is.null(meta)){
+  meta_changed <- !identical(a$metadata_enrichment,b$metadata_enrichment)
+  if(meta_changed || tchg || achg){
     attempted<-attempted+1L
     au <- aud_by_id[[ida]]
-    if(is.null(au)) stop(sprintf("metadata_enrichment exists without audit row for %s",ida),call.=FALSE)
+    if(is.null(au)) stop(sprintf("new Workflow 02 state exists without audit row for %s",ida),call.=FALSE)
     applied <- au$applied %||% list()
     provider_for <- function(field){
       hits <- Filter(function(z) identical(clean(z$field),field),applied)
@@ -114,7 +115,7 @@ for(i in seq_along(inp)){
         audit=au
       )
     }
-  } else if(tchg || achg) stop(sprintf("Changed metadata without metadata_enrichment provenance for %s",ida),call.=FALSE)
+  } else if(tchg || achg) stop(sprintf("Changed metadata without Workflow 02 provenance for %s",ida),call.=FALSE)
 }
 
 writejl(patches,patch_path); writejl(retry,retry_path)
