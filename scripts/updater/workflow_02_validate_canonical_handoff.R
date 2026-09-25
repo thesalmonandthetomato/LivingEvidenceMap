@@ -24,6 +24,8 @@ if(any(vapply(list(input_path,sample_path,report_path),is.null,logical(1)))) {
 }
 if(is.na(sample_n) || sample_n < 1L) stop("--sample-n must be positive",call.=FALSE)
 
+`%||%` <- function(x,y) if(is.null(x)) y else x
+
 clean_text <- function(x){
   if(is.null(x) || !length(x)) return(NULL)
   s <- trimws(gsub("[[:space:]]+"," ",as.character(x[[1L]])))
@@ -135,5 +137,3 @@ cat(sprintf(
   "PASS: Workflow 01 -> 02 handoff: %d canonical works, %d manifestations, %d DOI-bearing records eligible for metadata enrichment; selected %d real records\n",
   n_records,n_manifestations,n_eligible,length(sample_lines)
 ))
-
-`%||%` <- function(x,y) if(is.null(x)) y else x
