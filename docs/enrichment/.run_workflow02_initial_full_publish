@@ -1,0 +1,4 @@
+workflow01_pointer=docs/deduplication/zenodo/run-36128255337.json
+limit=0
+publish=true
+purpose=initial_full_workflow02_enrichment
