@@ -32,6 +32,7 @@ dir.create(file.path(output_root,"workflow01_full_five_source"),recursive=TRUE,s
 dir.create(file.path(output_root,"canonical"),recursive=TRUE,showWarnings=FALSE)
 
 sha <- function(path) digest(file=path,algo="sha256",serialize=FALSE)
+`%||%` <- function(x,y) if(is.null(x)) y else x
 read_nonempty <- function(path){
   x <- readLines(path,warn=FALSE,encoding="UTF-8")
   x[nzchar(trimws(x))]
@@ -168,14 +169,52 @@ if(!identical(tolower(sha(canonical_out)),tolower(target_canonical_sha))) {
 file.copy(file.path(delta_dir,"target_canonical_manifest.json"),
           file.path(output_root,"canonical","canonical_manifest.json"),overwrite=TRUE)
 
-# Preserve current alias ledger and repair audit where supplied.
+# Preserve current alias ledger and cumulative provenance ledgers.
 file.copy(file.path(delta_dir,"cluster_id_aliases.csv"),
           file.path(output_root,"workflow01_full_five_source","cluster_id_aliases.csv"),overwrite=TRUE)
+dir.create(file.path(output_root,"provenance"),showWarnings=FALSE)
+
 if(file.exists(file.path(delta_dir,"data_quality_repair_application.jsonl"))){
-  dir.create(file.path(output_root,"provenance"),showWarnings=FALSE)
   file.copy(file.path(delta_dir,"data_quality_repair_application.jsonl"),
             file.path(output_root,"provenance","data_quality_repair_application.jsonl"),overwrite=TRUE)
 }
+
+repair_key <- function(line){
+  z <- fromJSON(line,simplifyVector=FALSE)
+  paste(as.character(z$review_case_id %||% ""),as.character(z$source),
+        as.character(z$source_record_id),as.character(z$action),sep="|")
+}
+merge_jsonl_upserts <- function(previous_path,upsert_path,out_path,key_fun){
+  prev <- if(file.exists(previous_path)) read_nonempty(previous_path) else character()
+  ups <- if(file.exists(upsert_path)) read_nonempty(upsert_path) else character()
+  pkeys <- if(length(prev)) vapply(prev,key_fun,character(1)) else character()
+  ukeys <- if(length(ups)) vapply(ups,key_fun,character(1)) else character()
+  if(anyDuplicated(pkeys)) stop(sprintf("Previous ledger contains duplicate keys: %s",previous_path),call.=FALSE)
+  if(anyDuplicated(ukeys)) stop(sprintf("Delta ledger contains duplicate keys: %s",upsert_path),call.=FALSE)
+  store <- setNames(as.list(prev),pkeys)
+  if(length(ups)) for(i in seq_along(ups)) store[[ukeys[[i]]]] <- ups[[i]]
+  keys <- sort(names(store))
+  lines <- if(length(keys)) unlist(store[keys],use.names=FALSE) else character()
+  write_lines(lines,out_path)
+}
+
+merge_jsonl_upserts(
+  file.path(previous_root,"provenance","cumulative_data_quality_repairs.jsonl"),
+  file.path(delta_dir,"data_quality_repair_upserts.jsonl"),
+  file.path(output_root,"provenance","cumulative_data_quality_repairs.jsonl"),
+  repair_key
+)
+
+strip_key <- function(line){
+  z <- fromJSON(line,simplifyVector=FALSE)
+  paste(as.character(z$source),as.character(z$source_record_id),sep="::")
+}
+merge_jsonl_upserts(
+  file.path(previous_root,"workflow01_full_five_source","abstract_strip_actions.jsonl"),
+  file.path(delta_dir,"abstract_strip_action_upserts.jsonl"),
+  file.path(output_root,"workflow01_full_five_source","abstract_strip_actions.jsonl"),
+  strip_key
+)
 
 audit <- list(
   schema="living-evidence-map-workflow01-delta-replay-audit-v1",
