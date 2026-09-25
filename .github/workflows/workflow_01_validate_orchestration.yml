@@ -1,0 +1,81 @@
+name: Workflow 01 - Validate production orchestration
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_01_production.yml'
+      - '.github/workflows/workflow_01_resume_after_human_review.yml'
+      - '.github/workflows/workflow_01_validate_orchestration.yml'
+      - 'scripts/updater/workflow_01_build_delta.R'
+      - 'scripts/updater/workflow_01_replay_delta.R'
+      - 'scripts/updater/workflow_01_restore_current_state.R'
+      - 'scripts/updater/workflow_01_merge_cumulative_repairs.R'
+      - 'scripts/updater/workflow_01_build_pending_checkpoint.R'
+      - 'scripts/updater/workflow_01_archive_pending_checkpoint_to_zenodo.R'
+      - 'scripts/updater/workflow_01_restore_pending_checkpoint.R'
+      - 'scripts/updater/workflow_01_apply_checkpoint_sources.R'
+      - 'scripts/updater/workflow_01_archive_delta_to_zenodo.R'
+      - 'scripts/updater/workflow_01_build_canonical_jsonl.R'
+      - 'scripts/updater/workflow_01_apply_adjudications_and_recluster.R'
+
+permissions:
+  contents: read
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Workflow 01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install YAML parser
+        shell: Rscript {0}
+        run: install.packages('yaml')
+
+      - name: Parse production YAML
+        shell: Rscript {0}
+        run: |
+          library(yaml)
+          files <- c(
+            '.github/workflows/workflow_01_production.yml',
+            '.github/workflows/workflow_01_resume_after_human_review.yml'
+          )
+          for (f in files) {
+            x <- yaml.load_file(f)
+            stopifnot(is.list(x), !is.null(x$name), !is.null(x$jobs))
+            cat(sprintf('PASS YAML: %s\n', f))
+          }
+
+      - name: Parse Workflow 01 R implementation
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_01_build_delta.R',
+            'scripts/updater/workflow_01_replay_delta.R',
+            'scripts/updater/workflow_01_restore_current_state.R',
+            'scripts/updater/workflow_01_merge_cumulative_repairs.R',
+            'scripts/updater/workflow_01_build_pending_checkpoint.R',
+            'scripts/updater/workflow_01_archive_pending_checkpoint_to_zenodo.R',
+            'scripts/updater/workflow_01_restore_pending_checkpoint.R',
+            'scripts/updater/workflow_01_apply_checkpoint_sources.R',
+            'scripts/updater/workflow_01_archive_delta_to_zenodo.R',
+            'scripts/updater/workflow_01_build_canonical_jsonl.R',
+            'scripts/updater/workflow_01_apply_adjudications_and_recluster.R'
+          )
+          for (f in files) {
+            parse(file=f)
+            cat(sprintf('PASS R parse: %s\n', f))
+          }
