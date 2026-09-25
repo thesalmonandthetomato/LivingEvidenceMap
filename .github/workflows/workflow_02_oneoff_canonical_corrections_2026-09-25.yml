@@ -69,7 +69,7 @@ jobs:
             --output outputs/canonical_before_oneoff.jsonl \
             --report outputs/w02_replay_report.json \
             --mode exact
-          Rscript -e "library(jsonlite);r<-fromJSON('outputs/w02_replay_report.json');stopifnot(r$status=='PASS',r$input_records==32292L,r$patch_records==3434L,r$matched_patch_records==3434L,length(r$conflicts)==0L,r$output_sha256=='c88d36631512b5b30853fb3ae271db2e456b2a8b5b94925ccf0840e8f8d9156b');cat('PASS: authoritative Workflow 02 enrichment state reconstructed exactly\n')"
+          Rscript -e 'library(jsonlite);r<-fromJSON("outputs/w02_replay_report.json");stopifnot(r$status=="PASS",r$input_records==32292L,r$patch_records==3434L,r$matched_patch_records==3434L,length(r$conflicts)==0L,r$output_sha256=="c88d36631512b5b30853fb3ae271db2e456b2a8b5b94925ccf0840e8f8d9156b");cat("PASS: authoritative Workflow 02 enrichment state reconstructed exactly\\n")'
 
       - name: Build sparse one-off correction state
         shell: Rscript {0}
