@@ -72,7 +72,8 @@ repeat {
       if(!nzchar(source) || !nzchar(source_id)){
         stop(sprintf("%s manifestation %d lacks source/source_record_id",rid,i),call.=FALSE)
       }
-      source_counts[[source]] <<- (source_counts[[source]] %||% 0L) + 1L
+      current_n <- if(source %in% names(source_counts)) source_counts[[source]] else 0L
+      source_counts[[source]] <<- current_n + 1L
       paste0(source,":",source_id)
     },character(1))
     if(anyDuplicated(refs)){
