@@ -27,6 +27,11 @@ on:
         required: true
         default: false
         type: boolean
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/enrichment/.run_workflow02_production_smoke'
 
 permissions:
   contents: write
@@ -76,8 +81,8 @@ jobs:
 
       - name: Validate input pointers
         env:
-          W01_POINTER: ${{ inputs.workflow01_pointer_path }}
-          PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path }}
+          W01_POINTER: ${{ inputs.workflow01_pointer_path || 'docs/deduplication/zenodo/run-36128255337.json' }}
+          PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path || '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -91,7 +96,7 @@ jobs:
       - name: Restore authoritative Workflow 01 canonical state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          W01_POINTER: ${{ inputs.workflow01_pointer_path }}
+          W01_POINTER: ${{ inputs.workflow01_pointer_path || 'docs/deduplication/zenodo/run-36128255337.json' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -107,7 +112,7 @@ jobs:
         if: ${{ inputs.previous_workflow02_pointer_path != '' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path }}
+          PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path || '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -139,8 +144,8 @@ jobs:
         env:
           SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
           SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
-          LIMIT: ${{ inputs.limit }}
-          RECHECK: ${{ inputs.recheck_after_days }}
+          LIMIT: ${{ inputs.limit || '10' }}
+          RECHECK: ${{ inputs.recheck_after_days || '90' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -212,8 +217,8 @@ jobs:
 
       - name: Build durable sparse state directory
         env:
-          W01_POINTER: ${{ inputs.workflow01_pointer_path }}
-          PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path }}
+          W01_POINTER: ${{ inputs.workflow01_pointer_path || 'docs/deduplication/zenodo/run-36128255337.json' }}
+          PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path || '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -229,10 +234,10 @@ jobs:
           Rscript -e "library(jsonlite);x<-list(schema='living-evidence-map-workflow02-state-manifest-v1',workflow='02',github_run_id=Sys.getenv('GITHUB_RUN_ID'),workflow01_pointer=Sys.getenv('W01_POINTER'),workflow01_canonical_sha256=Sys.getenv('W01_SHA'),previous_workflow02_pointer=if(nzchar(Sys.getenv('PREV_W02_POINTER')))Sys.getenv('PREV_W02_POINTER') else NULL,final_enriched_sha256=digest::digest(file='outputs/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE),created_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'));writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/workflow02_state/state_manifest.json')"
 
       - name: Publish sparse Workflow 02 state to restricted Zenodo
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish == true }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path }}
+          PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path || '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -248,7 +253,7 @@ jobs:
           Rscript scripts/updater/workflow_02_archive_state_to_zenodo.R "${ARGS[@]}"
 
       - name: Register published Workflow 02 state
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish == true }}
         shell: bash
         run: |
           set -euo pipefail
