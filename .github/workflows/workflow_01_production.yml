@@ -48,7 +48,7 @@ concurrency:
 
 env:
   WORKFLOW01_BRANCH: workflow01-final-architecture
-  WORKFLOW00_REPORTING_BRANCH: workflow00-search-orchestrator
+  WORKFLOW00_REPORTING_BRANCH: workflow00-zenodo-search-archive
 
 jobs:
   workflow01:
