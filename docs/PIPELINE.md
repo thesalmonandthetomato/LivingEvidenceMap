@@ -30,9 +30,15 @@ The current refresh does **not** unnecessarily rerun expensive full-corpus LLM w
 
 The existing evidence-map corpus is the reference for determining whether an incoming record is already represented in the map. Screening include/exclude decisions are a separate resource used by the established relevance-screening workflow. They must not be treated as the deduplication corpus.
 
-## LLM and human-review policy
+## LLM and human-adjudication policy
 
-LLM adjudication is downstream of deterministic annotation. Decisions and supporting evidence should remain auditable. The intended direction is to reduce and ultimately eliminate routine human review as the validated adjudication workflow becomes sufficiently reliable; any unresolved review queue must remain explicit rather than being silently converted to a final decision.
+The pipeline contains two distinct human-adjudication gates.
+
+**Workflow 01 deduplication adjudication** resolves uncertain publication identity before canonicalisation. It is blocking: Workflow 01 must not publish a new canonical state while any required duplicate decision remains unresolved. These cases are not forwarded to Workflow 07.
+
+**Workflow 07 downstream adjudication** consolidates unresolved content and annotation cases produced after canonicalisation, specifically from Workflow 04 relevance screening, Workflow 05 annotations and Workflow 06 topic coding. Those upstream workflows should expose uncertainty explicitly in machine-readable queues/layers rather than silently forcing a final decision.
+
+LLM adjudication remains downstream of deterministic rules or annotation where applicable. Decisions and supporting evidence must remain auditable, and unresolved cases must remain explicit until the appropriate adjudication gate resolves them.
 
 ## Target isolation
 
