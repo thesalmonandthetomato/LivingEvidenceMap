@@ -145,3 +145,6 @@ ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,قزل آلاي رنگين كمان
 ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Ghezelalla-e-Rangin Kaman,common,TRUE,trout,FishBase Farsi transliteration
 ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Qezel Ala Ranginkaman,common,TRUE,trout,FishBase Farsi transliteration
 ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,تراوت قوس قزح,common,TRUE,trout,Arabic rainbow trout; FAO wording
+UNSPEC_SALMON,Unspecified species,,salmoniculture,generic,TRUE,salmon,French salmon farming/aquaculture term
+UNSPEC_SALMON,Unspecified species,,salmonicole,generic,TRUE,salmon,French salmon-farming adjective
+UNSPEC_SALMON,Unspecified species,,salmonicultura,generic,TRUE,salmon,Spanish/Portuguese/Italian salmon farming term
