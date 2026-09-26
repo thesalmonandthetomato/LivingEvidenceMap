@@ -16,8 +16,11 @@ dir_create(output_dir,recurse=TRUE)
 clean<-function(x){x<-as.character(x);x[is.na(x)]<-"";trimws(x)}
 bool<-function(x)tolower(clean(x))%in%c("true","t","1","yes")
 norm_set<-function(x){
- z<-clean(x);if(!nzchar(z))return("")
- vals<-trimws(unlist(strsplit(z,";",fixed=TRUE)));vals<-vals[nzchar(vals)]
+ z<-clean(x)
+ z<-z[nzchar(z)]
+ if(!length(z))return("")
+ vals<-trimws(unlist(strsplit(z,";",fixed=TRUE),use.names=FALSE))
+ vals<-vals[nzchar(vals)]
  paste(sort(unique(vals)),collapse="; ")
 }
 norm_text<-function(x)gsub("\\s+"," ",clean(x))
