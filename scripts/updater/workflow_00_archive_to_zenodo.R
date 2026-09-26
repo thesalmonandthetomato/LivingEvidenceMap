@@ -53,6 +53,22 @@ make_tar <- function(base,members,out) {
   TRUE
 }
 
+tree_sha256 <- function(root) {
+  files <- list.files(root,recursive=TRUE,full.names=TRUE,all.files=TRUE,no..=TRUE)
+  files <- files[file.info(files)$isdir %in% FALSE]
+  if (!length(files)) return(NA_character_)
+  rel <- substring(files,nchar(normalizePath(root,mustWork=TRUE))+2L)
+  ord <- order(rel); files <- files[ord]; rel <- rel[ord]
+  lines <- vapply(seq_along(files),function(i) paste(rel[[i]],digest(file=files[[i]],algo="sha256",serialize=FALSE),sep="\t"),character(1))
+  digest(paste(lines,collapse="\n"),algo="sha256",serialize=FALSE)
+}
+handoff_sources <- list()
+for (src in sources) {
+  src_dir <- file.path(staging_root,"harvests",src)
+  if (!dir.exists(src_dir)) stop(sprintf("Staged harvest missing for %s",src),call.=FALSE)
+  handoff_sources[[src]] <- list(tree_sha256=tree_sha256(src_dir))
+}
+
 archive_paths <- character()
 for (src in sources) {
   src_dir <- file.path(staging_root,"harvests",src)
@@ -85,6 +101,7 @@ manifest <- list(
   run_type=run_type,
   search_version=search_version,
   sources=sources,
+  handoff_sources=handoff_sources,
   file_visibility="restricted",
   files=file_meta
 )
@@ -234,6 +251,7 @@ receipt <- list(
   run_type=run_type,
   search_version=search_version,
   sources=sources,
+  handoff_sources=handoff_sources,
   zenodo_record_id=as.character(if (is.null(published$record_id)) published$id else published$record_id),
   zenodo_deposition_id=dep_id,
   doi=if (is.null(published$doi)) NA_character_ else published$doi,
