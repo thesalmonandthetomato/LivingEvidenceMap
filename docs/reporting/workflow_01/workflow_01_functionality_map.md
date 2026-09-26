@@ -142,11 +142,15 @@ The production controller exposes the model and automatic-promotion confidence t
 
 Substantive uncertainty and technical failure are not silently coerced into duplicate or non-duplicate states.
 
-### Human-review integrity gate
+### Workflow 01 deduplication adjudication gate
 
-Cases requiring human adjudication are rendered from an immutable review queue. The queue is bound to its manifest by SHA-256. Submitted decisions are validated against the exact expected case set before they are allowed to affect clustering.
+Cases requiring human adjudication of **publication identity** are rendered from an immutable Workflow 01 deduplication-review queue. The queue is bound to its manifest by SHA-256. Submitted decisions are validated against the exact expected case set before they are allowed to affect clustering.
 
-If human review is required, the production run stops downstream promotion and stores a compact pre-adjudication checkpoint. The checkpoint contains only the new source manifestations and the incremental state needed to resume, together with the locked review queue and lineage pointers. The resume workflow restores the previous authoritative state plus this checkpoint, validates the submitted decisions and repairs, and continues from the adjudication boundary without rerunning the completed search or model stages.
+This is a blocking identity-resolution gate local to Workflow 01. Unresolved duplicate identity can alter cluster membership, stable work identity and every downstream record, so Workflow 01 must not publish a new canonical state while any required duplicate adjudication remains unresolved.
+
+If deduplication adjudication is required, the production run stops downstream promotion and stores a compact pre-adjudication checkpoint. The checkpoint contains only the new source manifestations and the incremental state needed to resume, together with the locked review queue and lineage pointers. The resume workflow restores the previous authoritative state plus this checkpoint, validates the submitted decisions and repairs, and continues from the adjudication boundary without rerunning the completed search or model stages.
+
+This queue is deliberately separate from Workflow 07. Workflow 07 handles downstream content and annotation uncertainties arising after canonicalisation, including relevance-screening, species/geography annotation and topic-coding uncertainties from Workflows 04–06. Workflow 01 duplicate uncertainties are resolved here before canonicalisation and are not forwarded to Workflow 07.
 
 ### Metadata-repair actions
 
@@ -198,13 +202,13 @@ Candidate generation identifies comparisons required for newly introduced manife
 
 ### 5. Adjudicate residual candidate pairs
 
-Residual ambiguous cases are submitted to the configured LLM. Cases eligible for automatic promotion are incorporated at the configured confidence threshold. Remaining cases are routed to human review.
+Residual ambiguous cases are submitted to the configured LLM. Cases eligible for automatic promotion are incorporated at the configured confidence threshold. Remaining cases are routed to the Workflow 01 deduplication-adjudication queue.
 
-### 6. Pause and resume for human review when necessary
+### 6. Pause and resume for deduplication adjudication when necessary
 
-When the human-review queue is non-empty, Workflow 01 writes a compact checkpoint and restricted Zenodo pointer and stops before final publication.
+When the Workflow 01 deduplication-adjudication queue is non-empty, Workflow 01 writes a compact checkpoint and restricted Zenodo pointer and stops before final publication.
 
-The resume workflow validates the completed human decisions and repair ledger against the locked queue checksum, reconstructs the exact pre-adjudication state, and continues without repeating completed upstream work.
+The resume workflow validates the completed duplicate-identity decisions and repair ledger against the locked queue checksum, reconstructs the exact pre-adjudication state, and continues without repeating completed upstream work. No unresolved duplicate case is deferred to Workflow 07.
 
 ### 7. Reconstruct stable work clusters
 
@@ -333,7 +337,7 @@ The Workflow 01 → Workflow 02 interface is considered valid only when Workflow
 
 ## Methods text for research reporting
 
-> **Workflow 01: multi-source deduplication and canonicalisation.** Search results from Lens, Scopus, OpenAlex, AGRICOLA and Web of Science were reconciled using an R-based persistent deduplication workflow. Source-native record identities and previously resolved duplicate decisions were preserved across updates, so newly retrieved manifestations were compared incrementally rather than rebuilding historical deduplication state. Bibliographic candidate pairs were assessed using identifiers and publication metadata, with deterministic rules resolving well-supported cases and residual ambiguity subjected to language-model adjudication and, where required, checksum-locked human review. Human adjudication could also specify auditable manifestation-level metadata repairs. Final duplicate decisions were converted into stable work clusters that retained all constituent database manifestations and preserved existing work identifiers across updates. The source-agnostic canonical JSONL was then materialised deterministically. After the initial complete state was archived, subsequent accepted changes were stored as immutable deltas. Every delta was replayed against the previous authoritative state before publication and was required to reproduce the target pair state, cluster state and canonical JSONL checksum exactly. Full states, deltas and human-review checkpoints were retained as restricted Zenodo records with repository-held lineage pointers and checksums.
+> **Workflow 01: multi-source deduplication and canonicalisation.** Search results from Lens, Scopus, OpenAlex, AGRICOLA and Web of Science were reconciled using an R-based persistent deduplication workflow. Source-native record identities and previously resolved duplicate decisions were preserved across updates, so newly retrieved manifestations were compared incrementally rather than rebuilding historical deduplication state. Bibliographic candidate pairs were assessed using identifiers and publication metadata, with deterministic rules resolving well-supported cases and residual ambiguity subjected to language-model adjudication and, where required, a checksum-locked Workflow 01 deduplication-adjudication gate. Human adjudication could also specify auditable manifestation-level metadata repairs. Final duplicate decisions were converted into stable work clusters that retained all constituent database manifestations and preserved existing work identifiers across updates. The source-agnostic canonical JSONL was then materialised deterministically. After the initial complete state was archived, subsequent accepted changes were stored as immutable deltas. Every delta was replayed against the previous authoritative state before publication and was required to reproduce the target pair state, cluster state and canonical JSONL checksum exactly. Full states, deltas and human-review checkpoints were retained as restricted Zenodo records with repository-held lineage pointers and checksums.
 
 ## Reporting status
 
