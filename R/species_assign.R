@@ -10,13 +10,13 @@ assign_farmed_species <- function(species_mentions) {
   missing <- setdiff(required, names(species_mentions))
   if (length(missing) > 0L) stop("Species mentions are missing: ", paste(missing, collapse = ", "), call. = FALSE)
 
-  unresolved <- data.frame(
+  none <- data.frame(
     farmed_species_id = NA_character_, farmed_species = NA_character_,
-    assignment_role = "unresolved", review_required = TRUE,
-    assignment_reason = "No eligible farmed species detected",
+    assignment_role = "none", review_required = FALSE,
+    assignment_reason = "No eligible species term detected",
     non_target_species = NA_character_, stringsAsFactors = FALSE
   )
-  if (nrow(species_mentions) == 0L) return(unresolved)
+  if (nrow(species_mentions) == 0L) return(none)
 
   species_mentions$is_farmed_candidate <- as.logical(species_mentions$is_farmed_candidate)
   unique_species <- unique(species_mentions[, c("species_id", "preferred_name", "is_farmed_candidate"), drop = FALSE])
@@ -28,9 +28,9 @@ assign_farmed_species <- function(species_mentions) {
   if (specific) farmed <- farmed[farmed$species_id != "UNSPEC_SALMON", , drop = FALSE]
 
   if (nrow(farmed) == 0L) {
-    unresolved$non_target_species <- non_target_names
-    if (nrow(non_target) > 0L) unresolved$assignment_reason <- "Only non-target species detected"
-    return(unresolved)
+    none$non_target_species <- non_target_names
+    if (nrow(non_target) > 0L) none$assignment_reason <- "Only non-target species detected"
+    return(none)
   }
 
   role <- if (nrow(farmed) == 1L) "primary" else "co-primary"
