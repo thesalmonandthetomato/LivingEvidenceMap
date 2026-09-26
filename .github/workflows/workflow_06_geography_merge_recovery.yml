@@ -1,0 +1,64 @@
+name: Workflow 06 - recover and merge geography production
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow06/.run_geography_merge_recovery'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  recover_merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install merge dependencies
+        shell: Rscript {0}
+        run: install.packages(c("dplyr","readr","jsonlite"))
+
+      - name: Download all completed geography shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow05-geography-shard-*-36249616391
+          path: geography_shards
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 36249616391
+
+      - name: Validate shard inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          n_csv="$(find geography_shards -type f -name geography_results.csv | wc -l | tr -d ' ')"
+          n_jsonl="$(find geography_shards -type f -name geography_results.jsonl | wc -l | tr -d ' ')"
+          test "$n_csv" = "20"
+          test "$n_jsonl" = "20"
+          echo "PASS: recovered all 20 completed Workflow 06 geography shards"
+
+      - name: Merge and validate 19,407 records
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow06_geography_semantic_merge.R             --input-dir geography_shards             --output-dir outputs/workflow06_geography_production_final
+          Rscript -e 'x<-readr::read_csv("outputs/workflow06_geography_production_final/geography_semantic_final.csv",show_col_types=FALSE); stopifnot(nrow(x)==19407L,!anyDuplicated(x$record_id),identical(sort(as.integer(x$record_sequence)),seq_len(19407L))); cat("PASS: Workflow 06 geography merge contains exactly 19,407 unique records\n")'
+
+      - name: Upload Workflow 06 geography production output
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-geography-production-${{ github.run_id }}
+          path: outputs/workflow06_geography_production_final/
+          retention-days: 90
+          if-no-files-found: error
