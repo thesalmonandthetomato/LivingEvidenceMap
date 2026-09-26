@@ -21,7 +21,7 @@ files <- list.files(input_dir,pattern="geography_results\\.csv$",recursive=TRUE,
 if(length(files)!=20L) stop(sprintf("Expected 20 shard CSVs, found %d",length(files)))
 x <- bind_rows(lapply(files,read_csv,show_col_types=FALSE)) |> arrange(record_sequence)
 stopifnot(nrow(x)==19407L,!anyDuplicated(x$record_id),!anyDuplicated(x$record_sequence))
-if(!identical(sort(x$record_sequence),seq_len(19407L))) stop("record_sequence is not exactly 1:19407")
+if(!identical(sort(as.integer(x$record_sequence)),seq_len(19407L))) stop("record_sequence is not exactly 1:19407")
 
 jsonl <- list.files(input_dir,pattern="geography_results\\.jsonl$",recursive=TRUE,full.names=TRUE)
 if(length(jsonl)!=20L) stop(sprintf("Expected 20 shard JSONL files, found %d",length(jsonl)))
