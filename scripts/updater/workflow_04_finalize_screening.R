@@ -39,6 +39,9 @@ if(any(!con_ids%in%can_ids))stop("Consensus contains IDs absent from canonical",
 hist_map<-setNames(historical,hist_ids)
 terra_map<-setNames(terra,terra_ids)
 can_map<-setNames(canonical,can_ids)
+hist_dec<-vapply(historical,function(x)scalar((x$screening %||% list())$decision),character(1))
+if(any(!hist_dec%in%c("retain","exclude")))stop("Safe historical layer contains non-substantive decisions",call.=FALSE)
+safe_hist_exclude_ids<-hist_ids[hist_dec=="exclude"]
 
 cons_dec<-vapply(consensus,function(x)scalar((x$screening %||% list())$decision),character(1))
 unresolved_ids<-con_ids[cons_dec=="uncertain"]
@@ -60,7 +63,18 @@ for(i in seq_along(consensus)){
   id<-rid_layer(row)
   luna<-row$screening %||% list()
   d<-scalar(luna$decision)
-  if(d%in%c("retain","exclude")){
+  if(id%in%safe_hist_exclude_ids){
+    h<-hist_map[[id]]
+    row$screening<-list(
+      decision="exclude",
+      decision_origin="historical_exclude_authoritative",
+      requires_human_review=FALSE,
+      luna_consensus=luna,
+      historical_screening=h$screening %||% NULL,
+      historical_override_applied=identical(d,"retain")
+    )
+    route[[i]]<-"historical_exclude_authoritative"
+  } else if(d%in%c("retain","exclude")){
     row$screening$decision_origin="luna_consensus"
     row$screening$requires_human_review=FALSE
     route[[i]]<-"luna_consensus"
@@ -110,8 +124,10 @@ for(i in seq_along(consensus)){
 
 final_dec<-vapply(final,function(x)scalar((x$screening %||% list())$decision),character(1))
 if(any(!final_dec%in%c("retain","exclude")))stop("Final layer contains non-substantive decisions",call.=FALSE)
-if(sum(final_dec=="retain")!=19751L)stop(sprintf("Expected 19,751 final retains, found %d",sum(final_dec=="retain")),call.=FALSE)
-if(sum(final_dec=="exclude")!=12532L)stop(sprintf("Expected 12,532 final excludes, found %d",sum(final_dec=="exclude")),call.=FALSE)
+historical_exclude_overrides<-sum(con_ids%in%safe_hist_exclude_ids & cons_dec=="retain")
+if(historical_exclude_overrides!=344L)stop(sprintf("Expected 344 historical EXCLUDE overrides of Luna RETAIN, found %d",historical_exclude_overrides),call.=FALSE)
+if(sum(final_dec=="retain")!=19407L)stop(sprintf("Expected 19,407 final retains, found %d",sum(final_dec=="retain")),call.=FALSE)
+if(sum(final_dec=="exclude")!=12876L)stop(sprintf("Expected 12,876 final excludes, found %d",sum(final_dec=="exclude")),call.=FALSE)
 if(length(final)!=32283L||anyDuplicated(vapply(final,rid_layer,character(1))))stop("Final layer coverage invariant failed",call.=FALSE)
 
 write_jsonl(final,file.path(output_dir,"workflow04_final_screening_layer.jsonl"))
@@ -123,20 +139,28 @@ included_canonical<-unname(can_map[included_ids])
 write_jsonl(included_canonical,file.path(output_dir,"workflow04_included_canonical.jsonl"))
 
 summary<-list(
-  schema="living-evidence-map-workflow04-final-screening-v1",
+  schema="living-evidence-map-workflow04-final-screening-v2",
   status="PASS",
   source_luna_consensus_run=36221408684,
   source_terra_oneoff_run=36225691899,
   workflow03_eligible=32283L,
-  final_retain=19751L,
-  final_exclude=12532L,
-  inclusion_rate=19751/32283,
+  final_retain=19407L,
+  final_exclude=12876L,
+  inclusion_rate=19407/32283,
+  historical_exclude_overrides_of_luna_retain=historical_exclude_overrides,
   unresolved=0L,
   decision_routes=list(
     luna_consensus=sum(route=="luna_consensus"),
+    historical_exclude_authoritative=sum(route=="historical_exclude_authoritative"),
     historical_fallback=sum(route=="historical_fallback"),
     terra_oneoff=sum(route=="terra_oneoff"),
     human_rule_bulk_exclude=sum(route=="human_rule_bulk_exclude")
+  ),
+  historical_exclude_authoritative=list(
+    total=sum(route=="historical_exclude_authoritative"),
+    overrode_luna_retain=sum(route=="historical_exclude_authoritative"&cons_dec=="retain"),
+    agreed_with_luna_exclude=sum(route=="historical_exclude_authoritative"&cons_dec=="exclude"),
+    resolved_luna_uncertain=sum(route=="historical_exclude_authoritative"&cons_dec=="uncertain")
   ),
   historical_fallback=list(
     total=sum(route=="historical_fallback"),
