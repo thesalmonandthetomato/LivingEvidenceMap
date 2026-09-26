@@ -40,25 +40,46 @@ jobs:
           parse(file='scripts/updater/workflow_04_merge_consensus.R')
           cat('PASS: Workflow 04 consensus implementation parses\n')
 
-      - name: Restore authoritative lean canonical state
+      - name: Restore authoritative Workflow 03 handoff state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
-            --pointer docs/compaction/zenodo/run-36166883249.json \
-            --output-dir workflow04_input/canonical
-
-      - name: Restore authoritative Workflow 03 state
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
-            --pointer docs/publication_status/zenodo/run-36172718538.json \
-            --output-dir workflow04_input/status
+          W03_POINTER="docs/publication_status/zenodo/run-36172718538.json"
+          LEAN_POINTER="docs/compaction/zenodo/run-36166883249.json"
+          RUN_ID="$(POINTER="$W03_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$source_github_run_id)')"
+          EXPECTED_STATUS_SHA="$(POINTER="$W03_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$publication_status_sha256)')"
+          EXPECTED_LEAN_SHA="$(POINTER="$LEAN_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$lean_canonical_sha256)')"
+          CACHE_OK=false
+          rm -rf workflow04_input workflow04_handoff
+          mkdir -p workflow04_handoff
+          if gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow03-handoff-$RUN_ID" --dir workflow04_handoff; then
+            CAN="$(find workflow04_handoff -type f -name canonical_lean.jsonl -print -quit)"
+            STA="$(find workflow04_handoff -type f -name publication_status.jsonl -print -quit)"
+            if [ -n "$CAN" ] && [ -n "$STA" ]; then
+              CAN_SHA="$(P="$CAN" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')"
+              STA_SHA="$(P="$STA" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')"
+              if [ "$CAN_SHA" = "$EXPECTED_LEAN_SHA" ] && [ "$STA_SHA" = "$EXPECTED_STATUS_SHA" ]; then
+                mkdir -p workflow04_input/canonical workflow04_input/status
+                cp "$CAN" workflow04_input/canonical/canonical_lean.jsonl
+                cp "$STA" workflow04_input/status/publication_status.jsonl
+                CACHE_OK=true
+                echo "PASS: using verified 7-day Workflow 03 handoff artefact"
+              fi
+            fi
+          fi
+          if [ "$CACHE_OK" != true ]; then
+            rm -rf workflow04_input
+            Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+              --pointer "$LEAN_POINTER" \
+              --output-dir workflow04_input/canonical
+            Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
+              --pointer "$W03_POINTER" \
+              --output-dir workflow04_input/status
+            echo "PASS: restored authoritative Workflow 03 inputs from Zenodo"
+          fi
 
       - name: Validate Workflow 04 input
         shell: Rscript {0}
@@ -87,7 +108,7 @@ jobs:
           path: |
             workflow04_input/canonical/canonical_lean.jsonl
             workflow04_input/status/publication_status.jsonl
-          retention-days: 30
+          retention-days: 7
           if-no-files-found: error
 
   screen:
