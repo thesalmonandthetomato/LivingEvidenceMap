@@ -4,11 +4,14 @@
 
 Workflow 05 applies deterministic lexical species coding to the 19,407 records retained by Workflow 04.
 
-It has one substantive function:
-
-> search each retained record's title and abstract for the versioned species vocabulary and assign every matching eligible species coding.
+Its methodological function is to search each retained record's title and abstract for the versioned species vocabulary and assign every matching eligible species coding.
 
 Workflow 05 does not perform relevance screening, geography coding, topic coding, semantic inference, model adjudication, or focal/primary-species selection.
+
+This document is intended to serve two purposes:
+
+1. as a methodological guide to the repository implementation; and
+2. as source text for reporting the workflow in a research paper.
 
 ## Functionality map
 
@@ -48,7 +51,22 @@ if also present                    if present
                    geography coding
 ```
 
-## Authoritative input
+## Components
+
+| Component | Function |
+|---|---|
+| `.github/workflows/workflow_05_species_coding.yml` | Production controller for restoring the validated Workflow 04 retained corpus, validating the three-column vocabulary, running deterministic species coding, validating outputs, and creating the handoff artefact. |
+| `scripts/updater/workflow_05_species_coding.R` | Applies deterministic title/abstract species matching and writes record-level and long-form species outputs. |
+| `R/species_detect.R` | Implements case-insensitive lexical matching, markup normalisation, whitespace/hyphen tolerance, scientific-name abbreviation handling, OCR-spacing tolerance, overlap handling, and validated plural behaviour. |
+| `config/deterministic_concepts.csv` | Versioned runtime vocabulary with exactly `coding, entity, terms`. |
+| `scripts/updater/workflow_05_archive_state_to_zenodo.R` | Validates and publishes the sparse accepted W05 species layer to restricted Zenodo storage. |
+| `scripts/updater/workflow_05_update_zenodo_registry.R` | Registers the published Zenodo checkpoint and repository pointer. |
+| `docs/reporting/workflow_05/workflow_05_functionality_map.md` | Methodological and reporting description of the production workflow. |
+| `docs/reporting/workflow_05/AD_HOC_ACTIONS.md` | Separate record of non-routine baseline-establishment corrections; these are not part of the production methodology. |
+
+## Inputs and methodological rules
+
+### Authoritative input state
 
 The authoritative input is the Workflow 04 retained set:
 
@@ -60,7 +78,7 @@ The authoritative input is the Workflow 04 retained set:
 
 Workflow 05 may use the verified Workflow 04 Actions handoff cache when available. Otherwise it restores the accepted state from the durable Workflow 04 checkpoint and rematerialises the same retained corpus.
 
-## Coding vocabulary
+### Runtime coding vocabulary
 
 The runtime vocabulary is:
 
@@ -90,7 +108,7 @@ The vocabulary retains the multilingual terms, historical scientific synonyms an
 
 The ambiguous term `spring salmon` is deliberately excluded. English `Salmons` and Spanish `salmones` are included under `Unspecified species`.
 
-## Matching rules
+### Matching rules
 
 The matcher searches **title and abstract only**.
 
@@ -108,7 +126,7 @@ Matching is deterministic and case-insensitive. It supports:
 
 There is **no fuzzy matching** and no semantic inference. Misspellings are matched only when explicitly represented by the validated vocabulary or by the deterministic normalisation rules above.
 
-## Record-level coding rule
+### Record-level coding rule
 
 Every named eligible species detected in the title or abstract is retained.
 
@@ -123,7 +141,40 @@ Examples:
 - generic salmon terminology only → `Unspecified species`;
 - no configured species term → `NONE`.
 
-## Outputs
+## Processing modes or stages
+
+### 1. Restore and validate Workflow 04 retained records
+
+The workflow restores the exact 19,407 records retained by Workflow 04 and validates stable, unique `record_id` values.
+
+### 2. Validate the deterministic vocabulary
+
+The workflow requires the runtime vocabulary to contain exactly `coding, entity, terms`. The current W05 baseline requires `entity = farmed species` for all rows.
+
+### 3. Normalise title and abstract text
+
+Markup and formatting artefacts are normalised before matching, including HTML/JATS tags, escaped markup, irregular whitespace, hyphen variants and recognised OCR spacing artefacts.
+
+### 4. Detect deterministic lexical matches
+
+Every configured term is matched case-insensitively against title and abstract. Match-level provenance is retained.
+
+### 5. Derive record-level species codes
+
+All named eligible species detected for a record are retained. If a named eligible species is present, the generic `Unspecified species` code is suppressed. Records with no configured match are coded `NONE`.
+
+### 6. Validate the final species layer
+
+Before handoff, Workflow 05 requires:
+
+- exactly 19,407 record-level outputs;
+- unique stable `record_id` values;
+- preserved record order;
+- no missing species fields;
+- no generic `UNSPEC_SALMON` code where a named eligible species is also present; and
+- checksum identity between the runtime vocabulary and the vocabulary recorded in the run manifest.
+
+### 7. Produce operational and durable outputs
 
 The production workflow writes:
 
@@ -131,22 +182,32 @@ The production workflow writes:
 |---|---|
 | `workflow05_species_coded.csv` | Operational record-level handoff including record identity, title/abstract and species fields. |
 | `species_codes_long.csv` | Long-form record × species-code layer. |
-| `species_matches.csv` | Match-level provenance including the matched lexical evidence. |
+| `species_matches.csv` | Match-level provenance including matched lexical evidence. |
 | `species_record_counts.csv` | Aggregate coding counts. |
 | `workflow05_manifest.json` | Counts, input/vocabulary checksums and matcher configuration. |
 
-For durable archival, Workflow 05 stores a **sparse layer** rather than duplicating upstream bibliographic text. The Zenodo state contains:
+For durable archival, Workflow 05 stores a sparse layer rather than duplicating upstream bibliographic text.
 
-- `workflow05_species_layer.csv` with stable `record_id` and species coding fields for all 19,407 records;
-- `species_codes_long.csv`;
-- `species_matches.csv`;
-- `species_record_counts.csv`;
-- `workflow05_manifest.json`; and
-- the exact `deterministic_concepts.csv` vocabulary.
+## Provenance and documentation
 
-## Validated baseline
+Workflow 05 records, where applicable:
 
-The authoritative production run is GitHub Actions run **36268840588**, commit:
+- stable canonical `record_id`;
+- deterministic species code;
+- canonical species label;
+- matched lexical term;
+- title/abstract source of each match;
+- match position;
+- input record count;
+- coded and `NONE` record counts;
+- total lexical-match count;
+- runtime vocabulary SHA-256;
+- output-layer checksums;
+- source GitHub Actions run and commit;
+- upstream Workflow 04 Zenodo identity and layer checksum; and
+- Zenodo publication record and manifest checksum.
+
+The validated production baseline is GitHub Actions run **36268840588**, commit:
 
 `636428716c0a2e66431720dbffaf392e688b5b56`
 
@@ -157,46 +218,65 @@ Validated counts:
 - records coded `NONE`: **169**;
 - deterministic lexical matches: **80,831**.
 
-The three-column baseline was compared record-by-record against the immediately preceding validated rebuilt W05 run `36266979542`.
-
-Result:
+The three-column baseline was compared record-by-record against the immediately preceding validated rebuilt W05 run `36266979542`:
 
 - **19,407 / 19,407 record-level species codings identical**;
 - **0 coding differences**.
 
-The earlier validated species-only run `36245194052` differed from the rebuilt baseline for only one record. That change was intentional: the ambiguous phrase `spring salmon` had previously produced a Chinook salmon coding and was removed from the vocabulary.
-
-## Provenance and invariants
-
-Workflow 05 requires:
-
-- exactly 19,407 input records;
-- unique, stable `record_id` values;
-- exactly the three vocabulary columns `coding, entity, terms`;
-- no `spring salmon` term;
-- no focal/primary/co-primary species fields or logic;
-- no geography logic;
-- no LLM/API calls;
-- no generic `UNSPEC_SALMON` code on a record that also has a named eligible species;
-- exactly one record-level output row per input `record_id`; and
-- checksum identity between the runtime vocabulary and the vocabulary recorded in the run manifest.
+The earlier validated species-only run `36245194052` differed from the rebuilt baseline for one intentional correction: removal of the ambiguous phrase `spring salmon` as a Chinook synonym. The baseline-establishment history is documented separately in `AD_HOC_ACTIONS.md`.
 
 ## Storage and archival model
 
-GitHub retains the workflow implementation, matcher, three-column vocabulary and methodological documentation.
+### Permanent repository records
 
-The validated W05 output is exposed temporarily as a GitHub Actions artifact for operational handoff.
+GitHub retains:
 
-The accepted sparse W05 species layer is then published as a **restricted Zenodo dataset** and registered in:
+- the Workflow 05 controller;
+- deterministic matcher implementation;
+- the three-column runtime vocabulary;
+- Zenodo publication and registry scripts;
+- this functionality/methods report;
+- the separate ad hoc actions report; and
+- lightweight Zenodo registry/pointer metadata.
 
-- `docs/workflow05/zenodo_registry.csv`; and
-- `docs/workflow05/zenodo/run-36268840588.json`.
+The complete bibliographic corpus is not duplicated in Git.
 
-The registered Zenodo checkpoint is the authoritative W05 state. Downstream workflows should use a verified Actions handoff cache when available and otherwise restore from the registered durable checkpoint.
+### Short-lived GitHub Actions artefacts
+
+The validated W05 run exposes an operational handoff artefact containing the record-level coded output, long-form codes, lexical matches, counts and run manifest.
+
+Actions artefacts are execution and handoff caches rather than the authoritative long-term source of truth.
+
+### Durable external archive
+
+The accepted sparse W05 state is archived as restricted Zenodo record **22982751**, DOI **10.5281/zenodo.22982751**.
+
+The durable state contains:
+
+- `workflow05_species_layer.csv` with stable `record_id` and species coding fields for all 19,407 records;
+- `species_codes_long.csv`;
+- `species_matches.csv`;
+- `species_record_counts.csv`;
+- `workflow05_manifest.json`; and
+- the exact `deterministic_concepts.csv` runtime vocabulary.
+
+The archived Workflow 05 species-layer SHA-256 is:
+
+`85f4003d3835535f6ab1c50691c79159640448642bb7b20974d58856dab44cdf`
+
+The repository pointer is:
+
+`docs/workflow05/zenodo/run-36268840588.json`
+
+and the registry is:
+
+`docs/workflow05/zenodo_registry.csv`.
 
 ## Downstream handoff
 
 Workflow 06 consumes the same 19,407 stable `record_id` records together with the accepted W05 species layer.
+
+The registered Zenodo checkpoint is the authoritative W05 state. Workflow 06 should use a verified Actions handoff cache when available and otherwise restore from the registered durable checkpoint.
 
 Workflow 06 is responsible for geography coding. Geography is not part of Workflow 05.
 
@@ -204,9 +284,9 @@ Workflow 06 is responsible for geography coding. Geography is not part of Workfl
 
 > **Workflow 05: deterministic species coding.** Records retained after relevance screening were coded for eligible farmed species using deterministic lexical matching of titles and abstracts against a versioned three-column vocabulary comprising canonical coding, entity and semicolon-separated search terms. The vocabulary included scientific and common names, historical synonyms, multilingual terms and spelling variants identified during validation. Matching was case-insensitive and normalised whitespace, hyphen variants, HTML/JATS markup and recognised OCR spacing artefacts. All named eligible species detected in a record were retained; no focal or primary species was inferred. A generic unspecified-salmon code was used only where generic salmon terminology was detected without a named eligible species. Records with no configured match were coded `NONE`. Stable record identifiers and match-level lexical provenance were retained for reproducibility.
 
-## Status
+## Reporting status
 
-Workflow 05 is methodologically complete when:
+Workflow 05 is considered complete and validated when:
 
 - the validated Workflow 04 retained state is identity-checked;
 - the runtime vocabulary has exactly `coding, entity, terms`;
@@ -217,4 +297,6 @@ Workflow 05 is methodologically complete when:
 - the output passes the validated count and schema invariants; and
 - the accepted sparse layer is published and registered as a durable Zenodo checkpoint.
 
-The computational baseline satisfies the coding and validation conditions. The authoritative archival pointer is `docs/workflow05/zenodo/run-36268840588.json`.
+These conditions are satisfied for the current baseline.
+
+**Workflow 05 status: complete, validated, durably archived and ready for Workflow 06 consumption.**
