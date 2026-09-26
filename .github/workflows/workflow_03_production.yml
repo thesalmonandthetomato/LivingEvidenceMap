@@ -15,6 +15,10 @@ on:
         required: false
         default: true
         type: boolean
+      lean_pointer_path:
+        required: false
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
     secrets:
       ZENODO_ACCESS_TOKEN:
         required: true
@@ -42,6 +46,11 @@ on:
         required: true
         default: false
         type: boolean
+      lean_pointer_path:
+        description: 'Authoritative post-W02 lean canonical pointer'
+        required: false
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
 
   push:
     branches:
@@ -90,10 +99,11 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           GH_TOKEN: ${{ github.token }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path || 'docs/compaction/zenodo/run-36166883249.json' }}
         shell: bash
         run: |
           set -euo pipefail
-          POINTER="docs/compaction/zenodo/run-36166883249.json"
+          POINTER="$LEAN_POINTER"
           RUN_ID="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$source_github_run_id)')"
           EXPECTED_SHA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$lean_canonical_sha256)')"
           CACHE_OK=false
@@ -120,6 +130,7 @@ jobs:
           fi
           SHA="$(Rscript -e 'cat(digest::digest(file="workflow03_input/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
           test "$SHA" = "$EXPECTED_SHA"
+          echo "LEAN_SHA=$SHA" >> "$GITHUB_ENV"
 
       - name: Run publication-status scan
         env:
@@ -174,7 +185,7 @@ jobs:
             --publication-run-id "$GITHUB_RUN_ID" \
             --repository "$GITHUB_REPOSITORY" \
             --output-dir outputs/workflow03_zenodo \
-            --upstream-lean-sha256 1d3977537c1498a728c9fe04ff958874f4a7727ad344a02ba3ef00adb2f755c7
+            --upstream-lean-sha256 "$LEAN_SHA"
 
       - name: Register authoritative Workflow 03 layer
         id: handoff
