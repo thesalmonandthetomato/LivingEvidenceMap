@@ -42,10 +42,81 @@ paths <- list(
 for (p in paths) if (!file.exists(p)) stop(sprintf("Missing Workflow 06 state file: %s", basename(p)), call. = FALSE)
 
 layer <- read.csv(paths$layer, stringsAsFactors = FALSE, check.names = FALSE)
-unresolved <- read.csv(paths$unresolved, stringsAsFactors = FALSE, check.names = FALSE)
-failures <- read.csv(paths$failures, stringsAsFactors = FALSE, check.names = FALSE)
-discrepancies <- read.csv(paths$discrepancies, stringsAsFactors = FALSE, check.names = FALSE)
-summary <- fromJSON(paths$summary, simplifyVector = FALSE)
+
+# Apply the four validated one-off model-failure recoveries.
+recovered <- data.frame(
+  record_id = c(
+    "work-60e645a39d981a54",
+    "work-a933887a625b37d8",
+    "work-e8046bb0876a1942",
+    "work-f026296875ea14e0"
+  ),
+  geography_reason = c(
+    "The abstract identifies a commercial rainbow trout aquaculture facility but does not state its country or an unambiguous subnational location.",
+    "The title and abstract describe monitoring at an intensive trout farm and a mountain pond but do not identify a country or unambiguous subnational location.",
+    "The study is a longitudinal case study of the global salmon farming industry, but no specific country is identified.",
+    "The title and abstract describe field work at a rainbow trout farm but do not state a country or an unambiguous subnational location."
+  ),
+  recovery_run_id = c("36271055010","36271055010","36271186232","36271055010"),
+  stringsAsFactors = FALSE
+)
+stopifnot(all(recovered$record_id %in% layer$record_id))
+for (i in seq_len(nrow(recovered))) {
+  j <- match(recovered$record_id[[i]], layer$record_id)
+  layer$geography_status[j] <- "NONE"
+  layer$luna_iso3c[j] <- ""
+  layer$luna_country_names[j] <- ""
+  layer$luna_evidence[j] <- ""
+  layer$luna_mapping_reason[j] <- ""
+  layer$evidence_all_grounded[j] <- TRUE
+  layer$geography_reason[j] <- recovered$geography_reason[[i]]
+  layer$llm_failed[j] <- FALSE
+  layer$llm_error[j] <- ""
+  layer$luna_none[j] <- TRUE
+  layer$det_iso3c[j] <- trimws(ifelse(is.na(layer$deterministic_primary_iso3c[j]), "", layer$deterministic_primary_iso3c[j]))
+  layer$deterministic_none[j] <- !nzchar(layer$det_iso3c[j])
+  layer$exact_agreement[j] <- layer$deterministic_none[j]
+  layer$discrepancy_type[j] <- if (layer$deterministic_none[j]) "exact_agreement" else "deterministic_only_geography"
+}
+write.csv(layer, paths$layer, row.names = FALSE, na = "")
+
+unresolved <- layer[layer$geography_status == "UNRESOLVED", , drop = FALSE]
+ungrounded <- layer[!as.logical(layer$evidence_all_grounded), , drop = FALSE]
+failures <- layer[as.logical(layer$llm_failed), , drop = FALSE]
+discrepancies <- layer[layer$discrepancy_type != "exact_agreement", , drop = FALSE]
+write.csv(unresolved, paths$unresolved, row.names = FALSE, na = "")
+write.csv(ungrounded, paths$ungrounded, row.names = FALSE, na = "")
+write.csv(failures, paths$failures, row.names = FALSE, na = "")
+write.csv(discrepancies, paths$discrepancies, row.names = FALSE, na = "")
+
+patterns <- as.data.frame(table(layer$discrepancy_type), stringsAsFactors = FALSE)
+names(patterns) <- c("discrepancy_type","n")
+patterns$pct <- 100 * patterns$n / nrow(layer)
+patterns <- patterns[order(-patterns$n), , drop = FALSE]
+write.csv(patterns, paths$patterns, row.names = FALSE, na = "")
+
+statuses <- as.data.frame(table(layer$geography_status), stringsAsFactors = FALSE)
+names(statuses) <- c("geography_status","n")
+statuses$pct <- 100 * statuses$n / nrow(layer)
+write.csv(statuses, paths$statuses, row.names = FALSE, na = "")
+
+summary <- list(
+  records = nrow(layer),
+  model = "gpt-5.6-luna",
+  reasoning = "low",
+  prompt_sha256 = "ce20acddf42e494a799d08b130d3e1bace95746035a7ad8e625fc8046a1bd07a",
+  resolved_n = sum(layer$geography_status == "RESOLVED"),
+  none_n = sum(layer$geography_status == "NONE"),
+  unresolved_n = sum(layer$geography_status == "UNRESOLVED"),
+  evidence_not_grounded_n = sum(!as.logical(layer$evidence_all_grounded)),
+  llm_failures_n = sum(as.logical(layer$llm_failed)),
+  exact_agreement_discrepancy_class_n = sum(layer$discrepancy_type == "exact_agreement"),
+  qc_discrepancies_n = sum(layer$discrepancy_type != "exact_agreement"),
+  corrected_from_run = "36265092530",
+  failure_recovery_runs = c("36271055010","36271186232")
+)
+writeLines(toJSON(summary, auto_unbox = TRUE, pretty = TRUE), paths$summary)
+
 
 stopifnot(
   nrow(layer) == 19407L,
@@ -129,6 +200,8 @@ manifest <- list(
   geography_status_counts_sha256 = sha$statuses,
   validated_summary_sha256 = sha$summary,
   prompt_file_sha256 = sha$prompt,
+  failure_recovery_runs = c("36271055010","36271186232"),
+  corrected_record_ids = recovered$record_id,
   file_visibility = "restricted"
 )
 
