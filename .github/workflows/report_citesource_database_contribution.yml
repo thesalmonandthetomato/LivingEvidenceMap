@@ -88,6 +88,8 @@ jobs:
             nrow(s) == 5L,
             file.exists("outputs/citesource_contribution/source_provenance_screening.csv"),
             file.exists("outputs/citesource_contribution/source_contribution_screening_summary.csv"),
+            file.exists("outputs/citesource_contribution/database_contribution_deduplicated_vs_included.png"),
+            file.exists("outputs/citesource_contribution/database_contribution_deduplicated_vs_included.pdf"),
             file.exists("outputs/citesource_contribution/database_contribution_upset.png"),
             file.exists("outputs/citesource_contribution/database_contribution_upset.pdf")
           )
