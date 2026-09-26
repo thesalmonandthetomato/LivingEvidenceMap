@@ -37,7 +37,7 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
 
     # Treat ordinary whitespace and hyphen variants as equivalent lexical
     # separators. This captures forms such as RAINBOW-TROUT and SALMO-GAIRDNERI.
-    separator <- "(?:[[:space:]\\u00A0\\u00AD\\-\\u2010\\u2011\\u2012\\u2013\\u2014]+)"
+    separator <- "(?:[[:space:] ­‐‑‒–—-]+)"
     paste(parts, collapse = separator)
   }
 
