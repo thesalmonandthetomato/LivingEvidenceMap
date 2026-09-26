@@ -40,8 +40,8 @@ if(anyDuplicated(lens_map$historical_record_id))stop("A Lens manifestation maps 
 queue<-read_csv(queue_path,show_col_types=FALSE,progress=FALSE)
 state<-read_csv(state_path,show_col_types=FALSE,progress=FALSE)
 hist<-read_csv(historical_path,show_col_types=FALSE,progress=FALSE)
-required_hist<-c("record_id","deterministic_species","deterministic_species_ids","species_review_required","species_assignment_reason","non_target_species",
-                 "deterministic_primary_countries","deterministic_primary_iso3c","geography_review_required","geography_review_reason",
+required_hist<-c("record_id","deterministic_species","deterministic_species_ids","species_review_required",
+                 "deterministic_primary_countries","deterministic_primary_iso3c","geography_review_required",
                  "species_decision","llm_species","species_reason","geography_decision","llm_primary_country_iso3c","geography_reason")
 missing<-setdiff(required_hist,names(hist))
 if(length(missing))stop("Historical adjudication CSV missing required columns: ",paste(missing,collapse=", "),call.=FALSE)
@@ -56,14 +56,11 @@ hist<-hist|>filter(record_id%in%queue_ids)
 
 same_species_state<-function(h,c){
  identical(norm_set(h$deterministic_species),norm_set(c$deterministic_species)) &&
- identical(norm_set(h$deterministic_species_ids),norm_set(c$deterministic_species_ids)) &&
- identical(norm_text(h$species_assignment_reason),norm_text(c$species_assignment_reason)) &&
- identical(norm_set(h$non_target_species),norm_set(c$non_target_species))
+ identical(norm_set(h$deterministic_species_ids),norm_set(c$deterministic_species_ids))
 }
 same_geo_state<-function(h,c){
  identical(norm_set(h$deterministic_primary_countries),norm_set(c$deterministic_primary_countries)) &&
- identical(norm_set(h$deterministic_primary_iso3c),norm_set(c$deterministic_primary_iso3c)) &&
- identical(norm_text(h$geography_review_reason),norm_text(c$geography_review_reason))
+ identical(norm_set(h$deterministic_primary_iso3c),norm_set(c$deterministic_primary_iso3c))
 }
 
 inherit_rows<-list();audit_rows<-list();ii<-0L;aa<-0L
@@ -137,7 +134,7 @@ summary<-list(
  historical_species_conflicts=sum(audit$species_conflict%in%TRUE),
  historical_geography_conflicts=sum(audit$geography_conflict%in%TRUE),
  remaining_llm_queue_records=nrow(remaining),
- reuse_rule="unique Lens manifestation mapping to current stable record_id plus unchanged relevant deterministic state; multiple historical manifestations must agree",
+ reuse_rule="unique Lens manifestation mapping to current stable record_id plus exact agreement on historical/current deterministic species+species IDs or country+ISO3 state; corresponding historical review flag must be TRUE; multiple historical manifestations must agree",
  status="PASS"
 )
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null"),path(output_dir,"historical_inheritance_summary.json"))
