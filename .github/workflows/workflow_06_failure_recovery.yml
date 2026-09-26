@@ -48,14 +48,15 @@ jobs:
           Rscript scripts/reporting/workflow06_recover_failures.R \
             --input "$FAIL" \
             --prompt config/workflow05_geography_semantic_prompt.txt \
-            --output-dir outputs/workflow06_failure_recovery
+            --output-dir outputs/workflow06_failure_recovery \
+            --record-id work-e8046bb0876a1942
 
       - name: Validate scope
         shell: Rscript {0}
         run: |
           x <- readr::read_csv("outputs/workflow06_failure_recovery/workflow06_failure_recovery.csv",show_col_types=FALSE)
-          stopifnot(nrow(x)==4L,!anyDuplicated(x$record_id))
-          cat(sprintf("PASS: recovery output contains exactly four records; remaining failures=%d\n",sum(x$llm_failed)))
+          stopifnot(nrow(x)==1L,!anyDuplicated(x$record_id))
+          cat(sprintf("PASS: targeted recovery output contains exactly one record; remaining failures=%d\n",sum(x$llm_failed)))
 
       - name: Upload recovery output
         uses: actions/upload-artifact@v4
