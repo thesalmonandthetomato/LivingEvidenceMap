@@ -121,9 +121,9 @@ jobs:
         run: |
           set -euo pipefail
           POINTER="workflow00_registry/$W00_POINTER"
-          RUN_ID="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$github_run_id)' POINTER="$POINTER" 2>/dev/null || true)"
+          RUN_ID="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$github_run_id)' 2>/dev/null || true)"
           CACHE_OK=true
-          HAS_HASHES="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(!is.null(x$handoff_sources))' POINTER="$POINTER")"
+          HAS_HASHES="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(!is.null(x$handoff_sources))')"
           if [ "$HAS_HASHES" != "TRUE" ] || [ -z "$RUN_ID" ]; then CACHE_OK=false; fi
           rm -rf current_workflow00
           mkdir -p current_workflow00
@@ -134,8 +134,8 @@ jobs:
               if ! gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow00-${source}-harvest-${RUN_ID}" --dir "current_workflow00/$source"; then
                 CACHE_OK=false; break
               fi
-              EXPECTED="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$handoff_sources[[Sys.getenv("SOURCE")]]$tree_sha256)' POINTER="$POINTER" SOURCE="$source")"
-              ACTUAL="$(Rscript -e 'library(digest);root<-Sys.getenv("ROOT");fs<-list.files(root,recursive=TRUE,full.names=TRUE,all.files=TRUE,no..=TRUE);fs<-fs[file.info(fs)$isdir %in% FALSE];rel<-substring(fs,nchar(normalizePath(root,mustWork=TRUE))+2L);o<-order(rel);fs<-fs[o];rel<-rel[o];z<-vapply(seq_along(fs),function(i)paste(rel[[i]],digest(file=fs[[i]],algo="sha256",serialize=FALSE),sep="\t"),character(1));cat(digest(paste(z,collapse="\n"),algo="sha256",serialize=FALSE))' ROOT="current_workflow00/$source")"
+              EXPECTED="$(POINTER="$POINTER" SOURCE="$source" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$handoff_sources[[Sys.getenv("SOURCE")]]$tree_sha256)')"
+              ACTUAL="$(ROOT="current_workflow00/$source" Rscript -e 'library(digest);root<-Sys.getenv("ROOT");fs<-list.files(root,recursive=TRUE,full.names=TRUE,all.files=TRUE,no..=TRUE);fs<-fs[file.info(fs)$isdir %in% FALSE];rel<-substring(fs,nchar(normalizePath(root,mustWork=TRUE))+2L);o<-order(rel);fs<-fs[o];rel<-rel[o];z<-vapply(seq_along(fs),function(i)paste(rel[[i]],digest(file=fs[[i]],algo="sha256",serialize=FALSE),sep="\t"),character(1));cat(digest(paste(z,collapse="\n"),algo="sha256",serialize=FALSE))')"
               if [ "$EXPECTED" != "$ACTUAL" ]; then CACHE_OK=false; break; fi
             done
           fi
