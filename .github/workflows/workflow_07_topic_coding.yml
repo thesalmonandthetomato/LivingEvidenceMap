@@ -34,9 +34,11 @@ env:
   TOPIC_PROD_OUTPUT_DIR: outputs/workflow07_topic_v3_6_fresh
   TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
   TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
-  TOPIC_CHUNK_SIZE: '500'
+  TOPIC_CHUNK_SIZE: '200'
   BATCH_POLL_SECONDS: '20'
   BATCH_MAX_WAIT_SECONDS: '7200'
+  BATCH_TOKEN_LIMIT_RETRY_SECONDS: '120'
+  BATCH_TOKEN_LIMIT_MAX_RETRIES: '12'
   EXPECTED_ONTOLOGY_SHA256: '5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43'
   EXPECTED_PROMPT_SHA256: 'f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0'
 
@@ -150,7 +152,7 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 3
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
     steps:
