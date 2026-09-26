@@ -102,5 +102,5 @@ jobs:
         with:
           name: workflow04-zenodo-publication-${{ github.run_id }}
           path: outputs/workflow04_zenodo/
-          retention-days: 30
+          retention-days: 7
           if-no-files-found: warn
