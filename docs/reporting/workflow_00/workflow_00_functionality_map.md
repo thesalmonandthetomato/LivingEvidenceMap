@@ -155,6 +155,12 @@ The record contains:
 
 Zenodo metadata remain discoverable while the archived search-result files are restricted. The repository stores the DOI and record identifier so downstream workflows can retrieve the exact archived inputs deterministically.
 
+## Validated-state handoff
+
+Workflow 00 follows the repository-wide validated-state handoff policy. Validated source harvest artefacts are retained in GitHub Actions for seven days as a fast downstream cache. The corresponding restricted Zenodo record remains authoritative. Workflow 01 may use the Actions harvest only when its source/run identity and registered handoff checksum match the authoritative Workflow 00 pointer; otherwise it restores the same source state from Zenodo.
+
+The cache and Zenodo routes are delivery mechanisms for the same accepted state, not separate sources of truth.
+
 ## Downstream handoff
 
 Workflow 01 retrieves Workflow 00 inputs from the Zenodo records registered in the repository. Downloads are authenticated and verified against the stored byte sizes and checksums before extraction. This removes any dependency on long-lived GitHub Actions artefacts.
