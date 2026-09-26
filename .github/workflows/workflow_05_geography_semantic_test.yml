@@ -1,0 +1,90 @@
+name: Workflow 05 - semantic geography random 200 test
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow05/.run_geography_semantic_test'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  geography:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("dplyr","readr","jsonlite","httr2","digest"))
+
+      - name: Restore deterministic W05 checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-species-rule-delta-36234132889
+          path: deterministic_checkpoint
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 36234132889
+
+      - name: Locate exact records and deterministic geography
+        shell: bash
+        run: |
+          set -euo pipefail
+          REC="$(find deterministic_checkpoint -type f -path '*/workflow05_corrected/records_for_annotation.csv' -print -quit)"
+          DET="$(find deterministic_checkpoint -type f -path '*/workflow05_corrected/deterministic_annotation_summary.csv' -print -quit)"
+          if [ -z "$REC" ]; then REC="$(find deterministic_checkpoint -type f -name records_for_annotation.csv -print -quit)"; fi
+          if [ -z "$DET" ]; then DET="$(find deterministic_checkpoint -type f -name deterministic_annotation_summary.csv -print -quit)"; fi
+          test -n "$REC"; test -n "$DET"
+          cp "$REC" records_for_annotation.csv
+          cp "$DET" deterministic_annotation_summary.csv
+          Rscript -e 'r<-readr::read_csv("records_for_annotation.csv",show_col_types=FALSE);d<-readr::read_csv("deterministic_annotation_summary.csv",show_col_types=FALSE);stopifnot(nrow(r)==19407L,nrow(d)==19407L,!anyDuplicated(r$record_id),!anyDuplicated(d$record_id));cat("PASS: exact 19,407-record geography input restored\n")'
+
+      - name: Run one-pass semantic geography on random 200
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$OPENAI_API_KEY"
+          Rscript scripts/reporting/workflow05_geography_semantic_test.R \
+            --records records_for_annotation.csv \
+            --deterministic deterministic_annotation_summary.csv \
+            --prompt config/workflow05_geography_semantic_prompt.txt \
+            --sample-size 200 \
+            --sample-seed 20260926 \
+            --output-dir outputs/workflow05_geography_semantic_test
+
+      - name: Validate outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON("outputs/workflow05_geography_semantic_test/summary.json")
+          c <- read.csv("outputs/workflow05_geography_semantic_test/comparison_200.csv")
+          l <- read.csv("outputs/workflow05_geography_semantic_test/luna_geography.csv")
+          stopifnot(
+            s$n == 200L,
+            nrow(c) == 200L,
+            nrow(l) == 200L,
+            !anyDuplicated(c$record_id),
+            all(l$luna_status %in% c("RESOLVED","NONE","UNRESOLVED"))
+          )
+          cat("PASS: semantic geography random-200 outputs validated\n")
+
+      - name: Upload geography test outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-geography-semantic-test-${{ github.run_id }}
+          path: outputs/workflow05_geography_semantic_test/
+          retention-days: 90
+          if-no-files-found: error
