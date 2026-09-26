@@ -1,0 +1,106 @@
+name: Workflow 04 - Publish validated screening baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/workflow04/.publish_validated_baseline'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Download validated Workflow 04 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-final-screening-36227737500
+          path: source_artifact
+          github-token: ${{ github.token }}
+          run-id: 36227737500
+
+      - name: Build sparse durable Workflow 04 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          LAYER=$(find source_artifact -type f -name workflow04_final_screening_layer.jsonl -print -quit)
+          INC=$(find source_artifact -type f -name workflow04_included_record_ids.txt -print -quit)
+          EXC=$(find source_artifact -type f -name workflow04_excluded_record_ids.txt -print -quit)
+          SUMMARY=$(find source_artifact -type f -name summary.json -print -quit)
+          test -n "$LAYER"
+          test -n "$INC"
+          test -n "$EXC"
+          test -n "$SUMMARY"
+          mkdir -p workflow04_state
+          cp "$LAYER" workflow04_state/workflow04_final_screening_layer.jsonl
+          cp "$INC" workflow04_state/workflow04_included_record_ids.txt
+          cp "$EXC" workflow04_state/workflow04_excluded_record_ids.txt
+          cp "$SUMMARY" workflow04_state/summary.json
+          cp docs/workflow04/workflow04_agreement_summary.json workflow04_state/workflow04_agreement_summary.json
+          Rscript -e 'x<-jsonlite::fromJSON("workflow04_state/summary.json",simplifyVector=FALSE);stopifnot(x$status=="PASS",as.integer(x$workflow03_eligible)==32283L,as.integer(x$final_retain)==19407L,as.integer(x$final_exclude)==12876L,as.integer(x$unresolved)==0L);cat("PASS: validated Workflow 04 baseline artifact\n")'
+
+      - name: Publish restricted Workflow 04 screening state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow04_zenodo
+          Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R \
+            --state-dir workflow04_state \
+            --source-run-id 36227737500 \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow04_zenodo \
+            --upstream-lean-sha256 1d3977537c1498a728c9fe04ff958874f4a7727ad344a02ba3ef00adb2f755c7 \
+            --upstream-workflow03-sha256 0665f75882a1042fed55a56b71082836431c457ec7dea53a0c6793bf64215a79 \
+            --prompt-sha256 ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69
+
+      - name: Register authoritative Workflow 04 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_04_update_zenodo_registry.R \
+            --receipt outputs/workflow04_zenodo/zenodo_receipt.json \
+            --registry docs/workflow04/zenodo_registry.csv \
+            --pointer-dir docs/workflow04/zenodo
+          git add docs/workflow04/zenodo_registry.csv docs/workflow04/zenodo/run-36227737500.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Register authoritative Workflow 04 screening state"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-zenodo-publication-${{ github.run_id }}
+          path: outputs/workflow04_zenodo/
+          retention-days: 30
+          if-no-files-found: warn
