@@ -155,7 +155,7 @@ manifest <- list(
     listed_misspellings_supported = TRUE,
     fuzzy_matching = FALSE,
     semantic_inference = FALSE,
-    unspecified_suppressed_when_named_species_present = TRUE,
+    unspecified_suppressed_when_named_species_present = TRUE
   )
 )
 writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE), file.path(output_dir, "workflow05_manifest.json"))
