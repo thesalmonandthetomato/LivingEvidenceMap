@@ -263,41 +263,185 @@ write.csv(
   row.names = FALSE
 )
 
-# CiteSource's UpSet plot shows:
-# - left bars: number of canonical works represented by each database;
-# - top bars: exact unique/shared source combinations after deduplication.
-png(
-  file.path(output_dir, "database_contribution_upset.png"),
-  width = 2600, height = 1600, res = 220
-)
-CiteSource::plot_source_overlap_upset(
-  comparison,
-  groups = "source",
-  nsets = length(source_labels),
-  sets.x.label = "Canonical works contributed",
-  mainbar.y.label = "Canonical works in source intersection",
-  order.by = c("freq", "degree"),
-  decreasing = c(TRUE, TRUE),
-  text.scale = 1.35
-)
-dev.off()
+# Build exact source-intersection counts for both analysis stages.
+# Each record contributes to exactly one intersection combination.
+source_order <- screening_summary |>
+  arrange(desc(deduplicated_records)) |>
+  pull(database)
 
-pdf(
-  file.path(output_dir, "database_contribution_upset.pdf"),
-  width = 12, height = 7.5,
-  useDingbats = FALSE
+presence_matrix <- as.matrix(source_presence[, source_order, drop = FALSE])
+storage.mode(presence_matrix) <- "logical"
+
+intersection_key <- apply(
+  presence_matrix,
+  1,
+  function(z) paste(source_order[z], collapse = " | ")
 )
-CiteSource::plot_source_overlap_upset(
-  comparison,
-  groups = "source",
-  nsets = length(source_labels),
-  sets.x.label = "Canonical works contributed",
-  mainbar.y.label = "Canonical works in source intersection",
-  order.by = c("freq", "degree"),
-  decreasing = c(TRUE, TRUE),
-  text.scale = 1.35
+intersection_degree <- rowSums(presence_matrix)
+
+intersection_summary <- tibble(
+  record_id = source_presence$record_id,
+  intersection = intersection_key,
+  degree = intersection_degree,
+  included_w04 = source_presence$included_w04
+) |>
+  group_by(intersection, degree) |>
+  summarise(
+    deduplicated_records = n(),
+    included_records = sum(included_w04),
+    .groups = "drop"
+  ) |>
+  arrange(desc(deduplicated_records), desc(degree), intersection)
+
+if (sum(intersection_summary$deduplicated_records) != nrow(source_presence)) {
+  stop("Exact intersection counts do not sum to all canonical records", call. = FALSE)
+}
+if (length(included_ids) && sum(intersection_summary$included_records) != length(included_ids)) {
+  stop("Exact included intersection counts do not sum to Workflow 04 included records", call. = FALSE)
+}
+
+write.csv(
+  intersection_summary,
+  file.path(output_dir, "source_intersection_screening_summary.csv"),
+  row.names = FALSE
 )
-dev.off()
+
+# One integrated paired UpSet-style figure:
+#   left bars = source totals at both stages;
+#   top bars = exact source intersections at both stages;
+#   lower-right matrix = database combination defining each intersection.
+plot_paired_upset <- function(device = c("png", "pdf")) {
+  device <- match.arg(device)
+  olive <- "#6B6B2A"
+
+  if (device == "png") {
+    png(
+      file.path(output_dir, "database_contribution_upset.png"),
+      width = 3000, height = 1900, res = 220
+    )
+  } else {
+    pdf(
+      file.path(output_dir, "database_contribution_upset.pdf"),
+      width = 13.6, height = 8.6,
+      useDingbats = FALSE
+    )
+  }
+  on.exit(dev.off(), add = TRUE)
+
+  layout(
+    matrix(c(0, 1,
+             2, 3), nrow = 2, byrow = TRUE),
+    widths = c(0.30, 0.70),
+    heights = c(0.59, 0.41)
+  )
+
+  # Top-right: paired exact-intersection bars.
+  par(mar = c(0.8, 5.2, 1.6, 1.0))
+  intersection_mat <- rbind(
+    intersection_summary$deduplicated_records,
+    intersection_summary$included_records
+  )
+  ibp <- barplot(
+    intersection_mat,
+    beside = TRUE,
+    col = c("black", olive),
+    border = NA,
+    axes = FALSE,
+    ylim = c(0, max(intersection_mat) * 1.12),
+    space = c(0.10, 0.65)
+  )
+  axis(2, las = 1, cex.axis = 0.85)
+  mtext("Canonical works in source intersection", side = 2, line = 4.0, cex = 0.9)
+  legend(
+    "topright",
+    legend = c("Deduplicated records", "Included records"),
+    fill = c("black", olive),
+    border = NA,
+    bty = "n",
+    cex = 0.82
+  )
+  intersection_x <- colMeans(ibp)
+  intersection_xlim <- range(ibp) + c(-0.8, 0.8)
+
+  # Bottom-left: paired source totals.
+  par(mar = c(4.4, 8.3, 0.4, 0.8))
+  source_rows <- screening_summary |>
+    slice(match(source_order, database))
+  source_mat <- rbind(
+    source_rows$deduplicated_records,
+    source_rows$included_records
+  )
+  sbp <- barplot(
+    source_mat,
+    beside = TRUE,
+    horiz = TRUE,
+    names.arg = source_order,
+    las = 1,
+    col = c("black", olive),
+    border = NA,
+    axes = FALSE,
+    xlim = c(max(source_mat) * 1.08, 0),
+    space = c(0.10, 0.55),
+    cex.names = 0.87
+  )
+  axis(1, las = 1, cex.axis = 0.80)
+  mtext("Canonical works contributed", side = 1, line = 3.0, cex = 0.88)
+  source_y <- colMeans(sbp)
+  source_ylim <- range(sbp) + c(-0.7, 0.7)
+
+  # Bottom-right: intersection membership matrix aligned to top bars.
+  par(mar = c(4.4, 5.2, 0.4, 1.0))
+  plot(
+    NA,
+    xlim = intersection_xlim,
+    ylim = source_ylim,
+    xaxt = "n",
+    yaxt = "n",
+    xlab = "",
+    ylab = "",
+    bty = "n"
+  )
+
+  # Alternating row guides improve readability while retaining the UpSet form.
+  for (i in seq_along(source_y)) {
+    abline(h = source_y[[i]], col = "grey92", lwd = 0.8)
+  }
+
+  for (j in seq_len(nrow(intersection_summary))) {
+    members <- strsplit(intersection_summary$intersection[[j]], " | ", fixed = TRUE)[[1]]
+    active <- source_order %in% members
+
+    points(
+      rep(intersection_x[[j]], length(source_y)),
+      source_y,
+      pch = 16,
+      col = "grey82",
+      cex = 0.75
+    )
+
+    if (sum(active) > 1L) {
+      segments(
+        intersection_x[[j]],
+        min(source_y[active]),
+        intersection_x[[j]],
+        max(source_y[active]),
+        lwd = 1.5,
+        col = "black"
+      )
+    }
+
+    points(
+      rep(intersection_x[[j]], sum(active)),
+      source_y[active],
+      pch = 16,
+      col = "black",
+      cex = 0.92
+    )
+  }
+}
+
+plot_paired_upset("png")
+plot_paired_upset("pdf")
 
 report <- list(
   schema = "living-evidence-map-citesource-contribution-v1",
@@ -317,6 +461,7 @@ report <- list(
     overlap_matrix_csv = "source_overlap_matrix.csv",
     provenance_screening_csv = "source_provenance_screening.csv",
     screening_summary_csv = "source_contribution_screening_summary.csv",
+    intersection_screening_summary_csv = "source_intersection_screening_summary.csv",
     paired_bar_png = "database_contribution_deduplicated_vs_included.png",
     paired_bar_pdf = "database_contribution_deduplicated_vs_included.pdf"
   )
