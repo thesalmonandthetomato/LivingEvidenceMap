@@ -218,5 +218,5 @@ jobs:
             outputs/workflow03/
             outputs/workflow03_zenodo/
             workflow03_input/workflow03_restore_audit.json
-          retention-days: 7
+          retention-days: 90
           if-no-files-found: warn
