@@ -1,0 +1,89 @@
+name: Workflow 05 - two-pass Luna audit test
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow05/.run_luna_two_pass_test'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("dplyr","readr","jsonlite","httr2","digest","tidyr"))
+
+      - name: Restore corrected deterministic W05 checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-species-rule-delta-36234132889
+          path: corrected_checkpoint
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 36234132889
+
+      - name: Locate corrected deterministic inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          DET="$(find corrected_checkpoint -type f -path '*/workflow05_corrected/deterministic_annotation_summary.csv' -print -quit)"
+          REC="$(find corrected_checkpoint -type f -path '*/workflow05_corrected/records_for_annotation.csv' -print -quit)"
+          if [ -z "$REC" ]; then
+            REC="$(find corrected_checkpoint -type f -name records_for_annotation.csv -print -quit)"
+          fi
+          test -n "$DET"; test -n "$REC"
+          cp "$DET" corrected_deterministic_annotation_summary.csv
+          cp "$REC" records_for_annotation.csv
+          Rscript -e 'd<-readr::read_csv("corrected_deterministic_annotation_summary.csv",show_col_types=FALSE);r<-readr::read_csv("records_for_annotation.csv",show_col_types=FALSE);stopifnot(nrow(d)==19407L,nrow(r)==19407L,!anyDuplicated(d$record_id),!anyDuplicated(r$record_id));cat("PASS: corrected deterministic W05 checkpoint restored\n")'
+
+      - name: Run two blind Luna passes on fixed 100-record sample
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$OPENAI_API_KEY"
+          Rscript scripts/reporting/workflow05_luna_two_pass_test.R \
+            --deterministic corrected_deterministic_annotation_summary.csv \
+            --records records_for_annotation.csv \
+            --prompt config/workflow05_luna_independent_audit_prompt.txt \
+            --output-dir outputs/workflow05_luna_two_pass_test
+
+      - name: Validate outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON("outputs/workflow05_luna_two_pass_test/summary.json")
+          p <- read.csv("outputs/workflow05_luna_two_pass_test/pairwise_agreement.csv")
+          c <- read.csv("outputs/workflow05_luna_two_pass_test/comparison_100_three_way.csv")
+          stopifnot(
+            s$n == 100L,
+            nrow(p) == 6L,
+            nrow(c) == 100L,
+            file.exists("outputs/workflow05_luna_two_pass_test/three_way_disagreements.csv"),
+            file.exists("outputs/workflow05_luna_two_pass_test/stratified_three_way_agreement.csv")
+          )
+          cat("PASS: two-pass Luna comparison outputs validated\n")
+
+      - name: Upload two-pass audit outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-luna-two-pass-test-${{ github.run_id }}
+          path: outputs/workflow05_luna_two_pass_test/
+          retention-days: 90
+          if-no-files-found: error
