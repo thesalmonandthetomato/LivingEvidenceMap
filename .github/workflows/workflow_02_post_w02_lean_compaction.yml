@@ -108,5 +108,5 @@ jobs:
             outputs/post_w02_lean/
             w02_enrichment_replay.json
             w02_correction_replay.json
-          retention-days: 30
+          retention-days: 7
           if-no-files-found: error
