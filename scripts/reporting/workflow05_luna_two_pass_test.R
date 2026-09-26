@@ -9,6 +9,7 @@ det_path <- arg("--deterministic")
 rec_path <- arg("--records")
 out <- arg("--output-dir","outputs/workflow05_luna_two_pass_test")
 prompt_path <- arg("--prompt","config/workflow05_luna_independent_audit_prompt.txt")
+sample_file <- arg("--sample-file", NULL)
 dir.create(out, recursive=TRUE, showWarnings=FALSE)
 
 det <- read_csv(det_path, show_col_types=FALSE)
@@ -16,25 +17,31 @@ rec <- read_csv(rec_path, show_col_types=FALSE)
 x <- inner_join(rec, det, by="record_id")
 stopifnot(nrow(x)==19407L, !anyDuplicated(x$record_id))
 
-set.seed(20260926)
-sample_n_safe <- function(z,n) if(nrow(z)<=n) z else slice_sample(z,n=n)
-both <- x |> filter(species_review_required, geography_review_required)
-sp <- x |> filter(species_review_required, !geography_review_required)
-geo <- x |> filter(!species_review_required, geography_review_required)
-easy <- x |> filter(!species_review_required, !geography_review_required)
+if (!is.null(sample_file)) {
+  prior_sample <- read_csv(sample_file, show_col_types=FALSE)
+  stopifnot("record_id" %in% names(prior_sample), nrow(prior_sample)==100L, !anyDuplicated(prior_sample$record_id))
+  samp <- x |> semi_join(prior_sample |> select(record_id), by="record_id")
+  stopifnot(nrow(samp)==100L)
+} else {
+  set.seed(20260926)
+  sample_n_safe <- function(z,n) if(nrow(z)<=n) z else slice_sample(z,n=n)
+  both <- x |> filter(species_review_required, geography_review_required)
+  sp <- x |> filter(species_review_required, !geography_review_required)
+  geo <- x |> filter(!species_review_required, geography_review_required)
+  easy <- x |> filter(!species_review_required, !geography_review_required)
 
-# Preserve the same 100-record stratified design used in the first pilot.
-samp <- bind_rows(
-  sample_n_safe(easy, 40),
-  sample_n_safe(sp, 25),
-  sample_n_safe(geo, 31),
-  both
-) |> distinct(record_id, .keep_all=TRUE)
+  samp <- bind_rows(
+    sample_n_safe(easy, 40),
+    sample_n_safe(sp, 25),
+    sample_n_safe(geo, 31),
+    both
+  ) |> distinct(record_id, .keep_all=TRUE)
 
-if(nrow(samp) > 100L) samp <- samp |> slice_head(n=100)
-if(nrow(samp) < 100L) {
-  remaining <- anti_join(x, samp, by="record_id")
-  samp <- bind_rows(samp, sample_n_safe(remaining, 100L-nrow(samp)))
+  if(nrow(samp) > 100L) samp <- samp |> slice_head(n=100)
+  if(nrow(samp) < 100L) {
+    remaining <- anti_join(x, samp, by="record_id")
+    samp <- bind_rows(samp, sample_n_safe(remaining, 100L-nrow(samp)))
+  }
 }
 stopifnot(nrow(samp)==100L, !anyDuplicated(samp$record_id))
 
