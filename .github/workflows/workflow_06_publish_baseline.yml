@@ -1,0 +1,171 @@
+name: Workflow 06 - Publish validated geography baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/workflow06/.publish_validated_baseline'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','readr','dplyr'))
+
+      - name: Download validated Workflow 06 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow06-geography-production-36265092530
+          path: source_w06
+          github-token: ${{ github.token }}
+          run-id: 36265092530
+
+      - name: Download validated Workflow 05 handoff for identity check
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-species-coding-36268840588
+          path: source_w05
+          github-token: ${{ github.token }}
+          run-id: 36268840588
+
+      - name: Build sparse durable Workflow 06 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          FINAL=$(find source_w06 -type f -name geography_semantic_final.csv -print -quit)
+          JSONL=$(find source_w06 -type f -name geography_semantic_final.jsonl -print -quit)
+          UNRES=$(find source_w06 -type f -name geography_unresolved.csv -print -quit)
+          UNGROUND=$(find source_w06 -type f -name geography_ungrounded_evidence.csv -print -quit)
+          FAIL=$(find source_w06 -type f -name geography_llm_failures.csv -print -quit)
+          QC=$(find source_w06 -type f -name geography_deterministic_qc_discrepancies.csv -print -quit)
+          PAT=$(find source_w06 -type f -name discrepancy_patterns.csv -print -quit)
+          STAT=$(find source_w06 -type f -name geography_status_counts.csv -print -quit)
+          W05=$(find source_w05 -type f -name workflow05_species_coded.csv -print -quit)
+          for x in "$FINAL" "$JSONL" "$UNRES" "$UNGROUND" "$FAIL" "$QC" "$PAT" "$STAT" "$W05"; do test -n "$x"; done
+
+          mkdir -p workflow06_state
+          FINAL="$FINAL" W05="$W05" Rscript -e '
+            library(readr); library(dplyr); library(jsonlite)
+            x <- read_csv(Sys.getenv("FINAL"), show_col_types=FALSE)
+            w <- read_csv(Sys.getenv("W05"), show_col_types=FALSE)
+            stopifnot(
+              nrow(x)==19407L, nrow(w)==19407L,
+              !anyDuplicated(x$record_id), !anyDuplicated(w$record_id),
+              setequal(x$record_id,w$record_id),
+              sum(x$geography_status=="RESOLVED")==7770L,
+              sum(x$geography_status=="NONE")==11162L,
+              sum(x$geography_status=="UNRESOLVED")==475L,
+              sum(x$discrepancy_type!="exact_agreement")==3454L,
+              sum(x$discrepancy_type=="exact_agreement")==15953L,
+              sum(!x$evidence_all_grounded)==239L,
+              sum(x$llm_failed)==4L
+            )
+            keep <- c(
+              "record_id","record_sequence",
+              "deterministic_primary_countries","deterministic_primary_iso3c",
+              "geography_review_required","geography_review_reason",
+              "geography_status","luna_iso3c","luna_country_names","luna_evidence",
+              "luna_mapping_reason","evidence_all_grounded","geography_reason",
+              "llm_failed","llm_error","det_iso3c","exact_agreement",
+              "deterministic_none","luna_none","discrepancy_type"
+            )
+            write_csv(x[,keep],"workflow06_state/workflow06_geography_layer.csv",na="")
+            s <- list(
+              records=nrow(x),
+              model="gpt-5.6-luna",
+              reasoning="low",
+              prompt_sha256="ce20acddf42e494a799d08b130d3e1bace95746035a7ad8e625fc8046a1bd07a",
+              resolved_n=sum(x$geography_status=="RESOLVED"),
+              none_n=sum(x$geography_status=="NONE"),
+              unresolved_n=sum(x$geography_status=="UNRESOLVED"),
+              evidence_not_grounded_n=sum(!x$evidence_all_grounded),
+              ungrounded_evidence_discrepancy_n=sum(x$discrepancy_type=="ungrounded_evidence"),
+              llm_failures_n=sum(x$llm_failed),
+              exact_agreement_discrepancy_class_n=sum(x$discrepancy_type=="exact_agreement"),
+              qc_discrepancies_n=sum(x$discrepancy_type!="exact_agreement"),
+              note="discrepancy_type is the authoritative QC classification; legacy exact_agreement boolean aggregate is retained as provenance"
+            )
+            write_json(s,"workflow06_state/workflow06_validated_summary.json",auto_unbox=TRUE,pretty=TRUE)
+            cat("PASS: W06 and final W05 cover the same 19,407 record IDs\n")
+          '
+          cp "$JSONL" workflow06_state/geography_semantic_final.jsonl
+          cp "$UNRES" workflow06_state/geography_unresolved.csv
+          cp "$UNGROUND" workflow06_state/geography_ungrounded_evidence.csv
+          cp "$FAIL" workflow06_state/geography_llm_failures.csv
+          cp "$QC" workflow06_state/geography_deterministic_qc_discrepancies.csv
+          cp "$PAT" workflow06_state/discrepancy_patterns.csv
+          cp "$STAT" workflow06_state/geography_status_counts.csv
+          cp config/workflow05_geography_semantic_prompt.txt workflow06_state/workflow06_geography_prompt.txt
+          Rscript -e '
+            library(digest)
+            stopifnot(
+              digest(file="workflow06_state/workflow06_geography_prompt.txt",algo="sha256",serialize=FALSE) ==
+              "ce20acddf42e494a799d08b130d3e1bace95746035a7ad8e625fc8046a1bd07a"
+            )
+            cat("PASS: locked Workflow 06 prompt verified\n")
+          '
+
+      - name: Publish restricted Workflow 06 geography state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow06_zenodo
+          Rscript scripts/updater/workflow_06_archive_state_to_zenodo.R \
+            --state-dir workflow06_state \
+            --source-run-id 36265092530 \
+            --source-commit 9e9a2af88eb6dca76032df63119f9467f7a2a578 \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow06_zenodo \
+            --upstream-w05-record-id 22982751 \
+            --upstream-w05-layer-sha256 85f4003d3835535f6ab1c50691c79159640448642bb7b20974d58856dab44cdf
+
+      - name: Register authoritative Workflow 06 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_06_update_zenodo_registry.R \
+            --receipt outputs/workflow06_zenodo/zenodo_receipt.json \
+            --registry docs/workflow06/zenodo_registry.csv \
+            --pointer-dir docs/workflow06/zenodo
+          git add docs/workflow06/zenodo_registry.csv docs/workflow06/zenodo/run-36265092530.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Register authoritative Workflow 06 geography state"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-zenodo-publication-${{ github.run_id }}
+          path: outputs/workflow06_zenodo/
+          retention-days: 7
+          if-no-files-found: warn
