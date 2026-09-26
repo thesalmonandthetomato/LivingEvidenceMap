@@ -24,7 +24,7 @@ jobs:
           use-public-rspm: true
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c("dplyr","fs","here","jsonlite","readr","tibble","stringr","stringdist","quanteda","glmnet"))
+        run: install.packages(c("dplyr","fs","here","jsonlite","readr","tibble","stringr","stringdist","quanteda","glmnet","digest","purrr","tidyr"))
       - name: Restore previous deterministic W05 checkpoint
         uses: actions/download-artifact@v4
         with:
