@@ -291,7 +291,7 @@ intersection_summary <- tibble(
     included_records = sum(included_w04),
     .groups = "drop"
   ) |>
-  arrange(desc(deduplicated_records), desc(degree), intersection)
+  arrange(desc(degree), desc(deduplicated_records), intersection)
 
 if (sum(intersection_summary$deduplicated_records) != nrow(source_presence)) {
   stop("Exact intersection counts do not sum to all canonical records", call. = FALSE)
