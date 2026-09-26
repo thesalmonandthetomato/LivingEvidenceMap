@@ -138,4 +138,4 @@ writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),file.path(out_dir,"summar
 
 cat(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),"
 ")
-print(counts,n=Inf)
+print(counts)
