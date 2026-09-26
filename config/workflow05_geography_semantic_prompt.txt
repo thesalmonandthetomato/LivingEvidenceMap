@@ -29,7 +29,10 @@ Do NOT classify a country merely because it appears in:
 - previous studies or literature comparisons;
 - references to policies, regulations or industries elsewhere;
 - a species common name, strain name, product name or country adjective that does not locate the study;
-- general statements about where aquaculture occurs.
+- general statements about where aquaculture occurs;
+- geographical framing of an environmental or policy concern when the study activity itself is not explicitly located there.
+
+A contextual statement such as "concern about effects in the Bay of Fundy" does NOT establish Canada as study geography unless the title or abstract also states or clearly implies that sampling, experimentation, observation, farm activity, fieldwork, surveys or another substantive study activity occurred there.
 
 Do not infer geography from species, authors, institutional affiliation, language, nationality, production system, or general knowledge.
 
@@ -41,13 +44,22 @@ EVIDENCE REQUIREMENT
 
 For every returned country, provide the shortest exact text span from the supplied title or abstract that demonstrates that the location is substantive study geography.
 
+The evidence span must be an EXACT, VERBATIM, CONTIGUOUS substring copied from the supplied TITLE or ABSTRACT.
+- Do not paraphrase.
+- Do not normalise wording.
+- Do not insert ellipses.
+- Do not join non-contiguous text.
+- Preserve the exact wording from the source text.
+
 The evidence span must contain enough context to show WHY the place is a study location, not merely the place name. For example:
 - "samples were collected from salmon farms in Norway"
 is valid evidence.
 - "Norway"
 by itself is not sufficient when its role is unclear.
 
-Do not return a country without an evidence span grounded in the supplied text.
+If the evidence names a subnational place rather than the country itself, keep the evidence span verbatim and explain the country mapping separately in mapping_reason.
+
+Do not return a country without an exact verbatim evidence span grounded in the supplied text.
 
 STATUS
 
@@ -72,5 +84,6 @@ OUTPUT PRINCIPLES
 - Use ISO 3166-1 alpha-3 codes.
 - Country names and ISO3 codes must correspond.
 - Preserve multiple substantive countries.
+- For each returned country, provide mapping_reason. If the country itself is explicitly named in the evidence span, mapping_reason should say "Country explicitly named". If a subnational place is mapped to a country, state that mapping briefly.
 - Do not add commentary beyond the structured fields.
 - Be conservative about inference but do not omit an explicitly stated study location merely because it is mentioned only once.
