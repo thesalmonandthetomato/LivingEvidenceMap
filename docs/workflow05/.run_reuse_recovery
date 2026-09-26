@@ -1,1 +1,3 @@
 resume W05 historical adjudication reuse audit from deterministic checkpoint run 36230627164
+
+retry after fixing vector normalisation in historical reuse comparison
