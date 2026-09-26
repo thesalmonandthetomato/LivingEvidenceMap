@@ -1,0 +1,135 @@
+name: Workflow 05 - production semantic geography
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow05/.run_geography_production'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  geography_shard:
+    name: geography shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("dplyr","readr","jsonlite","httr2","digest"))
+
+      - name: Restore exact W05 geography input checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-species-rule-delta-36234132889
+          path: deterministic_checkpoint
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 36234132889
+
+      - name: Locate and validate 19,407-record input
+        shell: bash
+        run: |
+          set -euo pipefail
+          REC="$(find deterministic_checkpoint -type f -path '*/workflow05_corrected/records_for_annotation.csv' -print -quit)"
+          DET="$(find deterministic_checkpoint -type f -path '*/workflow05_corrected/deterministic_annotation_summary.csv' -print -quit)"
+          if [ -z "$REC" ]; then REC="$(find deterministic_checkpoint -type f -name records_for_annotation.csv -print -quit)"; fi
+          if [ -z "$DET" ]; then DET="$(find deterministic_checkpoint -type f -name deterministic_annotation_summary.csv -print -quit)"; fi
+          test -n "$REC"; test -n "$DET"
+          cp "$REC" records_for_annotation.csv
+          cp "$DET" deterministic_annotation_summary.csv
+          echo "ce20acddf42e494a799d08b130d3e1bace95746035a7ad8e625fc8046a1bd07a  config/workflow05_geography_semantic_prompt_v1.txt" | sha256sum -c -
+          Rscript -e 'r<-readr::read_csv("records_for_annotation.csv",show_col_types=FALSE);d<-readr::read_csv("deterministic_annotation_summary.csv",show_col_types=FALSE);stopifnot(nrow(r)==19407L,nrow(d)==19407L,!anyDuplicated(r$record_id),!anyDuplicated(r$record_sequence),!anyDuplicated(d$record_id));cat("PASS: exact 19,407-record geography input restored and prompt locked\n")'
+
+      - name: Run production semantic geography shard
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$OPENAI_API_KEY"
+          SHARD_PAD="$(printf '%02d' ${{ matrix.shard }})"
+          Rscript scripts/reporting/workflow05_geography_semantic_production.R \
+            --records records_for_annotation.csv \
+            --deterministic deterministic_annotation_summary.csv \
+            --prompt config/workflow05_geography_semantic_prompt_v1.txt \
+            --shard-id ${{ matrix.shard }} \
+            --shard-count 20 \
+            --output-dir "outputs/workflow05_geography_production/shard_${SHARD_PAD}"
+
+      - name: Upload shard recovery/output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-geography-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: outputs/workflow05_geography_production/
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Validate completed shard
+        shell: Rscript {0}
+        run: |
+          shard <- as.integer("${{ matrix.shard }}")
+          p <- sprintf("outputs/workflow05_geography_production/shard_%02d/geography_results.csv",shard)
+          x <- read.csv(p)
+          expected <- sum(((1:19407 - 1) %% 20) == (shard - 1))
+          stopifnot(nrow(x)==expected,!anyDuplicated(x$record_id),!anyDuplicated(x$record_sequence))
+          cat(sprintf("PASS: shard %d contains %d unique records\n",shard,nrow(x)))
+
+  merge:
+    name: merge and validate geography
+    needs: geography_shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("dplyr","readr","jsonlite"))
+
+      - name: Download all geography shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow05-geography-shard-*-${{ github.run_id }}
+          path: geography_shards
+
+      - name: Merge and validate all 19,407 records
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow05_geography_semantic_merge.R \
+            --input-dir geography_shards \
+            --output-dir outputs/workflow05_geography_production_final
+
+      - name: Upload merged production geography
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-geography-production-${{ github.run_id }}
+          path: outputs/workflow05_geography_production_final/
+          retention-days: 90
+          if-no-files-found: error
