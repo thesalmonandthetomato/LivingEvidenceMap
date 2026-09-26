@@ -6,3 +6,5 @@ rerun with W04 inclusion provenance for paired deduplicated/included source coun
 retry after replacing regex source parsing with exact comma-split membership
 
 render paired deduplicated and included database contribution bars
+
+render integrated paired UpSet with included intersection bars
