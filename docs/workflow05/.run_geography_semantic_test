@@ -1,3 +1,5 @@
 run one-pass semantic geography extraction on fixed random 200-record sample
 
 rerun same random-200 geography sample after exact-evidence and contextual-location prompt refinement
+
+rerun same random-200 geography sample after substantive-origin historical-entity and consistency refinements
