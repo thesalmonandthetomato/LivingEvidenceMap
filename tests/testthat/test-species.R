@@ -1,17 +1,64 @@
-testthat::test_that("species detection prefers longest overlapping terms", {
+testthat::test_that("named species beats overlapping generic salmon terms", {
   dictionary <- data.frame(
-    species_id = c("ATL_SALMO", "UNSPEC_SALMON"),
-    preferred_name = c("Atlantic salmon", "Unspecified farmed salmon"),
-    scientific_name = c("Salmo salar", NA),
-    synonym = c("Atlantic salmon", "salmon"),
-    synonym_type = c("common", "generic"),
-    is_farmed_candidate = c(TRUE, TRUE),
-    default_group = c("farmed_salmon", "farmed_salmon"),
+    species_id = c("SAL_SALAR", "UNSPEC_SALMON", "UNSPEC_SALMON"),
+    preferred_name = c("Atlantic salmon", "Unspecified species", "Unspecified species"),
+    scientific_name = c("Salmo salar", NA, NA),
+    synonym = c("Atlantic salmon", "salmon", "salmon aquaculture"),
+    synonym_type = c("common", "generic", "generic"),
+    is_farmed_candidate = c(TRUE, TRUE, TRUE),
+    default_group = c("salmon", "salmon", "salmon"),
     stringsAsFactors = FALSE
   )
-  hits <- detect_species_mentions("Atlantic salmon farming", "", dictionary)
-  testthat::expect_true(any(hits$matched_term == "Atlantic salmon"))
-  testthat::expect_false(any(hits$matched_term == "salmon" & hits$source == "title"))
+  hits <- detect_species_mentions("Atlantic salmon aquaculture", "", dictionary)
+  testthat::expect_true(any(hits$species_id == "SAL_SALAR"))
+  testthat::expect_false(any(hits$species_id == "UNSPEC_SALMON"))
+})
+
+testthat::test_that("short named species survives longer overlapping generic phrase", {
+  dictionary <- data.frame(
+    species_id = c("ONC_KISUTCH", "UNSPEC_SALMON"),
+    preferred_name = c("Coho salmon", "Unspecified species"),
+    scientific_name = c("Oncorhynchus kisutch", NA),
+    synonym = c("Coho salmon", "salmon aquaculture"),
+    synonym_type = c("common", "generic"),
+    is_farmed_candidate = c(TRUE, TRUE),
+    default_group = c("salmon", "salmon"),
+    stringsAsFactors = FALSE
+  )
+  hits <- detect_species_mentions("Coho salmon aquaculture in Japan", "", dictionary)
+  testthat::expect_true(any(hits$species_id == "ONC_KISUTCH"))
+  testthat::expect_false(any(hits$species_id == "UNSPEC_SALMON"))
+})
+
+testthat::test_that("hyphenated species names and scientific names are detected", {
+  dictionary <- data.frame(
+    species_id = c("ONC_MYKISS", "ONC_MYKISS"),
+    preferred_name = c("Rainbow trout", "Rainbow trout"),
+    scientific_name = c("Oncorhynchus mykiss", "Oncorhynchus mykiss"),
+    synonym = c("Rainbow trout", "Salmo gairdneri"),
+    synonym_type = c("common", "scientific"),
+    is_farmed_candidate = c(TRUE, TRUE),
+    default_group = c("trout", "trout"),
+    stringsAsFactors = FALSE
+  )
+  hits <- detect_species_mentions("RAINBOW-TROUT (SALMO-GAIRDNERI)", "", dictionary)
+  testthat::expect_true(any(tolower(hits$matched_term) == "rainbow-trout"))
+  testthat::expect_true(any(tolower(hits$matched_term) == "salmo-gairdneri"))
+})
+
+testthat::test_that("scientific abbreviations tolerate omitted full stop", {
+  dictionary <- data.frame(
+    species_id = c("SAL_SALAR", "ONC_MYKISS"),
+    preferred_name = c("Atlantic salmon", "Rainbow trout"),
+    scientific_name = c("Salmo salar", "Oncorhynchus mykiss"),
+    synonym = c("S. salar", "O. mykiss"),
+    synonym_type = c("abbreviation", "abbreviation"),
+    is_farmed_candidate = c(TRUE, TRUE),
+    default_group = c("salmon", "trout"),
+    stringsAsFactors = FALSE
+  )
+  hits <- detect_species_mentions("", "S salar and O mykiss were examined.", dictionary)
+  testthat::expect_setequal(hits$species_id, c("SAL_SALAR", "ONC_MYKISS"))
 })
 
 testthat::test_that("specific farmed salmon suppresses generic assignment", {
