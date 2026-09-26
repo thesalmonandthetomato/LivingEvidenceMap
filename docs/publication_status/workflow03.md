@@ -92,3 +92,14 @@ Actions artifacts are temporary execution artefacts. An authoritative Workflow 0
 5. the registry is updated.
 
 Historical archives and receipts are immutable.
+
+
+## Validated-state handoff
+
+Workflow 03 follows the repository-wide validated-state handoff policy.
+
+The lean canonical input is preferentially restored from the seven-day post-Workflow-02 handoff artefact when its SHA-256 matches the registered lean-checkpoint pointer. If the artefact is unavailable or fails verification, the same lean canonical state is restored from the restricted Zenodo checkpoint.
+
+After a validated full publication-status run, Workflow 03 exposes the lean canonical JSONL, publication-status layer and validation report as a seven-day handoff artefact for Workflow 04. Workflow 04 uses that artefact only when both the lean-canonical SHA-256 and publication-status-layer SHA-256 match the registered authoritative pointers; otherwise it restores both inputs from Zenodo.
+
+The durable Zenodo state remains authoritative. The Actions artefact is a temporary cache only.
