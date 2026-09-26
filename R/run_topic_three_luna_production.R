@@ -306,7 +306,7 @@ finish_chunk <- function(pass,chunk){
     write_json_s(list(expected=as.list(expected),got=as.list(got)),file.path(d,"id_mismatch.json"))
     stop("Batch output custom_id set does not match input")
   }
-  assignments<-list(); records<-list(); usages<-list()
+  assignments<-list(); records<-list(); usages<-list(); duplicate_assignments<-list()
   for(item in items){
     cid<-item$custom_id
     rid<-sub(paste0("^luna-",pass,"-"),"",cid)
@@ -315,7 +315,23 @@ finish_chunk <- function(pass,chunk){
     parsed<-fromJSON(extract_output_text(response),simplifyVector=FALSE)
     aa<-parsed$assignments %||% list()
     ids<-vapply(aa,function(a) as.character(a$path_id),"")
-    if(anyDuplicated(ids)) stop("Duplicate path_id for ",rid)
+    if(anyDuplicated(ids)){
+      dup_ids<-unique(ids[duplicated(ids) | duplicated(ids,fromLast=TRUE)])
+      for(pid in dup_ids) duplicate_assignments[[length(duplicate_assignments)+1]]<-data.frame(
+        record_id=rid,path_id=pid,copies=sum(ids==pid),stringsAsFactors=FALSE)
+      aa<-lapply(unique(ids),function(pid){
+        z<-aa[ids==pid]
+        roles<-vapply(z,function(a) as.character(a$role %||% ""),"")
+        reasons<-unique(trimws(vapply(z,function(a) as.character(a$reason %||% ""),"")))
+        reasons<-reasons[nzchar(reasons)]
+        list(
+          path_id=pid,
+          role=if(any(roles=="PRIMARY")) "PRIMARY" else "SECONDARY",
+          reason=paste(reasons,collapse=" | ")
+        )
+      })
+      ids<-vapply(aa,function(a) as.character(a$path_id),"")
+    }
     bad<-setdiff(ids,as.character(o$path_id)); if(length(bad)) stop("Unknown path_id for ",rid,": ",paste(bad,collapse=","))
     for(a in aa) assignments[[length(assignments)+1]]<-data.frame(
       record_id=rid,path_id=a$path_id,role=a$role,reason=a$reason,
@@ -330,9 +346,12 @@ finish_chunk <- function(pass,chunk){
   long<-if(length(assignments)) do.call(rbind,assignments) else data.frame(
     record_id=character(),path_id=character(),role=character(),reason=character(),hierarchy_path=character())
   rec<-do.call(rbind,records); use<-do.call(rbind,usages)
+  dup<-if(length(duplicate_assignments)) do.call(rbind,duplicate_assignments) else data.frame(
+    record_id=character(),path_id=character(),copies=integer())
   write_csv_s(long,file.path(d,"topic_assignments.csv"))
   write_csv_s(rec,file.path(d,"record_results.csv"))
   write_csv_s(use,file.path(d,"usage.csv"))
+  write_csv_s(dup,file.path(d,"duplicate_path_ids_collapsed.csv"))
   manifest<-list(
     pass=pass,chunk=chunk,records=nrow(rec),record_ids=as.list(as.character(rec$record_id)),
     input_sha256=sha256_file(input_path),output_sha256=sha256_file(raw_path),
