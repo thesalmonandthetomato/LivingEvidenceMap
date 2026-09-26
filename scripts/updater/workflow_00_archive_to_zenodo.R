@@ -53,6 +53,22 @@ make_tar <- function(base,members,out) {
   TRUE
 }
 
+tree_sha256 <- function(root) {
+  files <- list.files(root,recursive=TRUE,full.names=TRUE,all.files=TRUE,no..=TRUE)
+  files <- files[file.info(files)$isdir %in% FALSE]
+  if (!length(files)) return(NA_character_)
+  rel <- substring(files,nchar(normalizePath(root,mustWork=TRUE))+2L)
+  ord <- order(rel); files <- files[ord]; rel <- rel[ord]
+  lines <- vapply(seq_along(files),function(i) paste(rel[[i]],digest(file=files[[i]],algo="sha256",serialize=FALSE),sep="\t"),character(1))
+  digest(paste(lines,collapse="\n"),algo="sha256",serialize=FALSE)
+}
+handoff_sources <- list()
+for (src in sources) {
+  src_dir <- file.path(staging_root,"harvests",src)
+  if (!dir.exists(src_dir)) stop(sprintf("Staged harvest missing for %s",src),call.=FALSE)
+  handoff_sources[[src]] <- list(tree_sha256=tree_sha256(src_dir))
+}
+
 archive_paths <- character()
 for (src in sources) {
   src_dir <- file.path(staging_root,"harvests",src)
@@ -85,6 +101,7 @@ manifest <- list(
   run_type=run_type,
   search_version=search_version,
   sources=sources,
+  handoff_sources=handoff_sources,
   file_visibility="restricted",
   files=file_meta
 )
@@ -203,36 +220,16 @@ for (i in seq_along(archive_paths)) {
   fn <- basename(p)
   upload_url <- paste0(bucket,"/",URLencode(fn,reserved=TRUE))
   cat(sprintf("ZENODO UPLOAD %s bytes=%s\n",fn,file.info(p)$size))
-  upload_resp <- NULL
-  for (attempt in seq_len(5L)) {
-    resp <- request(upload_url) |>
+  upload_resp <- perform(
+    request(upload_url) |>
       req_method("PUT") |>
       auth() |>
       req_headers(Expect = "") |>
-      req_body_file(p) |>
-      req_timeout(1800) |>
-      req_error(is_error = function(resp) FALSE) |>
-      req_perform()
-    status <- resp_status(resp)
-    if (status %in% c(200L,201L)) {
-      upload_resp <- resp
-      break
-    }
-    body <- tryCatch(resp_body_string(resp),error=function(e) "")
-    transient <- status %in% c(429L,500L,502L,503L,504L)
-    if (!transient || attempt == 5L) {
-      stop(sprintf(
-        "Zenodo file upload failed for %s after %d attempt(s), HTTP %d: %s",
-        fn,attempt,status,body
-      ),call.=FALSE)
-    }
-    delay <- min(60,2^(attempt-1L) * 5)
-    message(sprintf(
-      "Transient Zenodo HTTP %d uploading %s; retry %d/5 after %ds",
-      status,fn,attempt+1L,delay
-    ))
-    Sys.sleep(delay)
-  }
+      req_body_file(p),
+    c(200L,201L),
+    paste0("file upload: ",fn),
+    1800
+  )
   uploaded[[i]] <- resp_body_json(upload_resp,simplifyVector=FALSE)
 }
 
@@ -254,6 +251,7 @@ receipt <- list(
   run_type=run_type,
   search_version=search_version,
   sources=sources,
+  handoff_sources=handoff_sources,
   zenodo_record_id=as.character(if (is.null(published$record_id)) published$id else published$record_id),
   zenodo_deposition_id=dep_id,
   doi=if (is.null(published$doi)) NA_character_ else published$doi,
