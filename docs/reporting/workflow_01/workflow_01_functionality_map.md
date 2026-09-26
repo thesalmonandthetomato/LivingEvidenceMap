@@ -309,47 +309,13 @@ current Workflow 01 state
 
 Repository pointers and the Zenodo registry provide the durable lineage needed to reconstruct that chain.
 
-## Validated baseline and repair state
+## Validated baseline
 
-The accepted full baseline is Workflow 01 run `36103542054`, archived as restricted Zenodo record `22953437` with DOI `10.5281/zenodo.22953437`.
+The accepted full Workflow 01 baseline contains 90,137 source manifestations and 32,292 canonical works, with zero unresolved pair decisions.
 
-That baseline contains:
+The authoritative canonical state is reconstructed from the registered full baseline plus any accepted immutable deltas. Stable work identifiers, pair state, cluster state and canonical JSONL are checksum-validated before downstream handoff.
 
-- 90,137 source manifestations;
-- 32,292 canonical works;
-- 22,956 duplicate clusters;
-- 9,336 singleton clusters; and
-- zero unresolved pair decisions.
-
-The baseline source manifestation counts are:
-
-| Source | Manifestations |
-|---|---:|
-| Lens | 24,135 |
-| Scopus | 19,948 |
-| OpenAlex | 28,134 |
-| AGRICOLA | 2,744 |
-| Web of Science | 15,176 |
-
-The baseline canonical JSONL SHA-256 is:
-
-`40eaf26efc73a59a427b05c0ef7d30af33e993edf9c9993ba1d7984c06e4bd9b`
-
-The complete approved metadata-repair set contains 32 repair actions. Full-corpus validation run `36128255337` demonstrated that:
-
-- all 32 approved repairs were applied;
-- the repaired corpus remained 90,137 manifestations and 32,292 canonical works;
-- the repair-only delta contained zero new source manifestations;
-- the repair-only delta contained zero pair-decision upserts;
-- the repair-only delta contained zero cluster-map upserts;
-- only 17 canonical records required upsert;
-- no canonical IDs were retired;
-- baseline plus the repair delta reproduced the target pair and cluster state; and
-- baseline plus the repair delta reproduced the repaired canonical JSONL exactly by SHA-256.
-
-Stable-ID validation run `36109881761` separately passed preservation, deterministic merge-alias and historical-split rejection tests.
-
-The fast delta/replay development fixture passed in run `36127982002`. The expensive full repair/replay validator is gated separately and is not intended to run on every implementation edit.
+Detailed development, repair and recovery actions used while establishing the baseline are recorded separately in `docs/reporting/workflow_01/AD_HOC_ACTIONS.md`.
 
 ## Downstream handoff
 
