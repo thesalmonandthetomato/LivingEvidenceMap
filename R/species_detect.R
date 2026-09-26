@@ -18,13 +18,35 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
 
   escape_regex <- function(x) gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", x, perl = TRUE)
 
+  lexical_pattern <- function(term, synonym_type) {
+    term <- trimws(term)
+    parts <- strsplit(term, "[[:space:]-]+", perl = TRUE)[[1L]]
+    parts <- parts[nzchar(parts)]
+    if (!length(parts)) return("")
+    parts <- vapply(parts, escape_regex, character(1))
+
+    # Genus abbreviations are often supplied without the full stop in older
+    # bibliographic metadata (e.g. "S salar", "O mykiss").
+    if (identical(tolower(as.character(synonym_type)), "abbreviation") &&
+        length(parts) >= 2L && grepl("^[[:alpha:]]\\\\\\.$", parts[[1L]], perl = TRUE)) {
+      parts[[1L]] <- sub("\\\\\\.$", "\\\\\\\\.?", parts[[1L]], perl = TRUE)
+    }
+
+    # Treat ordinary whitespace and hyphen variants as equivalent lexical
+    # separators. This captures forms such as RAINBOW-TROUT and SALMO-GAIRDNERI.
+    separator <- "(?:[[:space:]\\u00A0\\u00AD\\-\\u2010\\u2011\\u2012\\u2013\\u2014]+)"
+    paste(parts, collapse = separator)
+  }
+
   detect_in_text <- function(text, source) {
     if (is.na(text) || !nzchar(trimws(text))) return(empty)
     hits <- list(); k <- 0L
     for (i in seq_len(nrow(dictionary))) {
       term <- dictionary$synonym[[i]]
       if (is.na(term) || !nzchar(trimws(term))) next
-      pattern <- paste0("(?<![[:alnum:]_])", escape_regex(trimws(term)), "(?![[:alnum:]_])")
+      core_pattern <- lexical_pattern(term, dictionary$synonym_type[[i]])
+      if (!nzchar(core_pattern)) next
+      pattern <- paste0("(?<![[:alnum:]_])", core_pattern, "(?![[:alnum:]_])")
       starts <- gregexpr(pattern, text, ignore.case = TRUE, perl = TRUE)[[1L]]
       if (starts[[1L]] == -1L) next
       lengths <- attr(starts, "match.length")
@@ -44,13 +66,36 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
     out$term_length <- nchar(out$matched_term)
     out <- out[order(out$match_start, -out$term_length, out$species_id), , drop = FALSE]
 
-    # Resolve overlapping dictionary hits by retaining the longest span.
+    # Resolve overlaps without allowing a generic salmon phrase to erase an
+    # explicitly named eligible species. For the same species ID, retain the
+    # longest lexical match. Across different IDs, a specific species beats
+    # UNSPEC_SALMON; otherwise retain both IDs.
     keep <- rep(TRUE, nrow(out))
     for (i in seq_len(nrow(out))) {
       if (!keep[[i]]) next
-      overlap <- which(seq_len(nrow(out)) != i & out$match_start <= out$match_end[[i]] & out$match_end >= out$match_start[[i]] & out$term_length <= out$term_length[[i]])
-      keep[overlap] <- FALSE
-      keep[[i]] <- TRUE
+      for (j in seq_len(nrow(out))) {
+        if (i == j || !keep[[j]]) next
+        overlaps <- out$match_start[[j]] <= out$match_end[[i]] &&
+          out$match_end[[j]] >= out$match_start[[i]]
+        if (!overlaps) next
+
+        same_id <- identical(out$species_id[[i]], out$species_id[[j]])
+        i_generic <- identical(out$species_id[[i]], "UNSPEC_SALMON")
+        j_generic <- identical(out$species_id[[j]], "UNSPEC_SALMON")
+
+        if (same_id) {
+          if (out$term_length[[j]] > out$term_length[[i]]) {
+            keep[[i]] <- FALSE
+            break
+          }
+          if (out$term_length[[j]] <= out$term_length[[i]]) keep[[j]] <- FALSE
+        } else if (i_generic && !j_generic) {
+          keep[[i]] <- FALSE
+          break
+        } else if (!i_generic && j_generic) {
+          keep[[j]] <- FALSE
+        }
+      }
     }
     out <- unique(out[keep, setdiff(names(out), "term_length"), drop = FALSE])
     rownames(out) <- NULL
