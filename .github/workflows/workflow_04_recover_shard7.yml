@@ -1,0 +1,177 @@
+name: Workflow 04 - recover shard 7 consensus
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/workflow04/.run_recover_shard7'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout pipeline branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest','stringi'))
+
+      - name: Restore authoritative lean canonical state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer docs/compaction/zenodo/run-36166883249.json \
+            --output-dir workflow04_input/canonical
+
+      - name: Restore authoritative Workflow 03 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
+            --pointer docs/publication_status/zenodo/run-36172718538.json \
+            --output-dir workflow04_input/status
+
+      - name: Upload recovery input
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-recovery-input-${{ github.run_id }}
+          path: |
+            workflow04_input/canonical/canonical_lean.jsonl
+            workflow04_input/status/publication_status.jsonl
+          retention-days: 30
+          if-no-files-found: error
+
+  recover:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        subshard: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout pipeline branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest','stringi'))
+
+      - name: Download recovery input
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-recovery-input-${{ github.run_id }}
+          path: workflow04_input
+
+      - name: Recover original shard 7 subshard
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_luna_consensus.R \
+            --canonical workflow04_input/canonical/canonical_lean.jsonl \
+            --workflow03-status workflow04_input/status/publication_status.jsonl \
+            --output-dir outputs/workflow04_recovery/subshard-${{ matrix.subshard }} \
+            --model gpt-5.6-luna \
+            --shard-index 7 \
+            --shard-count 8 \
+            --subshard-index ${{ matrix.subshard }} \
+            --subshard-count 4 \
+            --checkpoint-every 25
+
+      - name: Upload recovered subshard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-recovery-shard7-${{ matrix.subshard }}-${{ github.run_id }}
+          path: outputs/workflow04_recovery/subshard-${{ matrix.subshard }}/
+          retention-days: 90
+          if-no-files-found: warn
+
+  merge:
+    needs: recover
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout pipeline branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download seven completed shards from original run
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 36186630247
+          pattern: workflow04-consensus-shard-*-36186630247
+          path: recovered_inputs/original
+          merge-multiple: false
+
+      - name: Download four recovered shard-7 subshards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow04-recovery-shard7-*-${{ github.run_id }}
+          path: recovered_inputs/shard7
+          merge-multiple: false
+
+      - name: Merge and validate recovered consensus
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_merge_recovered_consensus.R \
+            --input-root recovered_inputs \
+            --output-dir outputs/workflow04_consensus_recovered \
+            --expected-files 11
+
+      - name: Upload recovered merged Workflow 04 layer
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-consensus-recovered-${{ github.run_id }}
+          path: outputs/workflow04_consensus_recovered/
+          retention-days: 90
+          if-no-files-found: error
