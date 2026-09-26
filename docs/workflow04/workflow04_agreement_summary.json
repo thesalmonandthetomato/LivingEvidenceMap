@@ -1,0 +1,55 @@
+{
+  "schema": "living-evidence-map-workflow04-agreement-summary-v1",
+  "historical_comparator_records": 22198,
+  "excluded_historical_mapping_conflicts": 24,
+  "pass1_vs_pass2": {
+    "all_records": {"n": 32283, "agreement": 0.9631384939441812, "cohen_kappa": 0.9254147071561221},
+    "both_substantive": {"n": 31225, "agreement": 0.9831865492393915, "cohen_kappa": 0.9642114630174464},
+    "at_least_one_uncertain": 1058,
+    "opposing_substantive_decisions": 525,
+    "third_pass_queue": 1583
+  },
+  "pass1_vs_historical": {
+    "all_three_category": {"n": 22198, "agreement": 0.9554464366159113, "cohen_kappa": 0.8932112674165449},
+    "substantive_binary": {"n": 21936, "agreement": 0.9668581327498177, "cohen_kappa": 0.9189656973305784},
+    "luna_uncertain": 262
+  },
+  "pass2_vs_historical": {
+    "all_three_category": {"n": 22198, "agreement": 0.9544103072348861, "cohen_kappa": 0.890719689379808},
+    "substantive_binary": {"n": 21934, "agreement": 0.9658976930792377, "cohen_kappa": 0.9166336655880035},
+    "luna_uncertain": 264
+  },
+  "consensus_vs_historical": {
+    "all_three_category": {"n": 22198, "agreement": 0.9571132534462564, "cohen_kappa": 0.8971051817348514},
+    "substantive_binary": {"n": 21950, "agreement": 0.9679271070615034, "cohen_kappa": 0.9216127141125978},
+    "agreement_count": 21246,
+    "disagreement_count": 704,
+    "historical_retain_luna_exclude": 360,
+    "historical_exclude_luna_retain": 344,
+    "luna_unresolved": 248,
+    "historical_retain_luna_unresolved": 122,
+    "historical_exclude_luna_unresolved": 126
+  },
+  "three_rater_historical_pass1_pass2": {
+    "n": 21798,
+    "fleiss_kappa": 0.9347539068186059,
+    "unanimous_agreement": 0.9600880814753647,
+    "unanimous_count": 20928
+  },
+  "pass3_vs_historical_selected_subset": {
+    "historical_comparator_records": 736,
+    "all_three_category": {"n": 736, "agreement": 0.48097826086956524, "cohen_kappa": 0.17226435536294696},
+    "substantive_binary": {"n": 549, "agreement": 0.644808743169399, "cohen_kappa": 0.2902603472622767},
+    "pass3_uncertain": 187,
+    "selection_note": "Pass 3 was only invoked for records with first-two-pass disagreement, uncertainty, or technical failure; statistics are not directly comparable to full-pass metrics."
+  },
+  "final_workflow04": {
+    "source_finalisation_run": 36227737500,
+    "retain": 19407,
+    "exclude": 12876,
+    "unresolved": 0,
+    "inclusion_rate": 0.601152309264938,
+    "historical_exclude_overrides_of_luna_retain": 344
+  },
+  "methodological_note": "Agreement metrics are calculated from original Luna outputs before historical decisions were used as overrides or fallbacks. Historical decisions are a previous-screening comparator, not an independent gold standard."
+}
