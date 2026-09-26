@@ -43,19 +43,10 @@ UNSPEC_SALMON,Unspecified species,,Salmon cage,generic,TRUE,salmon,Explicit gene
 UNSPEC_SALMON,Unspecified species,,Salmon cages,generic,TRUE,salmon,Explicit generic salmon farming context
 UNSPEC_SALMON,Unspecified species,,Salmon pen,generic,TRUE,salmon,Explicit generic salmon farming context
 UNSPEC_SALMON,Unspecified species,,Salmon pens,generic,TRUE,salmon,Explicit generic salmon farming context
-SAL_TRUTTA,Brown trout,Salmo trutta,Brown trout,common,FALSE,trout,
-SAL_TRUTTA,Brown trout,Salmo trutta,Salmo trutta,scientific,FALSE,trout,
-SALVELINUS_ALPINUS,Arctic char,Salvelinus alpinus,Arctic char,common,FALSE,char,
-SALVELINUS_ALPINUS,Arctic char,Salvelinus alpinus,Salvelinus alpinus,scientific,FALSE,char,
-LEP_SALMONIS,Sea louse,Lepeophtheirus salmonis,Lepeophtheirus salmonis,scientific,FALSE,parasite,
-LEP_SALMONIS,Sea louse,Lepeophtheirus salmonis,Sea louse,common,FALSE,parasite,
-CAL_ELONGATUS,Sea louse,Caligus elongatus,Caligus elongatus,scientific,FALSE,parasite,
-GYR_SALARIS,Gyrodactylus salaris,Gyrodactylus salaris,Gyrodactylus salaris,scientific,FALSE,parasite,
 SAL_SALAR,Atlantic salmon,Salmo salar,Baltic salmon,common,TRUE,salmon,Regional/common name
 ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,arc-en-ciel,common,TRUE,trout,French/common-name usage
 ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Parasalmo mykiss,scientific,TRUE,trout,Historical/alternative scientific name
 ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Onchorhynchus mykiss,scientific,TRUE,trout,Observed misspelling of Oncorhynchus mykiss
-ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,California golden trout,common,TRUE,trout,User-specified synonym
 ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Salmo irideus,scientific,TRUE,trout,Historical scientific name
 ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,S. irideus,abbreviation,TRUE,trout,Historical scientific-name abbreviation
 ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,redband trout,common,TRUE,trout,Common name
@@ -74,3 +65,34 @@ ONC_MASOU,Masu salmon,Oncorhynchus masou,yamame trout,common,TRUE,salmon,Common 
 ONC_NERKA,Sockeye salmon,Oncorhynchus nerka,Onchorhynchus nerka,scientific,TRUE,salmon,Observed misspelling of Oncorhynchus nerka
 ONC_NERKA,Sockeye salmon,Oncorhynchus nerka,kokanee salmon,common,TRUE,salmon,Common name
 ONC_GORBUSCHA,Pink salmon,Oncorhynchus gorbuscha,Onchorhynchus gorbuscha,scientific,TRUE,salmon,Observed misspelling of Oncorhynchus gorbuscha
+SAL_SALAR,Atlantic salmon,Salmo salar,landlocked salmon,common,TRUE,salmon,Established common name
+SAL_SALAR,Atlantic salmon,Salmo salar,ouananiche,common,TRUE,salmon,Established common name
+SAL_SALAR,Atlantic salmon,Salmo salar,unaniche,common,TRUE,salmon,Established spelling variant/common name
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Salmo mykiss,scientific,TRUE,trout,Historical scientific name
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Oncorhynchus gairdnerii,scientific,TRUE,trout,Historical scientific name
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Salmo iridea,scientific,TRUE,trout,Historical scientific-name variant
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Onchorrhychus mykiss,scientific,TRUE,trout,Observed misspelling
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Onchorynchus mykiss,scientific,TRUE,trout,Observed misspelling
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Oncorhynchus myskis,scientific,TRUE,trout,Observed misspelling
+ONC_KISUTCH,Coho salmon,Oncorhynchus kisutch,silver salmon,common,TRUE,salmon,Established common name
+ONC_KISUTCH,Coho salmon,Oncorhynchus kisutch,coho,common,TRUE,salmon,Established common name
+ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,chinook,common,TRUE,salmon,Established common name
+ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,spring salmon,common,TRUE,salmon,Established common name
+ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,tyee,common,TRUE,salmon,Established common name
+ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,blackmouth,common,TRUE,salmon,Established common name
+ONC_KETA,Chum salmon,Oncorhynchus keta,dog salmon,common,TRUE,salmon,Established common name
+ONC_KETA,Chum salmon,Oncorhynchus keta,keta salmon,common,TRUE,salmon,Established common name
+ONC_KETA,Chum salmon,Oncorhynchus keta,keta,common,TRUE,salmon,Established common name
+ONC_KETA,Chum salmon,Oncorhynchus keta,calico salmon,common,TRUE,salmon,Established common name
+ONC_NERKA,Sockeye salmon,Oncorhynchus nerka,red salmon,common,TRUE,salmon,Established common name
+ONC_NERKA,Sockeye salmon,Oncorhynchus nerka,blueback salmon,common,TRUE,salmon,Established common name
+ONC_NERKA,Sockeye salmon,Oncorhynchus nerka,blue-back,common,TRUE,salmon,Established common name
+ONC_NERKA,Sockeye salmon,Oncorhynchus nerka,kokanee,common,TRUE,salmon,Established common name
+ONC_NERKA,Sockeye salmon,Oncorhynchus nerka,nerka,common,TRUE,salmon,Established common name
+ONC_GORBUSCHA,Pink salmon,Oncorhynchus gorbuscha,humpback salmon,common,TRUE,salmon,Established common name
+ONC_GORBUSCHA,Pink salmon,Oncorhynchus gorbuscha,humpy,common,TRUE,salmon,Established common name
+ONC_MASOU,Masu salmon,Oncorhynchus masou,Japanese salmon,common,TRUE,salmon,Established common name
+ONC_MASOU,Masu salmon,Oncorhynchus masou,honmasu,common,TRUE,salmon,Established common name
+ONC_MASOU,Masu salmon,Oncorhynchus masou,sakuramasu,common,TRUE,salmon,Established common name
+ONC_MASOU,Masu salmon,Oncorhynchus masou,satsukimasu,common,TRUE,salmon,Established common name
+ONC_MASOU,Masu salmon,Oncorhynchus masou,yamame,common,TRUE,salmon,Established common name
