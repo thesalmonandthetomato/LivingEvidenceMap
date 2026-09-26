@@ -1,0 +1,110 @@
+name: Workflow 07 - recall existing three-Luna topics
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow07/.run_topic_recall_audit'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CURRENT_W04_ARTIFACT_ID: '10901104043'
+  OLD_TOPIC_ARTIFACT_ID: '10609725480'
+  OLD_TOPIC_SOURCE_SHA: '3a1b895f5e5284232ccd3c5dc252cf6ba5c17085'
+
+jobs:
+  recall_audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("dplyr","readr","jsonlite","stringr","tibble","tidyr"))
+
+      - name: Recover current 19,407 included canonical records
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/current_w04
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${CURRENT_W04_ARTIFACT_ID}/zip" > /tmp/current_w04.zip
+          unzip -q /tmp/current_w04.zip -d inputs/current_w04
+          test -s inputs/current_w04/workflow04_included_canonical.jsonl
+          test "$(wc -l < inputs/current_w04/workflow04_included_canonical.jsonl)" -eq 19407
+
+      - name: Recover validated three-Luna topic production artefact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/old_topics
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${OLD_TOPIC_ARTIFACT_ID}/zip" > /tmp/old_topics.zip
+          unzip -q /tmp/old_topics.zip -d inputs/old_topics
+          test -s inputs/old_topics/input_queue.csv
+          test -s inputs/old_topics/three_luna_pathway_scores.csv
+          test -s inputs/old_topics/AUDIT_PASS.ok
+          test "$(($(wc -l < inputs/old_topics/input_queue.csv)-1))" -eq 13426
+
+      - name: Recover exact historical master used by old topic production
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/old_source
+          git cat-file -e "${OLD_TOPIC_SOURCE_SHA}^{commit}"
+          git show "${OLD_TOPIC_SOURCE_SHA}:data/master/current/living_evidence_map_master.csv" > inputs/old_source/living_evidence_map_master.csv
+          test -s inputs/old_source/living_evidence_map_master.csv
+
+      - name: Run exact topic recall audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow07_topic_recall_audit.R \
+            --current-jsonl inputs/current_w04/workflow04_included_canonical.jsonl \
+            --old-queue inputs/old_topics/input_queue.csv \
+            --old-scores inputs/old_topics/three_luna_pathway_scores.csv \
+            --old-master inputs/old_source/living_evidence_map_master.csv \
+            --output-dir outputs/workflow07_topic_recall_audit
+
+      - name: Validate audit outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON("outputs/workflow07_topic_recall_audit/summary.json")
+          a <- read.csv("outputs/workflow07_topic_recall_audit/current_topic_recall_status.csv")
+          q <- read.csv("outputs/workflow07_topic_recall_audit/fresh_topic_coding_queue.csv")
+          x <- read.csv("outputs/workflow07_topic_recall_audit/topic_recall_crosswalk.csv")
+          stopifnot(
+            s$current_included_records == 19407L,
+            s$old_three_luna_records == 13426L,
+            nrow(a) == 19407L,
+            !anyDuplicated(a$current_record_id),
+            !anyDuplicated(x$current_record_id),
+            !anyDuplicated(x$old_record_id),
+            nrow(x) + nrow(q) == 19407L
+          )
+          cat("PASS: Workflow 07 topic recall audit validated\n")
+          print(s)
+
+      - name: Upload topic recall audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-topic-recall-audit-${{ github.run_id }}
+          path: outputs/workflow07_topic_recall_audit/
+          retention-days: 90
+          if-no-files-found: error
