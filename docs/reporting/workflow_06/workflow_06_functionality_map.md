@@ -139,7 +139,7 @@ Every returned evidence span is checked as an exact substring of the supplied ti
 
 The validated baseline contains:
 
-- 239 records where evidence_all_grounded = FALSE;
+- 235 records where evidence_all_grounded = FALSE;
 - of these, 235 are classified as ungrounded_evidence discrepancies; and
 - 4 are model-call failures, which are also necessarily not grounded.
 
@@ -155,14 +155,14 @@ Baseline discrepancy counts are:
 
 | Discrepancy type | n |
 |---|---:|
-| exact_agreement | 15,953 |
+| exact_agreement | 15,956 |
 | deterministic_only_geography | 1,376 |
 | luna_only_geography | 1,136 |
 | different_country_set | 703 |
 | ungrounded_evidence | 235 |
 | llm_failure | 4 |
 
-Thus 3,454 records are flagged as non-exact QC discrepancies.
+Thus 3,451 records are flagged as non-exact QC discrepancies.
 
 A legacy boolean exact_agreement aggregate in the recovered merge summary yields 16,120. This differs from the authoritative discrepancy classification because discrepancy_type prioritises model failure and evidence-grounding failure before exact set equality. Reporting and archival QC counts therefore use discrepancy_type.
 
@@ -206,13 +206,13 @@ Baseline status counts:
 
 - records: 19,407;
 - RESOLVED: 7,770 (40.04%);
-- NONE: 11,162 (57.52%);
-- UNRESOLVED: 475 (2.45%);
+- NONE: 11,166 (57.52%);
+- UNRESOLVED: 471 (2.45%);
 - model-call failures: 4;
-- records with evidence_all_grounded = FALSE: 239;
-- non-exact QC discrepancies: 3,454.
+- records with evidence_all_grounded = FALSE: 235;
+- non-exact QC discrepancies: 3,451.
 
-The 475 unresolved records are preserved for later adjudication; they do not indicate an incomplete computational merge.
+The 471 unresolved records are preserved for later adjudication; they do not indicate an incomplete computational merge.
 
 ## Storage and archival model
 
@@ -230,7 +230,7 @@ The recovery merge deliberately reused the already completed production shards, 
 
 ### Durable external archive
 
-The accepted W06 geography state is published as a restricted Zenodo dataset.
+The corrected accepted W06 geography state is published as restricted Zenodo record **22983049**, DOI **10.5281/zenodo.22983049**.
 
 The durable archive contains:
 
@@ -272,4 +272,4 @@ Workflow 06 is considered computationally complete and validated when:
 - discrepancy classifications are reproducibly generated; and
 - the accepted sparse geography layer is published and registered as a durable Zenodo checkpoint.
 
-The computational conditions are satisfied by run 36265092530. The workflow becomes fully finalised when its Zenodo publication/registration run succeeds.
+The computational conditions are satisfied by run 36265092530 plus the validated four-record failure recovery runs 36271055010 and 36271186232. The corrected authoritative state is archived as restricted Zenodo record 22983049, DOI 10.5281/zenodo.22983049.
