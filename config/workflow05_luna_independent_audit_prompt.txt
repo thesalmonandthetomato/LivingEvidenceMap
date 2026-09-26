@@ -108,6 +108,7 @@ SPECIES RULES
 - Return every eligible farmed species that is a substantive study subject.
 - More than one eligible species may be returned.
 - Do not infer a specific species merely because it is commonly farmed in a country, production system or research context.
+- Generic "trout", "trout farming", "farmed trout" or similar wording must NOT be classified as ONC_MYKISS unless "rainbow trout", Oncorhynchus mykiss, or another recognised ONC_MYKISS synonym listed above is explicitly stated.
 - If salmon farming or aquaculture is clearly established but the eligible species cannot be determined more specifically, return UNSPEC_SALMON.
 - If a specific eligible species is clearly established, do not additionally return UNSPEC_SALMON merely because generic words such as "salmon" also occur.
 - Wild salmon is not a farmed study species simply because it is mentioned.
@@ -140,6 +141,7 @@ GEOGRAPHY RULES
   - literature citations
   - incidental background examples
   - author affiliations
+  - research institution, laboratory or research-group locations, unless the title or abstract explicitly states that the sampling, experiment, farm, study population or fieldwork itself occurred there
   - equipment origin
   - manufacturer or supplier location
   - software or publisher information
