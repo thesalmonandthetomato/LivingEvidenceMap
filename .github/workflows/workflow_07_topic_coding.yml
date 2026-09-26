@@ -16,6 +16,11 @@ on:
         required: false
         default: '36252255299'
         type: string
+      recovery_run_id:
+        description: Prior Workflow 07 production run to recover submitted/completed chunks from
+        required: false
+        default: '36254091560'
+        type: string
       workflow06_run_id:
         description: Workflow 06 geography run ID when input_mode=workflow06_all
         required: false
@@ -34,7 +39,7 @@ env:
   TOPIC_PROD_OUTPUT_DIR: outputs/workflow07_topic_v3_6_fresh
   TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
   TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
-  TOPIC_CHUNK_SIZE: '200'
+  TOPIC_CHUNK_SIZE: '500'
   BATCH_POLL_SECONDS: '20'
   BATCH_MAX_WAIT_SECONDS: '7200'
   BATCH_TOKEN_LIMIT_RETRY_SECONDS: '120'
@@ -152,8 +157,11 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 1
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    env:
+      RECOVERY_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.recovery_run_id || '36254091560' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -175,7 +183,7 @@ jobs:
           name: workflow07-topic-input-${{ github.run_id }}
           path: outputs/workflow07_topic_v3_6_fresh
 
-      - name: Recover same-run chunk state if this job is rerun
+      - name: Recover prior or same-run chunk state
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -186,18 +194,48 @@ jobs:
           d="$TOPIC_PROD_OUTPUT_DIR/pass_$PASS/chunk_$(printf '%03d' "$CHUNK")"
           mkdir -p "$d"
 
-          for kind in complete submission; do
-            name="workflow07-topic-$kind-$PASS-chunk-$CHUNK-$GITHUB_RUN_ID"
-            rm -rf "/tmp/w07_$kind"
-            mkdir -p "/tmp/w07_$kind"
-            if gh run download "$GITHUB_RUN_ID" -n "$name" -D "/tmp/w07_$kind" 2>/dev/null; then
-              marker="$(find "/tmp/w07_$kind" -type f \( -name complete.ok -o -name batch_submitted.json \) -print -quit)"
-              if [ -n "$marker" ]; then
-                src="$(dirname "$marker")"
-                cp -a "$src"/. "$d"/
+          recover_from_run() {
+            local run_id="$1"
+            [ -n "$run_id" ] || return 0
+            for kind in complete submission; do
+              name="workflow07-topic-$kind-$PASS-chunk-$CHUNK-$run_id"
+              rm -rf "/tmp/w07_$kind"
+              mkdir -p "/tmp/w07_$kind"
+              if gh run download "$run_id" -n "$name" -D "/tmp/w07_$kind" 2>/dev/null; then
+                marker="$(find "/tmp/w07_$kind" -type f \( -name complete.ok -o -name batch_submitted.json \) -print -quit)"
+                if [ -n "$marker" ]; then
+                  src="$(dirname "$marker")"
+                  cp -a "$src"/. "$d"/
+                fi
               fi
-            fi
-          done
+            done
+          }
+
+          # Recover the previous 500-record production attempt first, then let a
+          # same-run retry override it if this Actions run itself is rerun.
+          recover_from_run "$RECOVERY_RUN_ID"
+          recover_from_run "$GITHUB_RUN_ID"
+
+          if [ -s "$d/chunk_input_manifest.json" ]; then
+            PASS_EXPECTED="$PASS" CHUNK_EXPECTED="$CHUNK" Rscript -e '
+              library(jsonlite); library(digest)
+              d <- file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),
+                             paste0("pass_",Sys.getenv("PASS_EXPECTED")),
+                             sprintf("chunk_%03d",as.integer(Sys.getenv("CHUNK_EXPECTED"))))
+              m <- fromJSON(file.path(d,"chunk_input_manifest.json"),simplifyVector=FALSE)
+              stopifnot(
+                identical(as.character(m$pass),Sys.getenv("PASS_EXPECTED")),
+                as.integer(m$chunk)==as.integer(Sys.getenv("CHUNK_EXPECTED")),
+                identical(as.character(m$queue_sha256),
+                          digest(file=file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),"input_queue.csv"),
+                                 algo="sha256",serialize=FALSE)),
+                identical(as.character(m$ontology_sha256),
+                          digest(file=Sys.getenv("TOPIC_ONTOLOGY_PATH"),algo="sha256",serialize=FALSE)),
+                identical(as.character(m$prompt_sha256),
+                          digest(file=Sys.getenv("TOPIC_SYSTEM_PROMPT_PATH"),algo="sha256",serialize=FALSE))
+              )
+            '
+          fi
 
           if [ -s "$d/complete.ok" ]; then
             echo "Recovered already validated chunk $PASS/$CHUNK."
