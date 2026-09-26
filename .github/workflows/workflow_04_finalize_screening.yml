@@ -110,5 +110,5 @@ jobs:
         with:
           name: workflow04-final-screening-${{ github.run_id }}
           path: outputs/workflow04_final/
-          retention-days: 90
+          retention-days: 7
           if-no-files-found: error
