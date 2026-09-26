@@ -134,17 +134,13 @@ The GitHub repository stores lightweight, inspectable methodological and provena
 - `docs/search_record/zenodo_registry.csv`;
 - one small JSON pointer for each archived Workflow 00 run containing the corresponding Zenodo record, DOI and checksums.
 
-### Short-lived GitHub Actions artefacts
+### GitHub Actions artefacts
 
-Operational artefacts are retained for seven days only. These include:
+Validated handoff/documentation artefacts such as search plans, search-record bundles, expansion reconciliation outputs and Zenodo receipts are normally retained for seven days.
 
-- search plans;
-- raw source harvest artefacts;
-- source search-record bundles;
-- expansion reconciliation artefacts;
-- Zenodo receipts.
+Raw source-harvest artefacts are also recovery checkpoints for potentially costly database/API retrieval and are therefore retained for at least 90 days under the repository checkpoint policy. Workflow 01 may use a live source-harvest artefact as a fast handoff only when it can verify the artefact against the registered Workflow 00 handoff checksum.
 
-These artefacts support workflow execution and recovery but are not the durable archive.
+Actions artefacts are not the durable source of truth; the registered restricted Zenodo search archive remains authoritative.
 
 ### Durable Zenodo archive
 
