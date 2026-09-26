@@ -16,6 +16,7 @@ arg <- function(flag, default = NULL) {
 }
 
 input_path <- arg("--input")
+included_ids_path <- arg("--included-ids")
 output_dir <- arg("--output-dir", "outputs/citesource_contribution")
 if (is.null(input_path)) stop("Required: --input", call. = FALSE)
 if (!file.exists(input_path)) stop(sprintf("Canonical JSONL not found: %s", input_path), call. = FALSE)
@@ -29,6 +30,15 @@ source_labels <- c(
   agricola = "AGRICOLA",
   wos = "Web of Science"
 )
+
+
+included_ids <- character()
+if (!is.null(included_ids_path)) {
+  if (!file.exists(included_ids_path)) stop(sprintf("Included-ID file not found: %s", included_ids_path), call. = FALSE)
+  included_ids <- readLines(included_ids_path, warn = FALSE, encoding = "UTF-8")
+  included_ids <- included_ids[nzchar(trimws(included_ids))]
+  if (anyDuplicated(included_ids)) stop("Included-ID file contains duplicate record_id values", call. = FALSE)
+}
 
 # Read only the provenance needed for this analysis. One canonical work becomes
 # one CiteSource citation row; cite_source contains every database manifestation
@@ -73,6 +83,40 @@ canonical_sources <- bind_rows(rows)
 if (!nrow(canonical_sources)) stop("No canonical records parsed", call. = FALSE)
 if (anyDuplicated(canonical_sources$duplicate_id)) stop("Duplicate canonical record IDs", call. = FALSE)
 
+
+# Machine-readable provenance matrix: one row per canonical work, one logical
+# indicator per database, plus the Workflow 04 inclusion state when supplied.
+source_presence <- canonical_sources |>
+  transmute(
+    record_id = duplicate_id,
+    cite_source = as.character(cite_source)
+  )
+
+for (lab in unname(source_labels)) {
+  source_presence[[lab]] <- grepl(
+    paste0("(^|, )", gsub("([\\.^$|()\\[\\]{}*+?])", "\\\\\1", lab), "(, |$)"),
+    source_presence$cite_source,
+    perl = TRUE
+  )
+}
+source_presence$included_w04 <- source_presence$record_id %in% included_ids
+
+if (length(included_ids)) {
+  missing_included <- setdiff(included_ids, source_presence$record_id)
+  if (length(missing_included)) {
+    stop(sprintf("%d Workflow 04 included record_id values are absent from the canonical provenance matrix", length(missing_included)), call. = FALSE)
+  }
+  if (sum(source_presence$included_w04) != length(included_ids)) {
+    stop("Workflow 04 included-record count does not match provenance matrix", call. = FALSE)
+  }
+}
+
+write.csv(
+  source_presence |> select(-cite_source),
+  file.path(output_dir, "source_provenance_screening.csv"),
+  row.names = FALSE
+)
+
 # Use CiteSource directly for source comparison and uniqueness classification.
 comparison <- CiteSource::compare_sources(canonical_sources, comp_type = "sources")
 classified <- CiteSource::count_unique(canonical_sources)
@@ -92,6 +136,23 @@ source_summary <- classified |>
     share_of_all_canonical_works = canonical_works / nrow(canonical_sources)
   ) |>
   arrange(desc(canonical_works))
+
+
+screening_summary <- tibble(
+  database = unname(source_labels),
+  deduplicated_records = vapply(unname(source_labels), function(lab) sum(source_presence[[lab]]), integer(1)),
+  included_records = vapply(unname(source_labels), function(lab) sum(source_presence[[lab]] & source_presence$included_w04), integer(1))
+) |>
+  mutate(
+    included_share_of_source = included_records / deduplicated_records,
+    share_of_all_includes = if (length(included_ids)) included_records / length(included_ids) else NA_real_
+  )
+
+write.csv(
+  screening_summary,
+  file.path(output_dir, "source_contribution_screening_summary.csv"),
+  row.names = FALSE
+)
 
 # Validate summary against the logical source matrix produced by CiteSource.
 matrix_counts <- comparison |>
@@ -160,6 +221,7 @@ report <- list(
   schema = "living-evidence-map-citesource-contribution-v1",
   status = "PASS",
   canonical_records = nrow(canonical_sources),
+  workflow04_included_records = if (length(included_ids)) length(included_ids) else NULL,
   databases = unname(source_labels),
   interpretation = list(
     source_set_size = "Number of deduplicated canonical works with at least one manifestation from the database",
@@ -170,7 +232,9 @@ report <- list(
     figure_png = "database_contribution_upset.png",
     figure_pdf = "database_contribution_upset.pdf",
     summary_csv = "source_contribution_summary.csv",
-    overlap_matrix_csv = "source_overlap_matrix.csv"
+    overlap_matrix_csv = "source_overlap_matrix.csv",
+    provenance_screening_csv = "source_provenance_screening.csv",
+    screening_summary_csv = "source_contribution_screening_summary.csv"
   )
 )
 writeLines(
@@ -181,3 +245,4 @@ writeLines(
 
 cat(sprintf("PASS: CiteSource contribution analysis for %d canonical works\n", nrow(canonical_sources)))
 print(source_summary)
+if (length(included_ids)) print(screening_summary)
