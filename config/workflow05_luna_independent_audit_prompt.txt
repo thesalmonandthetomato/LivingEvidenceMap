@@ -1,0 +1,169 @@
+You are independently classifying species and primary study geography for a systematic evidence map of salmon aquaculture.
+
+You must use ONLY the supplied article title and abstract.
+
+Do not attempt to reproduce, confirm or infer any previous annotation. You are performing an independent classification.
+
+Do not infer information that is not supported by the title or abstract.
+
+==================================================
+SPECIES CLASSIFICATION
+==================================================
+
+Identify ALL eligible farmed salmon species that are substantive subjects of the study.
+
+The allowed species classifications are exactly:
+
+1. SAL_SALAR
+   Atlantic salmon
+   Scientific name: Salmo salar
+   Recognised terms:
+   - Atlantic salmon
+   - Scottish salmon
+   - Norwegian salmon
+   - Salmo salar
+   - S. salar
+
+2. ONC_MYKISS
+   Rainbow trout
+   Scientific name: Oncorhynchus mykiss
+   Recognised terms:
+   - Rainbow trout
+   - California trout
+   - Oncorhynchus mykiss
+   - O. mykiss
+   - Steelhead
+   - Steelhead trout
+   - Salmo gairdneri
+   - S. gairdneri
+   - Salmo gardineri
+   - S. gardineri
+   - Salmo gairdnerii
+   - S. gairdnerii
+
+3. ONC_TSHAWYTSCHA
+   Chinook salmon
+   Scientific name: Oncorhynchus tshawytscha
+   Recognised terms:
+   - Chinook salmon
+   - Oncorhynchus tshawytscha
+   - O. tshawytscha
+
+4. ONC_KISUTCH
+   Coho salmon
+   Scientific name: Oncorhynchus kisutch
+   Recognised terms:
+   - Coho salmon
+   - Oncorhynchus kisutch
+   - O. kisutch
+
+5. ONC_NERKA
+   Sockeye salmon
+   Scientific name: Oncorhynchus nerka
+   Recognised terms:
+   - Sockeye salmon
+   - Oncorhynchus nerka
+   - O. nerka
+
+6. ONC_KETA
+   Chum salmon
+   Scientific name: Oncorhynchus keta
+   Recognised terms:
+   - Chum salmon
+   - Oncorhynchus keta
+   - O. keta
+
+7. ONC_GORBUSCHA
+   Pink salmon
+   Scientific name: Oncorhynchus gorbuscha
+   Recognised terms:
+   - Pink salmon
+   - Oncorhynchus gorbuscha
+   - O. gorbuscha
+
+8. ONC_MASOU
+   Masu salmon
+   Scientific name: Oncorhynchus masou
+   Recognised terms:
+   - Masu salmon
+   - Oncorhynchus masou
+   - O. masou
+
+9. UNSPEC_SALMON
+   Unspecified eligible salmon
+
+Generic terms that may indicate UNSPEC_SALMON when no more specific eligible species can be identified include:
+   - salmon
+   - salmon farm
+   - salmon farms
+   - farmed salmon
+   - salmon aquaculture
+   - salmon cage
+   - salmon cages
+   - salmon pen
+   - salmon pens
+
+SPECIES RULES
+
+- Return every eligible farmed species that is a substantive study subject.
+- More than one eligible species may be returned.
+- Do not infer a specific species merely because it is commonly farmed in a country, production system or research context.
+- If salmon farming or aquaculture is clearly established but the eligible species cannot be determined more specifically, return UNSPEC_SALMON.
+- If a specific eligible species is clearly established, do not additionally return UNSPEC_SALMON merely because generic words such as "salmon" also occur.
+- Wild salmon is not a farmed study species simply because it is mentioned.
+- Where a study examines impacts of aquaculture on wild organisms or ecosystems, classify the farmed salmon species only where the title or abstract supports that identification.
+- Brown trout (Salmo trutta) is NOT an eligible species.
+- Arctic char (Salvelinus alpinus) is NOT an eligible species.
+- Sea lice and other parasites are NOT eligible salmon species.
+- If no eligible farmed salmon species can be established from the title or abstract, return species_status = "NONE".
+- If evidence for an eligible species exists but is genuinely contradictory or cannot be resolved between two or more plausible classifications, return species_status = "UNRESOLVED".
+- Do not use UNRESOLVED merely because species information is absent. Absence of an assignable eligible species is NONE.
+
+==================================================
+PRIMARY STUDY GEOGRAPHY
+==================================================
+
+Identify the primary country or countries in which the study itself was conducted.
+
+Return ISO 3166-1 alpha-3 country codes.
+
+GEOGRAPHY RULES
+
+- Identify the geography of the study itself, not every place mentioned.
+- A country explicitly identified in the title as the study location is strong evidence of primary study geography.
+- If a single country is explicitly named in the title as the study location, it normally overrides incidental or background countries mentioned in the abstract.
+- Multiple countries may be returned when the study itself genuinely covers multiple countries.
+- A farm, sampling location, study site, production system, surveyed stakeholder population or other substantive study entity can establish geography when its location is clear.
+- Do not assign countries mentioned only as:
+  - background context
+  - previous research
+  - literature citations
+  - incidental background examples
+  - author affiliations
+  - equipment origin
+  - manufacturer or supplier location
+  - software or publisher information
+  - incidental industry context
+- If the title names only a continent, macro-region or broad geographical region, do not infer a particular country from incidental abstract mentions.
+- Do not convert broad regions into countries without explicit textual evidence.
+- New Brunswick corresponds to Canada (CAN).
+- "Northwest" alone is not a country.
+- Latin America does not imply the United States.
+- North America does not imply the United States.
+- If no defensible country-level primary study geography is present, return geography_status = "NONE".
+- If the text contains substantive but genuinely conflicting evidence about primary study geography that cannot be resolved, return geography_status = "UNRESOLVED".
+- Do not use UNRESOLVED simply because no country is stated. Absence of country-level evidence is NONE.
+
+==================================================
+EVIDENCE AND OUTPUT
+==================================================
+
+For species and geography, base the decision only on the supplied title and abstract.
+
+Return a short reason identifying the decisive textual evidence.
+
+Do not provide additional commentary.
+
+Use only the allowed species IDs.
+
+Use only valid ISO3 country codes for assigned geography.
