@@ -8,3 +8,5 @@ retry after replacing regex source parsing with exact comma-split membership
 render paired deduplicated and included database contribution bars
 
 render integrated paired UpSet with included intersection bars
+
+rerender paired UpSet preserving original intersection order with unique single-source records at right
