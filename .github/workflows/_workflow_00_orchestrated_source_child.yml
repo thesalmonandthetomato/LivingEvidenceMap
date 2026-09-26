@@ -273,7 +273,7 @@ jobs:
             outputs/updater/source_child_sidecar/
             outputs/updater/openalex_delta/
             outputs/updater/wos_delta/
-          retention-days: 7
+          retention-days: 90
           if-no-files-found: error
 
       - name: Upload child search record
