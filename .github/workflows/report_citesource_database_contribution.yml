@@ -52,12 +52,27 @@ jobs:
             --output-root workflow01_state
           test -s workflow01_state/canonical/records.jsonl
 
+      - name: Restore authoritative Workflow 04 inclusion set
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
+            --pointer docs/workflow04/zenodo/run-36227737500.json \
+            --output-dir workflow04_state
+          INC="$(find workflow04_state -type f -name workflow04_included_record_ids.txt -print -quit)"
+          test -n "$INC"
+          cp "$INC" workflow04_included_record_ids.txt
+          Rscript -e 'x<-readLines("workflow04_included_record_ids.txt",warn=FALSE);x<-x[nzchar(trimws(x))];stopifnot(length(x)==19407L,!anyDuplicated(x));cat("PASS: authoritative W04 inclusion set contains 19,407 unique record IDs\n")'
+
       - name: Generate CiteSource contribution figure
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/reporting/plot_citesource_database_contribution.R \
             --input workflow01_state/canonical/records.jsonl \
+            --included-ids workflow04_included_record_ids.txt \
             --output-dir outputs/citesource_contribution
 
       - name: Validate outputs
@@ -69,11 +84,17 @@ jobs:
           stopifnot(
             r$status == "PASS",
             r$canonical_records == 32292L,
+            r$workflow04_included_records == 19407L,
             nrow(s) == 5L,
+            file.exists("outputs/citesource_contribution/source_provenance_screening.csv"),
+            file.exists("outputs/citesource_contribution/source_contribution_screening_summary.csv"),
             file.exists("outputs/citesource_contribution/database_contribution_upset.png"),
             file.exists("outputs/citesource_contribution/database_contribution_upset.pdf")
           )
-          cat("PASS: CiteSource figure and five-source summary validated\n")
+          p <- read.csv("outputs/citesource_contribution/source_provenance_screening.csv", check.names = FALSE)
+          ss <- read.csv("outputs/citesource_contribution/source_contribution_screening_summary.csv")
+          stopifnot(nrow(p) == 32292L, sum(p$included_w04) == 19407L, nrow(ss) == 5L)
+          cat("PASS: CiteSource figure and deduplicated/included provenance summaries validated\n")
 
       - name: Upload CiteSource contribution outputs
         uses: actions/upload-artifact@v4
