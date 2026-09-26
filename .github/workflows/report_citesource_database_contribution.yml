@@ -88,6 +88,7 @@ jobs:
             nrow(s) == 5L,
             file.exists("outputs/citesource_contribution/source_provenance_screening.csv"),
             file.exists("outputs/citesource_contribution/source_contribution_screening_summary.csv"),
+            file.exists("outputs/citesource_contribution/source_intersection_screening_summary.csv"),
             file.exists("outputs/citesource_contribution/database_contribution_deduplicated_vs_included.png"),
             file.exists("outputs/citesource_contribution/database_contribution_deduplicated_vs_included.pdf"),
             file.exists("outputs/citesource_contribution/database_contribution_upset.png"),
@@ -95,8 +96,15 @@ jobs:
           )
           p <- read.csv("outputs/citesource_contribution/source_provenance_screening.csv", check.names = FALSE)
           ss <- read.csv("outputs/citesource_contribution/source_contribution_screening_summary.csv")
-          stopifnot(nrow(p) == 32292L, sum(p$included_w04) == 19407L, nrow(ss) == 5L)
-          cat("PASS: CiteSource figure and deduplicated/included provenance summaries validated\n")
+          ix <- read.csv("outputs/citesource_contribution/source_intersection_screening_summary.csv")
+          stopifnot(
+            nrow(p) == 32292L,
+            sum(p$included_w04) == 19407L,
+            nrow(ss) == 5L,
+            sum(ix$deduplicated_records) == 32292L,
+            sum(ix$included_records) == 19407L
+          )
+          cat("PASS: CiteSource full paired UpSet and provenance summaries validated\n")
 
       - name: Upload CiteSource contribution outputs
         uses: actions/upload-artifact@v4
