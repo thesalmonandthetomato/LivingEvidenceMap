@@ -50,20 +50,44 @@ jobs:
           github-token: ${{ github.token }}
           run-id: 36268840588
 
+      - name: Download W06 failure recovery 1
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow06-failure-recovery-36271055010
+          path: recovery4
+          github-token: ${{ github.token }}
+          run-id: 36271055010
+
+      - name: Download W06 failure recovery 2
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow06-failure-recovery-36271186232
+          path: recovery1
+          github-token: ${{ github.token }}
+          run-id: 36271186232
+
       - name: Build sparse durable Workflow 06 state
         shell: bash
         run: |
           set -euo pipefail
-          FINAL=$(find source_w06 -type f -name geography_semantic_final.csv -print -quit)
+          BASE=$(find source_w06 -type f -name geography_semantic_final.csv -print -quit)
           JSONL=$(find source_w06 -type f -name geography_semantic_final.jsonl -print -quit)
-          UNRES=$(find source_w06 -type f -name geography_unresolved.csv -print -quit)
-          UNGROUND=$(find source_w06 -type f -name geography_ungrounded_evidence.csv -print -quit)
-          FAIL=$(find source_w06 -type f -name geography_llm_failures.csv -print -quit)
-          QC=$(find source_w06 -type f -name geography_deterministic_qc_discrepancies.csv -print -quit)
-          PAT=$(find source_w06 -type f -name discrepancy_patterns.csv -print -quit)
-          STAT=$(find source_w06 -type f -name geography_status_counts.csv -print -quit)
+          R4=$(find recovery4 -type f -name workflow06_failure_recovery.csv -print -quit)
+          R1=$(find recovery1 -type f -name workflow06_failure_recovery.csv -print -quit)
           W05=$(find source_w05 -type f -name workflow05_species_coded.csv -print -quit)
-          for x in "$FINAL" "$JSONL" "$UNRES" "$UNGROUND" "$FAIL" "$QC" "$PAT" "$STAT" "$W05"; do test -n "$x"; done
+          for x in "$BASE" "$JSONL" "$R4" "$R1" "$W05"; do test -n "$x"; done
+
+          Rscript scripts/reporting/workflow06_apply_failure_recovery.R \
+            --baseline "$BASE" --recovery4 "$R4" --recovery1 "$R1" \
+            --output-dir corrected_w06
+
+          FINAL=corrected_w06/geography_semantic_final.csv
+          UNRES=corrected_w06/geography_unresolved.csv
+          UNGROUND=corrected_w06/geography_ungrounded_evidence.csv
+          FAIL=corrected_w06/geography_llm_failures.csv
+          QC=corrected_w06/geography_deterministic_qc_discrepancies.csv
+          PAT=corrected_w06/discrepancy_patterns.csv
+          STAT=corrected_w06/geography_status_counts.csv
 
           mkdir -p workflow06_state
           FINAL="$FINAL" W05="$W05" Rscript -e '
@@ -75,12 +99,12 @@ jobs:
               !anyDuplicated(x$record_id), !anyDuplicated(w$record_id),
               setequal(x$record_id,w$record_id),
               sum(x$geography_status=="RESOLVED")==7770L,
-              sum(x$geography_status=="NONE")==11162L,
-              sum(x$geography_status=="UNRESOLVED")==475L,
-              sum(x$discrepancy_type!="exact_agreement")==3454L,
-              sum(x$discrepancy_type=="exact_agreement")==15953L,
-              sum(!x$evidence_all_grounded)==239L,
-              sum(x$llm_failed)==4L
+              sum(x$geography_status=="NONE")==11166L,
+              sum(x$geography_status=="UNRESOLVED")==471L,
+              sum(x$discrepancy_type!="exact_agreement")==3451L,
+              sum(x$discrepancy_type=="exact_agreement")==15956L,
+              sum(!x$evidence_all_grounded)==235L,
+              sum(x$llm_failed)==0L
             )
             keep <- c(
               "record_id","record_sequence",
