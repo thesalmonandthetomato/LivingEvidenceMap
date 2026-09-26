@@ -19,12 +19,12 @@ arg <- function(flag, default = NULL) {
 }
 
 input_path <- arg("--input")
-dictionary_path <- arg("--dictionary", "config/species_dictionary.csv")
+dictionary_path <- arg("--dictionary", "config/deterministic_concepts.csv")
 output_dir <- arg("--output-dir", "outputs/workflow05_species_coding")
 expected_records <- as.integer(arg("--expected-records", "19407"))
 
 if (is.null(input_path) || !file.exists(input_path)) stop("Valid --input JSONL is required", call. = FALSE)
-if (!file.exists(dictionary_path)) stop("Species dictionary is missing", call. = FALSE)
+if (!file.exists(dictionary_path)) stop("Deterministic concepts CSV is missing", call. = FALSE)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
@@ -60,14 +60,48 @@ records <- tibble(
 if (any(!nzchar(records$record_id))) stop("Every record requires a stable record_id", call. = FALSE)
 if (anyDuplicated(records$record_id)) stop("record_id values must be unique", call. = FALSE)
 
-dictionary <- read_csv(dictionary_path, show_col_types = FALSE, progress = FALSE)
-eligible_ids <- c(
-  "SAL_SALAR", "ONC_MYKISS", "ONC_TSHAWYTSCHA", "ONC_KISUTCH",
-  "ONC_NERKA", "ONC_KETA", "ONC_GORBUSCHA", "ONC_MASOU", "UNSPEC_SALMON"
-)
-if (!all(dictionary$species_id %in% eligible_ids)) {
-  stop("Dictionary contains a species code outside the approved W05 vocabulary", call. = FALSE)
+concepts <- read_csv(dictionary_path, show_col_types = FALSE, progress = FALSE)
+if (!identical(names(concepts), c("coding","entity","terms"))) {
+  stop("W05 concepts CSV must contain exactly: coding, entity, terms", call. = FALSE)
 }
+if (!nrow(concepts)) stop("W05 concepts CSV contains zero rows", call. = FALSE)
+if (any(!nzchar(trimws(concepts$coding))) || any(!nzchar(trimws(concepts$entity))) || any(!nzchar(trimws(concepts$terms)))) {
+  stop("Every W05 concept row requires non-empty coding, entity and terms", call. = FALSE)
+}
+if (any(concepts$entity != "farmed species")) {
+  stop("Current W05 expects entity = 'farmed species' for all rows", call. = FALSE)
+}
+
+code_map <- c(
+  "Atlantic salmon" = "SAL_SALAR",
+  "Rainbow trout" = "ONC_MYKISS",
+  "Chinook salmon" = "ONC_TSHAWYTSCHA",
+  "Coho salmon" = "ONC_KISUTCH",
+  "Sockeye salmon" = "ONC_NERKA",
+  "Chum salmon" = "ONC_KETA",
+  "Pink salmon" = "ONC_GORBUSCHA",
+  "Masu salmon" = "ONC_MASOU",
+  "Unspecified species" = "UNSPEC_SALMON"
+)
+if (!all(concepts$coding %in% names(code_map))) {
+  stop("Concept CSV contains an unrecognised farmed-species coding", call. = FALSE)
+}
+
+expanded <- lapply(seq_len(nrow(concepts)), function(i) {
+  terms <- trimws(strsplit(concepts$terms[[i]], ";", fixed = TRUE)[[1L]])
+  terms <- unique(terms[nzchar(terms)])
+  tibble(
+    species_id = unname(code_map[[concepts$coding[[i]]]]),
+    preferred_name = concepts$coding[[i]],
+    scientific_name = "",
+    synonym = terms,
+    synonym_type = "configured",
+    is_farmed_candidate = TRUE,
+    default_group = "salmon",
+    notes = ""
+  )
+})
+dictionary <- bind_rows(expanded)
 
 message(sprintf("Workflow 05: deterministic title/abstract species coding for %d records.", nrow(records)))
 
@@ -142,7 +176,8 @@ manifest <- list(
   records = nrow(records),
   input_sha256 = digest(file = input_path, algo = "sha256", serialize = FALSE),
   dictionary_sha256 = digest(file = dictionary_path, algo = "sha256", serialize = FALSE),
-  dictionary_rows = nrow(dictionary),
+  dictionary_rows = nrow(concepts),
+  expanded_terms = nrow(dictionary),
   species_matches = nrow(mentions),
   coded_records = sum(handoff$farmed_species_codes != "NONE"),
   none_records = sum(handoff$farmed_species_codes == "NONE"),

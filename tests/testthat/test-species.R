@@ -242,3 +242,12 @@ test_that("listed misspellings remain deterministic matches", {
     expect_true(any(m$species_id == "ONC_MYKISS"), info = txt)
   }
 })
+
+test_that("W05 deterministic concepts use exactly three columns", {
+  x <- readr::read_csv("config/deterministic_concepts.csv", show_col_types = FALSE)
+  expect_identical(names(x), c("coding", "entity", "terms"))
+  expect_true(all(x$entity == "farmed species"))
+  expect_false(any(grepl("spring salmon", x$terms, ignore.case = TRUE, fixed = TRUE)))
+  expect_true(any(grepl("Salmons", x$terms, fixed = TRUE)))
+  expect_true(any(grepl("salmones", x$terms, fixed = TRUE)))
+})
