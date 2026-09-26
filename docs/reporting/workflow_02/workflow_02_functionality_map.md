@@ -389,6 +389,12 @@ The archive manifest SHA-256 is:
 
 `405d54e01a4578ca6477820ea836f1142a3ca1a57647cf3028bed04da8ed20e2`
 
+## Validated-state handoff
+
+Validated Workflow 02 materialisations are retained for seven days as downstream handoff caches. The durable sparse enrichment state remains authoritative. A downstream workflow may use a live materialised cache only when its checksum matches the checksum registered for the accepted Workflow 02 state; otherwise the state is reconstructed from the exact upstream Workflow 01 corpus plus the registered Workflow 02 sparse layer.
+
+The post-Workflow-02 lean canonical checkpoint follows the same rule: a seven-day materialised lean artefact may be used directly, while the registered restricted Zenodo checkpoint provides the durable fallback.
+
 ## Downstream handoff
 
 The Workflow 02 handoff is the automatically enriched canonical state reconstructed from:
