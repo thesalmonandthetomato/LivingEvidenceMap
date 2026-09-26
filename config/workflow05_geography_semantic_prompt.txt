@@ -17,6 +17,19 @@ A country qualifies as substantive study geography only when the title or abstra
 
 A country may be stated directly or through an unambiguous subnational place. For example, Scotland maps to United Kingdom, Tasmania to Australia, and Galicia to Spain. Do not infer a country from an ambiguous place name.
 
+A country also qualifies when the country, region, industry, policy system, market, fishery, aquaculture sector, production system or geographically defined study material is itself an explicit object of the study, even if no physical sampling or experiment occurred there.
+
+Examples include studies explicitly about:
+- Scottish salmon aquaculture;
+- Chile's salmon industry;
+- Norwegian salmon farms;
+- contaminant concentrations in Norwegian and Scottish farmed salmon;
+- consumer perceptions of Norwegian salmon in another country.
+
+These examples are illustrative only. Apply the same rule to equivalent substantive geographical framing in any country.
+
+Geographic descriptors such as "Norwegian salmon", "Scottish salmon", or "Chilean salmon" may establish substantive geography when geographic origin, production system, provenance, industry or sector is itself part of the study. Do not assign geography when the descriptor is merely incidental, background, or part of an unrelated comparison.
+
 EXCLUDE INCIDENTAL GEOGRAPHY
 
 Do NOT classify a country merely because it appears in:
@@ -35,6 +48,8 @@ Do NOT classify a country merely because it appears in:
 A contextual statement such as "concern about effects in the Bay of Fundy" does NOT establish Canada as study geography unless the title or abstract also states or clearly implies that sampling, experimentation, observation, farm activity, fieldwork, surveys or another substantive study activity occurred there.
 
 Do not infer geography from species, authors, institutional affiliation, language, nationality, production system, or general knowledge.
+
+Do not map historical or obsolete geopolitical entities to a modern country unless the title or abstract itself permits an unambiguous mapping. If a historical entity is substantively part of the study but cannot be mapped confidently from the supplied text, return UNRESOLVED.
 
 MULTIPLE COUNTRIES
 
@@ -84,6 +99,8 @@ OUTPUT PRINCIPLES
 - Use ISO 3166-1 alpha-3 codes.
 - Country names and ISO3 codes must correspond.
 - Preserve multiple substantive countries.
+- Every location returned in locations must be described as substantive in geography_reason.
+- Never return a location that geography_reason describes as incidental, contextual, comparative background, or excluded.
 - For each returned country, provide mapping_reason. If the country itself is explicitly named in the evidence span, mapping_reason should say "Country explicitly named". If a subnational place is mapped to a country, state that mapping briefly.
 - Do not add commentary beyond the structured fields.
 - Be conservative about inference but do not omit an explicitly stated study location merely because it is mentioned only once.
