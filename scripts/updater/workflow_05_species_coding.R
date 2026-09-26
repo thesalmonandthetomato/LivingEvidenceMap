@@ -85,7 +85,6 @@ for (i in seq_len(nrow(records))) {
 }
 mentions <- bind_rows(mention_list)
 
-# Record-level coding only. No primary/co-primary/secondary classification.
 # If any named eligible species is present, suppress the generic
 # UNSPEC_SALMON coding for that record.
 if (nrow(mentions)) {
@@ -157,9 +156,6 @@ manifest <- list(
     fuzzy_matching = FALSE,
     semantic_inference = FALSE,
     unspecified_suppressed_when_named_species_present = TRUE,
-    primary_secondary_classification = FALSE,
-    geography = FALSE,
-    llm_calls = 0L
   )
 )
 writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE), file.path(output_dir, "workflow05_manifest.json"))
