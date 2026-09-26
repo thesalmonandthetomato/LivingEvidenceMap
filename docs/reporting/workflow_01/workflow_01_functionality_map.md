@@ -317,6 +317,12 @@ The authoritative canonical state is reconstructed from the registered full base
 
 Detailed development, repair and recovery actions used while establishing the baseline are recorded separately in `docs/reporting/workflow_01/AD_HOC_ACTIONS.md`.
 
+## Validated-state handoff
+
+After an accepted Workflow 01 state is validated and durably registered, the materialised canonical JSONL and its manifest are retained as a seven-day GitHub Actions handoff cache. Workflow 02 preferentially consumes this cache when the canonical SHA-256 equals the checksum in the authoritative Workflow 01 pointer. If the cache is expired, absent or fails verification, Workflow 02 reconstructs the same state from the registered Workflow 01 Zenodo baseline/delta chain.
+
+This seven-day handoff cache does not replace Workflow 01's longer-lived checkpoints for costly model/API or human-review work. Those recovery checkpoints remain subject to the repository checkpoint policy.
+
 ## Downstream handoff
 
 The authoritative downstream object is the reconstructed and checksum-verified canonical `records.jsonl`.
