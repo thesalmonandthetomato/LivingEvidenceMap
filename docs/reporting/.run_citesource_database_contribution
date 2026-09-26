@@ -4,3 +4,5 @@ canonical_records=32292
 rerun with W04 inclusion provenance for paired deduplicated/included source counts
 
 retry after replacing regex source parsing with exact comma-split membership
+
+render paired deduplicated and included database contribution bars
