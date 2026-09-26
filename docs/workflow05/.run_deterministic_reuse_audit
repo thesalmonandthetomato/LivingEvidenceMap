@@ -1,1 +1,3 @@
 run Workflow 05 deterministic species/geography annotation and audit safe reuse of historical adjudications; make no new LLM calls
+
+retry after fixing W04 handoff verification environment
