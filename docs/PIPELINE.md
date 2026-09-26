@@ -41,3 +41,12 @@ Every stage must receive an explicit target configuration. A stage must fail if 
 ## Porting policy
 
 The legacy repository provides implementation provenance. Methods are ported selectively and should remain scientifically equivalent unless a deliberate change is documented and tested. No production stage should read from or otherwise depend on the legacy repository.
+
+
+## Validated-state handoff
+
+Between validated workflow stages, the durable registered Zenodo state is authoritative. A downstream workflow may preferentially consume a live GitHub Actions handoff artefact when that artefact is tied to the registered upstream run and passes the expected identity/count/checksum validation. Validated handoff caches are normally retained for seven days.
+
+If the handoff cache has expired, is missing or cannot be verified, the downstream workflow restores the same accepted state from the registered Zenodo pointer. The analytical stage receives the same local input regardless of delivery route.
+
+This seven-day handoff policy does not supersede the repository checkpoint policy for costly API/model work. Recovery checkpoints containing expensive generated state are retained for at least 90 days.
