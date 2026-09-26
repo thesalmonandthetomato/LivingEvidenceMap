@@ -5,3 +5,5 @@ retry after fixing preparation heredoc syntax
 retry after adding missing preparation dependencies
 
 launch Workflow 07 fresh three-Luna coding for validated 7,110 uncoded records
+
+rerun after serial batch-limit recovery fix; recover run 36254091560
