@@ -1,0 +1,104 @@
+name: Workflow 05 - deterministic species coding
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow05/.run_species_coding'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  species:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout triggering revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("digest","dplyr","jsonlite","readr","tibble","testthat"))
+
+      - name: Run W05 regression tests
+        shell: Rscript {0}
+        run: |
+          source("R/species_detect.R")
+          testthat::test_file("tests/testthat/test-species.R", reporter = "summary")
+
+      - name: Restore validated W04 retained corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          POINTER="docs/workflow04/zenodo/run-36227737500.json"
+          RUN_ID="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$source_github_run_id)')"
+          EXPECTED_IDS_SHA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$included_record_ids_sha256)')"
+          mkdir -p inputs/w04_cache inputs/workflow05
+          CACHE_OK=false
+
+          if gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow04-final-screening-$RUN_ID" --dir inputs/w04_cache; then
+            INC="$(find inputs/w04_cache -type f -name workflow04_included_record_ids.txt -print -quit)"
+            CAN="$(find inputs/w04_cache -type f -name workflow04_included_canonical.jsonl -print -quit)"
+            if [ -n "$INC" ] && [ -n "$CAN" ]; then
+              IDS_SHA="$(P="$INC" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')"
+              if [ "$IDS_SHA" = "$EXPECTED_IDS_SHA" ]; then
+                cp "$INC" inputs/workflow05/workflow04_included_record_ids.txt
+                cp "$CAN" inputs/workflow05/retained_canonical.jsonl
+                CACHE_OK=true
+              fi
+            fi
+          fi
+
+          if [ "$CACHE_OK" != true ]; then
+            rm -rf inputs/w04_state inputs/lean
+            Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R               --pointer "$POINTER"               --output-dir inputs/w04_state
+            INC="$(find inputs/w04_state -type f -name workflow04_included_record_ids.txt -print -quit)"
+            Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R               --pointer docs/compaction/zenodo/run-36166883249.json               --output-dir inputs/lean
+            cp "$INC" inputs/workflow05/workflow04_included_record_ids.txt
+            Rscript scripts/updater/workflow_05_materialise_retained.R               --canonical inputs/lean/canonical_lean.jsonl               --included-ids inputs/workflow05/workflow04_included_record_ids.txt               --output inputs/workflow05/retained_canonical.jsonl               --expected-records 19407
+          fi
+
+          Rscript -e 'ln<-readLines("inputs/workflow05/retained_canonical.jsonl",warn=FALSE);ln<-ln[nzchar(trimws(ln))];stopifnot(length(ln)==19407L);cat("PASS: 19,407 W04-retained records restored\n")'
+
+      - name: Run deterministic species coding
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_05_species_coding.R             --input inputs/workflow05/retained_canonical.jsonl             --dictionary config/species_dictionary.csv             --output-dir outputs/workflow05_species_coding             --expected-records 19407
+
+      - name: Validate W05 output
+        shell: Rscript {0}
+        run: |
+          x <- readr::read_csv("outputs/workflow05_species_coding/workflow05_species_coded.csv",show_col_types=FALSE)
+          m <- jsonlite::fromJSON("outputs/workflow05_species_coding/workflow05_manifest.json")
+          stopifnot(
+            nrow(x) == 19407L,
+            !anyDuplicated(x$record_id),
+            !any(is.na(x$farmed_species)),
+            !any(is.na(x$farmed_species_codes)),
+            identical(m$rules$primary_secondary_classification, FALSE),
+            identical(m$rules$geography, FALSE),
+            identical(m$rules$llm_calls, 0L)
+          )
+          cat("PASS: W05 is species-only deterministic coding\n")
+
+      - name: Upload W05 species coding
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-species-coding-${{ github.run_id }}
+          path: outputs/workflow05_species_coding/
+          retention-days: 90
+          if-no-files-found: error
