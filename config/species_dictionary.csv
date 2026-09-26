@@ -96,3 +96,52 @@ ONC_MASOU,Masu salmon,Oncorhynchus masou,honmasu,common,TRUE,salmon,Established 
 ONC_MASOU,Masu salmon,Oncorhynchus masou,sakuramasu,common,TRUE,salmon,Established common name
 ONC_MASOU,Masu salmon,Oncorhynchus masou,satsukimasu,common,TRUE,salmon,Established common name
 ONC_MASOU,Masu salmon,Oncorhynchus masou,yamame,common,TRUE,salmon,Established common name
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Oncorhynchus mykkis,scientific,TRUE,trout,Observed spelling error in W05 corpus
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Oncorhyncus mykiss,scientific,TRUE,trout,Observed spelling error in W05 corpus
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,OOncorhynchus mykiss,scientific,TRUE,trout,Observed OCR/spelling error in W05 corpus
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Oncorhynchus mykis,scientific,TRUE,trout,Observed spelling error in W05 corpus
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Salmo giardneri,scientific,TRUE,trout,Observed spelling error in W05 corpus
+UNSPEC_SALMON,Unspecified species,,Salmon louse,generic,TRUE,salmon,Explicit host-context rule
+UNSPEC_SALMON,Unspecified species,,Salmon lice,generic,TRUE,salmon,Explicit host-context rule
+UNSPEC_SALMON,Unspecified species,,salmón,generic,TRUE,salmon,Spanish generic salmon
+UNSPEC_SALMON,Unspecified species,,salmones,generic,TRUE,salmon,Spanish generic salmon plural
+UNSPEC_SALMON,Unspecified species,,saumon,generic,TRUE,salmon,French generic salmon
+UNSPEC_SALMON,Unspecified species,,saumons,generic,TRUE,salmon,French generic salmon plural
+UNSPEC_SALMON,Unspecified species,,salmão,generic,TRUE,salmon,Portuguese generic salmon
+UNSPEC_SALMON,Unspecified species,,salmões,generic,TRUE,salmon,Portuguese generic salmon plural
+UNSPEC_SALMON,Unspecified species,,laks,generic,TRUE,salmon,Norwegian/Danish generic salmon
+UNSPEC_SALMON,Unspecified species,,lax,generic,TRUE,salmon,Swedish/Icelandic generic salmon
+UNSPEC_SALMON,Unspecified species,,laxar,generic,TRUE,salmon,Swedish/Icelandic generic salmon plural
+UNSPEC_SALMON,Unspecified species,,lohi,generic,TRUE,salmon,Finnish generic salmon
+UNSPEC_SALMON,Unspecified species,,lohet,generic,TRUE,salmon,Finnish generic salmon plural
+UNSPEC_SALMON,Unspecified species,,Lachs,generic,TRUE,salmon,German generic salmon
+UNSPEC_SALMON,Unspecified species,,Lachse,generic,TRUE,salmon,German generic salmon plural
+UNSPEC_SALMON,Unspecified species,,laksur,generic,TRUE,salmon,Faroese generic salmon
+UNSPEC_SALMON,Unspecified species,,laksar,generic,TRUE,salmon,Faroese generic salmon plural
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,trucha arco iris,common,TRUE,trout,Spanish rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,trucha arcoíris,common,TRUE,trout,Spanish rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,truite arc-en-ciel,common,TRUE,trout,French rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,truite arc en ciel,common,TRUE,trout,French rainbow trout variant
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,truta-arco-íris,common,TRUE,trout,Portuguese rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,truta arco íris,common,TRUE,trout,Portuguese rainbow trout variant
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,truta-arco-iris,common,TRUE,trout,Portuguese rainbow trout ASCII variant
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,regnbueørret,common,TRUE,trout,Norwegian rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,regnbueaure,common,TRUE,trout,Norwegian/Nynorsk rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,regnbåge,common,TRUE,trout,Swedish rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,regnbågslax,common,TRUE,trout,Swedish rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,regnbågsöring,common,TRUE,trout,Swedish rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,kirjolohi,common,TRUE,trout,Finnish rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Regenbogenforelle,common,TRUE,trout,German rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,regnbueørred,common,TRUE,trout,Danish rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,regnbogasilungur,common,TRUE,trout,Icelandic rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,ælabogasíl,common,TRUE,trout,Faroese rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,trota iridea,common,TRUE,trout,Italian rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,trota arcobaleno,common,TRUE,trout,Italian rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,gökkuşağı alabalığı,common,TRUE,trout,Turkish rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,gokkusagi alabaligi,common,TRUE,trout,Turkish rainbow trout ASCII variant
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,قزل آلای رنگین کمان,common,TRUE,trout,Persian/Farsi rainbow trout
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,قزل‌آلای رنگین‌کمان,common,TRUE,trout,Persian/Farsi rainbow trout ZWNJ form
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,قزل آلاي رنگين كمان,common,TRUE,trout,FishBase Farsi orthographic form
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Ghezelalla-e-Rangin Kaman,common,TRUE,trout,FishBase Farsi transliteration
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Qezel Ala Ranginkaman,common,TRUE,trout,FishBase Farsi transliteration
+ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,تراوت قوس قزح,common,TRUE,trout,Arabic rainbow trout; FAO wording
