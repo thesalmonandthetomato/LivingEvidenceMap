@@ -1,0 +1,105 @@
+name: One-off W04 Terra adjudication
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/workflow04/.run_oneoff_terra_adjudication'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  terra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Parse one-off Terra script
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/oneoff_workflow04_terra_adjudication.R')
+          cat('PASS: one-off Terra adjudication script parses\n')
+
+      - name: Download authoritative recovery input
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 36221408684
+          name: workflow04-recovery-input-36221408684
+          path: terra_input/recovery
+
+      - name: Download recovered Luna consensus
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 36221408684
+          name: workflow04-consensus-recovered-36221408684
+          path: terra_input/consensus
+
+      - name: Download historical migration layer
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 36184450763
+          name: workflow04-historical-migration-audit-36184450763
+          path: terra_input/historical
+
+      - name: Resolve exact input paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANONICAL=$(find terra_input/recovery -type f -name canonical_lean.jsonl -print -quit)
+          CONSENSUS=$(find terra_input/consensus -type f -name workflow04_consensus_layer.jsonl -print -quit)
+          HISTORICAL=$(find terra_input/historical -type f -name historical_screening_layer.jsonl -print -quit)
+          test -n "$CANONICAL"
+          test -n "$CONSENSUS"
+          test -n "$HISTORICAL"
+          echo "CANONICAL=$CANONICAL" >> "$GITHUB_ENV"
+          echo "CONSENSUS=$CONSENSUS" >> "$GITHUB_ENV"
+          echo "HISTORICAL=$HISTORICAL" >> "$GITHUB_ENV"
+          echo "PASS: all authoritative Terra inputs resolved"
+
+      - name: Run one-off Terra adjudication
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/oneoff_workflow04_terra_adjudication.R \
+            --canonical "$CANONICAL" \
+            --consensus "$CONSENSUS" \
+            --historical "$HISTORICAL" \
+            --output-dir outputs/workflow04_terra_oneoff \
+            --model gpt-5.6-terra
+
+      - name: Upload Terra adjudication artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-oneoff-terra-${{ github.run_id }}
+          path: outputs/workflow04_terra_oneoff/
+          retention-days: 90
+          if-no-files-found: error
