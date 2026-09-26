@@ -1,0 +1,20 @@
+#!/usr/bin/env Rscript
+suppressPackageStartupMessages({library(httr2);library(jsonlite);library(digest)})
+args<-commandArgs(trailingOnly=TRUE)
+arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
+pointer<-arg("--pointer");output_dir<-arg("--output-dir")
+if(is.null(pointer)||is.null(output_dir))stop("Required: --pointer --output-dir",call.=FALSE)
+x<-fromJSON(pointer,simplifyVector=FALSE)
+if(!identical(x$status,"published")||!identical(x$workflow,"04"))stop("Invalid Workflow 04 pointer",call.=FALSE)
+token<-Sys.getenv("ZENODO_ACCESS_TOKEN");if(!nzchar(token))stop("ZENODO_ACCESS_TOKEN is not set",call.=FALSE)
+dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
+archive<-x$archive_files[[1]]
+fn<-as.character(archive$filename)
+url<-paste0("https://zenodo.org/api/records/",x$zenodo_record_id,"/files/",URLencode(fn,reserved=TRUE),"/content")
+dest<-file.path(output_dir,fn)
+resp<-request(url)|>req_headers(Authorization=paste("Bearer",token))|>req_timeout(1800)|>req_error(is_error=function(resp)FALSE)|>req_perform()
+if(resp_status(resp)!=200L)stop(sprintf("Zenodo download HTTP %d",resp_status(resp)),call.=FALSE)
+writeBin(resp_body_raw(resp),dest)
+if(!identical(tolower(digest(file=dest,algo="sha256",serialize=FALSE)),tolower(as.character(archive$sha256))))stop("Workflow 04 archive checksum mismatch",call.=FALSE)
+utils::untar(dest,exdir=output_dir)
+cat(sprintf("PASS: restored Workflow 04 state from Zenodo record %s\n",x$zenodo_record_id))
