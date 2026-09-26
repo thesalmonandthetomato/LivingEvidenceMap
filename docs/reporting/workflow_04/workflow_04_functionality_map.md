@@ -310,7 +310,7 @@ The durable checkpoint should record:
 - source GitHub Actions run; and
 - archive checksum/manifest.
 
-At the time of this report, the validated final screening state exists as a GitHub Actions artefact; durable external publication of the Workflow 04 checkpoint remains a separate archival step.
+The validated final screening state is archived as restricted Zenodo record `22973914`, DOI `10.5281/zenodo.22973914`. The repository pointer is `docs/workflow04/zenodo/run-36227737500.json`.
 
 ## Validated baseline
 
@@ -371,6 +371,18 @@ Workflow 04 is considered methodologically complete when:
 
 These screening and validation conditions are satisfied for the current baseline: 19,407 records are retained, 12,876 excluded and none unresolved.
 
-Durable external archival of the final Workflow 04 state is still required to give Workflow 04 the same long-term checkpoint model used for the preceding authoritative workflow states.
+The durable screening checkpoint is published as restricted Zenodo record `22973914`, DOI `10.5281/zenodo.22973914`.
 
-**Workflow 04 screening status: complete; durable checkpoint publication pending.**
+The archived final screening-layer SHA-256 is:
+
+`fcdfa0ed6c3ed37f0e355fdd13f5843aa4f6dc2224603e68ead00c7aeafa1f6b`
+
+The retained record-ID set SHA-256 is:
+
+`285d3e7d4d00a8c090e4cc6a832b7184f0dbfff97653aeb9bb15194990b4574e`
+
+The excluded record-ID set SHA-256 is:
+
+`712d5ab93871565b6eaec4f1ee4dcefa40c5d740b06c14a4158009fafea538fe`
+
+**Workflow 04 status: complete, durably archived and ready for Workflow 05 consumption.**
