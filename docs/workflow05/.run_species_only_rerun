@@ -1,3 +1,5 @@
 rerun eligible-species-only deterministic extraction after matcher and synonym updates
 
 retry after Unicode separator regex fix
+
+retry after fixing final summary print only; species logic unchanged
