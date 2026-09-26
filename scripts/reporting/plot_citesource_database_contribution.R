@@ -151,6 +151,91 @@ write.csv(
   row.names = FALSE
 )
 
+
+# Paired source-contribution figure: black = all deduplicated canonical works;
+# olive = Workflow 04 included works. This is separate from, and complementary
+# to, the source-intersection UpSet figure below.
+bar_long <- screening_summary |>
+  select(database, deduplicated_records, included_records) |>
+  pivot_longer(
+    cols = c(deduplicated_records, included_records),
+    names_to = "stage",
+    values_to = "records"
+  ) |>
+  mutate(
+    stage = factor(
+      stage,
+      levels = c("deduplicated_records", "included_records"),
+      labels = c("Deduplicated records", "Included records")
+    ),
+    database = factor(
+      database,
+      levels = screening_summary$database[order(screening_summary$deduplicated_records, decreasing = TRUE)]
+    )
+  )
+
+png(
+  file.path(output_dir, "database_contribution_deduplicated_vs_included.png"),
+  width = 2200, height = 1400, res = 220
+)
+op <- par(mar = c(6.5, 5.5, 2.0, 1.0), xpd = FALSE)
+mat <- rbind(
+  screening_summary$deduplicated_records,
+  screening_summary$included_records
+)
+ord <- order(screening_summary$deduplicated_records, decreasing = TRUE)
+mat <- mat[, ord, drop = FALSE]
+labs <- screening_summary$database[ord]
+bp <- barplot(
+  mat,
+  beside = TRUE,
+  names.arg = labs,
+  las = 2,
+  col = c("black", "#6B6B2A"),
+  border = NA,
+  ylab = "Canonical records",
+  ylim = c(0, max(mat) * 1.12),
+  cex.names = 0.95
+)
+text(bp, mat, labels = format(mat, big.mark = ","), pos = 3, cex = 0.75)
+legend(
+  "topright",
+  legend = c("Deduplicated records", "Included records"),
+  fill = c("black", "#6B6B2A"),
+  border = NA,
+  bty = "n"
+)
+par(op)
+dev.off()
+
+pdf(
+  file.path(output_dir, "database_contribution_deduplicated_vs_included.pdf"),
+  width = 10.5, height = 7,
+  useDingbats = FALSE
+)
+op <- par(mar = c(6.5, 5.5, 2.0, 1.0), xpd = FALSE)
+bp <- barplot(
+  mat,
+  beside = TRUE,
+  names.arg = labs,
+  las = 2,
+  col = c("black", "#6B6B2A"),
+  border = NA,
+  ylab = "Canonical records",
+  ylim = c(0, max(mat) * 1.12),
+  cex.names = 0.95
+)
+text(bp, mat, labels = format(mat, big.mark = ","), pos = 3, cex = 0.75)
+legend(
+  "topright",
+  legend = c("Deduplicated records", "Included records"),
+  fill = c("black", "#6B6B2A"),
+  border = NA,
+  bty = "n"
+)
+par(op)
+dev.off()
+
 # Validate summary against the logical source matrix produced by CiteSource.
 matrix_counts <- comparison |>
   select(starts_with("source__")) |>
@@ -231,7 +316,9 @@ report <- list(
     summary_csv = "source_contribution_summary.csv",
     overlap_matrix_csv = "source_overlap_matrix.csv",
     provenance_screening_csv = "source_provenance_screening.csv",
-    screening_summary_csv = "source_contribution_screening_summary.csv"
+    screening_summary_csv = "source_contribution_screening_summary.csv",
+    paired_bar_png = "database_contribution_deduplicated_vs_included.png",
+    paired_bar_pdf = "database_contribution_deduplicated_vs_included.pdf"
   )
 )
 writeLines(
