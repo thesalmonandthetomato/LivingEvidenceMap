@@ -87,15 +87,30 @@ if (!all(concepts$coding %in% names(code_map))) {
   stop("Concept CSV contains an unrecognised farmed-species coding", call. = FALSE)
 }
 
+infer_synonym_type <- function(coding, term) {
+  term <- trimws(term)
+  if (identical(coding, "Unspecified species")) return("generic")
+  if (grepl("^[[:alpha:]]\\.[[:space:]]+[[:alpha:]-]+$", term, perl = TRUE)) return("abbreviation")
+
+  first <- tolower(strsplit(term, "[[:space:]]+", perl = TRUE)[[1L]][1L])
+  scientific_genera <- c(
+    "salmo", "oncorhynchus", "onchorhynchus", "onchorrhychus",
+    "onchorynchus", "oncorhyncus", "ooncorhynchus", "parasalmo"
+  )
+  if (first %in% scientific_genera) return("scientific")
+  "common"
+}
+
 expanded <- lapply(seq_len(nrow(concepts)), function(i) {
   terms <- trimws(strsplit(concepts$terms[[i]], ";", fixed = TRUE)[[1L]])
   terms <- unique(terms[nzchar(terms)])
+  coding <- concepts$coding[[i]]
   tibble(
-    species_id = unname(code_map[[concepts$coding[[i]]]]),
-    preferred_name = concepts$coding[[i]],
+    species_id = unname(code_map[[coding]]),
+    preferred_name = coding,
     scientific_name = "",
     synonym = terms,
-    synonym_type = "configured",
+    synonym_type = vapply(terms, function(term) infer_synonym_type(coding, term), character(1)),
     is_farmed_candidate = TRUE,
     default_group = "salmon",
     notes = ""
@@ -188,6 +203,7 @@ manifest <- list(
     html_jats_markup_normalised = TRUE,
     whitespace_hyphen_variants_tolerated = TRUE,
     listed_misspellings_supported = TRUE,
+    matcher_behaviour_inferred_from_terms = TRUE,
     fuzzy_matching = FALSE,
     semantic_inference = FALSE,
     unspecified_suppressed_when_named_species_present = TRUE
