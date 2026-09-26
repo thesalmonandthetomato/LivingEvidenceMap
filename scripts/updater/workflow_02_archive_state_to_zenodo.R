@@ -14,7 +14,11 @@ previous_state<-if(nzchar(previous_pointer)){
 }else NULL
 patch_path<-file.path(state_dir,"cumulative_patch.jsonl")
 report_path<-file.path(state_dir,"enrichment_report.json")
-if(!file.exists(patch_path)||!file.exists(report_path)) stop("Workflow 02 state missing cumulative_patch.jsonl or enrichment_report.json",call.=FALSE)
+state_manifest_path<-file.path(state_dir,"state_manifest.json")
+if(!file.exists(patch_path)||!file.exists(report_path)||!file.exists(state_manifest_path)) stop("Workflow 02 state missing cumulative_patch.jsonl, enrichment_report.json or state_manifest.json",call.=FALSE)
+state_manifest<-fromJSON(state_manifest_path,simplifyVector=FALSE)
+final_enriched_sha<-tolower(as.character(state_manifest$final_enriched_sha256))
+if(!nzchar(final_enriched_sha)) stop("Workflow 02 state manifest missing final_enriched_sha256",call.=FALSE)
 token<-Sys.getenv("ZENODO_ACCESS_TOKEN");if(!nzchar(token))stop("ZENODO_ACCESS_TOKEN is not set",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE); output_dir<-normalizePath(output_dir,mustWork=TRUE)
 archive_dir<-file.path(output_dir,"archive_files");dir.create(archive_dir,recursive=TRUE,showWarnings=FALSE)
@@ -45,6 +49,7 @@ manifest<-list(
     manifest_sha256=as.character(previous_state$manifest_sha256)
   ),
   cumulative_patch_records=length(patch_lines),
+  final_enriched_sha256=final_enriched_sha,
   enrichment_counts=er$counts,
   file_visibility="restricted",
   files=list(state_archive=list(
@@ -108,6 +113,7 @@ receipt<-list(
     manifest_sha256=as.character(previous_state$manifest_sha256)
   ),
   cumulative_patch_records=length(patch_lines),
+  final_enriched_sha256=final_enriched_sha,
   zenodo_record_id=record_id,zenodo_deposition_id=dep_id,
   doi=if(is.null(published$doi))NA_character_ else published$doi,
   record_url=if(!is.null(published$links$html))published$links$html else paste0("https://zenodo.org/records/",record_id),
