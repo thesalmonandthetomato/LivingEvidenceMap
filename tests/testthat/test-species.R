@@ -162,3 +162,41 @@ testthat::test_that("salmon in salmon louse or lice context remains eligible", {
   testthat::expect_true(nrow(hits) >= 2L)
   testthat::expect_true(all(hits$species_id == "UNSPEC_SALMON"))
 })
+
+
+testthat::test_that("absence of an eligible species term is NONE rather than review", {
+  mentions <- data.frame(
+    species_id = character(),
+    preferred_name = character(),
+    scientific_name = character(),
+    matched_term = character(),
+    synonym_type = character(),
+    source = character(),
+    match_start = integer(),
+    match_end = integer(),
+    is_farmed_candidate = logical(),
+    default_group = character(),
+    stringsAsFactors = FALSE
+  )
+  result <- assign_farmed_species(mentions)
+  testthat::expect_false(result$review_required)
+  testthat::expect_equal(result$assignment_role, "none")
+  testthat::expect_true(is.na(result$farmed_species_id))
+})
+
+testthat::test_that("generic trout and salmonid-only records remain NONE", {
+  dictionary <- data.frame(
+    species_id = c("ONC_MYKISS", "UNSPEC_SALMON"),
+    preferred_name = c("Rainbow trout", "Unspecified species"),
+    scientific_name = c("Oncorhynchus mykiss", NA),
+    synonym = c("Rainbow trout", "Salmon"),
+    synonym_type = c("common", "generic"),
+    is_farmed_candidate = c(TRUE, TRUE),
+    default_group = c("trout", "salmon"),
+    stringsAsFactors = FALSE
+  )
+  hits <- detect_species_mentions("Farmed trout and salmonids were studied.", "", dictionary)
+  result <- assign_farmed_species(hits)
+  testthat::expect_false(result$review_required)
+  testthat::expect_equal(result$assignment_role, "none")
+})
