@@ -101,13 +101,7 @@ jobs:
             gh run download "$WORKFLOW06_RUN_ID" -n "$artifact_name" -D inputs/workflow06
             geo="$(find inputs/workflow06 -type f -name geography_semantic_final.csv -print -quit)"
             test -n "$geo"
-            GEO_PATH="$geo" OUT_PATH="$TOPIC_PROD_OUTPUT_DIR/input_queue.csv" Rscript - <<'RS'
-            library(readr)
-            x <- read_csv(Sys.getenv("GEO_PATH"),show_col_types=FALSE)
-            req <- c("record_id","title","abstract")
-            stopifnot(all(req %in% names(x)),!anyDuplicated(x$record_id))
-            write_csv(x[,req],Sys.getenv("OUT_PATH"),na="")
-            RS
+            GEO_PATH="$geo" OUT_PATH="$TOPIC_PROD_OUTPUT_DIR/input_queue.csv" Rscript -e 'library(readr); x <- read_csv(Sys.getenv("GEO_PATH"), show_col_types=FALSE); req <- c("record_id","title","abstract"); stopifnot(all(req %in% names(x)), !anyDuplicated(x$record_id)); write_csv(x[,req], Sys.getenv("OUT_PATH"), na="")'
           else
             echo "Unknown INPUT_MODE=$INPUT_MODE" >&2
             exit 1
@@ -120,29 +114,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          INPUT_MODE="${{ steps.source.outputs.input_mode }}" WORKFLOW06_RUN_ID="$WORKFLOW06_RUN_ID" Rscript - <<'RS'
-          library(readr)
-          library(jsonlite)
-          library(digest)
-          p <- file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),"input_queue.csv")
-          q <- read_csv(p,show_col_types=FALSE)
-          stopifnot(all(c("record_id","title","abstract") %in% names(q)),!anyDuplicated(q$record_id))
-          if(Sys.getenv("INPUT_MODE")=="recall_uncoded") stopifnot(nrow(q)==7110L)
-          stopifnot(!any(is.na(q$record_id) | !nzchar(as.character(q$record_id))))
-          stopifnot(!any((is.na(q$title)|!nzchar(as.character(q$title))) &
-                        (is.na(q$abstract)|!nzchar(as.character(q$abstract)))))
-          write_json(
-            list(
-              input_mode=Sys.getenv("INPUT_MODE"),
-              records=nrow(q),
-              queue_sha256=digest(file=p,algo="sha256",serialize=FALSE),
-              recall_run_id=if(Sys.getenv("INPUT_MODE")=="recall_uncoded") "${{ steps.source.outputs.recall_run_id }}" else NULL,
-              workflow06_run_id=if(Sys.getenv("INPUT_MODE")=="workflow06_all") Sys.getenv("WORKFLOW06_RUN_ID") else NULL
-            ),
-            file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),"workflow07_input_source.json"),
-            pretty=TRUE,auto_unbox=TRUE,null="null"
-          )
-          RS
+          INPUT_MODE="${{ steps.source.outputs.input_mode }}" WORKFLOW06_RUN_ID="$WORKFLOW06_RUN_ID" RECALL_SOURCE_RUN="${{ steps.source.outputs.recall_run_id }}" Rscript -e 'library(readr); library(jsonlite); library(digest); p <- file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),"input_queue.csv"); q <- read_csv(p,show_col_types=FALSE); stopifnot(all(c("record_id","title","abstract") %in% names(q)),!anyDuplicated(q$record_id)); if(Sys.getenv("INPUT_MODE")=="recall_uncoded") stopifnot(nrow(q)==7110L); stopifnot(!any(is.na(q$record_id) | !nzchar(as.character(q$record_id)))); stopifnot(!any((is.na(q$title)|!nzchar(as.character(q$title))) & (is.na(q$abstract)|!nzchar(as.character(q$abstract))))); write_json(list(input_mode=Sys.getenv("INPUT_MODE"),records=nrow(q),queue_sha256=digest(file=p,algo="sha256",serialize=FALSE),recall_run_id=if(Sys.getenv("INPUT_MODE")=="recall_uncoded") Sys.getenv("RECALL_SOURCE_RUN") else NULL,workflow06_run_id=if(Sys.getenv("INPUT_MODE")=="workflow06_all") Sys.getenv("WORKFLOW06_RUN_ID") else NULL),file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),"workflow07_input_source.json"),pretty=TRUE,auto_unbox=TRUE,null="null")'
           Rscript R/run_topic_three_luna_production.R manifest
 
       - name: Build dynamic three-pass chunk matrix
