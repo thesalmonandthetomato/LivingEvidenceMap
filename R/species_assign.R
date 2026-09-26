@@ -24,7 +24,7 @@ assign_farmed_species <- function(species_mentions) {
   non_target <- unique_species[unique_species$is_farmed_candidate %in% FALSE, , drop = FALSE]
   non_target_names <- if (nrow(non_target)) paste(sort(unique(non_target$preferred_name)), collapse = "; ") else NA_character_
 
-  specific <- nrow(farmed) > 0L && any(!farmed$species_id %in% c("UNSPEC_SALMON", "ONC_MYKISS"))
+  specific <- nrow(farmed) > 0L && any(farmed$species_id != "UNSPEC_SALMON")
   if (specific) farmed <- farmed[farmed$species_id != "UNSPEC_SALMON", , drop = FALSE]
 
   if (nrow(farmed) == 0L) {
