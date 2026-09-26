@@ -339,6 +339,12 @@ These statistics describe screening agreement and consistency. The previous scre
 
 The selectively triggered third-pass subset is not used as an overall performance estimate because it is deliberately enriched for difficult or unstable cases.
 
+## Validated-state handoff
+
+The final Workflow 04 screening layer and materialised retained subset are exposed as a seven-day GitHub Actions handoff cache for Workflow 05. The restricted Zenodo screening checkpoint remains authoritative. Workflow 05 may use the live cache only after verifying the registered screening-layer and retained-ID checksums; if the cache is unavailable or fails verification, it must restore the W04 layer from Zenodo and rematerialise the retained corpus from the authoritative upstream canonical state.
+
+The 90-day per-shard model outputs used to protect costly screening work are recovery checkpoints, not downstream handoff caches, and are retained under the separate costly-work checkpoint policy.
+
 ## Downstream handoff
 
 The Workflow 04 downstream handoff is the retained set of stable canonical `record_id` values together with the corresponding Workflow 03 lean canonical records and the final screening provenance layer.
