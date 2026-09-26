@@ -43,7 +43,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('dplyr','fs','here','httr2','jsonlite','purrr','readr','stringi','stringr','tibble','tidyr','yaml','digest'))
+        run: install.packages(c('dplyr','fs','here','httr2','jsonlite','purrr','readr','stringi','stringr','tibble','tidyr','yaml','digest','glmnet','quanteda','stringdist'))
 
       - name: Parse W05 implementation
         shell: Rscript {0}
