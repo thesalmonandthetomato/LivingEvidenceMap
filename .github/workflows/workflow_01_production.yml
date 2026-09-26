@@ -115,14 +115,40 @@ jobs:
       - name: Restore current Workflow 00 source subset
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           W00_POINTER: ${{ inputs.workflow00_pointer_path }}
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
-            --pointer "workflow00_registry/$W00_POINTER" \
-            --sources "$W00_SOURCES" \
-            --output-root current_workflow00
+          POINTER="workflow00_registry/$W00_POINTER"
+          RUN_ID="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$github_run_id)' POINTER="$POINTER" 2>/dev/null || true)"
+          CACHE_OK=true
+          HAS_HASHES="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(!is.null(x$handoff_sources))' POINTER="$POINTER")"
+          if [ "$HAS_HASHES" != "TRUE" ] || [ -z "$RUN_ID" ]; then CACHE_OK=false; fi
+          rm -rf current_workflow00
+          mkdir -p current_workflow00
+          if [ "$CACHE_OK" = true ]; then
+            IFS=',' read -ra SRC <<< "$W00_SOURCES"
+            for source in "${SRC[@]}"; do
+              mkdir -p "current_workflow00/$source"
+              if ! gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow00-${source}-harvest-${RUN_ID}" --dir "current_workflow00/$source"; then
+                CACHE_OK=false; break
+              fi
+              EXPECTED="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$handoff_sources[[Sys.getenv("SOURCE")]]$tree_sha256)' POINTER="$POINTER" SOURCE="$source")"
+              ACTUAL="$(Rscript -e 'library(digest);root<-Sys.getenv("ROOT");fs<-list.files(root,recursive=TRUE,full.names=TRUE,all.files=TRUE,no..=TRUE);fs<-fs[file.info(fs)$isdir %in% FALSE];rel<-substring(fs,nchar(normalizePath(root,mustWork=TRUE))+2L);o<-order(rel);fs<-fs[o];rel<-rel[o];z<-vapply(seq_along(fs),function(i)paste(rel[[i]],digest(file=fs[[i]],algo="sha256",serialize=FALSE),sep="\t"),character(1));cat(digest(paste(z,collapse="\n"),algo="sha256",serialize=FALSE))' ROOT="current_workflow00/$source")"
+              if [ "$EXPECTED" != "$ACTUAL" ]; then CACHE_OK=false; break; fi
+            done
+          fi
+          if [ "$CACHE_OK" = true ]; then
+            echo "PASS: using verified 7-day Workflow 00 handoff artefacts"
+          else
+            rm -rf current_workflow00
+            Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+              --pointer "$POINTER" \
+              --sources "$W00_SOURCES" \
+              --output-root current_workflow00
+            echo "PASS: restored authoritative Workflow 00 state from Zenodo"
+          fi
 
       - name: Prepare updated and preserved source inputs
         shell: bash
@@ -527,6 +553,17 @@ jobs:
             git commit -m "Record Workflow 01 delta run $GITHUB_RUN_ID"
             git push origin "HEAD:$WORKFLOW01_BRANCH"
           fi
+
+      - name: Upload validated Workflow 01 handoff cache
+        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-handoff-${{ github.run_id }}
+          path: |
+            outputs/canonical/records.jsonl
+            outputs/canonical/canonical_manifest.json
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Upload short-lived audit state
         if: always()
