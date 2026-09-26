@@ -81,3 +81,84 @@ testthat::test_that("target validation rejects duplicated identifiers", {
   records <- data.frame(record_sequence = c(1L, 2L), record_id = c("A", "A"), title = c("a", "b"), abstract = c("a", "b"))
   testthat::expect_error(validate_target_records(records, "TEST"), "record_id")
 })
+
+
+testthat::test_that("HTML and JATS markup are stripped before matching", {
+  dictionary <- data.frame(
+    species_id = c("SAL_SALAR", "ONC_MYKISS"),
+    preferred_name = c("Atlantic salmon", "Rainbow trout"),
+    scientific_name = c("Salmo salar", "Oncorhynchus mykiss"),
+    synonym = c("Salmo salar", "Oncorhynchus mykiss"),
+    synonym_type = c("scientific", "scientific"),
+    is_farmed_candidate = c(TRUE, TRUE),
+    default_group = c("salmon", "trout"),
+    stringsAsFactors = FALSE
+  )
+  hits <- detect_species_mentions(
+    "<jats:italic>Salmo</jats:italic> <italic>salar</italic>",
+    "&lt;i&gt;Oncorhynchus&lt;/i&gt;&lt;i&gt; mykiss&lt;/i&gt;",
+    dictionary
+  )
+  testthat::expect_setequal(hits$species_id, c("SAL_SALAR", "ONC_MYKISS"))
+})
+
+testthat::test_that("OCR spacing inside scientific names is tolerated", {
+  dictionary <- data.frame(
+    species_id = c("SAL_SALAR", "ONC_MYKISS"),
+    preferred_name = c("Atlantic salmon", "Rainbow trout"),
+    scientific_name = c("Salmo salar", "Oncorhynchus mykiss"),
+    synonym = c("Salmo salar", "Oncorhynchus mykiss"),
+    synonym_type = c("scientific", "scientific"),
+    is_farmed_candidate = c(TRUE, TRUE),
+    default_group = c("salmon", "trout"),
+    stringsAsFactors = FALSE
+  )
+  hits <- detect_species_mentions("S almo salar", "O ncorhynchus mykiss", dictionary)
+  testthat::expect_setequal(hits$species_id, c("SAL_SALAR", "ONC_MYKISS"))
+})
+
+testthat::test_that("English common-name pluralisations are detected", {
+  dictionary <- data.frame(
+    species_id = c("ONC_MYKISS", "UNSPEC_SALMON"),
+    preferred_name = c("Rainbow trout", "Unspecified species"),
+    scientific_name = c("Oncorhynchus mykiss", NA),
+    synonym = c("Rainbow trout", "Salmon"),
+    synonym_type = c("common", "generic"),
+    is_farmed_candidate = c(TRUE, TRUE),
+    default_group = c("trout", "salmon"),
+    stringsAsFactors = FALSE
+  )
+  hits <- detect_species_mentions("Rainbow trouts were compared with salmons.", "", dictionary)
+  testthat::expect_setequal(hits$species_id, c("ONC_MYKISS", "UNSPEC_SALMON"))
+})
+
+testthat::test_that("generic trout and salmonid remain ignored", {
+  dictionary <- data.frame(
+    species_id = c("ONC_MYKISS", "UNSPEC_SALMON"),
+    preferred_name = c("Rainbow trout", "Unspecified species"),
+    scientific_name = c("Oncorhynchus mykiss", NA),
+    synonym = c("Rainbow trout", "Salmon"),
+    synonym_type = c("common", "generic"),
+    is_farmed_candidate = c(TRUE, TRUE),
+    default_group = c("trout", "salmon"),
+    stringsAsFactors = FALSE
+  )
+  hits <- detect_species_mentions("Farmed trout and salmonids were studied.", "", dictionary)
+  testthat::expect_equal(nrow(hits), 0L)
+})
+
+testthat::test_that("salmon in salmon louse or lice context remains eligible", {
+  dictionary <- data.frame(
+    species_id = "UNSPEC_SALMON",
+    preferred_name = "Unspecified species",
+    scientific_name = NA,
+    synonym = "Salmon",
+    synonym_type = "generic",
+    is_farmed_candidate = TRUE,
+    default_group = "salmon",
+    stringsAsFactors = FALSE
+  )
+  hits <- detect_species_mentions("Salmon lice burden", "salmon louse infection", dictionary)
+  testthat::expect_true(nrow(hits) >= 2L)
+  testthat::expect_true(all(hits$species_id == "UNSPEC_SALMON"))
+})
