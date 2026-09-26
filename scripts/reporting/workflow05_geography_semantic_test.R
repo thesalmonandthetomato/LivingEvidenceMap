@@ -61,9 +61,10 @@ schema <- list(
         properties=list(
           iso3c=list(type="string",pattern="^[A-Z]{3}$"),
           country_name=list(type="string",minLength=2),
-          evidence=list(type="string",minLength=2)
+          evidence=list(type="string",minLength=2),
+          mapping_reason=list(type="string",minLength=2)
         ),
-        required=c("iso3c","country_name","evidence"),
+        required=c("iso3c","country_name","evidence","mapping_reason"),
         additionalProperties=FALSE
       )
     ),
@@ -152,6 +153,7 @@ call_one <- function(row){
   iso <- if(length(locs)) vapply(locs,function(z) as.character(z$iso3c),character(1)) else character()
   names <- if(length(locs)) vapply(locs,function(z) as.character(z$country_name),character(1)) else character()
   evidence <- if(length(locs)) vapply(locs,function(z) as.character(z$evidence),character(1)) else character()
+  mapping <- if(length(locs)) vapply(locs,function(z) as.character(z$mapping_reason),character(1)) else character()
   grounded <- if(length(locs)) vapply(evidence,evidence_is_grounded,logical(1),title=row$title,abstract=row$abstract) else logical()
 
   if(a$geography_status=="NONE" && length(locs)>0L) stop("NONE returned with non-empty locations")
@@ -163,6 +165,7 @@ call_one <- function(row){
     luna_iso3c=norm_set(iso),
     luna_country_names=norm_set(names),
     luna_evidence=paste(evidence,collapse=" || "),
+    luna_mapping_reason=paste(mapping,collapse=" || "),
     evidence_all_grounded=if(length(grounded)) all(grounded) else TRUE,
     geography_reason=a$geography_reason,
     llm_failed=FALSE,
@@ -182,6 +185,7 @@ for(i in seq_len(nrow(samp))){
       luna_iso3c="",
       luna_country_names="",
       luna_evidence="",
+      luna_mapping_reason="",
       evidence_all_grounded=FALSE,
       geography_reason="",
       llm_failed=TRUE,
