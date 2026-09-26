@@ -18,6 +18,7 @@ arg <- function(flag, default=NULL){
 input <- arg("--input")
 prompt_path <- arg("--prompt","config/workflow05_geography_semantic_prompt.txt")
 out_dir <- arg("--output-dir","outputs/workflow06_failure_recovery")
+record_id_filter <- arg("--record-id",NULL)
 if(is.null(input)||!file.exists(input)) stop("--input is required",call.=FALSE)
 if(!file.exists(prompt_path)) stop("Prompt file not found",call.=FALSE)
 dir.create(out_dir,recursive=TRUE,showWarnings=FALSE)
@@ -25,6 +26,7 @@ dir.create(out_dir,recursive=TRUE,showWarnings=FALSE)
 x <- read_csv(input,show_col_types=FALSE) |>
   filter(llm_failed) |>
   arrange(record_sequence)
+if(!is.null(record_id_filter)) x <- x |> filter(record_id == record_id_filter)
 
 expected_ids <- c(
   "work-60e645a39d981a54",
@@ -32,11 +34,11 @@ expected_ids <- c(
   "work-e8046bb0876a1942",
   "work-f026296875ea14e0"
 )
-stopifnot(
-  nrow(x)==4L,
-  !anyDuplicated(x$record_id),
-  setequal(x$record_id,expected_ids)
-)
+if(is.null(record_id_filter)){
+  stopifnot(nrow(x)==4L,!anyDuplicated(x$record_id),setequal(x$record_id,expected_ids))
+}else{
+  stopifnot(nrow(x)==1L,!anyDuplicated(x$record_id),x$record_id[[1]] %in% expected_ids)
+}
 
 prompt_sha <- digest(file=prompt_path,algo="sha256",serialize=FALSE)
 expected_prompt_sha <- "ce20acddf42e494a799d08b130d3e1bace95746035a7ad8e625fc8046a1bd07a"
@@ -130,6 +132,8 @@ call_one <- function(row){
 
   iso <- if(length(locs)) vapply(locs,function(q) as.character(q$iso3c),character(1)) else character()
   names <- if(length(locs)) vapply(locs,function(q) as.character(q$country_name),character(1)) else character()
+  pseudo <- toupper(iso) %in% c("ZZZ","XXX") | grepl("global|multiple countries|worldwide", names, ignore.case=TRUE)
+  if(any(pseudo)) stop("Pseudo-country/global geography is not an allowed Workflow 06 country assignment",call.=FALSE)
   evidence <- if(length(locs)) vapply(locs,function(q) as.character(q$evidence),character(1)) else character()
   mapping <- if(length(locs)) vapply(locs,function(q) as.character(q$mapping_reason),character(1)) else character()
   grounded <- if(length(locs)) vapply(evidence,evidence_is_grounded,logical(1),title=row$title,abstract=row$abstract) else logical()
