@@ -1,0 +1,76 @@
+You are extracting substantive study geography from the TITLE and ABSTRACT of a scientific publication for a systematic evidence map of salmon aquaculture.
+
+Use ONLY the supplied title and abstract. Do not use outside knowledge except to map an explicitly stated, unambiguous subnational place to its country.
+
+TASK
+
+Identify every country in which the study itself was substantively conducted.
+
+A country qualifies as substantive study geography only when the title or abstract explicitly indicates that one or more of the following occurred there:
+- field sampling or observations;
+- aquaculture or farm production, monitoring, husbandry or intervention;
+- an experiment or trial conducted at a stated location;
+- study animals, farms, facilities, rivers, coastal areas, ecosystems or other study populations located there;
+- collection of biological, environmental, social or economic data;
+- interviews, surveys or stakeholder research undertaken there;
+- a geographically defined case study.
+
+A country may be stated directly or through an unambiguous subnational place. For example, Scotland maps to United Kingdom, Tasmania to Australia, and Galicia to Spain. Do not infer a country from an ambiguous place name.
+
+EXCLUDE INCIDENTAL GEOGRAPHY
+
+Do NOT classify a country merely because it appears in:
+- an author affiliation;
+- a university, laboratory, institute or research-group name;
+- the location of a supplier, manufacturer, commercial company or equipment source;
+- a funding body or organisation name;
+- publisher or software information;
+- background or contextual discussion;
+- previous studies or literature comparisons;
+- references to policies, regulations or industries elsewhere;
+- a species common name, strain name, product name or country adjective that does not locate the study;
+- general statements about where aquaculture occurs.
+
+Do not infer geography from species, authors, institutional affiliation, language, nationality, production system, or general knowledge.
+
+MULTIPLE COUNTRIES
+
+Return every country that is substantively part of the study. Do not force a single primary country when the study genuinely covers multiple countries.
+
+EVIDENCE REQUIREMENT
+
+For every returned country, provide the shortest exact text span from the supplied title or abstract that demonstrates that the location is substantive study geography.
+
+The evidence span must contain enough context to show WHY the place is a study location, not merely the place name. For example:
+- "samples were collected from salmon farms in Norway"
+is valid evidence.
+- "Norway"
+by itself is not sufficient when its role is unclear.
+
+Do not return a country without an evidence span grounded in the supplied text.
+
+STATUS
+
+Use exactly one of these statuses:
+
+RESOLVED
+- At least one substantive study country can be identified confidently.
+- Return all supported countries.
+
+NONE
+- No substantive country-level study geography is stated in the title or abstract.
+- This includes records containing only affiliation, supplier, manufacturer, background or other incidental geography.
+- Return an empty locations array.
+
+UNRESOLVED
+- The text contains substantive geographical evidence, but it cannot be mapped confidently to a country, or genuinely conflicting substantive geographical information prevents a defensible assignment.
+- Do NOT use UNRESOLVED merely because geography is absent. Absence is NONE.
+- Return an empty locations array unless a subset of countries is independently resolved; if so, include those resolved countries and explain the remaining ambiguity.
+
+OUTPUT PRINCIPLES
+
+- Use ISO 3166-1 alpha-3 codes.
+- Country names and ISO3 codes must correspond.
+- Preserve multiple substantive countries.
+- Do not add commentary beyond the structured fields.
+- Be conservative about inference but do not omit an explicitly stated study location merely because it is mentioned only once.
