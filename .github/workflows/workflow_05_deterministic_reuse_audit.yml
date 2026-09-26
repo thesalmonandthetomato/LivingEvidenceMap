@@ -78,7 +78,7 @@ jobs:
             if [ -n "$INC" ] && [ -n "$CAN" ]; then
               IDS_SHA="$(P="$INC" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')"
               if [ "$IDS_SHA" = "$EXPECTED_IDS_SHA" ]; then
-                Rscript -e 'library(jsonlite);ids<-readLines(Sys.getenv("INC"),warn=FALSE);ids<-ids[nzchar(trimws(ids))];ln<-readLines(Sys.getenv("CAN"),warn=FALSE);ln<-ln[nzchar(trimws(ln))];z<-lapply(ln,fromJSON,simplifyVector=FALSE);r<-vapply(z,function(x)as.character(x$identity$record_id),character(1));stopifnot(length(ids)==19407L,length(r)==19407L,!anyDuplicated(r),setequal(ids,r));cat("PASS: verified W04 retained handoff materialisation\n")' INC="$INC" CAN="$CAN"
+                INC="$INC" CAN="$CAN" Rscript -e 'library(jsonlite);ids<-readLines(Sys.getenv("INC"),warn=FALSE);ids<-ids[nzchar(trimws(ids))];ln<-readLines(Sys.getenv("CAN"),warn=FALSE);ln<-ln[nzchar(trimws(ln))];z<-lapply(ln,fromJSON,simplifyVector=FALSE);r<-vapply(z,function(x)as.character(x$identity$record_id),character(1));stopifnot(length(ids)==19407L,length(r)==19407L,!anyDuplicated(r),setequal(ids,r));cat("PASS: verified W04 retained handoff materialisation\n")'
                 mkdir -p inputs/workflow05
                 cp "$INC" inputs/workflow05/workflow04_included_record_ids.txt
                 cp "$CAN" inputs/workflow05/retained_canonical.jsonl
