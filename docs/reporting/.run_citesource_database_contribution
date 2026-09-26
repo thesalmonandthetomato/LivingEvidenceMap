@@ -1,2 +1,4 @@
 purpose=retry_citesource_database_contribution_with_glpk
 canonical_records=32292
+
+rerun with W04 inclusion provenance for paired deduplicated/included source counts
