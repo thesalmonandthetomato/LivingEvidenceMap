@@ -1,0 +1,154 @@
+name: Workflow 05 - deterministic annotation and historical reuse audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/workflow05/.run_deterministic_reuse_audit'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout W05 integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Checkout historical W05 adjudication output
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-dedup-v2-2026-09-14
+          path: historical_store
+          lfs: true
+          sparse-checkout: |
+            data/updates/2026-08-13_lens/records_after_species_geography_adjudication.csv
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('dplyr','fs','here','httr2','jsonlite','purrr','readr','stringi','stringr','tibble','tidyr','yaml','digest'))
+
+      - name: Parse W05 implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_05_materialise_retained.R')
+          parse(file='scripts/updater/workflow_05_species_geography.R')
+          parse(file='scripts/updater/workflow_05_reuse_historical_adjudications.R')
+          parse(file='R/species_detect.R')
+          parse(file='R/species_filter.R')
+          parse(file='R/species_assign.R')
+          parse(file='R/species_annotation.R')
+          parse(file='R/geography_detect.R')
+          parse(file='R/geography_primary_country.R')
+          parse(file='R/llm_adjudication.R')
+          cat('PASS: W05 deterministic and reuse scripts parse\n')
+
+      - name: Prefer verified W04 handoff cache; fall back to Zenodo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          POINTER="docs/workflow04/zenodo/run-36227737500.json"
+          RUN_ID="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$source_github_run_id)')"
+          EXPECTED_IDS_SHA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$included_record_ids_sha256)')"
+          CACHE_OK=false
+          mkdir -p inputs/w04_cache
+          if gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow04-final-screening-$RUN_ID" --dir inputs/w04_cache; then
+            INC="$(find inputs/w04_cache -type f -name workflow04_included_record_ids.txt -print -quit)"
+            CAN="$(find inputs/w04_cache -type f -name workflow04_included_canonical.jsonl -print -quit)"
+            if [ -n "$INC" ] && [ -n "$CAN" ]; then
+              IDS_SHA="$(P="$INC" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')"
+              if [ "$IDS_SHA" = "$EXPECTED_IDS_SHA" ]; then
+                Rscript -e 'library(jsonlite);ids<-readLines(Sys.getenv("INC"),warn=FALSE);ids<-ids[nzchar(trimws(ids))];ln<-readLines(Sys.getenv("CAN"),warn=FALSE);ln<-ln[nzchar(trimws(ln))];z<-lapply(ln,fromJSON,simplifyVector=FALSE);r<-vapply(z,function(x)as.character(x$identity$record_id),character(1));stopifnot(length(ids)==19407L,length(r)==19407L,!anyDuplicated(r),setequal(ids,r));cat("PASS: verified W04 retained handoff materialisation\n")' INC="$INC" CAN="$CAN"
+                mkdir -p inputs/workflow05
+                cp "$INC" inputs/workflow05/workflow04_included_record_ids.txt
+                cp "$CAN" inputs/workflow05/retained_canonical.jsonl
+                CACHE_OK=true
+              fi
+            fi
+          fi
+          if [ "$CACHE_OK" != true ]; then
+            rm -rf inputs/w04_state inputs/lean
+            Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
+              --pointer "$POINTER" \
+              --output-dir inputs/w04_state
+            INC="$(find inputs/w04_state -type f -name workflow04_included_record_ids.txt -print -quit)"
+            test -n "$INC"
+            Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+              --pointer docs/compaction/zenodo/run-36166883249.json \
+              --output-dir inputs/lean
+            mkdir -p inputs/workflow05
+            cp "$INC" inputs/workflow05/workflow04_included_record_ids.txt
+            Rscript scripts/updater/workflow_05_materialise_retained.R \
+              --canonical inputs/lean/canonical_lean.jsonl \
+              --included-ids inputs/workflow05/workflow04_included_record_ids.txt \
+              --output inputs/workflow05/retained_canonical.jsonl \
+              --expected-records 19407
+            echo "PASS: reconstructed W05 input from durable W03/W04 checkpoints"
+          else
+            echo "PASS: using verified live W04 handoff materialisation"
+          fi
+
+      - name: Run established deterministic species and geography annotation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow05
+          Rscript scripts/updater/workflow_05_species_geography.R \
+            --input inputs/workflow05/retained_canonical.jsonl \
+            --output-dir outputs/workflow05 \
+            --expected-records 19407
+
+      - name: Audit safe reuse of historical W05 adjudications
+        shell: bash
+        run: |
+          set -euo pipefail
+          HIST="historical_store/data/updates/2026-08-13_lens/records_after_species_geography_adjudication.csv"
+          test -s "$HIST"
+          Rscript scripts/updater/workflow_05_reuse_historical_adjudications.R \
+            --canonical inputs/workflow05/retained_canonical.jsonl \
+            --queue outputs/workflow05/annotation_adjudication_queue.csv \
+            --deterministic-state outputs/workflow05/deterministic_annotation_summary.csv \
+            --historical "$HIST" \
+            --output-dir outputs/workflow05/inheritance
+
+      - name: Report W05 audit summaries
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in outputs/workflow05/*summary.json outputs/workflow05/inheritance/*summary.json; do
+            [ -f "$f" ] || continue
+            echo "===== $f ====="
+            cat "$f"
+          done
+
+      - name: Upload W05 deterministic and inheritance checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-deterministic-reuse-audit-${{ github.run_id }}
+          path: |
+            inputs/workflow05/workflow04_included_record_ids.txt
+            outputs/workflow05/
+          retention-days: 90
+          if-no-files-found: warn
