@@ -1,0 +1,114 @@
+name: Workflow 04 - finalise screening
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/workflow04/.run_finalize_screening'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Parse finaliser
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_04_finalize_screening.R')
+          cat('PASS: Workflow 04 finaliser parses\n')
+
+      - name: Download authoritative recovery input
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 36221408684
+          name: workflow04-recovery-input-36221408684
+          path: inputs/recovery
+
+      - name: Download recovered Luna consensus
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 36221408684
+          name: workflow04-consensus-recovered-36221408684
+          path: inputs/consensus
+
+      - name: Download historical migration layer
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 36184450763
+          name: workflow04-historical-migration-audit-36184450763
+          path: inputs/historical
+
+      - name: Download one-off Terra adjudication
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          run-id: 36225691899
+          name: workflow04-oneoff-terra-36225691899
+          path: inputs/terra
+
+      - name: Resolve exact inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANONICAL=$(find inputs/recovery -type f -name canonical_lean.jsonl -print -quit)
+          CONSENSUS=$(find inputs/consensus -type f -name workflow04_consensus_layer.jsonl -print -quit)
+          HISTORICAL=$(find inputs/historical -type f -name historical_screening_layer.jsonl -print -quit)
+          TERRA=$(find inputs/terra -type f -name terra_adjudication.jsonl -print -quit)
+          test -n "$CANONICAL"
+          test -n "$CONSENSUS"
+          test -n "$HISTORICAL"
+          test -n "$TERRA"
+          echo "CANONICAL=$CANONICAL" >> "$GITHUB_ENV"
+          echo "CONSENSUS=$CONSENSUS" >> "$GITHUB_ENV"
+          echo "HISTORICAL=$HISTORICAL" >> "$GITHUB_ENV"
+          echo "TERRA=$TERRA" >> "$GITHUB_ENV"
+          echo "PASS: all authoritative Workflow 04 finalisation inputs resolved"
+
+      - name: Finalise Workflow 04
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_finalize_screening.R \
+            --canonical "$CANONICAL" \
+            --consensus "$CONSENSUS" \
+            --historical "$HISTORICAL" \
+            --terra "$TERRA" \
+            --output-dir outputs/workflow04_final
+
+      - name: Upload final Workflow 04 artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-final-screening-${{ github.run_id }}
+          path: outputs/workflow04_final/
+          retention-days: 90
+          if-no-files-found: error
