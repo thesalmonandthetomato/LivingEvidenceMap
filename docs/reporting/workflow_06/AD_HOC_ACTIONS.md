@@ -29,3 +29,26 @@ The explicit discrepancy_type classification first prioritises llm_failure and u
 - evidence_all_grounded == FALSE: 239, comprising 235 ungrounded_evidence cases plus 4 model failures.
 
 For reporting and archival QC summaries, discrepancy_type is treated as the authoritative classification. The older boolean aggregate is retained only as provenance.
+
+
+## 26 September 2026: four model-failure recoveries
+
+The validated baseline contained four records whose original semantic geography calls failed the W06 structural invariant.
+
+Targeted recovery run 36271055010 reran only those four records with the locked W06 prompt. Three returned valid NONE classifications. The fourth returned an invalid pseudo-country code (ZZZ, "Global/multiple countries") and was rejected.
+
+Targeted recovery run 36271186232 reran only that remaining record with an explicit pseudo-country guard. It returned NONE because the study concerned the global salmon farming industry but did not identify a specific country.
+
+The four validated replacements were then applied only to those four stable record_id values during archival. No other W06 record was changed.
+
+Corrected authoritative counts are:
+
+- RESOLVED: 7,770;
+- NONE: 11,166;
+- UNRESOLVED: 471;
+- model failures: 0;
+- evidence not fully grounded: 235;
+- exact QC agreement: 15,956;
+- QC discrepancies: 3,451.
+
+The corrected state is archived as restricted Zenodo record 22983049, DOI 10.5281/zenodo.22983049.
