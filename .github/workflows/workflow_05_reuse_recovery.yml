@@ -1,0 +1,110 @@
+name: Workflow 05 - resume historical reuse audit
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/workflow05/.run_reuse_recovery'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  reuse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout W05 integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Checkout historical W05 adjudication output
+        uses: actions/checkout@v4
+        with:
+          ref: canonical-fresh-dedup-v2-2026-09-14
+          path: historical_store
+          lfs: true
+          sparse-checkout: |
+            data/updates/2026-08-13_lens/records_after_species_geography_adjudication.csv
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install recovery R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('dplyr','readr','jsonlite','fs'))
+
+      - name: Restore completed deterministic W05 checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-deterministic-reuse-audit-36230627164
+          path: recovery
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 36230627164
+
+      - name: Restore verified W04 retained canonical input
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_ID=36227737500
+          mkdir -p inputs/w04
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow04-final-screening-$RUN_ID" --dir inputs/w04
+          CAN="$(find inputs/w04 -type f -name workflow04_included_canonical.jsonl -print -quit)"
+          INC="$(find inputs/w04 -type f -name workflow04_included_record_ids.txt -print -quit)"
+          test -n "$CAN"
+          test -n "$INC"
+          INC="$INC" CAN="$CAN" Rscript -e 'library(jsonlite);ids<-readLines(Sys.getenv("INC"),warn=FALSE);ids<-ids[nzchar(trimws(ids))];ln<-readLines(Sys.getenv("CAN"),warn=FALSE);ln<-ln[nzchar(trimws(ln))];z<-lapply(ln,fromJSON,simplifyVector=FALSE);r<-vapply(z,function(x)as.character(x$identity$record_id),character(1));stopifnot(length(ids)==19407L,length(r)==19407L,!anyDuplicated(r),setequal(ids,r));cat("PASS: verified W04 retained canonical input\n")'
+          mkdir -p inputs/workflow05
+          cp "$CAN" inputs/workflow05/retained_canonical.jsonl
+
+      - name: Locate recovered deterministic outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          QUEUE="$(find recovery -type f -name annotation_adjudication_queue.csv -print -quit)"
+          STATE="$(find recovery -type f -name deterministic_annotation_summary.csv -print -quit)"
+          test -n "$QUEUE"
+          test -n "$STATE"
+          mkdir -p outputs/workflow05
+          cp "$QUEUE" outputs/workflow05/annotation_adjudication_queue.csv
+          cp "$STATE" outputs/workflow05/deterministic_annotation_summary.csv
+          echo "PASS: restored deterministic W05 outputs from run 36230627164"
+
+      - name: Resume historical adjudication reuse audit only
+        shell: bash
+        run: |
+          set -euo pipefail
+          HIST="historical_store/data/updates/2026-08-13_lens/records_after_species_geography_adjudication.csv"
+          Rscript scripts/updater/workflow_05_reuse_historical_adjudications.R \
+            --canonical inputs/workflow05/retained_canonical.jsonl \
+            --queue outputs/workflow05/annotation_adjudication_queue.csv \
+            --deterministic-state outputs/workflow05/deterministic_annotation_summary.csv \
+            --historical "$HIST" \
+            --output-dir outputs/workflow05/inheritance
+
+      - name: Report recovery summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat outputs/workflow05/inheritance/historical_inheritance_summary.json
+
+      - name: Upload recovered W05 reuse audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-reuse-audit-${{ github.run_id }}
+          path: outputs/workflow05/
+          retention-days: 90
+          if-no-files-found: error
