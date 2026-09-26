@@ -1,0 +1,126 @@
+name: Workflow 05 - Publish validated species baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/workflow05/.publish_validated_baseline'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','readr'))
+
+      - name: Download validated Workflow 05 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-species-coding-36268840588
+          path: source_artifact
+          github-token: ${{ github.token }}
+          run-id: 36268840588
+
+      - name: Build sparse durable Workflow 05 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          CODED=$(find source_artifact -type f -name workflow05_species_coded.csv -print -quit)
+          CODES=$(find source_artifact -type f -name species_codes_long.csv -print -quit)
+          MATCHES=$(find source_artifact -type f -name species_matches.csv -print -quit)
+          COUNTS=$(find source_artifact -type f -name species_record_counts.csv -print -quit)
+          MANIFEST=$(find source_artifact -type f -name workflow05_manifest.json -print -quit)
+          test -n "$CODED"; test -n "$CODES"; test -n "$MATCHES"; test -n "$COUNTS"; test -n "$MANIFEST"
+          mkdir -p workflow05_state
+          CODED="$CODED" Rscript -e '
+            library(readr)
+            x <- read_csv(Sys.getenv("CODED"), show_col_types=FALSE)
+            stopifnot(nrow(x)==19407L,!anyDuplicated(x$record_id))
+            y <- x[,c("record_sequence","record_id","farmed_species_codes","farmed_species")]
+            stopifnot(sum(y$farmed_species_codes=="NONE")==169L,sum(y$farmed_species_codes!="NONE")==19238L)
+            write_csv(y,"workflow05_state/workflow05_species_layer.csv",na="")
+          '
+          cp "$CODES" workflow05_state/species_codes_long.csv
+          cp "$MATCHES" workflow05_state/species_matches.csv
+          cp "$COUNTS" workflow05_state/species_record_counts.csv
+          cp "$MANIFEST" workflow05_state/workflow05_manifest.json
+          cp config/deterministic_concepts.csv workflow05_state/deterministic_concepts.csv
+          Rscript -e '
+            library(jsonlite); library(digest); library(readr)
+            m <- fromJSON("workflow05_state/workflow05_manifest.json",simplifyVector=FALSE)
+            c <- read_csv("workflow05_state/deterministic_concepts.csv",show_col_types=FALSE)
+            stopifnot(
+              as.integer(m$records)==19407L,
+              as.integer(m$coded_records)==19238L,
+              as.integer(m$none_records)==169L,
+              as.integer(m$species_matches)==80831L,
+              identical(names(c),c("coding","entity","terms")),
+              identical(tolower(as.character(m$dictionary_sha256)),
+                        tolower(digest(file="workflow05_state/deterministic_concepts.csv",algo="sha256",serialize=FALSE)))
+            )
+            cat("PASS: validated Workflow 05 source artifact and three-column vocabulary\n")
+          '
+
+      - name: Publish restricted Workflow 05 species state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow05_zenodo
+          Rscript scripts/updater/workflow_05_archive_state_to_zenodo.R \
+            --state-dir workflow05_state \
+            --source-run-id 36268840588 \
+            --source-commit 636428716c0a2e66431720dbffaf392e688b5b56 \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow05_zenodo \
+            --upstream-w04-record-id 22973914 \
+            --upstream-w04-layer-sha256 fcdfa0ed6c3ed37f0e355fdd13f5843aa4f6dc2224603e68ead00c7aeafa1f6b
+
+      - name: Register authoritative Workflow 05 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_05_update_zenodo_registry.R \
+            --receipt outputs/workflow05_zenodo/zenodo_receipt.json \
+            --registry docs/workflow05/zenodo_registry.csv \
+            --pointer-dir docs/workflow05/zenodo
+          git add docs/workflow05/zenodo_registry.csv docs/workflow05/zenodo/run-36268840588.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Register authoritative Workflow 05 species state"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-zenodo-publication-${{ github.run_id }}
+          path: outputs/workflow05_zenodo/
+          retention-days: 7
+          if-no-files-found: warn

@@ -353,7 +353,7 @@ For the validated baseline, 19,407 records are passed to Workflow 05.
 
 Workflow 05 must preserve the canonical `record_id` and use the Workflow 04 retained set as an inclusion mask. It must not rerun relevance screening or reinterpret Workflow 04 publication eligibility.
 
-The intended next stage is deterministic species and geography annotation/reconciliation, followed by later topic coding.
+The intended next stage is deterministic species coding in Workflow 05, followed by geography coding in Workflow 06 and later topic coding.
 
 ## Methods text for research reporting
 
