@@ -51,6 +51,25 @@ jobs:
           cp "$REC" records_for_annotation.csv
           Rscript -e 'd<-readr::read_csv("corrected_deterministic_annotation_summary.csv",show_col_types=FALSE);r<-readr::read_csv("records_for_annotation.csv",show_col_types=FALSE);stopifnot(nrow(d)==19407L,nrow(r)==19407L,!anyDuplicated(d$record_id),!anyDuplicated(r$record_id));cat("PASS: corrected deterministic W05 checkpoint restored\n")'
 
+      - name: Restore exact prior 100-record sample
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-luna-two-pass-test-36235391643
+          path: prior_luna_test
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 36235391643
+
+      - name: Locate exact prior sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          SAMPLE="$(find prior_luna_test -type f -name sample_100.csv -print -quit)"
+          test -n "$SAMPLE"
+          cp "$SAMPLE" prior_sample_100.csv
+          Rscript -e 'x<-readr::read_csv("prior_sample_100.csv",show_col_types=FALSE);stopifnot(nrow(x)==100L,!anyDuplicated(x$record_id));cat("PASS: exact prior 100-record sample restored\n")'
+
+
       - name: Run two blind Luna passes on fixed 100-record sample
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -62,6 +81,7 @@ jobs:
             --deterministic corrected_deterministic_annotation_summary.csv \
             --records records_for_annotation.csv \
             --prompt config/workflow05_luna_independent_audit_prompt.txt \
+            --sample-file prior_sample_100.csv \
             --output-dir outputs/workflow05_luna_two_pass_test
 
       - name: Validate outputs
