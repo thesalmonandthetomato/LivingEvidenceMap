@@ -3,3 +3,5 @@ rerun eligible-species-only deterministic extraction after matcher and synonym u
 retry after Unicode separator regex fix
 
 retry after fixing final summary print only; species logic unchanged
+
+rerun after markup OCR plural multilingual and salmon-lice rule expansion
