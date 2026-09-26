@@ -586,5 +586,5 @@ jobs:
             outputs/delta/
             outputs/replayed/workflow01_delta_replay_audit.json
             outputs/zenodo/
-          retention-days: 30
+          retention-days: 90
           if-no-files-found: warn
