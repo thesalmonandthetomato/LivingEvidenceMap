@@ -8,17 +8,22 @@ The repository is self-contained. The former `salmonscopingreview` repository is
 
 ## Required production sequence
 
-1. **Lens.org RIS import and parsing** — read and clean the incoming Lens corpus using the established RIS handling rules.
-2. **Deduplication** — identify duplicates within the incoming Lens corpus and identify records already represented in the existing salmon evidence-map corpus.
-3. **Publication-status filtering** — remove retractions and publication notices using the established publication-status workflow and OpenAlex lookup logic.
-4. **LLM relevance screening** — apply the established salmon relevance-screening workflow. Existing validated screening decisions and model resources are retained; routine regeneration of already-established decisions is avoided.
-5. **Species annotation** — detect species mentions and assign farmed salmon species using the validated species dictionary and assignment rules.
-6. **Geography annotation** — detect country and macro-region mentions using the validated gazetteer and longest-match/precedence rules.
-7. **Primary study-country assignment** — derive candidate study countries from geography evidence and assign or queue according to the documented classifier.
-8. **Species/geography LLM adjudication** — resolve explicitly defined uncertain species/geography cases **after** deterministic annotation has been generated. Adjudication is not a substitute for annotation.
-9. **Validation** — check adjudicated annotations and structural invariants before dataset construction.
-10. **Topic annotation** — annotate the validated target corpus according to the established salmon topic hierarchy. Topics remain a required production stage and are always last among the substantive annotation stages.
-11. **Dataset construction** — assemble the final target dataset. Only after target-level validation should an update be incorporated into the master evidence map.
+The canonical workflow numbering is:
+
+1. **Workflow 00 — search / ingestion** — acquire source records and preserve source-level provenance.
+2. **Workflow 01 — deduplication / canonicalisation** — reconcile manifestations, resolve duplicate identity, and publish the canonical work set.
+3. **Workflow 02 — bibliographic repair / enrichment** — enrich missing bibliographic fields without overwriting valid populated data.
+4. **Workflow 03 — publication status** — identify and exclude retracted or withdrawn records according to the publication-status rules.
+5. **Workflow 04 — relevance screening** — apply the validated title-and-abstract relevance-screening model and retain explicit uncertainty.
+6. **Workflow 05 — deterministic species annotation** — detect and assign eligible salmon species using the validated dictionary and deterministic matching rules. Absence of an eligible species term is `NONE`, not an adjudication case. This workflow is deterministic and does not perform geography coding.
+7. **Workflow 06 — geography coding** — assign substantive study geography from titles and abstracts using the locked semantic geography classifier. Deterministic gazetteer output is retained as a QC/audit layer rather than the definitive classifier.
+8. **Workflow 07 — topic coding** — assign substantive topic codes according to the validated salmon topic ontology and model-voting procedure.
+9. **Workflow 08 — human adjudication** — resolve genuinely unresolved content/annotation cases carried forward from Workflows 04, 05, 06 and 07. Uncertainty must not be silently forced into a final class upstream.
+10. **Workflow 09 — documentation / output summary** — produce reproducible workflow summaries, provenance reports, database-contribution results, methods outputs and other documentation from the accepted upstream states.
+11. **Workflow 10 — dashboard construction** — build the user-facing Living Evidence Map dashboard from the accepted final analytical outputs.
+
+Dataset construction and publication occur from validated accepted workflow states. The authoritative registered Zenodo checkpoint remains the durable source of truth between major stages.
+
 
 ## Current Lens refresh
 
@@ -34,9 +39,9 @@ The existing evidence-map corpus is the reference for determining whether an inc
 
 The pipeline contains two distinct human-adjudication gates.
 
-**Workflow 01 deduplication adjudication** resolves uncertain publication identity before canonicalisation. It is blocking: Workflow 01 must not publish a new canonical state while any required duplicate decision remains unresolved. These cases are not forwarded to Workflow 07.
+**Workflow 01 deduplication adjudication** resolves uncertain publication identity before canonicalisation. It is blocking: Workflow 01 must not publish a new canonical state while any required duplicate decision remains unresolved. These cases are not forwarded to Workflow 08.
 
-**Workflow 07 downstream adjudication** consolidates unresolved content and annotation cases produced after canonicalisation, specifically from Workflow 04 relevance screening, Workflow 05 annotations and Workflow 06 topic coding. Those upstream workflows should expose uncertainty explicitly in machine-readable queues/layers rather than silently forcing a final decision.
+**Workflow 08 downstream adjudication** consolidates unresolved content and annotation cases produced after canonicalisation, specifically from Workflow 04 relevance screening, Workflow 05 deterministic species annotation, Workflow 06 geography coding and Workflow 07 topic coding. Those upstream workflows should expose uncertainty explicitly in machine-readable queues/layers rather than silently forcing a final decision.
 
 LLM adjudication remains downstream of deterministic rules or annotation where applicable. Decisions and supporting evidence must remain auditable, and unresolved cases must remain explicit until the appropriate adjudication gate resolves them.
 
