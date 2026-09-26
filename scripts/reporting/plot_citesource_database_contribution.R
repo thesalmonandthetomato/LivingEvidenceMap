@@ -92,12 +92,9 @@ source_presence <- canonical_sources |>
     cite_source = as.character(cite_source)
   )
 
+source_membership <- strsplit(source_presence$cite_source, ", ", fixed = TRUE)
 for (lab in unname(source_labels)) {
-  source_presence[[lab]] <- grepl(
-    paste0("(^|, )", gsub("([\\.^$|()\\[\\]{}*+?])", "\\\\\1", lab), "(, |$)"),
-    source_presence$cite_source,
-    perl = TRUE
-  )
+  source_presence[[lab]] <- vapply(source_membership, function(x) lab %in% x, logical(1))
 }
 source_presence$included_w04 <- source_presence$record_id %in% included_ids
 
