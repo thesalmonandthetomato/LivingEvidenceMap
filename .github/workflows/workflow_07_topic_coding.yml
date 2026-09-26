@@ -1,0 +1,397 @@
+name: Workflow 07 - three-Luna topic coding
+
+on:
+  workflow_dispatch:
+    inputs:
+      input_mode:
+        description: Topic input source
+        required: true
+        default: recall_uncoded
+        type: choice
+        options:
+          - recall_uncoded
+          - workflow06_all
+      recall_run_id:
+        description: Validated Workflow 07 recall-audit run ID
+        required: false
+        default: '36252255299'
+        type: string
+      workflow06_run_id:
+        description: Workflow 06 geography run ID when input_mode=workflow06_all
+        required: false
+        default: ''
+        type: string
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow07/.run_topic_uncoded_7110'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  TOPIC_PROD_OUTPUT_DIR: outputs/workflow07_topic_v3_6_fresh
+  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
+  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  TOPIC_CHUNK_SIZE: '500'
+  BATCH_POLL_SECONDS: '20'
+  BATCH_MAX_WAIT_SECONDS: '7200'
+  EXPECTED_ONTOLOGY_SHA256: '5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43'
+  EXPECTED_PROMPT_SHA256: 'f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      chunks: ${{ steps.matrix.outputs.chunks }}
+      records: ${{ steps.matrix.outputs.records }}
+      input_mode: ${{ steps.source.outputs.input_mode }}
+      recall_run_id: ${{ steps.source.outputs.recall_run_id }}
+    env:
+      INPUT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.input_mode || 'recall_uncoded' }}
+      RECALL_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.recall_run_id || '36252255299' }}
+      WORKFLOW06_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow06_run_id || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install preparation dependencies
+        shell: Rscript {0}
+        run: install.packages(c("readr","jsonlite","digest"))
+
+      - name: Validate frozen v3.6 ontology and prompt
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$EXPECTED_ONTOLOGY_SHA256  $TOPIC_ONTOLOGY_PATH" | sha256sum -c -
+          echo "$EXPECTED_PROMPT_SHA256  $TOPIC_SYSTEM_PROMPT_PATH" | sha256sum -c -
+
+      - name: Build Workflow 07 input queue
+        id: source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$TOPIC_PROD_OUTPUT_DIR"
+
+          if [ "$INPUT_MODE" = "recall_uncoded" ]; then
+            test -n "$RECALL_RUN_ID"
+            mkdir -p inputs/recall
+            gh run download "$RECALL_RUN_ID" \
+              -n "workflow07-topic-recall-audit-$RECALL_RUN_ID" \
+              -D inputs/recall
+            test -s inputs/recall/fresh_topic_coding_queue.csv
+            cp inputs/recall/fresh_topic_coding_queue.csv "$TOPIC_PROD_OUTPUT_DIR/input_queue.csv"
+
+          elif [ "$INPUT_MODE" = "workflow06_all" ]; then
+            test -n "$WORKFLOW06_RUN_ID" || { echo "workflow06_run_id is required" >&2; exit 1; }
+            mkdir -p inputs/workflow06
+            artifact_name="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$WORKFLOW06_RUN_ID/artifacts?per_page=100" \
+              --jq '.artifacts[].name' | grep -E '^(workflow06-geography-production-|workflow05-geography-production-)' | head -1)"
+            test -n "$artifact_name" || { echo "No Workflow 06 geography production artifact found" >&2; exit 1; }
+            gh run download "$WORKFLOW06_RUN_ID" -n "$artifact_name" -D inputs/workflow06
+            geo="$(find inputs/workflow06 -type f -name geography_semantic_final.csv -print -quit)"
+            test -n "$geo"
+            GEO_PATH="$geo" OUT_PATH="$TOPIC_PROD_OUTPUT_DIR/input_queue.csv" Rscript - <<'RS'
+            library(readr)
+            x <- read_csv(Sys.getenv("GEO_PATH"),show_col_types=FALSE)
+            req <- c("record_id","title","abstract")
+            stopifnot(all(req %in% names(x)),!anyDuplicated(x$record_id))
+            write_csv(x[,req],Sys.getenv("OUT_PATH"),na="")
+            RS
+          else
+            echo "Unknown INPUT_MODE=$INPUT_MODE" >&2
+            exit 1
+          fi
+
+          echo "input_mode=$INPUT_MODE" >> "$GITHUB_OUTPUT"
+          echo "recall_run_id=$RECALL_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Validate queue and write source manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          INPUT_MODE="${{ steps.source.outputs.input_mode }}" WORKFLOW06_RUN_ID="$WORKFLOW06_RUN_ID" Rscript - <<'RS'
+          library(readr)
+          library(jsonlite)
+          library(digest)
+          p <- file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),"input_queue.csv")
+          q <- read_csv(p,show_col_types=FALSE)
+          stopifnot(all(c("record_id","title","abstract") %in% names(q)),!anyDuplicated(q$record_id))
+          if(Sys.getenv("INPUT_MODE")=="recall_uncoded") stopifnot(nrow(q)==7110L)
+          stopifnot(!any(is.na(q$record_id) | !nzchar(as.character(q$record_id))))
+          stopifnot(!any((is.na(q$title)|!nzchar(as.character(q$title))) &
+                        (is.na(q$abstract)|!nzchar(as.character(q$abstract)))))
+          write_json(
+            list(
+              input_mode=Sys.getenv("INPUT_MODE"),
+              records=nrow(q),
+              queue_sha256=digest(file=p,algo="sha256",serialize=FALSE),
+              recall_run_id=if(Sys.getenv("INPUT_MODE")=="recall_uncoded") "${{ steps.source.outputs.recall_run_id }}" else NULL,
+              workflow06_run_id=if(Sys.getenv("INPUT_MODE")=="workflow06_all") Sys.getenv("WORKFLOW06_RUN_ID") else NULL
+            ),
+            file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),"workflow07_input_source.json"),
+            pretty=TRUE,auto_unbox=TRUE,null="null"
+          )
+          RS
+          Rscript R/run_topic_three_luna_production.R manifest
+
+      - name: Build dynamic three-pass chunk matrix
+        id: matrix
+        shell: Rscript {0}
+        run: |
+          library(readr)
+          library(jsonlite)
+          q <- read_csv(file.path(Sys.getenv("TOPIC_PROD_OUTPUT_DIR"),"input_queue.csv"),show_col_types=FALSE)
+          chunks <- ceiling(nrow(q)/as.integer(Sys.getenv("TOPIC_CHUNK_SIZE")))
+          inc <- unname(unlist(lapply(c("a","b","c"),function(p)
+            lapply(seq_len(chunks),function(ch) list(pass=p,chunk=ch))),recursive=FALSE))
+          matrix <- toJSON(list(include=inc),auto_unbox=TRUE)
+          cat(sprintf("matrix=%s\n",matrix),file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+          cat(sprintf("chunks=%d\n",chunks),file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+          cat(sprintf("records=%d\n",nrow(q)),file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+          cat("Workflow 07 records:",nrow(q)," chunks/pass:",chunks," classifications:",nrow(q)*3,"\n")
+
+      - name: Upload immutable Workflow 07 input
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-topic-input-${{ github.run_id }}
+          path: |
+            outputs/workflow07_topic_v3_6_fresh/input_queue.csv
+            outputs/workflow07_topic_v3_6_fresh/workflow07_input_source.json
+            outputs/workflow07_topic_v3_6_fresh/production_manifest.json
+          retention-days: 90
+          if-no-files-found: error
+
+  classify:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install production dependencies
+        shell: Rscript {0}
+        run: install.packages(c("curl","digest","httr2","jsonlite","readr"))
+
+      - name: Restore immutable Workflow 07 input
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow07-topic-input-${{ github.run_id }}
+          path: outputs/workflow07_topic_v3_6_fresh
+
+      - name: Recover same-run chunk state if this job is rerun
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        run: |
+          set -euo pipefail
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_$PASS/chunk_$(printf '%03d' "$CHUNK")"
+          mkdir -p "$d"
+
+          for kind in complete submission; do
+            name="workflow07-topic-$kind-$PASS-chunk-$CHUNK-$GITHUB_RUN_ID"
+            rm -rf "/tmp/w07_$kind"
+            mkdir -p "/tmp/w07_$kind"
+            if gh run download "$GITHUB_RUN_ID" -n "$name" -D "/tmp/w07_$kind" 2>/dev/null; then
+              marker="$(find "/tmp/w07_$kind" -type f \( -name complete.ok -o -name batch_submitted.json \) -print -quit)"
+              if [ -n "$marker" ]; then
+                src="$(dirname "$marker")"
+                cp -a "$src"/. "$d"/
+              fi
+            fi
+          done
+
+          if [ -s "$d/complete.ok" ]; then
+            echo "Recovered already validated chunk $PASS/$CHUNK."
+          elif [ -s "$d/batch_submitted.json" ]; then
+            echo "Recovered persisted batch submission for $PASS/$CHUNK; no duplicate submission will occur."
+          fi
+
+      - name: Submit batch only when needed
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_$PASS/chunk_$(printf '%03d' "$CHUNK")"
+          if [ -s "$d/complete.ok" ]; then
+            echo "Chunk already complete."
+          else
+            Rscript R/run_topic_three_luna_production.R submit_chunk "$PASS" "$CHUNK"
+          fi
+
+      - name: Persist batch submission before polling
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-topic-submission-${{ matrix.pass }}-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/workflow07_topic_v3_6_fresh/pass_${{ matrix.pass }}/
+          retention-days: 90
+          if-no-files-found: warn
+          overwrite: true
+
+      - name: Poll and validate batch output
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PASS: ${{ matrix.pass }}
+          CHUNK: ${{ matrix.chunk }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          d="$TOPIC_PROD_OUTPUT_DIR/pass_$PASS/chunk_$(printf '%03d' "$CHUNK")"
+          if [ -s "$d/complete.ok" ]; then
+            echo "Chunk already complete."
+          else
+            Rscript R/run_topic_three_luna_production.R finish_chunk "$PASS" "$CHUNK"
+          fi
+          test -s "$d/complete.ok"
+
+      - name: Upload validated chunk recovery state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-topic-complete-${{ matrix.pass }}-chunk-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/workflow07_topic_v3_6_fresh/pass_${{ matrix.pass }}/
+          retention-days: 90
+          if-no-files-found: warn
+          overwrite: true
+
+  merge:
+    needs: [prepare,classify]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.classify.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      INPUT_MODE: ${{ needs.prepare.outputs.input_mode }}
+      RECALL_RUN_ID: ${{ needs.prepare.outputs.recall_run_id }}
+      N_CHUNKS: ${{ needs.prepare.outputs.chunks }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install merge dependencies
+        shell: Rscript {0}
+        run: install.packages(c("curl","digest","httr2","jsonlite","readr","dplyr"))
+
+      - name: Restore immutable Workflow 07 input
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow07-topic-input-${{ github.run_id }}
+          path: outputs/workflow07_topic_v3_6_fresh
+
+      - name: Assemble validated topic chunks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for p in a b c; do
+            for ch in $(seq 1 "$N_CHUNKS"); do
+              target="$TOPIC_PROD_OUTPUT_DIR/pass_$p/chunk_$(printf '%03d' "$ch")"
+              rm -rf "$target" /tmp/w07_chunk
+              mkdir -p "$target" /tmp/w07_chunk
+              name="workflow07-topic-complete-$p-chunk-$ch-$GITHUB_RUN_ID"
+              gh run download "$GITHUB_RUN_ID" -n "$name" -D /tmp/w07_chunk
+              marker="$(find /tmp/w07_chunk -type f -name complete.ok -print -quit)"
+              test -n "$marker"
+              src="$(dirname "$marker")"
+              cp -a "$src"/. "$target"/
+              test -s "$target/complete.ok"
+            done
+          done
+
+      - name: Combine three independent Luna passes
+        run: Rscript R/run_topic_three_luna_production.R combine
+
+      - name: Deterministic integrity audit of fresh coding
+        run: Rscript R/run_topic_three_luna_production.R audit
+
+      - name: Restore recalled three-Luna scores when bootstrapping uncoded records
+        if: ${{ env.INPUT_MODE == 'recall_uncoded' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/recall
+          gh run download "$RECALL_RUN_ID" \
+            -n "workflow07-topic-recall-audit-$RECALL_RUN_ID" \
+            -D inputs/recall
+          test -s inputs/recall/recalled_three_luna_pathway_scores.csv
+          test -s inputs/recall/current_topic_recall_status.csv
+
+      - name: Build Workflow 07 final handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$INPUT_MODE" = "recall_uncoded" ]; then
+            Rscript scripts/reporting/workflow07_merge_recalled_fresh_topics.R \
+              --mode recall_uncoded \
+              --fresh-scores "$TOPIC_PROD_OUTPUT_DIR/three_luna_pathway_scores.csv" \
+              --fresh-record-results "$TOPIC_PROD_OUTPUT_DIR/all_pass_record_results.csv" \
+              --recalled-scores inputs/recall/recalled_three_luna_pathway_scores.csv \
+              --recall-status inputs/recall/current_topic_recall_status.csv \
+              --ontology "$TOPIC_ONTOLOGY_PATH" \
+              --output-dir outputs/workflow07_topic_final
+          else
+            Rscript scripts/reporting/workflow07_merge_recalled_fresh_topics.R \
+              --mode workflow06_all \
+              --fresh-scores "$TOPIC_PROD_OUTPUT_DIR/three_luna_pathway_scores.csv" \
+              --fresh-record-results "$TOPIC_PROD_OUTPUT_DIR/all_pass_record_results.csv" \
+              --ontology "$TOPIC_ONTOLOGY_PATH" \
+              --output-dir outputs/workflow07_topic_final
+          fi
+          test -s outputs/workflow07_topic_final/WORKFLOW07_HANDOFF_PASS.ok
+
+      - name: Upload final Workflow 07 handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-topic-handoff-${{ github.run_id }}
+          path: |
+            outputs/workflow07_topic_v3_6_fresh/input_queue.csv
+            outputs/workflow07_topic_v3_6_fresh/workflow07_input_source.json
+            outputs/workflow07_topic_v3_6_fresh/production_manifest.json
+            outputs/workflow07_topic_v3_6_fresh/all_pass_assignments.csv
+            outputs/workflow07_topic_v3_6_fresh/all_pass_record_results.csv
+            outputs/workflow07_topic_v3_6_fresh/all_pass_usage.csv
+            outputs/workflow07_topic_v3_6_fresh/three_luna_pathway_scores.csv
+            outputs/workflow07_topic_v3_6_fresh/combine_summary.json
+            outputs/workflow07_topic_v3_6_fresh/audit_review_flags.csv
+            outputs/workflow07_topic_v3_6_fresh/audit_summary.json
+            outputs/workflow07_topic_v3_6_fresh/AUDIT_PASS.ok
+            outputs/workflow07_topic_final/
+          retention-days: 90
+          if-no-files-found: error
