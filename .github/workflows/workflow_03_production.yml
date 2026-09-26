@@ -89,14 +89,37 @@ jobs:
       - name: Restore Workflow 03 lean canonical checkpoint
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
-            --pointer docs/compaction/zenodo/run-36166883249.json \
-            --output-dir workflow03_input
+          POINTER="docs/compaction/zenodo/run-36166883249.json"
+          RUN_ID="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$source_github_run_id)')"
+          EXPECTED_SHA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$lean_canonical_sha256)')"
+          CACHE_OK=false
+          rm -rf workflow03_input workflow03_handoff
+          mkdir -p workflow03_handoff
+          if gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "post-w02-lean-canonical-$RUN_ID" --dir workflow03_handoff; then
+            P="$(find workflow03_handoff -type f -name canonical_lean.jsonl -print -quit)"
+            if [ -n "$P" ]; then
+              SHA="$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')"
+              if [ "$SHA" = "$EXPECTED_SHA" ]; then
+                mkdir -p workflow03_input
+                cp "$P" workflow03_input/canonical_lean.jsonl
+                CACHE_OK=true
+                echo "PASS: using verified 7-day post-W02 lean handoff artefact"
+              fi
+            fi
+          fi
+          if [ "$CACHE_OK" != true ]; then
+            rm -rf workflow03_input
+            Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+              --pointer "$POINTER" \
+              --output-dir workflow03_input
+            echo "PASS: restored authoritative lean checkpoint from Zenodo"
+          fi
           SHA="$(Rscript -e 'cat(digest::digest(file="workflow03_input/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
-          test "$SHA" = "1d3977537c1498a728c9fe04ff958874f4a7727ad344a02ba3ef00adb2f755c7"
+          test "$SHA" = "$EXPECTED_SHA"
 
       - name: Run publication-status scan
         env:
@@ -174,6 +197,18 @@ jobs:
           fi
           echo "pointer_path=$POINTER" >> "$GITHUB_OUTPUT"
 
+      - name: Upload validated Workflow 03 handoff cache
+        if: ${{ (github.event_name == 'push' || inputs.publish == true) && (github.event_name == 'push' || inputs.limit == '0') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow03-handoff-${{ github.run_id }}
+          path: |
+            workflow03_input/canonical_lean.jsonl
+            outputs/workflow03/publication_status.jsonl
+            outputs/workflow03/report.json
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Upload Workflow 03 execution state
         if: always()
         uses: actions/upload-artifact@v4
@@ -183,5 +218,5 @@ jobs:
             outputs/workflow03/
             outputs/workflow03_zenodo/
             workflow03_input/workflow03_restore_audit.json
-          retention-days: 30
+          retention-days: 7
           if-no-files-found: warn
