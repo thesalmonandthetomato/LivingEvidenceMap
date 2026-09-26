@@ -124,16 +124,41 @@ jobs:
       - name: Restore authoritative Workflow 01 canonical state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           W01_POINTER: ${{ inputs.workflow01_pointer_path || 'docs/deduplication/zenodo/run-36128255337.json' }}
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_01_restore_current_state.R \
-            --pointer "$W01_POINTER" \
-            --pointer-dir docs/deduplication/zenodo \
-            --output-root workflow01_state
+          RUN_ID="$(W01_POINTER="$W01_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W01_POINTER"),simplifyVector=FALSE);cat(x$github_run_id)')"
+          EXPECTED_SHA="$(W01_POINTER="$W01_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W01_POINTER"),simplifyVector=FALSE);cat(x$canonical_jsonl_sha256)')"
+          CACHE_OK=false
+          rm -rf workflow01_state workflow01_handoff
+          mkdir -p workflow01_handoff
+          if [ -n "$RUN_ID" ] && [ -n "$EXPECTED_SHA" ]; then
+            if gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow01-handoff-$RUN_ID" --dir workflow01_handoff; then
+              P="$(find workflow01_handoff -type f -name records.jsonl -print -quit)"
+              if [ -n "$P" ]; then
+                ACTUAL_SHA="$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')"
+                if [ "$ACTUAL_SHA" = "$EXPECTED_SHA" ]; then
+                  mkdir -p workflow01_state/canonical
+                  cp "$P" workflow01_state/canonical/records.jsonl
+                  CACHE_OK=true
+                  echo "PASS: using verified 7-day Workflow 01 handoff artefact"
+                fi
+              fi
+            fi
+          fi
+          if [ "$CACHE_OK" != true ]; then
+            rm -rf workflow01_state
+            Rscript scripts/updater/workflow_01_restore_current_state.R \
+              --pointer "$W01_POINTER" \
+              --pointer-dir docs/deduplication/zenodo \
+              --output-root workflow01_state
+            echo "PASS: restored authoritative Workflow 01 state from Zenodo"
+          fi
           test -s workflow01_state/canonical/records.jsonl
           W01_SHA="$(Rscript -e "cat(digest::digest(file='workflow01_state/canonical/records.jsonl',algo='sha256',serialize=FALSE))")"
+          test "$W01_SHA" = "$EXPECTED_SHA"
           echo "W01_SHA=$W01_SHA" >> "$GITHUB_ENV"
 
       - name: Restore previous Workflow 02 state when supplied
@@ -297,6 +322,17 @@ jobs:
             git push origin HEAD:workflow01-final-architecture
           fi
 
+      - name: Upload validated Workflow 02 handoff cache
+        if: ${{ inputs.publish == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-handoff-${{ github.run_id }}
+          path: |
+            outputs/workflow02/enriched.jsonl
+            outputs/workflow02_state/state_manifest.json
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Upload compact Workflow 02 operational state
         if: always()
         uses: actions/upload-artifact@v4
@@ -308,5 +344,5 @@ jobs:
             outputs/workflow02/current_patch_report.json
             outputs/workflow02/retry_queue.jsonl
             outputs/workflow02_zenodo/zenodo_receipt.json
-          retention-days: 30
+          retention-days: 7
           if-no-files-found: warn
