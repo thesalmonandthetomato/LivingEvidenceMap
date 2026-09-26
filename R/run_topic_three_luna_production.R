@@ -18,6 +18,8 @@ master_path <- Sys.getenv("TOPIC_MASTER_PATH", "data/master/current/living_evide
 chunk_size <- as.integer(Sys.getenv("TOPIC_CHUNK_SIZE", "50"))
 poll_seconds <- as.integer(Sys.getenv("BATCH_POLL_SECONDS", "20"))
 max_wait_seconds <- as.integer(Sys.getenv("BATCH_MAX_WAIT_SECONDS", "18000"))
+token_limit_retry_seconds <- as.integer(Sys.getenv("BATCH_TOKEN_LIMIT_RETRY_SECONDS", "120"))
+token_limit_max_retries <- as.integer(Sys.getenv("BATCH_TOKEN_LIMIT_MAX_RETRIES", "12"))
 passes <- c("a","b","c")
 prices <- list(input=0.10,cached=0.01,cache_write=0.125,output=0.60)
 
@@ -244,18 +246,52 @@ finish_chunk <- function(pass,chunk){
   batch<-api_request("GET",paste0("/batches/",batch_id))
   terminal<-c("completed","failed","expired","cancelled")
   started<-Sys.time()
-  while(!(batch$status %in% terminal)){
-    if(as.numeric(difftime(Sys.time(),started,units="secs"))>max_wait_seconds){
-      write_json_s(batch,file.path(d,"batch_timeout_state.json"))
-      stop("Batch ",batch_id," did not reach a terminal state within ",max_wait_seconds," seconds")
-    }
-    Sys.sleep(poll_seconds)
-    batch<-api_request("GET",paste0("/batches/",batch_id))
-    write_json_s(batch,file.path(d,"batch_latest.json"))
-    message("pass ",pass," chunk ",chunk,": ",batch$status)
+  token_retries<-0L
+
+  token_limit_failure <- function(x){
+    if(!identical(x$status,"failed") || is.null(x$errors$data) || !length(x$errors$data)) return(FALSE)
+    codes<-vapply(x$errors$data,function(e) as.character(e$code %||% ""),character(1))
+    identical(as.integer(x$request_counts$total %||% 0L),0L) && any(codes=="token_limit_exceeded")
   }
+
+  repeat {
+    while(!(batch$status %in% terminal)){
+      if(as.numeric(difftime(Sys.time(),started,units="secs"))>max_wait_seconds){
+        write_json_s(batch,file.path(d,"batch_timeout_state.json"))
+        stop("Batch ",batch_id," did not reach a terminal state within ",max_wait_seconds," seconds")
+      }
+      Sys.sleep(poll_seconds)
+      batch<-api_request("GET",paste0("/batches/",batch_id))
+      write_json_s(batch,file.path(d,"batch_latest.json"))
+      message("pass ",pass," chunk ",chunk,": ",batch$status)
+    }
+
+    write_json_s(batch,file.path(d,sprintf("batch_final_attempt_%02d.json",token_retries+1L)))
+
+    if(identical(batch$status,"completed")) break
+
+    if(token_limit_failure(batch) && token_retries < token_limit_max_retries){
+      token_retries<-token_retries+1L
+      # Stagger retries across chunks to avoid all jobs resubmitting simultaneously.
+      stagger<-((chunk-1L) %% 5L) * 15L
+      wait_for<-token_limit_retry_seconds + stagger
+      message("Batch ",batch_id," hit the organisation enqueued-token limit before processing any requests. ",
+              "Waiting ",wait_for," seconds before safe resubmission attempt ",token_retries,
+              "/",token_limit_max_retries,".")
+      Sys.sleep(wait_for)
+      batch<-api_request("POST","/batches",list(
+        input_file_id=submitted$input_file_id,endpoint="/v1/responses",completion_window="24h",
+        metadata=list(description=paste0("topic-v3.6-",pass,"-chunk-",chunk,"-retry-",token_retries))))
+      batch_id<-as.character(batch$id)
+      write_json_s(batch,submitted_path)
+      next
+    }
+
+    write_json_s(batch,file.path(d,"batch_final.json"))
+    stop("Persisted batch ",batch_id," ended ",batch$status,"; refusing automatic resubmission")
+  }
+
   write_json_s(batch,file.path(d,"batch_final.json"))
-  if(batch$status!="completed") stop("Persisted batch ",batch_id," ended ",batch$status,"; refusing automatic resubmission")
   bytes<-api_request("GET",paste0("/files/",batch$output_file_id,"/content"),raw=TRUE)
   raw_path<-file.path(d,"batch_output.jsonl"); writeBin(bytes,raw_path)
   input_path<-file.path(d,"batch_input.jsonl")
