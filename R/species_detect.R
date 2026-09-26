@@ -19,30 +19,71 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
 
   escape_regex <- function(x) gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", x, perl = TRUE)
 
+  normalise_markup <- function(text) {
+    if (is.na(text) || !nzchar(text)) return(text)
+    # Decode the minimal entities needed to expose escaped HTML/JATS tags,
+    # then remove markup while preserving lexical separation.
+    text <- gsub("&lt;", "<", text, ignore.case = TRUE, fixed = FALSE)
+    text <- gsub("&gt;", ">", text, ignore.case = TRUE, fixed = FALSE)
+    text <- gsub("&nbsp;|&#160;|&#xA0;", " ", text, ignore.case = TRUE, perl = TRUE)
+    text <- gsub("&amp;", "&", text, ignore.case = TRUE, fixed = FALSE)
+    text <- gsub("<[^>]*>", " ", text, perl = TRUE)
+    text <- gsub("[ \u00AD]", " ", text, perl = TRUE)
+    text <- gsub("[[:space:]]+", " ", text, perl = TRUE)
+    trimws(text)
+  }
+
   lexical_pattern <- function(term, synonym_type) {
     term <- trimws(term)
-    raw_parts <- strsplit(term, "[[:space:]-]+", perl = TRUE)[[1L]]
+    raw_parts <- strsplit(term, "[[:space:]‐‑‒–—-]+", perl = TRUE)[[1L]]
     raw_parts <- raw_parts[nzchar(raw_parts)]
     if (!length(raw_parts)) return("")
-    abbreviation_first <- identical(tolower(as.character(synonym_type)), "abbreviation") &&
-      length(raw_parts) >= 2L && grepl("^[[:alpha:]]\\.$", raw_parts[[1L]], perl = TRUE)
-    parts <- vapply(raw_parts, escape_regex, character(1))
 
-    # Genus abbreviations are often supplied without the full stop in older
-    # bibliographic metadata (e.g. "S salar", "O mykiss").
-    if (abbreviation_first) {
-      genus_letter <- sub("\\.$", "", raw_parts[[1L]], perl = TRUE)
-      parts[[1L]] <- paste0(escape_regex(genus_letter), "\\.?" )
+    type <- tolower(as.character(synonym_type))
+    abbreviation_first <- identical(type, "abbreviation") &&
+      length(raw_parts) >= 2L && grepl("^[[:alpha:]]\\.$", raw_parts[[1L]], perl = TRUE)
+
+    token_pattern <- function(token, allow_ocr_gap = FALSE) {
+      if (allow_ocr_gap && nchar(token) >= 4L && grepl("^[[:alpha:]]+$", token, perl = TRUE)) {
+        return(paste0(
+          escape_regex(substr(token, 1L, 1L)),
+          "[[:space:]]*",
+          escape_regex(substr(token, 2L, nchar(token)))
+        ))
+      }
+      escape_regex(token)
     }
 
-    # Treat ordinary whitespace and hyphen variants as equivalent lexical
-    # separators. This captures forms such as RAINBOW-TROUT and SALMO-GAIRDNERI.
-    separator <- "(?:[[:space:] ­‐‑‒–—-]+)"
-    paste(parts, collapse = separator)
+    if (abbreviation_first) {
+      genus_letter <- sub("\\.$", "", raw_parts[[1L]], perl = TRUE)
+      parts <- c(
+        paste0(escape_regex(genus_letter), "\\.?"),
+        vapply(raw_parts[-1L], token_pattern, character(1), allow_ocr_gap = TRUE)
+      )
+    } else {
+      allow_ocr <- type %in% c("scientific")
+      parts <- vapply(raw_parts, token_pattern, character(1), allow_ocr_gap = allow_ocr)
+    }
+
+    # Ordinary whitespace and hyphen variants are equivalent lexical
+    # separators. This also permits markup-stripped terms split across tags.
+    separator <- "(?:[[:space:]‐‑‒–—-]+)"
+    core <- paste(parts, collapse = separator)
+
+    # Bibliographic metadata occasionally pluralises common-name head nouns
+    # (e.g. "rainbow trouts" or "salmons"). Permit that only for English
+    # salmon/trout terms, never for generic 'trout' because it is not a
+    # dictionary entry.
+    if (type %in% c("common", "generic") &&
+        grepl("(salmon|trout)$", term, ignore.case = TRUE, perl = TRUE)) {
+      core <- paste0(core, "s?")
+    }
+    core
   }
 
   detect_in_text <- function(text, source) {
     if (is.na(text) || !nzchar(trimws(text))) return(empty)
+    text <- normalise_markup(text)
     hits <- list(); k <- 0L
     for (i in seq_len(nrow(dictionary))) {
       term <- dictionary$synonym[[i]]
