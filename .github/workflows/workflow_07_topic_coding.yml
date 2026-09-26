@@ -65,7 +65,7 @@ jobs:
 
       - name: Install preparation dependencies
         shell: Rscript {0}
-        run: install.packages(c("readr","jsonlite","digest"))
+        run: install.packages(c("curl","digest","httr2","jsonlite","readr"))
 
       - name: Validate frozen v3.6 ontology and prompt
         shell: bash
