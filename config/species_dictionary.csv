@@ -35,6 +35,7 @@ ONC_MASOU,Masu salmon,Oncorhynchus masou,Masu salmon,common,TRUE,salmon,
 ONC_MASOU,Masu salmon,Oncorhynchus masou,Oncorhynchus masou,scientific,TRUE,salmon,
 ONC_MASOU,Masu salmon,Oncorhynchus masou,O. masou,abbreviation,TRUE,salmon,
 UNSPEC_SALMON,Unspecified species,,Salmon,generic,TRUE,salmon,Use only when species is not specified
+UNSPEC_SALMON,Unspecified species,,Salmons,generic,TRUE,salmon,English generic salmon plural
 UNSPEC_SALMON,Unspecified species,,Salmon farm,generic,TRUE,salmon,Explicit generic salmon farming context
 UNSPEC_SALMON,Unspecified species,,Salmon farms,generic,TRUE,salmon,Explicit generic salmon farming context
 UNSPEC_SALMON,Unspecified species,,Farmed salmon,generic,TRUE,salmon,Explicit generic salmon farming context
@@ -77,7 +78,6 @@ ONC_MYKISS,Rainbow trout,Oncorhynchus mykiss,Oncorhynchus myskis,scientific,TRUE
 ONC_KISUTCH,Coho salmon,Oncorhynchus kisutch,silver salmon,common,TRUE,salmon,Established common name
 ONC_KISUTCH,Coho salmon,Oncorhynchus kisutch,coho,common,TRUE,salmon,Established common name
 ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,chinook,common,TRUE,salmon,Established common name
-ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,spring salmon,common,TRUE,salmon,Established common name
 ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,tyee,common,TRUE,salmon,Established common name
 ONC_TSHAWYTSCHA,Chinook salmon,Oncorhynchus tshawytscha,blackmouth,common,TRUE,salmon,Established common name
 ONC_KETA,Chum salmon,Oncorhynchus keta,dog salmon,common,TRUE,salmon,Established common name

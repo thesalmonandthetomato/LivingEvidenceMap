@@ -200,3 +200,45 @@ testthat::test_that("generic trout and salmonid-only records remain NONE", {
   testthat::expect_false(result$review_required)
   testthat::expect_equal(result$assignment_role, "none")
 })
+
+
+test_that("W05 vocabulary excludes ambiguous spring salmon phrase", {
+  d <- read.csv("config/species_dictionary.csv", stringsAsFactors = FALSE, check.names = FALSE)
+  expect_false(any(tolower(d$synonym) == "spring salmon"))
+})
+
+test_that("generic salmon plurals map to unspecified species", {
+  d <- read.csv("config/species_dictionary.csv", stringsAsFactors = FALSE, check.names = FALSE)
+  for (term in c("Salmons", "salmones")) {
+    m <- detect_species_mentions(term, NA_character_, d)
+    expect_true(any(m$species_id == "UNSPEC_SALMON"), info = term)
+  }
+})
+
+test_that("species matcher tolerates case spaces hyphens and markup", {
+  d <- read.csv("config/species_dictionary.csv", stringsAsFactors = FALSE, check.names = FALSE)
+
+  cases <- c(
+    "ATLANTIC SALMON",
+    "Atlantic    salmon",
+    "Atlantic-salmon",
+    "<i>Salmo salar</i>",
+    "&lt;italic&gt;Salmo salar&lt;/italic&gt;",
+    "<italic>Oncorhynchus mykiss</italic>",
+    "<named-content content-type=\"species\">Salmo salar</named-content>"
+  )
+
+  for (txt in cases) {
+    m <- detect_species_mentions(txt, NA_character_, d)
+    expect_gt(nrow(m), 0L, info = txt)
+  }
+})
+
+test_that("listed misspellings remain deterministic matches", {
+  d <- read.csv("config/species_dictionary.csv", stringsAsFactors = FALSE, check.names = FALSE)
+  cases <- c("Oncorhynchus mykkis", "Oncorhyncus mykiss", "Salmo giardneri")
+  for (txt in cases) {
+    m <- detect_species_mentions(txt, NA_character_, d)
+    expect_true(any(m$species_id == "ONC_MYKISS"), info = txt)
+  }
+})
