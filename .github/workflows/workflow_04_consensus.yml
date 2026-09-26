@@ -1,7 +1,33 @@
 name: Workflow 04 - Luna consensus screening
 
 on:
+  workflow_call:
+    inputs:
+      lean_pointer_path:
+        required: false
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      workflow03_pointer_path:
+        required: false
+        default: 'docs/publication_status/zenodo/run-36172718538.json'
+        type: string
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+      OPENAI_API_KEY:
+        required: true
   workflow_dispatch:
+    inputs:
+      lean_pointer_path:
+        description: 'Authoritative lean canonical checkpoint pointer'
+        required: false
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      workflow03_pointer_path:
+        description: 'Authoritative Workflow 03 publication-status pointer'
+        required: false
+        default: 'docs/publication_status/zenodo/run-36172718538.json'
+        type: string
   push:
     branches:
       - workflow01-final-architecture
@@ -44,11 +70,13 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           GH_TOKEN: ${{ github.token }}
+          W03_POINTER_INPUT: ${{ inputs.workflow03_pointer_path || 'docs/publication_status/zenodo/run-36172718538.json' }}
+          LEAN_POINTER_INPUT: ${{ inputs.lean_pointer_path || 'docs/compaction/zenodo/run-36166883249.json' }}
         shell: bash
         run: |
           set -euo pipefail
-          W03_POINTER="docs/publication_status/zenodo/run-36172718538.json"
-          LEAN_POINTER="docs/compaction/zenodo/run-36166883249.json"
+          W03_POINTER="$W03_POINTER_INPUT"
+          LEAN_POINTER="$LEAN_POINTER_INPUT"
           RUN_ID="$(POINTER="$W03_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$source_github_run_id)')"
           EXPECTED_STATUS_SHA="$(POINTER="$W03_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$publication_status_sha256)')"
           EXPECTED_LEAN_SHA="$(POINTER="$LEAN_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$lean_canonical_sha256)')"
