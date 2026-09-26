@@ -1,7 +1,8 @@
 # Detect species mentions in titles and abstracts.
 #
-# Validated rule: match dictionary terms case-insensitively on token boundaries
-# and retain the longest term when dictionary matches overlap.
+# Match dictionary terms case-insensitively on token boundaries.
+# Lexical separators tolerate whitespace and hyphen variants. Overlap handling
+# never allows a generic salmon phrase to erase an explicitly named species.
 
 detect_species_mentions <- function(title = NA_character_, abstract = NA_character_, dictionary) {
   required <- c("species_id", "preferred_name", "scientific_name", "synonym", "synonym_type", "is_farmed_candidate", "default_group")
@@ -20,16 +21,18 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
 
   lexical_pattern <- function(term, synonym_type) {
     term <- trimws(term)
-    parts <- strsplit(term, "[[:space:]-]+", perl = TRUE)[[1L]]
-    parts <- parts[nzchar(parts)]
-    if (!length(parts)) return("")
-    parts <- vapply(parts, escape_regex, character(1))
+    raw_parts <- strsplit(term, "[[:space:]-]+", perl = TRUE)[[1L]]
+    raw_parts <- raw_parts[nzchar(raw_parts)]
+    if (!length(raw_parts)) return("")
+    abbreviation_first <- identical(tolower(as.character(synonym_type)), "abbreviation") &&
+      length(raw_parts) >= 2L && grepl("^[[:alpha:]]\\.$", raw_parts[[1L]], perl = TRUE)
+    parts <- vapply(raw_parts, escape_regex, character(1))
 
     # Genus abbreviations are often supplied without the full stop in older
     # bibliographic metadata (e.g. "S salar", "O mykiss").
-    if (identical(tolower(as.character(synonym_type)), "abbreviation") &&
-        length(parts) >= 2L && grepl("^[[:alpha:]]\\\\\\.$", parts[[1L]], perl = TRUE)) {
-      parts[[1L]] <- sub("\\\\\\.$", "\\\\\\\\.?", parts[[1L]], perl = TRUE)
+    if (abbreviation_first) {
+      genus_letter <- sub("\\.$", "", raw_parts[[1L]], perl = TRUE)
+      parts[[1L]] <- paste0(escape_regex(genus_letter), "\\.?" )
     }
 
     # Treat ordinary whitespace and hyphen variants as equivalent lexical
