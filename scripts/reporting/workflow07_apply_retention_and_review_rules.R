@@ -154,13 +154,18 @@ Q <- do.call(rbind,record_rows)
 # Integrity invariants.
 if(any(S$retained_for_analysis & S$retention_basis=="")) stop("Retained assignment missing retention basis")
 if(any(!S$retained_for_analysis & S$retention_basis=="")) stop("Non-retained assignment missing retention basis")
-if(any(Q$topic_count_retained > 10L & !(Q$topic_count_retained==vapply(Q$record_id,function(rid){
-  z <- S[S$record_id==rid & !grepl("^general_code",S$retention_basis),,drop=FALSE]
-  if(!nrow(z)) return(0L)
-  mx <- max(z$confidence_n)
-  sum(z$confidence_n==mx)
-},integer(1))))) {
-  stop("A >10 retained record is not explained by a highest-tier tie")
+over10 <- which(Q$topic_count_retained > 10L)
+if(length(over10)) {
+  expected_tied <- vapply(Q$record_id[over10],function(rid){
+    idx <- score_index[[rid]] %||% integer()
+    z <- S[idx[!grepl("^general_code",S$retention_basis[idx])],,drop=FALSE]
+    if(!nrow(z)) return(0L)
+    mx <- max(z$confidence_n)
+    sum(z$confidence_n==mx)
+  },integer(1))
+  if(any(Q$topic_count_retained[over10] != expected_tied)) {
+    stop("A >10 retained record is not explained by a highest-tier tie")
+  }
 }
 
 human <- Q[Q$workflow08_route=="human_adjudication",,drop=FALSE]
