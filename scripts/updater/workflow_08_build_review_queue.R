@@ -87,11 +87,26 @@ geo_decisions <- lapply(
   function(z) if(nzchar(trimws(z))) fromJSON(z,simplifyVector=FALSE) else NULL
 )
 geo_decisions <- Filter(Negate(is.null),geo_decisions)
+if(length(geo_decisions)!=6L) stop("Expected 6 existing W08 geography decisions")
 pre_adjudicated_geo_ids <- unique(vapply(
   geo_decisions,
   function(x) as.character(x$record_id %||% ""),
   character(1)
 ))
+raw_unresolved_ids <- w06$record_id[w06$geography_status=="UNRESOLVED"]
+raw_grounding_ids <- unique(as.character(g_resid$record_id))
+if(length(raw_unresolved_ids)!=471L) stop("Expected 471 raw W06 UNRESOLVED IDs")
+if(length(raw_grounding_ids)!=57L) stop("Expected 57 W06 residual grounding IDs after final validator")
+if(length(intersect(raw_unresolved_ids,raw_grounding_ids))!=1L) {
+  stop("Expected exactly one overlap between raw W06 unresolved and grounding-residual sets")
+}
+if(sum(pre_adjudicated_geo_ids %in% raw_unresolved_ids)!=1L) {
+  stop("Expected one existing human geography decision in the raw W06 unresolved set")
+}
+if(sum(pre_adjudicated_geo_ids %in% raw_grounding_ids)!=6L) {
+  stop("Expected all six existing human geography decisions in the grounding-residual set")
+}
+
 # Corpus context comes from the validated W05 handoff because it contains the
 # exact 19,407 stable IDs with title/abstract and species state.
 context <- w05 |>
@@ -270,7 +285,11 @@ manifest <- list(
   w06_unresolved_pending_after_existing_decisions=nrow(w06_unresolved),
   w06_grounding_residual_before_existing_decisions=nrow(g_resid),
   w06_grounding_residual_pending_after_existing_decisions=length(resid_ids),
+  w06_raw_unresolved_grounding_overlap=length(intersect(raw_unresolved_ids,raw_grounding_ids)),
   w06_existing_human_geography_decisions=length(geo_decisions),
+  w06_existing_decisions_in_unresolved=sum(pre_adjudicated_geo_ids %in% raw_unresolved_ids),
+  w06_existing_decisions_in_grounding_residual=sum(pre_adjudicated_geo_ids %in% raw_grounding_ids),
+  w06_pending_unique_records=length(unique(c(w06_unresolved$record_id,resid_ids))),
   w07_human_review=121L,
   w07_late_automatic_exclusions=123L,
   unique_records_pending_human_review=length(queue),
@@ -289,7 +308,7 @@ manifest <- list(
     workflow05_zenodo="22982751",
     workflow06_zenodo="22983049"
   ),
-  note="W04 has no unresolved current-baseline cases. W05 NONE, W06 minimum-escalation geography cases, and W07 final human-review cases are deduplicated by record_id. W07 late automatic exclusions are preserved separately for final assembly."
+  note="W04 has no unresolved current-baseline cases. W06 human review is intentionally comprehensive for the minimum-escalation set: 471 raw semantic UNRESOLVED plus 57 residual grounding failures, with one raw overlap; six previously adjudicated geography records remove that overlap and five additional grounding cases, leaving 470 unresolved + 51 grounding = 521 unique pending W06 records. W05 NONE and W07 final human-review cases are then deduplicated by record_id. W07 late automatic exclusions are preserved separately for final assembly."
 )
 write_json(manifest,file.path(out_dir,"workflow08_review_queue_manifest.json"),
            pretty=TRUE,auto_unbox=TRUE,null="null")
