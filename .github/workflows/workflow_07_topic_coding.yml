@@ -388,6 +388,17 @@ jobs:
           fi
           test -s outputs/workflow07_topic_final/WORKFLOW07_HANDOFF_PASS.ok
 
+      - name: Apply deterministic topic-retention and Workflow 08 review rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow07_apply_retention_and_review_rules.R \
+            --scores outputs/workflow07_topic_final/workflow07_topic_pathway_scores.csv \
+            --records outputs/workflow07_topic_final/workflow07_topic_record_summary.csv \
+            --ontology "$TOPIC_ONTOLOGY_PATH" \
+            --output-dir outputs/workflow07_topic_final_qc
+          test -s outputs/workflow07_topic_final_qc/WORKFLOW07_QC_PASS.ok
+
       - name: Upload final Workflow 07 handoff
         uses: actions/upload-artifact@v4
         with:
@@ -405,5 +416,6 @@ jobs:
             outputs/workflow07_topic_v3_6_fresh/audit_summary.json
             outputs/workflow07_topic_v3_6_fresh/AUDIT_PASS.ok
             outputs/workflow07_topic_final/
+            outputs/workflow07_topic_final_qc/
           retention-days: 90
           if-no-files-found: error
