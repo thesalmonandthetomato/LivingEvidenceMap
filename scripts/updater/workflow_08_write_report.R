@@ -1,12 +1,154 @@
 #!/usr/bin/env Rscript
 suppressPackageStartupMessages(library(jsonlite))
-args<-commandArgs(trailingOnly=TRUE);arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
-manifest_path<-arg("--manifest");receipt_path<-arg("--receipt");complete_path<-arg("--complete");output_path<-arg("--output")
-if(any(vapply(list(manifest_path,receipt_path,complete_path,output_path),is.null,logical(1))))stop("Required W08 report arguments missing",call.=FALSE)
-m<-fromJSON(manifest_path,simplifyVector=FALSE);z<-fromJSON(receipt_path,simplifyVector=FALSE);cpl<-fromJSON(complete_path,simplifyVector=FALSE)
-if(!identical(m$status,"PASS")||!identical(z$status,"published")||!identical(cpl$status,"PASS"))stop("Cannot write report from non-PASS state",call.=FALSE)
-ex<-m$exclusions_by_stage
-x<-c(
-"# Workflow 08: Human adjudication and final canonical assembly","","## Purpose","","Workflow 08 resolves all records escalated by Workflows 05–07, applies late automatic exclusions from Workflow 07, and assembles the definitive post-adjudication canonical JSONL. It exists to ensure that automated ambiguity is resolved transparently by a human reviewer without rewriting the archived automated layers. The final output retains all canonical works and records their final inclusion/exclusion and coding state.","","This document is intended to serve two purposes:","","1. as a methodological guide to the repository implementation; and","2. as source text for reporting the workflow in a research paper.","","## Functionality map","","```text","[W03 canonical + publication status]","             |","             v","[W04 final relevance layer] -> [W05 species] -> [W06 geography] -> [W07 topics]","                                                        |","                                                        v","                                      [locked W08 review queue: 811 issues]","                                                        |","                    [57 prior decisions + 754 offline workbook decisions]","                                                        |","                                                        v","                                      [validated complete decision ledger]","                                                        |","                         [apply late exclusions + human corrections]","                                                        |","                                                        v","                                  [definitive canonical JSONL: 32,292 works]","                                                        |","                                                        v","                                      [restricted Zenodo archive]","                                                        |","                                                        v","                                               [Workflow 09]","```","","## Components","","| Component | Function |","|---|---|","| `scripts/updater/workflow_08_build_review_queue.R` | Builds and locks the human-review queue from validated W05-W07 outputs. |","| `data/adjudication/workflow08/offline_adjudication_spec_2026-09-27.json` | Compact, checksum-bound representation of the completed offline review workbook. |","| `scripts/updater/workflow_08_expand_offline_decisions.R` | Expands the workbook specification, merges prior decisions and verifies exactly one decision for each locked issue. |","| `scripts/updater/workflow_08_finalize_canonical.R` | Applies W03-W08 state to the canonical JSONL and validates final population/exclusion accounting. |","| `scripts/updater/workflow_08_archive_to_zenodo.R` | Publishes the minimal final W08 archive to restricted Zenodo. |","| `.github/workflows/workflow_08_finalize.yml` | Restores validated inputs, performs final assembly, archives outputs and registers the final state. |","","## Inputs and methodological rules","",sprintf("The locked Workflow 08 queue contains **%d issues across %d unique records** and is identified by SHA-256 `%s`.",cpl$resolved_issues,cpl$unique_records,cpl$locked_queue_sha256),sprintf("Human adjudication comprised **%d prior in-chat decisions** and **%d offline workbook decisions**. The reviewed workbook `%s` is bound to SHA-256 `%s`.",cpl$prior_in_chat_decisions,cpl$offline_workbook_decisions,cpl$source_workbook,cpl$source_workbook_sha256),"","Human decisions are issue-specific. Species-NONE cases could be assigned an eligible named species, assigned unspecified species, or excluded. Geography cases could be assigned a country set or NONE; grounding-only cases could also accept the existing model assignment. Topic-disagreement cases could accept the retained automated topics, replace the topic set, exclude the record, or retain the record with no topic code (`no_code`). Zero-topic eligibility cases could be retained uncoded or excluded.","","The automated outputs of Workflows 04–07 are not rewritten. Workflow 08 is an overlay. The final canonical JSONL preserves all 32,292 canonical works, including excluded records, so that final disposition remains auditable.","","## Processing modes or stages","","### Locked intake","","The validated W05–W07 outputs are combined into an immutable queue. Each issue is identified by `<record_id>::<issue_type>` and the queue SHA-256 is propagated into every human decision.","","### Offline human adjudication","","Records were reviewed in a structured spreadsheet with separate worksheets for geography, species, topic disagreement and zero-topic eligibility. The completed workbook was converted into a compact specification containing class defaults and explicit record-level overrides. Expansion fails unless the specification plus prior decisions covers all 811 locked issues exactly once.","","### Final assembly","","The final assembler begins from the authoritative 32,292-work canonical JSONL, applies publication-status exclusion from Workflow 03 and relevance decisions from Workflow 04, then adds species, geography and topic coding for retained records. Workflow 07 late automatic exclusions and Workflow 08 human decisions are then applied as overlays. Excluded works remain present in the JSONL with an explicit exclusion stage and reason.","","### Validation","",sprintf("The final assembly contains **%d canonical works**, of which **%d are included** and **%d excluded**.",m$canonical_records,m$final_included_records,m$final_excluded_records),sprintf("Final exclusions are accounted for as Workflow 03 = %d; Workflow 04 = %d; Workflow 07 late automatic exclusions = %d; Workflow 08 human exclusions = %d.",ex$workflow03,ex$workflow04,ex$workflow07_late,ex$workflow08),sprintf("The final canonical JSONL SHA-256 is `%s`; the adjudication ledger SHA-256 is `%s`.",m$final_canonical_jsonl_sha256,m$adjudication_ledger_sha256),"","## Provenance and documentation","","Each final canonical record retains its stable `record_id`, bibliographic canonical fields and manifestation references. Final `screening`, `species`, `geography` and `topics` objects identify the terminal state and the workflow or human-adjudication source. Workflow 08 provenance includes the complete decision-ledger checksum and finalisation timestamp.","",sprintf("The complete decision ledger contains %d issue decisions. The final archive manifest records checksums for the upstream canonical input, W03-W07 layers, ontology, decision ledger and final canonical JSONL.",m$w08_decision_issues),"","## Storage and archival model","","### Permanent repository records","","The repository retains the compact offline-adjudication specification, prior human geography decisions, W08 implementation scripts, workflow definition, this report and the Zenodo pointer/registry. The 754-row workbook itself is represented by its cryptographic checksum and compact decision specification rather than committed as a large binary file.","","### Short-lived GitHub Actions artefacts","","The finalisation run uploads the assembled canonical JSONL, complete adjudication ledger, manifest, COMPLETE marker and Zenodo receipt as a short-lived Actions artefact for operational verification.","","### Durable external archive","",sprintf("The definitive W08 output is archived as restricted Zenodo record **%s**, DOI **%s**. The deposit contains the final canonical JSONL, the complete machine-readable W08 adjudication ledger and the final checksum/provenance manifest. Earlier W04-W07 states remain in their existing archives and are referenced rather than duplicated.",z$zenodo_record_id,z$doi),"","## Downstream handoff","","The definitive Workflow 08 canonical JSONL is the authoritative input to Workflow 09 documentation/output-summary work and subsequently the dashboard/output layer. Downstream workflows must verify its SHA-256 against the W08 Zenodo pointer before use.","","## Methods text for research reporting","",sprintf("> **Workflow 08: human adjudication and final assembly.** Records requiring manual resolution after species, geography and topic coding were collated into a checksum-locked review queue comprising %d issues across %d records. A single human reviewer adjudicated each issue using a structured offline workbook, with decisions recorded separately from the immutable automated outputs. Human decisions and late automated exclusions were then applied as an overlay to the canonical evidence base. The final dataset retained all %d canonical records, including excluded records with explicit disposition metadata, and comprised %d included and %d excluded records. The complete adjudication ledger and definitive canonical JSONL were checksum-validated and archived in a restricted Zenodo deposit (%s).",cpl$resolved_issues,cpl$unique_records,m$canonical_records,m$final_included_records,m$final_excluded_records,z$doi),"","## Reporting status","",sprintf("**COMPLETE and validated.** Completion requires: (1) all %d locked W08 issues resolved exactly once; (2) successful final assembly of all %d canonical works; (3) exact exclusion accounting; (4) checksum generation for the final canonical JSONL and adjudication ledger; and (5) publication of the minimal W08 archive to Zenodo. All conditions were satisfied by GitHub Actions run `%s`.",cpl$resolved_issues,m$canonical_records,z$source_github_run_id))
-dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE);writeLines(x,output_path,useBytes=TRUE)
-cat("PASS: wrote Workflow 08 report\n")
+
+args <- commandArgs(trailingOnly=TRUE)
+arg <- function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
+manifest_path <- arg("--manifest")
+receipt_path <- arg("--receipt")
+complete_path <- arg("--complete")
+output_path <- arg("--output")
+if(any(vapply(list(manifest_path,receipt_path,complete_path,output_path),is.null,logical(1)))) stop("Required W08 report arguments missing",call.=FALSE)
+
+m <- fromJSON(manifest_path,simplifyVector=FALSE)
+z <- fromJSON(receipt_path,simplifyVector=FALSE)
+cpl <- fromJSON(complete_path,simplifyVector=FALSE)
+if(!identical(m$status,"PASS")||!identical(z$status,"published")||!identical(cpl$status,"PASS")) stop("Cannot write report from non-PASS state",call.=FALSE)
+if(as.integer(m$source_canonical_population)!=32292L||as.integer(m$canonical_records)!=19117L||as.integer(m$excluded_records)!=13175L) stop("Unexpected corrected W08 counts",call.=FALSE)
+ex <- m$exclusions_by_stage
+
+x <- c(
+"# Workflow 08: Human adjudication and final canonical assembly",
+"",
+"## Purpose",
+"",
+"Workflow 08 resolves all records escalated by Workflows 05–07, applies late automatic exclusions from Workflow 07, and produces the definitive post-adjudication evidence base. Human decisions are applied as a separate overlay: archived automated outputs are not rewritten.",
+"",
+"The definitive canonical JSONL contains only final included records. Excluded records are exported separately as bibliographic metadata with their final exclusion stage and reason.",
+"",
+"This document is intended to serve two purposes:",
+"",
+"1. as a methodological guide to the repository implementation; and",
+"2. as source text for reporting the workflow in a research paper.",
+"",
+"## Functionality map",
+"",
+"```text",
+"[32,292-work source canonical + validated W03-W07 states]",
+"                         |",
+"                         v",
+"            [locked W08 review queue]",
+"              811 issues / 797 records",
+"                         |",
+"             +-----------+-----------+",
+"             |                       |",
+"             v                       v",
+" [57 prior decisions]      [754 offline workbook decisions]",
+"             |                       |",
+"             +-----------+-----------+",
+"                         |",
+"                         v",
+"       [validate complete decision ledger]",
+"                         |",
+"                         v",
+" [apply human decisions + W07 late exclusions]",
+"                         |",
+"                         v",
+"            [temporary full disposition state]",
+"                         |",
+"             +-----------+-----------+",
+"             |                       |",
+"             v                       v",
+"[19,117 included JSONL]       [13,175 exclusions CSV]",
+"             |                       |",
+"             +-----------+-----------+",
+"                         |",
+"                         v",
+"              [restricted Zenodo archive]",
+"                         |",
+"                         v",
+"                   [Workflow 09]",
+"```",
+"",
+"## Components",
+"",
+"| Component | Function |",
+"|---|---|",
+"| `scripts/updater/workflow_08_build_review_queue.R` | Builds and locks the human-review queue from validated W05-W07 outputs. |",
+"| `data/adjudication/workflow08/offline_adjudication_spec_2026-09-27.json` | Compact, checksum-bound representation of the completed offline review workbook. |",
+"| `scripts/updater/workflow_08_expand_offline_decisions.R` | Expands the workbook specification, merges prior decisions and verifies exactly one decision for each locked issue. |",
+"| `scripts/updater/workflow_08_finalize_canonical.R` | Applies W03-W08 state to the source canonical population and creates the temporary full disposition state. |",
+"| `scripts/updater/workflow_08_partition_final_outputs.R` | Writes the included-only canonical JSONL and separate bibliographic exclusions file, with count/checksum validation. |",
+"| `scripts/updater/workflow_08_archive_to_zenodo.R` | Publishes the included canonical JSONL, exclusions file, adjudication ledger and manifest to restricted Zenodo. |",
+"| `.github/workflows/workflow_08_finalize.yml` | Restores validated inputs, validates decisions, assembles and partitions final outputs, archives them and registers the final state. |",
+"",
+"## Inputs and methodological rules",
+"",
+sprintf("The locked Workflow 08 queue contains **%d issues across %d unique records** and is identified by SHA-256 `%s`.",cpl$resolved_issues,cpl$unique_records,cpl$locked_queue_sha256),
+sprintf("Human adjudication comprised **%d prior decisions** and **%d offline workbook decisions**. The reviewed workbook `%s` is bound to SHA-256 `%s`.",cpl$prior_in_chat_decisions,cpl$offline_workbook_decisions,cpl$source_workbook,cpl$source_workbook_sha256),
+"",
+"Human decisions are issue-specific. Species-NONE cases could be assigned an eligible named species, assigned unspecified species, or excluded. Geography cases could be assigned a country set or NONE; grounding-only cases could also accept the existing model assignment. Topic-disagreement cases could accept retained automated topics, replace the topic set, exclude the record, or retain the record with no topic code (`no_code`). Zero-topic eligibility cases could be retained uncoded or excluded.",
+"",
+"Automated W04-W07 outputs remain immutable. Workflow 08 applies an adjudication overlay, then partitions the final disposition into an included evidence-base JSONL and a separate exclusions register. Excluded records are therefore not present in the definitive canonical JSONL.",
+"",
+"## Processing modes or stages",
+"",
+"### Locked intake",
+"",
+"The validated W05-W07 outputs are combined into an immutable queue. Each issue is identified by `<record_id>::<issue_type>`, and the queue SHA-256 is propagated into every human decision.",
+"",
+"### Offline human adjudication",
+"",
+"Records were reviewed in a structured spreadsheet with separate worksheets for geography, species, topic disagreement and zero-topic eligibility. The completed workbook was converted into a compact specification containing class defaults and explicit record-level overrides. Expansion fails unless the specification plus prior decisions covers all 811 locked issues exactly once.",
+"",
+"### Final assembly and partition",
+"",
+sprintf("The assembler begins from the **%d-record** source canonical population and applies final W03-W08 disposition. The validated result contains **%d included** and **%d excluded** records.",m$source_canonical_population,m$canonical_records,m$excluded_records),
+sprintf("Final exclusions are mutually exclusively attributed to Workflow 03 = **%d**; Workflow 04 = **%d**; Workflow 07 late automatic exclusions = **%d**; Workflow 08 human exclusions = **%d**.",ex$workflow03,ex$workflow04,ex$workflow07_late,ex$workflow08),
+"",
+"The post-adjudication all-record state is a temporary internal intermediate only. It is partitioned into:",
+"",
+sprintf("- `living_evidence_map_canonical_final.jsonl`: **%d included records only**;",m$canonical_records),
+sprintf("- `workflow08_excluded_records.csv`: **%d excluded records**, containing record ID, title, authors, year, journal, volume, issue, pages, DOI, exclusion stage and exclusion reason.",m$excluded_records),
+"",
+"### Validation",
+"",
+sprintf("The included canonical JSONL SHA-256 is `%s`; the exclusions CSV SHA-256 is `%s`; the adjudication ledger SHA-256 is `%s`.",m$final_canonical_jsonl_sha256,m$excluded_records_csv_sha256,m$adjudication_ledger_sha256),
+sprintf("There are **%d included records with no final topic code** and **%d final topic assignments**.",m$included_uncoded_topic_records,m$final_topic_assignments),
+"",
+"## Provenance and documentation",
+"",
+"Each included canonical record retains its stable `record_id`, bibliographic canonical fields and manifestation references, together with final species, geography, topic and provenance objects. The exclusions register deliberately contains only bibliographic identification fields and the final exclusion stage/reason.",
+"",
+sprintf("The complete W08 decision ledger contains **%d issue decisions**. The final manifest records checksums for upstream inputs, the adjudication ledger, included canonical JSONL and exclusions CSV.",m$w08_decision_issues),
+"",
+"## Storage and archival model",
+"",
+"### Permanent repository records",
+"",
+"The repository retains the compact offline-adjudication specification, prior human geography decisions, W08 implementation scripts, workflow definition, this report and the Zenodo pointer/registry. The reviewed workbook itself is represented by its cryptographic checksum and compact decision specification rather than committed as a binary repository file.",
+"",
+"### Short-lived GitHub Actions artefacts",
+"",
+"The finalisation run retains the included canonical JSONL, exclusions CSV, complete adjudication ledger, manifest, COMPLETE marker and Zenodo receipt temporarily as an Actions artefact for verification.",
+"",
+"### Durable external archive",
+"",
+sprintf("The authoritative W08 output is restricted Zenodo record **%s**, DOI **%s**. It contains the included-only canonical JSONL, exclusions CSV, complete machine-readable W08 adjudication ledger and final checksum/provenance manifest.",z$zenodo_record_id,z$doi),
+if(!is.null(z$supersedes_zenodo_record_id)) sprintf("This record supersedes Zenodo record **%s** (%s), whose canonical JSONL incorrectly retained excluded records.",z$supersedes_zenodo_record_id,z$supersedes_doi) else "",
+"",
+"## Downstream handoff",
+"",
+"The included-only Workflow 08 canonical JSONL is the authoritative input to Workflow 09 documentation/output-summary work and subsequently the dashboard/output layer. Downstream workflows must verify its SHA-256 against the W08 Zenodo pointer before use. The exclusions CSV is retained for PRISMA-style reporting and audit, not as an analytical input.",
+"",
+"## Methods text for research reporting",
+"",
+sprintf("> **Workflow 08: human adjudication and final assembly.** Records requiring manual resolution after species, geography and topic coding were collated into a checksum-locked review queue comprising %d issues across %d records. A single human reviewer adjudicated each issue using a structured offline workbook, with decisions recorded separately from the immutable automated outputs. Human decisions and late automatic exclusions were applied as overlays to the canonical evidence base. From a source population of %d deduplicated records, %d records were retained in the definitive canonical evidence-base JSONL and %d excluded records were exported separately with bibliographic metadata and exclusion reasons. The complete adjudication ledger and final outputs were checksum-validated and archived in a restricted Zenodo deposit (%s).",cpl$resolved_issues,cpl$unique_records,m$source_canonical_population,m$canonical_records,m$excluded_records,z$doi),
+"",
+"## Reporting status",
+"",
+sprintf("**COMPLETE and validated.** All %d locked W08 issues were resolved exactly once; the %d-record source canonical population was partitioned into %d included canonical records and %d exclusions with exact accounting; final checksums were generated; and the corrected minimal W08 archive was published to Zenodo in run `%s`.",cpl$resolved_issues,m$source_canonical_population,m$canonical_records,m$excluded_records,z$source_github_run_id)
+)
+
+dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
+writeLines(x,output_path,useBytes=TRUE)
+cat("PASS: wrote corrected Workflow 08 report\n")

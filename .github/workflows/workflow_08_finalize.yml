@@ -35,6 +35,7 @@ jobs:
         run: |
           parse(file='scripts/updater/workflow_08_expand_offline_decisions.R')
           parse(file='scripts/updater/workflow_08_finalize_canonical.R')
+          parse(file='scripts/updater/workflow_08_partition_final_outputs.R')
           parse(file='scripts/updater/workflow_08_archive_to_zenodo.R')
           parse(file='scripts/updater/workflow_08_write_report.R')
           cat('PASS: Workflow 08 scripts parse\n')
@@ -99,9 +100,21 @@ jobs:
             --w07-late-exclusions inputs/w07/workflow07_late_automatic_exclusions.csv \
             --decisions outputs/workflow08/human_decisions_complete.jsonl \
             --ontology data/reference/topic_ontology_v3_6.csv \
-            --output outputs/workflow08/living_evidence_map_canonical_final.jsonl \
+            --output outputs/workflow08/_post_adjudication_all_records_internal.jsonl \
             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl \
-            --manifest outputs/workflow08/workflow08_final_manifest.json
+            --manifest outputs/workflow08/_post_adjudication_manifest_internal.json
+
+      - name: Partition included canonical and exclusions
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_partition_final_outputs.R \
+            --assembled outputs/workflow08/_post_adjudication_all_records_internal.jsonl \
+            --old-manifest outputs/workflow08/_post_adjudication_manifest_internal.json \
+            --canonical-output outputs/workflow08/living_evidence_map_canonical_final.jsonl \
+            --exclusions-output outputs/workflow08/workflow08_excluded_records.csv \
+            --manifest-output outputs/workflow08/workflow08_final_manifest.json
+          rm outputs/workflow08/_post_adjudication_all_records_internal.jsonl outputs/workflow08/_post_adjudication_manifest_internal.json
 
       - name: Publish minimal final Workflow 08 archive to Zenodo
         env:
@@ -112,6 +125,7 @@ jobs:
           mkdir -p outputs/workflow08_zenodo
           Rscript scripts/updater/workflow_08_archive_to_zenodo.R \
             --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl \
+            --exclusions outputs/workflow08/workflow08_excluded_records.csv \
             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl \
             --manifest outputs/workflow08/workflow08_final_manifest.json \
             --source-run-id "$GITHUB_RUN_ID" \
