@@ -1,0 +1,137 @@
+name: Workflow 07 - zero-topic targeted eligibility rescreen
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow07/.run_zero_topic_targeted_rescreen'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("readr","jsonlite"))
+      - name: Download zero-topic IDs and record text
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/handoff inputs/recall inputs/zero_rescreen
+          gh run download 36264955447 -n workflow07-topic-handoff-36264955447 -D inputs/handoff
+          gh run download 36252255299 -n workflow07-topic-recall-audit-36252255299 -D inputs/recall
+          ZERO=inputs/handoff/workflow07_topic_final/workflow07_zero_code_records.csv
+          REC=inputs/recall/current_topic_recall_status.csv
+          test -s "$ZERO"
+          test -s "$REC"
+          ZERO="$ZERO" REC="$REC" Rscript -e '
+            library(readr)
+            z<-read_csv(Sys.getenv("ZERO"),show_col_types=FALSE)
+            r<-read_csv(Sys.getenv("REC"),show_col_types=FALSE)
+            stopifnot(nrow(z)==358L,!anyDuplicated(z$record_id))
+            stopifnot(all(c("current_record_id","title","abstract")%in%names(r)),!anyDuplicated(r$current_record_id))
+            x<-merge(z[,c("record_id")],r[,c("current_record_id","title","abstract")],by.x="record_id",by.y="current_record_id",all.x=TRUE,sort=FALSE)
+            stopifnot(nrow(x)==358L,!any(is.na(x$title)&is.na(x$abstract)))
+            write_csv(x,"inputs/zero_rescreen/zero_topic_rescreen_input.csv",na="")
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-zero-topic-rescreen-input-${{ github.run_id }}
+          path: inputs/zero_rescreen/zero_topic_rescreen_input.csv
+          retention-days: 90
+          if-no-files-found: error
+
+  screen:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1,2,3,4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite","readr","digest"))
+      - uses: actions/download-artifact@v4
+        with:
+          name: workflow07-zero-topic-rescreen-input-${{ github.run_id }}
+          path: inputs/zero_rescreen
+      - name: Run targeted two-pass eligibility rescreen
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow07_zero_topic_targeted_rescreen.R \
+            --input inputs/zero_rescreen/zero_topic_rescreen_input.csv \
+            --output-dir outputs/workflow07_zero_topic_rescreen/shard-${{ matrix.shard }} \
+            --model gpt-5.6-luna \
+            --shard-index ${{ matrix.shard }} \
+            --shard-count 4 \
+            --checkpoint-every 10
+      - name: Upload shard state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-zero-topic-rescreen-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: outputs/workflow07_zero_topic_rescreen/shard-${{ matrix.shard }}/
+          retention-days: 90
+          if-no-files-found: warn
+          overwrite: true
+
+  merge:
+    needs: screen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install merge dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","readr"))
+      - name: Download shard outputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow07-zero-topic-rescreen-shard-*-${{ github.run_id }}
+          path: inputs/rescreen_shards
+      - name: Merge and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow07_zero_topic_targeted_rescreen_merge.R \
+            --input-root inputs/rescreen_shards \
+            --output-dir outputs/workflow07_zero_topic_rescreen_merged \
+            --expected-shards 4
+          test -s outputs/workflow07_zero_topic_rescreen_merged/PASS.ok
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-zero-topic-targeted-rescreen-${{ github.run_id }}
+          path: outputs/workflow07_zero_topic_rescreen_merged/
+          retention-days: 90
+          if-no-files-found: error
