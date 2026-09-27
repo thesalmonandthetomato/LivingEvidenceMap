@@ -18,16 +18,22 @@ if(anyDuplicated(ids)||any(!nzchar(ids)))stop("Merged identity invariant failed"
 ord<-order(ids);rows<-rows[ord];ids<-ids[ord]
 write_jsonl(rows,file.path(out,"workflow07_zero_topic_targeted_rescreen.jsonl"))
 dec<-vapply(rows,function(x)scalar(x$decision),character(1))
-review<-rows[dec %in% c("exclude","uncertain")]
+review<-rows[dec=="uncertain"]
+late_exclude<-rows[dec=="exclude"]
+included_uncoded<-rows[dec=="include"]
 write_jsonl(review,file.path(out,"workflow07_zero_topic_human_review_candidates.jsonl"))
+write_jsonl(late_exclude,file.path(out,"workflow07_zero_topic_late_automatic_exclusions.jsonl"))
+write_jsonl(included_uncoded,file.path(out,"workflow07_zero_topic_included_uncoded.jsonl"))
 summary<-list(
  schema="living-evidence-map-workflow07-zero-topic-targeted-rescreen-merged-v1",
  records=length(rows),
  include=sum(dec=="include"),
  exclude=sum(dec=="exclude"),
  uncertain=sum(dec=="uncertain"),
+ included_uncoded=length(included_uncoded),
+ late_automatic_exclusions=length(late_exclude),
  human_review_candidates=length(review),
- decision_policy="include consensus resolves zero-topic QC; exclude or uncertain proceeds to Workflow 08 human adjudication"
+ decision_policy="include -> retain as included-but-uncoded; exclude -> late automatic exclusion; uncertain -> Workflow 08 human adjudication"
 )
 write_json(summary,file.path(out,"summary.json"),pretty=TRUE,auto_unbox=TRUE)
 writeLines("PASS",file.path(out,"PASS.ok"))
