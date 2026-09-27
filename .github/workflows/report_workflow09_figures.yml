@@ -1,0 +1,144 @@
+name: Report - Workflow 09 manuscript figures
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/reporting/.run_workflow09_figures'
+
+permissions:
+  contents: read
+
+jobs:
+  figures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev libcairo2-dev libglpk-dev
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(c(
+            "jsonlite","dplyr","tidyr","readr","ggplot2","scales","here",
+            "stringr","sf","classInt","rnaturalearth","rnaturalearthdata",
+            "httr2","digest","CiteSource"
+          ))
+
+      - name: Restore authoritative final Workflow 08 reporting state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/restore_workflow08_reporting_state.R             --pointer docs/workflow08/zenodo/run-36329841121.json             --output-dir workflow08_reporting_state
+          test -s workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
+          test -s workflow08_reporting_state/workflow08_excluded_records.csv
+
+      - name: Restore authoritative pre-screening canonical and W04 included set
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R             --pointer docs/deduplication/zenodo/run-36128255337.json             --pointer-dir docs/deduplication/zenodo             --output-root workflow01_state
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer docs/workflow04/zenodo/run-36227737500.json             --output-dir workflow04_state
+          INC="$(find workflow04_state -type f -name workflow04_included_record_ids.txt -print -quit)"
+          test -n "$INC"
+          cp "$INC" workflow04_included_record_ids.txt
+
+      - name: Render manuscript figures from canonical data
+        env:
+          CANONICAL_JSONL: workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
+          EXCLUSIONS_CSV: workflow08_reporting_state/workflow08_excluded_records.csv
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript visualisations/01_records_by_publication_year.R
+          Rscript visualisations/02_records_by_country.R
+          Rscript visualisations/03_choropleth_records_by_country.R
+          Rscript visualisations/04_topic_hierarchy.R
+          Rscript visualisations/05_records_by_publication_year_high_level_topic.R
+          Rscript visualisations/06_rapidly_emerging_topics.R
+
+      - name: Render paired database contribution UpSet
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/plot_citesource_database_contribution.R             --input workflow01_state/canonical/records.jsonl             --included-ids workflow04_included_record_ids.txt             --output-dir outputs/citesource_contribution
+
+      - name: Validate canonical provenance and outputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+
+          canonical <- "workflow08_reporting_state/living_evidence_map_canonical_final.jsonl"
+          expected_sha <- "ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67"
+          stopifnot(
+            identical(tolower(digest(canonical, algo="sha256", file=TRUE, serialize=FALSE)), expected_sha)
+          )
+          n <- length(readLines(canonical, warn=FALSE))
+          stopifnot(n == 19117L)
+
+          required <- c(
+            "visualisations/figure_01_records_by_publication_year.png",
+            "visualisations/figure_02_records_by_country.png",
+            "visualisations/figure_03_choropleth_records_by_country.png",
+            "visualisations/figure_05_records_by_publication_year_high_level_topic.png",
+            "visualisations/figure_06_rapidly_emerging_topics.png",
+            "visualisations/topic_hierarchy/figure_04a_top_level_topics.png",
+            "visualisations/topic_hierarchy/figure_04a_hierarchy_production.png",
+            "visualisations/topic_hierarchy/figure_04b_hierarchy_environment.png",
+            "visualisations/topic_hierarchy/figure_04c_hierarchy_methods.png",
+            "visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.png",
+            "visualisations/topic_hierarchy/figure_04e_hierarchy_product.png",
+            "visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.png",
+            "visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.png",
+            "outputs/citesource_contribution/database_contribution_upset.png",
+            "outputs/citesource_contribution/database_contribution_deduplicated_vs_included.png"
+          )
+          stopifnot(all(file.exists(required)))
+          cat("PASS: all Workflow 09 review figures rendered from verified authoritative inputs\n")
+
+      - name: Stage review bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow09_figure_review/topic_hierarchy
+          cp visualisations/figure_01_records_by_publication_year.{png,pdf} outputs/workflow09_figure_review/
+          cp visualisations/figure_02_records_by_country.{png,pdf} outputs/workflow09_figure_review/
+          cp visualisations/figure_03_choropleth_records_by_country.{png,pdf} outputs/workflow09_figure_review/
+          cp visualisations/figure_05_records_by_publication_year_high_level_topic.{png,pdf} outputs/workflow09_figure_review/
+          cp visualisations/figure_06_rapidly_emerging_topics.{png,pdf} outputs/workflow09_figure_review/
+          cp visualisations/topic_hierarchy/*.png outputs/workflow09_figure_review/topic_hierarchy/
+          cp visualisations/topic_hierarchy/*.pdf outputs/workflow09_figure_review/topic_hierarchy/
+          cp outputs/citesource_contribution/database_contribution_upset.{png,pdf} outputs/workflow09_figure_review/
+          cp outputs/citesource_contribution/database_contribution_deduplicated_vs_included.{png,pdf} outputs/workflow09_figure_review/
+
+      - name: Upload Workflow 09 figure review bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow09-figure-review-${{ github.run_id }}
+          path: outputs/workflow09_figure_review/
+          retention-days: 30
+          if-no-files-found: error
