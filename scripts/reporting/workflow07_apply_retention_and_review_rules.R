@@ -67,11 +67,12 @@ is_superseded_general <- function(pid, assigned_ids) {
 
 S$retained_for_analysis <- FALSE
 S$retention_basis <- ""
+score_index <- split(seq_len(nrow(S)), as.character(S$record_id))
 
 record_rows <- vector("list",nrow(R))
 for(i in seq_len(nrow(R))) {
   rid <- as.character(R$record_id[[i]])
-  idx <- which(S$record_id==rid)
+  idx <- score_index[[rid]] %||% integer()
   raw_n <- length(idx)
   if(raw_n==0L) {
     zd <- unname(zr_dec[[rid]])
