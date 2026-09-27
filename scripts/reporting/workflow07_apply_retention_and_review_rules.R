@@ -24,6 +24,7 @@ dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
 S <- read_csv(scores_path,show_col_types=FALSE,progress=FALSE)
 R <- read_csv(records_path,show_col_types=FALSE,progress=FALSE)
+`%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x
 O <- read_csv(ontology_path,show_col_types=FALSE,progress=FALSE)
 read_jsonl <- function(path){x<-readLines(path,warn=FALSE,encoding="UTF-8");x<-x[nzchar(trimws(x))];lapply(x,jsonlite::fromJSON,simplifyVector=FALSE)}
 ZR <- read_jsonl(zero_rescreen_path)
@@ -48,7 +49,6 @@ if(any(!zr_dec %in% c("include","exclude","uncertain"))) stop("Invalid zero-topi
 Omap <- O[match(S$path_id,O$path_id),c("path_id","level_1","level_2","hierarchy_path")]
 stopifnot(all(Omap$path_id==S$path_id))
 
-`%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x
 present <- function(x) !is.na(x) & nzchar(trimws(as.character(x)))
 
 # Explicit ontology-v3.6 fallback/supersession rules only.
