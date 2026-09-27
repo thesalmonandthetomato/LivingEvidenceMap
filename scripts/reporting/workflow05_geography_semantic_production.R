@@ -98,11 +98,46 @@ norm_semicolon <- function(x){
   x <- as.character(x); x[is.na(x)] <- ""
   vapply(strsplit(x,";",fixed=TRUE),norm_set,character(1))
 }
+normalise_grounding_text <- function(z){
+  z <- as.character(z); z[is.na(z)] <- ""
+  z <- gsub("\\\\n|\\\\r|\\\\t", " ", z, perl=TRUE)
+  z <- gsub("&nbsp;|&#160;|&#xA0;", " ", z, ignore.case=TRUE, perl=TRUE)
+  z <- gsub("&amp;", "&", z, ignore.case=TRUE, fixed=FALSE)
+  z <- gsub("[\u00AD\u200B\uFEFF]", "", z, perl=TRUE)
+  z <- chartr("\u2018\u2019\u201C\u201D\u2010\u2011\u2012\u2013\u2014",
+              "''\\"\\"-----", z)
+  tolower(norm_ws(z))
+}
+
 evidence_is_grounded <- function(evidence,title,abstract){
-  e <- tolower(norm_ws(evidence))
-  if(!nzchar(e)) return(FALSE)
-  txt <- tolower(norm_ws(paste(title,abstract,sep=" ")))
-  grepl(e,txt,fixed=TRUE)
+  e_raw <- as.character(evidence)
+  if(is.na(e_raw) || !nzchar(trimws(e_raw))) return(FALSE)
+  txt <- normalise_grounding_text(paste(title,abstract,sep=" "))
+  e <- normalise_grounding_text(e_raw)
+
+  # Preferred rule: the evidence is a contiguous source substring after
+  # harmless Unicode/whitespace/markup normalisation.
+  if(grepl(e,txt,fixed=TRUE)) return(TRUE)
+
+  # Tolerate model-inserted ellipses only when every non-trivial quoted
+  # fragment is found in the source in the same order. This preserves
+  # source grounding while relaxing the formatting requirement.
+  raw <- gsub("\u2026", "...", e_raw, fixed=TRUE)
+  if(!grepl("...", raw, fixed=TRUE)) return(FALSE)
+  parts <- strsplit(raw, "...", fixed=TRUE)[[1L]]
+  parts <- vapply(parts, normalise_grounding_text, character(1))
+  parts <- trimws(gsub("^[. ]+|[. ]+$", "", parts, perl=TRUE))
+  parts <- parts[nzchar(parts) & nchar(parts) >= 4L]
+  if(length(parts) < 2L) return(FALSE)
+
+  pos <- 1L
+  for(part in parts){
+    remainder <- substr(txt,pos,nchar(txt))
+    hit <- regexpr(part,remainder,fixed=TRUE)[[1L]]
+    if(hit < 1L) return(FALSE)
+    pos <- pos + hit - 1L + nchar(part)
+  }
+  TRUE
 }
 
 call_one <- function(row){
