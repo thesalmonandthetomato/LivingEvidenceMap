@@ -16,7 +16,7 @@ arg <- function(flag, default=NULL){
 }
 
 input <- arg("--input")
-prompt_path <- arg("--prompt","config/workflow05_geography_semantic_prompt.txt")
+prompt_path <- arg("--prompt","config/workflow06_geography_semantic_prompt_v2.txt")
 out_dir <- arg("--output-dir","outputs/workflow06_failure_recovery")
 record_id_filter <- arg("--record-id",NULL)
 if(is.null(input)||!file.exists(input)) stop("--input is required",call.=FALSE)
@@ -41,7 +41,7 @@ if(is.null(record_id_filter)){
 }
 
 prompt_sha <- digest(file=prompt_path,algo="sha256",serialize=FALSE)
-expected_prompt_sha <- "ce20acddf42e494a799d08b130d3e1bace95746035a7ad8e625fc8046a1bd07a"
+expected_prompt_sha <- "2ef4a9f2099878ae825395f3f09b329f219bfd3a185d3704a8662c52bcff70ed"
 if(!identical(prompt_sha,expected_prompt_sha)) stop("Locked geography prompt SHA mismatch",call.=FALSE)
 prompt <- paste(readLines(prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n")
 
