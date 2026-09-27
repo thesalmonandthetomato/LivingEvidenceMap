@@ -1,0 +1,88 @@
+name: Workflow 08 - correct final output partition
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow08/.run_correct_partition'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  correct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Parse correction scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_08_partition_final_outputs.R')
+          parse(file='scripts/updater/workflow_08_archive_to_zenodo.R')
+          cat('PASS: correction scripts parse\n')
+
+      - name: Restore validated post-adjudication Workflow 08 output
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/w08full
+          gh run download 36328298079 -n workflow08-final-36328298079 -D inputs/w08full
+          test -s inputs/w08full/workflow08/living_evidence_map_canonical_final.jsonl
+          test -s inputs/w08full/workflow08/workflow08_adjudication_ledger.jsonl
+          test -s inputs/w08full/workflow08/workflow08_final_manifest.json
+
+      - name: Partition included canonical and exclusions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow08_corrected
+          cp inputs/w08full/workflow08/workflow08_adjudication_ledger.jsonl outputs/workflow08_corrected/workflow08_adjudication_ledger.jsonl
+          Rscript scripts/updater/workflow_08_partition_final_outputs.R \
+            --assembled inputs/w08full/workflow08/living_evidence_map_canonical_final.jsonl \
+            --old-manifest inputs/w08full/workflow08/workflow08_final_manifest.json \
+            --canonical-output outputs/workflow08_corrected/living_evidence_map_canonical_final.jsonl \
+            --exclusions-output outputs/workflow08_corrected/workflow08_excluded_records.csv \
+            --manifest-output outputs/workflow08_corrected/workflow08_final_manifest.json
+
+      - name: Publish corrected Workflow 08 archive to Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow08_corrected_zenodo
+          Rscript scripts/updater/workflow_08_archive_to_zenodo.R \
+            --canonical outputs/workflow08_corrected/living_evidence_map_canonical_final.jsonl \
+            --exclusions outputs/workflow08_corrected/workflow08_excluded_records.csv \
+            --ledger outputs/workflow08_corrected/workflow08_adjudication_ledger.jsonl \
+            --manifest outputs/workflow08_corrected/workflow08_final_manifest.json \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow08_corrected_zenodo
+
+      - name: Upload corrected Workflow 08 artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow08-corrected-${{ github.run_id }}
+          path: |
+            outputs/workflow08_corrected/
+            outputs/workflow08_corrected_zenodo/
+          retention-days: 90
+          if-no-files-found: warn
