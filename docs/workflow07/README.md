@@ -1,67 +1,36 @@
-# Workflow 07 — topic coding
+# Workflow 07 - topic coding
 
-Workflow 07 assigns substantive topic pathways using three independent GPT-5.6 Luna passes and the frozen v3.6 ontology.
+Workflow 07 assigns substantive topic pathways using three independent GPT-5.6 Luna passes and the frozen v3.6 ontology, then performs topic-specific quality control before handoff to Workflow 08.
 
-## Production classifier
+The full methodological report is:
 
-Frozen scientific resources:
+`docs/reporting/workflow_07/workflow_07_functionality_map.md`
+
+Baseline-establishment and diagnostic actions are recorded separately in:
+
+`docs/reporting/workflow_07/AD_HOC_ACTIONS.md`
+
+## Frozen production resources
 
 - `data/reference/topic_ontology_v3_6.csv`
+- ontology SHA-256: `5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43`
 - `data/reference/topic_system_prompt_v3_6.txt`
-- `R/run_topic_three_luna_production.R`
+- prompt SHA-256: `f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0`
 
-They are copied from the validated historical three-Luna production state and must retain these SHA-256 values:
+Each record receives three independent Luna classifications. Raw pathway assignments are preserved with 1/3, 2/3 or 3/3 support.
 
-- ontology: `5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43`
-- prompt: `f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0`
+## Final QC
 
-Each record receives three independent Luna classifications. Every returned pathway is retained with:
+Before Workflow 08 handoff, Workflow 07:
 
-- 1/3 votes = ★
-- 2/3 votes = ★★
-- 3/3 votes = ★★★
+1. applies documented ontology fallback/general-code pruning only to the analytical layer;
+2. applies the complete-star-tier soft maximum of ten topics;
+3. re-screens zero-topic records specifically for salmon/rainbow-trout farming eligibility;
+4. retains consensus-eligible zero-topic records as included but uncoded;
+5. records consensus-ineligible zero-topic records as late automatic exclusions;
+6. sends unresolved zero-topic eligibility to Workflow 08;
+7. sends records with mean pairwise three-pass Jaccard <0.20 to Workflow 08.
 
-The individual pass roles and reasons are retained.
+For the current baseline, the zero-topic rescreen returned 217 include, 123 exclude and 18 uncertain from 358 zero-topic records. A further 103 records meet the extreme-disagreement rule, giving 121 W07 human-review records.
 
-## Input modes
-
-`.github/workflows/workflow_07_topic_coding.yml` supports two input modes.
-
-### `recall_uncoded`
-
-Bootstrap/current production mode. It restores the validated topic-recall audit and codes only records with no reusable historical three-Luna result.
-
-Current validated recall audit:
-
-- included corpus: 19,407 records
-- recalled historical three-Luna records: 12,297
-- fresh coding queue: 7,110
-
-After fresh coding, recalled and fresh pathway scores are merged and validated into one 19,407-record Workflow 07 handoff.
-
-### `workflow06_all`
-
-Normal full-handoff mode. Given an accepted Workflow 06 run ID, Workflow 07 restores the Workflow 06 geography production artefact, takes its canonical `record_id`, title and abstract fields, and submits the full Workflow 06 population for three-Luna topic coding.
-
-This mode is intended for future full reruns or when reuse is deliberately bypassed.
-
-## Recovery
-
-Topic calls use the OpenAI Batch API in 500-record chunks. Batch submission state and validated chunk output are stored as 90-day GitHub Actions artefacts. Re-running a failed matrix job first attempts to restore the same-run batch ID/output so completed or submitted model work is not duplicated.
-
-## Handoff
-
-The final artefact is named:
-
-`workflow07-topic-handoff-<run_id>`
-
-It contains the fresh three-pass production files plus:
-
-- `workflow07_topic_pathway_scores.csv`
-- `workflow07_topic_record_summary.csv`
-- `workflow07_zero_code_records.csv`
-- `workflow07_star_counts.csv`
-- `workflow07_final_summary.json`
-- `WORKFLOW07_HANDOFF_PASS.ok`
-
-Workflow 08 should consume the validated Workflow 07 handoff rather than transient per-chunk artefacts.
+Workflow 08 consumes the validated final W07 handoff. Raw W07 model outputs and the historical W04 screening decision remain preserved.
