@@ -121,6 +121,19 @@ evidence_is_grounded <- function(evidence,title,abstract){
   # harmless Unicode/whitespace/markup normalisation.
   if(grepl(e,txt,fixed=TRUE)) return(TRUE)
 
+  # Also tolerate compressed quotations where the evidence words occur
+  # in the source in the same order but intervening source words were omitted.
+  evidence_tokens <- strsplit(e, " ", fixed=TRUE)[[1L]]
+  source_tokens <- strsplit(txt, " ", fixed=TRUE)[[1L]]
+  evidence_tokens <- evidence_tokens[nzchar(evidence_tokens)]
+  if(length(evidence_tokens) >= 4L){
+    j <- 1L
+    for(tok in source_tokens){
+      if(j <= length(evidence_tokens) && identical(tok, evidence_tokens[[j]])) j <- j + 1L
+    }
+    if(j > length(evidence_tokens)) return(TRUE)
+  }
+
   # Tolerate model-inserted ellipses only when every non-trivial quoted
   # fragment is found in the source in the same order. This preserves
   # source grounding while relaxing the formatting requirement.
