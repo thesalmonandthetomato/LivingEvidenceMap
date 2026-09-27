@@ -298,6 +298,8 @@ jobs:
     needs: [prepare,classify]
     if: ${{ always() && needs.prepare.result == 'success' && needs.classify.result == 'success' }}
     runs-on: ubuntu-latest
+    outputs:
+      zero_count: ${{ steps.zero_input.outputs.zero_count }}
     timeout-minutes: 90
     env:
       INPUT_MODE: ${{ needs.prepare.outputs.input_mode }}
@@ -388,14 +390,168 @@ jobs:
           fi
           test -s outputs/workflow07_topic_final/WORKFLOW07_HANDOFF_PASS.ok
 
-      - name: Apply deterministic topic-retention and Workflow 08 review rules
+      - name: Build zero-topic targeted-rescreen input
+        id: zero_input
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow07_zero_topic_rescreen_input
+          ZERO=outputs/workflow07_topic_final/workflow07_zero_code_records.csv
+          test -s "$ZERO"
+          if [ "$INPUT_MODE" = "recall_uncoded" ]; then
+            REC=inputs/recall/current_topic_recall_status.csv
+            ZERO="$ZERO" REC="$REC" OUT=outputs/workflow07_zero_topic_rescreen_input/zero_topic_rescreen_input.csv Rscript -e '
+              library(readr)
+              z<-read_csv(Sys.getenv("ZERO"),show_col_types=FALSE)
+              r<-read_csv(Sys.getenv("REC"),show_col_types=FALSE)
+              stopifnot(all(c("current_record_id","title","abstract")%in%names(r)),!anyDuplicated(r$current_record_id))
+              x<-merge(z[,c("record_id")],r[,c("current_record_id","title","abstract")],by.x="record_id",by.y="current_record_id",all.x=TRUE,sort=FALSE)
+              stopifnot(nrow(x)==nrow(z),!anyDuplicated(x$record_id),!any(is.na(x$title)&is.na(x$abstract)))
+              write_csv(x,Sys.getenv("OUT"),na="")
+              cat(nrow(x))
+            ' > /tmp/zero_count
+          else
+            REC="$TOPIC_PROD_OUTPUT_DIR/input_queue.csv"
+            ZERO="$ZERO" REC="$REC" OUT=outputs/workflow07_zero_topic_rescreen_input/zero_topic_rescreen_input.csv Rscript -e '
+              library(readr)
+              z<-read_csv(Sys.getenv("ZERO"),show_col_types=FALSE)
+              r<-read_csv(Sys.getenv("REC"),show_col_types=FALSE)
+              stopifnot(all(c("record_id","title","abstract")%in%names(r)),!anyDuplicated(r$record_id))
+              x<-merge(z[,c("record_id")],r[,c("record_id","title","abstract")],by="record_id",all.x=TRUE,sort=FALSE)
+              stopifnot(nrow(x)==nrow(z),!anyDuplicated(x$record_id),!any(is.na(x$title)&is.na(x$abstract)))
+              write_csv(x,Sys.getenv("OUT"),na="")
+              cat(nrow(x))
+            ' > /tmp/zero_count
+          fi
+          ZERO_COUNT="$(cat /tmp/zero_count)"
+          echo "zero_count=$ZERO_COUNT" >> "$GITHUB_OUTPUT"
+          echo "Zero-topic records requiring targeted eligibility rescreen: $ZERO_COUNT"
+
+      - name: Upload pre-rescreen Workflow 07 state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-pre-rescreen-${{ github.run_id }}
+          path: |
+            outputs/workflow07_topic_v3_6_fresh/
+            outputs/workflow07_topic_final/
+            outputs/workflow07_zero_topic_rescreen_input/
+          retention-days: 90
+          if-no-files-found: error
+
+  zero_rescreen:
+    needs: merge
+    if: ${{ needs.merge.result == 'success' && needs.merge.outputs.zero_count != '0' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install rescreen dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite","readr","digest"))
+
+      - name: Restore pre-rescreen state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow07-pre-rescreen-${{ github.run_id }}
+          path: restored
+
+      - name: Run targeted zero-topic eligibility rescreen
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow07_zero_topic_targeted_rescreen.R \
+            --input restored/outputs/workflow07_zero_topic_rescreen_input/zero_topic_rescreen_input.csv \
+            --output-dir outputs/workflow07_zero_topic_rescreen/shard-${{ matrix.shard }} \
+            --model gpt-5.6-luna \
+            --shard-index ${{ matrix.shard }} \
+            --shard-count 4 \
+            --checkpoint-every 10
+
+      - name: Upload rescreen shard state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-zero-topic-rescreen-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: outputs/workflow07_zero_topic_rescreen/shard-${{ matrix.shard }}/
+          retention-days: 90
+          if-no-files-found: warn
+          overwrite: true
+
+  finalise:
+    needs: [merge,zero_rescreen]
+    if: ${{ always() && needs.merge.result == 'success' && (needs.zero_rescreen.result == 'success' || needs.zero_rescreen.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install finalisation dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","readr"))
+
+      - name: Restore pre-rescreen Workflow 07 state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow07-pre-rescreen-${{ github.run_id }}
+          path: restored
+
+      - name: Restore and merge zero-topic rescreen
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZERO_COUNT: ${{ needs.merge.outputs.zero_count }}
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow07_zero_topic_rescreen_merged
+          if [ "$ZERO_COUNT" = "0" ]; then
+            : > outputs/workflow07_zero_topic_rescreen_merged/workflow07_zero_topic_targeted_rescreen.jsonl
+            echo '{"records":0,"include":0,"exclude":0,"uncertain":0,"human_review_candidates":0}' > outputs/workflow07_zero_topic_rescreen_merged/summary.json
+            echo PASS > outputs/workflow07_zero_topic_rescreen_merged/PASS.ok
+          else
+            rm -rf inputs/rescreen_shards
+            mkdir -p inputs/rescreen_shards
+            gh run download "$GITHUB_RUN_ID" \
+              --pattern "workflow07-zero-topic-rescreen-shard-*-$GITHUB_RUN_ID" \
+              -D inputs/rescreen_shards
+            Rscript scripts/reporting/workflow07_zero_topic_targeted_rescreen_merge.R \
+              --input-root inputs/rescreen_shards \
+              --output-dir outputs/workflow07_zero_topic_rescreen_merged \
+              --expected-shards 4 \
+              --expected-records "$ZERO_COUNT"
+            test -s outputs/workflow07_zero_topic_rescreen_merged/PASS.ok
+          fi
+
+      - name: Apply final topic-retention and Workflow 08 review rules
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/reporting/workflow07_apply_retention_and_review_rules.R \
-            --scores outputs/workflow07_topic_final/workflow07_topic_pathway_scores.csv \
-            --records outputs/workflow07_topic_final/workflow07_topic_record_summary.csv \
-            --ontology "$TOPIC_ONTOLOGY_PATH" \
+            --scores restored/outputs/workflow07_topic_final/workflow07_topic_pathway_scores.csv \
+            --records restored/outputs/workflow07_topic_final/workflow07_topic_record_summary.csv \
+            --ontology data/reference/topic_ontology_v3_6.csv \
+            --zero-rescreen outputs/workflow07_zero_topic_rescreen_merged/workflow07_zero_topic_targeted_rescreen.jsonl \
             --output-dir outputs/workflow07_topic_final_qc
           test -s outputs/workflow07_topic_final_qc/WORKFLOW07_QC_PASS.ok
 
@@ -404,18 +560,9 @@ jobs:
         with:
           name: workflow07-topic-handoff-${{ github.run_id }}
           path: |
-            outputs/workflow07_topic_v3_6_fresh/input_queue.csv
-            outputs/workflow07_topic_v3_6_fresh/workflow07_input_source.json
-            outputs/workflow07_topic_v3_6_fresh/production_manifest.json
-            outputs/workflow07_topic_v3_6_fresh/all_pass_assignments.csv
-            outputs/workflow07_topic_v3_6_fresh/all_pass_record_results.csv
-            outputs/workflow07_topic_v3_6_fresh/all_pass_usage.csv
-            outputs/workflow07_topic_v3_6_fresh/three_luna_pathway_scores.csv
-            outputs/workflow07_topic_v3_6_fresh/combine_summary.json
-            outputs/workflow07_topic_v3_6_fresh/audit_review_flags.csv
-            outputs/workflow07_topic_v3_6_fresh/audit_summary.json
-            outputs/workflow07_topic_v3_6_fresh/AUDIT_PASS.ok
-            outputs/workflow07_topic_final/
+            restored/outputs/workflow07_topic_v3_6_fresh/
+            restored/outputs/workflow07_topic_final/
+            outputs/workflow07_zero_topic_rescreen_merged/
             outputs/workflow07_topic_final_qc/
           retention-days: 90
           if-no-files-found: error
