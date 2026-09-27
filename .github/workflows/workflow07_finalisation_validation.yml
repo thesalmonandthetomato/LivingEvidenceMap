@@ -1,0 +1,84 @@
+name: Workflow 07 - finalisation validation
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow07/.run_finalisation_validation'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","readr"))
+
+      - name: Parse final Workflow 07 scripts
+        shell: Rscript {0}
+        run: |
+          parse(file="scripts/reporting/workflow07_apply_retention_and_review_rules.R")
+          parse(file="scripts/reporting/workflow07_zero_topic_targeted_rescreen.R")
+          parse(file="scripts/reporting/workflow07_zero_topic_targeted_rescreen_merge.R")
+          cat("PASS: Workflow 07 finalisation scripts parse\n")
+
+      - name: Restore validated production artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/handoff inputs/rescreen
+          gh run download 36264955447 -n workflow07-topic-handoff-36264955447 -D inputs/handoff
+          gh run download 36304758204 -n workflow07-zero-topic-targeted-rescreen-36304758204 -D inputs/rescreen
+          test -s inputs/handoff/workflow07_topic_final/workflow07_topic_pathway_scores.csv
+          test -s inputs/handoff/workflow07_topic_final/workflow07_topic_record_summary.csv
+          test -s inputs/rescreen/workflow07_zero_topic_targeted_rescreen.jsonl
+
+      - name: Validate final retention and review routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow07_apply_retention_and_review_rules.R \
+            --scores inputs/handoff/workflow07_topic_final/workflow07_topic_pathway_scores.csv \
+            --records inputs/handoff/workflow07_topic_final/workflow07_topic_record_summary.csv \
+            --ontology data/reference/topic_ontology_v3_6.csv \
+            --zero-rescreen inputs/rescreen/workflow07_zero_topic_targeted_rescreen.jsonl \
+            --output-dir outputs/workflow07_finalisation_validation
+          Rscript -e '
+            library(jsonlite)
+            x<-fromJSON("outputs/workflow07_finalisation_validation/workflow07_qc_summary.json")
+            stopifnot(
+              x$records==19407L,
+              x$zero_topic_records==358L,
+              x$zero_topic_rescreen_include==217L,
+              x$zero_topic_rescreen_exclude==123L,
+              x$zero_topic_rescreen_uncertain==18L,
+              x$included_uncoded_records==217L,
+              x$late_automatic_exclusions==123L,
+              x$extreme_disagreement_records==103L,
+              x$immediate_human_adjudication_records==121L
+            )
+            cat("PASS: validated Workflow 07 final counts\n")
+          '
+          test -s outputs/workflow07_finalisation_validation/WORKFLOW07_QC_PASS.ok
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-finalisation-validation-${{ github.run_id }}
+          path: outputs/workflow07_finalisation_validation/
+          retention-days: 90
+          if-no-files-found: error
