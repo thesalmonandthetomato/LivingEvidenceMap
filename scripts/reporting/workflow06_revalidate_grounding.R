@@ -39,6 +39,16 @@ ground_one <- function(evidence,title,abstract){
   txt <- normalise_grounding_text(paste(title,abstract,sep=" "))
   e <- normalise_grounding_text(e_raw)
   if(grepl(e,txt,fixed=TRUE)) return(list(valid=TRUE,method="normalised_contiguous"))
+  evidence_tokens <- strsplit(e, " ", fixed=TRUE)[[1L]]
+  source_tokens <- strsplit(txt, " ", fixed=TRUE)[[1L]]
+  evidence_tokens <- evidence_tokens[nzchar(evidence_tokens)]
+  if(length(evidence_tokens) >= 4L){
+    j <- 1L
+    for(tok in source_tokens){
+      if(j <= length(evidence_tokens) && identical(tok,evidence_tokens[[j]])) j <- j + 1L
+    }
+    if(j > length(evidence_tokens)) return(list(valid=TRUE,method="ordered_compressed_tokens"))
+  }
   raw <- gsub("\u2026","...",e_raw,fixed=TRUE)
   if(!grepl("...",raw,fixed=TRUE)) return(list(valid=FALSE,method="not_found"))
   parts <- strsplit(raw,"...",fixed=TRUE)[[1L]]
