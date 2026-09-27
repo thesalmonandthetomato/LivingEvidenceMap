@@ -15,15 +15,18 @@ arg <- function(flag, default=NULL) {
 scores_path <- arg("--scores")
 records_path <- arg("--records")
 ontology_path <- arg("--ontology")
+zero_rescreen_path <- arg("--zero-rescreen")
 output_dir <- arg("--output-dir","outputs/workflow07_topic_final_qc")
-if(any(vapply(list(scores_path,records_path,ontology_path),is.null,logical(1)))) {
-  stop("Required: --scores --records --ontology",call.=FALSE)
+if(any(vapply(list(scores_path,records_path,ontology_path,zero_rescreen_path),is.null,logical(1)))) {
+  stop("Required: --scores --records --ontology --zero-rescreen",call.=FALSE)
 }
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
 S <- read_csv(scores_path,show_col_types=FALSE,progress=FALSE)
 R <- read_csv(records_path,show_col_types=FALSE,progress=FALSE)
 O <- read_csv(ontology_path,show_col_types=FALSE,progress=FALSE)
+read_jsonl <- function(path){x<-readLines(path,warn=FALSE,encoding="UTF-8");x<-x[nzchar(trimws(x))];lapply(x,jsonlite::fromJSON,simplifyVector=FALSE)}
+ZR <- read_jsonl(zero_rescreen_path)
 
 req_s <- c("record_id","path_id","confidence_n","role_a","role_b","role_c")
 req_r <- c("record_id")
@@ -35,10 +38,17 @@ if(anyDuplicated(R$record_id)) stop("Duplicate record_id in record summary")
 if(anyDuplicated(paste(S$record_id,S$path_id,sep="\r"))) stop("Duplicate record_id/path_id in scores")
 if(any(!S$path_id %in% O$path_id)) stop("Unknown path_id in scores")
 if(any(!S$confidence_n %in% 1:3)) stop("Invalid confidence_n in scores")
+zero_ids <- setdiff(as.character(R$record_id),unique(as.character(S$record_id)))
+zr_ids <- vapply(ZR,function(x)as.character(x$record_id %||% ""),character(1))
+if(any(!nzchar(zr_ids))||anyDuplicated(zr_ids)) stop("Invalid zero-topic rescreen IDs")
+if(!setequal(zero_ids,zr_ids)) stop("Zero-topic rescreen coverage does not match zero-topic records")
+zr_dec <- setNames(vapply(ZR,function(x)as.character(x$decision %||% ""),character(1)),zr_ids)
+if(any(!zr_dec %in% c("include","exclude","uncertain"))) stop("Invalid zero-topic rescreen decision")
 
 Omap <- O[match(S$path_id,O$path_id),c("path_id","level_1","level_2","hierarchy_path")]
 stopifnot(all(Omap$path_id==S$path_id))
 
+`%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x
 present <- function(x) !is.na(x) & nzchar(trimws(as.character(x)))
 
 # Explicit ontology-v3.6 fallback/supersession rules only.
@@ -64,11 +74,17 @@ for(i in seq_len(nrow(R))) {
   idx <- which(S$record_id==rid)
   raw_n <- length(idx)
   if(raw_n==0L) {
+    zd <- unname(zr_dec[[rid]])
+    route <- if(zd=="uncertain") "human_adjudication" else "none"
+    screening_action <- if(zd=="exclude") "late_automatic_exclude" else if(zd=="include") "retain_included_uncoded" else "human_review"
     record_rows[[i]] <- data.frame(
       record_id=rid,topic_count_raw=0L,topic_count_after_general_pruning=0L,
       topic_count_retained=0L,mean_pairwise_jaccard=NA_real_,
       extreme_disagreement=FALSE,zero_topic=TRUE,high_topic_raw=FALSE,
-      ontology_pathology=FALSE,workflow08_route="automated_zero_topic_adjudication",
+      ontology_pathology=FALSE,zero_topic_rescreen_decision=zd,
+      screening_action=screening_action,
+      workflow08_reason=if(zd=="uncertain") "zero_topic_eligibility_uncertain" else "",
+      workflow08_route=route,
       stringsAsFactors=FALSE)
     next
   }
@@ -120,13 +136,16 @@ for(i in seq_len(nrow(R))) {
   extreme <- is.finite(mean_j) && mean_j < 0.20
 
   route <- if(pathology || extreme) "human_adjudication" else "none"
+  reason <- if(pathology) "ontology_pathology" else if(extreme) "extreme_three_pass_topic_disagreement" else ""
   record_rows[[i]] <- data.frame(
     record_id=rid,topic_count_raw=raw_n,
     topic_count_after_general_pruning=length(kept_idx),
     topic_count_retained=length(retain_idx),
     mean_pairwise_jaccard=mean_j,
     extreme_disagreement=extreme,zero_topic=FALSE,high_topic_raw=raw_n>10L,
-    ontology_pathology=pathology,workflow08_route=route,
+    ontology_pathology=pathology,zero_topic_rescreen_decision="",
+    screening_action="retain",
+    workflow08_reason=reason,workflow08_route=route,
     stringsAsFactors=FALSE)
 }
 Q <- do.call(rbind,record_rows)
@@ -144,13 +163,17 @@ if(any(Q$topic_count_retained > 10L & !(Q$topic_count_retained==vapply(Q$record_
 }
 
 human <- Q[Q$workflow08_route=="human_adjudication",,drop=FALSE]
-zero <- Q[Q$workflow08_route=="automated_zero_topic_adjudication",,drop=FALSE]
+zero <- Q[Q$zero_topic,,drop=FALSE]
+late_exclude <- Q[Q$screening_action=="late_automatic_exclude",,drop=FALSE]
+included_uncoded <- Q[Q$screening_action=="retain_included_uncoded",,drop=FALSE]
 high <- Q[Q$high_topic_raw,,drop=FALSE]
 
 write_csv(S,file.path(output_dir,"workflow07_topic_pathway_scores_retained.csv"),na="")
 write_csv(Q,file.path(output_dir,"workflow07_topic_record_qc.csv"),na="")
 write_csv(human,file.path(output_dir,"workflow07_workflow08_human_review_queue.csv"),na="")
-write_csv(zero,file.path(output_dir,"workflow07_zero_topic_adjudication_queue.csv"),na="")
+write_csv(zero,file.path(output_dir,"workflow07_zero_topic_rescreen_results.csv"),na="")
+write_csv(late_exclude,file.path(output_dir,"workflow07_late_automatic_exclusions.csv"),na="")
+write_csv(included_uncoded,file.path(output_dir,"workflow07_included_uncoded.csv"),na="")
 write_csv(high,file.path(output_dir,"workflow07_high_topic_automated_qc.csv"),na="")
 
 summary <- list(
@@ -159,12 +182,17 @@ summary <- list(
   raw_topic_assignments=nrow(S),
   retained_topic_assignments=sum(S$retained_for_analysis),
   zero_topic_records=nrow(zero),
+  zero_topic_rescreen_include=sum(zero$zero_topic_rescreen_decision=="include"),
+  zero_topic_rescreen_exclude=sum(zero$zero_topic_rescreen_decision=="exclude"),
+  zero_topic_rescreen_uncertain=sum(zero$zero_topic_rescreen_decision=="uncertain"),
+  included_uncoded_records=nrow(included_uncoded),
+  late_automatic_exclusions=nrow(late_exclude),
   high_topic_raw_records=nrow(high),
   extreme_disagreement_threshold_mean_pairwise_jaccard=0.20,
   extreme_disagreement_records=sum(Q$extreme_disagreement),
   ontology_pathology_records=sum(Q$ontology_pathology),
   immediate_human_adjudication_records=nrow(human),
-  zero_topic_route="targeted automated adjudication first; only residual uncertainty or identified miscoding proceeds to human adjudication",
+  zero_topic_route="targeted eligibility rescreen: include -> retain included-but-uncoded; exclude -> late automatic exclusion; uncertain -> Workflow 08 human adjudication",
   high_topic_rule="prune documented general/fallback codes; retain complete star tiers up to 10; if highest tier itself exceeds 10 retain the full tied tier",
   condition4_definition="residual ontology-semantic incompatibility after deterministic ontology-v3.6 fallback/supersession rules",
   created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
