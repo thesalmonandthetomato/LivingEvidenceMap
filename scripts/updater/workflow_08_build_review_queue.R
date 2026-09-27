@@ -33,7 +33,9 @@ if(any(vapply(req_files,function(x)is.null(x)||!file.exists(x),logical(1)))) {
 }
 dir.create(out_dir,recursive=TRUE,showWarnings=FALSE)
 
-`%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x\n\nclean_chr <- function(x) {
+`%||%` <- function(x,y) if(is.null(x)||length(x)==0) y else x
+
+clean_chr <- function(x) {
   x <- as.character(x)
   x[is.na(x)] <- ""
   x
