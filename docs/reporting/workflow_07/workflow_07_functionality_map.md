@@ -424,5 +424,5 @@ Workflow 07 is considered complete and validated when:
 - final routing counts and identity invariants pass the finalisation validator; and
 - expensive completed model outputs can be reused without rerunning classification.
 
-The current production topic coding and zero-topic rescreen satisfy the substantive baseline conditions. The integrated final-routing implementation is validated separately against the preserved production artifacts before being treated as the locked Workflow 07 handoff.
+These conditions are satisfied for the current baseline. The integrated final-routing implementation was validated against the preserved production topic handoff and zero-topic rescreen in GitHub Actions run **36305907080**. The validator confirmed 19,407 records, 358 zero-topic records, 217 included-but-uncoded records, 123 late automatic exclusions, 18 zero-topic eligibility-uncertain records, 103 extreme-disagreement records, and **121 total Workflow 07 human-adjudication records**.\n\n**Workflow 07 status: complete, validated and ready for Workflow 08 consumption.**
 
