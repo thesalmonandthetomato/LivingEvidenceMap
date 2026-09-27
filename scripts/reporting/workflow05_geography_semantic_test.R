@@ -17,7 +17,7 @@ arg <- function(flag, default=NULL){
 
 records_path <- arg("--records")
 det_path <- arg("--deterministic")
-prompt_path <- arg("--prompt","config/workflow05_geography_semantic_prompt.txt")
+prompt_path <- arg("--prompt","config/workflow06_geography_semantic_prompt_v2.txt")
 out_dir <- arg("--output-dir","outputs/workflow05_geography_semantic_test")
 sample_size <- as.integer(arg("--sample-size","200"))
 sample_seed <- as.integer(arg("--sample-seed","20260926"))
