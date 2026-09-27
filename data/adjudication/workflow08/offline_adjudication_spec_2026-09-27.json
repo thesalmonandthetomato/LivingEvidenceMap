@@ -1,0 +1,139 @@
+{
+  "schema": "living-evidence-map-workflow08-offline-adjudication-spec-v1",
+  "reviewed_by": "Neal Haddaway",
+  "review_date": "2026-09-27",
+  "source_workbook": "Workflow08_offline_human_review(1).xlsx",
+  "source_workbook_sha256": "00e396231ba72f1369e9c763b5e19945a3c3fc8b3fb1a6ccaac8d045d77fbf85",
+  "locked_queue_sha256": "a8f3203c7cfc252dc53d08cd850cbbb5c3c48b8270cebe8a87eedb1af41e5c16",
+  "expected_offline_decisions": 754,
+  "sheets": {
+    "geography_unresolved": {
+      "expected_rows": 466,
+      "default": {
+        "decision": "assign_none",
+        "final_value": {
+          "geography_status": "NONE",
+          "iso3c": [],
+          "country_names": []
+        }
+      },
+      "overrides": {
+        "work-073d70fc96824a29": {
+          "decision": "assign_country_set",
+          "final_value": {
+            "geography_status": "RESOLVED",
+            "iso3c": [
+              "CAN"
+            ],
+            "country_names": [
+              "Canada"
+            ]
+          }
+        }
+      }
+    },
+    "species_none": {
+      "expected_rows": 168,
+      "default": {
+        "decision": "exclude_record",
+        "final_value": {
+          "included": false
+        }
+      },
+      "overrides": {
+        "work-375b1e694f49bf57": {
+          "decision": "assign_named_species",
+          "final_value": {
+            "included": true,
+            "farmed_species": [
+              "Rainbow trout"
+            ]
+          }
+        },
+        "work-6d34f401a2b94d2a": {
+          "decision": "assign_named_species",
+          "final_value": {
+            "included": true,
+            "farmed_species": [
+              "Rainbow trout"
+            ]
+          }
+        },
+        "work-e4eec0545aa718ea": {
+          "decision": "assign_named_species",
+          "final_value": {
+            "included": true,
+            "farmed_species": [
+              "Rainbow trout"
+            ]
+          }
+        }
+      }
+    },
+    "topic_extreme_disagreement": {
+      "expected_rows": 102,
+      "default": {
+        "decision": "accept_retained_topics"
+      },
+      "overrides": {
+        "work-074ff4990cbd6a98": {
+          "decision": "replace_topic_set",
+          "final_value": {
+            "included": true,
+            "path_ids": [
+              "V3_036"
+            ]
+          }
+        },
+        "work-63ef1a96d3f3eaa9": {
+          "decision": "replace_topic_set",
+          "final_value": {
+            "included": true,
+            "path_ids": [
+              "V3_124"
+            ]
+          }
+        },
+        "work-7bebfc301cc38f1c": {
+          "decision": "no_code",
+          "final_value": {
+            "included": true,
+            "path_ids": []
+          }
+        },
+        "work-9f2ef9d3b9dcb66d": {
+          "decision": "no_code",
+          "final_value": {
+            "included": true,
+            "path_ids": []
+          }
+        }
+      }
+    },
+    "zero_topic_eligibility_uncertain": {
+      "expected_rows": 18,
+      "default": {
+        "decision": "include_uncoded",
+        "final_value": {
+          "included": true,
+          "path_ids": []
+        }
+      },
+      "overrides": {
+        "work-2dc4c2ce64f28c12": {
+          "decision": "exclude_record",
+          "final_value": {
+            "included": false
+          }
+        },
+        "work-dda9431a3253ed96": {
+          "decision": "exclude_record",
+          "final_value": {
+            "included": false
+          }
+        }
+      }
+    }
+  },
+  "note": "This compact specification exactly represents the completed offline workbook. Defaults apply only to the locked queue rows for the corresponding issue type; overrides are explicit record-specific decisions. The final W08 assembly must expand this spec, merge prior in-chat decisions, and fail unless all locked queue issues are resolved exactly once."
+}
