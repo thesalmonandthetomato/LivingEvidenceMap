@@ -122,6 +122,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin workflow01-final-architecture
           Rscript scripts/updater/workflow_08_write_report.R \
             --manifest outputs/workflow08/workflow08_final_manifest.json \
             --receipt outputs/workflow08_zenodo/zenodo_receipt.json \
@@ -133,9 +136,6 @@ jobs:
             echo 'source_run_id,zenodo_record_id,doi,canonical_sha256,published_at_utc' > docs/workflow08/zenodo_registry.csv
           fi
           Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow08_zenodo/zenodo_receipt.json"); cat(sprintf("%s,%s,%s,%s,%s\n",x$source_github_run_id,x$zenodo_record_id,x$doi,x$final_canonical_jsonl_sha256,x$published_at_utc),file="docs/workflow08/zenodo_registry.csv",append=TRUE)'
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git pull --rebase origin workflow01-final-architecture
           git add docs/reporting/workflow_08/workflow_08_functionality_map.md docs/workflow08/zenodo_registry.csv "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
           git commit -m "Document completed Workflow 08 run $GITHUB_RUN_ID [skip ci]"
           git push origin HEAD:workflow01-final-architecture
