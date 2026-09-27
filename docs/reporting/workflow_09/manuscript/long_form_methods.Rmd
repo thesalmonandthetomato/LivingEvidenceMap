@@ -1,0 +1,196 @@
+---
+title: "The status of academic research on salmon farming: a living evidence map"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+  word_document:
+    toc: false
+bibliography: references.bib
+link-citations: true
+reference-section-title: References
+---
+
+# Objectives and review question
+
+This evidence map has the following primary question:
+
+What is the nature of academic research on the topic of salmon aquaculture?
+
+Our secondary questions are:
+
+- How is research effort distributed across different subfields?
+- Where is the research focused globally?
+- How is research distributed among focal farmed salmon species?
+- How has the thematic composition of the evidence base changed over time?
+The evidence map has a global scope and includes research on the farming of Atlantic salmon and eligible Pacific salmonids, including rainbow trout. Outcomes are unrestricted and may include direct and indirect biological, ecological, environmental, economic, technological, governance, social, cultural, welfare and public-health outcomes.
+
+# Methods
+
+The methods for this living evidence map are informed by the Collaboration for Environmental Evidence Guidelines for systematic reviews and maps [@pullin2023collaboration] and by established systematic mapping methodology. The original review followed methods set out in an a priori protocol [@haddaway2024status] and has been documented in line with the ROSES reporting standards for systematic maps [@haddaway2018roses]. The living evidence map extends that protocol through repeated bibliographic updates, reproducible record reconciliation, deterministic annotation, model-assisted screening and classification, and structured human review.
+
+## Deviations from the protocol
+
+The principal deviations from the original protocol and subsequent methodological developments were:
+
+- Inclusion of all eligible Oncorhynchus mykiss aquaculture research, including freshwater rainbow trout. Differentiating between freshwater and marine populations proved unfeasible at title and abstract.
+- Expansion from the original Lens search to a multi-database search architecture.
+- We combined manual title-and-abstract screening of a substantial proportion of the original search corpus, rather than using machine-learning prioritisation. After the database list was expanded, large language models were used to screen all records, after a demonstrated extremely high rate of agreement with 20,000 manual decisions.
+- We made use of additional bibliographic sources to repair and enrich incomplete records before screening and annotation/coding.
+- We developed automated and human-in-the-loop procedures for the screening of subsequent living-map updates, performed at fortnightly intervals.
+- We used a combination of deterministic rules for farmed species annotation, and human-validated large language models for geography and topic coding.
+- Following manual screening, we developed a human-designed, three-level topic ontology to support topic classification of the corpus.
+- We have published versioned outputs, full workflow documentation, and an interactive evidence-map dashboard.
+
+## Search strategy
+
+The search strategy combined terms describing eligible salmon species with terms identifying aquaculture, farming and commercial production. The original search was developed and tested in The Lens bibliographic database. Original searches were performed on September 22nd 2026, with an initial screening of a validation set performed on 11th November 2024 in The Lens. The searches ultimately applied across all databases are provided in Additional File 1.
+
+Table 1. Search strategy and representative hits in The Lens
+
+| Substring number | Substring | Hits in Lens 27/09/26 |
+| --- | --- | --- |
+| #1 | ((title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) | 4,664,409 |
+| #2 | ((title:(salmon OR Salmo OR Oncorhynchus)) OR (abstract:(salmon OR Salmo OR Oncorhynchus)) OR (keyword:(salmon OR Salmo OR Oncorhynchus))) | 158,889 |
+| #3 | #1 AND #2 | 24,343 |
+| #4 | #3 filtered > excl. dataset, excl. report, excl. libguide, excl. news | 23,852 |
+
+The living evidence map was subsequently expanded to retrieve bibliographic records independently from the following databases, all accessed via their APIs:
+
+- The Lens (filtered to exclude datasets, reports, libguides, news)
+- OpenAlex
+- Scopus
+- Web of Science Core Collection (Science Citation Index Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation Index (SSCI) 1981-present, Social Sciences Citation Index (SSCI) 1981-present, Arts & Humanities Citation Index, (AHCI) 2017-present, Arts & Humanities Citation Index (AHCI) 2017-present, Emerging Sources Citation Index (ESCI) 2005-present, Emerging Sources Citation Index (ESCI) 2005-present)
+- AGRICOLA (via Europe PMC)
+Database-specific implementations were derived from the same underlying conceptual search and adapted to the syntax and indexing of each source. Search strings are stored as version-controlled user inputs in the project repository.
+
+### Searches for grey literature
+
+The review focuses on academic literature. Grey literature was eligible where it formed part of the academic record, including preprints, theses, books and book chapters.
+
+### Comprehensiveness of the search
+
+During development of the original protocol, a benchmark list of 17 articles of known relevance was assembled to test the functionality of the search. The search was considered adequate when all benchmark records indexed within the database could be retrieved. Where a benchmark record was missed, the search terms and indexed terminology were examined and revised where necessary. See the protocol for further details [@haddaway2024status].
+
+### Search update
+
+The evidence map has been converted into a living resource in September 2026. Search updates are ingested fortnightly through a reproducible multi-source workflow in which each bibliographic source is harvested separately, and source provenance is retained. Records newly retrieved in an update are standardised, repaired where possible, reconciled against the existing canonical corpus and passed through the same screening and annotation framework used for the living map. This report is based on searches performed on 22nd September 2026.
+
+## Reference library repair
+
+Incomplete bibliographic records, i.e. records lacking abstracts or complete titles, were repaired before subsequent screening and annotation where reliable information could be recovered. Bibliographic sources were queried using persistent identifiers. Europe PMC and Scopus were also used to recover missing titles and abstracts.
+
+Repair was provenance-preserving: the original source manifestation was retained, and information obtained from another source was treated as enrichment rather than evidence that the record originated from that database. Bibliographic data were used to ensure complete DOI matching to avoid incorrect enrichment. Records for which a reliable abstract could not be recovered were not automatically excluded.
+
+## Record reconciliation and deduplication
+
+Records retrieved from the different bibliographic sources were converted to a common structure and reconciled into a single canonical corpus. Multiple database records describing the same underlying publication were treated as manifestations of one unique record, with the contributing source database versions retained as provenance.
+
+Deduplication combined persistent identifiers with bibliographic comparison. Shared DOIs were informative but were not treated as sufficient evidence in isolation where other metadata conflicted. Records without shared identifiers could also be linked using combinations of title, authorship, year and other bibliographic fields. Potential duplicate relationships that could not be resolved deterministically were placed into an adjudication set for human review.
+
+Prior to deduplication, comparison fields were converted to a universal format for comparison (normalisation) using field-specific rules, including Unicode-aware title normalisation, conservative DOI normalization, and sequence-preserving abstract normalisation. Candidate pairs were generated from multiple bibliographic blocks, including combinations of author, year, title, journal, volume and pages, as well as exact normalised DOI, exact title, exact abstract and high-containment abstract signatures. Pairs were only merged automatically when they met predefined high-specificity rules based on exact or very strong agreement across multiple fields; fuzzy (i.e. partially matched) title or abstract evidence was not allowed to override material bibliographic contradictions, and borderline cases were sent for immediate human review. Accepted duplicate links were clustered. All source manifestations were retained as provenance for source traceability, and a single representative record was selected for downstream processing using the highest level of meta-data completeness and identifier quality.
+
+## Retraction and withdrawal sweeping
+
+Prior to screening, the deduplicated search results were swept for retractions and withdrawal notices. This data was sought from 2 sources: 1) within the record titles using deterministic rules; and, 2) via a search of the entire set of records based on DOI lookup using the OpenAlex API and assessment of retraction data. Retractions and withdrawals were recorded and excluded from further analysis. Other notices, e.g. corrections, not warranting exclusion were recorded within the dataset.
+
+## Screening strategy
+
+The validation search conducted in November 2024 produced 19,457 potentially relevant bibliographic records. These records were screened manually at title and abstract level against the eligibility criteria below. This manual screening formed the foundational evidence base for the living evidence map and resulted in 12,074 records being retained for the original corpus.
+
+The subsequent search updates were screened using an automated, human-in-the-loop procedure. The screening model was provided with the title, abstract where available, and the explicit inclusion and exclusion criteria. Records that could be resolved confidently were processed automatically, while uncertain decisions, model disagreements and predefined exception classes were retained for human review. A missing abstract did not by itself constitute an exclusion: where the title alone provided sufficient evidence for a defensible decision, the record could be screened on title information. Details of the models are provided below.
+
+### Eligibility criteria
+
+We used the following inclusion criteria separated by core components for assessing the eligibility of included studies.
+
+Table 2. Inclusion criteria for the review
+
+| Criterion | Inclusion |
+| --- | --- |
+| Population | Global scope. |
+| Phenomenon | Salmonid farming for the purpose of raising captive fish for production, including sea-based open-pen systems, land-based systems, recirculating aquaculture systems, flow-through systems and other commercial or experimental aquaculture systems. Population-enhancement hatcheries and ranching are excluded unless an explicit aquaculture-production context is present. |
+| Phase | From research and development through feed production, hatchery and smolt production, grow-out, harvesting, processing and human consumption. Direct and indirect impacts and supply-chain effects are eligible. |
+| Species | Atlantic salmon (Salmo salar); Chinook salmon (Oncorhynchus tshawytscha); coho salmon (O. kisutch); pink salmon (O. gorbuscha); sockeye salmon (O. nerka); masu salmon (O. masou); chum salmon (O. keta); and rainbow trout (O. mykiss). Records explicitly concerning farmed salmonids but lacking sufficient information for species-level assignment may be retained as unspecified species. |
+| Outcomes | Any measured or analysed outcome, including biological, ecological, environmental, economic, technological, governance, social, cultural, welfare and public-health outcomes. |
+| Study type | Academic research records meeting the substantive eligibility criteria. Eligible publication forms may include journal articles, reviews, conference material, books, book chapters, theses and preprints. Non-research and bibliographic artefacts are excluded. |
+
+### Notable exclusions
+
+- Hatchery studies were excluded where it was not clear that fish were being reared for aquaculture rather than for population enhancement, stocking or ranching.
+- Feed, disease, genetics or other studies with potential relevance to aquaculture were excluded where the title or abstract did not establish an explicit farming or aquaculture context.
+- Records referring only to 'salmonids' were not assumed to concern eligible farmed species in the absence of sufficient supporting information.
+- Temporary caging of fish for experimental monitoring or exposure studies was excluded unless the cages formed part of an aquaculture facility or the study was explicitly framed as directly relevant to aquaculture.
+- Peer-review reports, reviewer or editor responses, supplementary files, data sheets, library guides and analogous publication artefacts were excluded from the canonical evidence map.
+
+### Manual screening and validation
+
+Manual screening was a major component of the development of the evidence map. A set of 19,457 records from the original search in November 2024 were screened manually at title and abstract level. The resulting manually screened corpus provided a large body of human decisions against which later automated screening and annotation procedures could be developed, validated and refined.
+
+Before screening the full original set, however, a subset of 150 records was screened independently by two reviewers (NRH and MG). Fifteen disagreements were identified (10%), corresponding to a Cohen's kappa of 0.794. Disagreements were discussed, and the interpretation of the eligibility criteria was clarified before the remaining records were screened by one reviewer (NRH).
+
+Later automated stages were also subjected to manual validation. Review sets were used to assess uncertain screening decisions and ambiguous or conflicting species, geography and topic assignments. Where validation revealed a recurrent class of LLM error, the underlying rule, dictionary, prompt or ontology was revised where appropriate rather than correcting only the individual record. Human review therefore served both as case-level adjudication and as pipeline-level quality assurance.
+
+### Large Language Model Screening
+
+Automated relevance screening used GPT-5.6 Luna under a fixed, version-controlled eligibility prompt. Every record remaining after publication-status filtering was screened twice independently using the same bibliographic input, including titles and abstracts. Each pass returned one of three structured decisions: retain, exclude or uncertain, together with a concise justification grounded in the supplied record. The two model calls were independent: neither pass was given the decision or reasoning from the other.
+
+A third independent Luna pass was triggered only when the first two passes disagreed, when either pass returned uncertain, or when a technical failure occurred. Only substantive retain and exclude votes were counted towards consensus. A final automated decision required at least two matching substantive votes, giving either a two-of-two or two-of-three consensus; records without two matching substantive votes were retained for human adjudication rather than forced into an automated decision. In the validated baseline, the first two Luna passes agreed exactly for 96.31% of 32,283 screened records (Cohen's kappa = 0.925), and for 98.32% of records where both passes made substantive retain/exclude decisions (kappa = 0.964).
+
+To validate the automated inclusion screening, the final two-of-two/two-of-three GPT-5.6 Luna consensus decisions were compared with 21,950 records for which previous human screening decisions were available and suitable for comparison. Agreement between the human decisions and the final Luna consensus was 96.79%, corresponding to a Cohen’s κ of 0.922, indicating very high agreement. As an additional consistency check, 21,798 records had substantive decisions from the human screening and both initial Luna passes; across these three raters, 96.01% of records received unanimous decisions, with a Fleiss’ κ of 0.935. These comparisons were used as validation of the automated screening procedure rather than as a gold-standard accuracy assessment, since the earlier human decisions themselves were subject to screening error.
+
+### Reporting screening outcomes
+
+Screening outcomes were recorded using explicit inclusion, exclusion and review states. Excluded records retained their bibliographic information and exclusion reason for audit purposes but were not included in the canonical evidence-map dataset. Records requiring human review were kept separate from validated inclusions until adjudication was complete. Exclusions reasons were:
+
+## Ontology development
+
+During manual screening, key terms relating to salmon aquaculture were maintained in a dictionary and iteratively clustered by concept. Terms were added where they represented synonyms or novel concepts encountered in the evidence base. Following completion of manual screening of the original corpus, 3,017 concepts were grouped into a hierarchical topic structure.
+
+The initial ontology was subsequently reviewed during manual validation of the automated annotation workflow and refined into a three-level hierarchy. Terminal topics were provided with scope descriptions and supporting semantic cues. The final ontology (Additional File 2) is stored as a version-controlled user input so that changes to the scientific classification system are distinct from changes to the code used to apply it.
+
+## Corpus annotation
+
+Records included in the evidence map were annotated for focal farmed species, primary study geography and research topic using a set of three reproducible workflows. Annotation was designed conservatively: where available evidence did not support a defensible assignment, the record was retained without that annotation or referred for review rather than being assigned by unsupported inference.
+
+### Species annotation
+
+Species annotation was conducted entirely deterministically (i.e. based on term recognition without the use of AI) began with a curated dictionary of scientific names, common names, synonyms and other validated species expressions (see Additional File 3). Eligible codes were Atlantic salmon, Chinook salmon, chum salmon, coho salmon, masu salmon, pink salmon, sockeye salmon, rainbow trout and unspecified salmon species. Ambiguous cases were referred for manual review. The algorithm supported minor text differences caused by within-word spaces, formatting code and punctuation.
+
+### Geographic annotation
+
+Geographic annotation combined a deterministic geographic extractor with an independent semantic classification using GPT-5.6 Luna. Both methods operated on title and abstract text. The deterministic layer identified explicit country signals using curated geographic rules and mappings and was retained only as an independent quality-control comparator. The semantic model received a locked structured prompt requiring it to distinguish substantive study geography from incidental place mentions. A country was assigned only where the supplied text explicitly established study activity there or made a geographically defined industry, policy system, market, production system, provenance or study material an explicit object of analysis. Affiliations, suppliers, funders, background discussion, previous studies, language and external knowledge were not sufficient grounds for assignment.
+
+The Luna output was the authoritative automated geography classification and returned RESOLVED, NONE or UNRESOLVED, together with ISO 3166-1 alpha-3 country codes, country names, supporting evidence and a mapping reason. The returned evidence was automatically checked against the title and abstract using a grounding validator that tolerated harmless formatting differences between the extracted evidence and the source text, but did not permit inference from information absent from the source text. The deterministic and semantic country sets were compared for quality control and regression monitoring, but disagreement alone did not override the semantic result or trigger review. Records remaining UNRESOLVED, structurally invalid or ungrounded after an automatic validation and model retry were referred to human adjudication.
+
+### Topic classification
+
+Research topics were assigned using the final three-level hierarchical ontology. For each record, the title and abstract were evaluated against the complete set of permissible topic paths. Multiple topic assignments were allowed where more than one topic represented a substantive study objective, intervention, exposure, outcome, interpretation or application. Assignments were not made solely on the basis of isolated lexical mentions or background statements.
+
+Topic coding used three independent model passes under the same structured classification task. Agreement between passes was retained as a measure of consistency: assignments supported by all three passes received three stars, assignments supported by two received two stars, and single-pass assignments were treated according to the review rules. Records that could not be assigned a defensible topic, including some records with insufficient abstract information, were retained in the map as uncoded rather than being excluded.
+
+Topic coding used three independent GPT-5.6 Luna passes against the same final version of the topic ontology and system prompt. For each record, the union of pathways returned across the three passes was retained, and support for each record-topic assignment was recorded as one, two or three model votes, represented in the database as one, two or three stars. Pass-level roles and reasons were retained for provenance. Raw model assignments were preserved even where they were not subsequently retained for analysis.
+
+A deterministic analytical layer then removed ‘general’ codes where a more specific assigned pathway superseded them (e.g. “Other diseases – General” and “Other diseases – Diagnosis and detection”). For records with more than ten raw topics, pathways were retained by complete support tiers in descending order from three-star to one-star assignments, giving a soft maximum of ten; ties within a support tier were never broken arbitrarily, so a record could retain more than ten topics where the highest retained tier itself exceeded the limit. Agreement among the three pass-specific topic sets was assessed using mean pairwise Jaccard similarity, with values below 0.20 referred for human review. Records receiving no topic assignment underwent a separate targeted eligibility re-screen; eligible records could remain in the map as included but uncoded rather than being assigned an unsupported topic.
+
+## Human review and quality assurance
+
+Cases remaining uncertain after automated processing were subjected to structured human review. Review files contained the bibliographic information, relevant evidence and the specific decision requiring resolution. Human decisions were then incorporated into the validated dataset.
+
+Quality assurance also operated across batches of records. The dataset was inspected for implausible, inconsistent or unexpected patterns in screening, species, geography and topic assignments. Recurrent issues were used to refine dictionaries, gazetteers, deterministic rules, prompts and the ontology where appropriate. This combination of case-level adjudication and dataset-level checking was used to monitor consistency over successive updates.
+
+## Living evidence map updating
+
+The evidence map has been designed for repeated updating on a fortnightly basis. New records retrieved from the included bibliographic databases are standardised, repaired where appropriate, reconciled against the existing canonical corpus and screened for relevance. Newly included records then pass through species annotation, geographic annotation and topic classification. Existing validated annotations are retained unless a later workflow explicitly requires reconsideration, for example after a substantive ontology revision or identification of a systematic classification error.
+
+Unresolved screening or annotation cases are withheld from promotion to the validated canonical release until the required human review has been completed. Versioned intermediate outputs and review artefacts are retained so that the transformation from retrieved source records to the released evidence map can be audited.
+
+In additional, a quarterly sweep of the entire evidence base will be conducted using DOI lookup in the OpenAlex API to identify potential retractions and withdrawals. These records will be removed from the database and the dashboard updated accordingly.
+
+## Synthesis
+
+Species, geography and topic annotations were used to describe the structure of the evidence base and identify evidence clusters and gaps. Analyses included records by publication year and focal species; topic-assignment frequency through time; records per country and country-by-species patterns; country-level choropleths; high-level topic frequency by species; and theme-specific topic frequencies for Production, Environment, Methods, Industry and governance, Product, People and society, and Inputs and resources.
+
+Source contribution was summarised using the retained database provenance of canonical records, allowing the number and proportion of records contributed uniquely by each bibliographic source, and records also identified elsewhere, to be reported before and after relevance screening.
+
+To identify topics growing more rapidly than the evidence base overall, a relative growth index was calculated using the mean annual number of topic assignments during 2010-2014 as a baseline of 100. Subsequent annual values were expressed relative to that baseline. Thus, a value of 500 represents five times the topic's mean annual frequency during 2010-2014. The equivalent growth trajectory for the complete evidence database was calculated for comparison.
