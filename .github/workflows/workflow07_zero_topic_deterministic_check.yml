@@ -1,0 +1,59 @@
+name: Workflow 07 - zero-topic deterministic check
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow07/.run_zero_topic_deterministic_check'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deterministic-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("readr","jsonlite"))
+
+      - name: Download validated Workflow 07 artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/handoff inputs/recall
+          gh run download 36264955447 -n workflow07-topic-handoff-36264955447 -D inputs/handoff
+          gh run download 36252255299 -n workflow07-topic-recall-audit-36252255299 -D inputs/recall
+          test -s inputs/handoff/workflow07_topic_final/workflow07_zero_code_records.csv
+          test -s inputs/recall/current_topic_recall_status.csv
+
+      - name: Run deterministic zero-topic check
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow07_zero_topic_deterministic_check.R \
+            --zero inputs/handoff/workflow07_topic_final/workflow07_zero_code_records.csv \
+            --records inputs/recall/current_topic_recall_status.csv \
+            --ontology data/reference/topic_ontology_v3_6.csv \
+            --output-dir outputs/workflow07_zero_topic_deterministic
+          test -s outputs/workflow07_zero_topic_deterministic/PASS.ok
+
+      - name: Upload deterministic check
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-zero-topic-deterministic-${{ github.run_id }}
+          path: outputs/workflow07_zero_topic_deterministic/
+          retention-days: 90
+          if-no-files-found: error
