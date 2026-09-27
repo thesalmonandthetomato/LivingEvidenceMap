@@ -6,7 +6,7 @@ Workflow 06 assigns substantive study geography to records retained after Workfl
 
 The semantic model output is the authoritative automated geography decision. A deterministic geography layer is retained only as an independent quality-control comparator. Deterministic/semantic disagreement does not, by itself, trigger human adjudication.
 
-Records that remain unresolved or invalid after automatic validation and retry are handed to Workflow 08 for human adjudication. Human decisions are applied as a later layer and do not modify the Workflow 06 automated result.
+Records returned as `UNRESOLVED` do not proceed directly to human review. They first undergo a targeted independent semantic rescue using two Luna passes, with a third pass only when the first two disagree, remain unresolved or fail. Only records still unresolved after this rescue, or otherwise invalid after automatic validation and repair, are handed to Workflow 08 for human adjudication. Human decisions are applied as a later layer and do not modify the Workflow 06 automated result.
 
 This document is intended to serve two purposes:
 
@@ -35,13 +35,18 @@ This document is intended to serve two purposes:
              +------------+-------------+
              |                          |
              v                          v
-      RESOLVED / NONE          UNRESOLVED / invalid
-      accept Luna output        automatic retry/repair
-             |                          |
-             |                    if still invalid
-             |                          |
-             v                          v
-      [W06 geography layer]   [W08 human adjudication]
+      RESOLVED / NONE              UNRESOLVED
+      accept Luna output                 |
+             |                            v
+             |                [targeted semantic rescue]
+             |                 Luna A + B; C if needed
+             |                            |
+             |                    +-------+-------+
+             |                    |               |
+             |              RESOLVED/NONE     UNRESOLVED
+             |                    |               |
+             v                    v               v
+      [W06 geography layer] <-----+      [W08 human adjudication]
              |
              v
       [downstream assembly]
@@ -56,6 +61,7 @@ This document is intended to serve two purposes:
 | `scripts/reporting/workflow06_geography_semantic_merge.R` | Merges and validates production shards. |
 | `scripts/reporting/workflow06_recover_failures.R` | Targeted retry of structurally failed semantic calls. |
 | `scripts/reporting/workflow06_revalidate_grounding.R` | Revalidates evidence grounding using the final relaxed grounding rules. |
+| `scripts/reporting/workflow06_rescue_unresolved.R` | Reassesses semantic `UNRESOLVED` records using two independent Luna passes and a conditional third pass before any W08 escalation. |
 | `.github/workflows/workflow_06_geography_merge_recovery.yml` | Recovery controller used to merge the completed baseline shards without repeating model calls. |
 | `scripts/updater/workflow_06_archive_state_to_zenodo.R` | Validates and archives the accepted automated W06 state. |
 | `scripts/updater/workflow_06_update_zenodo_registry.R` | Registers the authoritative W06 checkpoint. |
@@ -97,7 +103,7 @@ The semantic result is authoritative for automated coding:
 - deterministic country/countries + Luna `NONE` -> accept Luna `NONE`;
 - deterministic `NONE` + Luna country/countries -> accept Luna country/countries;
 - both return different country sets -> accept Luna by default;
-- Luna `UNRESOLVED` -> flag for W08;
+- Luna `UNRESOLVED` -> targeted semantic rescue; only the residual unresolved set is flagged for W08;
 - semantic output still structurally invalid or ungrounded after automatic retry/validation -> flag for W08.
 
 The deterministic layer therefore serves **QC and regression monitoring only**. It does not override Luna and disagreement alone is not a W08 escalation criterion.
@@ -141,13 +147,23 @@ After technical failure recovery, **3,287 of 19,407 records (16.94%)** have diff
 
 The row-level QC classification additionally prioritises evidence-grounding and failure states, so its categories are not identical to a simple country-set disagreement count.
 
+### Unresolved semantic rescue
+
+A raw Luna `UNRESOLVED` status is treated as an intermediate QC state, not as an automatic human-review decision. Each such record is reassessed independently from title and abstract under the same locked substantive-geography rules.
+
+Two independent GPT-5.6 Luna rescue passes are run. A third pass is run only when the first two disagree, either pass remains `UNRESOLVED`, or either pass fails technically. A non-unresolved geography decision is accepted automatically only when at least two valid rescue passes agree on both status and ISO3 country set. If no two valid passes agree, the record remains `UNRESOLVED`.
+
+Deterministic geography is not supplied to the rescue model and cannot determine the rescue result. Resolved rescue outputs must also pass the W06 evidence-grounding validator.
+
+The original production semantic output remains preserved as provenance; the rescue result is an additional W06 QC layer applied before W08 routing.
+
 ### Human-review escalation
 
 Workflow 06 uses a minimum-escalation rule.
 
 Records are sent to Workflow 08 only when the semantic result remains:
 
-- `UNRESOLVED`;
+- still `UNRESOLVED` after targeted semantic rescue;
 - structurally invalid after retry;
 - a model/API failure after retry; or
 - ungrounded after the final automatic evidence validator.
@@ -244,7 +260,7 @@ Integrity is verified through stable record identity, cardinality checks, prompt
 
 ## Methods text for research reporting
 
-> **Workflow 06: substantive study geography.** Substantive study geography was coded from publication titles and abstracts using GPT-5.6 Luna with a locked structured prompt. Countries were assigned only where the supplied text explicitly established substantive study activity or made a geographically defined system, industry, sector, provenance or study material an explicit object of analysis; incidental geography and geography requiring external knowledge were excluded. Multiple countries were retained where supported. Returned evidence was checked against the source text using a grounding validator tolerant of harmless formatting differences and recoverable compressed quotations. An independent deterministic geography layer was used only for quality control and regression monitoring; semantic model decisions remained authoritative when the two methods disagreed. Records that remained unresolved or invalid after automated validation and retry were flagged for subsequent human adjudication.
+> **Workflow 06: substantive study geography.** Substantive study geography was coded from publication titles and abstracts using GPT-5.6 Luna with a locked structured prompt. Countries were assigned only where the supplied text explicitly established substantive study activity or made a geographically defined system, industry, sector, provenance or study material an explicit object of analysis; incidental geography and geography requiring external knowledge were excluded. Multiple countries were retained where supported. Returned evidence was checked against the source text using a grounding validator tolerant of harmless formatting differences and recoverable compressed quotations. An independent deterministic geography layer was used only for quality control and regression monitoring; semantic model decisions remained authoritative when the two methods disagreed. Records initially returned as `UNRESOLVED` underwent a targeted independent semantic rescue using two Luna passes and a conditional third pass. Only the residual unresolved or otherwise invalid records were routed to subsequent human adjudication.
 
 ## Reporting status
 
@@ -261,4 +277,4 @@ Workflow 06 is **finalised and locked** when:
 - the automated baseline is durably archived with checksums; and
 - human geography decisions are stored separately in Workflow 08.
 
-These conditions are satisfied. The authoritative automated baseline is Zenodo record **22983049**, DOI **10.5281/zenodo.22983049**. Future W06 runs use prompt v2 and the final relaxed evidence-grounding validator. Human review decisions do not modify W06; they are applied as Workflow 08 adjudication layers.
+These conditions were satisfied for the pre-rescue automated baseline archived as Zenodo record **22983049**, DOI **10.5281/zenodo.22983049**, but the downstream routing description was incomplete because the agreed `UNRESOLVED` rescue stage had not yet been implemented. Workflow 06 has therefore been reopened solely to add and validate that rescue stage. The report must not be considered re-locked until the rescue result and final W08 residual count are recorded.
