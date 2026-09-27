@@ -1,0 +1,123 @@
+name: Workflow 08 - build human adjudication intake
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow05_run_id:
+        description: Validated Workflow 05 species run
+        required: true
+        default: '36268840588'
+      workflow06_run_id:
+        description: Validated Workflow 06 merged geography run
+        required: true
+        default: '36265092530'
+      workflow06_recovery1_run_id:
+        description: Workflow 06 four-record recovery run
+        required: true
+        default: '36271055010'
+      workflow06_recovery2_run_id:
+        description: Workflow 06 pseudo-country recovery run
+        required: true
+        default: '36271186232'
+      workflow07_run_id:
+        description: Validated Workflow 07 finalisation run
+        required: true
+        default: '36305907080'
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow08/.run_build_intake'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout triggering revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("digest","dplyr","jsonlite","readr"))
+
+      - name: Restore validated W05-W07 artefacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          W05_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow05_run_id || '36268840588' }}
+          W06_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow06_run_id || '36265092530' }}
+          W06_REC1_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow06_recovery1_run_id || '36271055010' }}
+          W06_REC2_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow06_recovery2_run_id || '36271186232' }}
+          W07_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.workflow07_run_id || '36305907080' }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/w05 inputs/w06 inputs/w06rec1 inputs/w06rec2 inputs/w07
+
+          gh run download "$W05_RUN"             -n "workflow05-species-coding-$W05_RUN"             -D inputs/w05
+
+          gh run download "$W06_RUN"             -n "workflow06-geography-production-$W06_RUN"             -D inputs/w06
+
+          gh run download "$W06_REC1_RUN"             -n "workflow06-failure-recovery-$W06_REC1_RUN"             -D inputs/w06rec1
+
+          gh run download "$W06_REC2_RUN"             -n "workflow06-failure-recovery-$W06_REC2_RUN"             -D inputs/w06rec2
+
+          gh run download "$W07_RUN"             -n "workflow07-finalisation-validation-$W07_RUN"             -D inputs/w07
+
+          test -s inputs/w05/workflow05_species_coded.csv
+          test -s inputs/w06/geography_semantic_final.csv
+          test -s inputs/w06/geography_ungrounded_evidence.csv
+          test -s inputs/w06rec1/workflow06_failure_recovery.csv
+          test -s inputs/w06rec2/workflow06_failure_recovery.csv
+          test -s inputs/w07/workflow07_workflow08_human_review_queue.csv
+          test -s inputs/w07/workflow07_topic_pathway_scores_retained.csv
+          test -s inputs/w07/workflow07_late_automatic_exclusions.csv
+
+      - name: Revalidate the non-failure W06 grounding subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/w06_grounding outputs/workflow06_grounding_revalidation
+
+          Rscript -e '
+            library(readr)
+            x <- read_csv("inputs/w06/geography_ungrounded_evidence.csv",show_col_types=FALSE)
+            x <- x[!x$llm_failed,,drop=FALSE]
+            stopifnot(nrow(x)==235L,!anyDuplicated(x$record_id))
+            write_csv(x,"inputs/w06_grounding/geography_ungrounded_nonfailure.csv",na="")
+          '
+
+          Rscript scripts/reporting/workflow06_revalidate_grounding.R             --input inputs/w06_grounding/geography_ungrounded_nonfailure.csv             --output-dir outputs/workflow06_grounding_revalidation
+
+          test -s outputs/workflow06_grounding_revalidation/still_unvalidated_grounding.csv
+
+      - name: Build locked Workflow 08 review queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_build_review_queue.R             --w05 inputs/w05/workflow05_species_coded.csv             --w06 inputs/w06/geography_semantic_final.csv             --w06-recovery1 inputs/w06rec1/workflow06_failure_recovery.csv             --w06-recovery2 inputs/w06rec2/workflow06_failure_recovery.csv             --w06-grounding-residual outputs/workflow06_grounding_revalidation/still_unvalidated_grounding.csv             --w07-review inputs/w07/workflow07_workflow08_human_review_queue.csv             --w07-scores inputs/w07/workflow07_topic_pathway_scores_retained.csv             --w07-late-exclusions inputs/w07/workflow07_late_automatic_exclusions.csv             --existing-geography-decisions data/workflow08/geography_adjudication_decisions.jsonl             --output-dir outputs/workflow08_intake
+
+          test -s outputs/workflow08_intake/workflow08_review_queue.jsonl
+          test -s outputs/workflow08_intake/workflow08_review_queue_manifest.json
+          test -s outputs/workflow08_intake/WORKFLOW08_INTAKE_PASS.ok
+
+      - name: Upload locked Workflow 08 intake
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow08-review-intake-${{ github.run_id }}
+          path: |
+            outputs/workflow08_intake/
+            outputs/workflow06_grounding_revalidation/summary.json
+          retention-days: 90
+          if-no-files-found: error
