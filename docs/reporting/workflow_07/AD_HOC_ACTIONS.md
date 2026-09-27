@@ -106,3 +106,5 @@ The validator asserts the current baseline counts:
 - 103 extreme-disagreement records;
 - 121 total W07 human-adjudication records.
 
+
+The final integrated validation passed in GitHub Actions run **36305907080**. All script parsing, preserved-artifact restoration, routing assertions and output generation completed successfully.
