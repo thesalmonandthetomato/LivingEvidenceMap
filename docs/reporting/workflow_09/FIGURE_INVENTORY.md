@@ -2,22 +2,24 @@
 
 The long-form Results report uses figures generated into `outputs/report/long_form/figures/`.
 
-| Results figure | Purpose | Existing R implementation | Status for final Workflow 09 |
+| Results figure | Purpose | R implementation | Status for final Workflow 09 |
 |---|---|---|---|
 | 1 | Database contribution and exact source overlap before/after relevance screening | `scripts/reporting/plot_citesource_database_contribution.R` | Existing validated implementation; redirect/copy final PNG/PDF into long-form output directory. |
-| 2 | Review/process flow diagram | No current standalone script located on `workflow01-final-architecture` | Rebuild from the last agreed flow design using final W03-W08 counts. |
-| 3 | Records by publication year and focal species | `visualisations/01_records_by_publication_year.R` | Existing; migrate input from legacy corrected master to authoritative final W08 reporting input and omit incomplete current year. |
-| 4 | High-level topic assignments by publication year | `visualisations/05_records_by_publication_year_high_level_topic.R` | Existing; migrate to final W08 topic layer. |
-| 5 | Records by country and focal species | `visualisations/02_records_by_country.R` | Existing; migrate to final W08 geography/species layer. |
-| 6 | Country choropleth | `visualisations/03_choropleth_records_by_country.R` | Existing; migrate to final W08 geography layer. |
-| 7 | High-level topics by focal species | `visualisations/04_topic_hierarchy.R` | Existing script already computes top-level species counts and the top-level stacked figure; adapt output name/location. |
-| 8-14 | Theme-specific topic figures for Production, Environment, Methods, Industry and governance, Product, People and society, Inputs and resources | `visualisations/04_topic_hierarchy.R` | Existing; regenerate all seven from final W08 retained topic assignments. |
-| 15 | Rapidly emerging topics relative to evidence-base growth | `visualisations/06_rapidly_emerging_topics.R` / `visualisations/06_rapidly_emerging_topics_annotated.R` | Existing; finalise one implementation and regenerate from final corpus. |
+| 2 | Review/process flow diagram | `visualisations/07_flow_diagram.R` | Added as a canonical JSONL/exclusions-CSV implementation following the current slide-template structure. Source-database counts remain TBC until current Workflow 00 source totals are restored. |
+| 3 | Records by publication year and focal species | `visualisations/01_records_by_publication_year.R` | Migrated to the included-only W08 canonical JSONL. |
+| 4 | High-level topic assignments by publication year | `visualisations/05_records_by_publication_year_high_level_topic.R` | Migrated to the included-only W08 canonical JSONL. |
+| 5 | Records by country and focal species | `visualisations/02_records_by_country.R` | Migrated to the included-only W08 canonical JSONL. |
+| 6 | Country choropleth | `visualisations/03_choropleth_records_by_country.R` | Migrated to the included-only W08 canonical JSONL. |
+| 7 | High-level topics by focal species | `visualisations/04_topic_hierarchy.R` | Migrated to the included-only W08 canonical JSONL. |
+| 8-14 | Theme-specific topic figures for Production, Environment, Methods, Industry and governance, Product, People and society, Inputs and resources | `visualisations/04_topic_hierarchy.R` | Migrated to the included-only W08 canonical JSONL. |
+| 15 | Rapidly emerging topics relative to evidence-base growth | `visualisations/06_rapidly_emerging_topics.R`; `visualisations/06_rapidly_emerging_topics_annotated.R` now redirects to the canonical implementation | Migrated to the included-only W08 canonical JSONL. |
 | 16 | Primary-study topic distribution versus systematic-review coverage | No current standalone script located | New reporting script required if retained in final manuscript. |
 
 ## Important input migration
 
-The legacy static visualisation scripts currently read `data/master/current/living_evidence_map_master CORRECTED.csv`. That file represents the earlier dashboard/master architecture and is not the authoritative final Workflow 08 release. Workflow 09 should regenerate the manuscript figures from the final included-only canonical state (19,117 records) and retained W08 annotation layers, without changing the historical scripts' scientific definitions unless explicitly documented.
+The legacy static visualisation scripts previously read `data/master/current/living_evidence_map_master CORRECTED.csv`. That file represents the earlier dashboard/master architecture and is not the authoritative final Workflow 08 release. The figure scripts now read the final included-only canonical JSONL using `visualisations/canonical_figure_data.R`.
+
+By default scripts look for `data/master/current/living_evidence_map_canonical_final.jsonl`, `outputs/workflow08_corrected/living_evidence_map_canonical_final.jsonl`, or `outputs/workflow08/living_evidence_map_canonical_final.jsonl`. They can also be pointed to a file with `--canonical-jsonl` or `CANONICAL_JSONL`.
 
 ## Flow diagram counts currently established
 
