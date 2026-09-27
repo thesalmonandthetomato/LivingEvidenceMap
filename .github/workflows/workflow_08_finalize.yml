@@ -1,0 +1,152 @@
+name: Workflow 08 - finalise adjudication and canonical dataset
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow08/.run_finalize'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  finalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest','httr2'))
+
+      - name: Parse Workflow 08 finalisation scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_08_expand_offline_decisions.R')
+          parse(file='scripts/updater/workflow_08_finalize_canonical.R')
+          parse(file='scripts/updater/workflow_08_archive_to_zenodo.R')
+          parse(file='scripts/updater/workflow_08_write_report.R')
+          cat('PASS: Workflow 08 scripts parse\n')
+
+      - name: Restore authoritative lean canonical and Workflow 03 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/canonical inputs/w03
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R --pointer docs/compaction/zenodo/run-36166883249.json --output-dir inputs/canonical
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R --pointer docs/publication_status/zenodo/run-36172718538.json --output-dir inputs/w03
+
+      - name: Restore validated Workflow 04-07 and locked W08 inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/w04 inputs/w05 inputs/w06 inputs/w06r1 inputs/w06r2 inputs/w07 inputs/w08
+          gh run download 36227737500 -n workflow04-final-screening-36227737500 -D inputs/w04
+          gh run download 36268840588 -n workflow05-species-coding-36268840588 -D inputs/w05
+          gh run download 36265092530 -n workflow06-geography-production-36265092530 -D inputs/w06
+          gh run download 36271055010 -n workflow06-failure-recovery-36271055010 -D inputs/w06r1
+          gh run download 36271186232 -n workflow06-failure-recovery-36271186232 -D inputs/w06r2
+          gh run download 36305907080 -n workflow07-finalisation-validation-36305907080 -D inputs/w07
+          gh run download 36320650383 -n workflow08-review-intake-36320650383 -D inputs/w08
+          test -s inputs/w04/workflow04_final_screening_layer.jsonl
+          test -s inputs/w05/workflow05_species_coded.csv
+          test -s inputs/w06/geography_semantic_final.csv
+          test -s inputs/w07/workflow07_topic_pathway_scores_retained.csv
+          test -s inputs/w07/workflow07_late_automatic_exclusions.csv
+          test -s inputs/w08/workflow08_intake/workflow08_review_queue.jsonl
+
+      - name: Expand and validate all Workflow 08 human decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow08
+          Rscript scripts/updater/workflow_08_expand_offline_decisions.R \
+            --queue inputs/w08/workflow08_intake/workflow08_review_queue.jsonl \
+            --prior-decisions data/adjudication/workflow08/run-36316071774/human_decisions.jsonl \
+            --offline-spec data/adjudication/workflow08/offline_adjudication_spec_2026-09-27.json \
+            --output outputs/workflow08/human_decisions_complete.jsonl \
+            --complete outputs/workflow08/COMPLETE.json
+
+      - name: Assemble definitive canonical JSONL
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_finalize_canonical.R \
+            --canonical inputs/canonical/canonical_lean.jsonl \
+            --w03 inputs/w03/publication_status.jsonl \
+            --w04 inputs/w04/workflow04_final_screening_layer.jsonl \
+            --w05 inputs/w05/workflow05_species_coded.csv \
+            --w06 inputs/w06/geography_semantic_final.csv \
+            --w06-recovery1 inputs/w06r1/workflow06_failure_recovery.csv \
+            --w06-recovery2 inputs/w06r2/workflow06_failure_recovery.csv \
+            --pre-geo-decisions data/workflow08/geography_adjudication_decisions.jsonl \
+            --w07-scores inputs/w07/workflow07_topic_pathway_scores_retained.csv \
+            --w07-late-exclusions inputs/w07/workflow07_late_automatic_exclusions.csv \
+            --decisions outputs/workflow08/human_decisions_complete.jsonl \
+            --ontology data/reference/topic_ontology_v3_6.csv \
+            --output outputs/workflow08/living_evidence_map_canonical_final.jsonl \
+            --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl \
+            --manifest outputs/workflow08/workflow08_final_manifest.json
+
+      - name: Publish minimal final Workflow 08 archive to Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow08_zenodo
+          Rscript scripts/updater/workflow_08_archive_to_zenodo.R \
+            --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl \
+            --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl \
+            --manifest outputs/workflow08/workflow08_final_manifest.json \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow08_zenodo
+
+      - name: Write Workflow 08 report and register Zenodo pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_write_report.R \
+            --manifest outputs/workflow08/workflow08_final_manifest.json \
+            --receipt outputs/workflow08_zenodo/zenodo_receipt.json \
+            --complete outputs/workflow08/COMPLETE.json \
+            --output docs/reporting/workflow_08/workflow_08_functionality_map.md
+          mkdir -p docs/workflow08/zenodo
+          cp outputs/workflow08_zenodo/zenodo_receipt.json "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
+          if [ ! -f docs/workflow08/zenodo_registry.csv ]; then
+            echo 'source_run_id,zenodo_record_id,doi,canonical_sha256,published_at_utc' > docs/workflow08/zenodo_registry.csv
+          fi
+          Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow08_zenodo/zenodo_receipt.json"); cat(sprintf("%s,%s,%s,%s,%s\n",x$source_github_run_id,x$zenodo_record_id,x$doi,x$final_canonical_jsonl_sha256,x$published_at_utc),file="docs/workflow08/zenodo_registry.csv",append=TRUE)'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin workflow01-final-architecture
+          git add docs/reporting/workflow_08/workflow_08_functionality_map.md docs/workflow08/zenodo_registry.csv "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
+          git commit -m "Document completed Workflow 08 run $GITHUB_RUN_ID [skip ci]"
+          git push origin HEAD:workflow01-final-architecture
+
+      - name: Upload Workflow 08 finalisation artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow08-final-${{ github.run_id }}
+          path: |
+            outputs/workflow08/
+            outputs/workflow08_zenodo/
+          retention-days: 90
+          if-no-files-found: warn
