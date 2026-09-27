@@ -52,3 +52,16 @@ Corrected authoritative counts are:
 - QC discrepancies: 3,451.
 
 The corrected state is archived as restricted Zenodo record 22983049, DOI 10.5281/zenodo.22983049.
+
+
+## 27 September 2026: final W06 validation rules and W08 separation
+
+The W06 evidence validator was broadened to tolerate harmless source-format differences, model-inserted ellipses whose fragments are recoverable in order, and compressed evidence whose normalised words occur in the source in order.
+
+A version-2 W06 prompt was added to reduce future evidence-formatting failures by explicitly instructing the model to copy one continuous source span without dropping words or splicing fragments. The substantive geography definition was not changed.
+
+The final architecture makes the Luna semantic result authoritative for automated geography. The deterministic geography layer is retained for QC and regression monitoring only and does not override Luna.
+
+Human geography decisions made during validation were moved out of W06 into `data/workflow08/geography_adjudication_decisions.jsonl`. W08 is therefore the sole human-adjudication layer for these decisions.
+
+The corrected automated W06 baseline remains Zenodo record 22983049. Human decisions are not written back into that automated checkpoint.
