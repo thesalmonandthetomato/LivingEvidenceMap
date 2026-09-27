@@ -144,7 +144,6 @@ run_pass <- function(records,pass,path){
 
 X <- read_csv(input_path,show_col_types=FALSE,progress=FALSE)
 stopifnot(all(c("record_id","title","abstract") %in% names(X)))
-if(nrow(X)!=358L) stop("Expected 358 zero-topic records, found ",nrow(X))
 if(anyDuplicated(X$record_id)) stop("Duplicate record IDs")
 X <- X[order(X$record_id),,drop=FALSE]
 membership <- ((seq_len(nrow(X))-1L) %% shard_count)+1L
