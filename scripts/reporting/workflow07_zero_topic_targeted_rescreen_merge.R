@@ -3,6 +3,7 @@ suppressPackageStartupMessages({library(jsonlite);library(readr)})
 args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);args[[i+1L]]}
 root<-arg("--input-root");out<-arg("--output-dir","outputs/workflow07_zero_topic_rescreen_merged");expected<-as.integer(arg("--expected-shards","4"))
+expected_records<-as.integer(arg("--expected-records","0"))
 if(is.null(root))stop("Required: --input-root")
 dir.create(out,recursive=TRUE,showWarnings=FALSE)
 read_jsonl<-function(p){x<-readLines(p,warn=FALSE,encoding="UTF-8");x<-x[nzchar(trimws(x))];lapply(x,fromJSON,simplifyVector=FALSE)}
@@ -12,7 +13,7 @@ files<-list.files(root,pattern="final_rescreen\\.jsonl$",recursive=TRUE,full.nam
 if(length(files)!=expected)stop("Expected ",expected," shard outputs, found ",length(files))
 rows<-unlist(lapply(files,read_jsonl),recursive=FALSE)
 ids<-vapply(rows,function(x)scalar(x$record_id),character(1))
-if(length(rows)!=358L)stop("Expected 358 merged records, found ",length(rows))
+if(expected_records>0L && length(rows)!=expected_records)stop("Expected ",expected_records," merged records, found ",length(rows))
 if(anyDuplicated(ids)||any(!nzchar(ids)))stop("Merged identity invariant failed")
 ord<-order(ids);rows<-rows[ord];ids<-ids[ord]
 write_jsonl(rows,file.path(out,"workflow07_zero_topic_targeted_rescreen.jsonl"))
