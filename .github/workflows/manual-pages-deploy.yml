@@ -1,4 +1,5 @@
 name: Deploy GitHub Pages
+# deploy template refresh: show all Workflow 10 KPIs
 
 on:
   workflow_dispatch:
