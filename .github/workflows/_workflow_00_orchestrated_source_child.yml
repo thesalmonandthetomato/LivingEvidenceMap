@@ -250,7 +250,7 @@ jobs:
           SEARCH_QUERY: ${{ inputs.query }}
           PARENT_RUN_ID: ${{ inputs.parent_run_id }}
           SEARCH_VERSION: ${{ inputs.search_version }}
-          ADDITIONAL_FARM_TERM: ${{ inputs.additional_search_term }}
+          ADDITIONAL_SEARCH_TERM: ${{ inputs.additional_search_term }}
           REPORTED: ${{ steps.counts.outputs.reported }}
           DOWNLOADED: ${{ steps.counts.outputs.downloaded }}
           FORTNIGHTLY_FROM_DATE: ${{ inputs.fortnightly_from_date }}
@@ -262,7 +262,8 @@ jobs:
           if [ "$SOURCE" = "wos" ] && [ "$RUN_TYPE" = "fortnightly" ]; then
             documented_query="$SEARCH_QUERY ; modifiedTimeSpan=$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE"
           fi
-          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_FARM_TERM" --artifact-name "workflow00-${SOURCE}-${GITHUB_RUN_ID}" --output-root outputs/updater/search_record
+          implementation_sha="$(git rev-parse HEAD)"
+          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_SEARCH_TERM" --artifact-name "workflow00-${SOURCE}-harvest-${PARENT_RUN_ID}" --orchestrator-sha "$implementation_sha" --source-handler-sha "$implementation_sha" --output-root outputs/updater/search_record
 
       - name: Upload source harvest
         uses: actions/upload-artifact@v4
