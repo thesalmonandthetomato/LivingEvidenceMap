@@ -1,5 +1,5 @@
 name: Deploy GitHub Pages
-# deploy template refresh: show all Workflow 10 KPIs
+# deploy template refresh: add intersecting radial filters
 
 on:
   workflow_dispatch:
