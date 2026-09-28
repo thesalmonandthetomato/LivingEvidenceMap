@@ -1,15 +1,6 @@
 name: Lens pre-LLM processing
 
 on:
-  push:
-    paths:
-      - 'scripts/run_lens_pre_llm.R'
-      - 'scripts/validate_lens_update.R'
-      - 'scripts/setup_pipeline.R'
-      - 'R/**'
-      - 'data/updates/2026-08-13_lens/lens-export.ris'
-      - 'data/reference/salmon_evidence_map.csv'
-      - '.github/workflows/lens-pre-llm.yml'
   workflow_dispatch:
 
 jobs:
