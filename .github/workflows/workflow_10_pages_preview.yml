@@ -113,6 +113,9 @@ jobs:
           screened_n <- as.integer(flow$counts$title_abstract_screened)
           if(is.na(screened_n)||screened_n!=32283L) stop(sprintf('Unexpected screened count: %s',as.character(screened_n)),call.=FALSE)
           payload$metrics$candidate_search_results_screened <- screened_n
+          if(as.integer(payload$metrics$databases_searched)!=5L) stop('Preview KPI databases_searched is missing or incorrect',call.=FALSE)
+          if(as.integer(payload$metrics$search_results)!=90137L) stop('Preview KPI search_results is missing or incorrect',call.=FALSE)
+          if(as.integer(payload$metrics$unique_records_screened)!=32292L) stop('Preview KPI unique_records_screened is missing or incorrect',call.=FALSE)
 
           is_array <- function(x) is.list(x) && is.null(names(x))
           stopifnot(length(payload$records)==19117L)
