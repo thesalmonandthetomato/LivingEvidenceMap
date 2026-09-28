@@ -26,7 +26,7 @@ on:
         required: false
         default: false
         type: boolean
-      additional_farm_term:
+      additional_search_term:
         required: false
         default: ''
         type: string
@@ -70,8 +70,8 @@ on:
         required: true
         default: true
         type: boolean
-      additional_farm_term:
-        description: 'Expansion only: add one farm/aquaculture synonym; species terms are immutable'
+      additional_search_term:
+        description: 'Expansion only: add one search term to the farm/aquaculture concept; species terms are immutable'
         required: false
         default: ''
         type: string
@@ -86,7 +86,7 @@ permissions:
   actions: read
 
 env:
-  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow00-zenodo-search-archive
+  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow01-final-architecture
 
 jobs:
   validate-and-plan:
@@ -132,8 +132,8 @@ jobs:
           set -euo pipefail
           Rscript scripts/updater/workflow_00_search_orchestrator.R \
             --run-type '${{ inputs.run_type }}' \
-            --additional-farm-term '${{ inputs.additional_farm_term }}' \
-            --config config/workflow00_search_strategy.json \
+            --additional-search-term '${{ inputs.additional_search_term }}' \
+            --config user_input/workflow00_search_strategy.json \
             --output-dir outputs/updater/workflow00_plan
 
       - name: Record selected databases
@@ -196,7 +196,7 @@ jobs:
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
-      additional_farm_term: ${{ inputs.additional_farm_term }}
+      additional_search_term: ${{ inputs.additional_search_term }}
     secrets: inherit
 
   scopus:
@@ -211,7 +211,7 @@ jobs:
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
-      additional_farm_term: ${{ inputs.additional_farm_term }}
+      additional_search_term: ${{ inputs.additional_search_term }}
     secrets: inherit
 
   openalex:
@@ -226,7 +226,7 @@ jobs:
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
-      additional_farm_term: ${{ inputs.additional_farm_term }}
+      additional_search_term: ${{ inputs.additional_search_term }}
     secrets: inherit
 
   agricola:
@@ -241,7 +241,7 @@ jobs:
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
-      additional_farm_term: ${{ inputs.additional_farm_term }}
+      additional_search_term: ${{ inputs.additional_search_term }}
     secrets: inherit
 
   wos:
@@ -256,7 +256,7 @@ jobs:
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
-      additional_farm_term: ${{ inputs.additional_farm_term }}
+      additional_search_term: ${{ inputs.additional_search_term }}
     secrets: inherit
 
   reconcile-expansion:
@@ -437,10 +437,10 @@ jobs:
             workflow='00_expansion_reconciliation',
             status='success',
             parent_run_id=Sys.getenv('GITHUB_RUN_ID'),
-            additional_farm_term='${{ inputs.additional_farm_term }}',
+            additional_search_term='${{ inputs.additional_search_term }}',
             sources=x,
             matching_policy='exact native source identifier only',
-            downstream_bibliographic_deduplication='Workflow 02'
+            downstream_bibliographic_deduplication='Workflow 01'
           )
           dir.create(
             'outputs/updater/expansion_archive/docs/search_record/ad_hoc/reconciliation',
