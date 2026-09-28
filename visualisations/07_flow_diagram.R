@@ -111,6 +111,8 @@ source_counts <- c(
 n_combined <- as.integer(flow$counts$combined_search_results)
 n_duplicates_removed <- as.integer(flow$counts$duplicates_removed)
 n_enriched <- as.integer(flow$counts$records_enriched_workflow02)
+n_geography_coded <- as.integer(flow$counts$final_geography_coded)
+n_geography_uncoded <- as.integer(flow$counts$final_geography_uncoded)
 
 # Assertions bind the figure to the actual authoritative state.
 stopifnot(
@@ -120,6 +122,9 @@ stopifnot(
   n_duplicates_removed == 57845L,
   n_deduplicated == 32292L,
   n_enriched == 2190L,
+  n_geography_coded == 7618L,
+  n_geography_uncoded == 11499L,
+  n_geography_coded + n_geography_uncoded == n_final_included,
   n_w03 == 9L,
   n_screened_ta == 32283L,
   n_w04 == 12876L,
@@ -168,6 +173,7 @@ boxes <- bind_rows(
 
   box("species", 5.64, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
   box("geography", 5.64, 3.13, process_box_w, 0.76, paste0("Geography annotation\nn = ", fmt(n_final_included)), "annotate"),
+  box("geo_uncoded", 9.15, 3.13, process_box_w, 0.76, paste0("Included but uncoded for geography\nn = ", fmt(n_geography_uncoded)), "result"),
   box("topic", 5.64, 2.08, process_box_w, 0.76, paste0("Records entering topic annotation\nn = ", fmt(n_final_included)), "annotate"),
   box("uncoded", 9.15, 2.08, process_box_w, 0.76, paste0("Included but uncoded for topics\nn = ", fmt(n_topic_uncoded)), "result"),
 
@@ -195,10 +201,10 @@ main_arrows <- bind_rows(
 )
 
 side_connectors <- data.frame(
-  x = rep(5.64 + process_box_w / 2, 4),
-  y = c(9.78, 7.58, 6.48, 2.08),
-  xend = rep(9.15 - process_box_w / 2, 4),
-  yend = c(9.78, 7.58, 6.48, 2.08)
+  x = rep(5.64 + process_box_w / 2, 5),
+  y = c(9.78, 7.58, 6.48, 3.13, 2.08),
+  xend = rep(9.15 - process_box_w / 2, 5),
+  yend = c(9.78, 7.58, 6.48, 3.13, 2.08)
 )
 
 phase <- data.frame(
@@ -321,6 +327,8 @@ readr::write_csv(
       "records_screened_title_abstract",
       "records_excluded_title_abstract_total",
       "records_retained_final",
+      "final_geography_coded",
+      "final_geography_uncoded",
       "final_topic_coded",
       "final_topic_uncoded",
       "final_included"
@@ -335,6 +343,8 @@ readr::write_csv(
       n_screened_ta,
       n_excluded_ta_total,
       n_retained_final,
+      n_geography_coded,
+      n_geography_uncoded,
       n_topic_coded,
       n_topic_uncoded,
       n_final_included
