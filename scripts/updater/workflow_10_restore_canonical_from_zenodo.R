@@ -19,22 +19,43 @@ if(!identical(x$status,"published") ||
 expected_sha <- tolower(as.character(x$final_canonical_jsonl_sha256))
 if(!grepl("^[0-9a-f]{64}$",expected_sha)) stop("Workflow 08 pointer has invalid canonical SHA-256",call.=FALSE)
 
-file_meta <- Filter(function(z) identical(as.character(z$filename),"living_evidence_map_canonical_final.jsonl"),x$files)
-if(length(file_meta)!=1L) stop("Workflow 08 pointer does not identify exactly one final canonical JSONL",call.=FALSE)
-if(!identical(tolower(as.character(file_meta[[1L]]$sha256)),expected_sha)) stop("Pointer checksum disagreement",call.=FALSE)
+archive_name <- if(!is.null(x$canonical_archive_filename)) {
+  as.character(x$canonical_archive_filename)
+} else {
+  "living_evidence_map_canonical_final.jsonl"
+}
+file_meta <- Filter(function(z) identical(as.character(z$filename),archive_name),x$files)
+if(length(file_meta)!=1L) stop("Workflow 08 pointer does not identify exactly one canonical archive",call.=FALSE)
 
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN")
 if(!nzchar(token)) stop("ZENODO_ACCESS_TOKEN is not set",call.=FALSE)
 
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
-url <- paste0("https://zenodo.org/api/records/",x$zenodo_record_id,"/files/living_evidence_map_canonical_final.jsonl/content")
+url <- paste0("https://zenodo.org/api/records/",x$zenodo_record_id,"/files/",archive_name,"/content")
 resp <- request(url) |>
   req_headers(Authorization=paste("Bearer",token)) |>
   req_timeout(1800) |>
   req_error(is_error=function(resp)FALSE) |>
   req_perform()
 if(resp_status(resp)!=200L) stop(sprintf("Zenodo download HTTP %d",resp_status(resp)),call.=FALSE)
-writeBin(resp_body_raw(resp),output)
+
+raw <- resp_body_raw(resp)
+if(identical(as.character(x$canonical_archive_compression),"gzip") || grepl("\\.gz$",archive_name)){
+  tmp <- tempfile(fileext=".jsonl.gz")
+  writeBin(raw,tmp)
+  in_con <- gzfile(tmp,"rb")
+  out_con <- file(output,"wb")
+  on.exit({try(close(in_con),silent=TRUE);try(close(out_con),silent=TRUE)},add=TRUE)
+  repeat {
+    buf <- readBin(in_con,"raw",n=1024L*1024L)
+    if(!length(buf)) break
+    writeBin(buf,out_con)
+  }
+  close(in_con); close(out_con); on.exit(NULL,add=FALSE)
+  unlink(tmp)
+} else {
+  writeBin(raw,output)
+}
 
 actual_sha <- tolower(digest(file=output,algo="sha256",serialize=FALSE))
 if(!identical(actual_sha,expected_sha)) stop(sprintf("Canonical checksum mismatch: expected %s; found %s",expected_sha,actual_sha),call.=FALSE)
