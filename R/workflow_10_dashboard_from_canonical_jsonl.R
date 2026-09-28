@@ -130,9 +130,8 @@ repeat{
         score<-a$workflow07_score%||%list()
         star<-clean(score$stars)
         cn<-suppressWarnings(as.integer(clean(score$confidence_n)))
-        if(nzchar(star)){
-          if(is.na(cn)||!(cn%in%1:3)||nchar(star)!=cn||!grepl("^★{1,3}$",star)) stopf("Invalid topic confidence for %s / %s",rid,pid)
-        } else cn<-NA_integer_
+        if(!nzchar(star)) stopf("Final topic assignment lacks Workflow 07 confidence stars for %s / %s",rid,pid)
+        if(is.na(cn)||!(cn%in%1:3)||nchar(star)!=cn||!grepl("^★{1,3}$",star)) stopf("Invalid topic confidence for %s / %s",rid,pid)
         topic_ids<-c(topic_ids,pid);paths<-c(paths,opath);stars<-c(stars,star);confidence_n<-c(confidence_n,cn)
       }
     }
