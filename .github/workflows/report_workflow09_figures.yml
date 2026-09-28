@@ -41,7 +41,7 @@ jobs:
           install.packages(c(
             "jsonlite","dplyr","tidyr","readr","ggplot2","scales","here",
             "stringr","sf","classInt","rnaturalearth","rnaturalearthdata",
-            "httr2","digest","CiteSource"
+            "httr2","digest","CiteSource","rmarkdown","knitr"
           ))
 
       - name: Restore authoritative final Workflow 08 reporting state
@@ -114,6 +114,23 @@ jobs:
             --included-ids workflow04_included_record_ids.txt \
             --output-dir outputs/citesource_contribution
 
+      - name: Render Results manuscript from current Workflow 09 state
+        env:
+          CANONICAL_JSONL: workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
+          FLOW_COUNTS_JSON: visualisations/figure_07_flow_diagram_counts.json
+        shell: Rscript {0}
+        run: |
+          dir.create("outputs/workflow09_manuscript", recursive = TRUE, showWarnings = FALSE)
+          rmarkdown::render(
+            input = "docs/reporting/workflow_09/manuscript/long_form_results.Rmd",
+            output_format = "word_document",
+            output_file = "long_form_results.docx",
+            output_dir = "outputs/workflow09_manuscript",
+            envir = new.env(parent = globalenv()),
+            clean = TRUE
+          )
+          stopifnot(file.exists("outputs/workflow09_manuscript/long_form_results.docx"))
+
       - name: Validate canonical provenance and outputs
         shell: Rscript {0}
         run: |
@@ -179,6 +196,7 @@ jobs:
           cp visualisations/topic_hierarchy/*.png outputs/workflow09_figure_review/topic_hierarchy/
           cp visualisations/topic_hierarchy/*.pdf outputs/workflow09_figure_review/topic_hierarchy/
           cp outputs/citesource_contribution/database_contribution_upset.{png,pdf} outputs/workflow09_figure_review/
+          cp outputs/workflow09_manuscript/long_form_results.docx outputs/workflow09_figure_review/
 
       - name: Upload Workflow 09 figure review bundle
         uses: actions/upload-artifact@v4
