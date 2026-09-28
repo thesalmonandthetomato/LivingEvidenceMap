@@ -386,8 +386,9 @@ function wire(){
     if(rs)rs.value='__all__';
     if(rc)rc.value='__all__';
     lockedKey=null;
-    if(typeof renderRadial==='function')renderRadial();
     placeholder();
+    if(rs)rs.dispatchEvent(new Event('change'));
+    else if(rc)rc.dispatchEvent(new Event('change'));
     setTimeout(wire,0);
   };
   if(lockedKey===null && !info.textContent.trim()) placeholder();
