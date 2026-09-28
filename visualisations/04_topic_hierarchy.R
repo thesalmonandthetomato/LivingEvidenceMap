@@ -173,8 +173,9 @@ write_csv(top_species_counts %>% mutate(level1 = as.character(level1), species =
 #
 # Rows are grouped by Level 2 and separated visually. Level 2 parents are
 # ordered by total assignments; children are ordered within each group by
-# assignment frequency. The approved manuscript design deliberately omits
-# vertical grid lines and uses separators only between Level 2 groups.
+# assignment frequency. The final manuscript design uses a light common
+# x-axis reference grid, consistent typography and Level 2 group separators
+# across Figures 7-14.
 # APPROVED / LOCKED for Workflow 09 on 2026-09-28.
 
 make_hierarchy <- function(root, dat, file_stub) {
