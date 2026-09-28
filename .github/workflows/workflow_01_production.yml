@@ -170,37 +170,78 @@ jobs:
           mkdir -p current_sources/{lens,scopus,openalex,agricola,wos}
           has_source(){ case ",$W00_SOURCES," in *",$1,"*) return 0;; *) return 1;; esac; }
 
+          delta_root() {
+            local source="$1"
+            local p="current_workflow00/$source/source_delta/filtered_source"
+            if [ -d "$p" ]; then printf '%s' "$p"; else printf ''; fi
+          }
+
+          delta_n() {
+            local source="$1"
+            local m="current_workflow00/$source/source_delta/reconciliation_manifest.json"
+            if [ -s "$m" ]; then
+              M="$m" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("M"));cat(as.integer(x$new_native_ids))'
+            else
+              printf ''
+            fi
+          }
+
           if has_source lens; then
-            P="$(find current_workflow00/lens -name records.jsonl -type f -print -quit)"
-            test -n "$P"; cp "$P" current_sources/lens/records.jsonl
+            D="$(delta_root lens)"
+            if [ -n "$D" ]; then
+              cp "$D/records.jsonl" current_sources/lens/records.jsonl
+            else
+              P="$(find current_workflow00/lens -path '*/source_child/records.jsonl' -type f -print -quit)"
+              test -n "$P"; cp "$P" current_sources/lens/records.jsonl
+            fi
           else
             cp previous_state/workflow01_seed/lens_records_for_deduplication.jsonl current_sources/lens/records.jsonl
           fi
 
           if has_source scopus; then
-            P="$(find current_workflow00/scopus -type d -name source_child -print -quit)"
-            test -n "$P"; Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/scopus
+            D="$(delta_root scopus)"; N="$(delta_n scopus)"
+            if [ -n "$D" ] && [ "$N" = "0" ]; then
+              : > current_sources/scopus/scopus_sidecar_records.jsonl
+            else
+              if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/scopus -type d -name source_child -print -quit)"; fi
+              test -n "$P"; Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/scopus
+            fi
           else
             cp previous_state/workflow01_seed/scopus_records_for_deduplication.jsonl current_sources/scopus/scopus_sidecar_records.jsonl
           fi
 
           if has_source openalex; then
-            P="$(find current_workflow00/openalex -type d -name source_child -print -quit)"
-            test -n "$P"; Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/openalex
+            D="$(delta_root openalex)"; N="$(delta_n openalex)"
+            if [ -n "$D" ] && [ "$N" = "0" ]; then
+              : > current_sources/openalex/openalex_sidecar_records.jsonl
+            else
+              if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/openalex -type d -name source_child -print -quit)"; fi
+              test -n "$P"; Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/openalex
+            fi
           else
             cp previous_state/workflow01_seed/openalex_records_for_deduplication.jsonl current_sources/openalex/openalex_sidecar_records.jsonl
           fi
 
           if has_source agricola; then
-            P="$(find current_workflow00/agricola -type d -name source_child -print -quit)"
-            test -n "$P"; Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/agricola
+            D="$(delta_root agricola)"; N="$(delta_n agricola)"
+            if [ -n "$D" ] && [ "$N" = "0" ]; then
+              : > current_sources/agricola/agricola_sidecar_records.jsonl
+            else
+              if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/agricola -type d -name source_child -print -quit)"; fi
+              test -n "$P"; Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/agricola
+            fi
           else
             cp previous_state/workflow01_seed/agricola_records_for_deduplication.jsonl current_sources/agricola/agricola_sidecar_records.jsonl
           fi
 
           if has_source wos; then
-            P="$(find current_workflow00/wos -type d -name source_child -print -quit)"
-            test -n "$P"; Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/wos
+            D="$(delta_root wos)"; N="$(delta_n wos)"
+            if [ -n "$D" ] && [ "$N" = "0" ]; then
+              : > current_sources/wos/wos_starter_sidecar_records.jsonl
+            else
+              if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/wos -type d -name source_child -print -quit)"; fi
+              test -n "$P"; Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/wos
+            fi
           else
             cp previous_state/workflow01_seed/wos_records_for_deduplication.jsonl current_sources/wos/wos_starter_sidecar_records.jsonl
           fi
