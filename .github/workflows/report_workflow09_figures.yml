@@ -52,6 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git pull --ff-only origin workflow01-final-architecture
           W08_POINTER="$(ls docs/workflow08/zenodo/run-*.json | sort -V | tail -1)"
           test -n "$W08_POINTER"
           echo "W08_POINTER=$W08_POINTER" >> "$GITHUB_ENV"
