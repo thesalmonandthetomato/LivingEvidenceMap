@@ -1,5 +1,5 @@
 name: Deploy GitHub Pages
-# deploy template refresh: fix wildcard search interaction
+# deploy template refresh: fix wildcard search syntax
 
 on:
   workflow_dispatch:
@@ -119,6 +119,7 @@ jobs:
           grep -q "variantsForPattern" production/docs/workflow10-search-trial.html
           grep -q "normalisePattern" production/docs/workflow10-search-trial.html
           grep -q "Searching titles and abstracts" production/docs/workflow10-search-trial.html
+          grep -Fq "if(titleTokens.some(function(t){return tokenMatchesPattern(t,term);}))ids.add" production/docs/workflow10-search-trial.html
           grep -Fq "wildcards (* = zero or more characters; ? = one character)" production/docs/workflow10-search-trial.html
 
           # Reassert the existing preview is still present after adding the trial.
