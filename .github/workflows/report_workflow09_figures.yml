@@ -80,7 +80,7 @@ jobs:
           Rscript visualisations/05_records_by_publication_year_high_level_topic.R
           Rscript visualisations/06_rapidly_emerging_topics.R
 
-      - name: Render paired database contribution UpSet
+      - name: Render database contribution UpSet
         shell: bash
         run: |
           set -euo pipefail
@@ -114,8 +114,7 @@ jobs:
             "visualisations/topic_hierarchy/figure_04e_hierarchy_product.png",
             "visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.png",
             "visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.png",
-            "outputs/citesource_contribution/database_contribution_upset.png",
-            "outputs/citesource_contribution/database_contribution_deduplicated_vs_included.png"
+            "outputs/citesource_contribution/database_contribution_upset.png"
           )
           stopifnot(all(file.exists(required)))
           cat("PASS: all Workflow 09 review figures rendered from verified authoritative inputs\n")
@@ -133,7 +132,6 @@ jobs:
           cp visualisations/topic_hierarchy/*.png outputs/workflow09_figure_review/topic_hierarchy/
           cp visualisations/topic_hierarchy/*.pdf outputs/workflow09_figure_review/topic_hierarchy/
           cp outputs/citesource_contribution/database_contribution_upset.{png,pdf} outputs/workflow09_figure_review/
-          cp outputs/citesource_contribution/database_contribution_deduplicated_vs_included.{png,pdf} outputs/workflow09_figure_review/
 
       - name: Upload Workflow 09 figure review bundle
         uses: actions/upload-artifact@v4
