@@ -1,0 +1,70 @@
+{
+  "schema": "living-evidence-map-workflow00-state-v1",
+  "status": "accepted",
+  "state_id": "baseline-v1-2026-09-23",
+  "state_type": "composite_baseline",
+  "search_version": "v1",
+  "created_from_existing_archives": true,
+  "sources": {
+    "lens": {
+      "archive_pointer": "docs/search_record/zenodo/run-35730574878.json",
+      "github_run_id": "35730574878",
+      "zenodo_record_id": "22921060",
+      "doi": "10.5281/zenodo.22921060",
+      "harvest_file": {
+        "filename": "LivingEvidenceMap_workflow00_run-35730574878_lens-harvest.tar.gz",
+        "bytes": 78533401,
+        "sha256": "4003220dc06fc0e768e6e4321391cd9086a9873f3a1b31ecf96a03114ec0e6b8"
+      },
+      "native_id_registry": "data/workflow00/source_id_registry/lens_native_ids.txt"
+    },
+    "scopus": {
+      "archive_pointer": "docs/search_record/zenodo/run-35731899007.json",
+      "github_run_id": "35731899007",
+      "zenodo_record_id": "22925311",
+      "doi": "10.5281/zenodo.22925311",
+      "harvest_file": {
+        "filename": "LivingEvidenceMap_workflow00_run-35731899007_scopus-harvest.tar.gz",
+        "bytes": 4638739,
+        "sha256": "d87676dd7eb3e7d2d12caa5c537421d3fe7cbfc5e6bbbc856d00f482cfebff5b"
+      },
+      "native_id_registry": "data/workflow00/source_id_registry/scopus_native_ids.txt"
+    },
+    "openalex": {
+      "archive_pointer": "docs/search_record/zenodo/run-35730574878.json",
+      "github_run_id": "35730574878",
+      "zenodo_record_id": "22921060",
+      "doi": "10.5281/zenodo.22921060",
+      "harvest_file": {
+        "filename": "LivingEvidenceMap_workflow00_run-35730574878_openalex-harvest.tar.gz",
+        "bytes": 91227979,
+        "sha256": "2cf60e5bd6c8df38aeb3513bde5f325788c9ec405dde566043a9d5888a280b14"
+      },
+      "native_id_registry": "data/workflow00/source_id_registry/openalex_native_ids.txt"
+    },
+    "agricola": {
+      "archive_pointer": "docs/search_record/zenodo/run-35735412308.json",
+      "github_run_id": "35735412308",
+      "zenodo_record_id": "22920797",
+      "doi": "10.5281/zenodo.22920797",
+      "harvest_file": {
+        "filename": "LivingEvidenceMap_workflow00_run-35735412308_agricola-harvest.tar.gz",
+        "bytes": 5871218,
+        "sha256": "89abc9f1d7ce90a47db8147030bef0830044f8098f549be25b1bec57c03f257d"
+      },
+      "native_id_registry": "data/workflow00/source_id_registry/agricola_native_ids.txt"
+    },
+    "wos": {
+      "archive_pointer": "docs/search_record/zenodo/run-35730574878.json",
+      "github_run_id": "35730574878",
+      "zenodo_record_id": "22921060",
+      "doi": "10.5281/zenodo.22921060",
+      "harvest_file": {
+        "filename": "LivingEvidenceMap_workflow00_run-35730574878_wos-harvest.tar.gz",
+        "bytes": 12716718,
+        "sha256": "a2eef1bb28ba3e3aebdb3eb3c7c049650d8c96f9d4f920da76f51cb7a5755c17"
+      },
+      "native_id_registry": "data/workflow00/source_id_registry/wos_native_ids.txt"
+    }
+  }
+}
