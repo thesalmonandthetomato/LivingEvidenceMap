@@ -66,7 +66,7 @@ p_top <- ggplot(top_species_counts, aes(x = level1, y = species_records, fill = 
   geom_col(width = 0.75, colour = "white", linewidth = 0.15) + coord_flip() +
   scale_fill_manual(values = species_fill_values, drop = FALSE) +
   scale_y_continuous(labels = label_comma(), expand = expansion(mult = c(0, 0.06))) +
-  labs(x = NULL, y = "Included record-species observations", fill = "Species") +
+  labs(x = NULL, y = "Record–species topic assignments", fill = "Species") +
   theme_classic(base_size = 11) +
   theme(legend.position = "right", legend.title = element_text(face = "bold"), axis.title = element_text(face = "bold"), axis.text = element_text(colour = "black"), panel.grid = element_blank())
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.pdf"), p_top, width = 210, height = 130, units = "mm", device = cairo_pdf)
