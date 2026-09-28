@@ -1,0 +1,159 @@
+name: Temporary - test Scopus author keywords
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_test_scopus_keywords.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install minimal dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Test Scopus author-keyword retrieval
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(httr2)
+            library(jsonlite)
+          })
+
+          api_key <- Sys.getenv("SCOPUS_API_TOKEN")
+          insttoken <- Sys.getenv("SCOPUS_INSTTOKEN")
+          if (!nzchar(api_key)) stop("SCOPUS_API_TOKEN is missing")
+          if (!nzchar(insttoken)) stop("SCOPUS_INSTTOKEN is missing")
+
+          eids <- c(
+            "2-s2.0-0000017639",
+            "2-s2.0-0019715866",
+            "2-s2.0-0027331449",
+            "2-s2.0-0030629350",
+            "2-s2.0-0033372517",
+            "2-s2.0-0035836423",
+            "2-s2.0-0043157837",
+            "2-s2.0-105006688887",
+            "2-s2.0-105018804036",
+            "2-s2.0-105033454775"
+          )
+
+          scalar <- function(x) {
+            if (is.null(x) || length(x) == 0L) return(NULL)
+            if (is.atomic(x)) return(as.character(x[[1L]]))
+            NULL
+          }
+
+          find_keyword_nodes <- function(x, path="") {
+            out <- list()
+            if (!is.list(x)) return(out)
+            nms <- names(x)
+            if (is.null(nms)) {
+              for (i in seq_along(x)) {
+                out <- c(out, find_keyword_nodes(x[[i]], paste0(path, "[", i, "]")))
+              }
+              return(out)
+            }
+            for (nm in nms) {
+              p <- if (nzchar(path)) paste0(path, ".", nm) else nm
+              if (grepl("keyword", nm, ignore.case=TRUE)) {
+                out[[p]] <- x[[nm]]
+              }
+              if (is.list(x[[nm]])) {
+                out <- c(out, find_keyword_nodes(x[[nm]], p))
+              }
+            }
+            out
+          }
+
+          keyword_text <- function(nodes) {
+            vals <- character()
+            flatten <- function(x) {
+              if (is.null(x)) return(character())
+              if (is.atomic(x)) return(as.character(x))
+              if (!is.list(x)) return(character())
+              unlist(lapply(x, flatten), use.names=FALSE)
+            }
+            vals <- trimws(unlist(lapply(nodes, flatten), use.names=FALSE))
+            vals <- vals[nzchar(vals)]
+            vals <- vals[!grepl("^@|^\$|^author-keyword$|^keywords?$", vals, ignore.case=TRUE)]
+            unique(vals)
+          }
+
+          success <- 0L
+          with_keywords <- 0L
+
+          for (eid in eids) {
+            url <- paste0("https://api.elsevier.com/content/abstract/eid/", URLencode(eid, reserved=TRUE))
+            req <- request(url) |>
+              req_headers(
+                Accept="application/json",
+                `X-ELS-APIKey`=api_key,
+                `X-ELS-Insttoken`=insttoken,
+                `User-Agent`="LivingEvidenceMap Scopus keyword trial"
+              ) |>
+              req_url_query(view="FULL") |>
+              req_error(is_error=function(resp) FALSE)
+
+            resp <- tryCatch(req_perform(req), error=identity)
+            if (inherits(resp, "error")) {
+              cat(sprintf("EID=%s STATUS=REQUEST_ERROR ERROR=%s\n", eid, conditionMessage(resp)))
+              next
+            }
+
+            st <- resp_status(resp)
+            body <- tryCatch(resp_body_string(resp), error=function(e) "")
+            cat(sprintf("\nEID=%s HTTP=%d\n", eid, st))
+
+            if (st >= 400L) {
+              cat(sprintf("BODY=%s\n", substr(gsub("[\r\n]+"," ",body),1,500)))
+              next
+            }
+
+            success <- success + 1L
+            obj <- tryCatch(fromJSON(body, simplifyVector=FALSE), error=identity)
+            if (inherits(obj, "error")) {
+              cat(sprintf("PARSE_ERROR=%s\n", conditionMessage(obj)))
+              next
+            }
+
+            rr <- obj[["abstracts-retrieval-response"]]
+            core <- rr[["coredata"]]
+            title <- scalar(core[["dc:title"]])
+            cat(sprintf("TITLE=%s\n", ifelse(is.null(title),"<missing>",title)))
+
+            nodes <- find_keyword_nodes(rr)
+            paths <- names(nodes)
+            cat(sprintf("KEYWORD_PATHS=%s\n", if(length(paths)) paste(paths,collapse=" | ") else "NONE"))
+            vals <- keyword_text(nodes)
+            cat(sprintf("KEYWORDS_N=%d\n", length(vals)))
+            if (length(vals)) {
+              with_keywords <- with_keywords + 1L
+              cat(sprintf("KEYWORDS=%s\n", paste(vals,collapse=" || ")))
+            } else {
+              cat("KEYWORDS=NONE\n")
+            }
+          }
+
+          cat(sprintf("\nSUMMARY requested=%d successful=%d with_keyword_nodes=%d\n",
+                      length(eids), success, with_keywords))
