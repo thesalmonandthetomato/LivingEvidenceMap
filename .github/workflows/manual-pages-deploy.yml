@@ -1,5 +1,5 @@
 name: Deploy GitHub Pages
-# deploy template refresh: Boolean search trial
+# deploy template refresh: wildcard Boolean search trial
 
 on:
   workflow_dispatch:
@@ -115,6 +115,9 @@ jobs:
           grep -q "Boolean syntax: AND, OR, NOT" production/docs/workflow10-search-trial.html
           grep -q "parseBoolean" production/docs/workflow10-search-trial.html
           grep -q "idsForPhrase" production/docs/workflow10-search-trial.html
+          grep -q "wildcardRegex" production/docs/workflow10-search-trial.html
+          grep -q "variantsForPattern" production/docs/workflow10-search-trial.html
+          grep -q "wildcards (* = zero or more characters; ? = one character)" production/docs/workflow10-search-trial.html
 
           # Reassert the existing preview is still present after adding the trial.
           test -s production/docs/workflow10-preview.html
