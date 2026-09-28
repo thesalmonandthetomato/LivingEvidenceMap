@@ -22,6 +22,8 @@ concurrency:
 env:
   SOURCE_RUN_ID: '36457402997'
   SOURCE_ARTIFACT: 'workflow10-dashboard-36457402997'
+  TRIAL_RUN_ID: '36469533127'
+  TRIAL_ARTIFACT: 'workflow10-search-trial-36469533127'
 
 jobs:
   deploy:
@@ -74,6 +76,44 @@ jobs:
           grep -q "unique_records_screened" production/docs/workflow10-preview-data.js
           test $(wc -c < production/docs/workflow10-preview-data.js) -gt 1000000
           echo "PASS: complete Workflow 10 preview assembled"
+
+      - name: Download validated isolated search trial
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.TRIAL_ARTIFACT }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.TRIAL_RUN_ID }}
+          path: trial_artifact
+
+      - name: Add isolated search trial without modifying preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIAL_HTML=$(find trial_artifact -type f -name workflow10-search-trial.html -print -quit)
+          TRIAL_DATA=$(find trial_artifact -type f -name workflow10-search-trial-data.js -print -quit)
+          TRIAL_INDEX=$(find trial_artifact -type f -name workflow10-search-trial-index.js -print -quit)
+          test -s "$TRIAL_HTML"
+          test -s "$TRIAL_DATA"
+          test -s "$TRIAL_INDEX"
+
+          cp "$TRIAL_HTML" production/docs/workflow10-search-trial.html
+          cp "$TRIAL_DATA" production/docs/workflow10-search-trial-data.js
+          cp "$TRIAL_INDEX" production/docs/workflow10-search-trial-index.js
+
+          grep -q "Search and download" production/docs/workflow10-search-trial.html
+          grep -q "Search across titles and abstracts" production/docs/workflow10-search-trial.html
+          grep -q "abstract_snippet" production/docs/workflow10-search-trial-data.js
+          if grep -q '"abstract":' production/docs/workflow10-search-trial-data.js; then
+            echo "ERROR: full abstract field present in trial dashboard data" >&2
+            exit 1
+          fi
+          grep -q "LIVING_EVIDENCE_MAP_ABSTRACT_INDEX" production/docs/workflow10-search-trial-index.js
+
+          # Reassert the existing preview is still present after adding the trial.
+          test -s production/docs/workflow10-preview.html
+          test -s production/docs/workflow10-preview-data.js
+          echo "PASS: isolated search trial added; existing Workflow 10 preview preserved"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
