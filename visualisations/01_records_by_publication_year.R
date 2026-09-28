@@ -33,7 +33,7 @@ normalise_species <- function(x) {
 master <- load_figure_master()
 plot_data <- master %>%
   transmute(record_id, publication_year = year, species = final_species) %>%
-  filter(!is.na(publication_year)) %>%
+  filter(!is.na(publication_year), publication_year <= 2025L) %>%
   separate_rows(species, sep = ";") %>%
   mutate(species = normalise_species(species), species = if_else(is.na(species) | species == "", "Unspecified species", species)) %>%
   distinct(record_id, species, .keep_all = TRUE)
