@@ -50,5 +50,6 @@
     "Workflow 02 enriched 2,190 distinct records; the audit contains 2,190 applied field updates, one per enriched record.",
     "For the manuscript flow, Workflow 04, Workflow 07 late, and Workflow 08 exclusions are combined into the title/abstract exclusion total of 13,166, leaving 19,117 final retained records.",
     "Geography coding status in the final Workflow 08 canonical: 7,618 RESOLVED and 11,499 NONE; NONE records are included but have no geography assigned."
-  ]
+  ],
+  "search_update_date": "2026-09-22"
 }
