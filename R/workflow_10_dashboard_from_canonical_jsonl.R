@@ -194,7 +194,14 @@ if(length(iso_numeric)){
   for(k in names(iso_numeric)){n<-suppressWarnings(as.integer(iso_numeric[[k]]));if(!is.na(n))map_id_to_iso3[[sprintf("%03d",n)]]<-toupper(k)}
 }
 flow_counts<-fromJSON(flow_counts_path,simplifyVector=FALSE)
-screened_n<-as.integer((flow_counts$counts%||%list())$title_abstract_screened%||%NA_integer_)
+flow_c<-flow_counts$counts%||%list()
+database_n<-length(flow_c$sources%||%list())
+search_results_n<-as.integer(flow_c$combined_search_results%||%NA_integer_)
+unique_records_n<-as.integer(flow_c$deduplicated_records%||%NA_integer_)
+screened_n<-as.integer(flow_c$title_abstract_screened%||%NA_integer_)
+if(database_n!=5L) stopf("Unexpected Workflow 09 database count: %s",as.character(database_n))
+if(is.na(search_results_n)||search_results_n!=90137L) stopf("Unexpected Workflow 09 search-results count: %s",as.character(search_results_n))
+if(is.na(unique_records_n)||unique_records_n!=32292L) stopf("Unexpected Workflow 09 deduplicated-record count: %s",as.character(unique_records_n))
 if(is.na(screened_n)||screened_n!=32283L) stopf("Unexpected Workflow 09 screened count: %s",as.character(screened_n))
 published_at<-clean(pointer$published_at_utc)
 payload<-list(
@@ -216,6 +223,9 @@ payload<-list(
     total_species=length(species_counts),
     last_search=NULL,
     last_evidence_update=published_at,
+    databases_searched=database_n,
+    search_results=search_results_n,
+    unique_records_screened=unique_records_n,
     candidate_search_results_screened=screened_n
   ),
   species_display_order=c("Atlantic salmon","Chinook salmon","Chum salmon","Coho salmon","Masu salmon","Pink salmon","Sockeye salmon","Rainbow trout","Unspecified species"),
