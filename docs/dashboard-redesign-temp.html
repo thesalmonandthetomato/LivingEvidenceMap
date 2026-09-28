@@ -20,7 +20,7 @@
 <section class="section"><h2>Topic-assignment frequency by species</h2><p class="sub">High-level topic assignments split by focal farmed species. Click a segment to jump to the database filtered only to that species and high-level topic.</p><div id="topicSpeciesChart" class="chart-host"></div><div id="topicSpeciesLegend" class="legend"></div></section>
 
 <section class="section"><h2>Evidence by species × topic</h2><p class="sub">Click a topic label to show the next level in that branch. Click a cell to jump to the database filtered only to that species and topic.</p><div class="controls"><label>Species <select id="heatSpecies"><option value="__all__">All species</option></select></label><button id="heatReset" type="button">Reset topic view</button><span id="heatContext" class="heat-context">Showing high-level topics</span><span style="display:none"><select id="heatTop"><option value="__all__">All topics</option></select><select id="heatLevel"><option value="1">1</option></select><select id="heatParent"><option value="__all__">All top-level topics</option></select><select id="heatLimit"><option selected>60</option></select><button id="heatBack" type="button"></button></span></div><div class="heat-scroll"><div id="heatmap"></div></div></section>
-<section class="section"><h2>Topic hierarchy</h2><p class="sub">Radial hierarchy of topics. High-level branches use the full dashboard palette from dark grey-teal through pale grey and peach to salmon pink. Hover for counts; click any segment to jump to the database filtered only at that hierarchy level.</p><div class="topic-radial-controls"><button id="topicRadialReset" type="button">Reset highlight</button></div><div id="topicRadial" class="topic-radial"></div></section>
+<section class="section"><h2>Topic hierarchy</h2><p class="sub">Radial hierarchy of topics. High-level branches use the full dashboard palette from dark grey-teal through pale grey and peach to salmon pink. Hover for counts; click any segment to jump to the database filtered only at that hierarchy level.</p><div class="topic-radial-controls"><label>Species <select id="radialSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="radialCountry"><option value="__all__">All countries</option></select></label><button id="topicRadialReset" type="button">Reset highlight</button></div><div id="topicRadial" class="topic-radial"></div></section>
 <section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div class="controls"><input id="q" placeholder="Search title or abstract…"><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
 <footer class="repo-footer">The full evidence pipeline workflow is available on <a href="https://github.com/thesalmonandthetomato/LivingEvidenceMap" target="_blank" rel="noopener">GitHub</a>.</footer><div id="tip" class="tooltip"></div>
 <script src="./dashboard-data.js"></script>
@@ -247,9 +247,9 @@ function renderTopicSpecies(){
  legend(document.getElementById('topicSpeciesLegend'),species,SPECIES_COLOURS);
 }
 
-function makeTree(){
+function makeTree(records){
  var root={name:'All topics',key:'',ids:new Set(),children:new Map()};
- (D.records||[]).forEach(function(r,i){var id=rid(r,i);root.ids.add(id);(r.topic_paths||[]).forEach(function(p){var a=parts(p),node=root,key='';a.forEach(function(name){key=key?key+' > '+name:name;if(!node.children.has(name))node.children.set(name,{name:name,key:key,ids:new Set(),children:new Map()});node=node.children.get(name);node.ids.add(id);});});});
+ (records||D.records||[]).forEach(function(r,i){var id=rid(r,i);root.ids.add(id);(r.topic_paths||[]).forEach(function(p){var a=parts(p),node=root,key='';a.forEach(function(name){key=key?key+' > '+name:name;if(!node.children.has(name))node.children.set(name,{name:name,key:key,ids:new Set(),children:new Map()});node=node.children.get(name);node.ids.add(id);});});});
  return root;
 }
 var topicTree=null;
@@ -275,9 +275,13 @@ function renderHeat(){
 }
 
 function renderRadial(){
- var host=document.getElementById('topicRadial');host.style.setProperty('width','100%','important');host.style.setProperty('height','auto','important');host.style.setProperty('min-height','0','important');host.style.setProperty('max-width','520px','important');host.style.setProperty('max-height','none','important');host.style.setProperty('overflow','visible','important');host.style.setProperty('flex','0 1 520px','important');var el=d3.select('#topicRadial');el.selectAll('*').remove();if(!topicTree)topicTree=makeTree();
+ var host=document.getElementById('topicRadial');host.style.setProperty('width','100%','important');host.style.setProperty('height','auto','important');host.style.setProperty('min-height','0','important');host.style.setProperty('max-width','520px','important');host.style.setProperty('max-height','none','important');host.style.setProperty('overflow','visible','important');host.style.setProperty('flex','0 1 520px','important');var el=d3.select('#topicRadial');el.selectAll('*').remove();
+ var rs=document.getElementById('radialSpecies'),rc=document.getElementById('radialCountry');
+ var selectedSpecies=rs?rs.value:'__all__',selectedCountry=rc?rc.value:'__all__';
+ var radialRecords=(D.records||[]).filter(function(r){return (selectedSpecies==='__all__'||(r.species||[]).indexOf(selectedSpecies)>=0)&&(selectedCountry==='__all__'||(r.iso3||[]).indexOf(selectedCountry)>=0);});
+ var radialTree=makeTree(radialRecords);
  function conv(n){return {name:n.name,key:n.key,count:n.ids.size,children:Array.from(n.children.values()).sort(function(a,b){return b.ids.size-a.ids.size;}).map(conv)};}
- var data=conv(topicTree),W=520,H=520,R=246,h=d3.hierarchy(data);h.sum(function(d){return d.children&&d.children.length?0:d.count;});d3.partition().size([2*Math.PI,R])(h);
+ var data=conv(radialTree),W=520,H=520,R=246,h=d3.hierarchy(data);h.sum(function(d){return d.children&&d.children.length?0:d.count;});d3.partition().size([2*Math.PI,R])(h);
  var roots=rootsOrder(),rootColour={};roots.forEach(function(t,i){rootColour[t]=TOPIC_COLOURS[t]||d3.quantize(d3.interpolateRgbBasis(['#577c84','#a8bdbe','#e2b8a2','#ff9d78','#e55634']),Math.max(2,roots.length))[i];});
  function top(d){var a=d.ancestors().reverse();return a.length>1?a[1].data.name:d.data.name;}
  function fill(d){var c=d3.color(rootColour[top(d)]||'#577c84');var depth=Math.max(1,d.depth);return depth===1?c.formatHex():c.brighter(Math.min(1.25,(depth-1)*.42)).formatHex();}
@@ -301,6 +305,12 @@ function installSpeciesColumn(){
 function boot(){
  if(typeof D==='undefined'||!D||!Array.isArray(D.records)){setTimeout(boot,100);return;}
  window.D=D;topicTree=makeTree();
+ var radialSpecies=document.getElementById('radialSpecies'),radialCountry=document.getElementById('radialCountry');
+ if(radialSpecies&&radialSpecies.options.length===1){speciesOrder().forEach(function(s){radialSpecies.add(new Option(s==='Unspecified species'?'Unspecified salmon':s,s));});}
+ if(radialCountry&&radialCountry.options.length===1){Object.keys(D.country_iso3_counts||{}).sort(function(a,b){return countryLabel(a).localeCompare(countryLabel(b));}).forEach(function(iso){radialCountry.add(new Option(countryLabel(iso),iso));});}
+ function updateRadialFilters(){var reset=document.getElementById('topicRadialReset');if(reset)reset.click();renderRadial();}
+ if(radialSpecies)radialSpecies.onchange=updateRadialFilters;
+ if(radialCountry)radialCountry.onchange=updateRadialFilters;
  document.getElementById('yearGroup').onchange=renderYear;
  document.getElementById('heatSpecies').onchange=renderHeat;
  document.getElementById('heatReset').onclick=function(){heatBranch=null;renderHeat();};
