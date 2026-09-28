@@ -42,6 +42,14 @@ first <- function(x) {
   if (length(x)) x[[1L]] else ""
 }
 
+split_semicolon_values <- function(x) {
+  z <- clean(x)
+  if (!length(z)) return(character())
+  z <- unlist(strsplit(z, "\\s*;\\s*", perl = TRUE), use.names = FALSE)
+  z <- trimws(z)
+  unique(z[nzchar(z)])
+}
+
 emit <- function(con, tag, values) {
   values <- clean(values)
   if (!length(values)) return(invisible(NULL))
@@ -96,7 +104,7 @@ repeat {
       if (is.list(authors)) {
         emit(con_out, "AU", unlist(authors, recursive = TRUE, use.names = FALSE))
       } else {
-        emit(con_out, "AU", authors)
+        emit(con_out, "AU", split_semicolon_values(authors))
       }
     }
 
@@ -115,11 +123,12 @@ repeat {
     if (nzchar(doi)) emit(con_out, "UR", paste0("https://doi.org/", doi))
     emit(con_out, "AB", can$abstract)
 
-    emit(con_out, "KW", paste0("Species: ", clean(rec$species$labels)))
-    emit(con_out, "KW", paste0("Country: ", clean(rec$geography$country_names)))
+    emit(con_out, "KW", paste0("Species: ", split_semicolon_values(rec$species$labels)))
+    emit(con_out, "KW", paste0("Country: ", split_semicolon_values(rec$geography$country_names)))
     emit(con_out, "KW", topic_keywords(rec))
 
     emit(con_out, "N1", paste0("LivingEvidenceMap canonical record ID: ", rid))
+    emit(con_out, "N1", paste0("Source manifestation: ", clean(rec$manifestation_refs)))
     writeLines("ER  - ", con_out, useBytes = TRUE)
     writeLines("", con_out, useBytes = TRUE)
     n <- n + 1L
@@ -146,7 +155,8 @@ meta <- list(
     "stable canonical record ID",
     "species labels",
     "country names",
-    "retained topic pathways and star support where available"
+    "retained topic pathways and star support where available",
+    "source manifestation references"
   ),
   omitted_as_nonportable_ris = c(
     "workflow-specific provenance internals",
