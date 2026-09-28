@@ -18,7 +18,7 @@ child_run_id <- arg("--child-run-id", Sys.getenv("GITHUB_RUN_ID","unknown"))
 run_attempt <- arg("--run-attempt", Sys.getenv("GITHUB_RUN_ATTEMPT","1"))
 artifact_name <- arg("--artifact-name","")
 search_version <- arg("--search-version","")
-additional_farm_term <- arg("--additional-farm-term","")
+additional_search_term <- arg("--additional-search-term","")
 output_root <- arg("--output-root","outputs/updater/search_record")
 
 req <- c(source,run_type,query,parent_run_id)
@@ -40,7 +40,7 @@ record <- list(
   source=source,
   run_type=run_type,
   search_version=if(nzchar(search_version)) search_version else NULL,
-  additional_farm_term=if(nzchar(additional_farm_term)) additional_farm_term else NULL,
+  additional_search_term=if(nzchar(additional_search_term)) additional_search_term else NULL,
   search_string=query,
   reported_search_results=reported,
   successfully_downloaded_results=downloaded,
@@ -73,8 +73,8 @@ md <- c(
   query,
   "```"
 )
-if (nzchar(additional_farm_term)) {
-  md <- c(md,"","## Ad hoc expansion","","The immutable species block was unchanged.", sprintf("Additional farm/aquaculture term: `%s`",additional_farm_term))
+if (nzchar(additional_search_term)) {
+  md <- c(md,"","## Ad hoc expansion","","The immutable species block was unchanged.", sprintf("Additional search term: `%s`",additional_search_term))
 }
 writeLines(md,md_path)
 cat(sprintf("SEARCH_RECORD_JSON=%s\nSEARCH_RECORD_MD=%s\n",json_path,md_path))
