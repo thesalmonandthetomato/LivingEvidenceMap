@@ -1,5 +1,5 @@
 name: Deploy GitHub Pages
-# deploy template refresh: isolated search accordion trial
+# deploy template refresh: responsive RIS progress trial
 
 on:
   workflow_dispatch:
@@ -90,7 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TRIAL_HTML=$(find trial_artifact -type f -name workflow10-search-trial.html -print -quit)
+          TRIAL_HTML='workflow10/docs/dashboard-search-trial.html'
           TRIAL_DATA=$(find trial_artifact -type f -name workflow10-search-trial-data.js -print -quit)
           TRIAL_INDEX=$(find trial_artifact -type f -name workflow10-search-trial-index.js -print -quit)
           test -s "$TRIAL_HTML"
@@ -109,6 +109,9 @@ jobs:
             exit 1
           fi
           grep -q "LIVING_EVIDENCE_MAP_ABSTRACT_INDEX" production/docs/workflow10-search-trial-index.js
+          grep -q "downloadProgressBar" production/docs/workflow10-search-trial.html
+          grep -q "Reconstructing abstracts" production/docs/workflow10-search-trial.html
+          grep -q "Writing RIS records" production/docs/workflow10-search-trial.html
 
           # Reassert the existing preview is still present after adding the trial.
           test -s production/docs/workflow10-preview.html
