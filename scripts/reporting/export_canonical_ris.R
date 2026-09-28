@@ -122,7 +122,7 @@ repeat {
     emit(con_out, "KW", topic_keywords(rec))
 
     emit(con_out, "N1", paste0("LivingEvidenceMap canonical record ID: ", rid))
-    emit(con_out, "ER", "")
+    writeLines("ER  - ", con_out, useBytes = TRUE)
     writeLines("", con_out, useBytes = TRUE)
     n <- n + 1L
   }
