@@ -40,12 +40,15 @@
     "workflow08_exclusions": 168,
     "final_included": 19117,
     "final_topic_coded": 18886,
-    "final_topic_uncoded": 231
+    "final_topic_uncoded": 231,
+    "final_geography_coded": 7618,
+    "final_geography_uncoded": 11499
   },
   "notes": [
     "Source counts are source manifestations in the authoritative Workflow 01 manifest after Workflow 00 retrieval and reconciliation; they sum to 90,137.",
     "Duplicates removed is combined source manifestations minus 32,292 deduplicated canonical works.",
     "Workflow 02 enriched 2,190 distinct records; the audit contains 2,190 applied field updates, one per enriched record.",
-    "For the manuscript flow, Workflow 04, Workflow 07 late, and Workflow 08 exclusions are combined into the title/abstract exclusion total of 13,166, leaving 19,117 final retained records."
+    "For the manuscript flow, Workflow 04, Workflow 07 late, and Workflow 08 exclusions are combined into the title/abstract exclusion total of 13,166, leaving 19,117 final retained records.",
+    "Geography coding status in the final Workflow 08 canonical: 7,618 RESOLVED and 11,499 NONE; NONE records are included but have no geography assigned."
   ]
 }
