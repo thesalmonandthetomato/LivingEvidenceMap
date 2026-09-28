@@ -116,6 +116,39 @@ queries <- list(
   wos=wos_query
 )
 
+update_methods <- list(
+  lens=list(
+    retrieval_filter="Lens created date",
+    field_scope=c("title","abstract","keyword"),
+    window_rule="created date from 14 days before run date through run date",
+    limitation="Uses Lens created/indexing metadata; exact native Lens ID reconciliation removes already-known records."
+  ),
+  scopus=list(
+    retrieval_filter="Scopus ORIG-LOAD-DATE",
+    field_scope=c("title","abstract","keywords"),
+    window_rule="ORIG-LOAD-DATE after 14 days before run date",
+    limitation="Uses Scopus load-date metadata; exact EID reconciliation removes already-known records."
+  ),
+  openalex=list(
+    retrieval_filter="publication year",
+    field_scope=c("title","abstract"),
+    window_rule="current publication year through following publication year",
+    limitation="Deliberate workaround because suitable OpenAlex date filtering is not used in this workflow; title/abstract-only scope prevents full-text searching. Exact OpenAlex Work ID reconciliation retains only records not previously harvested."
+  ),
+  agricola=list(
+    retrieval_filter="Europe PMC FIRST_PDATE restricted to AGRICOLA source",
+    field_scope=c("title","abstract"),
+    window_rule="first publication date from 14 days before run date through run date",
+    limitation="Provider/API constraint: FIRST_PDATE is a publication-date filter rather than a true indexing-date filter. Exact AGR source+ID reconciliation removes already-known records."
+  ),
+  wos=list(
+    retrieval_filter="WoS Starter modifiedTimeSpan",
+    field_scope=c("title","abstract","author_keywords"),
+    window_rule="modifiedTimeSpan from 14 days before run date through run date",
+    limitation="Date window is passed as an API parameter rather than embedded in the query string; exact WoS UID reconciliation removes already-known records."
+  )
+)
+
 support <- list(
   lens=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   scopus=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
@@ -143,6 +176,7 @@ plan <- list(
   ),
   fortnightly_window=if(run_type=="fortnightly") list(from=as.character(from_date),to=as.character(today)) else NULL,
   source_queries=queries,
+  source_update_methods=if(run_type=="fortnightly") update_methods else NULL,
   source_mode_support=support
 )
 
