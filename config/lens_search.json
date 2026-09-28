@@ -28,8 +28,8 @@
     ]
   },
   "incremental": {
-    "cadence": "weekly",
+    "cadence": "fortnightly",
     "field": "created",
-    "overlap_days": 7
+    "overlap_days": 14
   }
 }
