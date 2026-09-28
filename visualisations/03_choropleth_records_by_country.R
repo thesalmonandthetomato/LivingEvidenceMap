@@ -27,10 +27,31 @@ country_counts <- master %>%
 
 world_raw <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
 world <- world_raw %>% transmute(iso3c = toupper(trimws(iso_a3_eh)), name_long, geometry)
-unmatched <- anti_join(country_counts, st_drop_geometry(world), by = "iso3c")
-if (nrow(unmatched) > 0) stop("Unmatched project ISO3 codes after normalisation: ", paste(unmatched$iso3c, collapse = ", "))
 
-plot_data <- world %>% select(iso3c, geometry) %>% left_join(country_counts, by = "iso3c") %>% mutate(records = replace_na(records, 0L))
+# Natural Earth does not use the user-assigned ISO-like code XKX for Kosovo.
+# Add an explicit geometry alias only when the Natural Earth data itself
+# exposes a Kosovo ADM0 code. No other unmatched project codes are guessed.
+if (!"XKX" %in% world$iso3c && "adm0_a3" %in% names(world_raw)) {
+  kosovo <- world_raw %>%
+    filter(toupper(trimws(adm0_a3)) == "KOS") %>%
+    transmute(iso3c = "XKX", name_long, geometry)
+  if (nrow(kosovo) == 1L) world <- bind_rows(world, kosovo)
+}
+
+unmatched <- anti_join(country_counts, st_drop_geometry(world), by = "iso3c") %>%
+  mutate(reason = "No matching Natural Earth geometry; omitted from rendered choropleth only")
+write_csv(unmatched, file.path(out_dir, "figure_03_unmatched_geography_codes.csv"))
+
+mapped_counts <- anti_join(country_counts, unmatched %>% select(iso3c), by = "iso3c")
+stopifnot(sum(mapped_counts$records) + sum(unmatched$records) == sum(country_counts$records))
+if (nrow(unmatched) > 0L) {
+  message(
+    "Choropleth audit: omitting unresolved map codes without altering canonical data: ",
+    paste(sprintf("%s (n=%s)", unmatched$iso3c, unmatched$records), collapse = ", ")
+  )
+}
+
+plot_data <- world %>% select(iso3c, geometry) %>% left_join(mapped_counts, by = "iso3c") %>% mutate(records = replace_na(records, 0L))
 positive <- plot_data$records[plot_data$records > 0]
 n_breaks <- min(7L, length(unique(positive)))
 fisher <- classInt::classIntervals(positive, n = n_breaks, style = "fisher")
@@ -47,7 +68,11 @@ p <- ggplot(plot_data) +
   geom_sf(aes(fill = records_class), colour = "white", linewidth = 0.12) +
   scale_fill_manual(values = class_cols, drop = FALSE, name = "Included records", guide = guide_legend(title.position = "top", nrow = 2, byrow = TRUE, keywidth = grid::unit(12, "mm"), keyheight = grid::unit(5, "mm"))) +
   coord_sf(expand = FALSE, crs = sf::st_crs(4326)) +
-  labs(title = "Living Evidence Map: included records by study country", subtitle = "Workflow 08 included-only canonical JSONL", caption = "Multi-country records count once for each represented country; territory codes are assigned to their sovereign state. Positive-count classes use Fisher–Jenks natural breaks.") +
+  labs(title = "Living Evidence Map: included records by study country", subtitle = "Workflow 08 included-only canonical JSONL", caption = paste0(
+    "Multi-country records count once for each represented country; territory codes are assigned to their sovereign state. ",
+    "Positive-count classes use Fisher–Jenks natural breaks.",
+    if (nrow(unmatched) > 0L) " Unresolved/non-current geography codes are preserved in the audit CSV and omitted from this rendered map." else ""
+  )) +
   theme_void(base_size = 11) +
   theme(plot.title = element_text(face = "bold", size = 16, colour = palette[1]), plot.subtitle = element_text(size = 10, colour = palette[2], margin = margin(b = 8)), plot.caption = element_text(size = 8, colour = palette[2], hjust = 0), legend.position = "bottom", legend.title = element_text(face = "bold", colour = palette[1]), legend.text = element_text(colour = palette[1]), plot.margin = margin(12, 12, 10, 12))
 
