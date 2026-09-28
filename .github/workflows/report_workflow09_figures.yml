@@ -313,12 +313,12 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git pull --rebase origin workflow01-final-architecture
           git add docs/reporting/workflow_09
           if git diff --cached --quiet; then
             echo "No Workflow 09 publication changes to commit."
           else
             git commit -m "Publish Workflow 09 reporting package [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
             git push origin HEAD:workflow01-final-architecture
           fi
 
