@@ -19,6 +19,8 @@ run_attempt <- arg("--run-attempt", Sys.getenv("GITHUB_RUN_ATTEMPT","1"))
 artifact_name <- arg("--artifact-name","")
 search_version <- arg("--search-version","")
 additional_search_term <- arg("--additional-search-term","")
+orchestrator_sha <- arg("--orchestrator-sha", Sys.getenv("GITHUB_SHA",""))
+source_handler_sha <- arg("--source-handler-sha", Sys.getenv("GITHUB_SHA",""))
 output_root <- arg("--output-root","outputs/updater/search_record")
 
 req <- c(source,run_type,query,parent_run_id)
@@ -35,7 +37,7 @@ dir <- file.path(output_root,folder)
 dir.create(dir,recursive=TRUE,showWarnings=FALSE)
 
 record <- list(
-  schema_version="1.0",
+  schema_version="1.1",
   recorded_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
   source=source,
   run_type=run_type,
@@ -45,7 +47,16 @@ record <- list(
   reported_search_results=reported,
   successfully_downloaded_results=downloaded,
   complete_download=identical(reported,downloaded),
-  github=list(repository=Sys.getenv("GITHUB_REPOSITORY",""), parent_workflow_run_id=parent_run_id, child_workflow_run_id=child_run_id, run_attempt=run_attempt, ref=Sys.getenv("GITHUB_REF_NAME",""), sha=Sys.getenv("GITHUB_SHA","")),
+  github=list(
+    repository=Sys.getenv("GITHUB_REPOSITORY",""),
+    parent_workflow_run_id=parent_run_id,
+    child_workflow_run_id=child_run_id,
+    run_attempt=run_attempt,
+    ref=Sys.getenv("GITHUB_REF_NAME",""),
+    triggering_sha=Sys.getenv("GITHUB_SHA",""),
+    orchestrator_sha=if(nzchar(orchestrator_sha)) orchestrator_sha else NULL,
+    source_handler_sha=if(nzchar(source_handler_sha)) source_handler_sha else NULL
+  ),
   artifact_name=if(nzchar(artifact_name)) artifact_name else NULL
 )
 
@@ -66,6 +77,8 @@ md <- c(
   sprintf("- **Parent workflow run:** %s", parent_run_id),
   sprintf("- **Child workflow run:** %s (attempt %s)", child_run_id, run_attempt),
   sprintf("- **Harvest artifact:** %s", if(nzchar(artifact_name)) artifact_name else "not supplied"),
+  sprintf("- **Orchestrator commit:** %s", if(nzchar(orchestrator_sha)) orchestrator_sha else "not supplied"),
+  sprintf("- **Source-handler commit:** %s", if(nzchar(source_handler_sha)) source_handler_sha else "not supplied"),
   "",
   "## Search string",
   "",
