@@ -30,6 +30,8 @@ jobs:
         run: install.packages(c('jsonlite','httr2','digest'))
 
       - name: Restore authoritative W08 canonical
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
