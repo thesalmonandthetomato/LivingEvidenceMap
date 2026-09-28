@@ -1,0 +1,157 @@
+name: Temporary - test Europe PMC keyword fallback
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_test_epmc_keyword_fallback.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install minimal dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest','data.table'))
+
+      - name: Restore authoritative W08 canonical
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp_w08
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer docs/workflow08/zenodo/run-36442875006.json \
+            --output tmp_w08/canonical.jsonl
+
+      - name: Test Europe PMC keyword fallback on Scopus misses
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(httr2)
+            library(jsonlite)
+          })
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          norm_doi <- function(x){
+            if(is.null(x)||!length(x)) return(NULL)
+            x <- trimws(tolower(as.character(x[[1L]])))
+            x <- sub("^https?://(dx\\.)?doi\\.org/","",x,perl=TRUE)
+            x <- sub("^doi:\\s*","",x,perl=TRUE)
+            x <- sub("[?#].*$","",x,perl=TRUE)
+            x <- sub("[.,;:]+$","",x,perl=TRUE)
+            if(!nzchar(x)) NULL else x
+          }
+          clean_vec <- function(x){
+            if(is.null(x)||!length(x)) return(character())
+            z <- trimws(as.character(unlist(x,use.names=FALSE)))
+            unique(z[nzchar(z)])
+          }
+          target_ids <- c(
+            "work-01c818aa41822caa",
+            "work-1e248b40b143e662",
+            "work-3ad846d3abd97116",
+            "work-ff4843fed0e418c9"
+          )
+          targets <- list()
+          con <- file("tmp_w08/canonical.jsonl","rt",encoding="UTF-8")
+          repeat{
+            lines <- readLines(con,n=500L,warn=FALSE)
+            if(!length(lines)) break
+            for(line in lines){
+              if(!nzchar(trimws(line))) next
+              r <- fromJSON(line,simplifyVector=FALSE)
+              rid <- as.character((r$identity %||% list())$record_id %||% "")
+              if(rid %in% target_ids){
+                targets[[rid]] <- list(
+                  record_id=rid,
+                  title=as.character((r$canonical %||% list())$title %||% ""),
+                  doi=norm_doi((r$canonical %||% list())$doi)
+                )
+              }
+            }
+          }
+          close(con)
+          cat(sprintf("TARGETS_FOUND=%d\n",length(targets)))
+
+          exact_match <- function(hit,d){
+            identical(norm_doi(hit$doi),d)
+          }
+          extract_keywords <- function(hit){
+            kl <- hit$keywordList %||% list()
+            clean_vec(kl$keyword %||% kl)
+          }
+          extract_mesh <- function(hit){
+            ml <- hit$meshHeadingList %||% list()
+            mh <- ml$meshHeading %||% list()
+            if(is.null(mh)||!length(mh)) return(character())
+            vals <- vapply(mh,function(z){
+              if(is.atomic(z)) return(as.character(z[[1L]]))
+              as.character((z$descriptorName %||% list())$majorTopic_YN %||% (z$descriptorName %||% list())$text %||% z$descriptorName %||% "")
+            },character(1))
+            clean_vec(vals)
+          }
+
+          successful <- 0L
+          exact <- 0L
+          with_kw <- 0L
+          for(rid in target_ids){
+            z <- targets[[rid]]
+            cat(sprintf("\nRECORD=%s\nTITLE=%s\nDOI=%s\n",
+                        rid,z$title,if(is.null(z$doi))"<missing>" else z$doi))
+            if(is.null(z$doi)){
+              cat("OUTCOME=NO_DOI\n")
+              next
+            }
+            req <- request("https://www.ebi.ac.uk/europepmc/webservices/rest/search") |>
+              req_headers(Accept="application/json",`User-Agent`="LivingEvidenceMap EuropePMC keyword fallback trial") |>
+              req_url_query(
+                query=sprintf('DOI:"%s"',z$doi),
+                format="json",
+                resultType="core",
+                pageSize=5
+              ) |>
+              req_error(is_error=function(resp) FALSE)
+            resp <- tryCatch(req_perform(req),error=identity)
+            if(inherits(resp,"error")){
+              cat(sprintf("OUTCOME=REQUEST_ERROR ERROR=%s\n",conditionMessage(resp)))
+              next
+            }
+            st <- resp_status(resp)
+            cat(sprintf("HTTP=%d\n",st))
+            if(st>=400L) next
+            successful <- successful+1L
+            obj <- fromJSON(resp_body_string(resp),simplifyVector=FALSE)
+            hits <- ((obj$resultList %||% list())$result) %||% list()
+            ex <- Filter(function(h) exact_match(h,z$doi),hits)
+            cat(sprintf("HITS=%d EXACT_DOI_HITS=%d\n",length(hits),length(ex)))
+            if(length(ex)!=1L){
+              cat("OUTCOME=NO_UNIQUE_EXACT_DOI_MATCH\n")
+              next
+            }
+            exact <- exact+1L
+            h <- ex[[1L]]
+            kws <- extract_keywords(h)
+            mesh <- extract_mesh(h)
+            cat(sprintf("KEYWORDS_N=%d\n",length(kws)))
+            cat(sprintf("KEYWORDS=%s\n",if(length(kws))paste(kws,collapse=" || ") else "NONE"))
+            cat(sprintf("MESH_PRESENT=%s\n",if(length(mesh))"YES" else "NO"))
+            if(length(kws)) with_kw <- with_kw+1L
+          }
+          cat(sprintf("\nSUMMARY targets=%d http_success=%d exact_doi_matches=%d with_keywords=%d\n",
+                      length(target_ids),successful,exact,with_kw))
