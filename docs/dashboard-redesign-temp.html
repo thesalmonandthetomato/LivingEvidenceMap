@@ -290,7 +290,6 @@ function renderRadial(){
    .on('mousemove',function(e,d){showTip(e,'<b>'+esc(d.data.name)+'</b><br>'+fmt(d.data.count)+' unique records<br>'+esc(d.data.key));}).on('mouseleave',hideTip)
    .on('click',function(e,d){e.stopPropagation();window.figureFilter({topic:d.data.key});});
  var center=g.append('g');center.append('circle').attr('r',92).attr('fill','#fff').attr('stroke','#d9e2e1');center.append('text').attr('text-anchor','middle').attr('y',-7).attr('font-weight',700).attr('fill','#2c454a').text('All topics');center.append('text').attr('text-anchor','middle').attr('y',24).attr('font-size',25).attr('font-weight',750).attr('fill','#2c454a').text(fmt(data.count));
- document.getElementById('topicRadialReset').onclick=function(){paths.attr('opacity',1);};
 }
 
 function installSpeciesColumn(){
@@ -387,8 +386,9 @@ function wire(){
     if(rs)rs.value='__all__';
     if(rc)rc.value='__all__';
     lockedKey=null;
-    placeholder();
     if(typeof renderRadial==='function')renderRadial();
+    placeholder();
+    setTimeout(wire,0);
   };
   if(lockedKey===null && !info.textContent.trim()) placeholder();
 }
