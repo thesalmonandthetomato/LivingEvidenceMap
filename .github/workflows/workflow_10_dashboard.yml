@@ -1,0 +1,118 @@
+name: Workflow 10 - dashboard from final canonical JSONL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/workflow_10_dashboard.yml'
+      - 'R/workflow_10_dashboard_from_canonical_jsonl.R'
+      - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
+      - 'docs/dashboard-redesign-temp.html'
+      - 'docs/evidence_flowdiagram.svg'
+      - 'docs/workflow08/zenodo/run-36329841121.json'
+      - 'data/reference/topic_ontology_v3_6.csv'
+      - 'config/iso3_numeric_map.json'
+      - 'config/global_country_gazetteer_v3.csv'
+
+permissions:
+  contents: read
+
+env:
+  W08_POINTER: 'docs/workflow08/zenodo/run-36329841121.json'
+  TOPIC_ONTOLOGY_PATH: 'data/reference/topic_ontology_v3_6.csv'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout workflow branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest','httr2'))
+
+      - name: Parse Workflow 10 R scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
+          parse(file='R/workflow_10_dashboard_from_canonical_jsonl.R')
+          cat('PASS: Workflow 10 scripts parse\n')
+
+      - name: Restore authoritative Workflow 08 canonical from Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/workflow10
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R             --pointer "$W08_POINTER"             --output inputs/workflow10/living_evidence_map_canonical_final.jsonl
+
+      - name: Build dashboard data from final canonical JSONL
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript R/workflow_10_dashboard_from_canonical_jsonl.R             inputs/workflow10/living_evidence_map_canonical_final.jsonl             docs/living_evidence_map.csv             docs/dashboard-data.js             "$W08_POINTER"
+
+      - name: Validate dashboard presentation and data contract
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(readr);library(digest)})
+
+          required <- c(
+            'docs/dashboard-redesign-temp.html',
+            'docs/evidence_flowdiagram.svg',
+            'docs/living_evidence_map.csv',
+            'docs/dashboard-data.js',
+            'docs/dashboard-data-manifest.json'
+          )
+          stopifnot(all(file.exists(required)))
+
+          csv <- read_csv('docs/living_evidence_map.csv',show_col_types=FALSE,progress=FALSE)
+          stopifnot(nrow(csv)==19117L)
+          stopifnot(!anyDuplicated(csv$record_id))
+
+          js <- paste(readLines('docs/dashboard-data.js',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          prefix <- 'window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA='
+          stopifnot(startsWith(js,prefix),endsWith(js,';'))
+          payload <- fromJSON(substr(js,nchar(prefix)+1L,nchar(js)-1L),simplifyVector=FALSE)
+          stopifnot(length(payload$records)==19117L)
+          stopifnot(as.integer(payload$metrics$total_records)==19117L)
+          stopifnot(identical(as.character(payload$source$zenodo_record_id),'22998934'))
+          stopifnot(identical(
+            tolower(as.character(payload$source$canonical_sha256)),
+            'ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67'
+          ))
+
+          html <- paste(readLines('docs/dashboard-redesign-temp.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(grepl('dashboard-data\\.js',html))
+          stopifnot(grepl('evidence_flowdiagram\\.svg',html))
+
+          cat(sprintf(
+            'PASS: Workflow 10 dashboard uses authoritative W08 canonical: %d records\n',
+            nrow(csv)
+          ))
+
+      - name: Upload Workflow 10 dashboard artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow10-dashboard-${{ github.run_id }}
+          path: |
+            docs/dashboard-redesign-temp.html
+            docs/dashboard-data.js
+            docs/dashboard-data-manifest.json
+            docs/living_evidence_map.csv
+            docs/evidence_flowdiagram.svg
+          retention-days: 30
+          if-no-files-found: error
