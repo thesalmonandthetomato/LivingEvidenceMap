@@ -3,3 +3,4 @@ canonical_records=19117
 canonical_sha256=ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67
 source_branch=workflow01-final-architecture
 retry=choropleth_unmatched_geography_audit
+rerender=approved_visual_refinements_2026-09-28
