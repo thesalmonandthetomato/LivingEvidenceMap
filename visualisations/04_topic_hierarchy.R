@@ -135,7 +135,7 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill
     colour = palette[1]
   ) +
   scale_fill_manual(values = species_fill_values, breaks = canonical_species, drop = FALSE) +
-  scale_x_continuous(labels = comma, expand = expansion(mult = c(0, 0.10))) +
+  scale_x_continuous(labels = comma, expand = expansion(mult = c(0, 0.18))) +
   labs(
     x = "Number of records",
     y = NULL,
