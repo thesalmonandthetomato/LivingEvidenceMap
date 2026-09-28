@@ -528,6 +528,10 @@ function unionSets(a,b){var out=new Set(a);b.forEach(function(x){out.add(x);});r
 function intersectSets(a,b){var out=new Set();a.forEach(function(x){if(b.has(x))out.add(x);});return out;}
 function differenceSets(a,b){var out=new Set();a.forEach(function(x){if(!b.has(x))out.add(x);});return out;}
 function universeSet(){return new Set((D.records||[]).map(function(r){return String(r.record_id);}));}
+function positionArray(x){
+  if(x===undefined||x===null)return [];
+  return Array.isArray(x)?x:[x];
+}
 
 function wildcardRegex(pattern){
   var escaped=String(pattern||'').replace(/[.+^\${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*').replace(/\?/g,'.');
@@ -566,7 +570,7 @@ function abstractPositions(term){
     var byRecord=idx.postings[tok]||{};
     Object.keys(byRecord).forEach(function(ri){
       var rid=String(idx.record_ids[Number(ri)]),set=byId.get(rid)||new Set();
-      (byRecord[ri]||[]).forEach(function(p){set.add(Number(p));});
+      positionArray(byRecord[ri]).forEach(function(p){set.add(Number(p));});
       byId.set(rid,set);
     });
   });
@@ -680,8 +684,8 @@ async function reconstructAbstracts(records){
       Object.keys(byRecord).forEach(function(ri){
         var rid=wanted.get(String(ri));
         if(rid===undefined)return;
-        var arr=out.get(rid),pos=byRecord[ri];
-        if(Array.isArray(pos))pos.forEach(function(p){arr[Number(p)]=tok;});
+        var arr=out.get(rid),pos=positionArray(byRecord[ri]);
+        pos.forEach(function(p){arr[Number(p)]=tok;});
       });
     }
     var pct=10+70*(stop/tokens.length);
