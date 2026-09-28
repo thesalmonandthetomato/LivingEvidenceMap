@@ -99,6 +99,15 @@ jobs:
           payload <- fromJSON(substr(js,nchar(prefix)+1L,nchar(js)-1L),simplifyVector=FALSE)
           stopifnot(length(payload$records)==19117L)
           stopifnot(as.integer(payload$metrics$total_records)==19117L)
+          stopifnot(as.integer(payload$metrics$candidate_search_results_screened)==32283L)
+
+          is_array <- function(x) is.list(x) && is.null(names(x))
+          bad_species <- which(!vapply(payload$records,function(r)is_array(r$species),logical(1)))
+          bad_countries <- which(!vapply(payload$records,function(r)is_array(r$countries),logical(1)))
+          bad_iso3 <- which(!vapply(payload$records,function(r)is_array(r$iso3),logical(1)))
+          bad_topics <- which(!vapply(payload$records,function(r)is_array(r$topics),logical(1)))
+          bad_topic_paths <- which(!vapply(payload$records,function(r)is_array(r$topic_paths) && all(vapply(r$topic_paths,is_array,logical(1))),logical(1)))
+          stopifnot(!length(bad_species),!length(bad_countries),!length(bad_iso3),!length(bad_topics),!length(bad_topic_paths))
           stopifnot(identical(as.character(payload$source$zenodo_record_id),'22998934'))
           stopifnot(identical(
             tolower(as.character(payload$source$canonical_sha256)),
