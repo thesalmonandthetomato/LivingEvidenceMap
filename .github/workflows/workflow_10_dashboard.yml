@@ -11,7 +11,8 @@ on:
       - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
       - 'docs/dashboard-redesign-temp.html'
       - 'docs/evidence_flowdiagram.svg'
-      - 'docs/workflow08/zenodo/run-36329841121.json'
+      - 'docs/workflow08/zenodo/*.json'
+      - 'docs/workflow08/zenodo_registry.csv'
       - 'data/reference/topic_ontology_v3_6.csv'
       - 'config/iso3_numeric_map.json'
       - 'config/global_country_gazetteer_v3.csv'
@@ -20,7 +21,6 @@ permissions:
   contents: read
 
 env:
-  W08_POINTER: 'docs/workflow08/zenodo/run-36329841121.json'
   TOPIC_ONTOLOGY_PATH: 'data/reference/topic_ontology_v3_6.csv'
 
 jobs:
@@ -50,6 +50,16 @@ jobs:
           parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
           parse(file='R/workflow_10_dashboard_from_canonical_jsonl.R')
           cat('PASS: Workflow 10 scripts parse\n')
+
+      - name: Resolve latest Workflow 08 pointer
+        shell: Rscript {0}
+        run: |
+          reg <- read.csv('docs/workflow08/zenodo_registry.csv',stringsAsFactors=FALSE)
+          if(!nrow(reg)) stop('Workflow 08 Zenodo registry is empty',call.=FALSE)
+          run_id <- tail(reg$source_run_id,1)
+          p <- sprintf('docs/workflow08/zenodo/run-%s.json',run_id)
+          if(!file.exists(p)) stop(sprintf('Latest Workflow 08 pointer not found: %s',p),call.=FALSE)
+          cat(sprintf('W08_POINTER=%s\n',p),file=Sys.getenv('GITHUB_ENV'),append=TRUE)
 
       - name: Restore authoritative Workflow 08 canonical from Zenodo
         env:
@@ -108,11 +118,38 @@ jobs:
           bad_topics <- which(!vapply(payload$records,function(r)is_array(r$topics),logical(1)))
           bad_topic_paths <- which(!vapply(payload$records,function(r)is_array(r$topic_paths) && all(vapply(r$topic_paths,is_array,logical(1))),logical(1)))
           stopifnot(!length(bad_species),!length(bad_countries),!length(bad_iso3),!length(bad_topics),!length(bad_topic_paths))
-          stopifnot(identical(as.character(payload$source$zenodo_record_id),'22998934'))
-          stopifnot(identical(
-            tolower(as.character(payload$source$canonical_sha256)),
-            'ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67'
+          pointer <- fromJSON(Sys.getenv('W08_POINTER'),simplifyVector=FALSE)
+          stopifnot(identical(as.character(payload$source$zenodo_record_id),as.character(pointer$zenodo_record_id)))
+          stopifnot(identical(tolower(as.character(payload$source$canonical_sha256)),tolower(as.character(pointer$final_canonical_jsonl_sha256))))
+          star_values <- unlist(lapply(payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
+          star_values <- star_values[nzchar(star_values)]
+          stopifnot(length(star_values)>0L)
+          stopifnot(all(grepl('^★{1,3}
+
+          html <- paste(readLines('docs/dashboard-redesign-temp.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(grepl('dashboard-data\\.js',html))
+          stopifnot(!grepl('Evidence flow',html,fixed=TRUE))
+          stopifnot(!grepl('evidence_flowdiagram\\.svg',html))
+          stopifnot(file.exists('outputs/workflow10/dashboard-redesign-temp-standalone.html'))
+
+          cat(sprintf(
+            'PASS: Workflow 10 dashboard uses authoritative W08 canonical: %d records\n',
+            nrow(csv)
           ))
+
+      - name: Upload Workflow 10 dashboard artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow10-dashboard-${{ github.run_id }}
+          path: |
+            docs/dashboard-redesign-temp.html
+            docs/dashboard-data.js
+            docs/dashboard-data-manifest.json
+            docs/living_evidence_map.csv
+            outputs/workflow10/dashboard-redesign-temp-standalone.html
+          retention-days: 30
+          if-no-files-found: error
+,star_values)))
 
           html <- paste(readLines('docs/dashboard-redesign-temp.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
           stopifnot(grepl('dashboard-data\\.js',html))
