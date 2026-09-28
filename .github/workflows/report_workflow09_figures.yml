@@ -79,6 +79,7 @@ jobs:
           Rscript visualisations/04_topic_hierarchy.R
           Rscript visualisations/05_records_by_publication_year_high_level_topic.R
           Rscript visualisations/06_rapidly_emerging_topics.R
+          Rscript visualisations/07_flow_diagram.R
 
       - name: Render database contribution UpSet
         shell: bash
@@ -106,6 +107,7 @@ jobs:
             "visualisations/figure_03_choropleth_records_by_country.png",
             "visualisations/figure_05_records_by_publication_year_high_level_topic.png",
             "visualisations/figure_06_rapidly_emerging_topics.png",
+            "visualisations/figure_07_flow_diagram.png",
             "visualisations/topic_hierarchy/figure_04a_top_level_topics.png",
             "visualisations/topic_hierarchy/figure_04a_hierarchy_production.png",
             "visualisations/topic_hierarchy/figure_04b_hierarchy_environment.png",
@@ -129,6 +131,8 @@ jobs:
           cp visualisations/figure_03_choropleth_records_by_country.{png,pdf} outputs/workflow09_figure_review/
           cp visualisations/figure_05_records_by_publication_year_high_level_topic.{png,pdf} outputs/workflow09_figure_review/
           cp visualisations/figure_06_rapidly_emerging_topics.{png,pdf} outputs/workflow09_figure_review/
+          cp visualisations/figure_07_flow_diagram.{png,pdf} outputs/workflow09_figure_review/
+          cp visualisations/figure_07_flow_diagram_{boxes,counts}.csv outputs/workflow09_figure_review/
           cp visualisations/topic_hierarchy/*.png outputs/workflow09_figure_review/topic_hierarchy/
           cp visualisations/topic_hierarchy/*.pdf outputs/workflow09_figure_review/topic_hierarchy/
           cp outputs/citesource_contribution/database_contribution_upset.{png,pdf} outputs/workflow09_figure_review/
