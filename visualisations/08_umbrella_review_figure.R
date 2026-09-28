@@ -97,9 +97,10 @@ p <- ggplot(plot_order, aes(x = assignments, y = reorder(topic, plot_row), fill 
   scale_fill_manual(values = theme_cols, guide = "none") +
   scale_x_continuous(
     breaks = 0:8,
-    limits = c(0, 10.2),
+    limits = c(0, 9.0),
     expand = expansion(mult = c(0, 0))
   ) +
+  coord_cartesian(clip = "off") +
   labs(x = NULL, y = NULL) +
   theme_minimal(base_size = 10) +
   theme(
@@ -108,7 +109,7 @@ p <- ggplot(plot_order, aes(x = assignments, y = reorder(topic, plot_row), fill 
     panel.grid.major.x = element_line(colour = "#e1e5e6", linewidth = 0.35),
     axis.text.y = element_text(colour = "#2c454a", size = 8.3),
     axis.text.x = element_text(colour = "#577c84", size = 8.3),
-    plot.margin = margin(6, 92, 6, 6),
+    plot.margin = margin(6, 150, 6, 6),
     plot.background = element_rect(fill = "white", colour = NA),
     panel.background = element_rect(fill = "white", colour = NA)
   )
