@@ -1,15 +1,24 @@
-name: Workflow 10 - dashboard from reconstructed final canonical
+name: Workflow 10 - dashboard from authoritative Workflow 08 canonical
 
 on:
   workflow_dispatch:
   push:
     branches: [workflow01-final-architecture]
     paths:
-      - 'docs/workflow10/.run_local_validation'
+      - '.github/workflows/workflow_10_dashboard.yml'
+      - 'R/workflow_10_dashboard_from_canonical_jsonl.R'
+      - 'R/workflow_10_make_standalone_preview.R'
+      - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
+      - 'docs/dashboard-redesign-temp.html'
+      - 'docs/workflow08/zenodo/*.json'
+      - 'docs/workflow08/zenodo_registry.csv'
+      - 'docs/reporting/workflow_09/flow_counts.json'
+      - 'data/reference/topic_ontology_v3_6.csv'
+      - 'config/iso3_numeric_map.json'
+      - 'config/global_country_gazetteer_v3.csv'
 
 permissions:
   contents: read
-  actions: read
 
 env:
   TOPIC_ONTOLOGY_PATH: 'data/reference/topic_ontology_v3_6.csv'
@@ -17,7 +26,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
 
     steps:
       - name: Checkout workflow branch
@@ -35,155 +44,56 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('jsonlite','readr','digest','httr2'))
 
-      - name: Parse required R scripts
+      - name: Parse Workflow 10 R scripts
         shell: Rscript {0}
         run: |
-          parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
-          parse(file='scripts/updater/workflow_03_restore_state_from_zenodo.R')
-          parse(file='scripts/updater/workflow_08_expand_offline_decisions.R')
-          parse(file='scripts/updater/workflow_08_finalize_canonical.R')
-          parse(file='scripts/updater/workflow_08_partition_final_outputs.R')
+          parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
           parse(file='R/workflow_10_dashboard_from_canonical_jsonl.R')
           parse(file='R/workflow_10_make_standalone_preview.R')
-          cat('PASS: required Workflow 08/10 scripts parse\n')
+          cat('PASS: Workflow 10 scripts parse\n')
 
-      - name: Restore authoritative lean canonical and Workflow 03 state
+      - name: Resolve authoritative Workflow 08 pointer
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          reg <- read.csv('docs/workflow08/zenodo_registry.csv',stringsAsFactors=FALSE)
+          auth <- reg[reg$status=='authoritative',,drop=FALSE]
+          if(nrow(auth)!=1L) stop(sprintf('Expected exactly one authoritative Workflow 08 registry row; found %d',nrow(auth)),call.=FALSE)
+          if(as.character(auth$zenodo_record_id[[1L]])!='23020526') {
+            stop(sprintf('Unexpected authoritative Workflow 08 Zenodo record: %s',auth$zenodo_record_id[[1L]]),call.=FALSE)
+          }
+          run_id <- as.character(auth$source_run_id[[1L]])
+          p <- sprintf('docs/workflow08/zenodo/run-%s.json',run_id)
+          if(!file.exists(p)) stop(sprintf('Authoritative Workflow 08 pointer not found: %s',p),call.=FALSE)
+          x <- fromJSON(p,simplifyVector=FALSE)
+          if(as.character(x$zenodo_record_id)!='23020526' ||
+             as.character(x$doi)!='10.5281/zenodo.23020526' ||
+             as.character(x$final_canonical_jsonl_sha256)!='8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c') {
+            stop('Authoritative Workflow 08 pointer does not match the registered lossless Zenodo archive',call.=FALSE)
+          }
+          cat(sprintf('W08_POINTER=%s\n',p),file=Sys.getenv('GITHUB_ENV'),append=TRUE)
+          cat(sprintf('PASS: authoritative W08 pointer = %s / Zenodo %s\n',p,x$zenodo_record_id))
+
+      - name: Restore authoritative Workflow 08 canonical from Zenodo
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p inputs/canonical inputs/w03
-          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
-            --pointer docs/compaction/zenodo/run-36166883249.json \
-            --output-dir inputs/canonical
-          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
-            --pointer docs/publication_status/zenodo/run-36172718538.json \
-            --output-dir inputs/w03
-
-      - name: Restore locked Workflow 04-08 inputs
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p inputs/w04 inputs/w05 inputs/w06 inputs/w06r1 inputs/w06r2 inputs/w07 inputs/w08
-          gh run download 36227737500 -n workflow04-final-screening-36227737500 -D inputs/w04
-          gh run download 36268840588 -n workflow05-species-coding-36268840588 -D inputs/w05
-          gh run download 36265092530 -n workflow06-geography-production-36265092530 -D inputs/w06
-          gh run download 36271055010 -n workflow06-failure-recovery-36271055010 -D inputs/w06r1
-          gh run download 36271186232 -n workflow06-failure-recovery-36271186232 -D inputs/w06r2
-          gh run download 36305907080 -n workflow07-finalisation-validation-36305907080 -D inputs/w07
-          gh run download 36320650383 -n workflow08-review-intake-36320650383 -D inputs/w08
-          test -s inputs/w04/workflow04_final_screening_layer.jsonl
-          test -s inputs/w05/workflow05_species_coded.csv
-          test -s inputs/w05/species_matches.csv
-          test -s inputs/w06/geography_semantic_final.csv
-          test -s inputs/w07/workflow07_topic_pathway_scores_retained.csv
-          test -s inputs/w07/workflow07_topic_record_qc.csv
-          test -s inputs/w07/workflow07_late_automatic_exclusions.csv
-          test -s inputs/w08/workflow08_intake/workflow08_review_queue.jsonl
-
-      - name: Expand Workflow 08 decisions
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p outputs/workflow08
-          Rscript scripts/updater/workflow_08_expand_offline_decisions.R \
-            --queue inputs/w08/workflow08_intake/workflow08_review_queue.jsonl \
-            --prior-decisions data/adjudication/workflow08/run-36316071774/human_decisions.jsonl \
-            --offline-spec data/adjudication/workflow08/offline_adjudication_spec_2026-09-27.json \
-            --output outputs/workflow08/human_decisions_complete.jsonl \
-            --complete outputs/workflow08/COMPLETE.json
-
-      - name: Reconstruct definitive Workflow 08 canonical
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_08_finalize_canonical.R \
-            --canonical inputs/canonical/canonical_lean.jsonl \
-            --w03 inputs/w03/publication_status.jsonl \
-            --w04 inputs/w04/workflow04_final_screening_layer.jsonl \
-            --w05 inputs/w05/workflow05_species_coded.csv \
-            --w05-matches inputs/w05/species_matches.csv \
-            --w06 inputs/w06/geography_semantic_final.csv \
-            --w06-recovery1 inputs/w06r1/workflow06_failure_recovery.csv \
-            --w06-recovery2 inputs/w06r2/workflow06_failure_recovery.csv \
-            --pre-geo-decisions data/workflow08/geography_adjudication_decisions.jsonl \
-            --w07-scores inputs/w07/workflow07_topic_pathway_scores_retained.csv \
-            --w07-qc inputs/w07/workflow07_topic_record_qc.csv \
-            --w07-late-exclusions inputs/w07/workflow07_late_automatic_exclusions.csv \
-            --decisions outputs/workflow08/human_decisions_complete.jsonl \
-            --ontology data/reference/topic_ontology_v3_6.csv \
-            --output outputs/workflow08/_post_adjudication_all_records_internal.jsonl \
-            --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl \
-            --manifest outputs/workflow08/_post_adjudication_manifest_internal.json
-
-      - name: Partition final included canonical
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_08_partition_final_outputs.R \
-            --assembled outputs/workflow08/_post_adjudication_all_records_internal.jsonl \
-            --old-manifest outputs/workflow08/_post_adjudication_manifest_internal.json \
-            --canonical-output outputs/workflow08/living_evidence_map_canonical_final.jsonl \
-            --exclusions-output outputs/workflow08/workflow08_excluded_records.csv \
-            --manifest-output outputs/workflow08/workflow08_final_manifest.json
-
-      - name: Validate canonical topic confidence contract
-        shell: Rscript {0}
-        run: |
-          suppressPackageStartupMessages(library(jsonlite))
-          lines <- readLines('outputs/workflow08/living_evidence_map_canonical_final.jsonl',warn=FALSE,encoding='UTF-8')
-          lines <- lines[nzchar(trimws(lines))]
-          stopifnot(length(lines)==19117L)
-          recs <- lapply(lines,fromJSON,simplifyVector=FALSE)
-          assignments <- unlist(lapply(recs,function(r) {
-            x <- r$topics$assignments
-            if(is.null(x)) list() else x
-          }),recursive=FALSE)
-          stopifnot(length(assignments)>0L)
-          bad <- Filter(function(a) {
-            s <- a$workflow07_score
-            is.null(s) || is.null(s$stars) || is.null(s$confidence_n) ||
-              !(as.integer(s$confidence_n) %in% 1:3) ||
-              !grepl('^★{1,3}$',as.character(s$stars)) ||
-              nchar(as.character(s$stars)) != as.integer(s$confidence_n)
-          },assignments)
-          stopifnot(length(bad)==0L)
-          cat(sprintf('PASS: %d final topic assignments all carry valid Workflow 07 stars\n',length(assignments)))
-
-      - name: Create local Workflow 08 pointer
-        shell: Rscript {0}
-        run: |
-          suppressPackageStartupMessages({library(jsonlite);library(digest)})
-          m <- fromJSON('outputs/workflow08/workflow08_final_manifest.json',simplifyVector=FALSE)
-          p <- list(
-            status='published',
-            workflow='08',
-            state='corrected_final_adjudicated_canonical',
-            canonical_records=19117L,
-            zenodo_record_id=paste0('local-w08-',Sys.getenv('GITHUB_RUN_ID')),
-            doi='',
-            final_canonical_jsonl_sha256=digest(
-              file='outputs/workflow08/living_evidence_map_canonical_final.jsonl',
-              algo='sha256',serialize=FALSE
-            ),
-            source_github_run_id=Sys.getenv('GITHUB_RUN_ID'),
-            published_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ')
-          )
-          dir.create('outputs/workflow10',recursive=TRUE,showWarnings=FALSE)
-          write_json(p,'outputs/workflow10/local_w08_pointer.json',auto_unbox=TRUE,pretty=TRUE)
+          mkdir -p inputs/workflow10 outputs/workflow10
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer "$W08_POINTER" \
+            --output inputs/workflow10/living_evidence_map_canonical_final.jsonl
 
       - name: Build Workflow 10 dashboard data
         shell: bash
         run: |
           set -euo pipefail
           Rscript R/workflow_10_dashboard_from_canonical_jsonl.R \
-            outputs/workflow08/living_evidence_map_canonical_final.jsonl \
+            inputs/workflow10/living_evidence_map_canonical_final.jsonl \
             outputs/workflow10/living_evidence_map.csv \
             outputs/workflow10/dashboard-data.js \
-            outputs/workflow10/local_w08_pointer.json
+            "$W08_POINTER"
 
       - name: Build standalone dashboard preview
         shell: bash
@@ -197,25 +107,42 @@ jobs:
       - name: Validate Workflow 10 output
         shell: Rscript {0}
         run: |
-          suppressPackageStartupMessages({library(jsonlite);library(readr)})
+          suppressPackageStartupMessages({library(jsonlite);library(readr);library(digest)})
+          pointer <- fromJSON(Sys.getenv('W08_POINTER'),simplifyVector=FALSE)
+          stopifnot(
+            as.character(pointer$zenodo_record_id)=='23020526',
+            as.character(pointer$final_canonical_jsonl_sha256)=='8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c'
+          )
+
           csv <- read_csv('outputs/workflow10/living_evidence_map.csv',show_col_types=FALSE,progress=FALSE)
           stopifnot(nrow(csv)==19117L,!anyDuplicated(csv$record_id))
+
           js <- paste(readLines('outputs/workflow10/dashboard-data.js',warn=FALSE,encoding='UTF-8'),collapse='\n')
           prefix <- 'window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA='
           stopifnot(startsWith(js,prefix),endsWith(js,';'))
           payload <- fromJSON(substr(js,nchar(prefix)+1L,nchar(js)-1L),simplifyVector=FALSE)
           stopifnot(length(payload$records)==19117L)
-          stars <- unlist(lapply(payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
-          stopifnot(length(stars)>0L,all(nzchar(stars)),all(grepl('^★{1,3}$',stars)))
-          stopifnot(file.exists('outputs/workflow10/dashboard-redesign-temp-standalone.html'))
-          cat(sprintf('PASS: Workflow 10 local W08 validation: %d records; %d starred topic assignments\n',nrow(csv),length(stars)))
+          stopifnot(as.integer(payload$metrics$candidate_search_results_screened)==32283L)
+          stopifnot(as.character(payload$source$zenodo_record_id)=='23020526')
+          stopifnot(as.character(payload$source$canonical_sha256)=='8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c')
 
-      - name: Upload Workflow 10 validation artefact
+          stars <- unlist(lapply(payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
+          stopifnot(length(stars)>0L,all(nzchar(stars)),all(stars %in% c('★','★★','★★★')))
+
+          html <- paste(readLines('docs/dashboard-redesign-temp.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(grepl('Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).',html,fixed=TRUE))
+          stopifnot(file.exists('outputs/workflow10/dashboard-redesign-temp-standalone.html'))
+
+          cat(sprintf(
+            'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
+            pointer$zenodo_record_id,nrow(csv),length(stars)
+          ))
+
+      - name: Upload Workflow 10 dashboard artefact
         uses: actions/upload-artifact@v4
         with:
-          name: workflow10-local-w08-${{ github.run_id }}
+          name: workflow10-dashboard-${{ github.run_id }}
           path: |
             outputs/workflow10/
-            outputs/workflow08/workflow08_final_manifest.json
           retention-days: 30
           if-no-files-found: error
