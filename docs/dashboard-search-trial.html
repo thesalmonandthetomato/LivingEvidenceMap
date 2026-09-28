@@ -438,6 +438,10 @@ var indexPromise=null,idx=null,recordIndexById=null,normalisedTokenMap=null;
 function normaliseToken(s){
   return String(s||'').toLocaleLowerCase().replace(/^\p{P}+|\p{P}+$/gu,'').trim();
 }
+function normalisePattern(s){
+  return String(s||'').toLocaleLowerCase().trim()
+    .replace(/^[^\p{L}\p{N}*?]+|[^\p{L}\p{N}*?]+$/gu,'');
+}
 function tokeniseQuery(q){
   var s=String(q||''),out=[],i=0;
   while(i<s.length){
@@ -530,7 +534,7 @@ function wildcardRegex(pattern){
   return new RegExp('^'+escaped+'$','u');
 }
 function variantsForPattern(term){
-  var pattern=normaliseToken(term);
+  var pattern=normalisePattern(term);
   if(!/[?*]/.test(pattern))return normalisedTokenMap.get(pattern)||[];
   var re=wildcardRegex(pattern),out=[];
   normalisedTokenMap.forEach(function(tokens,norm){
@@ -539,11 +543,11 @@ function variantsForPattern(term){
   return out;
 }
 function tokenMatchesPattern(token,pattern){
-  token=normaliseToken(token);pattern=normaliseToken(pattern);
+  token=normaliseToken(token);pattern=normalisePattern(pattern);
   return /[?*]/.test(pattern)?wildcardRegex(pattern).test(token):token===pattern;
 }
 function idsForTerm(term){
-  term=normaliseToken(term);
+  term=normalisePattern(term);
   var ids=new Set();
   var variants=variantsForPattern(term);
   variants.forEach(function(tok){
@@ -569,7 +573,7 @@ function abstractPositions(term){
   return byId;
 }
 function idsForPhrase(phrase){
-  var terms=String(phrase||'').trim().split(/\s+/).map(normaliseToken).filter(Boolean);
+  var terms=String(phrase||'').trim().split(/\s+/).map(normalisePattern).filter(Boolean);
   if(!terms.length)return new Set();
   if(terms.length===1)return idsForTerm(terms[0]);
 
@@ -611,6 +615,7 @@ function evaluateBoolean(node){
 }
 async function applySearch(){
   var input=document.getElementById('searchTerms');
+  var btn=document.getElementById('applySearchTerms');
   var q=String(input&&input.value||'').trim();
   var status=document.getElementById('searchIndexStatus');
   if(!q){
@@ -622,8 +627,13 @@ async function applySearch(){
     return;
   }
   try{
+    if(btn){btn.disabled=true;btn.textContent='Searching…';}
+    if(status)status.textContent='Searching titles and abstracts…';
+    await yieldToBrowser();
     var ast=parseBoolean(q);
     await ensureIndex();
+    if(status)status.textContent='Evaluating Boolean expression…';
+    await yieldToBrowser();
     trialSearchIds=evaluateBoolean(ast);
     state.q=q;
     state.page=1;
@@ -635,6 +645,8 @@ async function applySearch(){
     state.q='';
     if(status)status.textContent=err.message;
     throw err;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Search';}
   }
 }
 function activeRestriction(){
