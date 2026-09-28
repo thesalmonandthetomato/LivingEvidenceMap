@@ -19,7 +19,7 @@ topic_fill_values <- setNames(grDevices::colorRampPalette(base_palette)(length(t
 master <- load_figure_master()
 plot_data <- master %>%
   transmute(record_id, publication_year = year, raw_paths = as.character(topic_hierarchy_paths)) %>%
-  filter(!is.na(publication_year), !is.na(raw_paths), str_trim(raw_paths) != "") %>%
+  filter(!is.na(publication_year), publication_year <= 2025L, !is.na(raw_paths), str_trim(raw_paths) != "") %>%
   mutate(path = str_split(raw_paths, "\\s*;\\s*")) %>% unnest(path) %>%
   mutate(path = str_squish(path), high_level_topic = str_squish(str_split_fixed(path, "\\s*>\\s*", 2)[, 1])) %>%
   filter(path != "", high_level_topic != "") %>% distinct(record_id, publication_year, high_level_topic)
@@ -35,9 +35,9 @@ p <- ggplot(plot_data, aes(x = publication_year, y = records, fill = high_level_
   scale_fill_manual(values = topic_fill_values, breaks = topic_order, drop = FALSE, name = "High-level topic") +
   scale_x_continuous(breaks = year_breaks, expand = expansion(mult = c(0.005, 0.02))) +
   scale_y_continuous(labels = scales::label_comma(), expand = expansion(mult = c(0, 0.04))) +
-  labs(title = "Number of included records by publication year, stacked by high-level topic", x = "Publication year", y = "Number of included records") +
+  labs(x = "Publication year", y = "Topic assignments") +
   theme_classic(base_size = 11) +
-  theme(legend.position = "right", legend.title = element_text(face = "bold", colour = "#29434A"), legend.text = element_text(colour = "#29434A"), axis.title = element_text(face = "bold", colour = "#45616A"), axis.text = element_text(colour = "#29434A"), plot.title = element_text(face = "bold", size = 16, colour = "#29434A"), panel.grid = element_blank(), plot.background = element_rect(fill = "white", colour = NA), panel.background = element_rect(fill = "white", colour = NA))
+  theme(legend.position = "right", legend.title = element_text(face = "bold", colour = "#29434A"), legend.text = element_text(colour = "#29434A"), axis.title = element_text(face = "bold", colour = "#45616A"), axis.text = element_text(colour = "#29434A"), panel.grid = element_blank(), plot.background = element_rect(fill = "white", colour = NA), panel.background = element_rect(fill = "white", colour = NA))
 
 ggsave(file.path(out_dir, "figure_05_records_by_publication_year_high_level_topic.pdf"), p, width = 190, height = 120, units = "mm", device = cairo_pdf)
 ggsave(file.path(out_dir, "figure_05_records_by_publication_year_high_level_topic.png"), p, width = 190, height = 120, units = "mm", dpi = 600)
