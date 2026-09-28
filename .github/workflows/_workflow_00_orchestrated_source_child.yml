@@ -18,7 +18,7 @@ on:
       search_version:
         required: true
         type: string
-      additional_farm_term:
+      additional_search_term:
         required: false
         default: ""
         type: string
@@ -36,7 +36,7 @@ permissions:
   actions: read
 
 env:
-  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow00-zenodo-search-archive
+  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow01-final-architecture
 
 jobs:
   search:
@@ -49,11 +49,11 @@ jobs:
         run: |
           set -euo pipefail
           case "${{ inputs.source }}" in
-            lens) echo "branch=main" >> "$GITHUB_OUTPUT" ;;
-            scopus) echo "branch=updater-workflow-00b-scopus-ingestion" >> "$GITHUB_OUTPUT" ;;
-            openalex) echo "branch=updater-workflow-00c-openalex-ingestion" >> "$GITHUB_OUTPUT" ;;
-            agricola) echo "branch=updater-workflow-00d-agricola-ingestion" >> "$GITHUB_OUTPUT" ;;
-            wos) echo "branch=updater-workflow-00e-wos-starter-ingestion" >> "$GITHUB_OUTPUT" ;;
+            lens) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            scopus) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            openalex) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            agricola) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            wos) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             *) echo "Unsupported source: ${{ inputs.source }}" >&2; exit 2 ;;
           esac
 
@@ -250,7 +250,7 @@ jobs:
           SEARCH_QUERY: ${{ inputs.query }}
           PARENT_RUN_ID: ${{ inputs.parent_run_id }}
           SEARCH_VERSION: ${{ inputs.search_version }}
-          ADDITIONAL_FARM_TERM: ${{ inputs.additional_farm_term }}
+          ADDITIONAL_FARM_TERM: ${{ inputs.additional_search_term }}
           REPORTED: ${{ steps.counts.outputs.reported }}
           DOWNLOADED: ${{ steps.counts.outputs.downloaded }}
           FORTNIGHTLY_FROM_DATE: ${{ inputs.fortnightly_from_date }}
@@ -262,7 +262,7 @@ jobs:
           if [ "$SOURCE" = "wos" ] && [ "$RUN_TYPE" = "fortnightly" ]; then
             documented_query="$SEARCH_QUERY ; modifiedTimeSpan=$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE"
           fi
-          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-farm-term "$ADDITIONAL_FARM_TERM" --artifact-name "workflow00-${SOURCE}-${GITHUB_RUN_ID}" --output-root outputs/updater/search_record
+          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_FARM_TERM" --artifact-name "workflow00-${SOURCE}-${GITHUB_RUN_ID}" --output-root outputs/updater/search_record
 
       - name: Upload source harvest
         uses: actions/upload-artifact@v4
