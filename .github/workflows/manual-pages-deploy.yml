@@ -1,4 +1,4 @@
-name: Manually deploy GitHub Pages
+name: Deploy GitHub Pages
 
 on:
   workflow_dispatch:
@@ -6,11 +6,11 @@ on:
     branches: [main]
     paths:
       - 'docs/workflow10-preview.html'
-      - 'docs/workflow10-preview-data.js'
       - '.github/workflows/manual-pages-deploy.yml'
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -18,20 +18,61 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  SOURCE_RUN_ID: '36457402997'
+  SOURCE_ARTIFACT: 'workflow10-dashboard-36457402997'
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
-      - name: Checkout site files
+      - name: Checkout production site from main
         uses: actions/checkout@v4
         with:
           ref: main
-          sparse-checkout: |
-            docs
-          sparse-checkout-cone-mode: true
+          path: production
+          fetch-depth: 1
+
+      - name: Checkout validated Workflow 10 template
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          path: workflow10
+          fetch-depth: 1
+
+      - name: Download validated Workflow 10 data
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.SOURCE_ARTIFACT }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          path: preview_artifact
+
+      - name: Assemble deterministic Workflow 10 preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML='workflow10/docs/dashboard-redesign-temp.html'
+          DATA=$(find preview_artifact -type f -name dashboard-data.js -print -quit)
+          test -s "$HTML"
+          test -s "$DATA"
+          cp "$HTML" production/docs/workflow10-preview.html
+          sed -i 's#<script src="./dashboard-data.js"></script>#<script src="./workflow10-preview-data.js"></script>#' production/docs/workflow10-preview.html
+          cp "$DATA" production/docs/workflow10-preview-data.js
+
+          grep -q "Databases" production/docs/workflow10-preview.html
+          grep -q "22/09/26" production/docs/workflow10-preview.html
+          grep -q "topic_stars" production/docs/workflow10-preview.html
+          grep -q "databases_searched" production/docs/workflow10-preview-data.js
+          grep -q "search_results" production/docs/workflow10-preview-data.js
+          grep -q "unique_records_screened" production/docs/workflow10-preview-data.js
+          test $(wc -c < production/docs/workflow10-preview-data.js) -gt 1000000
+          echo "PASS: complete Workflow 10 preview assembled"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -39,7 +80,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: production/docs
 
       - name: Deploy to GitHub Pages
         id: deployment
