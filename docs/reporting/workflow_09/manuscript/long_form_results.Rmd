@@ -249,17 +249,11 @@ include_figure(here::here("visualisations", "figure_03_choropleth_records_by_cou
 
 ## Topics
 
-At least one topic was assigned to `r fmt(n_topic_coded)` of the `r fmt(n_total)` included records; `r fmt(n_topic_uncoded)` records (`r pct_total(n_topic_uncoded)`) remained uncoded for topic. Across coded records, the final ontology contained `r fmt(n_topic_assignments)` distinct record-topic assignments.
-
-The evidence base was strongly oriented towards Production, represented in `r fmt(theme_n("Production"))` records (`r pct_total(theme_n("Production"))`). Environment was the second-largest theme (`r fmt(theme_n("Environment"))`; `r pct_total(theme_n("Environment"))`), followed by Methods (`r fmt(theme_n("Methods"))`; `r pct_total(theme_n("Methods"))`), Product (`r fmt(theme_n("Product"))`; `r pct_total(theme_n("Product"))`) and Industry and governance (`r fmt(theme_n("Industry and governance"))`; `r pct_total(theme_n("Industry and governance"))`). People and society (`r fmt(theme_n("People and society"))`; `r pct_total(theme_n("People and society"))`) and Inputs and resources (`r fmt(theme_n("Inputs and resources"))`; `r pct_total(theme_n("Inputs and resources"))`) were substantially smaller. Theme percentages are not mutually exclusive because a record can be assigned to more than one theme.
-
 ```{r fig-top-level-species, fig.cap="High-level topic frequency by focal farmed species. Numbers at bar ends are unique records assigned to each high-level theme; stacked species segments may sum above the unique-record total for multi-species records."}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_top_level_topics.png"))
 ```
 
 ### Production
-
-Production research was centred on fish performance and biology, fish health, feed and nutrition, breeding and reproduction, and stress and mortality. The most frequently assigned terminal topic was *Physiology, metabolism and biological responses* (`r fmt(topic_n("Production > Fish performance and biology > Physiology, metabolism and biological responses"))` records; `r pct_total(topic_n("Production > Fish performance and biology > Physiology, metabolism and biological responses"))`), followed by *Growth and development* (`r fmt(topic_n("Production > Fish performance and biology > Growth and development"))`; `r pct_total(topic_n("Production > Fish performance and biology > Growth and development"))`). Other major concentrations included *Other diseases - Prevention and treatment* (`r fmt(topic_n("Production > Fish health > Other diseases - Prevention and treatment"))`; `r pct_total(topic_n("Production > Fish health > Other diseases - Prevention and treatment"))`), *Alternative feed ingredients* (`r fmt(topic_n("Production > Feed and nutrition > Alternative feed ingredients"))`; `r pct_total(topic_n("Production > Feed and nutrition > Alternative feed ingredients"))`), *Other diseases - General* (`r fmt(topic_n("Production > Fish health > Other diseases - General"))`; `r pct_total(topic_n("Production > Fish health > Other diseases - General"))`) and *Other diseases - Epidemiology* (`r fmt(topic_n("Production > Fish health > Other diseases - Epidemiology"))`; `r pct_total(topic_n("Production > Fish health > Other diseases - Epidemiology"))`). Sea lice remained a substantial research cluster, including `r fmt(topic_n("Production > Fish health > Sea lice control and treatment"))` records on control and treatment and `r fmt(topic_n("Production > Fish health > Sea lice epidemiology"))` on epidemiology.
 
 ```{r fig-production, fig.cap="Topic-assignment frequency within the Production theme."}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_hierarchy_production.png"))
@@ -267,15 +261,11 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_hiera
 
 ### Environment
 
-Environmental research was concentrated in *Water and ocean conditions* (`r fmt(topic_n("Environment > Environmental stressors > Water and ocean conditions"))`; `r pct_total(topic_n("Environment > Environmental stressors > Water and ocean conditions"))`), *Nutrients and organic waste* (`r fmt(topic_n("Environment > Waste and emissions > Nutrients and organic waste"))`; `r pct_total(topic_n("Environment > Waste and emissions > Nutrients and organic waste"))`), *Biodiversity and ecosystem effects* (`r fmt(topic_n("Environment > Wild populations and ecosystems > Biodiversity and ecosystem effects"))`; `r pct_total(topic_n("Environment > Wild populations and ecosystems > Biodiversity and ecosystem effects"))`) and *Monitoring and assessment* (`r fmt(topic_n("Environment > Environmental management > Monitoring and assessment"))`; `r pct_total(topic_n("Environment > Environmental management > Monitoring and assessment"))`). Hydrodynamics and water flow, post-escape ecology, chemicals and therapeutants, water quality and sedimentation/benthic impacts formed a second tier of frequently represented environmental topics.
-
 ```{r fig-environment, fig.cap="Topic-assignment frequency within the Environment theme."}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04b_hierarchy_environment.png"))
 ```
 
 ### Methods
-
-Methods research was dominated by *Diagnostic and laboratory methods* (`r fmt(topic_n("Methods > Methodological research > Diagnostic and laboratory methods"))`; `r pct_total(topic_n("Methods > Methodological research > Diagnostic and laboratory methods"))`), followed by *Statistical and modelling methods* (`r fmt(topic_n("Methods > Methodological research > Statistical and modelling methods"))`; `r pct_total(topic_n("Methods > Methodological research > Statistical and modelling methods"))`), *Monitoring and sampling methods* (`r fmt(topic_n("Methods > Methodological research > Monitoring and sampling methods"))`; `r pct_total(topic_n("Methods > Methodological research > Monitoring and sampling methods"))`) and *Sensors, imaging and measurement methods* (`r fmt(topic_n("Methods > Methodological research > Sensors, imaging and measurement methods"))`; `r pct_total(topic_n("Methods > Methodological research > Sensors, imaging and measurement methods"))`).
 
 ```{r fig-methods, fig.cap="Topic-assignment frequency within the Methods theme."}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04c_hierarchy_methods.png"))
@@ -283,15 +273,11 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04c_hiera
 
 ### Industry and governance
 
-Within Industry and governance, *Policy and regulation* was the largest terminal topic (`r fmt(topic_n("Industry and governance > Governance and policy > Policy and regulation"))`; `r pct_total(topic_n("Industry and governance > Governance and policy > Policy and regulation"))`), followed by *Costs and profitability* (`r fmt(topic_n("Industry and governance > Economics and performance > Costs and profitability"))`; `r pct_total(topic_n("Industry and governance > Economics and performance > Costs and profitability"))`), *Economic risk, valuation and impact* (`r fmt(topic_n("Industry and governance > Economics and performance > Economic risk, valuation and impact"))`; `r pct_total(topic_n("Industry and governance > Economics and performance > Economic risk, valuation and impact"))`), *History and regional development* (`r fmt(topic_n("Industry and governance > Sector development > History and regional development"))`) and *Supply, demand and prices* (`r fmt(topic_n("Industry and governance > Markets, trade and value chains > Supply, demand and prices"))`).
-
 ```{r fig-industry, fig.cap="Topic-assignment frequency within the Industry and governance theme."}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04d_hierarchy_industry_and_governance.png"))
 ```
 
 ### Product
-
-Product research was led by *Nutritional composition* (`r fmt(topic_n("Product > Composition and nutritional value > Nutritional composition"))`; `r pct_total(topic_n("Product > Composition and nutritional value > Nutritional composition"))`), *Physical and visual quality* (`r fmt(topic_n("Product > Fillet and carcass quality > Physical and visual quality"))`; `r pct_total(topic_n("Product > Fillet and carcass quality > Physical and visual quality"))`) and *Contaminants and residues* (`r fmt(topic_n("Product > Composition and nutritional value > Contaminants and residues"))`; `r pct_total(topic_n("Product > Composition and nutritional value > Contaminants and residues"))`). Chemical food safety, sensory properties, yield and body composition, and storage/packaging/shelf life were also prominent.
 
 ```{r fig-product, fig.cap="Topic-assignment frequency within the Product theme."}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04e_hierarchy_product.png"))
@@ -299,15 +285,11 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04e_hiera
 
 ### People and society
 
-People and society was much smaller than the Production and Environment evidence bases. The largest terminal topics were *Antimicrobial resistance and One Health* (`r fmt(topic_n("People and society > Public health > Antimicrobial resistance and One Health"))`; `r pct_total(topic_n("People and society > Public health > Antimicrobial resistance and One Health"))`), *Conflict and social licence* (`r fmt(topic_n("People and society > Communities and livelihoods > Conflict and social licence"))`; `r pct_total(topic_n("People and society > Communities and livelihoods > Conflict and social licence"))`) and *Public discourse and representation* (`r fmt(topic_n("People and society > Culture and knowledge > Public discourse and representation"))`; `r pct_total(topic_n("People and society > Culture and knowledge > Public discourse and representation"))`). Topics relating to livelihoods, Indigenous peoples and rights, employment, food security, working conditions and labour exploitation each represented well under 1% of the full evidence map.
-
 ```{r fig-people, fig.cap="Topic-assignment frequency within the People and society theme."}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04f_hierarchy_people_and_society.png"))
 ```
 
 ### Inputs and resources
-
-Inputs and resources was the smallest high-level theme. *By-products and waste as inputs* accounted for `r fmt(topic_n("Inputs and resources > Circularity > By-products and waste as inputs"))` records (`r pct_total(topic_n("Inputs and resources > Circularity > By-products and waste as inputs"))`) and was substantially more common than *Resource efficiency* (`r fmt(topic_n("Inputs and resources > Circularity > Resource efficiency"))`), *Novel feed resources* (`r fmt(topic_n("Inputs and resources > Feed-resource supply > Novel feed resources"))`) and *Marine feed resources* (`r fmt(topic_n("Inputs and resources > Feed-resource supply > Marine feed resources"))`). Energy supply was represented in only `r fmt(topic_n("Inputs and resources > Farm inputs > Energy supply"))` records.
 
 ```{r fig-inputs, fig.cap="Topic-assignment frequency within the Inputs and resources theme."}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04g_hierarchy_inputs_and_resources.png"))
