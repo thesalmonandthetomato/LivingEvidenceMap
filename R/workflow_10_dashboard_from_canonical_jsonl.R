@@ -5,15 +5,12 @@ args <- commandArgs(trailingOnly=TRUE)
 source_jsonl <- if(length(args)>=1L) args[[1L]] else stop("Missing canonical JSONL path",call.=FALSE)
 out_csv <- if(length(args)>=2L) args[[2L]] else "docs/living_evidence_map.csv"
 out_js <- if(length(args)>=3L) args[[3L]] else "docs/dashboard-data.js"
-pointer_path <- if(length(args)>=4L) args[[4L]] else "docs/workflow08/zenodo/run-36329841121.json"
-w07_scores_path <- if(length(args)>=5L) args[[5L]] else stop("Missing Workflow 07 retained topic-score path",call.=FALSE)
+pointer_path <- if(length(args)>=4L) args[[4L]] else stop("Missing Workflow 08 pointer path",call.=FALSE)
 
 ontology_path <- Sys.getenv("TOPIC_ONTOLOGY_PATH","data/reference/topic_ontology_v3_6.csv")
 iso_map_path <- Sys.getenv("ISO_NUMERIC_MAP_PATH","config/iso3_numeric_map.json")
 gazetteer_path <- Sys.getenv("COUNTRY_GAZETTEER_PATH","config/global_country_gazetteer_v3.csv")
 flow_counts_path <- Sys.getenv("WORKFLOW09_FLOW_COUNTS_PATH","docs/reporting/workflow_09/flow_counts.json")
-expected_sha <- "ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67"
-
 stopf <- function(...) stop(sprintf(...),call.=FALSE)
 `%||%` <- function(x,y) if(is.null(x)||length(x)==0L)y else x
 clean <- function(x){if(is.null(x)||length(x)==0L)return("");z<-as.character(x[[1L]]%||%"");if(is.na(z))"" else trimws(z)}
@@ -25,14 +22,16 @@ vec <- function(x){
 }
 safe_year <- function(x){z<-suppressWarnings(as.integer(substr(clean(x),1,4)));if(is.na(z)||z<1800L||z>2200L)"" else as.character(z)}
 
-for(p in c(source_jsonl,pointer_path,ontology_path,flow_counts_path,w07_scores_path)) if(!file.exists(p)) stopf("Required input not found: %s",p)
-if(!identical(tolower(digest(file=source_jsonl,algo="sha256",serialize=FALSE)),expected_sha)) stopf("Input is not the authoritative Workflow 08 canonical JSONL")
+for(p in c(source_jsonl,pointer_path,ontology_path,flow_counts_path)) if(!file.exists(p)) stopf("Required input not found: %s",p)
 
 pointer <- fromJSON(pointer_path,simplifyVector=FALSE)
-if(!identical(pointer$state,"corrected_final_adjudicated_canonical") ||
-   as.character(pointer$zenodo_record_id)!="22998934" ||
-   as.integer(pointer$canonical_records)!=19117L ||
-   tolower(as.character(pointer$final_canonical_jsonl_sha256))!=expected_sha) stopf("Workflow 08 pointer validation failed")
+if(!identical(pointer$status,"published") ||
+   !identical(pointer$workflow,"08") ||
+   !identical(pointer$state,"corrected_final_adjudicated_canonical") ||
+   as.integer(pointer$canonical_records)!=19117L) stopf("Workflow 08 pointer validation failed")
+expected_sha <- tolower(as.character(pointer$final_canonical_jsonl_sha256))
+if(!grepl("^[0-9a-f]{64}$",expected_sha)) stopf("Workflow 08 pointer has invalid canonical SHA-256")
+if(!identical(tolower(digest(file=source_jsonl,algo="sha256",serialize=FALSE)),expected_sha)) stopf("Input canonical JSONL does not match Workflow 08 pointer SHA-256")
 
 ontology <- read_csv(ontology_path,show_col_types=FALSE,progress=FALSE)
 ontology_problems <- problems(ontology)
@@ -47,16 +46,6 @@ miss <- setdiff(required_ontology,names(ontology))
 if(length(miss)) stopf("Ontology missing columns: %s",paste(miss,collapse=", "))
 if(anyDuplicated(ontology$path_id)) stopf("Ontology path_id values are not unique")
 onto_i <- setNames(seq_len(nrow(ontology)),as.character(ontology$path_id))
-
-w07 <- read_csv(w07_scores_path,show_col_types=FALSE,progress=FALSE)
-required_w07 <- c("record_id","path_id","confidence_n","stars","retained_for_analysis")
-miss_w07 <- setdiff(required_w07,names(w07))
-if(length(miss_w07)) stopf("Workflow 07 score file missing columns: %s",paste(miss_w07,collapse=", "))
-w07 <- w07[w07$retained_for_analysis %in% TRUE,,drop=FALSE]
-if(anyDuplicated(paste(w07$record_id,w07$path_id,sep="\r"))) stopf("Duplicate retained Workflow 07 record/path pairs")
-if(any(!(w07$confidence_n %in% 1:3))) stopf("Workflow 07 confidence_n outside 1:3")
-if(any(nchar(as.character(w07$stars)) != as.integer(w07$confidence_n))) stopf("Workflow 07 star labels do not match confidence_n")
-star_lookup <- setNames(as.character(w07$stars),paste(as.character(w07$record_id),as.character(w07$path_id),sep="\r"))
 
 iso_numeric <- list()
 if(file.exists(iso_map_path)){
@@ -129,7 +118,7 @@ repeat{
 
     assignments<-top$assignments%||%list()
     if(length(assignments)&&!is.list(assignments)) stopf("Topics are not structured for %s",rid)
-    topic_ids<-character();paths<-character()
+    topic_ids<-character();paths<-character();stars<-character();confidence_n<-integer()
     if(length(assignments)){
       for(a in assignments){
         if(!is.list(a)) stopf("Malformed topic assignment for %s",rid)
@@ -138,7 +127,13 @@ repeat{
         opath<-as.character(ontology$hierarchy_path[[onto_i[[pid]]]])
         apath<-clean(a$hierarchy_path)
         if(nzchar(apath)&&!identical(apath,opath)) stopf("Topic hierarchy mismatch for %s / %s",rid,pid)
-        topic_ids<-c(topic_ids,pid);paths<-c(paths,opath)
+        score<-a$workflow07_score%||%list()
+        star<-clean(score$stars)
+        cn<-suppressWarnings(as.integer(clean(score$confidence_n)))
+        if(nzchar(star)){
+          if(is.na(cn)||!(cn%in%1:3)||nchar(star)!=cn||!grepl("^★{1,3}$",star)) stopf("Invalid topic confidence for %s / %s",rid,pid)
+        } else cn<-NA_integer_
+        topic_ids<-c(topic_ids,pid);paths<-c(paths,opath);stars<-c(stars,star);confidence_n<-c(confidence_n,cn)
       }
     }
     if(anyDuplicated(topic_ids)) stopf("Duplicate topic path_id in %s",rid)
@@ -173,10 +168,8 @@ repeat{
       iso3=as.list(isos),
       topics=as.list(unique(unlist(topic_paths,use.names=FALSE))),
       topic_paths=lapply(topic_paths,as.list),
-      topic_stars=setNames(as.list(vapply(topic_ids,function(pid){
-        z<-star_lookup[[paste(rid,pid,sep="\r")]]
-        if(is.null(z)||is.na(z))"" else z
-      },character(1))),paths),
+      topic_stars=setNames(as.list(stars),paths),
+      topic_confidence_n=setNames(as.list(confidence_n),paths),
       topic_path_ids=setNames(as.list(topic_ids),paths),
       topic_coded_at=clean(((rec$provenance%||%list())$workflow08%||%list())$finalised_at_utc)
     )
@@ -256,6 +249,7 @@ manifest<-list(
   species_categories=length(species_counts),
   output_csv=out_csv,
   output_js=out_js,
+  topic_assignments_with_stars=sum(vapply(dash_records,function(r)sum(nzchar(unlist(r$topic_stars,use.names=FALSE))),integer(1))),
   output_js_sha256=digest(file=out_js,algo="sha256",serialize=FALSE)
 )
 write_json(manifest,file.path(dirname(out_js),"dashboard-data-manifest.json"),auto_unbox=TRUE,pretty=TRUE)
