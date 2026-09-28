@@ -3,13 +3,13 @@ suppressPackageStartupMessages({library(jsonlite);library(readr);library(digest)
 
 args <- commandArgs(trailingOnly=TRUE)
 dashboard_js <- if(length(args)>=1L) args[[1L]] else stop("Missing Workflow 10 dashboard-data.js",call.=FALSE)
-dashboard_csv <- if(length(args)>=2L) args[[2L]] else stop("Missing Workflow 10 living_evidence_map.csv",call.=FALSE)
+canonical_jsonl <- if(length(args)>=2L) args[[2L]] else stop("Missing authoritative Workflow 08 canonical JSONL",call.=FALSE)
 out_data_js <- if(length(args)>=3L) args[[3L]] else "outputs/workflow10-search-trial/workflow10-search-trial-data.js"
 out_index_js <- if(length(args)>=4L) args[[4L]] else "outputs/workflow10-search-trial/workflow10-search-trial-index.js"
 
 stopf <- function(...) stop(sprintf(...),call.=FALSE)
 if(!file.exists(dashboard_js)) stopf("Dashboard JS not found: %s",dashboard_js)
-if(!file.exists(dashboard_csv)) stopf("Dashboard CSV not found: %s",dashboard_csv)
+if(!file.exists(canonical_jsonl)) stopf("Canonical JSONL not found: %s",canonical_jsonl)
 
 raw_js <- paste(readLines(dashboard_js,warn=FALSE,encoding="UTF-8"),collapse="\n")
 prefix <- "window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA="
@@ -17,21 +17,37 @@ if(!startsWith(raw_js,prefix)||!endsWith(raw_js,";")) stopf("Unexpected dashboar
 payload <- fromJSON(substr(raw_js,nchar(prefix)+1L,nchar(raw_js)-1L),simplifyVector=FALSE)
 if(!is.list(payload$records)||!length(payload$records)) stopf("Dashboard payload has no records")
 
-csv <- read_csv(dashboard_csv,show_col_types=FALSE,progress=FALSE)
-req <- c("record_id","abstract","issue")
-miss <- setdiff(req,names(csv))
-if(length(miss)) stopf("Dashboard CSV missing columns: %s",paste(miss,collapse=", "))
-if(nrow(csv)!=length(payload$records)) stopf("CSV/JS record-count mismatch: %d vs %d",nrow(csv),length(payload$records))
-if(anyDuplicated(csv$record_id)) stopf("Dashboard CSV contains duplicate record_id")
-
-csv_i <- setNames(seq_len(nrow(csv)),as.character(csv$record_id))
+`%||%` <- function(x,y) if(is.null(x)||length(x)==0L)y else x
+canonical <- new.env(parent=emptyenv(),hash=TRUE)
+con <- file(canonical_jsonl,"rt",encoding="UTF-8")
+on.exit(close(con),add=TRUE)
+canonical_n <- 0L
+repeat{
+  lines <- readLines(con,n=500L,warn=FALSE)
+  if(!length(lines)) break
+  for(line in lines){
+    if(!nzchar(trimws(line))) next
+    rec <- fromJSON(line,simplifyVector=FALSE)
+    rid <- as.character(((rec$identity %||% list())$record_id) %||% "")
+    if(!nzchar(rid)) stopf("Canonical record without record_id")
+    if(exists(rid,envir=canonical,inherits=FALSE)) stopf("Duplicate canonical record_id: %s",rid)
+    if(!isTRUE((rec$screening %||% list())$final_included)) stopf("Canonical JSONL contains non-included record: %s",rid)
+    can <- rec$canonical %||% list()
+    assign(rid,list(
+      abstract=as.character(can$abstract %||% ""),
+      issue=as.character(can$issue %||% "")
+    ),envir=canonical)
+    canonical_n <- canonical_n+1L
+  }
+}
+close(con);on.exit(NULL,add=FALSE)
+if(canonical_n!=length(payload$records)) stopf("Canonical/dashboard record-count mismatch: %d vs %d",canonical_n,length(payload$records))
 
 normalise_ws <- function(x){
   x <- as.character(x %||% "")
   x[is.na(x)] <- ""
   trimws(gsub("[[:space:]]+"," ",x,perl=TRUE))
 }
-`%||%` <- function(x,y) if(is.null(x)||length(x)==0L)y else x
 
 snippet30 <- function(x){
   x <- normalise_ws(x)
@@ -48,15 +64,15 @@ postings <- new.env(parent=emptyenv(),hash=TRUE)
 for(i in seq_along(payload$records)){
   r <- payload$records[[i]]
   rid <- as.character(r$record_id %||% "")
-  if(!nzchar(rid)||is.na(csv_i[[rid]])) stopf("Record %d missing from CSV: %s",i,rid)
-  j <- csv_i[[rid]]
-  abstract <- normalise_ws(csv$abstract[[j]])
+  if(!nzchar(rid)||!exists(rid,envir=canonical,inherits=FALSE)) stopf("Record %d missing from canonical JSONL: %s",i,rid)
+  src <- get(rid,envir=canonical,inherits=FALSE)
+  abstract <- normalise_ws(src$abstract)
   record_ids[[i]] <- rid
 
   # Public trial payload contains only a 30-word snippet, never the full abstract.
   r$abstract <- NULL
   r$abstract_snippet <- snippet30(abstract)
-  r$issue <- if(is.na(csv$issue[[j]])) "" else as.character(csv$issue[[j]])
+  r$issue <- normalise_ws(src$issue)
   payload$records[[i]] <- r
 
   if(!nzchar(abstract)){
@@ -106,8 +122,8 @@ writeLines(
 for(i in seq_along(payload$records)){
   r <- payload$records[[i]]
   rid <- as.character(r$record_id %||% "")
-  j <- csv_i[[rid]]
-  source_abstract <- normalise_ws(csv$abstract[[j]])
+  src <- get(rid,envir=canonical,inherits=FALSE)
+  source_abstract <- normalise_ws(src$abstract)
   expected_snippet <- snippet30(source_abstract)
 
   if(!is.null(r[["abstract",exact=TRUE]])) stopf("Full abstract field survived in trial payload for record %s",rid)
@@ -123,6 +139,8 @@ for(i in seq_along(payload$records)){
 
 manifest <- list(
   schema="living-evidence-map-workflow10-search-trial-v1",
+  evidence_source="authoritative Workflow 08 canonical JSONL",
+  canonical_jsonl_sha256=digest(file=canonical_jsonl,algo="sha256",serialize=FALSE),
   records=length(record_ids),
   records_with_abstract=sum(token_counts>0L),
   unique_abstract_tokens=length(token_keys),
