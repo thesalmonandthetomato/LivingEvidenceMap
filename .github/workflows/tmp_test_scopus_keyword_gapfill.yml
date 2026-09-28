@@ -27,7 +27,7 @@ jobs:
 
       - name: Install minimal dependencies
         shell: Rscript {0}
-        run: install.packages(c('httr2','jsonlite','digest'))
+        run: install.packages(c('httr2','jsonlite','digest','data.table'))
 
       - name: Restore authoritative W01 and W08 states
         env:
