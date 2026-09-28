@@ -1,5 +1,5 @@
 name: Deploy GitHub Pages
-# deploy template refresh: redraw radial after reset
+# deploy template refresh: isolated search accordion trial
 
 on:
   workflow_dispatch:
@@ -22,8 +22,8 @@ concurrency:
 env:
   SOURCE_RUN_ID: '36457402997'
   SOURCE_ARTIFACT: 'workflow10-dashboard-36457402997'
-  TRIAL_RUN_ID: '36469533127'
-  TRIAL_ARTIFACT: 'workflow10-search-trial-36469533127'
+  TRIAL_RUN_ID: '36472359308'
+  TRIAL_ARTIFACT: 'workflow10-search-trial-36472359308'
 
 jobs:
   deploy:
