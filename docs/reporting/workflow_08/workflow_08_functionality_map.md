@@ -44,7 +44,7 @@ This document is intended to serve two purposes:
              +-----------+-----------+
                          |
                          v
-       [restricted Zenodo record 22998934]
+       [restricted Zenodo record 23020526]
                          |
                          v
                    [Workflow 09]
@@ -122,7 +122,7 @@ There are **231 included records with no final topic code** and **53,288 final t
 
 The initial W08 archive, Zenodo record **22998606** (DOI `10.5281/zenodo.22998606`), incorrectly treated the 32,292-record all-disposition intermediate as the definitive canonical JSONL. The W08 adjudication and inclusion/exclusion decisions in that intermediate were valid, but its output partition was not the agreed architecture.
 
-GitHub Actions run `36329841121` therefore deterministically repartitioned that already validated post-adjudication state without rerunning human review, model coding or upstream workflows. The corrected archive was published as restricted Zenodo record **22998934**, DOI **10.5281/zenodo.22998934**, which supersedes record 22998606.
+GitHub Actions run `36329841121` therefore deterministically repartitioned that already validated post-adjudication state without rerunning human review, model coding or upstream workflows. The corrected partition was first published as restricted Zenodo record **22998934**, DOI **10.5281/zenodo.22998934**. A subsequent lossless reassembly preserved the full upstream Workflow 03–07 annotation/provenance objects in the final canonical records without changing the final inclusion/exclusion decisions or counts. That lossless canonical was published as restricted Zenodo record **23020526**, DOI **10.5281/zenodo.23020526**, which supersedes record 22998934.
 
 ## Provenance and documentation
 
@@ -130,12 +130,12 @@ The complete W08 decision ledger records stable review keys, record IDs, issue t
 
 The corrected final-output checksums are:
 
-- included canonical JSONL SHA-256: `ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67`;
+- included canonical JSONL SHA-256: `8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c`;
 - exclusions CSV SHA-256: `d1733b27212d02d1d6d43011fa3fb38cd99ef779882c9ad94b7a7d2860d7c244`;
 - W08 adjudication ledger SHA-256: `db27db784d66dbcfecebbc9b86307db5ea2f680ec9f5e82fd844168fbff1c0e2`;
-- corrected final manifest SHA-256: `2b25a74b466d421a7556f8bda9b133bcf76984dfee11fbf4a32cc47787ea9439`.
+- canonical gzip archive SHA-256: `ffcce9aeae0dfdc914fe47b0e18b390fdddc6a6102e3ab0ff1d23bb5b331756d`.
 
-The included canonical JSONL is 88,916,161 bytes. The exclusions CSV is 3,454,999 bytes.
+The included canonical JSONL is 240,405,647 bytes. For Zenodo transfer it is stored as `living_evidence_map_canonical_final.jsonl.gz` (29,865,281 bytes); the uncompressed JSONL SHA-256 remains authoritative. The exclusions CSV is 3,454,999 bytes.
 
 ## Storage and archival model
 
@@ -149,25 +149,25 @@ Correction run `36329841121` retains the included canonical JSONL, exclusions CS
 
 ### Durable external archive
 
-The authoritative W08 output is archived as restricted Zenodo record **22998934**, DOI **10.5281/zenodo.22998934**. The deposit contains exactly:
+The authoritative W08 output is archived as restricted Zenodo record **23020526**, DOI **10.5281/zenodo.23020526**. The deposit contains exactly:
 
-1. `living_evidence_map_canonical_final.jsonl` — 19,117 included records only;
+1. `living_evidence_map_canonical_final.jsonl.gz` — gzip-compressed transfer form of the 19,117-record included canonical JSONL;
 2. `workflow08_excluded_records.csv` — 13,175 excluded records with bibliographic metadata and exclusion reasons;
 3. `workflow08_adjudication_ledger.jsonl` — all 811 W08 issue decisions; and
 4. `workflow08_final_manifest.json` — counts, provenance and checksums.
 
-Zenodo record **22998606** is superseded and must not be used as the authoritative W08 handoff.
+Zenodo records **22998606** and **22998934** are superseded and must not be used as the authoritative W08 handoff.
 
 ## Downstream handoff
 
-The included-only Workflow 08 canonical JSONL from Zenodo record 22998934 is the authoritative input to Workflow 09 documentation/output-summary work and subsequently the dashboard/output layer. Downstream workflows must verify SHA-256 `ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67` before use.
+The included-only Workflow 08 canonical JSONL from Zenodo record 23020526 is the authoritative input to Workflow 09 documentation/output-summary work and subsequently the dashboard/output layer. Downstream workflows must decompress `living_evidence_map_canonical_final.jsonl.gz` and verify the uncompressed SHA-256 `8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c` before use.
 
 The exclusions CSV is retained for audit, exclusion reporting and PRISMA-style flow reporting. It is not part of the analytical evidence-base input.
 
 ## Methods text for research reporting
 
-> **Workflow 08: human adjudication and final assembly.** Records requiring manual resolution after species, geography and topic coding were collated into a checksum-locked review queue comprising 811 issues across 797 records. A single human reviewer adjudicated each issue using a structured offline workbook, with decisions recorded separately from the immutable automated outputs. Human decisions and late automatic exclusions were applied as overlays to the canonical evidence base. From a source population of 32,292 deduplicated records, 19,117 records were retained in the definitive canonical evidence-base JSONL and 13,175 excluded records were exported separately with bibliographic metadata and final exclusion reasons. The complete adjudication ledger and final outputs were checksum-validated and archived in a restricted Zenodo deposit (10.5281/zenodo.22998934).
+> **Workflow 08: human adjudication and final assembly.** Records requiring manual resolution after species, geography and topic coding were collated into a checksum-locked review queue comprising 811 issues across 797 records. A single human reviewer adjudicated each issue using a structured offline workbook, with decisions recorded separately from the immutable automated outputs. Human decisions and late automatic exclusions were applied as overlays to the canonical evidence base. From a source population of 32,292 deduplicated records, 19,117 records were retained in the definitive canonical evidence-base JSONL and 13,175 excluded records were exported separately with bibliographic metadata and final exclusion reasons. The complete adjudication ledger and final outputs were checksum-validated and archived in a restricted Zenodo deposit (10.5281/zenodo.23020526).
 
 ## Reporting status
 
-**COMPLETE and validated.** All 811 locked W08 issues were resolved exactly once. The 32,292-record source population was partitioned exactly into 19,117 included canonical records and 13,175 exclusions. The included canonical JSONL contains no excluded records. The exclusions file contains only bibliographic identification fields and exclusion stage/reason. The corrected authoritative archive is Zenodo record **22998934**, DOI **10.5281/zenodo.22998934**.
+**COMPLETE and validated.** All 811 locked W08 issues were resolved exactly once. The 32,292-record source population was partitioned exactly into 19,117 included canonical records and 13,175 exclusions. The included canonical JSONL contains no excluded records. The exclusions file contains only bibliographic identification fields and exclusion stage/reason. The authoritative lossless archive is Zenodo record **23020526**, DOI **10.5281/zenodo.23020526**.
