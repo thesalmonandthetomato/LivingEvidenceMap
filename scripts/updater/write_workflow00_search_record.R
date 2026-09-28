@@ -21,6 +21,8 @@ search_version <- arg("--search-version","")
 additional_search_term <- arg("--additional-search-term","")
 orchestrator_sha <- arg("--orchestrator-sha", Sys.getenv("GITHUB_SHA",""))
 source_handler_sha <- arg("--source-handler-sha", Sys.getenv("GITHUB_SHA",""))
+window_from <- arg("--window-from","")
+window_to <- arg("--window-to","")
 output_root <- arg("--output-root","outputs/updater/search_record")
 
 req <- c(source,run_type,query,parent_run_id)
@@ -44,6 +46,10 @@ record <- list(
   search_version=if(nzchar(search_version)) search_version else NULL,
   additional_search_term=if(nzchar(additional_search_term)) additional_search_term else NULL,
   search_string=query,
+  search_window=if(nzchar(window_from)||nzchar(window_to)) list(
+    from=if(nzchar(window_from)) window_from else NULL,
+    to=if(nzchar(window_to)) window_to else NULL
+  ) else NULL,
   reported_search_results=reported,
   successfully_downloaded_results=downloaded,
   complete_download=identical(reported,downloaded),
@@ -74,6 +80,7 @@ md <- c(
   sprintf("- **Results reported by source:** %d", reported),
   sprintf("- **Results successfully downloaded:** %d", downloaded),
   sprintf("- **Complete download:** %s", if(reported==downloaded) "yes" else "no"),
+  sprintf("- **Search window:** %s", if(nzchar(window_from)||nzchar(window_to)) paste0(window_from," to ",window_to) else "not applicable"),
   sprintf("- **Parent workflow run:** %s", parent_run_id),
   sprintf("- **Child workflow run:** %s (attempt %s)", child_run_id, run_attempt),
   sprintf("- **Harvest artifact:** %s", if(nzchar(artifact_name)) artifact_name else "not supplied"),
