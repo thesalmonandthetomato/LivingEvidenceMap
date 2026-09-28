@@ -125,13 +125,13 @@ label_data <- top_counts %>%
   mutate(label_x = bar_end + label_gap)
 
 overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill = species)) +
-  geom_col(width = 0.68, colour = "white", linewidth = 0.2) +
+  geom_col(width = 0.72, colour = "white", linewidth = 0.2) +
   geom_text(
     data = label_data,
     aes(x = label_x, y = level1, label = comma(unique_records)),
     inherit.aes = FALSE,
     hjust = 0,
-    size = 3.5,
+    size = 2.7,
     colour = palette[1]
   ) +
   scale_fill_manual(values = species_fill_values, breaks = canonical_species, drop = FALSE) +
@@ -141,7 +141,7 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill
     y = NULL,
     fill = "Species"
   ) +
-  theme_minimal(base_size = 11) +
+  theme_minimal(base_size = 10.5) +
   theme(
     panel.grid.major.y = element_blank(),
     panel.grid.minor = element_blank(),
@@ -157,8 +157,8 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill
     plot.margin = margin(8, 28, 8, 12)
   )
 
-ggsave(file.path(out_dir, "figure_04a_top_level_topics.pdf"), overview, width = 190, height = 125, units = "mm")
-ggsave(file.path(out_dir, "figure_04a_top_level_topics.png"), overview, width = 190, height = 125, units = "mm", dpi = 600)
+ggsave(file.path(out_dir, "figure_04a_top_level_topics.pdf"), overview, width = 220, height = 90, units = "mm", device = cairo_pdf)
+ggsave(file.path(out_dir, "figure_04a_top_level_topics.png"), overview, width = 220, height = 90, units = "mm", dpi = 600)
 write_csv(top_counts %>% mutate(level1 = as.character(level1)), file.path(out_dir, "topic_top_level_unique_record_counts.csv"))
 write_csv(top_species_counts %>% mutate(level1 = as.character(level1), species = as.character(species)), file.path(out_dir, "topic_top_level_species_counts.csv"))
 
