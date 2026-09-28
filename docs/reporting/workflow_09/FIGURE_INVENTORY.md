@@ -7,12 +7,12 @@ The long-form Results report uses figures generated into `outputs/report/long_fo
 | 1 | Database contribution and exact source overlap before/after relevance screening | `scripts/reporting/plot_citesource_database_contribution.R` | Existing validated implementation; redirect/copy final PNG/PDF into long-form output directory. |
 | 2 | Review/process flow diagram | `visualisations/07_flow_diagram.R` | Added as a canonical JSONL/exclusions-CSV implementation following the current slide-template structure. Source-database counts remain TBC until current Workflow 00 source totals are restored. |
 | 3 | Records by publication year and focal species | `visualisations/01_records_by_publication_year.R` | Migrated to the included-only W08 canonical JSONL. |
-| 4 | High-level topic assignments by publication year | `visualisations/05_records_by_publication_year_high_level_topic.R` | Migrated to the included-only W08 canonical JSONL. |
+| 4 | High-level topic assignments by publication year | `visualisations/05_records_by_publication_year_high_level_topic.R` | **APPROVED / LOCKED 2026-09-28.** Wide manuscript layout, no internal title, canonical W08 JSONL input. |
 | 5 | Records by country and focal species | `visualisations/02_records_by_country.R` | Migrated to the included-only W08 canonical JSONL. |
 | 6 | Country choropleth | `visualisations/03_choropleth_records_by_country.R` | Migrated to the included-only W08 canonical JSONL. |
 | 7 | High-level topics by focal species | `visualisations/04_topic_hierarchy.R` | Migrated to the included-only W08 canonical JSONL. |
-| 8-14 | Theme-specific topic figures for Production, Environment, Methods, Industry and governance, Product, People and society, Inputs and resources | `visualisations/04_topic_hierarchy.R` | Migrated to the included-only W08 canonical JSONL. |
-| 15 | Rapidly emerging topics relative to evidence-base growth | `visualisations/06_rapidly_emerging_topics.R`; `visualisations/06_rapidly_emerging_topics_annotated.R` now redirects to the canonical implementation | Migrated to the included-only W08 canonical JSONL. |
+| 8-14 | Theme-specific topic figures for Production, Environment, Methods, Industry and governance, Product, People and society, Inputs and resources | `visualisations/04_topic_hierarchy.R` | **APPROVED / LOCKED 2026-09-28.** Fixed manuscript order; Level 3 labels; Level 2 colour legend and group separators; no vertical grid lines. |
+| 15 | Rapidly emerging topics relative to evidence-base growth | `visualisations/06_rapidly_emerging_topics.R`; `visualisations/06_rapidly_emerging_topics_annotated.R` | **NOT RETAINED at this stage.** Existing definition was judged unsuitable for identifying genuinely rapidly emerging topics; do not embed in manuscript unless the analytical definition is revisited. |
 | 16 | Primary-study topic distribution versus systematic-review coverage | No current standalone script located | New reporting script required if retained in final manuscript. |
 
 ## Important input migration
