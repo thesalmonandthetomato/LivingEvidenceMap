@@ -143,32 +143,35 @@ box <- function(id, x, y, w, h, label, stage) {
   data.frame(id, x, y, w, h, label, stage, stringsAsFactors = FALSE)
 }
 
+source_box_w <- 1.45
+process_box_w <- 2.75
+
 boxes <- bind_rows(
-  box("agricola", 2.60, 12.00, 1.45, 0.76, paste0("AGRICOLA\nn = ", fmt(source_counts[["AGRICOLA"]])), "source"),
-  box("lens",     4.12, 12.00, 1.45, 0.76, paste0("The Lens\nn = ", fmt(source_counts[["The Lens"]])), "source"),
-  box("openalex", 5.64, 12.00, 1.45, 0.76, paste0("OpenAlex\nn = ", fmt(source_counts[["OpenAlex"]])), "source"),
-  box("scopus",   7.16, 12.00, 1.45, 0.76, paste0("Scopus\nn = ", fmt(source_counts[["Scopus"]])), "source"),
-  box("wos",      8.68, 12.00, 1.45, 0.76, paste0("WoSCC\nn = ", fmt(source_counts[["WoSCC"]])), "source"),
+  box("agricola", 2.60, 12.00, source_box_w, 0.76, paste0("AGRICOLA\nn = ", fmt(source_counts[["AGRICOLA"]])), "source"),
+  box("lens",     4.12, 12.00, source_box_w, 0.76, paste0("The Lens\nn = ", fmt(source_counts[["The Lens"]])), "source"),
+  box("openalex", 5.64, 12.00, source_box_w, 0.76, paste0("OpenAlex\nn = ", fmt(source_counts[["OpenAlex"]])), "source"),
+  box("scopus",   7.16, 12.00, source_box_w, 0.76, paste0("Scopus\nn = ", fmt(source_counts[["Scopus"]])), "source"),
+  box("wos",      8.68, 12.00, source_box_w, 0.76, paste0("WoSCC\nn = ", fmt(source_counts[["WoSCC"]])), "source"),
 
-  box("combined", 5.64, 10.88, 2.55, 0.76, paste0("Combined search results\nn = ", fmt(n_combined)), "search"),
-  box("dedup", 5.64, 9.78, 2.55, 0.76, paste0("Deduplicated records\nn = ", fmt(n_deduplicated)), "screen"),
-  box("dupes", 9.15, 9.78, 2.25, 0.76, paste0("Duplicate records removed\nn = ", fmt(n_duplicates_removed)), "exclude"),
+  box("combined", 5.64, 10.88, process_box_w, 0.76, paste0("Combined search results\nn = ", fmt(n_combined)), "search"),
+  box("dedup", 5.64, 9.78, process_box_w, 0.76, paste0("Deduplicated records\nn = ", fmt(n_deduplicated)), "screen"),
+  box("dupes", 9.15, 9.78, process_box_w, 0.76, paste0("Duplicate records removed\nn = ", fmt(n_duplicates_removed)), "exclude"),
 
-  box("enrichment", 5.64, 8.68, 2.75, 0.76, paste0("Record repair and enrichment\nn enriched = ", fmt(n_enriched)), "repair"),
+  box("enrichment", 5.64, 8.68, process_box_w, 0.76, paste0("Record repair and enrichment\nn enriched = ", fmt(n_enriched)), "repair"),
 
-  box("status_sweep", 5.64, 7.58, 2.85, 0.76, paste0("Records swept for retractions /\nwithdrawal notices\nn = ", fmt(n_deduplicated)), "screen"),
-  box("retractions", 9.15, 7.58, 2.25, 0.76, paste0("Retractions excluded\nn = ", fmt(n_w03)), "exclude"),
+  box("status_sweep", 5.64, 7.58, process_box_w, 0.76, paste0("Records swept for retractions /\nwithdrawal notices\nn = ", fmt(n_deduplicated)), "screen"),
+  box("retractions", 9.15, 7.58, process_box_w, 0.76, paste0("Retractions excluded\nn = ", fmt(n_w03)), "exclude"),
 
-  box("screened", 5.64, 6.48, 2.65, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
-  box("excluded_ta", 9.15, 6.48, 2.55, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_excluded_ta_total)), "exclude"),
-  box("retained", 5.64, 5.38, 2.65, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_retained_final)), "retain"),
+  box("screened", 5.64, 6.48, process_box_w, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
+  box("excluded_ta", 9.15, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_excluded_ta_total)), "exclude"),
+  box("retained", 5.64, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_retained_final)), "retain"),
 
-  box("species", 5.64, 4.18, 2.45, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
-  box("geography", 5.64, 3.13, 2.45, 0.76, paste0("Geography annotation\nn = ", fmt(n_final_included)), "annotate"),
-  box("topic", 5.64, 2.08, 2.45, 0.76, paste0("Topic annotation\nn = ", fmt(n_final_included)), "annotate"),
-  box("uncoded", 9.15, 2.08, 2.40, 0.76, paste0("Included but uncoded for topics\nn = ", fmt(n_topic_uncoded)), "result"),
+  box("species", 5.64, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
+  box("geography", 5.64, 3.13, process_box_w, 0.76, paste0("Geography annotation\nn = ", fmt(n_final_included)), "annotate"),
+  box("topic", 5.64, 2.08, process_box_w, 0.76, paste0("Records entering topic annotation\nn = ", fmt(n_final_included)), "annotate"),
+  box("uncoded", 9.15, 2.08, process_box_w, 0.76, paste0("Included but uncoded for topics\nn = ", fmt(n_topic_uncoded)), "result"),
 
-  box("map", 5.64, 0.88, 2.65, 0.86, paste0("Living Evidence Map\nn = ", fmt(n_final_included)), "map")
+  box("map", 5.64, 0.88, process_box_w, 0.86, paste0("Living Evidence Map\nn = ", fmt(n_final_included)), "map")
 )
 
 # Source lines join a common collector.
@@ -192,9 +195,9 @@ main_arrows <- bind_rows(
 )
 
 side_connectors <- data.frame(
-  x = c(6.92, 7.07, 6.97, 6.87),
+  x = rep(5.64 + process_box_w / 2, 4),
   y = c(9.78, 7.58, 6.48, 2.08),
-  xend = c(8.03, 8.03, 7.88, 7.95),
+  xend = rep(9.15 - process_box_w / 2, 4),
   yend = c(9.78, 7.58, 6.48, 2.08)
 )
 
