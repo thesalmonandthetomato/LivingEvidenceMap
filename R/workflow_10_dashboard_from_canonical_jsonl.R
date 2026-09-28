@@ -199,6 +199,8 @@ database_n<-length(flow_c$sources%||%list())
 search_results_n<-as.integer(flow_c$combined_search_results%||%NA_integer_)
 unique_records_n<-as.integer(flow_c$deduplicated_records%||%NA_integer_)
 screened_n<-as.integer(flow_c$title_abstract_screened%||%NA_integer_)
+search_update_date<-clean(flow_counts$search_update_date)
+if(!identical(search_update_date,"2026-09-22")) stopf("Unexpected Workflow 09 search update date: %s",search_update_date)
 if(database_n!=5L) stopf("Unexpected Workflow 09 database count: %s",as.character(database_n))
 if(is.na(search_results_n)||search_results_n!=90137L) stopf("Unexpected Workflow 09 search-results count: %s",as.character(search_results_n))
 if(is.na(unique_records_n)||unique_records_n!=32292L) stopf("Unexpected Workflow 09 deduplicated-record count: %s",as.character(unique_records_n))
@@ -221,7 +223,7 @@ payload<-list(
     total_topics=nrow(ontology),
     total_countries=length(country_counts),
     total_species=length(species_counts),
-    last_search=NULL,
+    last_search=search_update_date,
     last_evidence_update=published_at,
     databases_searched=database_n,
     search_results=search_results_n,
