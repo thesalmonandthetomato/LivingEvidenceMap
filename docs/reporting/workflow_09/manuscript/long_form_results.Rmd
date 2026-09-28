@@ -177,73 +177,6 @@ n_topic_uncoded <- n_total - n_topic_coded
 n_topic_assignments <- nrow(topic_records)
 
 # -------------------------------------------------------------------------
-# Rapidly emerging topics
-# -------------------------------------------------------------------------
-
-rapid_topics <- tibble::tribble(
-  ~topic, ~path,
-  "Monitoring and sampling methods", "Methods > Methodological research > Monitoring and sampling methods",
-  "Automation and precision aquaculture", "Production > Production systems and technology > Automation and precision aquaculture",
-  "Smoltification and smolt quality", "Production > Early life and transfer > Smoltification and smolt quality",
-  "Novel feed resources", "Inputs and resources > Feed-resource supply > Novel feed resources",
-  "Welfare assessment and risks", "Production > Fish welfare > Welfare assessment",
-  "Welfare assessment and risks", "Production > Fish welfare > Welfare risks and consequences",
-  "Climate change", "Environment > Environmental stressors > Climate change",
-  "Climate change", "Environment > Climate change > Adaptation and mitigation",
-  "Sensors, imaging and measurement", "Methods > Methodological research > Sensors, imaging and measurement methods",
-  "Statistical and modelling methods", "Methods > Methodological research > Statistical and modelling methods",
-  "Antimicrobial resistance and One Health", "People and society > Public health > Antimicrobial resistance and One Health",
-  "Energy, greenhouse gases and life-cycle footprint", "Environment > Resource use and footprint > Energy, greenhouse gases and life-cycle footprint",
-  "By-products and waste as inputs", "Inputs and resources > Circularity > By-products and waste as inputs",
-  "Plastics and solid waste", "Environment > Waste and emissions > Plastics and solid waste"
-)
-
-topic_year <- master %>%
-  transmute(record_id, publication_year = year, raw_paths = as.character(topic_hierarchy_paths)) %>%
-  filter(!is.na(publication_year), !is.na(raw_paths), str_trim(raw_paths) != "") %>%
-  mutate(path = str_split(raw_paths, "\\s*;\\s*")) %>%
-  unnest(path) %>%
-  mutate(path = str_squish(path)) %>%
-  filter(path != "") %>%
-  distinct(record_id, publication_year, path) %>%
-  inner_join(rapid_topics, by = "path") %>%
-  distinct(record_id, publication_year, topic) %>%
-  count(topic, publication_year, name = "topic_records")
-
-background_year <- master %>%
-  filter(!is.na(year)) %>%
-  distinct(record_id, year) %>%
-  count(year, name = "background_records") %>%
-  complete(year = 2010:2025, fill = list(background_records = 0L))
-
-background_baseline <- mean(background_year$background_records[background_year$year >= 2010 & background_year$year <= 2014])
-background_recent <- mean(background_year$background_records[background_year$year >= 2021 & background_year$year <= 2025])
-background_growth_ratio <- background_recent / background_baseline
-
-rapid_summary <- rapid_topics %>%
-  distinct(topic) %>%
-  left_join(
-    topic_year %>%
-      complete(topic, publication_year = 2010:2025, fill = list(topic_records = 0L)) %>%
-      group_by(topic) %>%
-      summarise(
-        baseline = mean(topic_records[publication_year >= 2010 & publication_year <= 2014]),
-        recent = mean(topic_records[publication_year >= 2021 & publication_year <= 2025]),
-        .groups = "drop"
-      ),
-    by = "topic"
-  ) %>%
-  mutate(
-    growth_ratio = if_else(baseline > 0, recent / baseline, NA_real_),
-    relative_to_background = growth_ratio / background_growth_ratio
-  ) %>%
-  arrange(desc(growth_ratio), topic)
-
-rapid_comparable <- rapid_summary %>% filter(!is.na(growth_ratio))
-rapid_faster <- rapid_comparable %>% filter(growth_ratio > background_growth_ratio)
-nth_rapid <- function(n) rapid_comparable[n, , drop = FALSE]
-
-# -------------------------------------------------------------------------
 # Pipeline flow counts from the same Workflow 09 run
 # -------------------------------------------------------------------------
 
@@ -373,14 +306,6 @@ Inputs and resources was the smallest high-level theme. `r topic_name(3,1,level1
 
 ```{r fig-inputs, fig.cap="Topic-assignment frequency within the Inputs and resources theme."}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04g_hierarchy_inputs_and_resources.png"))
-```
-
-## Rapidly emerging topics
-
-The evidence base as a whole grew by `r sprintf("%.2f", background_growth_ratio)` times between the mean annual output in 2010-2014 and 2021-2025. `r nrow(rapid_faster)` of the `r nrow(rapid_comparable)` selected topics with a non-zero 2010-2014 baseline grew faster than this background rate. The strongest relative increases were observed for `r nth_rapid(1)$topic` (`r sprintf("%.1f", nth_rapid(1)$growth_ratio)` times its 2010-2014 baseline), `r nth_rapid(2)$topic` (`r sprintf("%.1f", nth_rapid(2)$growth_ratio)` times), `r nth_rapid(3)$topic` (`r sprintf("%.1f", nth_rapid(3)$growth_ratio)` times) and `r nth_rapid(4)$topic` (`r sprintf("%.1f", nth_rapid(4)$growth_ratio)` times). `r human_list(rapid_faster$topic[5:nrow(rapid_faster)])` also grew faster than the database overall. Plastics and solid waste had no records during the 2010-2014 baseline period and is therefore shown as an emerging topic without a directly comparable baseline growth ratio.
-
-```{r fig-emerging, fig.cap="Relative growth of rapidly emerging topics compared with growth of the complete evidence base. Topic series are indexed to their mean annual frequency during 2010-2014 where a baseline is available; the dashed grey line represents fitted background database growth."}
-include_figure(here::here("visualisations", "figure_06_rapidly_emerging_topics.png"))
 ```
 
 ## Comparison with secondary research
