@@ -55,6 +55,10 @@ jobs:
           r-version: release
           use-public-rspm: true
 
+      - name: Install preview R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
       - name: Add isolated preview files
         shell: Rscript {0}
         run: |
@@ -80,17 +84,42 @@ jobs:
           out_data <- 'production/docs/workflow10-preview-data.js'
           writeLines(html,out_html,useBytes=TRUE)
 
+          suppressPackageStartupMessages(library(jsonlite))
           data_js <- paste(readLines(data_path,warn=FALSE,encoding='UTF-8'),collapse='\n')
+          prefix <- 'window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA='
+          if(!startsWith(data_js,prefix) || !endsWith(data_js,';')) stop('Unexpected dashboard-data.js wrapper',call.=FALSE)
+          payload <- fromJSON(substr(data_js,nchar(prefix)+1L,nchar(data_js)-1L),simplifyVector=FALSE)
+
+          as_array <- function(x) {
+            if(is.null(x)) return(list())
+            if(is.list(x) && is.null(names(x))) return(x)
+            as.list(x)
+          }
+          payload$records <- lapply(payload$records,function(r) {
+            r$species <- as_array(r$species)
+            r$countries <- as_array(r$countries)
+            r$iso3 <- as_array(r$iso3)
+            r$topics <- as_array(r$topics)
+            r$topic_paths <- as_array(r$topic_paths)
+            r$topic_paths <- lapply(r$topic_paths,as_array)
+            r
+          })
+
           flow_path <- 'workflow10/docs/reporting/workflow_09/flow_counts.json'
-          flow_txt <- paste(readLines(flow_path,warn=FALSE,encoding='UTF-8'),collapse=' ')
-          hit <- regmatches(flow_txt,regexec('"title_abstract_screened"\\s*:\\s*([0-9]+)',flow_txt,perl=TRUE))[[1L]]
-          if(length(hit)!=2L) stop('Could not read title_abstract_screened from Workflow 09 flow counts',call.=FALSE)
-          screened_n <- as.integer(hit[[2L]])
-          if(screened_n!=32283L) stop(sprintf('Unexpected screened count: %d',screened_n),call.=FALSE)
-          old_metric <- '"candidate_search_results_screened":null'
-          new_metric <- paste0('"candidate_search_results_screened":',screened_n)
-          if(!grepl(old_metric,data_js,fixed=TRUE) && !grepl(new_metric,data_js,fixed=TRUE)) stop('Screened-count metric not found in preview data',call.=FALSE)
-          data_js <- sub(old_metric,new_metric,data_js,fixed=TRUE)
+          flow <- fromJSON(flow_path,simplifyVector=FALSE)
+          screened_n <- as.integer(flow$counts$title_abstract_screened)
+          if(is.na(screened_n)||screened_n!=32283L) stop(sprintf('Unexpected screened count: %s',as.character(screened_n)),call.=FALSE)
+          payload$metrics$candidate_search_results_screened <- screened_n
+
+          is_array <- function(x) is.list(x) && is.null(names(x))
+          stopifnot(length(payload$records)==19117L)
+          stopifnot(all(vapply(payload$records,function(r)is_array(r$species),logical(1))))
+          stopifnot(all(vapply(payload$records,function(r)is_array(r$countries),logical(1))))
+          stopifnot(all(vapply(payload$records,function(r)is_array(r$iso3),logical(1))))
+          stopifnot(all(vapply(payload$records,function(r)is_array(r$topics),logical(1))))
+          stopifnot(all(vapply(payload$records,function(r)is_array(r$topic_paths)&&all(vapply(r$topic_paths,is_array,logical(1))),logical(1))))
+
+          data_js <- paste0(prefix,toJSON(payload,auto_unbox=TRUE,null='null',na='null',pretty=FALSE),';')
           writeLines(data_js,out_data,useBytes=TRUE)
 
           if(!file.exists('production/docs/index.html')) stop('Production index.html missing',call.=FALSE)
