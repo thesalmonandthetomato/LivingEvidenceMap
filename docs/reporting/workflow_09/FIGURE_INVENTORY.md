@@ -1,36 +1,37 @@
 # Workflow 09 figure inventory
 
-The long-form Results report uses figures generated into `outputs/report/long_form/figures/`.
+Workflow 09 publishes 15 final manuscript figures in both PNG and PDF under `docs/reporting/workflow_09/figures/`. The corresponding R source snapshot is stored under `docs/reporting/workflow_09/figure_code/`.
 
-| Results figure | Purpose | R implementation | Status for final Workflow 09 |
-|---|---|---|---|
-| 1 | Database contribution and exact source overlap before/after relevance screening | `scripts/reporting/plot_citesource_database_contribution.R` | Existing validated implementation; redirect/copy final PNG/PDF into long-form output directory. |
-| 2 | Review/process flow diagram | `visualisations/07_flow_diagram.R` | Populated from authoritative Workflow 00/01 source counts, Workflow 02 enrichment results, and final Workflow 08 state; follows the current slide-template structure. |
-| 3 | Records by publication year and focal species | `visualisations/01_records_by_publication_year.R` | Migrated to the included-only W08 canonical JSONL. |
-| 4 | High-level topic assignments by publication year | `visualisations/05_records_by_publication_year_high_level_topic.R` | **APPROVED / LOCKED 2026-09-28.** Wide manuscript layout, no internal title, canonical W08 JSONL input. |
-| 5 | Records by country and focal species | `visualisations/02_records_by_country.R` | Migrated to the included-only W08 canonical JSONL. |
-| 6 | Country choropleth | `visualisations/03_choropleth_records_by_country.R` | Migrated to the included-only W08 canonical JSONL. |
-| 7 | High-level topics by focal species | `visualisations/04_topic_hierarchy.R` | Migrated to the included-only W08 canonical JSONL. |
-| 8-14 | Theme-specific topic figures for Production, Environment, Methods, Industry and governance, Product, People and society, Inputs and resources | `visualisations/04_topic_hierarchy.R` | **APPROVED / LOCKED 2026-09-28.** Fixed manuscript order; Level 3 labels; Level 2 colour legend and group separators; no vertical grid lines. |
-| 15 | Rapidly emerging topics relative to evidence-base growth | `visualisations/06_rapidly_emerging_topics.R`; `visualisations/06_rapidly_emerging_topics_annotated.R` | **NOT RETAINED at this stage.** Existing definition was judged unsuitable for identifying genuinely rapidly emerging topics; do not embed in manuscript unless the analytical definition is revisited. |
-| 16 | Primary-study topic distribution versus systematic-review coverage | No current standalone script located | New reporting script required if retained in final manuscript. |
+| Manuscript figure | Purpose | Permanent figure file stem | R implementation |
+|---:|---|---|---|
+| 1 | Review/process flow | `figure_01_flow_diagram` | `visualisations/07_flow_diagram.R` |
+| 2 | Database contribution and exact source overlap before/after relevance screening | `figure_02_database_contribution` | `scripts/reporting/plot_citesource_database_contribution.R` |
+| 3 | Records by publication year and focal species | `figure_03_publication_year_species` | `visualisations/01_records_by_publication_year.R` |
+| 4 | High-level topic assignments by publication year | `figure_04_publication_year_topics` | `visualisations/05_records_by_publication_year_high_level_topic.R` |
+| 5 | Global distribution of included records by substantive study country | `figure_05_country_choropleth` | `visualisations/03_choropleth_records_by_country.R` |
+| 6 | Top countries by focal species | `figure_06_country_species` | `visualisations/02_records_by_country.R` |
+| 7 | High-level topics by focal species | `figure_07_top_level_topics` | `visualisations/04_topic_hierarchy.R` |
+| 8 | Production topic hierarchy | `figure_08_production` | `visualisations/04_topic_hierarchy.R` |
+| 9 | Environment topic hierarchy | `figure_09_environment` | `visualisations/04_topic_hierarchy.R` |
+| 10 | Methods topic hierarchy | `figure_10_methods` | `visualisations/04_topic_hierarchy.R` |
+| 11 | Industry and governance topic hierarchy | `figure_11_industry_and_governance` | `visualisations/04_topic_hierarchy.R` |
+| 12 | Product topic hierarchy | `figure_12_product` | `visualisations/04_topic_hierarchy.R` |
+| 13 | People and society topic hierarchy | `figure_13_people_and_society` | `visualisations/04_topic_hierarchy.R` |
+| 14 | Inputs and resources topic hierarchy | `figure_14_inputs_and_resources` | `visualisations/04_topic_hierarchy.R` |
+| 15 | Topic coverage in the supplied umbrella review | `figure_15_umbrella_review` | `visualisations/08_umbrella_review_figure.R` |
 
-## Important input migration
+## Final design rules
 
-The legacy static visualisation scripts previously read `data/master/current/living_evidence_map_master CORRECTED.csv`. That file represents the earlier dashboard/master architecture and is not the authoritative final Workflow 08 release. The figure scripts now read the final included-only canonical JSONL using `visualisations/canonical_figure_data.R`.
+Figures 3 and 4 use the same publication-year axis layout, aspect ratio, typography, horizontal reference-grid treatment and right-hand legend placement.
 
-By default scripts look for `data/master/current/living_evidence_map_canonical_final.jsonl`, `outputs/workflow08_corrected/living_evidence_map_canonical_final.jsonl`, or `outputs/workflow08/living_evidence_map_canonical_final.jsonl`. They can also be pointed to a file with `--canonical-jsonl` or `CANONICAL_JSONL`.
+Figures 7-14 use a common horizontal-bar design with the x-axis label **Number of records**, consistent typography, grid treatment and margins. Figure heights for theme-specific plots scale with the number of topic rows to avoid vertically stretching small panels such as Methods.
 
-## Flow diagram counts currently established
+Figures 7-14 contain no internal titles, subtitles or below-plot explanatory captions. Explanatory wording belongs in manuscript figure captions.
 
-- Deduplicated canonical records: 32,292.
-- Publication-status exclusions before relevance screening: 9.
-- Records entering Workflow 04 relevance screening: 32,283.
-- Workflow 04 retained: 19,407.
-- Workflow 04 excluded: 12,876.
-- Additional late exclusions attributed to Workflow 07 in final accounting: 122.
-- Additional Workflow 08 human-review exclusions: 168.
-- Final included evidence map: 19,117.
-- Final included records without a retained topic code: 231.
+The rapidly-emerging-topics figure explored during development is not part of the final figure set because its analytical definition was not retained.
 
-The final diagram uses source totals AGRICOLA 2,744; The Lens 24,135; OpenAlex 28,134; Scopus 19,948; WoSCC 15,176 (combined 90,137), with 57,845 duplicate manifestations removed to yield 32,292 deduplicated canonical works. Workflow 02 enriched 2,190 distinct records. The 231 included-but-uncoded topic records remain included rather than being treated as exclusions.
+## Data source
+
+All analytical figures use the final included-only Workflow 08 canonical JSONL through `visualisations/canonical_figure_data.R`. Workflow 09 selects the latest registered Workflow 08 Zenodo pointer and verifies the canonical SHA-256 before publication.
+
+Figures requiring upstream process/provenance data additionally restore the corresponding validated Workflow 01, Workflow 02 and Workflow 04 states. These are reporting inputs only and do not replace Workflow 08 final inclusion decisions.
