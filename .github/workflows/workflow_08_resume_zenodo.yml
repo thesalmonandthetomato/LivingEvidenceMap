@@ -1,0 +1,145 @@
+name: Workflow 08 - resume Zenodo publication only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow08/.run_resume_zenodo'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Parse publication scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_08_resume_zenodo.R')
+          parse(file='scripts/updater/workflow_08_write_report.R')
+          cat('PASS: Workflow 08 publication-only scripts parse\n')
+
+      - name: Restore validated Workflow 08 artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/w08resume
+          gh run download 36442875006 \
+            -n workflow08-final-36442875006 \
+            -D inputs/w08resume
+          test -s inputs/w08resume/workflow08/living_evidence_map_canonical_final.jsonl
+          test -s inputs/w08resume/workflow08/workflow08_excluded_records.csv
+          test -s inputs/w08resume/workflow08/workflow08_adjudication_ledger.jsonl
+          test -s inputs/w08resume/workflow08/workflow08_final_manifest.json
+          test -s inputs/w08resume/workflow08/COMPLETE.json
+
+      - name: Verify preserved canonical before publication
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(digest)})
+          p <- 'inputs/w08resume/workflow08/living_evidence_map_canonical_final.jsonl'
+          m <- fromJSON('inputs/w08resume/workflow08/workflow08_final_manifest.json',simplifyVector=FALSE)
+          stopifnot(
+            identical(m$status,'PASS'),
+            as.integer(m$canonical_records)==19117L,
+            as.integer(m$excluded_records)==13175L,
+            unname(file.info(p)$size)==as.numeric(m$final_canonical_jsonl_bytes),
+            identical(
+              tolower(digest(file=p,algo='sha256',serialize=FALSE)),
+              tolower(as.character(m$final_canonical_jsonl_sha256))
+            )
+          )
+          cat(sprintf(
+            'PASS: preserved W08 canonical verified: %d bytes; SHA256=%s\n',
+            unname(file.info(p)$size),
+            m$final_canonical_jsonl_sha256
+          ))
+
+      - name: Publish compressed canonical to Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow08_zenodo
+          Rscript scripts/updater/workflow_08_resume_zenodo.R \
+            --canonical inputs/w08resume/workflow08/living_evidence_map_canonical_final.jsonl \
+            --exclusions inputs/w08resume/workflow08/workflow08_excluded_records.csv \
+            --ledger inputs/w08resume/workflow08/workflow08_adjudication_ledger.jsonl \
+            --manifest inputs/w08resume/workflow08/workflow08_final_manifest.json \
+            --source-run-id 36442875006 \
+            --repository "$GITHUB_REPOSITORY" \
+            --supersedes-doi 10.5281/zenodo.22998934 \
+            --output-dir outputs/workflow08_zenodo
+
+      - name: Register new authoritative Workflow 08 pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin workflow01-final-architecture
+
+          Rscript scripts/updater/workflow_08_write_report.R \
+            --manifest inputs/w08resume/workflow08/workflow08_final_manifest.json \
+            --receipt outputs/workflow08_zenodo/zenodo_receipt.json \
+            --complete inputs/w08resume/workflow08/COMPLETE.json \
+            --output docs/reporting/workflow_08/workflow_08_functionality_map.md
+
+          mkdir -p docs/workflow08/zenodo
+          cp outputs/workflow08_zenodo/zenodo_receipt.json docs/workflow08/zenodo/run-36442875006.json
+
+          if [ ! -f docs/workflow08/zenodo_registry.csv ]; then
+            echo 'source_run_id,zenodo_record_id,doi,canonical_sha256,published_at_utc' > docs/workflow08/zenodo_registry.csv
+          fi
+
+          Rscript -e '
+            x <- jsonlite::fromJSON("outputs/workflow08_zenodo/zenodo_receipt.json")
+            reg <- read.csv("docs/workflow08/zenodo_registry.csv",stringsAsFactors=FALSE)
+            reg <- reg[as.character(reg$source_run_id)!="36442875006",,drop=FALSE]
+            row <- data.frame(
+              source_run_id=as.character(x$source_github_run_id),
+              zenodo_record_id=as.character(x$zenodo_record_id),
+              doi=as.character(x$doi),
+              canonical_sha256=as.character(x$final_canonical_jsonl_sha256),
+              published_at_utc=as.character(x$published_at_utc),
+              stringsAsFactors=FALSE
+            )
+            write.csv(rbind(reg,row),"docs/workflow08/zenodo_registry.csv",row.names=FALSE,quote=FALSE)
+          '
+
+          git add docs/reporting/workflow_08/workflow_08_functionality_map.md \
+                  docs/workflow08/zenodo_registry.csv \
+                  docs/workflow08/zenodo/run-36442875006.json
+          git commit -m "Register lossless Workflow 08 Zenodo publication [skip ci]"
+          git push origin HEAD:workflow01-final-architecture
+
+      - name: Upload publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow08-zenodo-resume-${{ github.run_id }}
+          path: outputs/workflow08_zenodo/
+          retention-days: 30
+          if-no-files-found: warn
