@@ -251,12 +251,12 @@ jobs:
           library(digest)
 
           canonical <- "workflow08_reporting_state/living_evidence_map_canonical_final.jsonl"
-          w08_manifest <- fromJSON(Sys.getenv("W08_MANIFEST_PATH"))
-          expected_sha <- tolower(as.character(w08_manifest$final_canonical_jsonl_sha256))
+          w08_pointer <- fromJSON(Sys.getenv("W08_POINTER"))
+          expected_sha <- tolower(as.character(w08_pointer$final_canonical_jsonl_sha256))
           stopifnot(
-            identical(w08_manifest$status, "PASS"),
-            identical(w08_manifest$annotation_preservation, "lossless-upstream-handoff-v1"),
-            as.integer(w08_manifest$canonical_records) == 19117L,
+            identical(w08_pointer$status, "published"),
+            identical(w08_pointer$annotation_preservation, "lossless-upstream-handoff-v1"),
+            as.integer(w08_pointer$canonical_records) == 19117L,
             identical(
               tolower(digest(canonical, algo = "sha256", file = TRUE, serialize = FALSE)),
               expected_sha
