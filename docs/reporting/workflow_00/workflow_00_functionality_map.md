@@ -100,6 +100,18 @@ A source-specific update search intended to identify newly indexed records while
 
 Every fortnightly harvest is then reconciled against that source's persistent native-ID registry before Workflow 01. This is an exact source-level delta filter, not bibliographic deduplication. Lens uses Lens ID; Scopus uses EID; OpenAlex uses Work ID; AGRICOLA uses the Europe PMC AGR source plus ID; and Web of Science uses UID. Already-known native IDs remain preserved in the raw search archive but are not passed downstream. Only previously unseen native IDs are emitted in the filtered source-shaped harvest consumed by Workflow 01. The updated source-native ID registry is committed only after the selected source jobs have completed successfully.
 
+The five sources do not expose equivalent update-date semantics, so Workflow 00 records the retrieval mechanism explicitly rather than presenting the searches as methodologically identical:
+
+| Source | Fortnightly retrieval mechanism | Search fields | Important constraint |
+|---|---|---|---|
+| Lens | `created` date, 14-day window | title, abstract, keyword | Uses Lens creation/indexing metadata. |
+| Scopus | `ORIG-LOAD-DATE` after the 14-day boundary | title, abstract, keywords | Uses Scopus load-date metadata. |
+| OpenAlex | current publication year plus following publication year | title and abstract only | Deliberate workaround: the workflow does not use the relevant paid date filtering, and title/abstract-only search prevents full-text searching. Previously harvested Work IDs are removed after retrieval. |
+| AGRICOLA | `FIRST_PDATE` 14-day window via Europe PMC, restricted to `SRC:AGR` | title and abstract | Provider/API constraint: this is a first-publication-date filter rather than a true indexing-date filter. Previously harvested AGR IDs are removed after retrieval. |
+| Web of Science | Starter API `modifiedTimeSpan`, 14-day window | title, abstract, author keywords | The update window is supplied as a separate API parameter rather than embedded in the query string. |
+
+These source-specific rules are written into each fortnightly `search_plan.json` under `source_update_methods`.
+
 ### Expansion
 
 A controlled search-term expansion. The species block is immutable. A new farm/aquaculture term may be added and searched while excluding the existing farm-term block. Retrieved records are reconciled against persistent native source identifiers before downstream bibliographic deduplication.
@@ -176,7 +188,7 @@ Workflow 01 consumes one authoritative Workflow 00 state pointer. The state iden
 
 ## Reporting status
 
-Workflow 00 state integrity is validated by `scripts/updater/workflow_00_validate_state.R`, which requires exactly the five expected sources, valid archive references and harvest checksums, and non-empty duplicate-free source-native ID registries. Automatic promotion of future update harvests into the rolling state is deferred until source-native ID reconciliation is consistently enforced for fortnightly updates across all five sources.
+Workflow 00 state integrity is validated by `scripts/updater/workflow_00_validate_state.R`, which requires exactly the five expected sources, valid archive references and harvest checksums, and non-empty duplicate-free source-native ID registries. Source-native ID reconciliation is now consistently enforced for fortnightly updates across all five sources. Automatic replacement of a complete source entry in `current.json` by a fortnightly archive nevertheless remains disabled because a fortnightly archive is a delta, not a complete source snapshot. The logical state model must therefore preserve the baseline plus accepted source-level deltas rather than treating the newest delta archive as the whole source.
 
 Workflow 00 is considered complete when:
 
