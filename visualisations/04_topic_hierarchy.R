@@ -143,7 +143,6 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill
   ) +
   theme_minimal(base_size = 11) +
   theme(
-    panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
     panel.grid.major.y = element_blank(),
     panel.grid.minor = element_blank(),
     panel.grid.major.x = element_line(colour = "#e5e8e9", linewidth = 0.35),
