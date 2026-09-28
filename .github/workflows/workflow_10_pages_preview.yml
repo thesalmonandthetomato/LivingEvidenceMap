@@ -79,7 +79,19 @@ jobs:
           out_html <- 'production/docs/workflow10-preview.html'
           out_data <- 'production/docs/workflow10-preview-data.js'
           writeLines(html,out_html,useBytes=TRUE)
-          file.copy(data_path,out_data,overwrite=TRUE)
+
+          data_js <- paste(readLines(data_path,warn=FALSE,encoding='UTF-8'),collapse='\n')
+          flow_path <- 'workflow10/docs/reporting/workflow_09/flow_counts.json'
+          flow_txt <- paste(readLines(flow_path,warn=FALSE,encoding='UTF-8'),collapse=' ')
+          hit <- regmatches(flow_txt,regexec('"title_abstract_screened"\\s*:\\s*([0-9]+)',flow_txt,perl=TRUE))[[1L]]
+          if(length(hit)!=2L) stop('Could not read title_abstract_screened from Workflow 09 flow counts',call.=FALSE)
+          screened_n <- as.integer(hit[[2L]])
+          if(screened_n!=32283L) stop(sprintf('Unexpected screened count: %d',screened_n),call.=FALSE)
+          old_metric <- '"candidate_search_results_screened":null'
+          new_metric <- paste0('"candidate_search_results_screened":',screened_n)
+          if(!grepl(old_metric,data_js,fixed=TRUE) && !grepl(new_metric,data_js,fixed=TRUE)) stop('Screened-count metric not found in preview data',call.=FALSE)
+          data_js <- sub(old_metric,new_metric,data_js,fixed=TRUE)
+          writeLines(data_js,out_data,useBytes=TRUE)
 
           if(!file.exists('production/docs/index.html')) stop('Production index.html missing',call.=FALSE)
           if(file.info(out_data)$size < 1000000) stop('Preview data file unexpectedly small',call.=FALSE)
