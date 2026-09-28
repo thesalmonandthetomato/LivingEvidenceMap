@@ -127,11 +127,12 @@ jobs:
           stopifnot(all(vapply(eligible,function(r)!is.null(r$geography$workflow06),logical(1))))
           stopifnot(all(vapply(eligible,function(r)!is.null(r$topics$workflow07_record_qc),logical(1))))
 
-          match_rows <- sum(vapply(eligible,function(r)length(r$species$matches %||% list()),integer(1)))
+          nzlist <- function(x) if(is.null(x)) list() else x
+          match_rows <- sum(vapply(eligible,function(r)length(nzlist(r$species$matches)),integer(1)))
           expected_matches <- nrow(read_csv('inputs/w05/species_matches.csv',show_col_types=FALSE,progress=FALSE))
           stopifnot(match_rows==expected_matches)
 
-          preserved_scores <- unlist(lapply(eligible,function(r)r$topics$workflow07_assignments %||% list()),recursive=FALSE)
+          preserved_scores <- unlist(lapply(eligible,function(r)nzlist(r$topics$workflow07_assignments)),recursive=FALSE)
           expected_scores <- read_csv('inputs/w07/workflow07_topic_pathway_scores_retained.csv',show_col_types=FALSE,progress=FALSE)
           expected_scores <- expected_scores[expected_scores$retained_for_analysis %in% TRUE,,drop=FALSE]
           stopifnot(length(preserved_scores)==nrow(expected_scores))
@@ -142,7 +143,7 @@ jobs:
           },logical(1))))
 
           final_scored <- unlist(lapply(eligible,function(r) {
-            Filter(function(a)!is.null(a$workflow07_score),r$topics$assignments %||% list())
+            Filter(function(a)!is.null(a$workflow07_score),nzlist(r$topics$assignments))
           }),recursive=FALSE)
           stopifnot(all(vapply(final_scored,function(a) {
             s <- a$workflow07_score
