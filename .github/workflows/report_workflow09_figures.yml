@@ -102,8 +102,8 @@ jobs:
           Rscript visualisations/03_choropleth_records_by_country.R
           Rscript visualisations/04_topic_hierarchy.R
           Rscript visualisations/05_records_by_publication_year_high_level_topic.R
-          Rscript visualisations/06_rapidly_emerging_topics.R
           Rscript visualisations/07_flow_diagram.R
+          Rscript visualisations/08_umbrella_review_figure.R
 
       - name: Render database contribution UpSet
         shell: bash
@@ -146,8 +146,8 @@ jobs:
             "visualisations/figure_02_records_by_country.png",
             "visualisations/figure_03_choropleth_records_by_country.png",
             "visualisations/figure_05_records_by_publication_year_high_level_topic.png",
-            "visualisations/figure_06_rapidly_emerging_topics.png",
             "visualisations/figure_07_flow_diagram.png",
+            "visualisations/figure_08_umbrella_review.png",
             "visualisations/figure_07_flow_diagram_counts.json",
             "visualisations/topic_hierarchy/figure_04a_top_level_topics.png",
             "visualisations/topic_hierarchy/figure_04a_hierarchy_production.png",
@@ -171,8 +171,9 @@ jobs:
           cp visualisations/figure_02_records_by_country.{png,pdf} outputs/workflow09_figure_review/
           cp visualisations/figure_03_choropleth_records_by_country.{png,pdf} outputs/workflow09_figure_review/
           cp visualisations/figure_05_records_by_publication_year_high_level_topic.{png,pdf} outputs/workflow09_figure_review/
-          cp visualisations/figure_06_rapidly_emerging_topics.{png,pdf} outputs/workflow09_figure_review/
           cp visualisations/figure_07_flow_diagram.{png,pdf} outputs/workflow09_figure_review/
+          cp visualisations/figure_08_umbrella_review.{png,pdf} outputs/workflow09_figure_review/
+          cp visualisations/figure_08_umbrella_review_data.csv outputs/workflow09_figure_review/
           cp visualisations/figure_07_flow_diagram_{boxes,counts}.csv outputs/workflow09_figure_review/
           cp visualisations/figure_07_flow_diagram_counts.json outputs/workflow09_figure_review/
           cp visualisations/topic_hierarchy/*.png outputs/workflow09_figure_review/topic_hierarchy/
