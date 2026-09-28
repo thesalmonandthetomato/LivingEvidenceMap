@@ -1,0 +1,205 @@
+name: Temporary - test Scopus keyword gap fill
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_test_scopus_keyword_gapfill.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install minimal dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Restore authoritative W01 and W08 states
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-36128255337.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root tmp_w01
+          mkdir -p tmp_w08
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer docs/workflow08/zenodo/run-36442875006.json \
+            --output tmp_w08/canonical.jsonl
+
+      - name: Identify exact production-rule candidates and test 10
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(httr2)
+            library(jsonlite)
+          })
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          clean_vec <- function(x){
+            if(is.null(x)||!length(x)) return(character())
+            z <- trimws(as.character(unlist(x,use.names=FALSE)))
+            unique(z[nzchar(z)])
+          }
+          read_jsonl <- function(path,fun){
+            con <- file(path,'rt',encoding='UTF-8'); on.exit(close(con))
+            repeat{
+              lines <- readLines(con,n=500L,warn=FALSE)
+              if(!length(lines)) break
+              for(line in lines){
+                if(!nzchar(trimws(line))) next
+                fun(fromJSON(line,simplifyVector=FALSE))
+              }
+            }
+          }
+
+          # Final included record IDs only.
+          included <- new.env(hash=TRUE,parent=emptyenv())
+          read_jsonl('tmp_w08/canonical.jsonl',function(r){
+            rid <- as.character((r$identity %||% list())$record_id %||% '')
+            if(nzchar(rid)) assign(rid,TRUE,envir=included)
+          })
+          cat(sprintf('FINAL_INCLUDED_RECORDS=%d\n',length(ls(included))))
+
+          seed_root <- 'tmp_w01/workflow01_seed'
+          source_files <- c(
+            lens='lens_records_for_deduplication.jsonl',
+            scopus='scopus_records_for_deduplication.jsonl',
+            openalex='openalex_records_for_deduplication.jsonl',
+            agricola='agricola_records_for_deduplication.jsonl',
+            wos='wos_records_for_deduplication.jsonl'
+          )
+          source_maps <- lapply(names(source_files),function(x)new.env(hash=TRUE,parent=emptyenv()))
+          names(source_maps) <- names(source_files)
+
+          for(src in names(source_files)){
+            path <- file.path(seed_root,source_files[[src]])
+            read_jsonl(path,function(r){
+              if(src=='lens'){
+                rid <- as.character((r$identity %||% list())$lens_id %||% (r$identity %||% list())$record_id %||% '')
+                kws <- clean_vec((r$canonical %||% list())$keywords %||% ((r$lens %||% list())$raw_payload %||% list())$keywords)
+                val <- list(keywords=kws,scopus_eid=NULL)
+              } else {
+                rid <- as.character((r$sidecar_identity %||% list())$sidecar_record_id %||% '')
+                kws <- clean_vec((r$mapped_fields %||% list())$keywords)
+                eid <- if(src=='scopus') as.character((r$sidecar_identity %||% list())$scopus_eid %||% '') else ''
+                val <- list(keywords=kws,scopus_eid=eid)
+              }
+              if(nzchar(rid)) assign(rid,val,envir=source_maps[[src]])
+            })
+          }
+
+          candidates <- list()
+          w01can <- 'tmp_w01/canonical/records.jsonl'
+          read_jsonl(w01can,function(r){
+            rid <- as.character((r$identity %||% list())$record_id %||% '')
+            if(!nzchar(rid) || !exists(rid,envir=included,inherits=FALSE)) return(NULL)
+            mans <- r$manifestations %||% list()
+            upstream_keywords <- character()
+            scopus_eids <- character()
+            for(m in mans){
+              src <- as.character(m$source %||% '')
+              sid <- as.character(m$source_record_id %||% '')
+              if(!nzchar(src)||!nzchar(sid)||is.null(source_maps[[src]])||
+                 !exists(sid,envir=source_maps[[src]],inherits=FALSE)) next
+              v <- get(sid,envir=source_maps[[src]],inherits=FALSE)
+              if(src=='scopus'){
+                if(nzchar(v$scopus_eid %||% '')) scopus_eids <- c(scopus_eids,v$scopus_eid)
+              } else {
+                upstream_keywords <- c(upstream_keywords,v$keywords)
+              }
+            }
+            upstream_keywords <- unique(upstream_keywords[nzchar(upstream_keywords)])
+            scopus_eids <- unique(scopus_eids[nzchar(scopus_eids)])
+            if(length(upstream_keywords)==0L && length(scopus_eids)>0L){
+              candidates[[length(candidates)+1L]] <<- list(
+                record_id=rid,
+                scopus_eid=scopus_eids[[1L]],
+                title=as.character((r$canonical %||% list())$title %||% '')
+              )
+            }
+          })
+
+          cat(sprintf('CANDIDATES_NO_UPSTREAM_KEYWORDS_WITH_SCOPUS_ID=%d\n',length(candidates)))
+          if(!length(candidates)) quit(status=0L)
+
+          # Deterministic spread across the full candidate set.
+          k <- min(10L,length(candidates))
+          ix <- unique(round(seq(1,length(candidates),length.out=k)))
+          sample <- candidates[ix]
+          cat(sprintf('TEST_SAMPLE_N=%d\n',length(sample)))
+
+          api_key <- Sys.getenv('SCOPUS_API_TOKEN')
+          insttoken <- Sys.getenv('SCOPUS_INSTTOKEN')
+          if(!nzchar(api_key)||!nzchar(insttoken)) stop('Scopus credentials missing')
+
+          author_keywords <- function(rr){
+            node <- (rr$authkeywords %||% list())[['author-keyword']]
+            if(is.null(node)){
+              node <- (((((rr$item %||% list())$bibrecord %||% list())$head %||% list())[['citation-info']] %||% list())[['author-keywords']] %||% list())[['author-keyword']]
+            }
+            if(is.null(node)) return(character())
+            if(!is.list(node)) return(clean_vec(node))
+            vals <- vapply(node,function(z){
+              if(is.atomic(z)) return(as.character(z[[1L]]))
+              if(!is.list(z)) return('')
+              as.character(z[['$']] %||% z[['$t']] %||% z[['text']] %||% '')
+            },character(1))
+            clean_vec(vals)
+          }
+
+          ok <- 0L
+          with_kw <- 0L
+          total_kw <- 0L
+          for(z in sample){
+            eid <- z$scopus_eid
+            url <- paste0('https://api.elsevier.com/content/abstract/eid/',URLencode(eid,reserved=TRUE))
+            req <- request(url) |>
+              req_headers(
+                Accept='application/json',
+                `X-ELS-APIKey`=api_key,
+                `X-ELS-Insttoken`=insttoken,
+                `User-Agent`='LivingEvidenceMap Scopus keyword gap-fill trial'
+              ) |>
+              req_url_query(view='FULL') |>
+              req_error(is_error=function(resp) FALSE)
+            resp <- tryCatch(req_perform(req),error=identity)
+            if(inherits(resp,'error')){
+              cat(sprintf('RECORD=%s EID=%s REQUEST_ERROR=%s\n',z$record_id,eid,conditionMessage(resp)))
+              next
+            }
+            st <- resp_status(resp)
+            cat(sprintf('\nRECORD=%s\nEID=%s\nHTTP=%d\nTITLE=%s\n',z$record_id,eid,st,z$title))
+            if(st>=400L) next
+            ok <- ok+1L
+            obj <- fromJSON(resp_body_string(resp),simplifyVector=FALSE)
+            rr <- obj[['abstracts-retrieval-response']] %||% list()
+            kws <- author_keywords(rr)
+            cat(sprintf('AUTHOR_KEYWORDS_N=%d\n',length(kws)))
+            cat(sprintf('AUTHOR_KEYWORDS=%s\n',if(length(kws))paste(kws,collapse=' || ') else 'NONE'))
+            if(length(kws)){
+              with_kw <- with_kw+1L
+              total_kw <- total_kw+length(kws)
+            }
+          }
+          cat(sprintf('\nSUMMARY candidates=%d tested=%d http_success=%d with_author_keywords=%d keywords_returned=%d\n',
+                      length(candidates),length(sample),ok,with_kw,total_kw))
