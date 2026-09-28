@@ -96,7 +96,7 @@ jobs:
             }
             vals <- trimws(unlist(lapply(nodes, flatten), use.names=FALSE))
             vals <- vals[nzchar(vals)]
-            vals <- vals[!grepl("^@|^\$|^author-keyword$|^keywords?$", vals, ignore.case=TRUE)]
+            vals <- vals[!grepl("^@|^[$]|^author-keyword$|^keywords?$", vals, ignore.case=TRUE)]
             unique(vals)
           }
 
