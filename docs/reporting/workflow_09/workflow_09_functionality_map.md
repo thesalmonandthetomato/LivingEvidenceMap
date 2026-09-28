@@ -69,7 +69,7 @@ Workflow 09 additionally restores the authoritative Workflow 01, Workflow 02 and
 
 ### Final included corpus
 
-Workflow 09 restores the most recent registered Workflow 08 Zenodo pointer in `docs/workflow08/zenodo/`. The restored `living_evidence_map_canonical_final.jsonl` is checksum-verified before any reporting outputs are accepted.
+Workflow 09 currently restores the validated lossless Workflow 08 finalisation artifact from GitHub Actions run `36442875006` (`workflow08-final-36442875006`). This run successfully assembled, validated and partitioned the definitive 19,117-record included canonical JSONL with lossless upstream annotation provenance; its subsequent Zenodo upload failed with an HTTP 502 after repeated attempts. Workflow 09 therefore verifies the canonical file against the PASS `workflow08_final_manifest.json` from that artifact before any reporting outputs are accepted. The lossless canonical SHA-256 is `8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c`.
 
 The current evidence-base size is **19,117 included canonical records**.
 
@@ -206,13 +206,13 @@ Each production run also uploads the complete `docs/reporting/workflow_09/` publ
 
 ### Authoritative analytical archive
 
-The Workflow 08 Zenodo deposit remains the durable source of the canonical JSONL and exclusions. Workflow 09 does not create a competing canonical archive.
+The Workflow 08 layer remains the authoritative source of the canonical JSONL and exclusions. For the current lossless baseline, the validated run artifact is used because the 240 MB JSONL failed to upload to Zenodo with HTTP 502; Workflow 09 does not claim that its RIS or manuscript files replace the canonical archive.
 
 ## Downstream handoff
 
 Workflow 09 is the reporting endpoint for the manuscript and static publication package. Workflow 10 may consume the same final canonical data to build the interactive dashboard, but the dashboard is not authoritative for manuscript counts.
 
-Future living updates should rerun Workflow 09 after a new Workflow 08 authoritative pointer has been registered. Because the Workflow 09 controller selects the latest registered W08 pointer, the publication package can be regenerated without manually changing a hard-coded W08 run identifier.
+Future living updates should rerun Workflow 09 after a new validated Workflow 08 final state is produced. The current production controller is pinned to the validated lossless baseline run `36442875006` so that the publication package uses the complete provenance-preserving canonical schema rather than the earlier compact W08 export. When a later W08 baseline becomes authoritative, this source reference must be advanced deliberately and its manifest/checksum revalidated.
 
 ## Methods text for research reporting
 
