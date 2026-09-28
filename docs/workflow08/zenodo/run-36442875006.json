@@ -26,5 +26,31 @@
   "doi": "10.5281/zenodo.23020526",
   "record_url": "https://zenodo.org/records/23020526",
   "visibility": "restricted",
+  "files": [
+    {
+      "filename": "living_evidence_map_canonical_final.jsonl.gz",
+      "bytes": 29865281,
+      "sha256": "ffcce9aeae0dfdc914fe47b0e18b390fdddc6a6102e3ab0ff1d23bb5b331756d",
+      "zenodo_checksum": "md5:201ea10c52fa922f8d0114013e2ba8d0"
+    },
+    {
+      "filename": "workflow08_excluded_records.csv",
+      "bytes": 3454999,
+      "sha256": "d1733b27212d02d1d6d43011fa3fb38cd99ef779882c9ad94b7a7d2860d7c244",
+      "zenodo_checksum": "md5:210e230dd0105977160086c4a4dc2c5c"
+    },
+    {
+      "filename": "workflow08_adjudication_ledger.jsonl",
+      "bytes": 477569,
+      "sha256": "db27db784d66dbcfecebbc9b86307db5ea2f680ec9f5e82fd844168fbff1c0e2",
+      "zenodo_checksum": "md5:f2cb996b2a0e11ea0470e70c01a5c6e4"
+    },
+    {
+      "filename": "workflow08_final_manifest.json",
+      "bytes": 2278,
+      "sha256": "20b1a9e671c55476e88f547b3af6b586d4f4c01b10614b762042358027e5dac8",
+      "zenodo_checksum": "md5:2ea42ebc98e02ac9a3b423194e40a940"
+    }
+  ],
   "published_at_utc": "2026-09-28T16:51:01Z"
 }
