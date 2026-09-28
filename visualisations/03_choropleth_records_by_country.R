@@ -68,13 +68,17 @@ p <- ggplot(plot_data) +
   geom_sf(aes(fill = records_class), colour = "white", linewidth = 0.12) +
   scale_fill_manual(values = class_cols, drop = FALSE, name = "Included records", guide = guide_legend(title.position = "top", nrow = 2, byrow = TRUE, keywidth = grid::unit(12, "mm"), keyheight = grid::unit(5, "mm"))) +
   coord_sf(expand = FALSE, crs = sf::st_crs(4326)) +
-  labs(title = "Living Evidence Map: included records by study country", subtitle = "Workflow 08 included-only canonical JSONL", caption = paste0(
-    "Multi-country records count once for each represented country; territory codes are assigned to their sovereign state. ",
-    "Positive-count classes use Fisher–Jenks natural breaks.",
-    if (nrow(unmatched) > 0L) " Unresolved/non-current geography codes are preserved in the audit CSV and omitted from this rendered map." else ""
-  )) +
   theme_void(base_size = 11) +
-  theme(plot.title = element_text(face = "bold", size = 16, colour = palette[1]), plot.subtitle = element_text(size = 10, colour = palette[2], margin = margin(b = 8)), plot.caption = element_text(size = 8, colour = palette[2], hjust = 0), legend.position = "bottom", legend.title = element_text(face = "bold", colour = palette[1]), legend.text = element_text(colour = palette[1]), plot.margin = margin(12, 12, 10, 12))
+  theme(
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA),
+    legend.background = element_rect(fill = "white", colour = NA),
+    legend.key = element_rect(fill = "white", colour = NA),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold", colour = palette[1]),
+    legend.text = element_text(colour = palette[1]),
+    plot.margin = margin(8, 8, 8, 8)
+  )
 
 ggsave(file.path(out_dir, "figure_03_choropleth_records_by_country.pdf"), p, width = 210, height = 135, units = "mm", device = cairo_pdf)
 ggsave(file.path(out_dir, "figure_03_choropleth_records_by_country.png"), p, width = 210, height = 135, units = "mm", dpi = 600)
