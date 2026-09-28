@@ -66,8 +66,10 @@ jobs:
           gh run download 36320650383 -n workflow08-review-intake-36320650383 -D inputs/w08
           test -s inputs/w04/workflow04_final_screening_layer.jsonl
           test -s inputs/w05/workflow05_species_coded.csv
+          test -s inputs/w05/species_matches.csv
           test -s inputs/w06/geography_semantic_final.csv
           test -s inputs/w07/workflow07_topic_pathway_scores_retained.csv
+          test -s inputs/w07/workflow07_topic_record_qc.csv
           test -s inputs/w07/workflow07_late_automatic_exclusions.csv
           test -s inputs/w08/workflow08_intake/workflow08_review_queue.jsonl
 
@@ -92,11 +94,13 @@ jobs:
             --w03 inputs/w03/publication_status.jsonl \
             --w04 inputs/w04/workflow04_final_screening_layer.jsonl \
             --w05 inputs/w05/workflow05_species_coded.csv \
+            --w05-matches inputs/w05/species_matches.csv \
             --w06 inputs/w06/geography_semantic_final.csv \
             --w06-recovery1 inputs/w06r1/workflow06_failure_recovery.csv \
             --w06-recovery2 inputs/w06r2/workflow06_failure_recovery.csv \
             --pre-geo-decisions data/workflow08/geography_adjudication_decisions.jsonl \
             --w07-scores inputs/w07/workflow07_topic_pathway_scores_retained.csv \
+            --w07-qc inputs/w07/workflow07_topic_record_qc.csv \
             --w07-late-exclusions inputs/w07/workflow07_late_automatic_exclusions.csv \
             --decisions outputs/workflow08/human_decisions_complete.jsonl \
             --ontology data/reference/topic_ontology_v3_6.csv \
