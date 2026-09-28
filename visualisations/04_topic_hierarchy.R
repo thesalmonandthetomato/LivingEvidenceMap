@@ -166,14 +166,16 @@ write_csv(top_species_counts %>% mutate(level1 = as.character(level1), species =
 # 2. HIERARCHICAL HORIZONTAL BAR PLOTS
 # -------------------------------------------------------------------------
 #
-# Each row is one Level 2 > Level 3 category.
-#   - bar length = number of topic assignments
+# Each row is one Level 3 category.
+#   - bar length = number of included records assigned to that Level 3 topic
 #   - colour = Level 2 parent
-#   - label = full Level 2 > Level 3 taxonomy path
+#   - label = Level 3 category
 #
 # Rows are grouped by Level 2 and separated visually. Level 2 parents are
 # ordered by total assignments; children are ordered within each group by
-# assignment frequency. The figure height expands with the number of rows.
+# assignment frequency. The approved manuscript design deliberately omits
+# vertical grid lines and uses separators only between Level 2 groups.
+# APPROVED / LOCKED for Workflow 09 on 2026-09-28.
 
 make_hierarchy <- function(root, dat, file_stub) {
   d <- dat %>%
@@ -196,7 +198,7 @@ make_hierarchy <- function(root, dat, file_stub) {
     left_join(parent_order, by = "level2") %>%
     arrange(parent_index, desc(assignments), level3) %>%
     mutate(
-      full_label = if_else(level3 == level2, level2, paste0(level2, " > ", level3)),
+      full_label = if_else(level3 == level2, level2, level3),
       label = factor(full_label, levels = rev(full_label)),
       parent_factor = factor(level2, levels = parent_order$level2)
     )
@@ -206,36 +208,35 @@ make_hierarchy <- function(root, dat, file_stub) {
   parent_cols <- setNames(rep(palette, length.out = nrow(parent_order)), parent_order$level2)
 
   p <- ggplot(d, aes(x = assignments, y = label, fill = parent_factor)) +
-    geom_col(width = 0.72, show.legend = FALSE) +
+    geom_col(width = 0.72) +
     geom_text(aes(label = comma(assignments)), hjust = -0.12, size = 2.7, colour = palette[1], show.legend = FALSE) +
-    scale_fill_manual(values = parent_cols, drop = FALSE) +
+    scale_fill_manual(values = parent_cols, drop = FALSE, name = "Level 2") +
     scale_x_continuous(labels = comma, expand = expansion(mult = c(0, 0.10))) +
     labs(
       title = root,
-      subtitle = "Topic-assignment frequency by Level 2 > Level 3 category",
-      x = "Topic assignments",
-      y = NULL,
-      caption = "Bar length represents assignment frequency; colour identifies the Level 2 parent."
+      x = "Included records",
+      y = NULL
     ) +
     theme_minimal(base_size = 10.5) +
     theme(
-      panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_line(colour = "#e5e8e9", linewidth = 0.35),
+      panel.grid = element_blank(),
       axis.text.y = element_text(colour = palette[1], size = 7.2, lineheight = 0.95),
       axis.text.x = element_text(colour = palette[2], size = 8.5),
-      axis.title.x = element_text(colour = palette[2], size = 9.5, margin = margin(t = 7)),
-      plot.title = element_text(face = "bold", size = 18, colour = palette[1], margin = margin(b = 3)),
-      plot.subtitle = element_text(colour = palette[2], size = 10.5, margin = margin(b = 12)),
-      plot.caption = element_text(colour = palette[2], size = 7.5, hjust = 0, margin = margin(t = 8)),
-      plot.background = element_rect(fill = "white", colour = NA), panel.background = element_rect(fill = "white", colour = NA),
+      axis.title.x = element_text(colour = "black", face = "bold", size = 9.5, margin = margin(t = 7)),
+      plot.title = element_text(face = "bold", size = 18, colour = palette[1], margin = margin(b = 8)),
+      legend.position = "right",
+      legend.title = element_text(face = "bold", colour = "black"),
+      legend.text = element_text(colour = "black"),
+      plot.background = element_rect(fill = "white", colour = NA),
+      panel.background = element_rect(fill = "white", colour = NA),
       plot.margin = margin(16, 28, 16, 12)
     )
 
   group_sizes <- d %>% count(parent_index, name = "n") %>% arrange(parent_index)
-  boundaries <- cumsum(group_sizes$n) + 0.5
+  boundaries <- n_rows - cumsum(group_sizes$n) + 0.5
   boundaries <- boundaries[-length(boundaries)]
   if (length(boundaries)) {
-    p <- p + geom_hline(yintercept = boundaries, colour = "#cfd6d7", linewidth = 0.7, inherit.aes = FALSE)
+    p <- p + geom_hline(yintercept = boundaries, colour = "#cfd6d7", linewidth = 1.1, inherit.aes = FALSE)
   }
 
   write_csv(
@@ -248,7 +249,19 @@ make_hierarchy <- function(root, dat, file_stub) {
   invisible(p)
 }
 
-roots <- top_counts %>% arrange(desc(unique_records)) %>% pull(level1) %>% as.character()
+roots <- c(
+  "Production",
+  "Environment",
+  "Methods",
+  "Industry and governance",
+  "Product",
+  "People and society",
+  "Inputs and resources"
+)
+missing_roots <- setdiff(roots, unique(raw_paths$level1))
+if (length(missing_roots)) {
+  stop("Expected manuscript topic roots missing from canonical data: ", paste(missing_roots, collapse = ", "))
+}
 for (i in seq_along(roots)) {
   root <- roots[i]
   safe_root <- str_replace_all(str_to_lower(root), "[^a-z0-9]+", "_")
