@@ -137,7 +137,7 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill
   scale_fill_manual(values = species_fill_values, breaks = canonical_species, drop = FALSE) +
   scale_x_continuous(labels = comma, limits = c(0, 12000), expand = expansion(mult = c(0, 0))) +
   labs(
-    x = "Records / species-record observations",
+    x = NULL,
     y = NULL,
     fill = "Species"
   ) +
@@ -145,11 +145,12 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill
   theme(
     panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
     axis.text.y = element_text(colour = palette[1], face = "bold"),
-    axis.text.x = element_text(colour = palette[2]), axis.title.x = element_text(colour = palette[2]),
+    axis.text.x = element_text(colour = palette[2]),
+    axis.title.x = element_blank(),
     legend.title = element_text(face = "bold", colour = palette[1]),
     legend.text = element_text(colour = palette[1]),
     plot.background = element_rect(fill = "white", colour = NA), panel.background = element_rect(fill = "white", colour = NA),
-    plot.margin = margin(12, 30, 12, 12)
+    plot.margin = margin(4, 30, 4, 12)
   )
 
 ggsave(file.path(out_dir, "figure_04a_top_level_topics.pdf"), overview, width = 190, height = 125, units = "mm")
@@ -199,7 +200,7 @@ make_hierarchy <- function(root, dat, file_stub) {
     )
 
   n_rows <- nrow(d)
-  plot_height <- max(150, 52 + n_rows * 5.2)
+  plot_height <- max(135, 40 + n_rows * 5.2)
   parent_cols <- setNames(rep(palette, length.out = nrow(parent_order)), parent_order$level2)
 
   p <- ggplot(d, aes(x = assignments, y = label, fill = parent_factor)) +
@@ -208,7 +209,7 @@ make_hierarchy <- function(root, dat, file_stub) {
     scale_fill_manual(values = parent_cols, drop = FALSE, name = "Level 2") +
     scale_x_continuous(labels = comma, expand = expansion(mult = c(0, 0.10))) +
     labs(
-      x = "Included records",
+      x = NULL,
       y = NULL
     ) +
     theme_minimal(base_size = 10.5) +
@@ -216,13 +217,13 @@ make_hierarchy <- function(root, dat, file_stub) {
       panel.grid = element_blank(),
       axis.text.y = element_text(colour = palette[1], size = 7.2, lineheight = 0.95),
       axis.text.x = element_text(colour = palette[2], size = 8.5),
-      axis.title.x = element_text(colour = "black", face = "bold", size = 9.5, margin = margin(t = 7)),
+      axis.title.x = element_blank(),
       legend.position = "right",
       legend.title = element_text(face = "bold", colour = "black"),
       legend.text = element_text(colour = "black"),
       plot.background = element_rect(fill = "white", colour = NA),
       panel.background = element_rect(fill = "white", colour = NA),
-      plot.margin = margin(16, 28, 16, 12)
+      plot.margin = margin(4, 28, 4, 12)
     )
 
   group_sizes <- d %>% count(parent_index, name = "n") %>% arrange(parent_index)
