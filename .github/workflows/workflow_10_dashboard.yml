@@ -66,6 +66,15 @@ jobs:
           set -euo pipefail
           Rscript R/workflow_10_dashboard_from_canonical_jsonl.R             inputs/workflow10/living_evidence_map_canonical_final.jsonl             docs/living_evidence_map.csv             docs/dashboard-data.js             "$W08_POINTER"
 
+      - name: Build standalone dashboard preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript R/workflow_10_make_standalone_preview.R \
+            docs/dashboard-redesign-temp.html \
+            docs/dashboard-data.js \
+            outputs/workflow10/dashboard-redesign-temp-standalone.html
+
       - name: Validate dashboard presentation and data contract
         shell: Rscript {0}
         run: |
@@ -98,7 +107,9 @@ jobs:
 
           html <- paste(readLines('docs/dashboard-redesign-temp.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
           stopifnot(grepl('dashboard-data\\.js',html))
-          stopifnot(grepl('evidence_flowdiagram\\.svg',html))
+          stopifnot(!grepl('Evidence flow',html,fixed=TRUE))
+          stopifnot(!grepl('evidence_flowdiagram\\.svg',html))
+          stopifnot(file.exists('outputs/workflow10/dashboard-redesign-temp-standalone.html'))
 
           cat(sprintf(
             'PASS: Workflow 10 dashboard uses authoritative W08 canonical: %d records\n',
@@ -114,6 +125,6 @@ jobs:
             docs/dashboard-data.js
             docs/dashboard-data-manifest.json
             docs/living_evidence_map.csv
-            docs/evidence_flowdiagram.svg
+            outputs/workflow10/dashboard-redesign-temp-standalone.html
           retention-days: 30
           if-no-files-found: error
