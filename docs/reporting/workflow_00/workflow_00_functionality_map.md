@@ -98,6 +98,8 @@ A complete search of the selected sources using the current version-controlled s
 
 A source-specific update search intended to identify newly indexed records while retaining the same underlying search concepts. Date or indexing filters are applied only where their semantics have been explicitly implemented for the source.
 
+Every fortnightly harvest is then reconciled against that source's persistent native-ID registry before Workflow 01. This is an exact source-level delta filter, not bibliographic deduplication. Lens uses Lens ID; Scopus uses EID; OpenAlex uses Work ID; AGRICOLA uses the Europe PMC AGR source plus ID; and Web of Science uses UID. Already-known native IDs remain preserved in the raw search archive but are not passed downstream. Only previously unseen native IDs are emitted in the filtered source-shaped harvest consumed by Workflow 01. The updated source-native ID registry is committed only after the selected source jobs have completed successfully.
+
 ### Expansion
 
 A controlled search-term expansion. The species block is immutable. A new farm/aquaculture term may be added and searched while excluding the existing farm-term block. Retrieved records are reconciled against persistent native source identifiers before downstream bibliographic deduplication.
@@ -117,6 +119,7 @@ Each source search produces a structured provenance record containing, where app
 - parent and child GitHub workflow run identifiers;
 - Git commit/ref provenance;
 - associated harvest artefact;
+- for fortnightly searches, the number of already-known native IDs and genuinely new native IDs passed downstream;
 - additional search term for expansion searches.
 
 The same information is written in both JSON and Markdown formats.
