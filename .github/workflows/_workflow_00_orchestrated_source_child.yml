@@ -200,7 +200,13 @@ jobs:
             documented_query="$SEARCH_QUERY ; modifiedTimeSpan=$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE"
           fi
           implementation_sha="$(git rev-parse HEAD)"
-          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_SEARCH_TERM" --artifact-name "workflow00-${SOURCE}-harvest-${PARENT_RUN_ID}" --orchestrator-sha "$implementation_sha" --source-handler-sha "$implementation_sha" --window-from "$FORTNIGHTLY_FROM_DATE" --window-to "$FORTNIGHTLY_TO_DATE" --output-root outputs/updater/search_record
+          native_args=()
+          if [ "$RUN_TYPE" = "fortnightly" ]; then
+            known_native="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/updater/source_delta/reconciliation_manifest.json");cat(as.integer(x$already_known_native_ids))')"
+            new_native="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/updater/source_delta/reconciliation_manifest.json");cat(as.integer(x$new_native_ids))')"
+            native_args=(--known-native-results "$known_native" --new-native-results "$new_native")
+          fi
+          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_SEARCH_TERM" --artifact-name "workflow00-${SOURCE}-harvest-${PARENT_RUN_ID}" --orchestrator-sha "$implementation_sha" --source-handler-sha "$implementation_sha" --window-from "$FORTNIGHTLY_FROM_DATE" --window-to "$FORTNIGHTLY_TO_DATE" "${native_args[@]}" --output-root outputs/updater/search_record
 
       - name: Upload source harvest
         uses: actions/upload-artifact@v4
