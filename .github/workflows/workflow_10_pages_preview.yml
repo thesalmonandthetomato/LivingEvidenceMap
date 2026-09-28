@@ -20,8 +20,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_RUN_ID: '36452144492'
-  SOURCE_ARTIFACT: 'workflow10-local-w08-36452144492'
+  SOURCE_RUN_ID: '36455747378'
+  SOURCE_ARTIFACT: 'workflow10-dashboard-36455747378'
 
 jobs:
   deploy-preview:
