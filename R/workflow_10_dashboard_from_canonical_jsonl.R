@@ -10,6 +10,7 @@ pointer_path <- if(length(args)>=4L) args[[4L]] else "docs/workflow08/zenodo/run
 ontology_path <- Sys.getenv("TOPIC_ONTOLOGY_PATH","data/reference/topic_ontology_v3_6.csv")
 iso_map_path <- Sys.getenv("ISO_NUMERIC_MAP_PATH","config/iso3_numeric_map.json")
 gazetteer_path <- Sys.getenv("COUNTRY_GAZETTEER_PATH","config/global_country_gazetteer_v3.csv")
+flow_counts_path <- Sys.getenv("WORKFLOW09_FLOW_COUNTS_PATH","docs/reporting/workflow_09/flow_counts.json")
 expected_sha <- "ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67"
 
 stopf <- function(...) stop(sprintf(...),call.=FALSE)
@@ -23,7 +24,7 @@ vec <- function(x){
 }
 safe_year <- function(x){z<-suppressWarnings(as.integer(substr(clean(x),1,4)));if(is.na(z)||z<1800L||z>2200L)"" else as.character(z)}
 
-for(p in c(source_jsonl,pointer_path,ontology_path)) if(!file.exists(p)) stopf("Required input not found: %s",p)
+for(p in c(source_jsonl,pointer_path,ontology_path,flow_counts_path)) if(!file.exists(p)) stopf("Required input not found: %s",p)
 if(!identical(tolower(digest(file=source_jsonl,algo="sha256",serialize=FALSE)),expected_sha)) stopf("Input is not the authoritative Workflow 08 canonical JSONL")
 
 pointer <- fromJSON(pointer_path,simplifyVector=FALSE)
@@ -186,6 +187,9 @@ map_id_to_iso3<-list()
 if(length(iso_numeric)){
   for(k in names(iso_numeric)){n<-suppressWarnings(as.integer(iso_numeric[[k]]));if(!is.na(n))map_id_to_iso3[[sprintf("%03d",n)]]<-toupper(k)}
 }
+flow_counts<-fromJSON(flow_counts_path,simplifyVector=FALSE)
+screened_n<-as.integer((flow_counts$counts%||%list())$title_abstract_screened%||%NA_integer_)
+if(is.na(screened_n)||screened_n!=32283L) stopf("Unexpected Workflow 09 screened count: %s",as.character(screened_n))
 published_at<-clean(pointer$published_at_utc)
 payload<-list(
   generated_at=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
@@ -206,7 +210,7 @@ payload<-list(
     total_species=length(species_counts),
     last_search=NULL,
     last_evidence_update=published_at,
-    candidate_search_results_screened=NULL
+    candidate_search_results_screened=screened_n
   ),
   species_display_order=c("Atlantic salmon","Chinook salmon","Chum salmon","Coho salmon","Masu salmon","Pink salmon","Sockeye salmon","Rainbow trout","Unspecified species"),
   species_counts=species_counts,
