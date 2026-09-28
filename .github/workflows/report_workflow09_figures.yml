@@ -251,14 +251,17 @@ jobs:
           library(digest)
 
           canonical <- "workflow08_reporting_state/living_evidence_map_canonical_final.jsonl"
-          pointer <- fromJSON(Sys.getenv("W08_POINTER"), simplifyVector = FALSE)
-          idx <- which(vapply(pointer$files, function(x) identical(x$filename, "living_evidence_map_canonical_final.jsonl"), logical(1)))
-          stopifnot(length(idx) == 1L)
-          expected_sha <- tolower(as.character(pointer$files[[idx]]$sha256))
-          stopifnot(identical(
-            tolower(digest(canonical, algo = "sha256", file = TRUE, serialize = FALSE)),
-            expected_sha
-          ))
+          w08_manifest <- fromJSON(Sys.getenv("W08_MANIFEST_PATH"))
+          expected_sha <- tolower(as.character(w08_manifest$final_canonical_jsonl_sha256))
+          stopifnot(
+            identical(w08_manifest$status, "PASS"),
+            identical(w08_manifest$annotation_preservation, "lossless-upstream-handoff-v1"),
+            as.integer(w08_manifest$canonical_records) == 19117L,
+            identical(
+              tolower(digest(canonical, algo = "sha256", file = TRUE, serialize = FALSE)),
+              expected_sha
+            )
+          )
 
           ris_manifest <- fromJSON("docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris.manifest.json")
           stopifnot(as.integer(ris_manifest$records) == 19117L)
