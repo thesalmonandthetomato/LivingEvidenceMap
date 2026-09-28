@@ -14,133 +14,317 @@ reference-section-title: References
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
-figure_dir <- file.path("outputs", "report", "long_form", "figures")
-include_figure <- function(filename) {
-  path <- file.path(figure_dir, filename)
-  if (file.exists(path)) knitr::include_graphics(path) else cat(sprintf("[Figure pending: %s]", filename))
+
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(readr)
+library(jsonlite)
+library(here)
+
+source(here::here("visualisations", "canonical_figure_data.R"))
+
+# All analytical results in this document are calculated from the authoritative
+# Workflow 08 included-only canonical JSONL at render time.
+master <- load_figure_master()
+n_total <- nrow(master)
+
+fmt <- function(x) format(as.integer(x), big.mark = ",", scientific = FALSE, trim = TRUE)
+pct_total <- function(x) sprintf("%.1f%%", 100 * as.numeric(x) / n_total)
+
+include_figure <- function(...) {
+  paths <- c(...)
+  hit <- paths[file.exists(paths)]
+  if (length(hit)) {
+    knitr::include_graphics(hit[[1]])
+  } else {
+    cat(sprintf("[Figure pending: %s]", paste(paths, collapse = " | ")))
+  }
 }
+
+# Publication year.
+year_counts <- master %>%
+  filter(!is.na(year)) %>%
+  count(year, name = "n")
+year_n <- function(y) {
+  x <- year_counts$n[match(y, year_counts$year)]
+  ifelse(length(x) && !is.na(x), x, 0L)
+}
+
+# Species. Records with multiple eligible species contribute once to each
+# species category, matching the manuscript figures.
+species_counts <- master %>%
+  transmute(record_id, species = final_species) %>%
+  separate_rows(species, sep = ";") %>%
+  mutate(species = str_trim(species)) %>%
+  filter(!is.na(species), species != "") %>%
+  distinct(record_id, species) %>%
+  count(species, name = "n")
+species_n <- function(label) {
+  x <- species_counts$n[match(label, species_counts$species)]
+  ifelse(length(x) && !is.na(x), x, 0L)
+}
+
+# Geography. Use the same country gazetteer and ISO3 logic as the manuscript
+# geography figures.
+gazetteer <- read_csv(
+  here::here("config", "global_country_gazetteer_v3.csv"),
+  show_col_types = FALSE,
+  progress = FALSE
+)
+country_lookup <- gazetteer %>%
+  transmute(
+    iso3c = toupper(str_trim(as.character(iso3c))),
+    country_name = str_trim(as.character(country_name)),
+    match_type = tolower(str_trim(as.character(match_type))),
+    priority = suppressWarnings(as.numeric(priority))
+  ) %>%
+  filter(
+    !is.na(iso3c), iso3c != "",
+    !is.na(country_name), country_name != "",
+    match_type %in% c("country", "country name")
+  ) %>%
+  arrange(iso3c, desc(priority), country_name) %>%
+  distinct(iso3c, .keep_all = TRUE) %>%
+  select(iso3c, country_name)
+
+country_counts <- master %>%
+  transmute(
+    record_id,
+    iso3c = toupper(str_trim(as.character(final_primary_country_iso3c)))
+  ) %>%
+  filter(!is.na(iso3c), iso3c != "") %>%
+  separate_rows(iso3c, sep = ";") %>%
+  mutate(iso3c = toupper(str_trim(iso3c))) %>%
+  filter(iso3c != "", iso3c != "NONE") %>%
+  distinct(record_id, iso3c) %>%
+  count(iso3c, name = "n", sort = TRUE) %>%
+  left_join(country_lookup, by = "iso3c")
+country_n <- function(code) {
+  x <- country_counts$n[match(code, country_counts$iso3c)]
+  ifelse(length(x) && !is.na(x), x, 0L)
+}
+n_geo_coded <- sum(toupper(str_trim(master$geography_status)) == "RESOLVED")
+n_geo_uncoded <- sum(toupper(str_trim(master$geography_status)) == "NONE")
+
+# Topic assignments.
+topic_records <- master %>%
+  transmute(record_id, raw_paths = as.character(topic_hierarchy_paths)) %>%
+  filter(!is.na(raw_paths), str_trim(raw_paths) != "") %>%
+  mutate(path = str_split(raw_paths, "\\s*;\\s*")) %>%
+  unnest(path) %>%
+  mutate(
+    path = str_squish(path),
+    level1 = str_squish(str_split_fixed(path, "\\s*>\\s*", 2)[, 1])
+  ) %>%
+  filter(path != "", level1 != "") %>%
+  distinct(record_id, path, level1)
+
+topic_n <- function(path_value) {
+  n_distinct(topic_records$record_id[topic_records$path == path_value])
+}
+theme_n <- function(theme) {
+  n_distinct(topic_records$record_id[topic_records$level1 == theme])
+}
+n_topic_coded <- n_distinct(topic_records$record_id)
+n_topic_uncoded <- n_total - n_topic_coded
+n_topic_assignments <- nrow(topic_records)
+
+# Rapid-emergence analysis, matching visualisations/06_rapidly_emerging_topics.R.
+rapid_topics <- tibble::tribble(
+  ~topic, ~path,
+  "Monitoring and sampling methods", "Methods > Methodological research > Monitoring and sampling methods",
+  "Automation and precision aquaculture", "Production > Production systems and technology > Automation and precision aquaculture",
+  "Smoltification and smolt quality", "Production > Early life and transfer > Smoltification and smolt quality",
+  "Novel feed resources", "Inputs and resources > Feed-resource supply > Novel feed resources",
+  "Welfare assessment and risks", "Production > Fish welfare > Welfare assessment",
+  "Welfare assessment and risks", "Production > Fish welfare > Welfare risks and consequences",
+  "Climate change", "Environment > Environmental stressors > Climate change",
+  "Climate change", "Environment > Climate change > Adaptation and mitigation",
+  "Sensors, imaging and measurement", "Methods > Methodological research > Sensors, imaging and measurement methods",
+  "Statistical and modelling methods", "Methods > Methodological research > Statistical and modelling methods",
+  "Antimicrobial resistance and One Health", "People and society > Public health > Antimicrobial resistance and One Health",
+  "Energy, greenhouse gases and life-cycle footprint", "Environment > Resource use and footprint > Energy, greenhouse gases and life-cycle footprint",
+  "By-products and waste as inputs", "Inputs and resources > Circularity > By-products and waste as inputs",
+  "Plastics and solid waste", "Environment > Waste and emissions > Plastics and solid waste"
+)
+
+topic_year <- master %>%
+  transmute(record_id, publication_year = year, raw_paths = as.character(topic_hierarchy_paths)) %>%
+  filter(!is.na(publication_year), !is.na(raw_paths), str_trim(raw_paths) != "") %>%
+  mutate(path = str_split(raw_paths, "\\s*;\\s*")) %>%
+  unnest(path) %>%
+  mutate(path = str_squish(path)) %>%
+  filter(path != "") %>%
+  distinct(record_id, publication_year, path) %>%
+  inner_join(rapid_topics, by = "path") %>%
+  distinct(record_id, publication_year, topic) %>%
+  count(topic, publication_year, name = "topic_records")
+
+background_year <- master %>%
+  filter(!is.na(year)) %>%
+  distinct(record_id, year) %>%
+  count(year, name = "background_records")
+
+background_baseline <- mean(background_year$background_records[background_year$year >= 2010 & background_year$year <= 2014])
+background_recent <- mean(background_year$background_records[background_year$year >= 2021 & background_year$year <= 2025])
+background_growth_ratio <- background_recent / background_baseline
+
+rapid_summary <- rapid_topics %>%
+  distinct(topic) %>%
+  left_join(
+    topic_year %>%
+      complete(topic, publication_year = 2010:2025, fill = list(topic_records = 0L)) %>%
+      group_by(topic) %>%
+      summarise(
+        baseline = mean(topic_records[publication_year >= 2010 & publication_year <= 2014]),
+        recent = mean(topic_records[publication_year >= 2021 & publication_year <= 2025]),
+        .groups = "drop"
+      ),
+    by = "topic"
+  ) %>%
+  mutate(
+    growth_ratio = if_else(baseline > 0, recent / baseline, NA_real_),
+    relative_to_background = growth_ratio / background_growth_ratio
+  )
+rapid_growth <- function(topic) {
+  x <- rapid_summary$growth_ratio[match(topic, rapid_summary$topic)]
+  ifelse(length(x) && !is.na(x), x, NA_real_)
+}
+
+# Flow counts are generated from the pipeline inputs by the Workflow 09 flow
+# script. The frozen manifest is only a fallback for a standalone manuscript render.
+flow_path <- here::here("visualisations", "figure_07_flow_diagram_counts.json")
+if (!file.exists(flow_path)) {
+  flow_path <- here::here("docs", "reporting", "workflow_09", "flow_counts.json")
+}
+flow <- fromJSON(flow_path, simplifyVector = FALSE)$counts
 ```
 
 # Results
 
 ## Review process
 
-The original Lens search produced 19,457 potentially relevant bibliographic records, which were screened manually at title and abstract level; 12,074 records were retained for the original corpus. Following expansion to the five-source search architecture and cross-database reconciliation, the current baseline contained 32,292 deduplicated canonical records. Nine records were excluded before relevance screening on publication-status grounds, leaving 32,283 records for automated relevance screening. Of these, 19,407 were retained and 12,876 excluded at Workflow 04. Subsequent topic-stage eligibility checking and structured human adjudication resulted in a further 290 exclusions, leaving **19,117 records in the final included evidence map**.
+Following multi-database retrieval and reconciliation, `r fmt(flow$deduplicated_records)` deduplicated canonical records entered the curation pipeline. Nine records were removed following the retraction/withdrawal sweep. Of the remaining `r fmt(flow$title_abstract_screened)` records, `r fmt(flow$title_abstract_excluded_total)` were excluded during title-and-abstract screening and subsequent eligibility quality control, leaving **`r fmt(n_total)` records in the final included evidence map**. The final canonical total independently reconciles with the Workflow 08 included-only JSONL used for all analyses below.
 
-Database provenance was retained through deduplication, allowing the contribution and overlap of the five bibliographic sources to be compared before and after relevance screening. The source-contribution analysis shows substantial overlap among databases, while each source also contributes records not represented by the others. The paired figure presents all deduplicated canonical records in black and Workflow 04 screening inclusions in olive green, with exact source intersections shown in the accompanying matrix.
+Database provenance was retained through deduplication, allowing the contribution and overlap of the five bibliographic sources to be compared before and after relevance screening. The paired UpSet-style figure shows the database contribution to the deduplicated corpus and to the set retained at Workflow 04, together with the exact source intersections.
 
-```{r fig-source-contribution, fig.cap="Contribution and overlap of bibliographic databases before and after relevance screening. Black bars show all deduplicated canonical records and olive-green bars show Workflow 04 included records. The matrix identifies the database combination defining each exact intersection."}
-include_figure("figure_01_database_contribution_upset.png")
+```{r fig-source-contribution, fig.cap="Contribution and overlap of bibliographic databases before and after relevance screening. Black bars show all deduplicated canonical records and blue bars show records retained at Workflow 04; the matrix identifies the database combination defining each exact intersection."}
+include_figure(here::here("outputs", "citesource_contribution", "database_contribution_upset.png"))
 ```
 
-The complete search, reconciliation, screening, annotation and adjudication process is summarised in the review flow diagram. The flow distinguishes records removed before screening, relevance-screening exclusions, later eligibility exclusions identified during topic quality control, human-review exclusions, and the final set included in the evidence map.
+The complete search, reconciliation, repair, screening and annotation process is summarised in the review flow diagram.
 
-```{r fig-flow, fig.cap="Flow of records through search, reconciliation, relevance screening, annotation and human adjudication."}
-include_figure("figure_02_review_flow.png")
+```{r fig-flow, fig.cap="Flow of records through database searching, deduplication, record repair and enrichment, retraction screening, title-and-abstract screening, annotation and inclusion in the Living Evidence Map."}
+include_figure(here::here("visualisations", "figure_07_flow_diagram.png"))
 ```
 
 ## Publication year
 
-The volume of academic evidence on salmon farming has increased substantially over time. As in the earlier corpus, the evidence base is dominated by Atlantic salmon, rainbow trout and records referring to farmed salmon without sufficient information for species-level assignment. The final figure will report the temporal pattern from the current 19,117-record canonical evidence map and exclude the incomplete current publication year from trend interpretation.
+The volume of academic evidence on salmon farming increased markedly over time (Figure 3). There were `r fmt(year_n(2025))` included records published in 2025, the highest complete publication year in the current corpus, compared with `r fmt(year_n(2010))` in 2010. Records dated 2026 are incomplete at the time of analysis and are not interpreted as a complete annual total.
+
+The three largest focal species categories were rainbow trout (`r fmt(species_n("Rainbow trout"))` records; `r pct_total(species_n("Rainbow trout"))`), Atlantic salmon (`r fmt(species_n("Atlantic salmon"))`; `r pct_total(species_n("Atlantic salmon"))`) and unspecified farmed salmon species (`r fmt(species_n("Unspecified species"))`; `r pct_total(species_n("Unspecified species"))`). Species categories are not mutually exclusive because individual records can refer to more than one eligible farmed species.
 
 ```{r fig-year-species, fig.cap="Records by publication year and focal farmed species."}
-include_figure("figure_03_records_by_publication_year.png")
+include_figure(here::here("visualisations", "figure_01_records_by_publication_year.png"))
 ```
 
-The thematic composition of the literature also changed through time. The earlier analysis showed the largest absolute growth in Production research, while Environment and Methods became increasingly prominent; the final analysis will recalculate these trajectories from the current canonical topic assignments.
+The thematic composition of the literature also expanded through time (Figure 4). Production remained the largest high-level theme in absolute terms, while Environment and Methods also increased substantially as the evidence base grew. Because records can receive more than one high-level topic, annual stacked totals represent topic-record assignments rather than mutually exclusive studies.
 
 ```{r fig-year-topic, fig.cap="Topic-assignment frequency for high-level topics by publication year."}
-include_figure("figure_04_records_by_publication_year_high_level_topic.png")
+include_figure(here::here("visualisations", "figure_05_records_by_publication_year_high_level_topic.png"))
 ```
 
 ## Geography
 
-Research is geographically concentrated in the major salmon-producing regions, while rainbow-trout research is distributed across a broader set of countries. The earlier corpus showed particularly large evidence bases in Norway, Chile, Canada, the United Kingdom and the United States, together with substantial rainbow-trout research in countries including Turkey, Iran, Italy and Spain. Final country rankings and counts will be regenerated from the current Workflow 08 geography layer rather than carried forward from the previous manuscript version.
+A substantive study country could be resolved for `r fmt(n_geo_coded)` records (`r pct_total(n_geo_coded)`), while `r fmt(n_geo_uncoded)` included records (`r pct_total(n_geo_uncoded)`) did not contain sufficient evidence for a defensible country-level assignment. Among records with assigned geography, the largest country evidence bases were Norway (`r fmt(country_n("NOR"))` records), Canada (`r fmt(country_n("CAN"))`), Chile (`r fmt(country_n("CHL"))`), the United Kingdom (`r fmt(country_n("GBR"))`), the United States (`r fmt(country_n("USA"))`) and Turkey (`r fmt(country_n("TUR"))`). Records may be assigned to more than one country where the substantive study spans multiple countries.
 
-```{r fig-country-species, fig.cap="Records per country for the most frequently represented study countries, by focal farmed species."}
-include_figure("figure_05_records_by_country.png")
+```{r fig-country-species, fig.cap="Records per country for the 20 most frequently represented study countries, by focal farmed species."}
+include_figure(here::here("visualisations", "figure_02_records_by_country.png"))
 ```
 
-```{r fig-choropleth, fig.cap="Global distribution of records by substantive study country."}
-include_figure("figure_06_choropleth_records_by_country.png")
+```{r fig-choropleth, fig.cap="Global distribution of included records by substantive study country."}
+include_figure(here::here("visualisations", "figure_03_choropleth_records_by_country.png"))
 ```
 
 ## Topics
 
-The evidence base remains strongly oriented towards Production, with Environment forming the second major body of research. Methods, Industry and governance, Product, People and society, and Inputs and resources form progressively smaller parts of the mapped literature. Because the final topic layer contains 53,288 retained topic assignments across the 19,117 included records, all percentages and theme-specific counts below will be regenerated from the final Workflow 08 topic state rather than copied from the earlier 13,389-record manuscript analysis.
+At least one topic was assigned to `r fmt(n_topic_coded)` of the `r fmt(n_total)` included records; `r fmt(n_topic_uncoded)` records (`r pct_total(n_topic_uncoded)`) remained uncoded for topic. Across coded records, the final ontology contained `r fmt(n_topic_assignments)` distinct record-topic assignments.
 
-```{r fig-top-level-species, fig.cap="High-level topic frequency by focal farmed species."}
-include_figure("figure_07_top_level_topics_by_species.png")
+The evidence base was strongly oriented towards Production, represented in `r fmt(theme_n("Production"))` records (`r pct_total(theme_n("Production"))`). Environment was the second-largest theme (`r fmt(theme_n("Environment"))`; `r pct_total(theme_n("Environment"))`), followed by Methods (`r fmt(theme_n("Methods"))`; `r pct_total(theme_n("Methods"))`), Product (`r fmt(theme_n("Product"))`; `r pct_total(theme_n("Product"))`) and Industry and governance (`r fmt(theme_n("Industry and governance"))`; `r pct_total(theme_n("Industry and governance"))`). People and society (`r fmt(theme_n("People and society"))`; `r pct_total(theme_n("People and society"))`) and Inputs and resources (`r fmt(theme_n("Inputs and resources"))`; `r pct_total(theme_n("Inputs and resources"))`) were substantially smaller. Theme percentages are not mutually exclusive because a record can be assigned to more than one theme.
+
+```{r fig-top-level-species, fig.cap="High-level topic frequency by focal farmed species. Numbers at bar ends are unique records assigned to each high-level theme; stacked species segments may sum above the unique-record total for multi-species records."}
+include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_top_level_topics.png"))
 ```
 
 ### Production
 
-Production research in the previous manuscript was concentrated in fish health, fish performance and biology, feed and nutrition, breeding and reproduction, and stress and mortality. The final figure will retain this descriptive structure while recalculating topic frequencies from the final ontology and analytical retention rules.
+Production research was centred on fish performance and biology, fish health, feed and nutrition, breeding and reproduction, and stress and mortality. The most frequently assigned terminal topic was *Physiology, metabolism and biological responses* (`r fmt(topic_n("Production > Fish performance and biology > Physiology, metabolism and biological responses"))` records; `r pct_total(topic_n("Production > Fish performance and biology > Physiology, metabolism and biological responses"))`), followed by *Growth and development* (`r fmt(topic_n("Production > Fish performance and biology > Growth and development"))`; `r pct_total(topic_n("Production > Fish performance and biology > Growth and development"))`). Other major concentrations included *Other diseases - Prevention and treatment* (`r fmt(topic_n("Production > Fish health > Other diseases - Prevention and treatment"))`; `r pct_total(topic_n("Production > Fish health > Other diseases - Prevention and treatment"))`), *Alternative feed ingredients* (`r fmt(topic_n("Production > Feed and nutrition > Alternative feed ingredients"))`; `r pct_total(topic_n("Production > Feed and nutrition > Alternative feed ingredients"))`), *Other diseases - General* (`r fmt(topic_n("Production > Fish health > Other diseases - General"))`; `r pct_total(topic_n("Production > Fish health > Other diseases - General"))`) and *Other diseases - Epidemiology* (`r fmt(topic_n("Production > Fish health > Other diseases - Epidemiology"))`; `r pct_total(topic_n("Production > Fish health > Other diseases - Epidemiology"))`). Sea lice remained a substantial research cluster, including `r fmt(topic_n("Production > Fish health > Sea lice control and treatment"))` records on control and treatment and `r fmt(topic_n("Production > Fish health > Sea lice epidemiology"))` on epidemiology.
 
 ```{r fig-production, fig.cap="Topic-assignment frequency within the Production theme."}
-include_figure("figure_08_hierarchy_production.png")
+include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_hierarchy_production.png"))
 ```
 
 ### Environment
 
-Environmental research spans environmental management, impacts on wild populations and ecosystems, waste and emissions, environmental stressors, physical environmental conditions, escapes and broader environmental impacts. The final text will report the dominant and least represented terminal topics directly from the final topic-assignment table.
+Environmental research was concentrated in *Water and ocean conditions* (`r fmt(topic_n("Environment > Environmental stressors > Water and ocean conditions"))`; `r pct_total(topic_n("Environment > Environmental stressors > Water and ocean conditions"))`), *Nutrients and organic waste* (`r fmt(topic_n("Environment > Waste and emissions > Nutrients and organic waste"))`; `r pct_total(topic_n("Environment > Waste and emissions > Nutrients and organic waste"))`), *Biodiversity and ecosystem effects* (`r fmt(topic_n("Environment > Wild populations and ecosystems > Biodiversity and ecosystem effects"))`; `r pct_total(topic_n("Environment > Wild populations and ecosystems > Biodiversity and ecosystem effects"))`) and *Monitoring and assessment* (`r fmt(topic_n("Environment > Environmental management > Monitoring and assessment"))`; `r pct_total(topic_n("Environment > Environmental management > Monitoring and assessment"))`). Hydrodynamics and water flow, post-escape ecology, chemicals and therapeutants, water quality and sedimentation/benthic impacts formed a second tier of frequently represented environmental topics.
 
 ```{r fig-environment, fig.cap="Topic-assignment frequency within the Environment theme."}
-include_figure("figure_09_hierarchy_environment.png")
+include_figure(here::here("visualisations", "topic_hierarchy", "figure_04b_hierarchy_environment.png"))
 ```
 
 ### Methods
 
-Methods research includes diagnostic and laboratory methods, monitoring and sampling, statistical and modelling methods, sensors and imaging, evidence synthesis and classification, and experimental-design methods.
+Methods research was dominated by *Diagnostic and laboratory methods* (`r fmt(topic_n("Methods > Methodological research > Diagnostic and laboratory methods"))`; `r pct_total(topic_n("Methods > Methodological research > Diagnostic and laboratory methods"))`), followed by *Statistical and modelling methods* (`r fmt(topic_n("Methods > Methodological research > Statistical and modelling methods"))`; `r pct_total(topic_n("Methods > Methodological research > Statistical and modelling methods"))`), *Monitoring and sampling methods* (`r fmt(topic_n("Methods > Methodological research > Monitoring and sampling methods"))`; `r pct_total(topic_n("Methods > Methodological research > Monitoring and sampling methods"))`) and *Sensors, imaging and measurement methods* (`r fmt(topic_n("Methods > Methodological research > Sensors, imaging and measurement methods"))`; `r pct_total(topic_n("Methods > Methodological research > Sensors, imaging and measurement methods"))`).
 
 ```{r fig-methods, fig.cap="Topic-assignment frequency within the Methods theme."}
-include_figure("figure_10_hierarchy_methods.png")
+include_figure(here::here("visualisations", "topic_hierarchy", "figure_04c_hierarchy_methods.png"))
 ```
 
 ### Industry and governance
 
-Industry and governance research covers governance and policy, sector development, economics and performance, markets and value chains, and firms and industry structure.
+Within Industry and governance, *Policy and regulation* was the largest terminal topic (`r fmt(topic_n("Industry and governance > Governance and policy > Policy and regulation"))`; `r pct_total(topic_n("Industry and governance > Governance and policy > Policy and regulation"))`), followed by *Costs and profitability* (`r fmt(topic_n("Industry and governance > Economics and performance > Costs and profitability"))`; `r pct_total(topic_n("Industry and governance > Economics and performance > Costs and profitability"))`), *Economic risk, valuation and impact* (`r fmt(topic_n("Industry and governance > Economics and performance > Economic risk, valuation and impact"))`; `r pct_total(topic_n("Industry and governance > Economics and performance > Economic risk, valuation and impact"))`), *History and regional development* (`r fmt(topic_n("Industry and governance > Sector development > History and regional development"))`) and *Supply, demand and prices* (`r fmt(topic_n("Industry and governance > Markets, trade and value chains > Supply, demand and prices"))`).
 
 ```{r fig-industry, fig.cap="Topic-assignment frequency within the Industry and governance theme."}
-include_figure("figure_11_hierarchy_industry_and_governance.png")
+include_figure(here::here("visualisations", "topic_hierarchy", "figure_04d_hierarchy_industry_and_governance.png"))
 ```
 
 ### Product
 
-Product research covers composition and quality, contaminants and food safety, consumer responses, processing and preservation, and human nutrition and health.
+Product research was led by *Nutritional composition* (`r fmt(topic_n("Product > Composition and nutritional value > Nutritional composition"))`; `r pct_total(topic_n("Product > Composition and nutritional value > Nutritional composition"))`), *Physical and visual quality* (`r fmt(topic_n("Product > Fillet and carcass quality > Physical and visual quality"))`; `r pct_total(topic_n("Product > Fillet and carcass quality > Physical and visual quality"))`) and *Contaminants and residues* (`r fmt(topic_n("Product > Composition and nutritional value > Contaminants and residues"))`; `r pct_total(topic_n("Product > Composition and nutritional value > Contaminants and residues"))`). Chemical food safety, sensory properties, yield and body composition, and storage/packaging/shelf life were also prominent.
 
 ```{r fig-product, fig.cap="Topic-assignment frequency within the Product theme."}
-include_figure("figure_12_hierarchy_product.png")
+include_figure(here::here("visualisations", "topic_hierarchy", "figure_04e_hierarchy_product.png"))
 ```
 
 ### People and society
 
-People and society research is smaller than the Production and Environment evidence bases and covers public discourse, conflict and social licence, livelihoods, communities, culture and knowledge, public health, equity and rights, labour and employment, and food security and access.
+People and society was much smaller than the Production and Environment evidence bases. The largest terminal topics were *Antimicrobial resistance and One Health* (`r fmt(topic_n("People and society > Public health > Antimicrobial resistance and One Health"))`; `r pct_total(topic_n("People and society > Public health > Antimicrobial resistance and One Health"))`), *Conflict and social licence* (`r fmt(topic_n("People and society > Communities and livelihoods > Conflict and social licence"))`; `r pct_total(topic_n("People and society > Communities and livelihoods > Conflict and social licence"))`) and *Public discourse and representation* (`r fmt(topic_n("People and society > Culture and knowledge > Public discourse and representation"))`; `r pct_total(topic_n("People and society > Culture and knowledge > Public discourse and representation"))`). Topics relating to livelihoods, Indigenous peoples and rights, employment, food security, working conditions and labour exploitation each represented well under 1% of the full evidence map.
 
 ```{r fig-people, fig.cap="Topic-assignment frequency within the People and society theme."}
-include_figure("figure_13_hierarchy_people_and_society.png")
+include_figure(here::here("visualisations", "topic_hierarchy", "figure_04f_hierarchy_people_and_society.png"))
 ```
 
 ### Inputs and resources
 
-Inputs and resources research includes circularity, feed-resource supply and farm inputs. The earlier corpus showed a particularly small literature on energy supply and several other upstream resource inputs; these patterns will be recalculated for the final corpus.
+Inputs and resources was the smallest high-level theme. *By-products and waste as inputs* accounted for `r fmt(topic_n("Inputs and resources > Circularity > By-products and waste as inputs"))` records (`r pct_total(topic_n("Inputs and resources > Circularity > By-products and waste as inputs"))`) and was substantially more common than *Resource efficiency* (`r fmt(topic_n("Inputs and resources > Circularity > Resource efficiency"))`), *Novel feed resources* (`r fmt(topic_n("Inputs and resources > Feed-resource supply > Novel feed resources"))`) and *Marine feed resources* (`r fmt(topic_n("Inputs and resources > Feed-resource supply > Marine feed resources"))`). Energy supply was represented in only `r fmt(topic_n("Inputs and resources > Farm inputs > Energy supply"))` records.
 
 ```{r fig-inputs, fig.cap="Topic-assignment frequency within the Inputs and resources theme."}
-include_figure("figure_14_hierarchy_inputs_and_resources.png")
+include_figure(here::here("visualisations", "topic_hierarchy", "figure_04g_hierarchy_inputs_and_resources.png"))
 ```
 
 ## Rapidly emerging topics
 
-Relative growth is evaluated against the expansion of the evidence base as a whole, using the mean annual number of assignments during 2010–2014 as the baseline index of 100. In the previous analysis, rapidly growing themes included monitoring and sampling methods, automation and precision aquaculture, smoltification and smolt quality, novel feed resources, welfare, climate change, sensors and imaging, statistical and modelling methods, antimicrobial resistance and One Health, energy and life-cycle impacts, by-products and waste as inputs, and plastics and solid waste. The final figure will regenerate both topic trajectories and the database-wide background trajectory from the final corpus.
+The evidence base as a whole grew by `r sprintf("%.2f", background_growth_ratio)` times between the mean annual output in 2010–2014 and 2021–2025. All 11 selected topics with a non-zero 2010–2014 baseline grew faster than this background rate. The strongest relative increases were observed for *Climate change* (`r sprintf("%.1f", rapid_growth("Climate change"))` times its 2010–2014 baseline), *Novel feed resources* (`r sprintf("%.1f", rapid_growth("Novel feed resources"))` times), *Smoltification and smolt quality* (`r sprintf("%.1f", rapid_growth("Smoltification and smolt quality"))` times) and *Automation and precision aquaculture* (`r sprintf("%.1f", rapid_growth("Automation and precision aquaculture"))` times). Monitoring and sampling, sensors and measurement, welfare, antimicrobial resistance and One Health, energy/life-cycle assessment, circular use of by-products, and statistical/modelling methods also grew faster than the database overall. *Plastics and solid waste* had no records during the 2010–2014 baseline period and is therefore shown as an emerging topic without a directly comparable baseline growth ratio.
 
-```{r fig-emerging, fig.cap="Relative growth of rapidly emerging topics compared with growth of the complete evidence base. Each series is indexed to its mean annual frequency during 2010–2014 where a baseline is available."}
-include_figure("figure_15_rapidly_emerging_topics.png")
+```{r fig-emerging, fig.cap="Relative growth of rapidly emerging topics compared with growth of the complete evidence base. Topic series are indexed to their mean annual frequency during 2010–2014 where a baseline is available; the dashed grey line represents fitted background database growth."}
+include_figure(here::here("visualisations", "figure_06_rapidly_emerging_topics.png"))
 ```
 
 ## Comparison with secondary research
 
-The earlier manuscript compared the distribution of primary-study topics with a recent umbrella review of 37 systematic reviews of salmon aquaculture. That comparison showed a markedly narrower distribution of secondary research, with particularly strong representation of sea lice and substantially less review coverage of several major physiological, environmental, methodological, governance and social research areas. This comparison should be regenerated against the final primary-study topic distribution before manuscript submission rather than retaining percentages calculated from the previous 13,389-record corpus.
+The supplied manuscript draft compares this evidence map with a recent umbrella review of 37 systematic reviews across salmon aquaculture. Recalculation against the final canonical evidence map confirms the principal imbalance identified in the draft. *Sea lice control and treatment* occurs in `r fmt(topic_n("Production > Fish health > Sea lice control and treatment"))` mapped records (`r pct_total(topic_n("Production > Fish health > Sea lice control and treatment"))`), compared with 8 of 37 systematic reviews (21.6%) in the umbrella-review dataset. By contrast, several of the largest areas in the mapped literature have comparatively little systematic-review coverage, including *Physiology, metabolism and biological responses* (`r pct_total(topic_n("Production > Fish performance and biology > Physiology, metabolism and biological responses"))` of mapped records), *Growth and development* (`r pct_total(topic_n("Production > Fish performance and biology > Growth and development"))`), and major disease, environmental and methodological topics.
 
-```{r fig-secondary, fig.cap="Comparison of topic representation in the evidence map with topic coverage in the recent umbrella review of systematic reviews."}
-include_figure("figure_16_primary_vs_systematic_reviews.png")
-```
+The social evidence base is particularly weakly represented in the systematic-review literature described in the draft. In the final canonical map, *Antimicrobial resistance and One Health* accounts for `r pct_total(topic_n("People and society > Public health > Antimicrobial resistance and One Health"))` of records, *Conflict and social licence* for `r pct_total(topic_n("People and society > Communities and livelihoods > Conflict and social licence"))`, and *Public discourse and representation* for `r pct_total(topic_n("People and society > Culture and knowledge > Public discourse and representation"))`; the supplied umbrella-review dataset contains one review on antimicrobial resistance/One Health and none in most of the other social categories.
+
+Overall, the comparison continues to indicate that the systematic-review evidence covers a narrower subset of the topics represented across the mapped literature, with particularly strong representation of sea lice and limited coverage of several major physiological, environmental, methodological, governance and social research areas.
