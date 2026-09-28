@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev libcairo2-dev libglpk-dev
+          sudo apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev libcairo2-dev libglpk-dev pandoc
 
       - name: Install R dependencies
         shell: Rscript {0}
@@ -180,6 +180,7 @@ jobs:
           cat("PASS: Workflow 09 figures and flow counts regenerated from authoritative pipeline inputs\n")
 
       - name: Stage review bundle
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -199,6 +200,7 @@ jobs:
           cp outputs/workflow09_manuscript/long_form_results.docx outputs/workflow09_figure_review/
 
       - name: Upload Workflow 09 figure review bundle
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workflow09-figure-review-${{ github.run_id }}
