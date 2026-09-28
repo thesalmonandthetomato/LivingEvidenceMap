@@ -12,15 +12,12 @@ x <- fromJSON(pointer,simplifyVector=FALSE)
 if(!identical(x$status,"published") ||
    !identical(x$workflow,"08") ||
    !identical(x$state,"corrected_final_adjudicated_canonical") ||
-   as.character(x$zenodo_record_id)!="22998934" ||
    as.integer(x$canonical_records)!=19117L) {
-  stop("Pointer is not the authoritative corrected Workflow 08 canonical dataset",call.=FALSE)
+  stop("Pointer is not a published final Workflow 08 canonical dataset",call.=FALSE)
 }
 
 expected_sha <- tolower(as.character(x$final_canonical_jsonl_sha256))
-if(!identical(expected_sha,"ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67")) {
-  stop("Unexpected authoritative Workflow 08 canonical SHA-256",call.=FALSE)
-}
+if(!grepl("^[0-9a-f]{64}$",expected_sha)) stop("Workflow 08 pointer has invalid canonical SHA-256",call.=FALSE)
 
 file_meta <- Filter(function(z) identical(as.character(z$filename),"living_evidence_map_canonical_final.jsonl"),x$files)
 if(length(file_meta)!=1L) stop("Workflow 08 pointer does not identify exactly one final canonical JSONL",call.=FALSE)
