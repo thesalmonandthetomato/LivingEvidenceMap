@@ -6,6 +6,7 @@ on:
     branches: [workflow01-final-architecture]
     paths:
       - '.github/workflows/workflow_10_pages_preview.yml'
+      - 'docs/dashboard-redesign-temp.html'
   workflow_dispatch:
 
 permissions:
