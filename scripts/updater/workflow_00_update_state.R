@@ -18,7 +18,7 @@ if (!file.exists(prior_path)||!file.exists(receipt_path)) stop("Prior state or r
 prior <- fromJSON(prior_path,simplifyVector=FALSE)
 receipt <- fromJSON(receipt_path,simplifyVector=FALSE)
 if (!identical(prior$schema,"living-evidence-map-workflow00-state-v1") || !identical(prior$status,"accepted")) stop("Prior state is not accepted v1 state",call.=FALSE)
-if (!identical(receipt$status,"published") || !identical(receipt$visibility,"restricted")) stop("Receipt is not a published restricted W00 archive",call.=FALSE)
+if (!identical(receipt$status,"published") || !identical(receipt$visibility,"restricted")) stop("Receipt is not a published restricted W00 archive",call.=FALSE)\nif (!identical(receipt$run_type,"full")) stop("Automatic rolling-state promotion is disabled for fortnightly/expansion deltas until source-native ID reconciliation is consistent across all five sources",call.=FALSE)
 
 sources <- trimws(as.character(unlist(receipt$sources,use.names=FALSE)))
 sources <- sources[nzchar(sources)]
