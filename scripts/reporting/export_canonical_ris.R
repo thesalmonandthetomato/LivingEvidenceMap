@@ -75,9 +75,7 @@ topic_keywords <- function(rec) {
 }
 
 con_in <- file(input, open = "r", encoding = "UTF-8")
-on.exit(close(con_in), add = TRUE)
 con_out <- file(output, open = "w", encoding = "UTF-8")
-on.exit(close(con_out), add = TRUE)
 
 n <- 0L
 repeat {
@@ -128,8 +126,8 @@ repeat {
   }
 }
 
+close(con_in)
 close(con_out)
-con_out <- NULL
 
 sha <- digest(output, algo = "sha256", file = TRUE, serialize = FALSE)
 info <- file.info(output)
