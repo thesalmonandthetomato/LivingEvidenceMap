@@ -6,6 +6,7 @@ source_jsonl <- if(length(args)>=1L) args[[1L]] else stop("Missing canonical JSO
 out_csv <- if(length(args)>=2L) args[[2L]] else "docs/living_evidence_map.csv"
 out_js <- if(length(args)>=3L) args[[3L]] else "docs/dashboard-data.js"
 pointer_path <- if(length(args)>=4L) args[[4L]] else "docs/workflow08/zenodo/run-36329841121.json"
+w07_scores_path <- if(length(args)>=5L) args[[5L]] else stop("Missing Workflow 07 retained topic-score path",call.=FALSE)
 
 ontology_path <- Sys.getenv("TOPIC_ONTOLOGY_PATH","data/reference/topic_ontology_v3_6.csv")
 iso_map_path <- Sys.getenv("ISO_NUMERIC_MAP_PATH","config/iso3_numeric_map.json")
@@ -24,7 +25,7 @@ vec <- function(x){
 }
 safe_year <- function(x){z<-suppressWarnings(as.integer(substr(clean(x),1,4)));if(is.na(z)||z<1800L||z>2200L)"" else as.character(z)}
 
-for(p in c(source_jsonl,pointer_path,ontology_path,flow_counts_path)) if(!file.exists(p)) stopf("Required input not found: %s",p)
+for(p in c(source_jsonl,pointer_path,ontology_path,flow_counts_path,w07_scores_path)) if(!file.exists(p)) stopf("Required input not found: %s",p)
 if(!identical(tolower(digest(file=source_jsonl,algo="sha256",serialize=FALSE)),expected_sha)) stopf("Input is not the authoritative Workflow 08 canonical JSONL")
 
 pointer <- fromJSON(pointer_path,simplifyVector=FALSE)
@@ -46,6 +47,16 @@ miss <- setdiff(required_ontology,names(ontology))
 if(length(miss)) stopf("Ontology missing columns: %s",paste(miss,collapse=", "))
 if(anyDuplicated(ontology$path_id)) stopf("Ontology path_id values are not unique")
 onto_i <- setNames(seq_len(nrow(ontology)),as.character(ontology$path_id))
+
+w07 <- read_csv(w07_scores_path,show_col_types=FALSE,progress=FALSE)
+required_w07 <- c("record_id","path_id","confidence_n","stars","retained_for_analysis")
+miss_w07 <- setdiff(required_w07,names(w07))
+if(length(miss_w07)) stopf("Workflow 07 score file missing columns: %s",paste(miss_w07,collapse=", "))
+w07 <- w07[w07$retained_for_analysis %in% TRUE,,drop=FALSE]
+if(anyDuplicated(paste(w07$record_id,w07$path_id,sep="\r"))) stopf("Duplicate retained Workflow 07 record/path pairs")
+if(any(!(w07$confidence_n %in% 1:3))) stopf("Workflow 07 confidence_n outside 1:3")
+if(any(nchar(as.character(w07$stars)) != as.integer(w07$confidence_n))) stopf("Workflow 07 star labels do not match confidence_n")
+star_lookup <- setNames(as.character(w07$stars),paste(as.character(w07$record_id),as.character(w07$path_id),sep="\r"))
 
 iso_numeric <- list()
 if(file.exists(iso_map_path)){
@@ -162,7 +173,10 @@ repeat{
       iso3=as.list(isos),
       topics=as.list(unique(unlist(topic_paths,use.names=FALSE))),
       topic_paths=lapply(topic_paths,as.list),
-      topic_stars=list(),
+      topic_stars=setNames(as.list(vapply(topic_ids,function(pid){
+        z<-star_lookup[[paste(rid,pid,sep="\r")]]
+        if(is.null(z)||is.na(z))"" else z
+      },character(1))),paths),
       topic_path_ids=setNames(as.list(topic_ids),paths),
       topic_coded_at=clean(((rec$provenance%||%list())$workflow08%||%list())$finalised_at_utc)
     )
