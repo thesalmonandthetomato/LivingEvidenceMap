@@ -14,7 +14,7 @@ This document is intended to serve two purposes:
 Functionally, Workflow 00 comprises one parent orchestrator plus one reusable source handler. The parent launches the handler independently for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science. The handler then invokes the appropriate source-specific R ingestion code.
 
 ```text
-config/workflow00_search_strategy.json
+user_input/workflow00_search_strategy.json
           |
           v
 workflow_00_search_orchestrator.yml
@@ -41,7 +41,7 @@ workflow_00_search_orchestrator.yml
 
 | Component | Function |
 |---|---|
-| `config/workflow00_search_strategy.json` | Authoritative search concept definition. Stores the search version, immutable species terms and farm/aquaculture terms. |
+| `user_input/workflow00_search_strategy.json` | Authoritative search concept definition. Stores the search version, immutable species terms and farm/aquaculture terms. |
 | `scripts/updater/workflow_00_search_orchestrator.R` | Translates the common strategy into syntax appropriate for each source and defines full, fortnightly and expansion searches. |
 | `.github/workflows/workflow_00_search_orchestrator.yml` | Parent controller. Selects sources, creates the search plan, launches source jobs, checks completion, archives documentation and deposits the completed run on Zenodo. |
 | `.github/workflows/_workflow_00_orchestrated_source_child.yml` | Reusable source handler called once for each selected database. |
@@ -53,7 +53,7 @@ workflow_00_search_orchestrator.yml
 
 The conceptual search strategy is permanently version-controlled in:
 
-`config/workflow00_search_strategy.json`
+`user_input/workflow00_search_strategy.json`
 
 For search version `v1`, the common species block is:
 
