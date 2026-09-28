@@ -36,7 +36,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','readr','digest'))
+        run: install.packages(c('jsonlite','readr','digest','httr2'))
 
       - name: Download validated Workflow 10 source artefact
         uses: actions/download-artifact@v4
@@ -47,16 +47,44 @@ jobs:
           run-id: ${{ env.SOURCE_RUN_ID }}
           path: source_artifact
 
-      - name: Resolve source files
+      - name: Resolve validated dashboard projection
         shell: bash
         run: |
           set -euo pipefail
           DATA=$(find source_artifact -type f -name dashboard-data.js -print -quit)
-          CSV=$(find source_artifact -type f -name living_evidence_map.csv -print -quit)
           test -s "$DATA"
-          test -s "$CSV"
           echo "SOURCE_DATA=$DATA" >> "$GITHUB_ENV"
-          echo "SOURCE_CSV=$CSV" >> "$GITHUB_ENV"
+
+      - name: Resolve authoritative Workflow 08 pointer
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          reg <- read.csv('docs/workflow08/zenodo_registry.csv',stringsAsFactors=FALSE)
+          auth <- reg[reg$status=='authoritative',,drop=FALSE]
+          if(nrow(auth)!=1L) stop(sprintf('Expected exactly one authoritative Workflow 08 registry row; found %d',nrow(auth)),call.=FALSE)
+          run_id <- as.character(auth$source_run_id[[1L]])
+          p <- sprintf('docs/workflow08/zenodo/run-%s.json',run_id)
+          if(!file.exists(p)) stop(sprintf('Authoritative Workflow 08 pointer not found: %s',p),call.=FALSE)
+          x <- fromJSON(p,simplifyVector=FALSE)
+          if(as.character(x$zenodo_record_id)!='23020526' ||
+             as.character(x$doi)!='10.5281/zenodo.23020526' ||
+             as.character(x$final_canonical_jsonl_sha256)!='8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c') {
+            stop('Authoritative Workflow 08 pointer does not match the registered lossless Zenodo archive',call.=FALSE)
+          }
+          cat(sprintf('W08_POINTER=%s\n',p),file=Sys.getenv('GITHUB_ENV'),append=TRUE)
+          cat(sprintf('PASS: authoritative W08 pointer = %s / Zenodo %s\n',p,x$zenodo_record_id))
+
+      - name: Restore authoritative Workflow 08 canonical from Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/workflow10-search-trial
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer "$W08_POINTER" \
+            --output inputs/workflow10-search-trial/living_evidence_map_canonical_final.jsonl
+          echo "SOURCE_CANONICAL=inputs/workflow10-search-trial/living_evidence_map_canonical_final.jsonl" >> "$GITHUB_ENV"
 
       - name: Parse search-trial builder
         shell: Rscript {0}
@@ -69,7 +97,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow10-search-trial
-          Rscript R/workflow_10_build_search_trial.R             "$SOURCE_DATA"             "$SOURCE_CSV"             outputs/workflow10-search-trial/workflow10-search-trial-data.js             outputs/workflow10-search-trial/workflow10-search-trial-index.js
+          Rscript R/workflow_10_build_search_trial.R \
+            "$SOURCE_DATA" \
+            "$SOURCE_CANONICAL" \
+            outputs/workflow10-search-trial/workflow10-search-trial-data.js \
+            outputs/workflow10-search-trial/workflow10-search-trial-index.js
           cp docs/dashboard-search-trial.html outputs/workflow10-search-trial/workflow10-search-trial.html
 
       - name: Validate isolated trial
@@ -86,6 +118,8 @@ jobs:
             file.exists(index_file),
             file.exists(html_file),
             as.integer(manifest$records)==19117L,
+            as.character(manifest$evidence_source)=='authoritative Workflow 08 canonical JSONL',
+            as.character(manifest$canonical_jsonl_sha256)=='8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c',
             as.numeric(manifest$abstract_index_bytes)>1000000
           )
 
