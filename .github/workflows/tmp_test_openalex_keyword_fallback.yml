@@ -1,0 +1,99 @@
+name: Temporary - test OpenAlex keyword fallback
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_test_openalex_keyword_fallback.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install minimal dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+
+      - name: Test exact DOI OpenAlex keyword fallback
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(httr2)
+            library(jsonlite)
+          })
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          dois <- c(
+            "10.1002/ece3.5974",
+            "10.1111/j.1749-7345.2005.tb00329.x"
+          )
+          clean_vec <- function(x){
+            if(is.null(x)||!length(x)) return(character())
+            z <- trimws(as.character(unlist(x,use.names=FALSE)))
+            unique(z[nzchar(z)])
+          }
+          extract_keywords <- function(w){
+            kws <- w$keywords %||% list()
+            if(!length(kws)) return(character())
+            vals <- vapply(kws,function(k){
+              if(is.atomic(k)) return(as.character(k[[1L]]))
+              as.character(k$display_name %||% k$keyword %||% "")
+            },character(1))
+            clean_vec(vals)
+          }
+          extract_concepts <- function(w){
+            cs <- w$concepts %||% list()
+            if(!length(cs)) return(character())
+            vals <- vapply(cs,function(k){
+              if(is.atomic(k)) return(as.character(k[[1L]]))
+              as.character(k$display_name %||% "")
+            },character(1))
+            clean_vec(vals)
+          }
+          matched <- 0L
+          with_keywords <- 0L
+          for(d in dois){
+            url <- paste0("https://api.openalex.org/works/https://doi.org/", URLencode(d,reserved=TRUE))
+            req <- request(url) |>
+              req_headers(Accept="application/json", `User-Agent`="LivingEvidenceMap OpenAlex keyword fallback trial") |>
+              req_error(is_error=function(resp) FALSE)
+            resp <- tryCatch(req_perform(req),error=identity)
+            cat(sprintf("\nDOI=%s\n",d))
+            if(inherits(resp,"error")){
+              cat(sprintf("OUTCOME=REQUEST_ERROR ERROR=%s\n",conditionMessage(resp)))
+              next
+            }
+            st <- resp_status(resp)
+            cat(sprintf("HTTP=%d\n",st))
+            if(st>=400L){
+              cat(sprintf("OUTCOME=HTTP_%d\n",st))
+              next
+            }
+            matched <- matched+1L
+            w <- fromJSON(resp_body_string(resp),simplifyVector=FALSE)
+            cat(sprintf("OPENALEX_ID=%s\n",as.character(w$id %||% "")))
+            cat(sprintf("TITLE=%s\n",as.character(w$title %||% "")))
+            kws <- extract_keywords(w)
+            cs <- extract_concepts(w)
+            cat(sprintf("KEYWORDS_N=%d\n",length(kws)))
+            cat(sprintf("KEYWORDS=%s\n",if(length(kws))paste(kws,collapse=" || ") else "NONE"))
+            cat(sprintf("CONCEPTS_N=%d\n",length(cs)))
+            cat(sprintf("CONCEPTS=%s\n",if(length(cs))paste(cs,collapse=" || ") else "NONE"))
+            if(length(kws)) with_keywords <- with_keywords+1L
+          }
+          cat(sprintf("\nSUMMARY requested=%d matched=%d with_keywords=%d\n",
+                      length(dois),matched,with_keywords))
