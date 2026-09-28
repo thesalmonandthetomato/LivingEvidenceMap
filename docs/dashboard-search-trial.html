@@ -27,6 +27,11 @@
 .search-row input{flex:1 1 360px}
 .search-status{color:var(--mid);font-size:13px;min-height:20px}
 .search-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.download-progress{display:none;margin-top:12px}
+.download-progress.active{display:block}
+.download-progress-track{height:8px;background:#e3e9e8;border-radius:99px;overflow:hidden}
+.download-progress-bar{height:100%;width:0;background:var(--mid);transition:width .12s linear}
+.download-progress-text{font-size:12px;color:var(--mid);margin-top:5px}
 .search-note{font-size:12px;color:var(--mid);margin-top:12px}
 </style>
 </head><body><header><div class="wrap"><div>Living Evidence Map</div><h1>Research evidence on salmon farming, at a glance</h1><p class="project-description">The Living Evidence Map is a scoping review of research articles on aquaculture of all salmon species, including Atlantic and Pacific salmon and rainbow trout, across all production stages. The map was originally populated by manual screening of &gt;19,000 records and is now maintained using validated machine screening and content annotation, supported by LLMs (OpenAI GPT-5.6 Luna). For further information on the wider project, see <a href="https://www.thesalmonandthetomato.org" style="color:#fff">The Salmon and the Tomato</a>. This project was coordinated by Dr Neal Haddaway.</p></div></header><div class="temp-banner"><strong>Search/download trial.</strong> This experimental page is isolated from the current Workflow 10 preview.</div><main class="wrap"><div id="kpis" class="kpis"></div><div id="lem-update-status" class="section" style="padding:12px 16px;margin:0 0 18px"><div style="display:flex;gap:24px;flex-wrap:wrap;align-items:baseline"><span><b>Last search</b> 22/09/26</span><span><b>Last evidence update</b> 22/09/26</span></div></div>
@@ -36,7 +41,7 @@
 
 <section class="section"><h2>Evidence by species × topic</h2><p class="sub">Click a topic label to show the next level in that branch. Click a cell to jump to the database filtered only to that species and topic.</p><div class="controls"><label>Species <select id="heatSpecies"><option value="__all__">All species</option></select></label><button id="heatReset" type="button">Reset topic view</button><span id="heatContext" class="heat-context">Showing high-level topics</span><span style="display:none"><select id="heatTop"><option value="__all__">All topics</option></select><select id="heatLevel"><option value="1">1</option></select><select id="heatParent"><option value="__all__">All top-level topics</option></select><select id="heatLimit"><option selected>60</option></select><button id="heatBack" type="button"></button></span></div><div class="heat-scroll"><div id="heatmap"></div></div></section>
 <section class="section"><h2>Topic hierarchy</h2><p class="sub">Radial hierarchy of topics. High-level branches use the full dashboard palette from dark grey-teal through pale grey and peach to salmon pink. Hover for counts; click any segment to jump to the database filtered only at that hierarchy level.</p><div class="topic-radial-controls"><label>Species <select id="radialSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="radialCountry"><option value="__all__">All countries</option></select></label><button id="topicRadialReset" type="button">Reset filters</button></div><div id="topicRadial" class="topic-radial"></div></section>
-<section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div id="searchDownloadAccordion" class="search-accordion" aria-hidden="true"><div class="search-accordion-head"><div><h3>Search and download</h3><p class="sub">Search across titles and abstracts</p></div><button id="closeSearchDownload" class="search-accordion-close" type="button">Collapse</button></div><div class="search-row"><input id="searchTerms" type="search" placeholder="Enter one or more search terms"><button id="applySearchTerms" type="button">Search</button><button id="clearSearchTerms" type="button">Clear search</button></div><div id="searchIndexStatus" class="search-status">Abstract search index is loaded only when this panel is opened.</div><div class="search-actions"><button id="downloadFilteredRis" type="button" disabled>Download filtered results (.RIS)</button></div><p class="search-note">The download button is enabled only when filters and/or search terms reduce the evidence base. The public dashboard contains only 30-word abstract snippets; full abstracts are reconstructed from the separately loaded inverted index for the downloaded subset.</p></div><div class="controls"><button id="openSearchDownload" class="search-download-btn" type="button">Search and download</button><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
+<section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div id="searchDownloadAccordion" class="search-accordion" aria-hidden="true"><div class="search-accordion-head"><div><h3>Search and download</h3><p class="sub">Search across titles and abstracts</p></div><button id="closeSearchDownload" class="search-accordion-close" type="button">Collapse</button></div><div class="search-row"><input id="searchTerms" type="search" placeholder="Enter one or more search terms"><button id="applySearchTerms" type="button">Search</button><button id="clearSearchTerms" type="button">Clear search</button></div><div id="searchIndexStatus" class="search-status">Abstract search index is loaded only when this panel is opened.</div><div class="search-actions"><button id="downloadFilteredRis" type="button" disabled>Download filtered results (.RIS)</button></div><div id="downloadProgress" class="download-progress" aria-live="polite"><div class="download-progress-track"><div id="downloadProgressBar" class="download-progress-bar"></div></div><div id="downloadProgressText" class="download-progress-text">Preparing RIS…</div></div><p class="search-note">The download button is enabled only when filters and/or search terms reduce the evidence base. The public dashboard contains only 30-word abstract snippets; full abstracts are reconstructed from the separately loaded inverted index for the downloaded subset.</p></div><div class="controls"><button id="openSearchDownload" class="search-download-btn" type="button">Search and download</button><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
 <footer class="repo-footer">The full evidence pipeline workflow is available on <a href="https://github.com/thesalmonandthetomato/LivingEvidenceMap" target="_blank" rel="noopener">GitHub</a>.</footer><div id="tip" class="tooltip"></div>
 <script src="./workflow10-search-trial-data.js"></script>
 <script>
@@ -508,24 +513,56 @@ async function applySearch(){
 function activeRestriction(){
   return state.species!=='__all__'||state.country!=='__all__'||state.topic!==null||state.year!==null||!!String(state.q||'').trim();
 }
-function reconstructAbstract(recordId){
-  if(!idx||!recordIndexById)return '';
-  var ri=recordIndexById.get(String(recordId));
-  if(ri===undefined)return '';
-  var n=Number(idx.token_counts[ri]||0);
-  if(!n)return '';
-  var out=new Array(n);
-  Object.keys(idx.postings).forEach(function(tok){
-    var pos=(idx.postings[tok]||{})[String(ri)];
-    if(Array.isArray(pos))pos.forEach(function(p){out[Number(p)]=tok;});
+function setDownloadProgress(active,pct,text){
+  var wrap=document.getElementById('downloadProgress');
+  var bar=document.getElementById('downloadProgressBar');
+  var label=document.getElementById('downloadProgressText');
+  if(wrap)wrap.classList.toggle('active',!!active);
+  if(bar)bar.style.width=Math.max(0,Math.min(100,Number(pct)||0))+'%';
+  if(label&&text)label.textContent=text;
+}
+function yieldToBrowser(){return new Promise(function(resolve){requestAnimationFrame(function(){setTimeout(resolve,0);});});}
+
+async function reconstructAbstracts(records){
+  var wanted=new Map(),out=new Map();
+  records.forEach(function(r){
+    var ri=recordIndexById.get(String(r.record_id));
+    if(ri===undefined)return;
+    var n=Number(idx.token_counts[ri]||0);
+    wanted.set(String(ri),String(r.record_id));
+    out.set(String(r.record_id),n?new Array(n):[]);
   });
-  return out.filter(function(x){return x!==undefined&&x!==null;}).join(' ');
+
+  var tokens=Object.keys(idx.postings),chunk=2500;
+  for(var start=0;start<tokens.length;start+=chunk){
+    var stop=Math.min(tokens.length,start+chunk);
+    for(var ti=start;ti<stop;ti++){
+      var tok=tokens[ti],byRecord=idx.postings[tok]||{};
+      Object.keys(byRecord).forEach(function(ri){
+        var rid=wanted.get(String(ri));
+        if(rid===undefined)return;
+        var arr=out.get(rid),pos=byRecord[ri];
+        if(Array.isArray(pos))pos.forEach(function(p){arr[Number(p)]=tok;});
+      });
+    }
+    var pct=10+70*(stop/tokens.length);
+    setDownloadProgress(true,pct,'Reconstructing abstracts… '+Math.round(pct)+'%');
+    await yieldToBrowser();
+  }
+
+  var reconstructed=new Map();
+  out.forEach(function(arr,rid){
+    reconstructed.set(rid,arr.filter(function(x){return x!==undefined&&x!==null;}).join(' '));
+  });
+  return reconstructed;
 }
 function risEscape(s){return String(s==null?'':s).replace(/[\r\n]+/g,' ').trim();}
 function authors(r){return String(r.authors||'').split(/\s*;\s*|\s*\|\s*/).map(function(x){return x.trim();}).filter(Boolean);}
-function toRis(records){
-  var lines=[];
-  records.forEach(function(r){
+
+async function toRis(records,abstracts){
+  var lines=[],chunk=250;
+  for(var i=0;i<records.length;i++){
+    var r=records[i];
     lines.push('TY  - JOUR');
     lines.push('TI  - '+risEscape(r.title));
     authors(r).forEach(function(a){lines.push('AU  - '+risEscape(a));});
@@ -535,21 +572,49 @@ function toRis(records){
     if(r.issue)lines.push('IS  - '+risEscape(r.issue));
     if(r.pages)lines.push('SP  - '+risEscape(r.pages));
     if(r.doi)lines.push('DO  - '+risEscape(r.doi));
-    var ab=reconstructAbstract(r.record_id);
+    var ab=abstracts.get(String(r.record_id))||'';
     if(ab)lines.push('AB  - '+risEscape(ab));
     lines.push('ER  - ');
     lines.push('');
-  });
+
+    if((i+1)%chunk===0||i===records.length-1){
+      var pct=80+18*((i+1)/records.length);
+      setDownloadProgress(true,pct,'Writing RIS records… '+(i+1).toLocaleString()+' / '+records.length.toLocaleString());
+      await yieldToBrowser();
+    }
+  }
   return lines.join('\r\n');
 }
 async function downloadRis(){
-  await ensureIndex();
-  var records=recordsFor();
-  if(!activeRestriction()||records.length>=D.records.length)return;
-  var blob=new Blob([toRis(records)],{type:'application/x-research-info-systems;charset=utf-8'});
-  var url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download='living-evidence-map-filtered-results.ris';document.body.appendChild(a);a.click();a.remove();
-  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  var btn=document.getElementById('downloadFilteredRis');
+  try{
+    if(btn){btn.disabled=true;btn.textContent='Preparing RIS…';}
+    setDownloadProgress(true,2,'Loading abstract index…');
+    await ensureIndex();
+
+    var records=recordsFor();
+    if(!activeRestriction()||records.length>=D.records.length||records.length===0)return;
+
+    setDownloadProgress(true,8,'Preparing '+records.length.toLocaleString()+' filtered records…');
+    await yieldToBrowser();
+
+    var abstracts=await reconstructAbstracts(records);
+    var ris=await toRis(records,abstracts);
+
+    setDownloadProgress(true,99,'Starting download…');
+    await yieldToBrowser();
+
+    var blob=new Blob([ris],{type:'application/x-research-info-systems;charset=utf-8'});
+    var url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download='living-evidence-map-filtered-results.ris';document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+
+    setDownloadProgress(true,100,'Download ready.');
+    setTimeout(function(){setDownloadProgress(false,0,'Preparing RIS…');},1800);
+  } finally {
+    if(btn){btn.textContent='Download filtered results (.RIS)';}
+    updateUi();
+  }
 }
 function updateUi(){
   var btn=document.getElementById('downloadFilteredRis');
