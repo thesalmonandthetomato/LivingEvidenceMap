@@ -1,0 +1,118 @@
+name: Workflow 10 - isolated search/download trial
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/workflow_10_search_trial.yml'
+      - 'R/workflow_10_build_search_trial.R'
+      - 'docs/dashboard-search-trial.html'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_RUN_ID: '36457402997'
+  SOURCE_ARTIFACT: 'workflow10-dashboard-36457402997'
+
+jobs:
+  build-trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout workflow branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest'))
+
+      - name: Download validated Workflow 10 source artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.SOURCE_ARTIFACT }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          path: source_artifact
+
+      - name: Resolve source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATA=$(find source_artifact -type f -name dashboard-data.js -print -quit)
+          CSV=$(find source_artifact -type f -name living_evidence_map.csv -print -quit)
+          test -s "$DATA"
+          test -s "$CSV"
+          echo "SOURCE_DATA=$DATA" >> "$GITHUB_ENV"
+          echo "SOURCE_CSV=$CSV" >> "$GITHUB_ENV"
+
+      - name: Parse search-trial builder
+        shell: Rscript {0}
+        run: |
+          parse(file='R/workflow_10_build_search_trial.R')
+          cat('PASS: search-trial builder parses\n')
+
+      - name: Build lightweight trial data and abstract inverted index
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow10-search-trial
+          Rscript R/workflow_10_build_search_trial.R             "$SOURCE_DATA"             "$SOURCE_CSV"             outputs/workflow10-search-trial/workflow10-search-trial-data.js             outputs/workflow10-search-trial/workflow10-search-trial-index.js
+          cp docs/dashboard-search-trial.html outputs/workflow10-search-trial/workflow10-search-trial.html
+
+      - name: Validate isolated trial
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          data_file <- 'outputs/workflow10-search-trial/workflow10-search-trial-data.js'
+          index_file <- 'outputs/workflow10-search-trial/workflow10-search-trial-index.js'
+          html_file <- 'outputs/workflow10-search-trial/workflow10-search-trial.html'
+          manifest <- fromJSON('outputs/workflow10-search-trial/search-trial-manifest.json',simplifyVector=FALSE)
+
+          stopifnot(
+            file.exists(data_file),
+            file.exists(index_file),
+            file.exists(html_file),
+            as.integer(manifest$records)==19117L,
+            as.numeric(manifest$abstract_index_bytes)>1000000
+          )
+
+          d <- paste(readLines(data_file,warn=FALSE,encoding='UTF-8'),collapse='\n')
+          h <- paste(readLines(html_file,warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(
+            !grepl('"abstract":',d,fixed=TRUE),
+            grepl('"abstract_snippet":',d,fixed=TRUE),
+            grepl('Search and download',h,fixed=TRUE),
+            grepl('Search across titles and abstracts',h,fixed=TRUE),
+            grepl('Download filtered results (.RIS)',h,fixed=TRUE),
+            grepl('workflow10-search-trial-data.js',h,fixed=TRUE),
+            grepl('workflow10-search-trial-index.js',h,fixed=TRUE),
+            !grepl('./workflow10-preview-data.js',h,fixed=TRUE)
+          )
+
+          cat(sprintf(
+            'PASS: isolated trial validated: %s records; %.1f MB main data; %.1f MB lazy abstract index\n',
+            manifest$records,
+            as.numeric(manifest$dashboard_data_bytes)/1024^2,
+            as.numeric(manifest$abstract_index_bytes)/1024^2
+          ))
+
+      - name: Upload isolated trial artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow10-search-trial-${{ github.run_id }}
+          path: outputs/workflow10-search-trial/
+          retention-days: 30
+          if-no-files-found: error
