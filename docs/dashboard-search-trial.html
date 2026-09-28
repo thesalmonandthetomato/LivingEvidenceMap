@@ -41,7 +41,7 @@
 
 <section class="section"><h2>Evidence by species × topic</h2><p class="sub">Click a topic label to show the next level in that branch. Click a cell to jump to the database filtered only to that species and topic.</p><div class="controls"><label>Species <select id="heatSpecies"><option value="__all__">All species</option></select></label><button id="heatReset" type="button">Reset topic view</button><span id="heatContext" class="heat-context">Showing high-level topics</span><span style="display:none"><select id="heatTop"><option value="__all__">All topics</option></select><select id="heatLevel"><option value="1">1</option></select><select id="heatParent"><option value="__all__">All top-level topics</option></select><select id="heatLimit"><option selected>60</option></select><button id="heatBack" type="button"></button></span></div><div class="heat-scroll"><div id="heatmap"></div></div></section>
 <section class="section"><h2>Topic hierarchy</h2><p class="sub">Radial hierarchy of topics. High-level branches use the full dashboard palette from dark grey-teal through pale grey and peach to salmon pink. Hover for counts; click any segment to jump to the database filtered only at that hierarchy level.</p><div class="topic-radial-controls"><label>Species <select id="radialSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="radialCountry"><option value="__all__">All countries</option></select></label><button id="topicRadialReset" type="button">Reset filters</button></div><div id="topicRadial" class="topic-radial"></div></section>
-<section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div id="searchDownloadAccordion" class="search-accordion" aria-hidden="true"><div class="search-accordion-head"><div><h3>Search and download</h3><p class="sub">Search across titles and abstracts</p></div><button id="closeSearchDownload" class="search-accordion-close" type="button">Collapse</button></div><div class="search-row"><input id="searchTerms" type="search" placeholder="Enter one or more search terms"><button id="applySearchTerms" type="button">Search</button><button id="clearSearchTerms" type="button">Clear search</button></div><div id="searchIndexStatus" class="search-status">Abstract search index is loaded only when this panel is opened.</div><div class="search-actions"><button id="downloadFilteredRis" type="button" disabled>Download filtered results (.RIS)</button></div><div id="downloadProgress" class="download-progress" aria-live="polite"><div class="download-progress-track"><div id="downloadProgressBar" class="download-progress-bar"></div></div><div id="downloadProgressText" class="download-progress-text">Preparing RIS…</div></div><p class="search-note">The download button is enabled only when filters and/or search terms reduce the evidence base. The public dashboard contains only 30-word abstract snippets; full abstracts are reconstructed from the separately loaded inverted index for the downloaded subset.</p></div><div class="controls"><button id="openSearchDownload" class="search-download-btn" type="button">Search and download</button><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
+<section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div id="searchDownloadAccordion" class="search-accordion" aria-hidden="true"><div class="search-accordion-head"><div><h3>Search and download</h3><p class="sub">Search across titles and abstracts</p></div><button id="closeSearchDownload" class="search-accordion-close" type="button">Collapse</button></div><div class="search-row"><input id="searchTerms" type="search" placeholder='e.g. ((sea) AND (lice OR louse)) OR "salmon louse"'><button id="applySearchTerms" type="button">Search</button><button id="clearSearchTerms" type="button">Clear search</button></div><div id="searchIndexStatus" class="search-status">Abstract search index is loaded only when this panel is opened.</div><div class="search-note">Boolean syntax: AND, OR, NOT, parentheses and quoted phrases. Operators are case-insensitive; adjacent terms imply AND.</div><div class="search-actions"><button id="downloadFilteredRis" type="button" disabled>Download filtered results (.RIS)</button></div><div id="downloadProgress" class="download-progress" aria-live="polite"><div class="download-progress-track"><div id="downloadProgressBar" class="download-progress-bar"></div></div><div id="downloadProgressText" class="download-progress-text">Preparing RIS…</div></div><p class="search-note">The download button is enabled only when filters and/or search terms reduce the evidence base. The public dashboard contains only 30-word abstract snippets; full abstracts are reconstructed from the separately loaded inverted index for the downloaded subset.</p></div><div class="controls"><button id="openSearchDownload" class="search-download-btn" type="button">Search and download</button><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
 <footer class="repo-footer">The full evidence pipeline workflow is available on <a href="https://github.com/thesalmonandthetomato/LivingEvidenceMap" target="_blank" rel="noopener">GitHub</a>.</footer><div id="tip" class="tooltip"></div>
 <script src="./workflow10-search-trial-data.js"></script>
 <script>
@@ -438,8 +438,55 @@ var indexPromise=null,idx=null,recordIndexById=null,normalisedTokenMap=null;
 function normaliseToken(s){
   return String(s||'').toLocaleLowerCase().replace(/^\p{P}+|\p{P}+$/gu,'').trim();
 }
-function queryTerms(q){
-  return Array.from(new Set(String(q||'').trim().split(/\s+/).map(normaliseToken).filter(Boolean)));
+function tokeniseQuery(q){
+  var s=String(q||''),out=[],i=0;
+  while(i<s.length){
+    if(/\s/.test(s[i])){i++;continue;}
+    if(s[i]==='('||s[i]===')'){out.push({type:s[i],value:s[i]});i++;continue;}
+    if(s[i]==='"'){
+      var j=i+1,buf='';
+      while(j<s.length&&s[j]!=='"'){buf+=s[j++];}
+      if(j>=s.length)throw new Error('Search syntax error: missing closing quotation mark.');
+      var phrase=buf.trim();
+      if(!phrase)throw new Error('Search syntax error: empty quoted phrase.');
+      out.push({type:'PHRASE',value:phrase});
+      i=j+1;continue;
+    }
+    var j=i,buf='';
+    while(j<s.length&&!/\s/.test(s[j])&&s[j]!=='('&&s[j]!==')'){buf+=s[j++];}
+    var upper=buf.toUpperCase();
+    if(upper==='AND'||upper==='OR'||upper==='NOT')out.push({type:upper,value:upper});
+    else if(buf)out.push({type:'TERM',value:buf});
+    i=j;
+  }
+  // Insert implicit AND between adjacent operands/groups, including before NOT.
+  var expanded=[];
+  function canEnd(t){return t&&['TERM','PHRASE',')'].includes(t.type);}
+  function canStart(t){return t&&['TERM','PHRASE','(','NOT'].includes(t.type);}
+  out.forEach(function(t){
+    var prev=expanded[expanded.length-1];
+    if(canEnd(prev)&&canStart(t))expanded.push({type:'AND',value:'AND'});
+    expanded.push(t);
+  });
+  return expanded;
+}
+function parseBoolean(q){
+  var toks=tokeniseQuery(q),pos=0;
+  if(!toks.length)return null;
+  function peek(){return toks[pos];}
+  function take(type){var t=peek();if(t&&t.type===type){pos++;return t;}return null;}
+  function primary(){
+    if(take('(')){var n=orExpr();if(!take(')'))throw new Error('Search syntax error: missing closing parenthesis.');return n;}
+    var t=take('TERM')||take('PHRASE');
+    if(t)return {type:t.type,value:t.value};
+    throw new Error('Search syntax error near '+(peek()?'"'+peek().value+'"':'end of expression')+'.');
+  }
+  function notExpr(){if(take('NOT'))return {type:'NOT',child:notExpr()};return primary();}
+  function andExpr(){var n=notExpr();while(take('AND'))n={type:'AND',left:n,right:notExpr()};return n;}
+  function orExpr(){var n=andExpr();while(take('OR'))n={type:'OR',left:n,right:andExpr()};return n;}
+  var ast=orExpr();
+  if(pos<toks.length)throw new Error('Search syntax error near "'+toks[pos].value+'".');
+  return ast;
 }
 function ensureIndex(){
   if(idx) return Promise.resolve(idx);
@@ -473,27 +520,77 @@ function ensureIndex(){
   });
   return indexPromise;
 }
+function unionSets(a,b){var out=new Set(a);b.forEach(function(x){out.add(x);});return out;}
+function intersectSets(a,b){var out=new Set();a.forEach(function(x){if(b.has(x))out.add(x);});return out;}
+function differenceSets(a,b){var out=new Set();a.forEach(function(x){if(!b.has(x))out.add(x);});return out;}
+function universeSet(){return new Set((D.records||[]).map(function(r){return String(r.record_id);}));}
+
 function idsForTerm(term){
+  term=normaliseToken(term);
   var ids=new Set();
   var variants=normalisedTokenMap.get(term)||[];
   variants.forEach(function(tok){
     var byRecord=idx.postings[tok]||{};
     Object.keys(byRecord).forEach(function(i){ids.add(String(idx.record_ids[Number(i)]));});
   });
-  // Titles remain searchable even if a term is absent from the abstract index.
   (D.records||[]).forEach(function(r){
-    if(normaliseToken(String(r.title||'')).includes(term))ids.add(String(r.record_id));
+    var titleTokens=String(r.title||'').split(/\s+/).map(normaliseToken);
+    if(titleTokens.includes(term))ids.add(String(r.record_id));
   });
   return ids;
 }
-function intersectSets(a,b){
-  if(a===null)return new Set(b);
-  var out=new Set();a.forEach(function(x){if(b.has(x))out.add(x);});return out;
+function abstractPositions(term){
+  var byId=new Map(),variants=normalisedTokenMap.get(normaliseToken(term))||[];
+  variants.forEach(function(tok){
+    var byRecord=idx.postings[tok]||{};
+    Object.keys(byRecord).forEach(function(ri){
+      var rid=String(idx.record_ids[Number(ri)]),set=byId.get(rid)||new Set();
+      (byRecord[ri]||[]).forEach(function(p){set.add(Number(p));});
+      byId.set(rid,set);
+    });
+  });
+  return byId;
+}
+function idsForPhrase(phrase){
+  var terms=String(phrase||'').trim().split(/\s+/).map(normaliseToken).filter(Boolean);
+  if(!terms.length)return new Set();
+  if(terms.length===1)return idsForTerm(terms[0]);
+
+  var posMaps=terms.map(abstractPositions),ids=null;
+  posMaps.forEach(function(m){ids=ids===null?new Set(m.keys()):intersectSets(ids,new Set(m.keys()));});
+  var out=new Set();
+  (ids||new Set()).forEach(function(rid){
+    var starts=posMaps[0].get(rid)||new Set(),ok=false;
+    starts.forEach(function(p){
+      if(ok)return;
+      for(var j=1;j<posMaps.length;j++)if(!(posMaps[j].get(rid)||new Set()).has(p+j))return;
+      ok=true;
+    });
+    if(ok)out.add(rid);
+  });
+
+  // Also support exact phrases in titles.
+  var needle=terms.join(' ');
+  (D.records||[]).forEach(function(r){
+    var title=String(r.title||'').split(/\s+/).map(normaliseToken).filter(Boolean).join(' ');
+    if(title.includes(needle))out.add(String(r.record_id));
+  });
+  return out;
+}
+function evaluateBoolean(node){
+  if(!node)return universeSet();
+  if(node.type==='TERM')return idsForTerm(node.value);
+  if(node.type==='PHRASE')return idsForPhrase(node.value);
+  if(node.type==='NOT')return differenceSets(universeSet(),evaluateBoolean(node.child));
+  if(node.type==='AND')return intersectSets(evaluateBoolean(node.left),evaluateBoolean(node.right));
+  if(node.type==='OR')return unionSets(evaluateBoolean(node.left),evaluateBoolean(node.right));
+  throw new Error('Unsupported search expression.');
 }
 async function applySearch(){
   var input=document.getElementById('searchTerms');
-  var terms=queryTerms(input&&input.value);
-  if(!terms.length){
+  var q=String(input&&input.value||'').trim();
+  var status=document.getElementById('searchIndexStatus');
+  if(!q){
     trialSearchIds=null;
     state.q='';
     state.page=1;
@@ -501,14 +598,21 @@ async function applySearch(){
     updateUi();
     return;
   }
-  await ensureIndex();
-  var hit=null;
-  terms.forEach(function(t){hit=intersectSets(hit,idsForTerm(t));});
-  trialSearchIds=hit||new Set();
-  state.q=terms.join(' ');
-  state.page=1;
-  table();
-  updateUi();
+  try{
+    var ast=parseBoolean(q);
+    await ensureIndex();
+    trialSearchIds=evaluateBoolean(ast);
+    state.q=q;
+    state.page=1;
+    table();
+    updateUi();
+    if(status)status.textContent='Boolean search applied. '+trialSearchIds.size.toLocaleString()+' records match the search expression before other database filters.';
+  }catch(err){
+    trialSearchIds=null;
+    state.q='';
+    if(status)status.textContent=err.message;
+    throw err;
+  }
 }
 function activeRestriction(){
   return state.species!=='__all__'||state.country!=='__all__'||state.topic!==null||state.year!==null||!!String(state.q||'').trim();
