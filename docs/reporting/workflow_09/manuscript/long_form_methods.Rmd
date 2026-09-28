@@ -60,8 +60,8 @@ The living evidence map was subsequently expanded to retrieve bibliographic reco
 - The Lens (filtered to exclude datasets, reports, libguides, news)
 - OpenAlex
 - Scopus
-- Web of Science Core Collection (Science Citation Index Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation Index (SSCI) 1981-present, Social Sciences Citation Index (SSCI) 1981-present, Arts & Humanities Citation Index, (AHCI) 2017-present, Arts & Humanities Citation Index (AHCI) 2017-present, Emerging Sources Citation Index (ESCI) 2005-present, Emerging Sources Citation Index (ESCI) 2005-present)
-- AGRICOLA (via Europe PMC)
+- Web of Science Core Collection (Science Citation Index Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation Index (SSCI) 1981-present, Arts & Humanities Citation Index (AHCI) 2017-present, Emerging Sources Citation Index (ESCI) 2005-present)
+- AGRICOLA
 Database-specific implementations were derived from the same underlying conceptual search and adapted to the syntax and indexing of each source. Search strings are stored as version-controlled user inputs in the project repository.
 
 ### Searches for grey literature
@@ -78,7 +78,7 @@ The evidence map has been converted into a living resource in September 2026. Se
 
 ## Reference library repair
 
-Incomplete bibliographic records, i.e. records lacking abstracts or complete titles, were repaired before subsequent screening and annotation where reliable information could be recovered. Bibliographic sources were queried using persistent identifiers. Europe PMC and Scopus were also used to recover missing titles and abstracts.
+Incomplete bibliographic records, i.e. records lacking abstracts or complete titles, were repaired before subsequent screening and annotation where reliable information could be recovered. Bibliographic sources were queried using persistent identifiers. Europe PMC and Scopus were used as repair and enrichment sources to recover missing titles and abstracts; Europe PMC was not treated as an included bibliographic search database.
 
 Repair was provenance-preserving: the original source manifestation was retained, and information obtained from another source was treated as enrichment rather than evidence that the record originated from that database. Bibliographic data were used to ensure complete DOI matching to avoid incorrect enrichment. Records for which a reliable abstract could not be recovered were not automatically excluded.
 
