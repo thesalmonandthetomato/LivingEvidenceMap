@@ -110,7 +110,7 @@ for(i in seq_along(payload$records)){
   source_abstract <- normalise_ws(csv$abstract[[j]])
   expected_snippet <- snippet30(source_abstract)
 
-  if(!is.null(r$abstract)) stopf("Full abstract field survived in trial payload for record %s",rid)
+  if(!is.null(r[["abstract",exact=TRUE]])) stopf("Full abstract field survived in trial payload for record %s",rid)
   if(is.null(r$abstract_snippet)) stopf("Abstract snippet missing from trial payload for record %s",rid)
   if(!identical(as.character(r$abstract_snippet),expected_snippet)){
     stopf("Abstract snippet mismatch for record %s",rid)
