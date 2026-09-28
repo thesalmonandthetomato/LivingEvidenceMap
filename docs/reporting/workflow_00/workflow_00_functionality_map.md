@@ -132,7 +132,9 @@ The GitHub repository stores lightweight, inspectable methodological and provena
 - expansion reconciliation documentation, where applicable;
 - persistent native source-ID registries used for expansion reconciliation;
 - `docs/search_record/zenodo_registry.csv`;
-- one small JSON pointer for each archived Workflow 00 run containing the corresponding Zenodo record, DOI and checksums.
+- one small JSON pointer for each archived Workflow 00 run containing the corresponding Zenodo record, DOI and checksums;
+- `docs/search_record/state/current.json`, the authoritative logical five-source Workflow 00 state consumed by Workflow 01; and
+- immutable historical state snapshots such as `docs/search_record/state/baseline-v1.json`.
 
 ### GitHub Actions artefacts
 
@@ -163,13 +165,15 @@ The cache and Zenodo routes are delivery mechanisms for the same accepted state,
 
 ## Downstream handoff
 
-Workflow 01 retrieves Workflow 00 inputs from the Zenodo records registered in the repository. Downloads are authenticated and verified against the stored byte sizes and checksums before extraction. This removes any dependency on long-lived GitHub Actions artefacts.
+Workflow 01 consumes one authoritative Workflow 00 state pointer. The state identifies the accepted Lens, Scopus, OpenAlex, AGRICOLA and Web of Science source archives and their source-specific checksums. Downloads are authenticated and verified against the stored byte sizes and SHA-256 checksums before extraction. The initial five-source baseline is a composite state referencing three immutable restricted Zenodo records; no archived search data are duplicated merely to create the logical state. This removes any dependency on long-lived GitHub Actions artefacts.
 
 ## Methods text for research reporting
 
 > **Workflow 00: literature searching and provenance.** Searches were managed by a reproducible R-based orchestration workflow. A version-controlled configuration defined a common species concept and aquaculture/farming concept, from which database-specific queries were generated for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science. The parent workflow executed each selected source independently through a reusable source handler and source-specific ingestion script. For every search, the exact query, execution date, database-reported result count, successfully downloaded record count and workflow provenance were recorded in machine-readable JSON and human-readable Markdown files. Full searches, fortnightly updates and controlled search-term expansions used the same strategy definition. Search outputs were retained as short-lived GitHub Actions artefacts for seven days and deposited durably as restricted, checksum-verified Zenodo records, with persistent DOI and provenance pointers maintained in the repository.
 
 ## Reporting status
+
+Workflow 00 state integrity is validated by `scripts/updater/workflow_00_validate_state.R`, which requires exactly the five expected sources, valid archive references and harvest checksums, and non-empty duplicate-free source-native ID registries. Automatic promotion of future update harvests into the rolling state is deferred until source-native ID reconciliation is consistently enforced for fortnightly updates across all five sources.
 
 Workflow 00 is considered complete when:
 
