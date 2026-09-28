@@ -1,0 +1,100 @@
+name: Workflow 10 - deploy isolated Pages preview
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/workflow_10_pages_preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  SOURCE_RUN_ID: '36435811431'
+  SOURCE_ARTIFACT: 'workflow10-dashboard-36435811431'
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout production site from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: production
+          fetch-depth: 1
+
+      - name: Checkout Workflow 10 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          path: workflow10
+          fetch-depth: 1
+
+      - name: Download passed Workflow 10 dashboard artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.SOURCE_ARTIFACT }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          path: preview_artifact
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Add isolated preview files
+        shell: Rscript {0}
+        run: |
+          locate_one <- function(name) {
+            x <- list.files('preview_artifact', pattern=paste0('^',name,'$'), recursive=TRUE, full.names=TRUE)
+            if(length(x)!=1L) stop(sprintf('Expected exactly one %s in artifact; found %d',name,length(x)),call.=FALSE)
+            x[[1L]]
+          }
+
+          html_path <- locate_one('dashboard-redesign-temp.html')
+          data_path <- locate_one('dashboard-data.js')
+
+          html <- paste(readLines(html_path,warn=FALSE,encoding='UTF-8'),collapse='\n')
+          if(grepl('Evidence flow',html,fixed=TRUE) || grepl('evidence_flowdiagram.svg',html,fixed=TRUE)) {
+            stop('Flow diagram reference unexpectedly present in preview HTML',call.=FALSE)
+          }
+          marker <- '<script src="./dashboard-data.js"></script>'
+          if(!grepl(marker,html,fixed=TRUE)) stop('Expected dashboard-data.js marker not found',call.=FALSE)
+          html <- sub(marker,'<script src="./workflow10-preview-data.js"></script>',html,fixed=TRUE)
+
+          out_html <- 'production/docs/workflow10-preview.html'
+          out_data <- 'production/docs/workflow10-preview-data.js'
+          writeLines(html,out_html,useBytes=TRUE)
+          file.copy(data_path,out_data,overwrite=TRUE)
+
+          if(!file.exists('production/docs/index.html')) stop('Production index.html missing',call.=FALSE)
+          if(file.info(out_data)$size < 1000000) stop('Preview data file unexpectedly small',call.=FALSE)
+          cat(sprintf('PASS: isolated Pages preview prepared: %s + %s\n',out_html,out_data))
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload complete Pages site with preview
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: production/docs
+
+      - name: Deploy complete Pages site
+        id: deployment
+        uses: actions/deploy-pages@v4
