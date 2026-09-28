@@ -1,5 +1,5 @@
 name: Deploy GitHub Pages
-# deploy template refresh: responsive RIS progress trial
+# deploy template refresh: Boolean search trial
 
 on:
   workflow_dispatch:
@@ -112,6 +112,9 @@ jobs:
           grep -q "downloadProgressBar" production/docs/workflow10-search-trial.html
           grep -q "Reconstructing abstracts" production/docs/workflow10-search-trial.html
           grep -q "Writing RIS records" production/docs/workflow10-search-trial.html
+          grep -q "Boolean syntax: AND, OR, NOT" production/docs/workflow10-search-trial.html
+          grep -q "parseBoolean" production/docs/workflow10-search-trial.html
+          grep -q "idsForPhrase" production/docs/workflow10-search-trial.html
 
           # Reassert the existing preview is still present after adding the trial.
           test -s production/docs/workflow10-preview.html
