@@ -23,6 +23,8 @@ orchestrator_sha <- arg("--orchestrator-sha", Sys.getenv("GITHUB_SHA",""))
 source_handler_sha <- arg("--source-handler-sha", Sys.getenv("GITHUB_SHA",""))
 window_from <- arg("--window-from","")
 window_to <- arg("--window-to","")
+known_native_results <- suppressWarnings(as.integer(arg("--known-native-results","")))
+new_native_results <- suppressWarnings(as.integer(arg("--new-native-results","")))
 output_root <- arg("--output-root","outputs/updater/search_record")
 
 req <- c(source,run_type,query,parent_run_id)
@@ -53,6 +55,12 @@ record <- list(
   reported_search_results=reported,
   successfully_downloaded_results=downloaded,
   complete_download=identical(reported,downloaded),
+  native_id_reconciliation=if(!is.na(new_native_results) || !is.na(known_native_results)) list(
+    already_known=if(!is.na(known_native_results)) known_native_results else NULL,
+    new=if(!is.na(new_native_results)) new_native_results else NULL,
+    matching="exact source-native identifier",
+    records_passed_downstream=if(!is.na(new_native_results)) new_native_results else NULL
+  ) else NULL,
   github=list(
     repository=Sys.getenv("GITHUB_REPOSITORY",""),
     parent_workflow_run_id=parent_run_id,
@@ -81,6 +89,8 @@ md <- c(
   sprintf("- **Results successfully downloaded:** %d", downloaded),
   sprintf("- **Complete download:** %s", if(reported==downloaded) "yes" else "no"),
   sprintf("- **Search window:** %s", if(nzchar(window_from)||nzchar(window_to)) paste0(window_from," to ",window_to) else "not applicable"),
+  sprintf("- **Already-known native IDs:** %s", if(!is.na(known_native_results)) known_native_results else "not applicable"),
+  sprintf("- **New native IDs passed downstream:** %s", if(!is.na(new_native_results)) new_native_results else "not applicable"),
   sprintf("- **Parent workflow run:** %s", parent_run_id),
   sprintf("- **Child workflow run:** %s (attempt %s)", child_run_id, run_attempt),
   sprintf("- **Harvest artifact:** %s", if(nzchar(artifact_name)) artifact_name else "not supplied"),
