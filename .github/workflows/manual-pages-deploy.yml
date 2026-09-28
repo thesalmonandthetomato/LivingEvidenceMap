@@ -1,5 +1,5 @@
 name: Deploy GitHub Pages
-# deploy template refresh: add intersecting radial filters
+# deploy template refresh: fix radial reset and dynamic database KPI
 
 on:
   workflow_dispatch:
