@@ -17,12 +17,11 @@
 </style>
 <style id="search-trial-styles">
 .search-download-btn{font-weight:700}
-.search-modal-backdrop{position:fixed;inset:0;background:rgba(44,69,74,.48);display:none;align-items:center;justify-content:center;padding:24px;z-index:100}
-.search-modal-backdrop.open{display:flex}
-.search-modal{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 60px rgba(44,69,74,.25);padding:24px}
-.search-modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
-.search-modal h2{margin:0 0 4px}
-.search-modal-close{border:0;background:transparent;font-size:26px;line-height:1;padding:2px 6px}
+.search-accordion{display:none;border:1px solid var(--line);border-radius:10px;background:#f8faf9;padding:18px 20px;margin:0 0 16px}
+.search-accordion.open{display:block}
+.search-accordion-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.search-accordion h3{margin:0 0 4px}
+.search-accordion-close{font-size:13px;padding:6px 9px}
 .search-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0 10px}
 .search-row input{flex:1 1 360px}
 .search-status{color:var(--mid);font-size:13px;min-height:20px}
@@ -36,8 +35,8 @@
 
 <section class="section"><h2>Evidence by species × topic</h2><p class="sub">Click a topic label to show the next level in that branch. Click a cell to jump to the database filtered only to that species and topic.</p><div class="controls"><label>Species <select id="heatSpecies"><option value="__all__">All species</option></select></label><button id="heatReset" type="button">Reset topic view</button><span id="heatContext" class="heat-context">Showing high-level topics</span><span style="display:none"><select id="heatTop"><option value="__all__">All topics</option></select><select id="heatLevel"><option value="1">1</option></select><select id="heatParent"><option value="__all__">All top-level topics</option></select><select id="heatLimit"><option selected>60</option></select><button id="heatBack" type="button"></button></span></div><div class="heat-scroll"><div id="heatmap"></div></div></section>
 <section class="section"><h2>Topic hierarchy</h2><p class="sub">Radial hierarchy of topics. High-level branches use the full dashboard palette from dark grey-teal through pale grey and peach to salmon pink. Hover for counts; click any segment to jump to the database filtered only at that hierarchy level.</p><div class="topic-radial-controls"><label>Species <select id="radialSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="radialCountry"><option value="__all__">All countries</option></select></label><button id="topicRadialReset" type="button">Reset filters</button></div><div id="topicRadial" class="topic-radial"></div></section>
-<section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div class="controls"><button id="openSearchDownload" class="search-download-btn" type="button">Search and download</button><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
-<div id="searchDownloadBackdrop" class="search-modal-backdrop" aria-hidden="true"><div class="search-modal" role="dialog" aria-modal="true" aria-labelledby="searchDownloadTitle"><div class="search-modal-head"><div><h2 id="searchDownloadTitle">Search and download</h2><p class="sub">Search across titles and abstracts</p></div><button id="closeSearchDownload" class="search-modal-close" type="button" aria-label="Close">×</button></div><div class="search-row"><input id="searchTerms" type="search" placeholder="Enter one or more search terms"><button id="applySearchTerms" type="button">Search</button><button id="clearSearchTerms" type="button">Clear search</button></div><div id="searchIndexStatus" class="search-status">Abstract search index is loaded only when this panel is opened.</div><div class="search-actions"><button id="downloadFilteredRis" type="button" disabled>Download filtered results (.RIS)</button></div><p class="search-note">The download button is enabled only when filters and/or search terms reduce the evidence base. The public dashboard contains only 30-word abstract snippets; full abstracts are reconstructed from the separately loaded inverted index for the downloaded subset.</p></div></div><footer class="repo-footer">The full evidence pipeline workflow is available on <a href="https://github.com/thesalmonandthetomato/LivingEvidenceMap" target="_blank" rel="noopener">GitHub</a>.</footer><div id="tip" class="tooltip"></div>
+<section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div id="searchDownloadAccordion" class="search-accordion" aria-hidden="true"><div class="search-accordion-head"><div><h3>Search and download</h3><p class="sub">Search across titles and abstracts</p></div><button id="closeSearchDownload" class="search-accordion-close" type="button">Collapse</button></div><div class="search-row"><input id="searchTerms" type="search" placeholder="Enter one or more search terms"><button id="applySearchTerms" type="button">Search</button><button id="clearSearchTerms" type="button">Clear search</button></div><div id="searchIndexStatus" class="search-status">Abstract search index is loaded only when this panel is opened.</div><div class="search-actions"><button id="downloadFilteredRis" type="button" disabled>Download filtered results (.RIS)</button></div><p class="search-note">The download button is enabled only when filters and/or search terms reduce the evidence base. The public dashboard contains only 30-word abstract snippets; full abstracts are reconstructed from the separately loaded inverted index for the downloaded subset.</p></div><div class="controls"><button id="openSearchDownload" class="search-download-btn" type="button">Search and download</button><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
+<footer class="repo-footer">The full evidence pipeline workflow is available on <a href="https://github.com/thesalmonandthetomato/LivingEvidenceMap" target="_blank" rel="noopener">GitHub</a>.</footer><div id="tip" class="tooltip"></div>
 <script src="./workflow10-search-trial-data.js"></script>
 <script>
 const fmt=d3.format(','),palette=['#2c454a','#577c84','#a8bdbe','#e2b8a2','#ff9d78','#e55634'];const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));let D,state={species:'__all__',country:'__all__',topic:null,year:null,q:'',page:1,size:50,sort:'title',dir:'asc'};
@@ -561,12 +560,12 @@ function updateUi(){
 window.updateTrialSearchUi=updateUi;
 
 function open(){
-  var b=document.getElementById('searchDownloadBackdrop');
+  var b=document.getElementById('searchDownloadAccordion');
   if(b){b.classList.add('open');b.setAttribute('aria-hidden','false');}
   ensureIndex().then(updateUi).catch(function(){});
 }
 function close(){
-  var b=document.getElementById('searchDownloadBackdrop');
+  var b=document.getElementById('searchDownloadAccordion');
   if(b){b.classList.remove('open');b.setAttribute('aria-hidden','true');}
 }
 function start(){
@@ -574,7 +573,6 @@ function start(){
   if(!openBtn){setTimeout(start,100);return;}
   openBtn.onclick=open;
   document.getElementById('closeSearchDownload').onclick=close;
-  document.getElementById('searchDownloadBackdrop').addEventListener('click',function(e){if(e.target===this)close();});
   document.getElementById('applySearchTerms').onclick=function(){applySearch().catch(function(err){document.getElementById('searchIndexStatus').textContent=err.message;});};
   document.getElementById('clearSearchTerms').onclick=function(){
     document.getElementById('searchTerms').value='';
