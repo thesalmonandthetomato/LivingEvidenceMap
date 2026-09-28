@@ -108,6 +108,50 @@ jobs:
             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl \
             --manifest outputs/workflow08/_post_adjudication_manifest_internal.json
 
+      - name: Validate lossless annotation preservation
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(readr)})
+          p <- 'outputs/workflow08/_post_adjudication_all_records_internal.jsonl'
+          lines <- readLines(p,warn=FALSE,encoding='UTF-8')
+          lines <- lines[nzchar(trimws(lines))]
+          recs <- lapply(lines,fromJSON,simplifyVector=FALSE)
+          stopifnot(length(recs)==32292L)
+
+          eligible <- Filter(function(r) {
+            !is.null(r$species$workflow05)
+          },recs)
+          stopifnot(length(eligible)==19407L)
+
+          stopifnot(all(vapply(recs,function(r)!is.null(r$publication_status),logical(1))))
+          stopifnot(all(vapply(eligible,function(r)!is.null(r$geography$workflow06),logical(1))))
+          stopifnot(all(vapply(eligible,function(r)!is.null(r$topics$workflow07_record_qc),logical(1))))
+
+          match_rows <- sum(vapply(eligible,function(r)length(r$species$matches %||% list()),integer(1)))
+          expected_matches <- nrow(read_csv('inputs/w05/species_matches.csv',show_col_types=FALSE,progress=FALSE))
+          stopifnot(match_rows==expected_matches)
+
+          preserved_scores <- unlist(lapply(eligible,function(r)r$topics$workflow07_assignments %||% list()),recursive=FALSE)
+          expected_scores <- read_csv('inputs/w07/workflow07_topic_pathway_scores_retained.csv',show_col_types=FALSE,progress=FALSE)
+          expected_scores <- expected_scores[expected_scores$retained_for_analysis %in% TRUE,,drop=FALSE]
+          stopifnot(length(preserved_scores)==nrow(expected_scores))
+          stopifnot(all(vapply(preserved_scores,function(x) {
+            !is.null(x$confidence_n) && !is.null(x$stars) &&
+              as.integer(x$confidence_n) %in% 1:3 &&
+              nchar(as.character(x$stars))==as.integer(x$confidence_n)
+          },logical(1))))
+
+          final_scored <- unlist(lapply(eligible,function(r) {
+            Filter(function(a)!is.null(a$workflow07_score),r$topics$assignments %||% list())
+          }),recursive=FALSE)
+          stopifnot(all(vapply(final_scored,function(a) {
+            s <- a$workflow07_score
+            !is.null(s$confidence_n) && !is.null(s$stars)
+          },logical(1))))
+
+          cat(sprintf('PASS: lossless annotation preservation: %d eligible records; %d species matches; %d retained W07 scores\n',
+                      length(eligible),match_rows,length(preserved_scores)))
+
       - name: Partition included canonical and exclusions
         shell: bash
         run: |
