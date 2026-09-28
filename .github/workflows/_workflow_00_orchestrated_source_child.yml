@@ -80,60 +80,6 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c("httr2","jsonlite","digest"))
 
-      - name: Locate previous OpenAlex harvest for fortnightly delta
-        if: ${{ inputs.source == 'openalex' && inputs.run_type == 'fortnightly' }}
-        id: previous_openalex
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CURRENT_PARENT_RUN_ID: ${{ inputs.parent_run_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/previous_openalex
-          artifact_json="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" | jq -s '
-            [.[].artifacts[] |
-             select(.expired == false) |
-             select(.name | startswith("workflow00-openalex-harvest-")) |
-             select(.name != ("workflow00-openalex-harvest-" + env.CURRENT_PARENT_RUN_ID))] |
-            sort_by(.created_at) | reverse | .[0] // empty')"
-          if [ -z "$artifact_json" ] || [ "$artifact_json" = "null" ]; then
-            echo "baseline=false" >> "$GITHUB_OUTPUT"
-            echo "No previous orchestrated OpenAlex harvest artefact found; current run becomes baseline."
-            exit 0
-          fi
-          previous_run="$(echo "$artifact_json" | jq -r '.workflow_run.id')"
-          previous_name="$(echo "$artifact_json" | jq -r '.name')"
-          gh run download "$previous_run" --repo "$GITHUB_REPOSITORY" --name "$previous_name" --dir /tmp/previous_openalex
-          echo "baseline=true" >> "$GITHUB_OUTPUT"
-          echo "previous_run=$previous_run" >> "$GITHUB_OUTPUT"
-          echo "previous_name=$previous_name" >> "$GITHUB_OUTPUT"
-
-      - name: Locate prior WoS harvests for fortnightly UID reconciliation
-        if: ${{ inputs.source == 'wos' && inputs.run_type == 'fortnightly' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CURRENT_PARENT_RUN_ID: ${{ inputs.parent_run_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/wos_history
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
-            --jq '.artifacts[] | select(.expired == false) | select((.name | startswith("workflow00-wos-harvest-")) or (.name | startswith("wos-starter-full-search-"))) | [.id,.name,.workflow_run.id] | @tsv' \
-            > /tmp/wos_candidates.tsv
-          grep -v "${CURRENT_PARENT_RUN_ID}" /tmp/wos_candidates.tsv > /tmp/wos_candidates_filtered.tsv || true
-          if [ ! -s /tmp/wos_candidates_filtered.tsv ]; then
-            echo "No prior WoS harvest artifact found; cannot safely distinguish new from modified records." >&2
-            exit 2
-          fi
-          while read -r artifact_id artifact_name run_id; do
-            dest="/tmp/wos_history/$artifact_id"
-            mkdir -p "$dest"
-            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir "$dest" || true
-          done < /tmp/wos_candidates_filtered.tsv
-          count="$(find /tmp/wos_history -type f -name 'response_*.json' | wc -l | tr -d ' ')"
-          [ "$count" -gt 0 ] || { echo "Prior WoS artifacts contained no raw response pages." >&2; exit 2; }
-          echo "Prior WoS raw pages available for UID reconciliation: $count"
-
       - name: Run source search
         env:
           SOURCE: ${{ inputs.source }}
@@ -191,34 +137,25 @@ jobs:
               ;;
           esac
 
-      - name: Build OpenAlex identifier delta against previous search
-        if: ${{ inputs.source == 'openalex' && inputs.run_type == 'fortnightly' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
-          git show origin/$WORKFLOW00_ORCHESTRATOR_BRANCH:scripts/updater/workflow_00c_openalex_identifier_delta.R > /tmp/workflow_00c_openalex_identifier_delta.R
-          previous_args=()
-          if [ '${{ steps.previous_openalex.outputs.baseline }}' = 'true' ]; then
-            previous_args=(--previous-dir /tmp/previous_openalex)
-          fi
-          Rscript /tmp/workflow_00c_openalex_identifier_delta.R \
-            --current-dir outputs/updater/source_child \
-            "${previous_args[@]}" \
-            --output-dir outputs/updater/openalex_delta
 
-      - name: Reconcile WoS fortnightly results by UID
-        if: ${{ inputs.source == 'wos' && inputs.run_type == 'fortnightly' }}
+      - name: Reconcile fortnightly harvest by native source ID
+        if: ${{ inputs.run_type == 'fortnightly' }}
+        env:
+          SOURCE: ${{ inputs.source }}
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
-          git show origin/$WORKFLOW00_ORCHESTRATOR_BRANCH:scripts/updater/workflow_00_native_id_reconcile.R > /tmp/workflow_00_native_id_reconcile.R
-          Rscript /tmp/workflow_00_native_id_reconcile.R \
-            --source wos \
+          registry="data/workflow00/source_id_registry/${SOURCE}_native_ids.txt"
+          test -s "$registry"
+          Rscript scripts/updater/workflow_00_native_id_reconcile.R \
+            --source "$SOURCE" \
+            --run-type fortnightly \
             --current-root outputs/updater/source_child \
-            --history-root /tmp/wos_history \
-            --output-dir outputs/updater/wos_delta
+            --registry "$registry" \
+            --output-dir outputs/updater/source_delta
+          test -s outputs/updater/source_delta/reconciliation_manifest.json
+          test -f outputs/updater/source_delta/updated_native_ids.txt
+
 
       - name: Extract source counts
         id: counts
@@ -272,8 +209,7 @@ jobs:
           path: |
             outputs/updater/source_child/
             outputs/updater/source_child_sidecar/
-            outputs/updater/openalex_delta/
-            outputs/updater/wos_delta/
+            outputs/updater/source_delta/
           retention-days: 90
           if-no-files-found: error
 
