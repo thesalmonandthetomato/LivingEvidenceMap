@@ -117,7 +117,7 @@ jobs:
           grep -q "idsForPhrase" production/docs/workflow10-search-trial.html
           grep -q "wildcardRegex" production/docs/workflow10-search-trial.html
           grep -q "variantsForPattern" production/docs/workflow10-search-trial.html
-          grep -q "wildcards (* = zero or more characters; ? = one character)" production/docs/workflow10-search-trial.html
+          grep -Fq "wildcards (* = zero or more characters; ? = one character)" production/docs/workflow10-search-trial.html
 
           # Reassert the existing preview is still present after adding the trial.
           test -s production/docs/workflow10-preview.html
