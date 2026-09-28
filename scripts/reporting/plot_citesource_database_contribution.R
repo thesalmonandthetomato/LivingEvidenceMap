@@ -312,7 +312,7 @@ write.csv(
 #   lower-right matrix = database combination defining each intersection.
 plot_paired_upset <- function(device = c("png", "pdf")) {
   device <- match.arg(device)
-  olive <- "#6B6B2A"
+  included_col <- "#2596be"
 
   if (device == "png") {
     png(
@@ -344,21 +344,21 @@ plot_paired_upset <- function(device = c("png", "pdf")) {
   ibp <- barplot(
     intersection_mat,
     beside = TRUE,
-    col = c("black", olive),
+    col = c("black", included_col),
     border = NA,
     axes = FALSE,
     ylim = c(0, max(intersection_mat) * 1.12),
     space = c(0.10, 0.65)
   )
-  axis(2, las = 1, cex.axis = 0.85)
-  mtext("Canonical works in source intersection", side = 2, line = 4.0, cex = 0.9)
+  axis(2, las = 1, cex.axis = 0.95)
+  mtext("Canonical works in source intersection", side = 2, line = 4.0, cex = 1.0)
   legend(
     "topright",
     legend = c("Deduplicated records", "Included records"),
-    fill = c("black", olive),
+    fill = c("black", included_col),
     border = NA,
     bty = "n",
-    cex = 0.82
+    cex = 1.02
   )
   intersection_x <- colMeans(ibp)
   intersection_xlim <- range(ibp) + c(-0.8, 0.8)
@@ -377,15 +377,15 @@ plot_paired_upset <- function(device = c("png", "pdf")) {
     horiz = TRUE,
     names.arg = source_order,
     las = 1,
-    col = c("black", olive),
+    col = c("black", included_col),
     border = NA,
     axes = FALSE,
     xlim = c(max(source_mat) * 1.08, 0),
     space = c(0.10, 0.55),
-    cex.names = 0.87
+    cex.names = 0.97
   )
-  axis(1, las = 1, cex.axis = 0.80)
-  mtext("Canonical works contributed", side = 1, line = 3.0, cex = 0.88)
+  axis(1, las = 1, cex.axis = 0.90)
+  mtext("Canonical works contributed", side = 1, line = 3.0, cex = 0.98)
   source_y <- colMeans(sbp)
   source_ylim <- range(sbp) + c(-0.7, 0.7)
 
