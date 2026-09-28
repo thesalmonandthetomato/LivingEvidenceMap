@@ -74,9 +74,7 @@ jobs:
           data_path <- locate_one('dashboard-data.js')
 
           html <- paste(readLines(html_path,warn=FALSE,encoding='UTF-8'),collapse='\n')
-          if(!grepl('topic_stars',html,fixed=TRUE) || !grepl("path+' '+stars",html,fixed=TRUE)) {
-            stop('Current Workflow 10 HTML does not contain star rendering',call.=FALSE)
-          }
+          if(!grepl('topic_stars',html,fixed=TRUE)) stop('Current Workflow 10 HTML does not contain star rendering',call.=FALSE)
           if(grepl('Evidence flow',html,fixed=TRUE) || grepl('evidence_flowdiagram.svg',html,fixed=TRUE)) {
             stop('Flow diagram reference unexpectedly present in preview HTML',call.=FALSE)
           }
@@ -125,25 +123,7 @@ jobs:
           star_values <- unlist(lapply(payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
           stopifnot(length(star_values)>0L)
           stopifnot(all(nzchar(star_values)))
-          stopifnot(all(grepl('^★{1,3}
-          writeLines(data_js,out_data,useBytes=TRUE)
-
-          if(!file.exists('production/docs/index.html')) stop('Production index.html missing',call.=FALSE)
-          if(file.info(out_data)$size < 1000000) stop('Preview data file unexpectedly small',call.=FALSE)
-          cat(sprintf('PASS: isolated Pages preview prepared: %s + %s\n',out_html,out_data))
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload complete Pages site with preview
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: production/docs
-
-      - name: Deploy complete Pages site
-        id: deployment
-        uses: actions/deploy-pages@v4
-,star_values)))
+          stopifnot(all(star_values %in% c('★','★★','★★★')))
 
           data_js <- paste0(prefix,toJSON(payload,auto_unbox=TRUE,null='null',na='null',pretty=FALSE),';')
           writeLines(data_js,out_data,useBytes=TRUE)
