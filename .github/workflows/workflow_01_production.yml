@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       workflow00_pointer_path:
-        description: 'Workflow 00 Zenodo pointer path on workflow00-search-orchestrator'
+        description: 'Workflow 00 state or archive pointer path on workflow01-final-architecture'
         required: true
         type: string
       previous_workflow01_pointer_path:
@@ -48,7 +48,7 @@ concurrency:
 
 env:
   WORKFLOW01_BRANCH: workflow01-final-architecture
-  WORKFLOW00_REPORTING_BRANCH: workflow00-zenodo-search-archive
+  WORKFLOW00_REPORTING_BRANCH: workflow01-final-architecture
 
 jobs:
   workflow01:
@@ -89,8 +89,15 @@ jobs:
           test -s "workflow00_registry/$W00_POINTER"
           test -s "$PREV_W01_POINTER"
           Rscript -e "x<-jsonlite::fromJSON('$PREV_W01_POINTER');stopifnot(x$status=='published',x$state %in% c('final','delta'),x$visibility=='restricted')"
-          Rscript -e "x<-jsonlite::fromJSON('workflow00_registry/$W00_POINTER');s<-unlist(x$sources);stopifnot(x$status=='published',x$visibility=='restricted',length(s)>0L,all(s %in% c('lens','scopus','openalex','agricola','wos')))"
-          SOURCES="$(Rscript -e "x<-jsonlite::fromJSON('workflow00_registry/$W00_POINTER');cat(paste(unlist(x$sources),collapse=','))")"
+          POINTER="workflow00_registry/$W00_POINTER"
+          SCHEMA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(if(is.null(x$schema)) "" else x$schema)')"
+          if [ "$SCHEMA" = "living-evidence-map-workflow00-state-v1" ]; then
+            Rscript scripts/updater/workflow_00_validate_state.R --state "$POINTER"
+            SOURCES="lens,scopus,openalex,agricola,wos"
+          else
+            Rscript -e "x<-jsonlite::fromJSON('$POINTER');s<-unlist(x$sources);stopifnot(x$status=='published',x$visibility=='restricted',length(s)>0L,all(s %in% c('lens','scopus','openalex','agricola','wos')))"
+            SOURCES="$(Rscript -e "x<-jsonlite::fromJSON('$POINTER');cat(paste(unlist(x$sources),collapse=','))")"
+          fi
           echo "W00_SOURCES=$SOURCES" >> "$GITHUB_ENV"
 
       - name: Restore latest Workflow 01 state from baseline plus deltas
@@ -121,12 +128,18 @@ jobs:
         run: |
           set -euo pipefail
           POINTER="workflow00_registry/$W00_POINTER"
+          SCHEMA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(if(is.null(x$schema)) "" else x$schema)')"
+          rm -rf current_workflow00
+          mkdir -p current_workflow00
+          if [ "$SCHEMA" = "living-evidence-map-workflow00-state-v1" ]; then
+            Rscript scripts/updater/workflow_01_restore_workflow00_state.R               --state "$POINTER"               --output-root current_workflow00
+            echo "PASS: restored authoritative composite Workflow 00 state"
+            exit 0
+          fi
           RUN_ID="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$github_run_id)' 2>/dev/null || true)"
           CACHE_OK=true
           HAS_HASHES="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(!is.null(x$handoff_sources))')"
           if [ "$HAS_HASHES" != "TRUE" ] || [ -z "$RUN_ID" ]; then CACHE_OK=false; fi
-          rm -rf current_workflow00
-          mkdir -p current_workflow00
           if [ "$CACHE_OK" = true ]; then
             IFS=',' read -ra SRC <<< "$W00_SOURCES"
             for source in "${SRC[@]}"; do
