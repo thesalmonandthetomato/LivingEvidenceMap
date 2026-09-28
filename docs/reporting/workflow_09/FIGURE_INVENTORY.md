@@ -5,7 +5,7 @@ The long-form Results report uses figures generated into `outputs/report/long_fo
 | Results figure | Purpose | R implementation | Status for final Workflow 09 |
 |---|---|---|---|
 | 1 | Database contribution and exact source overlap before/after relevance screening | `scripts/reporting/plot_citesource_database_contribution.R` | Existing validated implementation; redirect/copy final PNG/PDF into long-form output directory. |
-| 2 | Review/process flow diagram | `visualisations/07_flow_diagram.R` | Added as a canonical JSONL/exclusions-CSV implementation following the current slide-template structure. Source-database counts remain TBC until current Workflow 00 source totals are restored. |
+| 2 | Review/process flow diagram | `visualisations/07_flow_diagram.R` | Populated from authoritative Workflow 00/01 source counts, Workflow 02 enrichment results, and final Workflow 08 state; follows the current slide-template structure. |
 | 3 | Records by publication year and focal species | `visualisations/01_records_by_publication_year.R` | Migrated to the included-only W08 canonical JSONL. |
 | 4 | High-level topic assignments by publication year | `visualisations/05_records_by_publication_year_high_level_topic.R` | **APPROVED / LOCKED 2026-09-28.** Wide manuscript layout, no internal title, canonical W08 JSONL input. |
 | 5 | Records by country and focal species | `visualisations/02_records_by_country.R` | Migrated to the included-only W08 canonical JSONL. |
@@ -33,4 +33,4 @@ By default scripts look for `data/master/current/living_evidence_map_canonical_f
 - Final included evidence map: 19,117.
 - Final included records without a retained topic code: 231.
 
-The final diagram should show source-database retrieval counts separately once the current Workflow 00 source totals are restored, and should distinguish the 231 included-but-uncoded records from exclusions.
+The final diagram uses source totals AGRICOLA 2,744; The Lens 24,135; OpenAlex 28,134; Scopus 19,948; WoSCC 15,176 (combined 90,137), with 57,845 duplicate manifestations removed to yield 32,292 deduplicated canonical works. Workflow 02 enriched 2,190 distinct records. The 231 included-but-uncoded topic records remain included rather than being treated as exclusions.
