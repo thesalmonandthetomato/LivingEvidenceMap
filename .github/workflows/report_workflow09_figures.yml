@@ -241,9 +241,7 @@ jobs:
 
           cp outputs/workflow09_manuscript/methods.{md,html,docx,pdf} "$PUB/manuscript/"
           cp outputs/workflow09_manuscript/results.{md,html,docx,pdf} "$PUB/manuscript/"
-          cp docs/reporting/workflow_09/manuscript/long_form_methods.Rmd "$PUB/manuscript/long_form_methods.Rmd"
-          cp docs/reporting/workflow_09/manuscript/long_form_results.Rmd "$PUB/manuscript/long_form_results.Rmd"
-          cp docs/reporting/workflow_09/manuscript/references.bib "$PUB/manuscript/references.bib"
+          cp scripts/reporting/export_canonical_ris.R "$PUB/data/export_canonical_ris.R"
 
       - name: Validate Workflow 09 publication package
         shell: Rscript {0}
@@ -268,14 +266,30 @@ jobs:
           flow <- fromJSON("docs/reporting/workflow_09/flow_counts.json", simplifyVector = FALSE)
           stopifnot(as.integer(flow$counts$final_included) == 19117L)
 
+          stems <- c(
+            "flow_diagram","database_contribution","publication_year_species",
+            "publication_year_topics","country_choropleth","country_species",
+            "top_level_topics","production","environment","methods",
+            "industry_and_governance","product","people_and_society",
+            "inputs_and_resources","umbrella_review"
+          )
+          required_figures <- unlist(lapply(c("png","pdf"), function(ext) {
+            sprintf("docs/reporting/workflow_09/figures/figure_%02d_%s.%s", 1:15, stems, ext)
+          }), use.names = FALSE)
           required <- c(
-            sprintf("docs/reporting/workflow_09/figures/figure_%02d_%s.png",
-              1:15,
-              c("flow_diagram","database_contribution","publication_year_species",
-                "publication_year_topics","country_choropleth","country_species",
-                "top_level_topics","production","environment","methods",
-                "industry_and_governance","product","people_and_society",
-                "inputs_and_resources","umbrella_review")),
+            required_figures,
+            "docs/reporting/workflow_09/figure_code/canonical_figure_data.R",
+            "docs/reporting/workflow_09/figure_code/figure_01_flow_diagram.R",
+            "docs/reporting/workflow_09/figure_code/figure_02_database_contribution.R",
+            "docs/reporting/workflow_09/figure_code/figure_03_publication_year_species.R",
+            "docs/reporting/workflow_09/figure_code/figure_04_publication_year_topics.R",
+            "docs/reporting/workflow_09/figure_code/figure_05_country_choropleth.R",
+            "docs/reporting/workflow_09/figure_code/figure_06_country_species.R",
+            "docs/reporting/workflow_09/figure_code/figures_07_to_14_topic_hierarchy.R",
+            "docs/reporting/workflow_09/figure_code/figure_15_umbrella_review.R",
+            "docs/reporting/workflow_09/manuscript/long_form_methods.Rmd",
+            "docs/reporting/workflow_09/manuscript/long_form_results.Rmd",
+            "docs/reporting/workflow_09/manuscript/references.bib",
             "docs/reporting/workflow_09/manuscript/methods.md",
             "docs/reporting/workflow_09/manuscript/methods.html",
             "docs/reporting/workflow_09/manuscript/methods.docx",
