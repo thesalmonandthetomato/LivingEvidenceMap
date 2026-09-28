@@ -1,5 +1,5 @@
 name: Deploy GitHub Pages
-# deploy template refresh: fix radial reset and dynamic database KPI
+# deploy template refresh: atomic radial reset
 
 on:
   workflow_dispatch:
