@@ -66,13 +66,15 @@ for(i in seq_along(payload$records)){
 
   tokens <- strsplit(abstract," ",fixed=TRUE)[[1L]]
   token_counts[[i]] <- length(tokens)
-  # 0-based token positions, matching the OpenAlex-style representation.
-  for(pos0 in seq_along(tokens)-1L){
-    tok <- tokens[[pos0+1L]]
-    if(!nzchar(tok)) next
+  # Group positions by token within the record first. This preserves exact
+  # 0-based token positions but avoids repeatedly copying a posting list
+  # for every token occurrence.
+  pos_by_token <- split(as.integer(seq_along(tokens)-1L),tokens)
+  pos_by_token <- pos_by_token[nzchar(names(pos_by_token))]
+  key <- as.character(i-1L)
+  for(tok in names(pos_by_token)){
     by_record <- if(exists(tok,envir=postings,inherits=FALSE)) get(tok,envir=postings,inherits=FALSE) else list()
-    key <- as.character(i-1L)
-    by_record[[key]] <- c(by_record[[key]] %||% integer(),as.integer(pos0))
+    by_record[[key]] <- pos_by_token[[tok]]
     assign(tok,by_record,envir=postings)
   }
 }
@@ -99,13 +101,24 @@ writeLines(
   out_index_js,useBytes=TRUE
 )
 
-# Verify that no full abstract survived in the public trial dashboard payload.
-trial_js <- paste(readLines(out_data_js,warn=FALSE,encoding="UTF-8"),collapse="\n")
-for(i in seq_len(min(100L,nrow(csv)))){
-  a <- normalise_ws(csv$abstract[[i]])
-  if(nchar(a)>=120L && grepl(substr(a,1L,min(180L,nchar(a))),trial_js,fixed=TRUE)){
-    stopf("Full abstract text leaked into trial dashboard payload for record %s",csv$record_id[[i]])
+# Verify structurally that the public trial payload has no full abstract field
+# and that every snippet is exactly the permitted first <=30 words.
+for(i in seq_along(payload$records)){
+  r <- payload$records[[i]]
+  rid <- as.character(r$record_id %||% "")
+  j <- csv_i[[rid]]
+  source_abstract <- normalise_ws(csv$abstract[[j]])
+  expected_snippet <- snippet30(source_abstract)
+
+  if(!is.null(r$abstract)) stopf("Full abstract field survived in trial payload for record %s",rid)
+  if(is.null(r$abstract_snippet)) stopf("Abstract snippet missing from trial payload for record %s",rid)
+  if(!identical(as.character(r$abstract_snippet),expected_snippet)){
+    stopf("Abstract snippet mismatch for record %s",rid)
   }
+
+  snip_plain <- sub("…$","",as.character(r$abstract_snippet))
+  snip_tokens <- if(nzchar(snip_plain)) strsplit(snip_plain," ",fixed=TRUE)[[1L]] else character()
+  if(length(snip_tokens)>30L) stopf("Abstract snippet exceeds 30 words for record %s",rid)
 }
 
 manifest <- list(
