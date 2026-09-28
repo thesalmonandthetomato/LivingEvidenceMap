@@ -318,6 +318,10 @@ jobs:
             echo "No Workflow 09 publication changes to commit."
           else
             git commit -m "Publish Workflow 09 reporting package [skip ci]"
+            # Discard generated working files outside docs/reporting/workflow_09
+            # before rebasing the publication commit onto the live branch.
+            git reset --hard HEAD
+            git clean -fd
             git pull --rebase origin workflow01-final-architecture
             git push origin HEAD:workflow01-final-architecture
           fi
