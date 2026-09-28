@@ -556,7 +556,7 @@ function idsForTerm(term){
   });
   (D.records||[]).forEach(function(r){
     var titleTokens=String(r.title||'').split(/\s+/).map(normaliseToken).filter(Boolean);
-    if(titleTokens.some(function(t){return tokenMatchesPattern(t,term);})))ids.add(String(r.record_id));
+    if(titleTokens.some(function(t){return tokenMatchesPattern(t,term);}))ids.add(String(r.record_id));
   });
   return ids;
 }
