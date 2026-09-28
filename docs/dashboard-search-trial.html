@@ -41,7 +41,7 @@
 
 <section class="section"><h2>Evidence by species × topic</h2><p class="sub">Click a topic label to show the next level in that branch. Click a cell to jump to the database filtered only to that species and topic.</p><div class="controls"><label>Species <select id="heatSpecies"><option value="__all__">All species</option></select></label><button id="heatReset" type="button">Reset topic view</button><span id="heatContext" class="heat-context">Showing high-level topics</span><span style="display:none"><select id="heatTop"><option value="__all__">All topics</option></select><select id="heatLevel"><option value="1">1</option></select><select id="heatParent"><option value="__all__">All top-level topics</option></select><select id="heatLimit"><option selected>60</option></select><button id="heatBack" type="button"></button></span></div><div class="heat-scroll"><div id="heatmap"></div></div></section>
 <section class="section"><h2>Topic hierarchy</h2><p class="sub">Radial hierarchy of topics. High-level branches use the full dashboard palette from dark grey-teal through pale grey and peach to salmon pink. Hover for counts; click any segment to jump to the database filtered only at that hierarchy level.</p><div class="topic-radial-controls"><label>Species <select id="radialSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="radialCountry"><option value="__all__">All countries</option></select></label><button id="topicRadialReset" type="button">Reset filters</button></div><div id="topicRadial" class="topic-radial"></div></section>
-<section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div id="searchDownloadAccordion" class="search-accordion" aria-hidden="true"><div class="search-accordion-head"><div><h3>Search and download</h3><p class="sub">Search across titles and abstracts</p></div><button id="closeSearchDownload" class="search-accordion-close" type="button">Collapse</button></div><div class="search-row"><input id="searchTerms" type="search" placeholder='e.g. ((sea) AND (lice OR louse)) OR "salmon louse"'><button id="applySearchTerms" type="button">Search</button><button id="clearSearchTerms" type="button">Clear search</button></div><div id="searchIndexStatus" class="search-status">Abstract search index is loaded only when this panel is opened.</div><div class="search-note">Boolean syntax: AND, OR, NOT, parentheses and quoted phrases. Operators are case-insensitive; adjacent terms imply AND.</div><div class="search-actions"><button id="downloadFilteredRis" type="button" disabled>Download filtered results (.RIS)</button></div><div id="downloadProgress" class="download-progress" aria-live="polite"><div class="download-progress-track"><div id="downloadProgressBar" class="download-progress-bar"></div></div><div id="downloadProgressText" class="download-progress-text">Preparing RIS…</div></div><p class="search-note">The download button is enabled only when filters and/or search terms reduce the evidence base. The public dashboard contains only 30-word abstract snippets; full abstracts are reconstructed from the separately loaded inverted index for the downloaded subset.</p></div><div class="controls"><button id="openSearchDownload" class="search-download-btn" type="button">Search and download</button><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
+<section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div id="searchDownloadAccordion" class="search-accordion" aria-hidden="true"><div class="search-accordion-head"><div><h3>Search and download</h3><p class="sub">Search across titles and abstracts</p></div><button id="closeSearchDownload" class="search-accordion-close" type="button">Collapse</button></div><div class="search-row"><input id="searchTerms" type="search" placeholder='e.g. ((sea) AND (lic* OR l?use)) OR "salmon lic*"'><button id="applySearchTerms" type="button">Search</button><button id="clearSearchTerms" type="button">Clear search</button></div><div id="searchIndexStatus" class="search-status">Abstract search index is loaded only when this panel is opened.</div><div class="search-note">Boolean syntax: AND, OR, NOT, parentheses, quoted phrases, and wildcards (* = zero or more characters; ? = one character). Operators are case-insensitive; adjacent terms imply AND.</div><div class="search-actions"><button id="downloadFilteredRis" type="button" disabled>Download filtered results (.RIS)</button></div><div id="downloadProgress" class="download-progress" aria-live="polite"><div class="download-progress-track"><div id="downloadProgressBar" class="download-progress-bar"></div></div><div id="downloadProgressText" class="download-progress-text">Preparing RIS…</div></div><p class="search-note">The download button is enabled only when filters and/or search terms reduce the evidence base. The public dashboard contains only 30-word abstract snippets; full abstracts are reconstructed from the separately loaded inverted index for the downloaded subset.</p></div><div class="controls"><button id="openSearchDownload" class="search-download-btn" type="button">Search and download</button><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
 <footer class="repo-footer">The full evidence pipeline workflow is available on <a href="https://github.com/thesalmonandthetomato/LivingEvidenceMap" target="_blank" rel="noopener">GitHub</a>.</footer><div id="tip" class="tooltip"></div>
 <script src="./workflow10-search-trial-data.js"></script>
 <script>
@@ -525,22 +525,39 @@ function intersectSets(a,b){var out=new Set();a.forEach(function(x){if(b.has(x))
 function differenceSets(a,b){var out=new Set();a.forEach(function(x){if(!b.has(x))out.add(x);});return out;}
 function universeSet(){return new Set((D.records||[]).map(function(r){return String(r.record_id);}));}
 
+function wildcardRegex(pattern){
+  var escaped=String(pattern||'').replace(/[.+^\${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*').replace(/\?/g,'.');
+  return new RegExp('^'+escaped+'$','u');
+}
+function variantsForPattern(term){
+  var pattern=normaliseToken(term);
+  if(!/[?*]/.test(pattern))return normalisedTokenMap.get(pattern)||[];
+  var re=wildcardRegex(pattern),out=[];
+  normalisedTokenMap.forEach(function(tokens,norm){
+    if(re.test(norm))tokens.forEach(function(t){out.push(t);});
+  });
+  return out;
+}
+function tokenMatchesPattern(token,pattern){
+  token=normaliseToken(token);pattern=normaliseToken(pattern);
+  return /[?*]/.test(pattern)?wildcardRegex(pattern).test(token):token===pattern;
+}
 function idsForTerm(term){
   term=normaliseToken(term);
   var ids=new Set();
-  var variants=normalisedTokenMap.get(term)||[];
+  var variants=variantsForPattern(term);
   variants.forEach(function(tok){
     var byRecord=idx.postings[tok]||{};
     Object.keys(byRecord).forEach(function(i){ids.add(String(idx.record_ids[Number(i)]));});
   });
   (D.records||[]).forEach(function(r){
-    var titleTokens=String(r.title||'').split(/\s+/).map(normaliseToken);
-    if(titleTokens.includes(term))ids.add(String(r.record_id));
+    var titleTokens=String(r.title||'').split(/\s+/).map(normaliseToken).filter(Boolean);
+    if(titleTokens.some(function(t){return tokenMatchesPattern(t,term);})))ids.add(String(r.record_id));
   });
   return ids;
 }
 function abstractPositions(term){
-  var byId=new Map(),variants=normalisedTokenMap.get(normaliseToken(term))||[];
+  var byId=new Map(),variants=variantsForPattern(term);
   variants.forEach(function(tok){
     var byRecord=idx.postings[tok]||{};
     Object.keys(byRecord).forEach(function(ri){
@@ -569,11 +586,17 @@ function idsForPhrase(phrase){
     if(ok)out.add(rid);
   });
 
-  // Also support exact phrases in titles.
-  var needle=terms.join(' ');
+  // Also support phrases, including wildcard tokens, in titles.
   (D.records||[]).forEach(function(r){
-    var title=String(r.title||'').split(/\s+/).map(normaliseToken).filter(Boolean).join(' ');
-    if(title.includes(needle))out.add(String(r.record_id));
+    var titleTokens=String(r.title||'').split(/\s+/).map(normaliseToken).filter(Boolean);
+    if(titleTokens.length<terms.length)return;
+    for(var i=0;i<=titleTokens.length-terms.length;i++){
+      var ok=true;
+      for(var j=0;j<terms.length;j++){
+        if(!tokenMatchesPattern(titleTokens[i+j],terms[j])){ok=false;break;}
+      }
+      if(ok){out.add(String(r.record_id));break;}
+    }
   });
   return out;
 }
