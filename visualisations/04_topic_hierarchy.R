@@ -137,20 +137,15 @@ overview <- ggplot(top_species_counts, aes(x = species_records, y = level1, fill
   scale_fill_manual(values = species_fill_values, breaks = canonical_species, drop = FALSE) +
   scale_x_continuous(labels = comma, limits = c(0, 12000), expand = expansion(mult = c(0, 0))) +
   labs(
-    title = "LivingEvidenceMap: topic distribution",
-    subtitle = "Unique records assigned to each top-level topic; colour shows species composition",
     x = "Records / species-record observations",
     y = NULL,
-    fill = "Species",
-    caption = "Numbers at bar ends are unique records. Species segments follow the Figure 1/2 ordering and may sum above the unique-record total where a record has multiple species assignments."
+    fill = "Species"
   ) +
   theme_minimal(base_size = 11) +
   theme(
     panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
     axis.text.y = element_text(colour = palette[1], face = "bold"),
     axis.text.x = element_text(colour = palette[2]), axis.title.x = element_text(colour = palette[2]),
-    plot.title = element_text(face = "bold", size = 16, colour = palette[1]),
-    plot.subtitle = element_text(colour = palette[2]), plot.caption = element_text(colour = palette[2], hjust = 0),
     legend.title = element_text(face = "bold", colour = palette[1]),
     legend.text = element_text(colour = palette[1]),
     plot.background = element_rect(fill = "white", colour = NA), panel.background = element_rect(fill = "white", colour = NA),
@@ -213,7 +208,6 @@ make_hierarchy <- function(root, dat, file_stub) {
     scale_fill_manual(values = parent_cols, drop = FALSE, name = "Level 2") +
     scale_x_continuous(labels = comma, expand = expansion(mult = c(0, 0.10))) +
     labs(
-      title = root,
       x = "Included records",
       y = NULL
     ) +
@@ -223,7 +217,6 @@ make_hierarchy <- function(root, dat, file_stub) {
       axis.text.y = element_text(colour = palette[1], size = 7.2, lineheight = 0.95),
       axis.text.x = element_text(colour = palette[2], size = 8.5),
       axis.title.x = element_text(colour = "black", face = "bold", size = 9.5, margin = margin(t = 7)),
-      plot.title = element_text(face = "bold", size = 18, colour = palette[1], margin = margin(b = 8)),
       legend.position = "right",
       legend.title = element_text(face = "bold", colour = "black"),
       legend.text = element_text(colour = "black"),
