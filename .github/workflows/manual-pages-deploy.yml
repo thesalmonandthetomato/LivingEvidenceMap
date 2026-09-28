@@ -1,5 +1,5 @@
 name: Deploy GitHub Pages
-# deploy template refresh: atomic radial reset
+# deploy template refresh: redraw radial after reset
 
 on:
   workflow_dispatch:
