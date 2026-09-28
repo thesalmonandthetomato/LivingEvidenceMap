@@ -146,7 +146,7 @@ manifest <- list(
   bibliographic_deduplication_performed=FALSE,
   doi_matching_performed=FALSE,
   fuzzy_matching_performed=FALSE,
-  downstream_deduplication="Workflow 02"
+  downstream_deduplication="Workflow 01"
 )
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),
            file.path(output_dir,"reconciliation_manifest.json"))
