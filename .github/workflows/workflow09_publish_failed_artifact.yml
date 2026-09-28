@@ -1,0 +1,61 @@
+name: Workflow 09 - publish validated failed-run artifact
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/reporting/.run_workflow09_publish_artifact'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Download validated Workflow 09 package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf docs/reporting/workflow_09_from_artifact
+          mkdir -p docs/reporting/workflow_09_from_artifact
+          gh run download 36457265617 \
+            -n workflow09-publication-package-36457265617 \
+            -D docs/reporting/workflow_09_from_artifact
+          test -s docs/reporting/workflow_09_from_artifact/data/living_evidence_map_canonical_final.ris
+          test -s docs/reporting/workflow_09_from_artifact/manuscript/methods.docx
+          test -s docs/reporting/workflow_09_from_artifact/manuscript/results.docx
+          test -s docs/reporting/workflow_09_from_artifact/manuscript/methods.pdf
+          test -s docs/reporting/workflow_09_from_artifact/manuscript/results.pdf
+
+      - name: Publish package into Workflow 09 docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          rsync -a --delete \
+            --exclude workflow_09_from_artifact \
+            docs/reporting/workflow_09_from_artifact/ \
+            docs/reporting/workflow_09/
+          rm -rf docs/reporting/workflow_09_from_artifact
+
+      - name: Commit validated package
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/reporting/workflow_09
+          git commit -m "Publish validated Workflow 09 reporting package [skip ci]"
+          git reset --hard HEAD
+          git clean -fd
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
