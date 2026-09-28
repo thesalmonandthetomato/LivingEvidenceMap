@@ -121,6 +121,8 @@ receipt <- list(
   supersedes_doi=supersedes_doi,
   source_github_run_id=as.character(source_run_id),
   source_github_run_url=sprintf("https://github.com/%s/actions/runs/%s",repository,source_run_id),
+  publication_github_run_id=Sys.getenv("GITHUB_RUN_ID"),
+  publication_github_run_url=sprintf("https://github.com/%s/actions/runs/%s",repository,Sys.getenv("GITHUB_RUN_ID")),
   source_canonical_population=as.integer(m$source_canonical_population),
   canonical_records=as.integer(m$canonical_records),
   excluded_records=as.integer(m$excluded_records),
