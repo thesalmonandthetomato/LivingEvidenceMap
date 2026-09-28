@@ -33,6 +33,13 @@ if(!identical(pointer$state,"corrected_final_adjudicated_canonical") ||
    tolower(as.character(pointer$final_canonical_jsonl_sha256))!=expected_sha) stopf("Workflow 08 pointer validation failed")
 
 ontology <- read_csv(ontology_path,show_col_types=FALSE,progress=FALSE)
+ontology_problems <- problems(ontology)
+if(nrow(ontology_problems)){
+  print(ontology_problems,n=Inf)
+  stopf("Ontology CSV has %d parsing problem(s)",nrow(ontology_problems))
+} else {
+  cat("PASS: ontology CSV parsed without problems\n")
+}
 required_ontology <- c("path_id","level_1","level_2","level_3","hierarchy_path","definition")
 miss <- setdiff(required_ontology,names(ontology))
 if(length(miss)) stopf("Ontology missing columns: %s",paste(miss,collapse=", "))
@@ -46,7 +53,14 @@ if(file.exists(iso_map_path)){
 }
 country_name_by_iso3 <- list()
 if(file.exists(gazetteer_path)){
-  g<-suppressWarnings(read_csv(gazetteer_path,show_col_types=FALSE,progress=FALSE))
+  g<-read_csv(gazetteer_path,show_col_types=FALSE,progress=FALSE)
+  gazetteer_problems<-problems(g)
+  if(nrow(gazetteer_problems)){
+    print(gazetteer_problems,n=Inf)
+    stopf("Country gazetteer CSV has %d parsing problem(s)",nrow(gazetteer_problems))
+  } else {
+    cat("PASS: country gazetteer CSV parsed without problems\n")
+  }
   iso_col<-intersect(c("iso3","iso3c","alpha3","iso_a3"),names(g))
   name_col<-intersect(c("country_name","name","country","name_en"),names(g))
   if(length(iso_col)&&length(name_col)){
