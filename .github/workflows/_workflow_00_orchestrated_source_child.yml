@@ -263,7 +263,7 @@ jobs:
             documented_query="$SEARCH_QUERY ; modifiedTimeSpan=$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE"
           fi
           implementation_sha="$(git rev-parse HEAD)"
-          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_SEARCH_TERM" --artifact-name "workflow00-${SOURCE}-harvest-${PARENT_RUN_ID}" --orchestrator-sha "$implementation_sha" --source-handler-sha "$implementation_sha" --output-root outputs/updater/search_record
+          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_SEARCH_TERM" --artifact-name "workflow00-${SOURCE}-harvest-${PARENT_RUN_ID}" --orchestrator-sha "$implementation_sha" --source-handler-sha "$implementation_sha" --window-from "$FORTNIGHTLY_FROM_DATE" --window-to "$FORTNIGHTLY_TO_DATE" --output-root outputs/updater/search_record
 
       - name: Upload source harvest
         uses: actions/upload-artifact@v4
