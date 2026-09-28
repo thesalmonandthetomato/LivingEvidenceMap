@@ -20,7 +20,7 @@
 <section class="section"><h2>Topic-assignment frequency by species</h2><p class="sub">High-level topic assignments split by focal farmed species. Click a segment to jump to the database filtered only to that species and high-level topic.</p><div id="topicSpeciesChart" class="chart-host"></div><div id="topicSpeciesLegend" class="legend"></div></section>
 
 <section class="section"><h2>Evidence by species × topic</h2><p class="sub">Click a topic label to show the next level in that branch. Click a cell to jump to the database filtered only to that species and topic.</p><div class="controls"><label>Species <select id="heatSpecies"><option value="__all__">All species</option></select></label><button id="heatReset" type="button">Reset topic view</button><span id="heatContext" class="heat-context">Showing high-level topics</span><span style="display:none"><select id="heatTop"><option value="__all__">All topics</option></select><select id="heatLevel"><option value="1">1</option></select><select id="heatParent"><option value="__all__">All top-level topics</option></select><select id="heatLimit"><option selected>60</option></select><button id="heatBack" type="button"></button></span></div><div class="heat-scroll"><div id="heatmap"></div></div></section>
-<section class="section"><h2>Topic hierarchy</h2><p class="sub">Radial hierarchy of topics. High-level branches use the full dashboard palette from dark grey-teal through pale grey and peach to salmon pink. Hover for counts; click any segment to jump to the database filtered only at that hierarchy level.</p><div class="topic-radial-controls"><label>Species <select id="radialSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="radialCountry"><option value="__all__">All countries</option></select></label><button id="topicRadialReset" type="button">Reset highlight</button></div><div id="topicRadial" class="topic-radial"></div></section>
+<section class="section"><h2>Topic hierarchy</h2><p class="sub">Radial hierarchy of topics. High-level branches use the full dashboard palette from dark grey-teal through pale grey and peach to salmon pink. Hover for counts; click any segment to jump to the database filtered only at that hierarchy level.</p><div class="topic-radial-controls"><label>Species <select id="radialSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="radialCountry"><option value="__all__">All countries</option></select></label><button id="topicRadialReset" type="button">Reset filters</button></div><div id="topicRadial" class="topic-radial"></div></section>
 <section class="section" id="database"><h2>Database</h2><p class="sub">Filters selected above are applied here.</p><div class="controls"><input id="q" placeholder="Search title or abstract…"><label>Species <select id="tableSpecies"><option value="__all__">All species</option></select></label><label>Country <select id="tableCountry"><option value="__all__">All countries</option></select></label><label>Publication year <select id="tableYear"><option value="__all__">All years</option></select></label><label>Topic <select id="tableTopic"><option value="__all__">All topics</option></select></label><label>Records <select id="pageSize"><option>10</option><option>20</option><option selected>50</option></select></label><button id="clear">Clear filters</button></div><p class="sub">Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).</p><div id="dbCount" class="sub"></div><div class="table-wrap"><table class="table"><thead><tr><th data-sort="title">Title &amp; summary ↕</th><th data-sort="species">Species ↕</th><th data-sort="year">Year ↕</th><th data-sort="authors">Authors ↕</th><th data-sort="publication">Journal / volume / pages ↕</th><th data-sort="countries">Country ↕</th><th data-sort="topics">Topics ↕</th></tr></thead><tbody id="tbody"></tbody></table></div><div class="pager"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div></section></main>
 <footer class="repo-footer">The full evidence pipeline workflow is available on <a href="https://github.com/thesalmonandthetomato/LivingEvidenceMap" target="_blank" rel="noopener">GitHub</a>.</footer><div id="tip" class="tooltip"></div>
 <script src="./dashboard-data.js"></script>
@@ -308,7 +308,7 @@ function boot(){
  var radialSpecies=document.getElementById('radialSpecies'),radialCountry=document.getElementById('radialCountry');
  if(radialSpecies&&radialSpecies.options.length===1){speciesOrder().forEach(function(s){radialSpecies.add(new Option(s==='Unspecified species'?'Unspecified salmon':s,s));});}
  if(radialCountry&&radialCountry.options.length===1){Object.keys(D.country_iso3_counts||{}).sort(function(a,b){return countryLabel(a).localeCompare(countryLabel(b));}).forEach(function(iso){radialCountry.add(new Option(countryLabel(iso),iso));});}
- function updateRadialFilters(){var reset=document.getElementById('topicRadialReset');if(reset)reset.click();renderRadial();}
+ function updateRadialFilters(){window.dispatchEvent(new CustomEvent('radialfilterschanged'));renderRadial();}
  if(radialSpecies)radialSpecies.onchange=updateRadialFilters;
  if(radialCountry)radialCountry.onchange=updateRadialFilters;
  document.getElementById('yearGroup').onchange=renderYear;
@@ -382,9 +382,20 @@ function wire(){
       filterWithoutJump(d.data.key);
     });
   var reset=document.getElementById('topicRadialReset');
-  if(reset) reset.onclick=function(){lockedKey=null;sel.classed('dim',false).classed('focus',false).attr('opacity',1);placeholder();};
+  if(reset) reset.onclick=function(){
+    var rs=document.getElementById('radialSpecies'),rc=document.getElementById('radialCountry');
+    if(rs)rs.value='__all__';
+    if(rc)rc.value='__all__';
+    lockedKey=null;
+    placeholder();
+    if(typeof renderRadial==='function')renderRadial();
+  };
   if(lockedKey===null && !info.textContent.trim()) placeholder();
 }
+window.addEventListener('radialfilterschanged',function(){
+  lockedKey=null;
+  placeholder();
+});
 function scheduleWire(){if(scheduled)return;scheduled=true;setTimeout(wire,0);}
 function start(){
   var radial=document.getElementById('topicRadial');
