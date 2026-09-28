@@ -1,3 +1,4 @@
 2026-09-27 final Workflow 08 assembly and Zenodo publication
 retry after finaliser syntax correction
 retry after manifest-expression parse correction
+2026-09-28 rerun after lossless annotation preservation fix
