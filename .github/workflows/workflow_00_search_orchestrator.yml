@@ -1,0 +1,682 @@
+name: Workflow 00 - Search orchestrator
+
+on:
+  workflow_call:
+    inputs:
+      run_type:
+        required: true
+        type: string
+      lens:
+        required: false
+        default: false
+        type: boolean
+      scopus:
+        required: false
+        default: false
+        type: boolean
+      openalex:
+        required: false
+        default: false
+        type: boolean
+      agricola:
+        required: false
+        default: false
+        type: boolean
+      wos:
+        required: false
+        default: false
+        type: boolean
+      additional_farm_term:
+        required: false
+        default: ''
+        type: string
+      resume_run_id:
+        required: false
+        default: ''
+        type: string
+
+  workflow_dispatch:
+    inputs:
+      run_type:
+        description: 'Run mode'
+        required: true
+        type: choice
+        options:
+          - full
+          - fortnightly
+          - expansion
+      lens:
+        description: 'Run Lens'
+        required: true
+        default: true
+        type: boolean
+      scopus:
+        description: 'Run Scopus'
+        required: true
+        default: true
+        type: boolean
+      openalex:
+        description: 'Run OpenAlex'
+        required: true
+        default: true
+        type: boolean
+      agricola:
+        description: 'Run AGRICOLA'
+        required: true
+        default: true
+        type: boolean
+      wos:
+        description: 'Run Web of Science'
+        required: true
+        default: true
+        type: boolean
+      additional_farm_term:
+        description: 'Expansion only: add one farm/aquaculture synonym; species terms are immutable'
+        required: false
+        default: ''
+        type: string
+      resume_run_id:
+        description: 'Reserved for child artefact reuse'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow00-zenodo-search-archive
+
+jobs:
+  validate-and-plan:
+    runs-on: ubuntu-latest
+    outputs:
+      search_version: ${{ steps.out.outputs.search_version }}
+      fortnightly_from_date: ${{ steps.out.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ steps.out.outputs.fortnightly_to_date }}
+      lens_query: ${{ steps.out.outputs.lens_query }}
+      scopus_query: ${{ steps.out.outputs.scopus_query }}
+      openalex_query: ${{ steps.out.outputs.openalex_query }}
+      agricola_query: ${{ steps.out.outputs.agricola_query }}
+      wos_query: ${{ steps.out.outputs.wos_query }}
+    steps:
+      - name: Validate selected source support
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ inputs.lens }}' != 'true' ] && [ '${{ inputs.scopus }}' != 'true' ] && [ '${{ inputs.openalex }}' != 'true' ] && [ '${{ inputs.agricola }}' != 'true' ] && [ '${{ inputs.wos }}' != 'true' ]; then
+            echo 'Select at least one implemented source.' >&2
+            exit 2
+          fi
+
+      - name: Checkout Workflow 00 orchestration branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW00_ORCHESTRATOR_BRANCH }}
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Validate search controls and write source queries
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type '${{ inputs.run_type }}' \
+            --additional-farm-term '${{ inputs.additional_farm_term }}' \
+            --config config/workflow00_search_strategy.json \
+            --output-dir outputs/updater/workflow00_plan
+
+      - name: Record selected databases
+        shell: Rscript {0}
+        env:
+          LENS: ${{ inputs.lens }}
+          SCOPUS: ${{ inputs.scopus }}
+          OPENALEX: ${{ inputs.openalex }}
+          AGRICOLA: ${{ inputs.agricola }}
+          WOS: ${{ inputs.wos }}
+        run: |
+          library(jsonlite)
+          p <- 'outputs/updater/workflow00_plan/search_plan.json'
+          x <- fromJSON(p, simplifyVector=FALSE)
+          x$selected_databases <- list(
+            lens=identical(Sys.getenv('LENS'),'true'),
+            scopus=identical(Sys.getenv('SCOPUS'),'true'),
+            openalex=identical(Sys.getenv('OPENALEX'),'true'),
+            agricola=identical(Sys.getenv('AGRICOLA'),'true'),
+            wos=identical(Sys.getenv('WOS'),'true')
+          )
+          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),p)
+
+      - name: Export source queries
+        id: out
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- fromJSON('outputs/updater/workflow00_plan/search_plan.json')
+          q <- p$source_queries
+          emit <- function(name,value) {
+            cat(sprintf('%s<<EOF\n%s\nEOF\n',name,value),file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
+          }
+          emit('search_version',p$search_version)
+          emit('fortnightly_from_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$from)
+          emit('fortnightly_to_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$to)
+          emit('lens_query',q$lens)
+          emit('scopus_query',q$scopus)
+          emit('openalex_query',q$openalex)
+          emit('agricola_query',q$agricola)
+          emit('wos_query',q$wos)
+
+      - name: Upload Workflow 00 plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-search-plan-${{ github.run_id }}
+          path: outputs/updater/workflow00_plan/
+          retention-days: 7
+          if-no-files-found: error
+
+  lens:
+    needs: validate-and-plan
+    if: ${{ inputs.lens }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: lens
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.lens_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  scopus:
+    needs: validate-and-plan
+    if: ${{ inputs.scopus }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: scopus
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.scopus_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  openalex:
+    needs: validate-and-plan
+    if: ${{ inputs.openalex }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: openalex
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.openalex_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  agricola:
+    needs: validate-and-plan
+    if: ${{ inputs.agricola }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: agricola
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.agricola_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  wos:
+    needs: validate-and-plan
+    if: ${{ inputs.wos }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: wos
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.wos_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_farm_term: ${{ inputs.additional_farm_term }}
+    secrets: inherit
+
+  reconcile-expansion:
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, wos]
+    if: ${{ always() && inputs.run_type == 'expansion' && needs.validate-and-plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure selected expansion searches succeeded
+        env:
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          WOS_SELECTED: ${{ inputs.wos }}
+          LENS_RESULT: ${{ needs.lens.result }}
+          SCOPUS_RESULT: ${{ needs.scopus.result }}
+          OPENALEX_RESULT: ${{ needs.openalex.result }}
+          AGRICOLA_RESULT: ${{ needs.agricola.result }}
+          WOS_RESULT: ${{ needs.wos.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          check() {
+            local selected="$1" result="$2" source="$3"
+            if [ "$selected" = "true" ] && [ "$result" != "success" ]; then
+              echo "$source expansion child did not succeed: $result" >&2
+              exit 1
+            fi
+          }
+          check "$LENS_SELECTED" "$LENS_RESULT" lens
+          check "$SCOPUS_SELECTED" "$SCOPUS_RESULT" scopus
+          check "$OPENALEX_SELECTED" "$OPENALEX_RESULT" openalex
+          check "$AGRICOLA_SELECTED" "$AGRICOLA_RESULT" agricola
+          check "$WOS_SELECTED" "$WOS_RESULT" wos
+
+      - name: Checkout Workflow 00 orchestration branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW00_ORCHESTRATOR_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download current expansion harvests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          WOS_SELECTED: ${{ inputs.wos }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p expansion_current
+          for source in lens scopus openalex agricola wos; do
+            upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
+            selected="${!upper}"
+            [ "$selected" = "true" ] || continue
+            mkdir -p "expansion_current/$source"
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-${source}-harvest-${GITHUB_RUN_ID}" \
+              --dir "expansion_current/$source"
+          done
+
+      - name: Build historical native-ID inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          WOS_SELECTED: ${{ inputs.wos }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p expansion_history
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.id,.name,.workflow_run.id] | @tsv' > /tmp/all_artifacts.tsv
+
+          matches_source() {
+            local source="$1" name="$2"
+            case "$source" in
+              lens) [[ "$name" == workflow00-lens-harvest-* ]] ;;
+              scopus) [[ "$name" == workflow00-scopus-harvest-* || "$name" == scopus-full-search-* ]] ;;
+              openalex) [[ "$name" == workflow00-openalex-harvest-* || "$name" == openalex-full-search-* ]] ;;
+              agricola) [[ "$name" == workflow00-agricola-harvest-* || "$name" == agricola-full-search-* ]] ;;
+              wos) [[ "$name" == workflow00-wos-harvest-* || "$name" == wos-starter-full-search-* ]] ;;
+              *) return 1 ;;
+            esac
+          }
+
+          for source in lens scopus openalex agricola wos; do
+            upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
+            selected="${!upper}"
+            [ "$selected" = "true" ] || continue
+            mkdir -p "expansion_history/$source"
+
+            registry="data/workflow00/source_id_registry/${source}_native_ids.txt"
+            if [ -s "$registry" ]; then
+              cp "$registry" "expansion_history/$source/known_native_ids.txt"
+              echo "Using persistent registry for $source"
+              continue
+            fi
+
+            echo "Seeding first $source registry from preserved harvest artefacts"
+            while IFS="$(printf '\t')" read -r id name run_id; do
+              [ -n "$id" ] || continue
+              [ "$name" != "workflow00-${source}-harvest-${GITHUB_RUN_ID}" ] || continue
+              if matches_source "$source" "$name"; then
+                dest="expansion_history/$source/artifact-$id"
+                mkdir -p "$dest"
+                echo "Downloading historical $source artefact: $name"
+                gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$name" --dir "$dest"
+              fi
+            done < /tmp/all_artifacts.tsv
+
+            if [ "$source" = "lens" ] && ! find "expansion_history/lens" -type f -name 'records.jsonl' -print -quit | grep -q .; then
+              git fetch origin canonical-fresh-2026-09-08-v1
+              git show origin/canonical-fresh-2026-09-08-v1:data/canonical/current/repair/records.jsonl > expansion_history/lens/records.jsonl
+              echo "Seeded Lens IDs from canonical fresh full harvest"
+            fi
+          done
+
+      - name: Reconcile expansion by native source ID
+        env:
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          WOS_SELECTED: ${{ inputs.wos }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/updater/expansion_reconciliation
+          for source in lens scopus openalex agricola wos; do
+            upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
+            selected="${!upper}"
+            [ "$selected" = "true" ] || continue
+            out="outputs/updater/expansion_reconciliation/$source"
+            Rscript scripts/updater/workflow_00_expansion_native_id_reconcile.R \
+              --source "$source" \
+              --current-root "expansion_current/$source" \
+              --history-root "expansion_history/$source" \
+              --output-dir "$out"
+
+            mkdir -p outputs/updater/expansion_archive/data/workflow00/source_id_registry
+            cp "$out/updated_native_ids.txt" \
+              "outputs/updater/expansion_archive/data/workflow00/source_id_registry/${source}_native_ids.txt"
+
+            mkdir -p "outputs/updater/expansion_archive/docs/search_record/ad_hoc/reconciliation/${GITHUB_RUN_ID}"
+            cp "$out/reconciliation_manifest.json" \
+              "outputs/updater/expansion_archive/docs/search_record/ad_hoc/reconciliation/${GITHUB_RUN_ID}/${source}_reconciliation.json"
+          done
+
+      - name: Write consolidated expansion reconciliation summary
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          files <- list.files(
+            'outputs/updater/expansion_reconciliation',
+            pattern='reconciliation_manifest\\.json$',
+            recursive=TRUE,
+            full.names=TRUE
+          )
+          stopifnot(length(files) >= 1L)
+          x <- lapply(files,fromJSON,simplifyVector=FALSE)
+          summary <- list(
+            workflow='00_expansion_reconciliation',
+            status='success',
+            parent_run_id=Sys.getenv('GITHUB_RUN_ID'),
+            additional_farm_term='${{ inputs.additional_farm_term }}',
+            sources=x,
+            matching_policy='exact native source identifier only',
+            downstream_bibliographic_deduplication='Workflow 02'
+          )
+          dir.create(
+            'outputs/updater/expansion_archive/docs/search_record/ad_hoc/reconciliation',
+            recursive=TRUE,
+            showWarnings=FALSE
+          )
+          writeLines(
+            toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),
+            sprintf(
+              'outputs/updater/expansion_archive/docs/search_record/ad_hoc/reconciliation/%s_summary.json',
+              Sys.getenv('GITHUB_RUN_ID')
+            )
+          )
+
+      - name: Upload expansion reconciliation artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-expansion-reconciliation-${{ github.run_id }}
+          path: |
+            outputs/updater/expansion_reconciliation/
+            outputs/updater/expansion_archive/
+          retention-days: 7
+          if-no-files-found: error
+
+  archive-search-records:
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, wos, reconcile-expansion]
+    if: ${{ always() && needs.validate-and-plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure selected child searches and reconciliation succeeded
+        env:
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          WOS_SELECTED: ${{ inputs.wos }}
+          LENS_RESULT: ${{ needs.lens.result }}
+          SCOPUS_RESULT: ${{ needs.scopus.result }}
+          OPENALEX_RESULT: ${{ needs.openalex.result }}
+          AGRICOLA_RESULT: ${{ needs.agricola.result }}
+          WOS_RESULT: ${{ needs.wos.result }}
+          RECONCILE_RESULT: ${{ needs.reconcile-expansion.result }}
+          RUN_TYPE: ${{ inputs.run_type }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          check() {
+            local selected="$1" result="$2" source="$3"
+            if [ "$selected" = "true" ] && [ "$result" != "success" ]; then
+              echo "$source child search did not succeed: $result" >&2
+              exit 1
+            fi
+          }
+          check "$LENS_SELECTED" "$LENS_RESULT" lens
+          check "$SCOPUS_SELECTED" "$SCOPUS_RESULT" scopus
+          check "$OPENALEX_SELECTED" "$OPENALEX_RESULT" openalex
+          check "$AGRICOLA_SELECTED" "$AGRICOLA_RESULT" agricola
+          check "$WOS_SELECTED" "$WOS_RESULT" wos
+          if [ "$RUN_TYPE" = "expansion" ] && [ "$RECONCILE_RESULT" != "success" ]; then
+            echo "Expansion reconciliation did not succeed: $RECONCILE_RESULT" >&2
+            exit 1
+          fi
+
+      - name: Checkout documentation branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW00_ORCHESTRATOR_BRANCH }}
+          fetch-depth: 0
+
+      - name: Download child search records
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloaded_search_records
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --pattern "workflow00-search-record-*-${GITHUB_RUN_ID}" \
+            --dir downloaded_search_records
+          if ! find downloaded_search_records -type f -print -quit | grep -q .; then
+            echo "No child search-record files were downloaded." >&2
+            exit 1
+          fi
+
+      - name: Download expansion reconciliation archive
+        if: ${{ inputs.run_type == 'expansion' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow00-expansion-reconciliation-${{ github.run_id }}
+          path: downloaded_expansion_reconciliation
+
+      - name: Archive search records and source-ID registries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/search_record
+          cp -R downloaded_search_records/* docs/search_record/
+
+          if [ '${{ inputs.run_type }}' = 'expansion' ]; then
+            cp -R downloaded_expansion_reconciliation/expansion_archive/docs/* docs/
+            mkdir -p data/workflow00/source_id_registry
+            cp -R downloaded_expansion_reconciliation/expansion_archive/data/workflow00/source_id_registry/* \
+              data/workflow00/source_id_registry/
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/search_record
+          if [ '${{ inputs.run_type }}' = 'expansion' ]; then
+            git add data/workflow00/source_id_registry
+          fi
+
+          if git diff --cached --quiet; then
+            echo 'No new search records or source-ID registry changes to commit.'
+            exit 0
+          fi
+
+          git commit -m "Archive Workflow 00 search records for run ${GITHUB_RUN_ID}"
+          git push origin "HEAD:$WORKFLOW00_ORCHESTRATOR_BRANCH"
+
+      - name: Upload consolidated search archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-search-record-archive-${{ github.run_id }}
+          path: docs/search_record/
+          retention-days: 7
+          if-no-files-found: error
+
+  archive-search-to-zenodo:
+    needs: [validate-and-plan, archive-search-records]
+    if: ${{ always() && needs.validate-and-plan.result == 'success' && needs.archive-search-records.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout Workflow 00 archive branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW00_ORCHESTRATOR_BRANCH }}
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install Zenodo archive dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Stage complete Workflow 00 search
+        id: stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          WOS_SELECTED: ${{ inputs.wos }}
+          RUN_TYPE: ${{ inputs.run_type }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p zenodo_staging/plan zenodo_staging/harvests zenodo_staging/search_records
+
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "workflow00-search-plan-$GITHUB_RUN_ID" \
+            --dir zenodo_staging/plan
+
+          sources=()
+          for source in lens scopus openalex agricola wos; do
+            upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
+            selected="${!upper}"
+            [ "$selected" = "true" ] || continue
+            sources+=("$source")
+            mkdir -p "zenodo_staging/harvests/$source" "zenodo_staging/search_records/$source"
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-${source}-harvest-$GITHUB_RUN_ID" \
+              --dir "zenodo_staging/harvests/$source"
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-search-record-${source}-$GITHUB_RUN_ID" \
+              --dir "zenodo_staging/search_records/$source"
+          done
+
+          if [ "$RUN_TYPE" = "expansion" ]; then
+            mkdir -p zenodo_staging/expansion_reconciliation
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-expansion-reconciliation-$GITHUB_RUN_ID" \
+              --dir zenodo_staging/expansion_reconciliation
+          fi
+
+          joined="$(IFS=,; echo "${sources[*]}")"
+          [ -n "$joined" ] || { echo "No selected sources staged" >&2; exit 2; }
+          echo "sources=$joined" >> "$GITHUB_OUTPUT"
+          echo "PASS: staged Workflow 00 run $GITHUB_RUN_ID for sources $joined"
+
+      - name: Publish restricted Zenodo search archive
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_archive_to_zenodo.R \
+            --staging-root zenodo_staging \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-type '${{ inputs.run_type }}' \
+            --search-version '${{ needs.validate-and-plan.outputs.search_version }}' \
+            --sources '${{ steps.stage.outputs.sources }}' \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/updater/workflow00_zenodo
+
+      - name: Update repository Zenodo search registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_update_zenodo_registry.R \
+            --receipt outputs/updater/workflow00_zenodo/zenodo_receipt.json \
+            --registry docs/search_record/zenodo_registry.csv \
+            --pointer-dir docs/search_record/zenodo
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/search_record/zenodo_registry.csv docs/search_record/zenodo/
+          if git diff --cached --quiet; then
+            echo 'Zenodo registry already contains this Workflow 00 run.'
+          else
+            git commit -m "Register Zenodo archive for Workflow 00 run $GITHUB_RUN_ID"
+            git push origin "HEAD:$WORKFLOW00_ORCHESTRATOR_BRANCH"
+          fi
+
+      - name: Upload Zenodo receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-zenodo-receipt-${{ github.run_id }}
+          path: outputs/updater/workflow00_zenodo/
+          retention-days: 7
+          if-no-files-found: warn
+
