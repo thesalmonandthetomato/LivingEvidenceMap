@@ -116,8 +116,8 @@ jobs:
 
       - name: Render Results manuscript from current Workflow 09 state
         env:
-          CANONICAL_JSONL: workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
-          FLOW_COUNTS_JSON: visualisations/figure_07_flow_diagram_counts.json
+          CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
+          FLOW_COUNTS_JSON: ${{ github.workspace }}/visualisations/figure_07_flow_diagram_counts.json
         shell: Rscript {0}
         run: |
           dir.create("outputs/workflow09_manuscript", recursive = TRUE, showWarnings = FALSE)
@@ -197,7 +197,9 @@ jobs:
           cp visualisations/topic_hierarchy/*.png outputs/workflow09_figure_review/topic_hierarchy/
           cp visualisations/topic_hierarchy/*.pdf outputs/workflow09_figure_review/topic_hierarchy/
           cp outputs/citesource_contribution/database_contribution_upset.{png,pdf} outputs/workflow09_figure_review/
-          cp outputs/workflow09_manuscript/long_form_results.docx outputs/workflow09_figure_review/
+          if [ -f outputs/workflow09_manuscript/long_form_results.docx ]; then
+            cp outputs/workflow09_manuscript/long_form_results.docx outputs/workflow09_figure_review/
+          fi
 
       - name: Upload Workflow 09 figure review bundle
         if: always()
