@@ -2,6 +2,12 @@ name: Manually deploy GitHub Pages
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/workflow10-preview.html'
+      - 'docs/workflow10-preview-data.js'
+      - '.github/workflows/manual-pages-deploy.yml'
 
 permissions:
   contents: read
