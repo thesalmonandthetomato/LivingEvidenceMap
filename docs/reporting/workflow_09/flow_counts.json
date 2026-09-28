@@ -1,30 +1,30 @@
 {
-  "schema": "living-evidence-map-workflow09-flow-counts-v1",
-  "status": "final",
-  "source_provenance": {
-    "workflow00_01_manifest": {
-      "github_run_id": "36128255337",
-      "path": "canonical/canonical_manifest.json",
-      "canonical_sha256": "f0772fb92cca9fcc676a0f77bf8b2eae0becebf60b07cb23db989d22b7cabe80"
+  "schema": "living-evidence-map-workflow09-flow-counts-v2",
+  "generated_at_utc": "2026-09-28T17:35:51Z",
+  "inputs": {
+    "workflow01_canonical_jsonl": {
+      "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow01_state/canonical/records.jsonl",
+      "sha256": "f0772fb92cca9fcc676a0f77bf8b2eae0becebf60b07cb23db989d22b7cabe80"
     },
-    "workflow02_enrichment": {
-      "github_run_id": "36137804187",
-      "path": "workflow02_state/enrichment_report.json",
-      "output_sha256": "c88d36631512b5b30853fb3ae271db2e456b2a8b5b94925ccf0840e8f8d9156b"
+    "workflow02_cumulative_patch_jsonl": {
+      "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow02_cumulative_patch.jsonl",
+      "sha256": "206a35e63e1a08e5812a2043f07329a1a499c6737003e8fe352bb0ef151903fb"
     },
-    "workflow08_final": {
-      "github_run_id": "36329841121",
-      "zenodo_record_id": "22998934",
-      "doi": "10.5281/zenodo.22998934",
-      "final_canonical_sha256": "ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67"
+    "workflow08_final_canonical_jsonl": {
+      "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl",
+      "sha256": "8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c"
+    },
+    "workflow08_exclusions_csv": {
+      "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow08_reporting_state/workflow08_excluded_records.csv",
+      "sha256": "d1733b27212d02d1d6d43011fa3fb38cd99ef779882c9ad94b7a7d2860d7c244"
     }
   },
   "counts": {
     "sources": {
-      "AGRICOLA": 2744,
       "The Lens": 24135,
-      "OpenAlex": 28134,
       "Scopus": 19948,
+      "OpenAlex": 28134,
+      "AGRICOLA": 2744,
       "WoSCC": 15176
     },
     "combined_search_results": 90137,
@@ -34,22 +34,14 @@
     "retractions_excluded": 9,
     "title_abstract_screened": 32283,
     "title_abstract_excluded_total": 13166,
-    "title_abstract_retained_final": 19117,
     "workflow04_exclusions": 12876,
     "workflow07_late_exclusions": 122,
     "workflow08_exclusions": 168,
-    "final_included": 19117,
+    "title_abstract_retained_final": 19117,
+    "final_geography_coded": 7618,
+    "final_geography_uncoded": 11499,
     "final_topic_coded": 18886,
     "final_topic_uncoded": 231,
-    "final_geography_coded": 7618,
-    "final_geography_uncoded": 11499
-  },
-  "notes": [
-    "Source counts are source manifestations in the authoritative Workflow 01 manifest after Workflow 00 retrieval and reconciliation; they sum to 90,137.",
-    "Duplicates removed is combined source manifestations minus 32,292 deduplicated canonical works.",
-    "Workflow 02 enriched 2,190 distinct records; the audit contains 2,190 applied field updates, one per enriched record.",
-    "For the manuscript flow, Workflow 04, Workflow 07 late, and Workflow 08 exclusions are combined into the title/abstract exclusion total of 13,166, leaving 19,117 final retained records.",
-    "Geography coding status in the final Workflow 08 canonical: 7,618 RESOLVED and 11,499 NONE; NONE records are included but have no geography assigned."
-  ],
-  "search_update_date": "2026-09-22"
+    "final_included": 19117
+  }
 }
