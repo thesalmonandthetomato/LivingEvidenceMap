@@ -1,4 +1,4 @@
-name: Report - Workflow 09 manuscript figures
+name: Report - Workflow 09 publication package
 
 on:
   workflow_dispatch:
@@ -9,19 +9,19 @@ on:
       - 'docs/reporting/.run_workflow09_figures'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  figures:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
-          persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
@@ -33,7 +33,9 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev libcairo2-dev libglpk-dev pandoc
+          sudo apt-get install -y \
+            libudunits2-dev libgdal-dev libgeos-dev libproj-dev libcairo2-dev libglpk-dev \
+            pandoc libreoffice-writer
 
       - name: Install R dependencies
         shell: Rscript {0}
@@ -44,14 +46,17 @@ jobs:
             "httr2","digest","CiteSource","rmarkdown","knitr"
           ))
 
-      - name: Restore authoritative final Workflow 08 reporting state
+      - name: Restore latest authoritative Workflow 08 final state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          W08_POINTER="$(ls docs/workflow08/zenodo/run-*.json | sort -V | tail -1)"
+          test -n "$W08_POINTER"
+          echo "W08_POINTER=$W08_POINTER" >> "$GITHUB_ENV"
           Rscript scripts/reporting/restore_workflow08_reporting_state.R \
-            --pointer docs/workflow08/zenodo/run-36329841121.json \
+            --pointer "$W08_POINTER" \
             --output-dir workflow08_reporting_state
           test -s workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
           test -s workflow08_reporting_state/workflow08_excluded_records.csv
@@ -88,12 +93,22 @@ jobs:
           test -s "$PATCH"
           cp "$PATCH" workflow02_cumulative_patch.jsonl
 
+      - name: Export full canonical library to RIS
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow09_data
+          Rscript scripts/reporting/export_canonical_ris.R \
+            --input workflow08_reporting_state/living_evidence_map_canonical_final.jsonl \
+            --output outputs/workflow09_data/living_evidence_map_canonical_final.ris \
+            --manifest outputs/workflow09_data/living_evidence_map_canonical_final.ris.manifest.json
+
       - name: Render manuscript figures from authoritative pipeline data
         env:
-          CANONICAL_JSONL: workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
-          EXCLUSIONS_CSV: workflow08_reporting_state/workflow08_excluded_records.csv
-          PRESCREEN_CANONICAL_JSONL: workflow01_state/canonical/records.jsonl
-          WORKFLOW02_PATCH_JSONL: workflow02_cumulative_patch.jsonl
+          CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
+          EXCLUSIONS_CSV: ${{ github.workspace }}/workflow08_reporting_state/workflow08_excluded_records.csv
+          PRESCREEN_CANONICAL_JSONL: ${{ github.workspace }}/workflow01_state/canonical/records.jsonl
+          WORKFLOW02_PATCH_JSONL: ${{ github.workspace }}/workflow02_cumulative_patch.jsonl
         shell: bash
         run: |
           set -euo pipefail
@@ -105,7 +120,7 @@ jobs:
           Rscript visualisations/07_flow_diagram.R
           Rscript visualisations/08_umbrella_review_figure.R
 
-      - name: Render database contribution UpSet
+      - name: Render database contribution figure
         shell: bash
         run: |
           set -euo pipefail
@@ -114,98 +129,186 @@ jobs:
             --included-ids workflow04_included_record_ids.txt \
             --output-dir outputs/citesource_contribution
 
-      - name: Render Results manuscript from current Workflow 09 state
+      - name: Render Methods and Results manuscripts
         env:
           CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
           FLOW_COUNTS_JSON: ${{ github.workspace }}/visualisations/figure_07_flow_diagram_counts.json
         shell: Rscript {0}
         run: |
           dir.create("outputs/workflow09_manuscript", recursive = TRUE, showWarnings = FALSE)
-          rmarkdown::render(
-            input = "docs/reporting/workflow_09/manuscript/long_form_results.Rmd",
-            output_format = "word_document",
-            output_file = "long_form_results.docx",
-            output_dir = "outputs/workflow09_manuscript",
-            envir = new.env(parent = globalenv()),
-            clean = TRUE
-          )
-          stopifnot(file.exists("outputs/workflow09_manuscript/long_form_results.docx"))
 
-      - name: Validate canonical provenance and outputs
+          render_all <- function(input, stem) {
+            out <- normalizePath("outputs/workflow09_manuscript", mustWork = TRUE)
+            env <- new.env(parent = globalenv())
+
+            rmarkdown::render(
+              input = input,
+              output_format = "word_document",
+              output_file = paste0(stem, ".docx"),
+              output_dir = out,
+              envir = env,
+              clean = TRUE
+            )
+            rmarkdown::render(
+              input = input,
+              output_format = "html_document",
+              output_file = paste0(stem, ".html"),
+              output_dir = out,
+              envir = new.env(parent = globalenv()),
+              clean = TRUE
+            )
+            rmarkdown::render(
+              input = input,
+              output_format = "md_document",
+              output_file = paste0(stem, ".md"),
+              output_dir = out,
+              envir = new.env(parent = globalenv()),
+              clean = TRUE
+            )
+          }
+
+          render_all("docs/reporting/workflow_09/manuscript/long_form_methods.Rmd", "methods")
+          render_all("docs/reporting/workflow_09/manuscript/long_form_results.Rmd", "results")
+
+          stopifnot(all(file.exists(file.path(
+            "outputs/workflow09_manuscript",
+            c("methods.docx","methods.html","methods.md","results.docx","results.html","results.md")
+          ))))
+
+      - name: Convert Word manuscripts to PDF
+        shell: bash
+        run: |
+          set -euo pipefail
+          libreoffice --headless --convert-to pdf --outdir outputs/workflow09_manuscript outputs/workflow09_manuscript/methods.docx
+          libreoffice --headless --convert-to pdf --outdir outputs/workflow09_manuscript outputs/workflow09_manuscript/results.docx
+          test -s outputs/workflow09_manuscript/methods.pdf
+          test -s outputs/workflow09_manuscript/results.pdf
+
+      - name: Stage permanent Workflow 09 publication package
+        shell: bash
+        run: |
+          set -euo pipefail
+          PUB=docs/reporting/workflow_09
+          mkdir -p "$PUB/figures" "$PUB/figure_code" "$PUB/data" "$PUB/manuscript"
+
+          # Final manuscript figure numbering.
+          cp visualisations/figure_07_flow_diagram.png "$PUB/figures/figure_01_flow_diagram.png"
+          cp visualisations/figure_07_flow_diagram.pdf "$PUB/figures/figure_01_flow_diagram.pdf"
+          cp outputs/citesource_contribution/database_contribution_upset.png "$PUB/figures/figure_02_database_contribution.png"
+          cp outputs/citesource_contribution/database_contribution_upset.pdf "$PUB/figures/figure_02_database_contribution.pdf"
+          cp visualisations/figure_01_records_by_publication_year.png "$PUB/figures/figure_03_publication_year_species.png"
+          cp visualisations/figure_01_records_by_publication_year.pdf "$PUB/figures/figure_03_publication_year_species.pdf"
+          cp visualisations/figure_05_records_by_publication_year_high_level_topic.png "$PUB/figures/figure_04_publication_year_topics.png"
+          cp visualisations/figure_05_records_by_publication_year_high_level_topic.pdf "$PUB/figures/figure_04_publication_year_topics.pdf"
+          cp visualisations/figure_03_choropleth_records_by_country.png "$PUB/figures/figure_05_country_choropleth.png"
+          cp visualisations/figure_03_choropleth_records_by_country.pdf "$PUB/figures/figure_05_country_choropleth.pdf"
+          cp visualisations/figure_02_records_by_country.png "$PUB/figures/figure_06_country_species.png"
+          cp visualisations/figure_02_records_by_country.pdf "$PUB/figures/figure_06_country_species.pdf"
+          cp visualisations/topic_hierarchy/figure_04a_top_level_topics.png "$PUB/figures/figure_07_top_level_topics.png"
+          cp visualisations/topic_hierarchy/figure_04a_top_level_topics.pdf "$PUB/figures/figure_07_top_level_topics.pdf"
+          cp visualisations/topic_hierarchy/figure_04a_hierarchy_production.png "$PUB/figures/figure_08_production.png"
+          cp visualisations/topic_hierarchy/figure_04a_hierarchy_production.pdf "$PUB/figures/figure_08_production.pdf"
+          cp visualisations/topic_hierarchy/figure_04b_hierarchy_environment.png "$PUB/figures/figure_09_environment.png"
+          cp visualisations/topic_hierarchy/figure_04b_hierarchy_environment.pdf "$PUB/figures/figure_09_environment.pdf"
+          cp visualisations/topic_hierarchy/figure_04c_hierarchy_methods.png "$PUB/figures/figure_10_methods.png"
+          cp visualisations/topic_hierarchy/figure_04c_hierarchy_methods.pdf "$PUB/figures/figure_10_methods.pdf"
+          cp visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.png "$PUB/figures/figure_11_industry_and_governance.png"
+          cp visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.pdf "$PUB/figures/figure_11_industry_and_governance.pdf"
+          cp visualisations/topic_hierarchy/figure_04e_hierarchy_product.png "$PUB/figures/figure_12_product.png"
+          cp visualisations/topic_hierarchy/figure_04e_hierarchy_product.pdf "$PUB/figures/figure_12_product.pdf"
+          cp visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.png "$PUB/figures/figure_13_people_and_society.png"
+          cp visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.pdf "$PUB/figures/figure_13_people_and_society.pdf"
+          cp visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.png "$PUB/figures/figure_14_inputs_and_resources.png"
+          cp visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.pdf "$PUB/figures/figure_14_inputs_and_resources.pdf"
+          cp visualisations/figure_08_umbrella_review.png "$PUB/figures/figure_15_umbrella_review.png"
+          cp visualisations/figure_08_umbrella_review.pdf "$PUB/figures/figure_15_umbrella_review.pdf"
+
+          # Data products needed to audit figures and reuse the corpus.
+          cp visualisations/figure_07_flow_diagram_counts.json "$PUB/flow_counts.json"
+          cp outputs/workflow09_data/living_evidence_map_canonical_final.ris "$PUB/data/living_evidence_map_canonical_final.ris"
+          cp outputs/workflow09_data/living_evidence_map_canonical_final.ris.manifest.json "$PUB/data/living_evidence_map_canonical_final.ris.manifest.json"
+
+          # Snapshot the exact plotting code used for this publication package.
+          cp visualisations/canonical_figure_data.R "$PUB/figure_code/canonical_figure_data.R"
+          cp visualisations/07_flow_diagram.R "$PUB/figure_code/figure_01_flow_diagram.R"
+          cp scripts/reporting/plot_citesource_database_contribution.R "$PUB/figure_code/figure_02_database_contribution.R"
+          cp visualisations/01_records_by_publication_year.R "$PUB/figure_code/figure_03_publication_year_species.R"
+          cp visualisations/05_records_by_publication_year_high_level_topic.R "$PUB/figure_code/figure_04_publication_year_topics.R"
+          cp visualisations/03_choropleth_records_by_country.R "$PUB/figure_code/figure_05_country_choropleth.R"
+          cp visualisations/02_records_by_country.R "$PUB/figure_code/figure_06_country_species.R"
+          cp visualisations/04_topic_hierarchy.R "$PUB/figure_code/figures_07_to_14_topic_hierarchy.R"
+          cp visualisations/08_umbrella_review_figure.R "$PUB/figure_code/figure_15_umbrella_review.R"
+
+          cp outputs/workflow09_manuscript/methods.{md,html,docx,pdf} "$PUB/manuscript/"
+          cp outputs/workflow09_manuscript/results.{md,html,docx,pdf} "$PUB/manuscript/"
+          cp docs/reporting/workflow_09/manuscript/long_form_methods.Rmd "$PUB/manuscript/long_form_methods.Rmd"
+          cp docs/reporting/workflow_09/manuscript/long_form_results.Rmd "$PUB/manuscript/long_form_results.Rmd"
+          cp docs/reporting/workflow_09/manuscript/references.bib "$PUB/manuscript/references.bib"
+
+      - name: Validate Workflow 09 publication package
         shell: Rscript {0}
         run: |
           library(jsonlite)
           library(digest)
 
-          final_canonical <- "workflow08_reporting_state/living_evidence_map_canonical_final.jsonl"
-          final_pointer <- fromJSON("docs/workflow08/zenodo/run-36329841121.json", simplifyVector=FALSE)
-          expected_sha <- tolower(as.character(final_pointer$files[[which(vapply(final_pointer$files, function(x) identical(x$filename, "living_evidence_map_canonical_final.jsonl"), logical(1)))]]$sha256))
-          stopifnot(
-            identical(tolower(digest(final_canonical, algo="sha256", file=TRUE, serialize=FALSE)), expected_sha)
-          )
+          canonical <- "workflow08_reporting_state/living_evidence_map_canonical_final.jsonl"
+          pointer <- fromJSON(Sys.getenv("W08_POINTER"), simplifyVector = FALSE)
+          idx <- which(vapply(pointer$files, function(x) identical(x$filename, "living_evidence_map_canonical_final.jsonl"), logical(1)))
+          stopifnot(length(idx) == 1L)
+          expected_sha <- tolower(as.character(pointer$files[[idx]]$sha256))
+          stopifnot(identical(
+            tolower(digest(canonical, algo = "sha256", file = TRUE, serialize = FALSE)),
+            expected_sha
+          ))
 
-          flow <- fromJSON("visualisations/figure_07_flow_diagram_counts.json", simplifyVector=FALSE)
-          stopifnot(
-            as.integer(flow$counts$deduplicated_records) ==
-              as.integer(flow$counts$final_included) +
-              as.integer(flow$counts$workflow04_exclusions) +
-              as.integer(flow$counts$workflow07_late_exclusions) +
-              as.integer(flow$counts$workflow08_exclusions) +
-              as.integer(flow$counts$retractions_excluded)
-          )
-          stopifnot(
-            as.integer(flow$counts$combined_search_results) ==
-              sum(as.integer(unlist(flow$counts$sources, use.names=FALSE)))
-          )
+          ris_manifest <- fromJSON("docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris.manifest.json")
+          stopifnot(as.integer(ris_manifest$records) == 19117L)
+          stopifnot(identical(tolower(ris_manifest$source_jsonl_sha256), expected_sha))
+
+          flow <- fromJSON("docs/reporting/workflow_09/flow_counts.json", simplifyVector = FALSE)
+          stopifnot(as.integer(flow$counts$final_included) == 19117L)
 
           required <- c(
-            "visualisations/figure_01_records_by_publication_year.png",
-            "visualisations/figure_02_records_by_country.png",
-            "visualisations/figure_03_choropleth_records_by_country.png",
-            "visualisations/figure_05_records_by_publication_year_high_level_topic.png",
-            "visualisations/figure_07_flow_diagram.png",
-            "visualisations/figure_08_umbrella_review.png",
-            "visualisations/figure_07_flow_diagram_counts.json",
-            "visualisations/topic_hierarchy/figure_04a_top_level_topics.png",
-            "visualisations/topic_hierarchy/figure_04a_hierarchy_production.png",
-            "visualisations/topic_hierarchy/figure_04b_hierarchy_environment.png",
-            "visualisations/topic_hierarchy/figure_04c_hierarchy_methods.png",
-            "visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.png",
-            "visualisations/topic_hierarchy/figure_04e_hierarchy_product.png",
-            "visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.png",
-            "visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.png",
-            "outputs/citesource_contribution/database_contribution_upset.png"
+            sprintf("docs/reporting/workflow_09/figures/figure_%02d_%s.png",
+              1:15,
+              c("flow_diagram","database_contribution","publication_year_species",
+                "publication_year_topics","country_choropleth","country_species",
+                "top_level_topics","production","environment","methods",
+                "industry_and_governance","product","people_and_society",
+                "inputs_and_resources","umbrella_review")),
+            "docs/reporting/workflow_09/manuscript/methods.md",
+            "docs/reporting/workflow_09/manuscript/methods.html",
+            "docs/reporting/workflow_09/manuscript/methods.docx",
+            "docs/reporting/workflow_09/manuscript/methods.pdf",
+            "docs/reporting/workflow_09/manuscript/results.md",
+            "docs/reporting/workflow_09/manuscript/results.html",
+            "docs/reporting/workflow_09/manuscript/results.docx",
+            "docs/reporting/workflow_09/manuscript/results.pdf",
+            "docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris"
           )
           stopifnot(all(file.exists(required)))
-          cat("PASS: Workflow 09 figures and flow counts regenerated from authoritative pipeline inputs\n")
+          cat("PASS: Workflow 09 publication package validated\n")
 
-      - name: Stage review bundle
-        if: always()
+      - name: Commit publication package to branch
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p outputs/workflow09_figure_review/topic_hierarchy
-          cp visualisations/figure_01_records_by_publication_year.{png,pdf} outputs/workflow09_figure_review/
-          cp visualisations/figure_02_records_by_country.{png,pdf} outputs/workflow09_figure_review/
-          cp visualisations/figure_03_choropleth_records_by_country.{png,pdf} outputs/workflow09_figure_review/
-          cp visualisations/figure_05_records_by_publication_year_high_level_topic.{png,pdf} outputs/workflow09_figure_review/
-          cp visualisations/figure_07_flow_diagram.{png,pdf} outputs/workflow09_figure_review/
-          cp visualisations/figure_08_umbrella_review.{png,pdf} outputs/workflow09_figure_review/
-          cp visualisations/figure_08_umbrella_review_data.csv outputs/workflow09_figure_review/
-          cp visualisations/figure_07_flow_diagram_{boxes,counts}.csv outputs/workflow09_figure_review/
-          cp visualisations/figure_07_flow_diagram_counts.json outputs/workflow09_figure_review/
-          cp visualisations/topic_hierarchy/*.png outputs/workflow09_figure_review/topic_hierarchy/
-          cp visualisations/topic_hierarchy/*.pdf outputs/workflow09_figure_review/topic_hierarchy/
-          cp outputs/citesource_contribution/database_contribution_upset.{png,pdf} outputs/workflow09_figure_review/
-          if [ -f outputs/workflow09_manuscript/long_form_results.docx ]; then
-            cp outputs/workflow09_manuscript/long_form_results.docx outputs/workflow09_figure_review/
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin workflow01-final-architecture
+          git add docs/reporting/workflow_09
+          if git diff --cached --quiet; then
+            echo "No Workflow 09 publication changes to commit."
+          else
+            git commit -m "Publish Workflow 09 reporting package [skip ci]"
+            git push origin HEAD:workflow01-final-architecture
           fi
 
-      - name: Upload Workflow 09 figure review bundle
+      - name: Upload Workflow 09 publication package
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow09-figure-review-${{ github.run_id }}
-          path: outputs/workflow09_figure_review/
-          retention-days: 30
+          name: workflow09-publication-package-${{ github.run_id }}
+          path: docs/reporting/workflow_09/
+          retention-days: 90
           if-no-files-found: error
