@@ -292,6 +292,57 @@ pick_publication_date <- function(mans, manifestation_keys){
   )
 }
 
+normalise_issn <- function(x){
+  x <- clean_text(x)
+  if(is.null(x)) return(NULL)
+  y <- toupper(gsub("[^0-9X]","",x))
+  if(nchar(y)==8L) return(paste0(substr(y,1L,4L),"-",substr(y,5L,8L)))
+  x
+}
+
+normalise_pmid <- function(x){
+  x <- clean_text(x)
+  if(is.null(x)) return(NULL)
+  y <- gsub("^PMID[: ]*","",toupper(x))
+  y <- gsub("[^0-9]","",y)
+  if(!nzchar(y)) NULL else y
+}
+
+collect_identifier_values <- function(mans, manifestation_keys, identifier_name, normaliser, selection_label){
+  values <- character()
+  norm_seen <- new.env(hash=TRUE,parent=emptyenv())
+  contributors <- character()
+
+  for(i in seq_along(mans)){
+    ids <- (mans[[i]]$manifestation_metadata %||% list())$identifiers %||% list()
+    x <- ids[[identifier_name]] %||% NULL
+    if(is.null(x) || !length(x)) next
+    raw_vals <- as.character(unlist(x,use.names=FALSE))
+    if(!length(raw_vals)) next
+
+    contributed <- FALSE
+    for(v in raw_vals){
+      z <- normaliser(v)
+      if(is.null(z) || !nzchar(z)) next
+      key <- tolower(z)
+      if(!exists(key,envir=norm_seen,inherits=FALSE)){
+        assign(key,TRUE,envir=norm_seen)
+        values <- c(values,z)
+        contributed <- TRUE
+      }
+    }
+    if(contributed) contributors <- c(contributors,manifestation_keys[[i]])
+  }
+
+  list(
+    value=unname(values),
+    provenance=list(
+      selection=selection_label,
+      source_keys=unname(unique(contributors))
+    )
+  )
+}
+
 collect_manifestation_metadata_values <- function(mans, manifestation_keys, field_name, selection_label){
   values <- character()
   norm_seen <- new.env(hash=TRUE,parent=emptyenv())
@@ -610,6 +661,10 @@ for(cid in sort(names(clusters))){
   language_pick <- collect_manifestation_metadata_values(
     mans,mk,"language","union_distinct_explicit_source_values_case_insensitive"
   )
+  issn_pick <- collect_identifier_values(mans,mk,"issn",normalise_issn,"union_distinct_normalised_identifiers")
+  eissn_pick <- collect_identifier_values(mans,mk,"eissn",normalise_issn,"union_distinct_normalised_identifiers")
+  issn_l_pick <- collect_identifier_values(mans,mk,"issn_l",normalise_issn,"union_distinct_normalised_identifiers")
+  pmid_pick <- collect_identifier_values(mans,mk,"pmid",normalise_pmid,"union_distinct_normalised_identifiers")
   rec <- list(
     schema_version="living-evidence-map-canonical-v1",
     identity=list(record_id=cid,record_id_type="deduplication_cluster_id"),
@@ -627,6 +682,10 @@ for(cid in sort(names(clusters))){
       publication_type=publication_type_pick$value,
       publication_date=publication_date_pick$value,
       language=language_pick$value,
+      issn=issn_pick$value,
+      eissn=eissn_pick$value,
+      issn_l=issn_l_pick$value,
+      pmid=pmid_pick$value,
       field_provenance=list(
         title=title_pick$source_key,abstract=abstract_pick$source_key,doi=doi_pick$source_key,
         authors=authors_pick$source_key,year=year_pick$source_key,journal=journal_pick$source_key,
@@ -634,7 +693,11 @@ for(cid in sort(names(clusters))){
         author_keywords=author_keywords_pick$provenance,
         publication_type=publication_type_pick$provenance,
         publication_date=publication_date_pick$provenance,
-        language=language_pick$provenance
+        language=language_pick$provenance,
+        issn=issn_pick$provenance,
+        eissn=eissn_pick$provenance,
+        issn_l=issn_l_pick$provenance,
+        pmid=pmid_pick$provenance
       )    ),
     manifestations=mans,
     provenance=list(
