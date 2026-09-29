@@ -95,6 +95,27 @@ parse_response <- function(resp, page) {
 }
 
 started_at <- now_utc()
+
+database_scope <- list(
+  platform = "Web of Science",
+  api_product = "Web of Science Starter API",
+  endpoint = base_url,
+  database_parameter = "WOS",
+  databases_searched = list(
+    list(
+      code = "WOS",
+      name = "Web of Science Core Collection"
+    )
+  ),
+  selection_method = "Explicit db=WOS API parameter",
+  recorded_at_utc = started_at,
+  institutional_coverage_note = paste(
+    "The content, editions and historical coverage available within the Web of Science Core Collection",
+    "are determined by the institutional/API entitlement active at query time and may change."
+  ),
+  core_collection_editions = "Not exposed or independently verified by this Starter API request"
+)
+
 first <- NULL
 if (is.null(reported_total_arg)) {
   first <- parse_response(request_page(1L), 1L)
@@ -114,6 +135,7 @@ if (count_only) {
     counted_at = now_utc(),
     endpoint = base_url,
     database = "WOS",
+    database_scope = database_scope,
     query = query,
     modified_time_span = if (nzchar(modified_time_span)) modified_time_span else NULL,
     search_scope = c("title", "abstract", "author_keywords"),
@@ -138,6 +160,7 @@ manifest <- list(
   started_at = started_at,
   endpoint = base_url,
   database = "WOS",
+  database_scope = database_scope,
   query = query,
   modified_time_span = if (nzchar(modified_time_span)) modified_time_span else NULL,
   search_scope = c("title", "abstract", "author_keywords"),
