@@ -131,7 +131,7 @@ scopus_headers <- function(req){
 }
 scopus_doi <- function(d){
   req <- request(paste0("https://api.elsevier.com/content/abstract/doi/",URLencode(d,reserved=TRUE))) |>
-    req_url_query(view="META_ABS") |>
+    req_url_query(view="FULL") |>
     scopus_headers()
   z <- perform(req); st <- resp_status(z$resp)
   if(st>=400L) return(list(status=st,outcome=paste0("http_",st),title=NULL,doi=NULL,eid=NULL,keywords=character()))
@@ -139,10 +139,13 @@ scopus_doi <- function(d){
   if(is.null(obj)) return(list(status=st,outcome="invalid_json",title=NULL,doi=NULL,eid=NULL,keywords=character()))
   rr <- obj[["abstracts-retrieval-response"]] %||% obj
   core <- rr[["coredata"]] %||% list()
+  head <- (((rr[["item"]] %||% list())[["bibrecord"]] %||% list())[["head"]] %||% list())
+  citation_info <- head[["citation-info"]] %||% list()
   kw_candidates <- list(
     (rr[["authkeywords"]] %||% list())[["author-keyword"]],
     (rr[["author-keywords"]] %||% list())[["author-keyword"]],
-    (((rr[["item"]] %||% list())[["bibrecord"]] %||% list())[["head"]] %||% list())[["author-keywords"]]
+    (head[["author-keywords"]] %||% list())[["author-keyword"]],
+    (citation_info[["author-keywords"]] %||% list())[["author-keyword"]]
   )
   kws <- character()
   for(k in kw_candidates) kws <- c(kws,clean_keywords(k))
