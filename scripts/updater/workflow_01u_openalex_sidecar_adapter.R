@@ -157,7 +157,7 @@ for (i in seq_along(works)) {
       publication_date = pub_date,
       source = loc$source_display_name,
       doi = doi,
-      keywords = keywords,
+      indexing_terms = keywords,
       publication_type = work_type,
       institutions = institutions,
       open_access = w$open_access %||% NULL,
@@ -184,7 +184,7 @@ for (i in seq_along(works)) {
     publication_type = work_type %||% NA_character_,
     abstract_present = !is.null(abstract) && nzchar(abstract),
     authors_present = !is.null(authors) && length(authors) > 0L,
-    keywords_present = !is.null(keywords) && length(keywords) > 0L,
+    indexing_terms_present = !is.null(keywords) && length(keywords) > 0L,
     institutions_present = !is.null(institutions) && length(institutions) > 0L,
     stringsAsFactors = FALSE
   )
@@ -235,13 +235,13 @@ manifest <- list(
     publication_type = present_pct(coverage$publication_type),
     abstract = round(100 * mean(coverage$abstract_present), 1),
     authors = round(100 * mean(coverage$authors_present), 1),
-    keywords = round(100 * mean(coverage$keywords_present), 1),
+    indexing_terms = round(100 * mean(coverage$indexing_terms_present), 1),
     institutions = round(100 * mean(coverage$institutions_present), 1)
   ),
   workflow01_schema_compatibility = list(
-    canonical_bibliographic_fields = c('title','abstract','authors','year','source','doi','keywords','publication_type'),
-    safely_mappable_now = c('title','abstract','authors','year','source','doi','keywords','publication_type'),
-    additional_openalex_fields_retained_sidecar_only = c('openalex_id','publication_date','institutions','open_access','primary_location'),
+    canonical_bibliographic_fields = c('title','abstract','authors','year','source','doi','publication_type'),
+    safely_mappable_now = c('title','abstract','authors','year','source','doi','publication_type'),
+    additional_openalex_fields_retained_sidecar_only = c('openalex_id','publication_date','institutions','open_access','primary_location','indexing_terms'),
     source_specific_identity = 'openalex_id',
     canonical_materialisation_deferred = TRUE,
     note = 'Diagnostic source sidecar only. Canonical materialisation is performed later by the source-agnostic Workflow 01 canonical builder.'
