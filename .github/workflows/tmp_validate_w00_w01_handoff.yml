@@ -6,6 +6,11 @@ on:
     branches: [workflow01-final-architecture]
     paths:
       - '.github/workflows/tmp_validate_w00_w01_handoff.yml'
+      - 'scripts/updater/workflow_01r_lens_sidecar_adapter.R'
+      - 'scripts/updater/workflow_01s_scopus_sidecar_adapter.R'
+      - 'scripts/updater/workflow_01u_openalex_sidecar_adapter.R'
+      - 'scripts/updater/workflow_01v_agricola_sidecar_adapter.R'
+      - 'scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R'
 
 permissions:
   contents: read
@@ -91,16 +96,12 @@ jobs:
             any(!is.na(z) & nzchar(trimws(as.character(z))))
           }
 
-          lens <- readj("restored_w00/lens/source_child/records.jsonl")
-          if(!length(lens)) {
-            p <- list.files("restored_w00/lens",pattern="records\\.jsonl$",recursive=TRUE,full.names=TRUE)
-            if(length(p)!=1L) stop("Could not uniquely locate Lens records.jsonl")
-            lens <- readj(p[[1L]])
-          }
-          lens_kw <- sum(vapply(lens,function(r)present((r$canonical %||% list())$keywords),logical(1)))
-          lens_ids <- vapply(lens,function(r)as.character((r$identity %||% list())$lens_id %||% ""),character(1))
-          stopifnot(length(lens_ids)==length(lens),all(nzchar(lens_ids)),!anyDuplicated(lens_ids))
-          cat(sprintf("LENS records=%d article_keyword_records=%d native_ids_ok=TRUE\n",length(lens),lens_kw))
+          lens <- readj("adapted/lens/lens_sidecar_records.jsonl")
+          lens_kw <- sum(vapply(lens,function(r)present((r$mapped_fields %||% list())$author_keywords),logical(1)))
+          lens_bad <- sum(vapply(lens,function(r)present((r$mapped_fields %||% list())$keywords),logical(1)))
+          lens_ids <- vapply(lens,function(r)as.character((r$sidecar_identity %||% list())$lens_id %||% ""),character(1))
+          stopifnot(length(lens_ids)==length(lens),all(nzchar(lens_ids)),!anyDuplicated(lens_ids),lens_bad==0L)
+          cat(sprintf("LENS records=%d author_keyword_records=%d ambiguous_keywords=0 native_ids_ok=TRUE\n",length(lens),lens_kw))
 
           sc <- readj("adapted/scopus/scopus_sidecar_records.jsonl")
           sc_ids <- vapply(sc,function(r)as.character((r$sidecar_identity %||% list())$scopus_eid %||% (r$sidecar_identity %||% list())$scopus_id %||% ""),character(1))
