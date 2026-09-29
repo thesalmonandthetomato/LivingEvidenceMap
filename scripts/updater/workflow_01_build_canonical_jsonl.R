@@ -241,6 +241,40 @@ year_value <- function(x){
   if(m[[1L]]<0L) return(NULL)
   as.integer(regmatches(s,m)[[1L]])
 }
+collect_manifestation_metadata_values <- function(mans, manifestation_keys, field_name, selection_label){
+  values <- character()
+  norm_seen <- new.env(hash=TRUE,parent=emptyenv())
+  contributors <- character()
+
+  for(i in seq_along(mans)){
+    x <- ((mans[[i]]$manifestation_metadata %||% list())[[field_name]]) %||% NULL
+    if(is.null(x) || !length(x)) next
+    raw_vals <- as.character(unlist(x,use.names=FALSE))
+    raw_vals <- gsub("[[:space:]]+"," ",trimws(raw_vals))
+    raw_vals <- raw_vals[!is.na(raw_vals) & nzchar(raw_vals)]
+    if(!length(raw_vals)) next
+
+    contributed <- FALSE
+    for(v in raw_vals){
+      key <- tolower(v)
+      if(!exists(key,envir=norm_seen,inherits=FALSE)){
+        assign(key,TRUE,envir=norm_seen)
+        values <- c(values,v)
+        contributed <- TRUE
+      }
+    }
+    if(contributed) contributors <- c(contributors,manifestation_keys[[i]])
+  }
+
+  list(
+    value=unname(values),
+    provenance=list(
+      selection=selection_label,
+      source_keys=unname(unique(contributors))
+    )
+  )
+}
+
 collect_author_keywords <- function(mans, manifestation_keys){
   values <- character()
   norm_seen <- new.env(hash=TRUE,parent=emptyenv())
@@ -518,6 +552,9 @@ for(cid in sort(names(clusters))){
   issue_pick <- pick_field("issue")
   pages_pick <- pick_field("pages")
   author_keywords_pick <- collect_author_keywords(mans,mk)
+  publication_type_pick <- collect_manifestation_metadata_values(
+    mans,mk,"publication_type","union_distinct_source_values_case_insensitive"
+  )
   rec <- list(
     schema_version="living-evidence-map-canonical-v1",
     identity=list(record_id=cid,record_id_type="deduplication_cluster_id"),
@@ -532,11 +569,13 @@ for(cid in sort(names(clusters))){
       issue=issue_pick$value,
       pages=pages_pick$value,
       author_keywords=author_keywords_pick$value,
+      publication_type=publication_type_pick$value,
       field_provenance=list(
         title=title_pick$source_key,abstract=abstract_pick$source_key,doi=doi_pick$source_key,
         authors=authors_pick$source_key,year=year_pick$source_key,journal=journal_pick$source_key,
         volume=volume_pick$source_key,issue=issue_pick$source_key,pages=pages_pick$source_key,
-        author_keywords=author_keywords_pick$provenance
+        author_keywords=author_keywords_pick$provenance,
+        publication_type=publication_type_pick$provenance
       )    ),
     manifestations=mans,
     provenance=list(
