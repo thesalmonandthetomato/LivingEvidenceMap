@@ -105,13 +105,9 @@ for (i in seq_along(lines)) {
     stringsAsFactors=FALSE
   )
 }
-
-ids <- vapply(out,function(x)x$sidecar_identity$sidecar_record_id,character(1))
-if (anyDuplicated(ids)) stop("Duplicate Lens sidecar IDs",call.=FALSE)
-
-con <- file(file.path(output_dir,"lens_sidecar_records.jsonl"),"wt",encoding="UTF-8")
-for (r in out) writeLines(toJSON(r,auto_unbox=TRUE,null="null",na="null",digits=NA),con)
 close(con)
+
+if (anyDuplicated(ids)) stop("Duplicate Lens sidecar IDs",call.=FALSE)
 
 cov <- do.call(rbind,coverage)
 write.csv(cov,file.path(output_dir,"field_coverage_records.csv"),row.names=FALSE,na="")
