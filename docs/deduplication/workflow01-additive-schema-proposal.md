@@ -1,6 +1,6 @@
 # Workflow 01 additive canonical-schema proposal
 
-Status: design draft. No builder change has yet been applied.
+Status: implementation in progress. Manifestation enrichment has passed the additive regression guard; work-level fields are being added one class at a time.
 
 This proposal follows the field-preservation audit and quantitative coverage audit. The purpose is to enrich Workflow 01 without changing any existing deduplication or downstream identity semantics.
 
@@ -36,7 +36,7 @@ The regression guard is implemented in:
 
 The first implementation tranche should add only fields that are clearly bibliographic and already mapped by multiple sources:
 
-- `keywords`
+- `author_keywords`
 - `publication_type`
 - `publication_date`
 - `language`
@@ -49,20 +49,22 @@ Each added canonical field must also gain an explicit provenance entry.
 
 ### Selection principles
 
-**keywords**
+**author_keywords**
 
-Keywords are multi-valued. They should not use the current single-value modal picker.
+Author keywords are multi-valued. They should not use the current single-value modal picker.
 
 Proposed rule:
 
-1. collect non-empty keyword values from eligible manifestations;
+1. collect non-empty author-keyword values from eligible manifestations;
 2. trim and collapse internal whitespace only;
 3. deduplicate case-insensitively while preserving the first source spelling;
 4. retain all distinct bibliographic keyword terms rather than selecting one source's list;
-5. preserve source-level keyword lists in manifestations;
-6. record contributing manifestation keys in keyword provenance.
+5. preserve source-level author-keyword lists in manifestations;
+6. record contributing manifestation keys in author-keyword provenance.
 
-Scopus STANDARD contributes no keywords. Workflow 02 may later fill `canonical.keywords` only when this W01 value is empty and a retained Scopus EID is available.
+OpenAlex generated keywords/topics/concepts are indexing metadata only and must never contribute to `canonical.author_keywords`.
+
+Scopus STANDARD contributes no author keywords. Workflow 02 may later fill `canonical.author_keywords` only when this W01 value is empty and a retained Scopus EID is available.
 
 **publication_type**
 
@@ -92,7 +94,7 @@ Every manifestation should retain mapped data that was previously discarded:
   - AGRICOLA ID
   - WoS UID
   - PMID where supplied
-- keywords
+- author keywords
 - publication type
 - publication date / first publication date
 - ISSN / eISSN / ISSN-L where supplied
