@@ -22,7 +22,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
-          lfs: true
           persist-credentials: false
 
       - name: Set up R
