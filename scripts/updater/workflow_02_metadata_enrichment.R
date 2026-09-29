@@ -81,6 +81,61 @@ clean_abstract <- function(x){
 }
 is_missing <- function(x) is.null(clean_text(x))
 
+clean_keyword_values <- function(x){
+  vals <- character()
+  walk <- function(z,nm=NULL){
+    if(is.null(z)) return(invisible(NULL))
+    if(is.atomic(z) && !is.list(z)){
+      zz <- as.character(z)
+      zz <- zz[!is.na(zz)]
+      if(length(zz)) vals <<- c(vals,zz)
+      return(invisible(NULL))
+    }
+    if(!is.list(z)) return(invisible(NULL))
+    nms <- names(z)
+    if(!is.null(nms)){
+      preferred <- intersect(c("$","#text","text","value","keyword"),nms)
+      if(length(preferred)){
+        for(k in preferred) walk(z[[k]],k)
+        return(invisible(NULL))
+      }
+      for(k in seq_along(z)){
+        key <- nms[[k]] %||% ""
+        if(grepl("^@",key) || key %in% c("code","id")) next
+        walk(z[[k]],key)
+      }
+    } else {
+      for(v in z) walk(v)
+    }
+    invisible(NULL)
+  }
+  walk(x)
+  vals <- trimws(gsub("[[:space:]]+"," ",vals))
+  vals <- vals[nzchar(vals)]
+  if(!length(vals)) return(character())
+  vals[!duplicated(tolower(vals))]
+}
+keywords_missing <- function(x) length(clean_keyword_values(x))==0L
+
+retained_scopus_eid <- function(r){
+  mans <- r$manifestations %||% list()
+  vals <- character()
+  for(m in mans){
+    if(!identical(tolower(clean_text(m$source) %||% ""), "scopus")) next
+    mm <- m$manifestation_metadata %||% list()
+    ids <- mm$identifiers %||% list()
+    sid <- mm$source_identity %||% list()
+    cand <- c(
+      clean_text(sid$scopus_eid),
+      clean_text(ids$scopus_eid)
+    )
+    cand <- cand[!vapply(cand,is.null,logical(1))]
+    if(length(cand)) vals <- c(vals,as.character(cand))
+  }
+  vals <- unique(trimws(vals[nzchar(trimws(vals))]))
+  if(!length(vals)) NULL else vals[[1L]]
+}
+
 retryable <- function(status) identical(status,429L) || status>=500L
 perform_retry <- function(req,max_attempts=4L){
   errors <- character()
@@ -102,18 +157,20 @@ epmc_lookup <- function(d){
     req_headers(Accept="application/json",`User-Agent`="LivingEvidenceMap-Workflow02/1.0")
   z <- perform_retry(req)
   st <- resp_status(z$resp)
-  if(st>=400L) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,outcome=paste0("http_",st),attempts=z$attempts))
+  if(st>=400L) return(list(status=st,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,outcome=paste0("http_",st),attempts=z$attempts))
   dat <- resp_body_json(z$resp,simplifyVector=FALSE)
   hits <- dat$resultList$result %||% list()
   exact <- Filter(function(h) identical(norm_doi(h$doi),d),hits)
-  if(!length(exact)) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,outcome="no_exact_doi_match",attempts=z$attempts))
+  if(!length(exact)) return(list(status=st,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,outcome="no_exact_doi_match",attempts=z$attempts))
   h <- exact[[1L]]
+  kws <- clean_keyword_values((h$keywordList %||% list())$keyword %||% NULL)
   list(
     status=st,
     title=clean_text(h$title),
     abstract=clean_abstract(h$abstractText),
+    author_keywords=kws,
     returned_doi=norm_doi(h$doi),
-    outcome=if(!is.null(clean_abstract(h$abstractText))||!is.null(clean_text(h$title)))"exact_doi_metadata_returned" else "exact_doi_no_metadata",
+    outcome=if(!is.null(clean_abstract(h$abstractText))||!is.null(clean_text(h$title))||length(kws))"exact_doi_metadata_returned" else "exact_doi_no_metadata",
     attempts=z$attempts
   )
 }
@@ -134,7 +191,18 @@ scopus_extract <- function(obj){
       if(!is.null(biblio)) abstract <- clean_abstract(paste(unlist(biblio,use.names=FALSE),collapse=" "))
     }
   }
-  list(title=title,abstract=abstract,doi=doi,eid=eid)
+  keyword_candidates <- list(
+    (rr[["authkeywords"]] %||% list())[["author-keyword"]],
+    (rr[["author-keywords"]] %||% list())[["author-keyword"]],
+    (((rr[["item"]] %||% list())[["bibrecord"]] %||% list())[["head"]] %||% list())[["author-keywords"]]
+  )
+  author_keywords <- character()
+  for(k in keyword_candidates){
+    z <- clean_keyword_values(k)
+    if(length(z)) author_keywords <- c(author_keywords,z)
+  }
+  if(length(author_keywords)) author_keywords <- author_keywords[!duplicated(tolower(author_keywords))]
+  list(title=title,abstract=abstract,doi=doi,eid=eid,author_keywords=author_keywords)
 }
 
 scopus_headers <- function(req) {
@@ -222,12 +290,12 @@ scopus_lookup_eid <- function(eid){
     scopus_headers()
   z <- perform_retry(req)
   st <- resp_status(z$resp)
-  if(st>=400L) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,eid=eid,outcome=paste0("http_",st),attempts=z$attempts))
+  if(st>=400L) return(list(status=st,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=eid,outcome=paste0("http_",st),attempts=z$attempts))
   parsed <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
-  if(is.null(parsed)) return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,eid=eid,outcome="invalid_json",attempts=z$attempts))
+  if(is.null(parsed)) return(list(status=st,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=eid,outcome="invalid_json",attempts=z$attempts))
   ex <- scopus_extract(parsed)
-  list(status=st,title=ex$title,abstract=ex$abstract,returned_doi=ex$doi,eid=ex$eid %||% eid,
-       outcome=if(!is.null(ex$title)||!is.null(ex$abstract))"metadata_returned" else "success_no_metadata",
+  list(status=st,title=ex$title,abstract=ex$abstract,author_keywords=ex$author_keywords,returned_doi=ex$doi,eid=ex$eid %||% eid,
+       outcome=if(!is.null(ex$title)||!is.null(ex$abstract)||length(ex$author_keywords))"metadata_returned" else "success_no_metadata",
        attempts=z$attempts)
 }
 
@@ -243,7 +311,7 @@ scopus_lookup <- function(d){
     if(!is.null(parsed)){
       ex <- scopus_extract(parsed)
       if(!is.null(ex$title) || !is.null(ex$abstract) || !is.null(ex$doi)){
-        return(list(status=st,title=ex$title,abstract=ex$abstract,returned_doi=ex$doi,eid=ex$eid,
+        return(list(status=st,title=ex$title,abstract=ex$abstract,author_keywords=ex$author_keywords,returned_doi=ex$doi,eid=ex$eid,
                     outcome="direct_doi_metadata_returned",attempts=z$attempts,route="direct_doi"))
       }
     }
@@ -253,7 +321,7 @@ scopus_lookup <- function(d){
   # then retrieve the uniquely compatible hit by EID using META_ABS.
   sr <- scopus_search_doi(d)
   if(!length(sr$entries)){
-    return(list(status=st,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,
+    return(list(status=st,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,
                 outcome=paste0("direct_",ifelse(st>=400L,paste0("http_",st),"no_metadata"),";search_",sr$outcome),
                 attempts=z$attempts+sr$attempts,route="doi_then_search"))
   }
@@ -269,7 +337,7 @@ scopus_lookup <- function(d){
   candidates <- if(length(exact_idx)) sr$entries[exact_idx] else if(length(sr$entries)==1L) sr$entries else list()
 
   if(!length(candidates)){
-    return(list(status=sr$status,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,
+    return(list(status=sr$status,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,
                 outcome=if(any(nzchar(entry_dois)))"search_hits_no_exact_doi" else "search_hits_nonunique_without_doi",
                 attempts=z$attempts+sr$attempts,route="doi_then_search"))
   }
@@ -277,7 +345,7 @@ scopus_lookup <- function(d){
   candidate_eids <- unlist(lapply(candidates,extract_scopus_eid),use.names=FALSE)
   candidate_eids <- unique(candidate_eids[nzchar(candidate_eids)])
   if(length(candidate_eids)!=1L){
-    return(list(status=sr$status,title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,
+    return(list(status=sr$status,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,
                 outcome=if(!length(candidate_eids))"search_candidate_missing_eid" else "search_candidate_nonunique_eid",
                 attempts=z$attempts+sr$attempts,route="doi_then_search"))
   }
@@ -389,7 +457,7 @@ for(i in seq_along(rows)){
 
   if(still_missing_title || still_missing_abstract){
     counts$scopus_attempted <- counts$scopus_attempted + 1L
-    sc <- tryCatch(scopus_lookup(d),error=function(e)list(outcome="technical_error",error=conditionMessage(e),title=NULL,abstract=NULL,returned_doi=NULL,eid=NULL,status=NULL,attempts=NULL))
+    sc <- tryCatch(scopus_lookup(d),error=function(e)list(outcome="technical_error",error=conditionMessage(e),title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,status=NULL,attempts=NULL))
     rec_audit$scopus <- sc
     if(identical(sc$status,404L)) counts$scopus_http_404 <- counts$scopus_http_404 + 1L
 
