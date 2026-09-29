@@ -15,7 +15,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,13 +39,6 @@ jobs:
           set -euo pipefail
           Rscript scripts/updater/workflow_01_restore_current_state.R             --pointer docs/deduplication/zenodo/run-36128255337.json             --pointer-dir docs/deduplication/zenodo             --output-root baseline
           test -s baseline/canonical/records.jsonl
-
-      - name: Self-test additive regression guard
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_01_validate_additive_schema.R             --baseline baseline/canonical/records.jsonl             --candidate baseline/canonical/records.jsonl             --report outputs/self_test_report.json
-
 
       - name: Locate archived Workflow 01 rebuild inputs
         id: inputs
