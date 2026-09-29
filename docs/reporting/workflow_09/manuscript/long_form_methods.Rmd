@@ -60,7 +60,7 @@ The living evidence map was subsequently expanded to retrieve bibliographic reco
 - The Lens (filtered to exclude datasets, reports, libguides, news)
 - OpenAlex
 - Scopus
-- Web of Science Core Collection (Science Citation Index Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation Index (SSCI) 1981-present, Arts & Humanities Citation Index (AHCI) 2017-present, Emerging Sources Citation Index (ESCI) 2005-present)
+- Web of Science (Web of Science Core Collection: Science Citation Index Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation Index (SSCI) 1981-present, Arts & Humanities Citation Index (AHCI) 2017-present, Emerging Sources Citation Index (ESCI) 2005-present; Current Contents Connect; MEDLINE; Preprint Citation Index; Research Commons)
 - AGRICOLA
 Database-specific implementations were derived from the same underlying conceptual search and adapted to the syntax and indexing of each source. Search strings are stored as version-controlled user inputs in the project repository.
 
