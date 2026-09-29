@@ -1,0 +1,105 @@
+name: Temporary - validate W00 to W01 handoff semantics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_validate_w00_w01_handoff.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest','data.table'))
+
+      - name: Restore accepted Workflow 00 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_workflow00_state.R             --state docs/search_record/state/current.json             --output-root restored_w00
+
+      - name: Rebuild W01 source adapters from restored W00
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p adapted/{scopus,openalex,agricola,wos}
+          Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R             --input-dir restored_w00/scopus             --output-dir adapted/scopus
+          Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R             --input-dir restored_w00/openalex             --output-dir adapted/openalex
+          Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R             --input-dir restored_w00/agricola             --output-dir adapted/agricola
+          Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R             --input-dir restored_w00/wos             --output-dir adapted/wos
+
+      - name: Validate handoff keyword semantics and identities
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          readj <- function(path){
+            x <- readLines(path,warn=FALSE,encoding="UTF-8")
+            x <- x[nzchar(trimws(x))]
+            lapply(x,fromJSON,simplifyVector=FALSE)
+          }
+          present <- function(x){
+            if(is.null(x)||!length(x)) return(FALSE)
+            z <- unlist(x,use.names=FALSE)
+            any(!is.na(z) & nzchar(trimws(as.character(z))))
+          }
+
+          lens <- readj("restored_w00/lens/source_child/records.jsonl")
+          if(!length(lens)) {
+            p <- list.files("restored_w00/lens",pattern="records\\.jsonl$",recursive=TRUE,full.names=TRUE)
+            if(length(p)!=1L) stop("Could not uniquely locate Lens records.jsonl")
+            lens <- readj(p[[1L]])
+          }
+          lens_kw <- sum(vapply(lens,function(r)present((r$canonical %||% list())$keywords),logical(1)))
+          lens_ids <- vapply(lens,function(r)as.character((r$identity %||% list())$lens_id %||% ""),character(1))
+          stopifnot(length(lens_ids)==length(lens),all(nzchar(lens_ids)),!anyDuplicated(lens_ids))
+          cat(sprintf("LENS records=%d article_keyword_records=%d native_ids_ok=TRUE\n",length(lens),lens_kw))
+
+          sc <- readj("adapted/scopus/scopus_sidecar_records.jsonl")
+          sc_ids <- vapply(sc,function(r)as.character((r$sidecar_identity %||% list())$scopus_eid %||% (r$sidecar_identity %||% list())$scopus_id %||% ""),character(1))
+          sc_akw <- sum(vapply(sc,function(r)present((r$mapped_fields %||% list())$author_keywords),logical(1)))
+          stopifnot(all(nzchar(sc_ids)),!anyDuplicated(sc_ids),sc_akw==0L)
+          cat(sprintf("SCOPUS records=%d author_keyword_records=%d native_ids_ok=TRUE\n",length(sc),sc_akw))
+
+          oa <- readj("adapted/openalex/openalex_sidecar_records.jsonl")
+          oa_ids <- vapply(oa,function(r)as.character((r$sidecar_identity %||% list())$openalex_id %||% ""),character(1))
+          oa_index <- sum(vapply(oa,function(r)present((r$mapped_fields %||% list())$indexing_terms),logical(1)))
+          oa_bad_kw <- sum(vapply(oa,function(r)present((r$mapped_fields %||% list())$keywords),logical(1)))
+          oa_bad_akw <- sum(vapply(oa,function(r)present((r$mapped_fields %||% list())$author_keywords),logical(1)))
+          stopifnot(all(nzchar(oa_ids)),!anyDuplicated(oa_ids),oa_bad_kw==0L,oa_bad_akw==0L)
+          cat(sprintf("OPENALEX records=%d indexing_term_records=%d author_keyword_records=0 ambiguous_keywords=0 native_ids_ok=TRUE\n",length(oa),oa_index))
+
+          ag <- readj("adapted/agricola/agricola_sidecar_records.jsonl")
+          ag_ids <- vapply(ag,function(r)as.character((r$sidecar_identity %||% list())$agricola_id %||% ""),character(1))
+          ag_akw <- sum(vapply(ag,function(r)present((r$mapped_fields %||% list())$author_keywords),logical(1)))
+          ag_bad <- sum(vapply(ag,function(r)present((r$mapped_fields %||% list())$keywords),logical(1)))
+          stopifnot(all(nzchar(ag_ids)),!anyDuplicated(ag_ids),ag_bad==0L)
+          cat(sprintf("AGRICOLA records=%d author_keyword_records=%d ambiguous_keywords=0 native_ids_ok=TRUE\n",length(ag),ag_akw))
+
+          wos <- readj("adapted/wos/wos_starter_sidecar_records.jsonl")
+          wos_ids <- vapply(wos,function(r)as.character((r$sidecar_identity %||% list())$wos_uid %||% ""),character(1))
+          wos_akw <- sum(vapply(wos,function(r)present((r$mapped_fields %||% list())$author_keywords),logical(1)))
+          wos_bad <- sum(vapply(wos,function(r)present((r$mapped_fields %||% list())$keywords),logical(1)))
+          stopifnot(all(nzchar(wos_ids)),!anyDuplicated(wos_ids),wos_bad==0L)
+          cat(sprintf("WOS records=%d author_keyword_records=%d ambiguous_keywords=0 native_ids_ok=TRUE\n",length(wos),wos_akw))
+
+          cat("PASS: W00 -> W01 handoff semantics validated; OpenAlex generated terms isolated from author keywords\n")
