@@ -1,0 +1,72 @@
+name: Temporary - benchmark Scopus search fallback after DOI 404
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_workflow02_scopus_search_fallback_benchmark.yml'
+      - 'scripts/updater/tmp_workflow_02_scopus_search_fallback_benchmark.R'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','stringdist'))
+
+      - name: Parse benchmark
+        shell: Rscript {0}
+        run: parse(file='scripts/updater/tmp_workflow_02_scopus_search_fallback_benchmark.R')
+
+      - name: Download prior direct-DOI benchmark artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prior
+          gh run download 36608275103 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name scopus-doi-keyword-benchmark-36608275103 \
+            --dir prior
+          test -s prior/results.jsonl
+
+      - name: Test 50 direct-DOI 404s through Search -> EID -> FULL
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/tmp_workflow_02_scopus_search_fallback_benchmark.R \
+            --input prior/results.jsonl \
+            --output-dir outputs/scopus_search_fallback \
+            --target-n 50 \
+            --delay 0.2
+          Rscript -e "r<-jsonlite::fromJSON('outputs/scopus_search_fallback/report.json');stopifnot(r\$status=='PASS',r\$sample_n==50L);cat(sprintf('PASS: search fallback accepted %d/50 keyword records (%.1f%%)\n',r\$accepted_keyword_records,100*r\$accepted_yield))"
+
+      - name: Upload fallback benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scopus-search-fallback-benchmark-${{ github.run_id }}
+          path: outputs/scopus_search_fallback/
+          retention-days: 30
+          if-no-files-found: warn
