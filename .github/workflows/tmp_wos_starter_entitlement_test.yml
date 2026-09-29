@@ -1,4 +1,4 @@
-name: Temporary - WoS Starter entitlement test
+name: Temporary - WoS Starter PQDT test
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  test-entitlements:
+  test-pqdt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c("httr2","jsonlite"))
 
-      - name: Test WoS Starter database entitlements
+      - name: Test PQDT candidate database codes in WoS Starter
         env:
           WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
         shell: Rscript {0}
@@ -42,33 +42,19 @@ jobs:
           key <- Sys.getenv("WOS_STARTER_API")
           stopifnot(nzchar(key))
 
-          dbs <- c(
-            WOS="Web of Science Core Collection",
-            BIOABS="Biological Abstracts",
-            BCI="BIOSIS Citation Index",
-            BIOSIS="BIOSIS Previews",
-            CCC="Current Contents Connect",
-            DIIDW="Derwent Innovations Index",
-            DRCI="Data Citation Index",
-            MEDLINE="MEDLINE",
-            ZOOREC="Zoological Record",
-            PPRN="Preprint Citation Index",
-            RC="Research Commons",
-            WOK="All databases"
-          )
-
           endpoint <- "https://api.clarivate.com/apis/wos-starter/v1/documents"
+          candidates <- c("PQDT", "PQDTI", "PQDT-CI", "DISS", "WOS")
 
-          res <- lapply(names(dbs), function(db) {
+          res <- lapply(candidates, function(db) {
             req <- request(endpoint) |>
               req_headers(
                 Accept="application/json",
                 `X-ApiKey`=key,
-                `User-Agent`="LivingEvidenceMap temporary entitlement audit"
+                `User-Agent`="LivingEvidenceMap temporary PQDT test"
               ) |>
               req_url_query(
                 db=db,
-                q='TS="salmon"',
+                q='TS="agriculture"',
                 limit=1,
                 page=1,
                 detail="short"
@@ -81,34 +67,22 @@ jobs:
             parsed <- tryCatch(fromJSON(body, simplifyVector=FALSE), error=function(e) NULL)
 
             total <- NA_integer_
-            err <- NA_character_
             uid <- NA_character_
-            citation_dbs <- NA_character_
+            err <- NA_character_
 
             if (!is.null(parsed$metadata$total)) total <- as.integer(parsed$metadata$total)
+            if (!is.null(parsed$hits) && length(parsed$hits) && !is.null(parsed$hits[[1]]$uid)) {
+              uid <- as.character(parsed$hits[[1]]$uid)
+            }
             if (!is.null(parsed$error$details)) err <- as.character(parsed$error$details)
             if (!is.null(parsed$error$title) && is.na(err)) err <- as.character(parsed$error$title)
             if (!is.null(parsed$error_description) && is.na(err)) err <- as.character(parsed$error_description)
 
-            if (!is.null(parsed$hits) && length(parsed$hits)) {
-              h <- parsed$hits[[1]]
-              if (!is.null(h$uid)) uid <- as.character(h$uid)
-              if (!is.null(h$citations) && length(h$citations)) {
-                x <- vapply(h$citations, function(z) {
-                  if (is.null(z$db)) "" else as.character(z$db)
-                }, character(1))
-                x <- unique(x[nzchar(x)])
-                if (length(x)) citation_dbs <- paste(x, collapse=";")
-              }
-            }
-
             data.frame(
               db_code=db,
-              database_name=unname(dbs[[db]]),
               http_status=status,
-              total_salmon_hits=total,
+              total_agriculture_hits=total,
               first_uid=uid,
-              first_hit_citation_db_fields=citation_dbs,
               error=err,
               stringsAsFactors=FALSE
             )
@@ -117,21 +91,13 @@ jobs:
           out <- do.call(rbind, res)
           print(out, row.names=FALSE)
 
-          dir.create("outputs/wos_entitlement_test", recursive=TRUE, showWarnings=FALSE)
-          write.csv(out, "outputs/wos_entitlement_test/wos_starter_entitlements.csv", row.names=FALSE, na="")
-
-          wok <- out[out$db_code=="WOK",]
-          wos <- out[out$db_code=="WOS",]
-          cat("\nSUMMARY\n")
-          cat(sprintf("WOS status=%s total=%s\n", wos$http_status, wos$total_salmon_hits))
-          cat(sprintf("WOK status=%s total=%s\n", wok$http_status, wok$total_salmon_hits))
-          enabled <- out$db_code[out$http_status == 200]
-          cat("HTTP 200 databases:", paste(enabled, collapse=", "), "\n")
+          dir.create("outputs/wos_pqdt_test", recursive=TRUE, showWarnings=FALSE)
+          write.csv(out, "outputs/wos_pqdt_test/wos_starter_pqdt_test.csv", row.names=FALSE, na="")
 
       - name: Upload result
         uses: actions/upload-artifact@v4
         with:
-          name: wos-starter-entitlement-test-${{ github.run_id }}
-          path: outputs/wos_entitlement_test/
+          name: wos-starter-pqdt-test-${{ github.run_id }}
+          path: outputs/wos_pqdt_test/
           retention-days: 7
           if-no-files-found: error
