@@ -42,10 +42,38 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p adapted/{scopus,openalex,agricola,wos}
-          Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R             --input-dir restored_w00/scopus             --output-dir adapted/scopus
-          Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R             --input-dir restored_w00/openalex             --output-dir adapted/openalex
-          Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R             --input-dir restored_w00/agricola             --output-dir adapted/agricola
-          Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R             --input-dir restored_w00/wos             --output-dir adapted/wos
+
+          source_child_dir() {
+            local source="$1"
+            local root="restored_w00/$source"
+            local p
+            p="$(find "$root" -type d -name source_child -print -quit)"
+            if [ -z "$p" ]; then
+              echo "Could not locate source_child directory for $source under $root" >&2
+              find "$root" -maxdepth 3 -type f -print >&2 || true
+              exit 1
+            fi
+            printf '%s' "$p"
+          }
+
+          SCOPUS_INPUT="$(source_child_dir scopus)"
+          OPENALEX_INPUT="$(source_child_dir openalex)"
+          AGRICOLA_INPUT="$(source_child_dir agricola)"
+          WOS_INPUT="$(source_child_dir wos)"
+
+          echo "Scopus input: $SCOPUS_INPUT"
+          echo "OpenAlex input: $OPENALEX_INPUT"
+          echo "AGRICOLA input: $AGRICOLA_INPUT"
+          echo "WoS input: $WOS_INPUT"
+
+          Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R \
+            --input-dir "$SCOPUS_INPUT" --output-dir adapted/scopus
+          Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R \
+            --input-dir "$OPENALEX_INPUT" --output-dir adapted/openalex
+          Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R \
+            --input-dir "$AGRICOLA_INPUT" --output-dir adapted/agricola
+          Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R \
+            --input-dir "$WOS_INPUT" --output-dir adapted/wos
 
       - name: Validate handoff keyword semantics and identities
         shell: Rscript {0}
