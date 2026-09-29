@@ -607,6 +607,9 @@ for(cid in sort(names(clusters))){
     mans,mk,"publication_type","union_distinct_source_values_case_insensitive"
   )
   publication_date_pick <- pick_publication_date(mans,mk)
+  language_pick <- collect_manifestation_metadata_values(
+    mans,mk,"language","union_distinct_explicit_source_values_case_insensitive"
+  )
   rec <- list(
     schema_version="living-evidence-map-canonical-v1",
     identity=list(record_id=cid,record_id_type="deduplication_cluster_id"),
@@ -623,13 +626,15 @@ for(cid in sort(names(clusters))){
       author_keywords=author_keywords_pick$value,
       publication_type=publication_type_pick$value,
       publication_date=publication_date_pick$value,
+      language=language_pick$value,
       field_provenance=list(
         title=title_pick$source_key,abstract=abstract_pick$source_key,doi=doi_pick$source_key,
         authors=authors_pick$source_key,year=year_pick$source_key,journal=journal_pick$source_key,
         volume=volume_pick$source_key,issue=issue_pick$source_key,pages=pages_pick$source_key,
         author_keywords=author_keywords_pick$provenance,
         publication_type=publication_type_pick$provenance,
-        publication_date=publication_date_pick$provenance
+        publication_date=publication_date_pick$provenance,
+        language=language_pick$provenance
       )    ),
     manifestations=mans,
     provenance=list(
