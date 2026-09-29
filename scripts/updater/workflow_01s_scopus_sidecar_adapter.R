@@ -99,6 +99,7 @@ for (i in seq_along(entries)) {
       source = source_title,
       doi = doi,
       keywords = NULL,
+      author_keywords = NULL,
       publication_type = publication_type,
       affiliations = affiliations
     ),
@@ -180,10 +181,10 @@ manifest <- list(
     keywords = 0
   ),
   workflow01_schema_compatibility = list(
-    canonical_bibliographic_fields = c('title', 'abstract', 'authors', 'year', 'source', 'doi', 'keywords', 'publication_type'),
+    canonical_bibliographic_fields = c('title', 'abstract', 'authors', 'year', 'source', 'doi', 'author_keywords', 'publication_type'),
     safely_mappable_now = c('title', 'year', 'source', 'doi', 'publication_type'),
     partially_mappable_now = c('authors:first_author_only'),
-    unavailable_in_standard_search_sample = c('abstract', 'full_authors', 'keywords'),
+    unavailable_in_standard_search_sample = c('abstract', 'full_authors', 'author_keywords'),
     source_specific_identity = c('scopus_eid','scopus_id'),
     canonical_materialisation_deferred = TRUE,
     note = 'Diagnostic source sidecar only. Canonical materialisation is performed later by the source-agnostic Workflow 01 canonical builder.'
