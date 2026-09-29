@@ -39,14 +39,15 @@ records_path <- locate_records(input_dir)
 lines <- readLines(records_path,warn=FALSE,encoding="UTF-8")
 lines <- lines[nzchar(trimws(lines))]
 if (!length(lines)) stop("Lens sidecar adapter received zero records",call.=FALSE)
-rows <- lapply(lines,fromJSON,simplifyVector=FALSE)
 
 adapted_at <- now_utc()
-out <- vector("list",length(rows))
-coverage <- vector("list",length(rows))
+coverage <- vector("list",length(lines))
+ids <- character(length(lines))
+jsonl_path <- file.path(output_dir,"lens_sidecar_records.jsonl")
+con <- file(jsonl_path,"wt",encoding="UTF-8")
 
-for (i in seq_along(rows)) {
-  r <- rows[[i]]
+for (i in seq_along(lines)) {
+  r <- fromJSON(lines[[i]],simplifyVector=FALSE)
   id <- r$identity %||% list()
   can <- r$canonical %||% list()
   lid <- as.character(id$lens_id %||% can$lens_id %||% "")
@@ -55,7 +56,7 @@ for (i in seq_along(rows)) {
   author_keywords <- can$keywords %||% NULL
   sidecar_id <- paste0("lens:",lid)
 
-  out[[i]] <- list(
+  out <- list(
     sidecar_identity=list(
       sidecar_record_id=sidecar_id,
       lens_id=lid,
@@ -66,7 +67,10 @@ for (i in seq_along(rows)) {
       source_format="lens_api_json",
       source_collection="Lens Scholarly"
     ),
-    lens=list(raw_payload=(r$lens %||% list())$raw_payload %||% NULL),
+    lens=list(
+      authoritative_raw_payload_location="Workflow 00 restricted Zenodo harvest",
+      raw_payload_duplicated_in_w01=FALSE
+    ),
     mapped_fields=list(
       title=can$title %||% NULL,
       abstract=can$abstract %||% NULL,
@@ -87,6 +91,9 @@ for (i in seq_along(rows)) {
       downstream_workflows_modified=FALSE
     )
   )
+
+  writeLines(toJSON(out,auto_unbox=TRUE,null="null",na="null",digits=NA),con)
+  ids[[i]] <- sidecar_id
 
   coverage[[i]] <- data.frame(
     sidecar_record_id=sidecar_id,
@@ -116,7 +123,7 @@ audit <- list(
   input=list(
     source="Lens restored Workflow 00 harvest",
     records_path=records_path,
-    records_read=length(out)
+    records_read=length(lines)
   ),
   output=list(
     sidecar_jsonl="lens_sidecar_records.jsonl",
@@ -145,4 +152,4 @@ audit <- list(
 writeLines(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
            file.path(output_dir,"compatibility_audit.json"))
 
-message(sprintf("PASS: wrote %d Lens sidecar records; author keyword semantics explicit; canonical JSON untouched.",length(out)))
+message(sprintf("PASS: wrote %d Lens sidecar records; author keyword semantics explicit; canonical JSON untouched.",length(lines)))
