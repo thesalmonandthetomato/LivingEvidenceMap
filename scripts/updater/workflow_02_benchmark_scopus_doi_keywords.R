@@ -157,6 +157,65 @@ scopus_doi <- function(d){
        keywords=kws)
 }
 
+extract_eid <- function(entry){
+  vals <- c(clean(entry[["eid"]]),clean(entry[["dc:identifier"]]),clean(entry[["scopus-id"]]),clean(entry[["scopus_id"]]))
+  vals <- vals[!vapply(vals,is.null,logical(1))]
+  if(!length(vals)) return(character())
+  norm <- function(x){
+    y <- trimws(as.character(x))
+    y <- sub("^SCOPUS_ID:\\s*","",y,ignore.case=TRUE,perl=TRUE)
+    y <- sub("^EID:\\s*","",y,ignore.case=TRUE,perl=TRUE)
+    if(grepl("^2-s2\\.0-",y,ignore.case=TRUE)) return(y)
+    if(grepl("^[0-9]+$",y)) return(paste0("2-s2.0-",y))
+    y
+  }
+  unique(vapply(vals,norm,character(1)))
+}
+scopus_search_doi <- function(d){
+  req <- request("https://api.elsevier.com/content/search/scopus") |>
+    req_url_query(query=sprintf("DOI(%s)",d),count=5,view="STANDARD") |>
+    scopus_headers()
+  z <- perform(req); st <- resp_status(z$resp)
+  if(st>=400L) return(list(status=st,outcome=paste0("http_",st),entries=list()))
+  obj <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
+  if(is.null(obj)) return(list(status=st,outcome="invalid_json",entries=list()))
+  sr <- obj[["search-results"]] %||% list()
+  entries <- sr[["entry"]] %||% list()
+  total_raw <- sr[["opensearch:totalResults"]] %||% "0"
+  total <- suppressWarnings(as.integer(as.character(total_raw[[1L]] %||% total_raw)))
+  if(is.na(total)||total<=0L) return(list(status=st,outcome="no_hits",entries=list()))
+  entries <- Filter(function(e){
+    if(!is.list(e)) return(FALSE)
+    any(c("eid","dc:identifier","scopus-id","scopus_id","dc:title","prism:doi") %in% names(e))
+  },entries)
+  list(status=st,outcome=if(length(entries))"search_hits" else "no_usable_entries",entries=entries)
+}
+scopus_eid_full <- function(eid){
+  req <- request(paste0("https://api.elsevier.com/content/abstract/eid/",URLencode(eid,reserved=TRUE))) |>
+    req_url_query(view="FULL") |>
+    scopus_headers()
+  z <- perform(req); st <- resp_status(z$resp)
+  if(st>=400L) return(list(status=st,outcome=paste0("http_",st),title=NULL,doi=NULL,eid=eid,keywords=character()))
+  obj <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
+  if(is.null(obj)) return(list(status=st,outcome="invalid_json",title=NULL,doi=NULL,eid=eid,keywords=character()))
+  rr <- obj[["abstracts-retrieval-response"]] %||% obj
+  core <- rr[["coredata"]] %||% list()
+  head <- (((rr[["item"]] %||% list())[["bibrecord"]] %||% list())[["head"]] %||% list())
+  citation_info <- head[["citation-info"]] %||% list()
+  kw_candidates <- list(
+    (rr[["authkeywords"]] %||% list())[["author-keyword"]],
+    (rr[["author-keywords"]] %||% list())[["author-keyword"]],
+    (head[["author-keywords"]] %||% list())[["author-keyword"]],
+    (citation_info[["author-keywords"]] %||% list())[["author-keyword"]]
+  )
+  kws <- character()
+  for(k in kw_candidates) kws <- c(kws,clean_keywords(k))
+  if(length(kws)) kws <- kws[!duplicated(tolower(kws))]
+  list(status=st,outcome="metadata_returned",title=clean(core[["dc:title"]] %||% core[["title"]]),
+       doi=norm_doi(core[["prism:doi"]] %||% core[["doi"]]),
+       eid=clean(core[["eid"]] %||% rr[["eid"]]) %||% eid,keywords=kws)
+}
+
 # Scan only minimal candidate fields.
 con <- file(input,"rt",encoding="UTF-8"); on.exit(close(con),add=TRUE)
 cand <- list()
@@ -227,6 +286,42 @@ for(i in seq_along(selected)){
   Sys.sleep(delay)
 }
 
+# Second benchmark stage: test search -> unique EID -> FULL on 50 direct-DOI 404s.
+fallback_pool <- which(vapply(results,function(x) identical(x$scopus_status,404L),logical(1)))
+fallback_n <- min(50L,length(fallback_pool))
+fallback_results <- list()
+if(fallback_n>0L){
+  for(ii in fallback_pool[seq_len(fallback_n)]){
+    x <- results[[ii]]
+    sr <- tryCatch(scopus_search_doi(x$doi),error=function(e)list(status=NA_integer_,outcome="technical_error",entries=list(),error=conditionMessage(e)))
+    entries <- sr$entries %||% list()
+    entry_dois <- if(length(entries)) vapply(entries,function(e) norm_doi(e[["prism:doi"]] %||% e[["doi"]]) %||% "",character(1)) else character()
+    exact_idx <- which(nzchar(entry_dois) & entry_dois==x$doi)
+    candidates <- if(length(exact_idx)) entries[exact_idx] else if(length(entries)==1L) entries else list()
+    eids <- unique(unlist(lapply(candidates,extract_eid),use.names=FALSE))
+    eids <- eids[nzchar(eids)]
+    er <- NULL
+    if(length(eids)==1L){
+      er <- tryCatch(scopus_eid_full(eids[[1L]]),error=function(e)list(status=NA_integer_,outcome="technical_error",title=NULL,doi=NULL,eid=eids[[1L]],keywords=character(),error=conditionMessage(e)))
+    }
+    sim <- if(!is.null(er) && !is.null(er$title)) title_sim(x$title,er$title) else NA_real_
+    doi_ok <- !is.null(er) && identical(er$doi,x$doi)
+    title_ok <- !is.na(sim) && sim>=0.90
+    has_kw <- !is.null(er) && length(er$keywords)>0L
+    accepted <- doi_ok && title_ok && has_kw
+    fallback_results[[length(fallback_results)+1L]] <- list(
+      record_id=x$record_id,doi=x$doi,canonical_title=x$title,
+      search_status=sr$status %||% NA_integer_,search_outcome=sr$outcome %||% NULL,
+      search_entries=length(entries),candidate_eids=eids,
+      eid_retrieval=er,
+      title_similarity=sim,exact_doi=doi_ok,title_guard=title_ok,
+      keyword_count=if(is.null(er))0L else length(er$keywords),
+      accepted=accepted
+    )
+    Sys.sleep(delay)
+  }
+}
+
 n_http200 <- sum(vapply(results,function(x) identical(x$scopus_status,200L),logical(1)))
 n_404 <- sum(vapply(results,function(x) identical(x$scopus_status,404L),logical(1)))
 n_doi <- sum(vapply(results,function(x)isTRUE(x$exact_doi),logical(1)))
@@ -249,6 +344,16 @@ tab <- do.call(rbind,lapply(results,function(x)data.frame(
   accepted=isTRUE(x$accepted),stringsAsFactors=FALSE
 )))
 write.csv(tab,file.path(outdir,"results.csv"),row.names=FALSE,na="")
+fallback_search_hits <- sum(vapply(fallback_results,function(x) identical(x$search_outcome,"search_hits"),logical(1)))
+fallback_unique_eid <- sum(vapply(fallback_results,function(x) length(x$candidate_eids)==1L,logical(1)))
+fallback_exact_doi <- sum(vapply(fallback_results,function(x)isTRUE(x$exact_doi),logical(1)))
+fallback_title_pass <- sum(vapply(fallback_results,function(x)isTRUE(x$title_guard),logical(1)))
+fallback_kw <- sum(vapply(fallback_results,function(x)(x$keyword_count%||%0L)>0L,logical(1)))
+fallback_accept <- sum(vapply(fallback_results,function(x)isTRUE(x$accepted),logical(1)))
+fj <- file(file.path(outdir,"fallback_404_results.jsonl"),"wt",encoding="UTF-8")
+if(length(fallback_results)) for(x in fallback_results) writeLines(toJSON(x,auto_unbox=TRUE,null="null",na="null",digits=NA),fj,useBytes=TRUE)
+close(fj)
+
 report <- list(
   schema="living-evidence-map-w02-scopus-doi-keyword-benchmark-v1",
   status="PASS",
@@ -268,6 +373,14 @@ report <- list(
   scopus_keyword_records_rejected_by_identity_guard=n_mismatch,
   accepted_keyword_yield=n_accept/target_n,
   total_author_keywords_returned=kw_total,
+  fallback_404_sample_n=fallback_n,
+  fallback_search_hits=fallback_search_hits,
+  fallback_unique_eid=fallback_unique_eid,
+  fallback_exact_doi_matches=fallback_exact_doi,
+  fallback_title_guard_passes=fallback_title_pass,
+  fallback_records_with_author_keywords=fallback_kw,
+  fallback_accepted_keyword_records=fallback_accept,
+  fallback_accepted_yield=if(fallback_n>0L) fallback_accept/fallback_n else 0,
   input_sha256=digest(file=input,algo="sha256",serialize=FALSE),
   results_sha256=digest(file=file.path(outdir,"results.jsonl"),algo="sha256",serialize=FALSE),
   completed_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
