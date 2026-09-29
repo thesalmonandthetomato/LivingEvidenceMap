@@ -72,7 +72,7 @@ Preserve source-level values in manifestations. At work level, retain the distin
 
 **publication_date**
 
-Preserve source-level dates. Work-level selection should prefer a complete ISO date over year-only values and should not alter the existing canonical `year`.
+Preserve source-level dates. At work level, normalise only recognisable ISO-like values and prefer the most specific available value (`YYYY-MM-DD` over `YYYY-MM` over `YYYY`). Among equally specific values, choose the modal value; ties are resolved deterministically. Record contributing manifestation keys as provenance. This must not alter the existing canonical `year`.
 
 **language**
 
