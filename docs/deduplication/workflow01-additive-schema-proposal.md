@@ -80,7 +80,7 @@ Preserve only explicit source-supplied language values. At work level, retain th
 
 **ISSN/eISSN/ISSN-L/PMID**
 
-Treat as bibliographic identifiers. Preserve source values in manifestations. At work level, retain the deterministically supported identifier(s), with provenance. These identifiers must not feed back into W01 deduplication unless a future separately validated redesign explicitly approves that.
+Treat as bibliographic identifiers. Preserve source values in manifestations. At work level, retain the distinct explicit identifiers after conservative normalisation: ISSN-family values are upper-cased and rendered as `NNNN-NNNX` when eight valid characters are present; PMID values are reduced to their numeric identifier. Deduplicate normalised values and record contributing manifestation keys as provenance. These identifiers must not feed back into W01 deduplication unless a future separately validated redesign explicitly approves that.
 
 ## Proposed manifestation additions
 
