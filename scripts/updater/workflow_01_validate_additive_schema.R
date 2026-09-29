@@ -95,6 +95,22 @@ for(rid in common){
   bkeys <- vapply(bm,function(m)paste(as.character(m$source %||% ""),as.character(m$source_record_id %||% ""),sep="::"),character(1))
   if(!identical(sort(akeys),sort(bkeys))){
     add_issue(rid,"manifestation_identity_set",sort(akeys),sort(bkeys))
+  } else {
+    existing_manifestation_fields <- c(
+      "source","source_record_id","title","abstract","doi","authors","year",
+      "journal","volume","issue","pages","abstract_stripped","abstract_strip_provenance"
+    )
+    amap <- setNames(am,akeys)
+    bmap <- setNames(bm,bkeys)
+    for(mkey in sort(akeys)){
+      ma <- amap[[mkey]]
+      mb <- bmap[[mkey]]
+      for(f in existing_manifestation_fields){
+        if(!same_json(ma[[f]],mb[[f]])){
+          add_issue(rid,paste0("manifestation[",mkey,"].",f),ma[[f]],mb[[f]])
+        }
+      }
+    }
   }
 
   ac <- a$canonical %||% list()
