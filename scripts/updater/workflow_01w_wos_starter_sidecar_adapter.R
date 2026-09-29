@@ -116,7 +116,7 @@ for (i in seq_along(hits)) {
       year = year,
       source = source_title,
       doi = doi,
-      keywords = author_keywords,
+      author_keywords = author_keywords,
       publication_type = publication_type,
       volume = volume,
       issue = issue,
@@ -200,8 +200,8 @@ audit <- list(
     publication_type = pct(coverage$publication_type_present)
   ),
   canonical_schema_compatibility = list(
-    canonical_bibliographic_fields = c("title","abstract","authors","year","source","doi","keywords","publication_type","volume","issue","pages"),
-    safely_mappable_now = c("title","authors","year","source","doi","keywords","publication_type","volume","issue","pages"),
+    canonical_bibliographic_fields = c("title","abstract","authors","year","source","doi","author_keywords","publication_type","volume","issue","pages"),
+    safely_mappable_now = c("title","authors","year","source","doi","author_keywords","publication_type","volume","issue","pages"),
     unavailable_from_starter = c("abstract","funding","affiliations"),
     source_specific_identity = "wos_uid",
     retained_sidecar_only = c("issn","eissn","pmid","source_types","times_cited_wos","raw_payload"),
