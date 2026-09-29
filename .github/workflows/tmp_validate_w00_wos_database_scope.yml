@@ -1,0 +1,70 @@
+name: Temporary - validate W00 WoS database scope record
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w00_wos_database_scope.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+
+      - name: Validate WoS database-scope propagation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wos_test
+          cat > /tmp/wos_test/manifest.json <<'JSON'
+          {
+            "database_scope": {
+              "platform": "Web of Science",
+              "api_product": "Web of Science Starter API",
+              "database_parameter": "WOS",
+              "databases_searched": [
+                {"code": "WOS", "name": "Web of Science Core Collection"}
+              ],
+              "selection_method": "Explicit db=WOS API parameter",
+              "recorded_at_utc": "2026-09-29T12:00:00Z",
+              "institutional_coverage_note": "Coverage depends on institutional/API entitlement active at query time.",
+              "core_collection_editions": "Not exposed or independently verified by this Starter API request"
+            }
+          }
+          JSON
+
+          Rscript scripts/updater/write_workflow00_search_record.R \
+            --source wos \
+            --run-type full \
+            --query 'TS="salmon"' \
+            --reported-results 10 \
+            --downloaded-results 10 \
+            --parent-run-id test-parent \
+            --source-manifest /tmp/wos_test/manifest.json \
+            --output-root /tmp/wos_test/search_record
+
+          json_file="$(find /tmp/wos_test/search_record -name '*.json' -type f | head -n1)"
+          md_file="$(find /tmp/wos_test/search_record -name '*.md' -type f | head -n1)"
+
+          Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1],simplifyVector=FALSE); stopifnot(x$schema_version=="1.2",x$database_scope$database_parameter=="WOS",x$database_scope$databases_searched[[1]]$name=="Web of Science Core Collection")' "$json_file"
+          grep -q 'Web of Science Core Collection' "$md_file"
+          grep -q 'API database parameter.*WOS' "$md_file"
+          echo "PASS: WoS database scope is preserved in JSON and Markdown search records."
