@@ -92,7 +92,7 @@ for (i in seq_along(records)) {
       year=year,
       source=journal,
       doi=doi,
-      keywords=keywords,
+      author_keywords=keywords,
       publication_type=pubtype,
       author_string=scalar(r$authorString),
       affiliation=scalar(r$affiliation),
@@ -118,7 +118,7 @@ for (i in seq_along(records)) {
     authors_present=!is.null(authors)&&length(authors)>0L,
     year=year %||% NA_character_,
     source=journal %||% NA_character_,
-    keywords_present=!is.null(keywords)&&length(keywords)>0L,
+    author_keywords_present=!is.null(keywords)&&length(keywords)>0L,
     publication_type_present=!is.null(pubtype)&&length(pubtype)>0L,
     stringsAsFactors=FALSE
   )
@@ -165,12 +165,12 @@ audit <- list(
     year=pct(present(cov$year)),
     source=pct(present(cov$source)),
     doi=pct(present(cov$doi)),
-    keywords=pct(cov$keywords_present),
+    author_keywords=pct(cov$author_keywords_present),
     publication_type=pct(cov$publication_type_present)
   ),
   workflow01_schema_compatibility=list(
-    canonical_bibliographic_fields=c("title","abstract","authors","year","source","doi","keywords","publication_type"),
-    safely_mappable_now=c("title","abstract","authors","year","source","doi","keywords","publication_type"),
+    canonical_bibliographic_fields=c("title","abstract","authors","year","source","doi","author_keywords","publication_type"),
+    safely_mappable_now=c("title","abstract","authors","year","source","doi","author_keywords","publication_type"),
     source_specific_identity="agricola_id",
     canonical_materialisation_deferred=TRUE,
     note="Diagnostic source sidecar only. Canonical materialisation is performed later by the source-agnostic Workflow 01 canonical builder."
