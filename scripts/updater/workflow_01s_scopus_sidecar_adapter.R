@@ -14,6 +14,17 @@ arg <- function(flag, default = NULL) {
 input_dir <- arg('--input-dir', 'inputs/scopus_ingestion')
 output_dir <- arg('--output-dir', 'outputs/updater/scopus_sidecar_adapter')
 if (!dir.exists(input_dir)) stop(sprintf('Input directory does not exist: %s', input_dir))
+resolve_source_dir <- function(root) {
+  direct <- file.path(root, 'raw')
+  child <- file.path(root, 'source_child', 'raw')
+  if (dir.exists(direct)) return(root)
+  if (dir.exists(child)) return(file.path(root, 'source_child'))
+  raw_dirs <- list.dirs(root, recursive = TRUE, full.names = TRUE)
+  raw_dirs <- raw_dirs[basename(raw_dirs) == 'raw']
+  if (length(raw_dirs) == 1L) return(dirname(raw_dirs[[1L]]))
+  stop(sprintf('Could not uniquely locate authoritative raw directory under %s', root))
+}
+input_dir <- resolve_source_dir(input_dir)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
