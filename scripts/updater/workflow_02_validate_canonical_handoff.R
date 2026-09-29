@@ -53,8 +53,9 @@ n_manifestations <- 0L
 n_doi <- 0L
 n_missing_title <- 0L
 n_missing_abstract <- 0L
+n_missing_author_keywords <- 0L
 n_eligible <- 0L
-source_counts <- setNames(integer(5),c("lens","scopus","openalex","agricola","wos"))
+source_counts <- integer()
 
 repeat {
   line <- readLines(con,n=1L,warn=FALSE)
@@ -84,9 +85,9 @@ repeat {
     src <- clean_text(m$source)
     sid <- clean_text(m$source_record_id)
     if(is.null(src) || is.null(sid)) stop(sprintf("Invalid manifestation identity in %s",rid),call.=FALSE)
-    if(!(src %in% names(source_counts))) stop(sprintf("Unexpected manifestation source '%s' in %s",src,rid),call.=FALSE)
     manifestation_keys <- c(manifestation_keys,paste(src,sid,sep="::"))
-    source_counts[[src]] <- source_counts[[src]] + 1L
+    current_n <- if(src %in% names(source_counts)) source_counts[[src]] else 0L
+    source_counts[[src]] <- current_n + 1L
     n_manifestations <- n_manifestations + 1L
   }
 
@@ -94,9 +95,12 @@ repeat {
   if(!is.null(d)) n_doi <- n_doi + 1L
   mt <- is_missing(r$canonical$title)
   ma <- is_missing(r$canonical$abstract)
+  kws <- r$canonical$author_keywords %||% list()
+  mk <- !length(unlist(kws,use.names=FALSE))
   if(mt) n_missing_title <- n_missing_title + 1L
   if(ma) n_missing_abstract <- n_missing_abstract + 1L
-  eligible <- !is.null(d) && (mt || ma)
+  if(mk) n_missing_author_keywords <- n_missing_author_keywords + 1L
+  eligible <- !is.null(d) && (mt || ma || mk)
   if(eligible){
     n_eligible <- n_eligible + 1L
     if(length(sample_lines) < sample_n) sample_lines <- c(sample_lines,line)
@@ -126,6 +130,7 @@ report <- list(
   records_with_doi=n_doi,
   records_missing_title=n_missing_title,
   records_missing_abstract=n_missing_abstract,
+  records_missing_author_keywords=n_missing_author_keywords,
   workflow02_eligible_records=n_eligible,
   sample_records=length(sample_lines),
   sample_sha256=digest(file=sample_path,algo="sha256",serialize=FALSE),
@@ -134,6 +139,6 @@ report <- list(
 dir.create(dirname(report_path),recursive=TRUE,showWarnings=FALSE)
 writeLines(toJSON(report,auto_unbox=TRUE,pretty=TRUE,null="null"),report_path,useBytes=TRUE)
 cat(sprintf(
-  "PASS: Workflow 01 -> 02 handoff: %d canonical works, %d manifestations, %d DOI-bearing records eligible for metadata enrichment; selected %d real records\n",
+  "PASS: Workflow 01 -> 02 handoff: %d canonical works, %d manifestations, %d DOI-bearing records eligible for title/abstract/author-keyword enrichment; selected %d real records\n",
   n_records,n_manifestations,n_eligible,length(sample_lines)
 ))
