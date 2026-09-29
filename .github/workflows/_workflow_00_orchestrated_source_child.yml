@@ -206,7 +206,7 @@ jobs:
             new_native="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/updater/source_delta/reconciliation_manifest.json");cat(as.integer(x$new_native_ids))')"
             native_args=(--known-native-results "$known_native" --new-native-results "$new_native")
           fi
-          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_SEARCH_TERM" --artifact-name "workflow00-${SOURCE}-harvest-${PARENT_RUN_ID}" --orchestrator-sha "$implementation_sha" --source-handler-sha "$implementation_sha" --window-from "$FORTNIGHTLY_FROM_DATE" --window-to "$FORTNIGHTLY_TO_DATE" "${native_args[@]}" --output-root outputs/updater/search_record
+          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_SEARCH_TERM" --artifact-name "workflow00-${SOURCE}-harvest-${PARENT_RUN_ID}" --orchestrator-sha "$implementation_sha" --source-handler-sha "$implementation_sha" --window-from "$FORTNIGHTLY_FROM_DATE" --window-to "$FORTNIGHTLY_TO_DATE" --source-manifest outputs/updater/source_child/manifest.json "${native_args[@]}" --output-root outputs/updater/search_record
 
       - name: Upload source harvest
         uses: actions/upload-artifact@v4
