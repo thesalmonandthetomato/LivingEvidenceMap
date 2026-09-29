@@ -1,6 +1,6 @@
 # Workflow 00 -> Workflow 01 handoff contract
 
-Status: agreed design contract; no canonical-builder change applied yet.
+Status: adopted production contract. Adapter semantics, enriched manifestation preservation and work-level bibliographic fields have passed full additive-regression validation.
 
 Branch: `workflow01-final-architecture`
 
@@ -401,9 +401,9 @@ Only fields supplied by the source are populated.
 
 Existing manifestation fields remain unchanged. New fields are additive.
 
-## Proposed canonical additions after manifestation handoff is fixed
+## Production canonical additions
 
-The following may be added at work level after the manifestation-preservation step passes regression testing:
+The following are now part of the production W01 canonical work object:
 
 - `author_keywords`
 - `publication_type`
@@ -430,12 +430,11 @@ For each deduplicated work:
 
 Distinct terms are not conflicts. For example, `sea lice` and `Lepeophtheirus salmonis` both survive.
 
-## Required adapter changes before W01 canonical-builder enrichment
+## Adopted adapter semantics
 
 1. **OpenAlex**
-   - stop describing OpenAlex generated `keywords` as canonical bibliographic keywords;
-   - rename/reclassify them as non-author indexing terms;
-   - retain them only as manifestation/source-specific metadata if desired.
+   - generated `keywords` are classified as non-author `indexing_terms`;
+   - they remain manifestation/source-specific metadata and never populate `canonical.author_keywords`.
 
 2. **Lens**
    - expose current `keywords` to the common handoff explicitly as `author_keywords` / article keywords with Lens provenance.
@@ -452,9 +451,9 @@ Distinct terms are not conflicts. For example, `sea lice` and `Lepeophtheirus sa
 
 No W00 search/API behaviour needs to change for these steps.
 
-## Validation requirements
+## Production validation requirements
 
-Before production adoption:
+The adopted schema is protected by the following invariants:
 
 1. baseline-vs-enriched W01 regression must pass for all 32,292 current records;
 2. record IDs must be identical;
@@ -467,12 +466,24 @@ Before production adoption:
 9. every canonical author keyword must trace to at least one eligible manifestation;
 10. no newly preserved field may influence deduplication until separately approved and validated.
 
-## Implementation sequence
+## Validation status
 
-1. Update adapter field names/semantics only.
-2. Validate adapter outputs.
-3. Extend W01 manifestations with additive fields.
-4. Run additive regression gate.
-5. Add canonical work-level fields.
-6. Run additive regression gate again.
-7. Update W02 to fill missing title/abstract/author_keywords using Europe PMC then Scopus.
+The complete enriched W01 schema has passed additive regression against the authoritative current baseline of 32,292 canonical works and 90,137 source manifestations. Existing identities, deduplication state, canonical title/abstract/DOI/authors/year/journal/volume/issue/pages and their provenance remained unchanged.
+
+Validated production additions are:
+
+- rich source-specific `manifestation_metadata`;
+- `canonical.author_keywords`;
+- `canonical.publication_type`;
+- `canonical.publication_date`;
+- `canonical.language`;
+- `canonical.issn`;
+- `canonical.eissn`;
+- `canonical.issn_l`;
+- `canonical.pmid`.
+
+The production finalisation workflow now validates the presence of these canonical fields and provenance entries across the entire output, verifies manifestation metadata on every manifestation, and explicitly guards against OpenAlex generated terms entering manifestation author keywords.
+
+## Remaining downstream work
+
+Workflow 02 may fill missing title, abstract and author keywords using separately validated Europe PMC and Scopus enrichment. Future database additions must extend the source restoration/adapter layer without changing the established W01 identity or deduplication semantics.
