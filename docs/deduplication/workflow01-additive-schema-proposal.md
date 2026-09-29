@@ -68,7 +68,7 @@ Scopus STANDARD contributes no author keywords. Workflow 02 may later fill `cano
 
 **publication_type**
 
-Preserve source-level values in manifestations. Work-level canonicalisation should be deterministic and must not alter deduplication. Before implementation, inspect cross-source value vocabularies and define a conservative mapping or retain a source-derived list if harmonisation would be lossy.
+Preserve source-level values in manifestations. At work level, retain the distinct non-empty source-supplied values, deduplicated case-insensitively while preserving first-source spelling. Do not harmonise vocabularies yet because cross-source mappings may be lossy. Record the contributing manifestation keys as provenance. This field must not alter deduplication.
 
 **publication_date**
 
