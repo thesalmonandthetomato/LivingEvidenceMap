@@ -117,97 +117,109 @@ extract_institutions <- function(authorships) {
 raw_files <- sort(list.files(file.path(input_dir, 'raw'), pattern = '\\.json$', full.names = TRUE))
 if (!length(raw_files)) stop(sprintf('No raw OpenAlex JSON files found under %s/raw', input_dir))
 
-works <- list()
-for (f in raw_files) {
-  x <- fromJSON(f, simplifyVector = FALSE)
-  rs <- x[['results']] %||% list()
-  if (!is.list(rs)) stop(sprintf('Unexpected results structure in %s', f))
-  works <- c(works, rs)
-}
-if (!length(works)) stop('OpenAlex sidecar adapter received zero works')
-
 retrieved_at <- now_utc()
-records <- vector('list', length(works))
-coverage_rows <- vector('list', length(works))
-
-for (i in seq_along(works)) {
-  w <- works[[i]]
-  oid <- openalex_short_id(w$id)
-  doi <- trim_null(w$doi)
-  if (!is.null(doi)) doi <- sub('^https://doi.org/', '', doi)
-  title <- trim_null(w$title)
-  year <- trim_null(w$publication_year)
-  pub_date <- trim_null(w$publication_date)
-  work_type <- trim_null(w$type)
-  abstract <- reconstruct_abstract(w$abstract_inverted_index)
-  authors <- extract_authors(w$authorships)
-  keywords <- extract_keywords(w$keywords)
-  institutions <- extract_institutions(w$authorships)
-  loc <- extract_primary_location(w)
-
-  if (is.null(oid)) stop(sprintf('Record %d has no OpenAlex work ID', i))
-  sidecar_id <- paste0('openalex:', oid)
-
-  records[[i]] <- list(
-    sidecar_identity = list(
-      sidecar_record_id = sidecar_id,
-      openalex_id = oid,
-      doi = doi
-    ),
-    source = list(
-      provider = 'openalex',
-      source_format = 'openalex_works_api_oql_json',
-      search_scope = c('title','abstract')
-    ),
-    openalex = list(raw_payload = w),
-    mapped_fields = list(
-      title = title,
-      abstract = abstract,
-      authors = authors,
-      year = year,
-      publication_date = pub_date,
-      source = loc$source_display_name,
-      doi = doi,
-      indexing_terms = keywords,
-      publication_type = work_type,
-      institutions = institutions,
-      open_access = w$open_access %||% NULL,
-      primary_location = loc
-    ),
-    provenance = list(
-      adapter_workflow = 'workflow_01u_openalex_sidecar_adapter',
-      implementation_language = 'R',
-      adapted_at = retrieved_at,
-      source_stage = 'openalex_oql_title_abstract_search',
-      canonical_json_modified = FALSE,
-      downstream_workflows_modified = FALSE
-    )
-  )
-
-  coverage_rows[[i]] <- data.frame(
-    sidecar_record_id = sidecar_id,
-    openalex_id = oid,
-    doi = doi %||% NA_character_,
-    title = title %||% NA_character_,
-    year = year %||% NA_character_,
-    publication_date = pub_date %||% NA_character_,
-    source = loc$source_display_name %||% NA_character_,
-    publication_type = work_type %||% NA_character_,
-    abstract_present = !is.null(abstract) && nzchar(abstract),
-    authors_present = !is.null(authors) && length(authors) > 0L,
-    indexing_terms_present = !is.null(keywords) && length(keywords) > 0L,
-    institutions_present = !is.null(institutions) && length(institutions) > 0L,
-    stringsAsFactors = FALSE
-  )
-}
-
-sidecar_ids <- vapply(records, function(r) r$sidecar_identity$sidecar_record_id, character(1))
-if (anyDuplicated(sidecar_ids)) stop('Duplicate OpenAlex sidecar_record_id values found in sample')
-
 jsonl_path <- file.path(output_dir, 'openalex_sidecar_records.jsonl')
 con <- file(jsonl_path, open = 'wt', encoding = 'UTF-8')
-for (r in records) writeLines(toJSON(r, auto_unbox = TRUE, null = 'null', na = 'null', digits = NA), con)
+on.exit(try(close(con), silent = TRUE), add = TRUE)
+
+coverage_rows <- list()
+sidecar_ids <- character()
+records_read <- 0L
+
+for (f in raw_files) {
+  x <- fromJSON(f, simplifyVector = FALSE)
+  works <- x[['results']] %||% list()
+  if (!is.list(works)) stop(sprintf('Unexpected results structure in %s', f))
+  if (!length(works)) next
+
+  for (w in works) {
+    records_read <- records_read + 1L
+
+    oid <- openalex_short_id(w$id)
+    doi <- trim_null(w$doi)
+    if (!is.null(doi)) doi <- sub('^https://doi.org/', '', doi)
+    title <- trim_null(w$title)
+    year <- trim_null(w$publication_year)
+    pub_date <- trim_null(w$publication_date)
+    work_type <- trim_null(w$type)
+    abstract <- reconstruct_abstract(w$abstract_inverted_index)
+    authors <- extract_authors(w$authorships)
+    keywords <- extract_keywords(w$keywords)
+    institutions <- extract_institutions(w$authorships)
+    loc <- extract_primary_location(w)
+
+    if (is.null(oid)) stop(sprintf('Record %d has no OpenAlex work ID', records_read))
+    sidecar_id <- paste0('openalex:', oid)
+    sidecar_ids[[records_read]] <- sidecar_id
+
+    record <- list(
+      sidecar_identity = list(
+        sidecar_record_id = sidecar_id,
+        openalex_id = oid,
+        doi = doi
+      ),
+      source = list(
+        provider = 'openalex',
+        source_format = 'openalex_works_api_oql_json',
+        search_scope = c('title','abstract')
+      ),
+      openalex = list(
+        authoritative_raw_payload_location = 'Workflow 00 restricted Zenodo harvest',
+        source_raw_file = basename(f),
+        raw_payload_duplicated_in_w01 = FALSE
+      ),
+      mapped_fields = list(
+        title = title,
+        abstract = abstract,
+        authors = authors,
+        year = year,
+        publication_date = pub_date,
+        source = loc$source_display_name,
+        doi = doi,
+        indexing_terms = keywords,
+        publication_type = work_type,
+        institutions = institutions,
+        open_access = w$open_access %||% NULL,
+        primary_location = loc
+      ),
+      provenance = list(
+        adapter_workflow = 'workflow_01u_openalex_sidecar_adapter',
+        implementation_language = 'R',
+        adapted_at = retrieved_at,
+        source_stage = 'openalex_oql_title_abstract_search',
+        canonical_json_modified = FALSE,
+        downstream_workflows_modified = FALSE
+      )
+    )
+
+    writeLines(toJSON(record, auto_unbox = TRUE, null = 'null', na = 'null', digits = NA), con)
+
+    coverage_rows[[records_read]] <- data.frame(
+      sidecar_record_id = sidecar_id,
+      openalex_id = oid,
+      doi = doi %||% NA_character_,
+      title = title %||% NA_character_,
+      year = year %||% NA_character_,
+      publication_date = pub_date %||% NA_character_,
+      source = loc$source_display_name %||% NA_character_,
+      publication_type = work_type %||% NA_character_,
+      abstract_present = !is.null(abstract) && nzchar(abstract),
+      authors_present = !is.null(authors) && length(authors) > 0L,
+      indexing_terms_present = !is.null(keywords) && length(keywords) > 0L,
+      institutions_present = !is.null(institutions) && length(institutions) > 0L,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  rm(x, works)
+  invisible(gc(FALSE))
+}
+
 close(con)
+con <- NULL
+
+if (records_read == 0L) stop('OpenAlex sidecar adapter received zero works')
+if (anyDuplicated(sidecar_ids)) stop('Duplicate OpenAlex sidecar_record_id values found')
 
 coverage <- do.call(rbind, coverage_rows)
 write.csv(coverage, file.path(output_dir, 'field_coverage_records.csv'), row.names = FALSE, na = '')
@@ -220,15 +232,16 @@ manifest <- list(
   created_at = retrieved_at,
   input = list(
     source = 'OpenAlex Works API OQL title/abstract artefact',
-    raw_files = basename(raw_files),
-    records_read = length(works)
+    raw_files_n = length(raw_files),
+    records_read = records_read
   ),
   output = list(
     sidecar_jsonl = 'openalex_sidecar_records.jsonl',
     field_coverage_csv = 'field_coverage_records.csv',
     canonical_json_modified = FALSE,
     canonical_branch_written = FALSE,
-    downstream_workflows_modified = FALSE
+    downstream_workflows_modified = FALSE,
+    raw_payload_duplicated_in_w01 = FALSE
   ),
   identifier_checks = list(
     unique_sidecar_ids = length(unique(sidecar_ids)),
@@ -255,10 +268,10 @@ manifest <- list(
     additional_openalex_fields_retained_sidecar_only = c('openalex_id','publication_date','institutions','open_access','primary_location','indexing_terms'),
     source_specific_identity = 'openalex_id',
     canonical_materialisation_deferred = TRUE,
-    note = 'Diagnostic source sidecar only. Canonical materialisation is performed later by the source-agnostic Workflow 01 canonical builder.'
+    note = 'W00 raw OpenAlex responses remain authoritative in the restricted Zenodo archive. W01 retains mapped metadata and source-file provenance without duplicating raw payloads.'
   )
 )
 writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = 'null', na = 'null'), file.path(output_dir, 'compatibility_audit.json'))
 
 message(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = 'null', na = 'null'))
-message(sprintf('PASS: wrote %d OpenAlex source-manifestation sidecar records; canonical materialisation deferred.', length(records)))
+message(sprintf('PASS: wrote %d OpenAlex source-manifestation sidecar records; canonical materialisation deferred.', records_read))
