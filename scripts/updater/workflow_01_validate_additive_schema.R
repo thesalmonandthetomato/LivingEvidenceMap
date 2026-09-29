@@ -118,8 +118,12 @@ for(rid in common){
   for(f in existing_canonical_fields){
     if(!same_json(ac[[f]],bc[[f]])) add_issue(rid,paste0("canonical.",f),ac[[f]],bc[[f]])
   }
-  if(!same_json(ac$field_provenance,bc$field_provenance)){
-    add_issue(rid,"canonical.field_provenance",ac$field_provenance,bc$field_provenance)
+  ap <- ac$field_provenance %||% list()
+  bp <- bc$field_provenance %||% list()
+  for(f in existing_canonical_fields){
+    if(!same_json(ap[[f]],bp[[f]])){
+      add_issue(rid,paste0("canonical.field_provenance.",f),ap[[f]],bp[[f]])
+    }
   }
 }
 
