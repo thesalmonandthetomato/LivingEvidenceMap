@@ -1,6 +1,6 @@
-# Workflow 01 additive canonical-schema proposal
+# Workflow 01 additive canonical-schema implementation record
 
-Status: implementation in progress. Manifestation enrichment has passed the additive regression guard; work-level fields are being added one class at a time.
+Status: adopted for production W01. Manifestation enrichment and all planned work-level bibliographic fields have passed the full additive regression guard.
 
 This proposal follows the field-preservation audit and quantitative coverage audit. The purpose is to enrich Workflow 01 without changing any existing deduplication or downstream identity semantics.
 
@@ -32,9 +32,9 @@ The regression guard is implemented in:
 
 `scripts/updater/workflow_01_validate_additive_schema.R`
 
-## Proposed work-level additions
+## Adopted work-level additions
 
-The first implementation tranche should add only fields that are clearly bibliographic and already mapped by multiple sources:
+The adopted first implementation tranche adds the following bibliographic fields:
 
 - `author_keywords`
 - `publication_type`
@@ -82,7 +82,7 @@ Preserve only explicit source-supplied language values. At work level, retain th
 
 Treat as bibliographic identifiers. Preserve source values in manifestations. At work level, retain the distinct explicit identifiers after conservative normalisation: ISSN-family values are upper-cased and rendered as `NNNN-NNNX` when eight valid characters are present; PMID values are reduced to their numeric identifier. Deduplicate normalised values and record contributing manifestation keys as provenance. These identifiers must not feed back into W01 deduplication unless a future separately validated redesign explicitly approves that.
 
-## Proposed manifestation additions
+## Adopted manifestation additions
 
 Every manifestation should retain mapped data that was previously discarded:
 
@@ -121,12 +121,14 @@ Manifestations should additionally preserve the source's structured author objec
 
 This is additive. It must not replace the existing manifestation `authors` field until downstream compatibility has been separately reviewed.
 
-## Implementation order
+## Completed implementation sequence
 
-1. Add the regression gate and prove that it passes when baseline is compared with itself.
-2. Extend manifestation preservation first.
-3. Run the regression gate against baseline.
-4. Add work-level bibliographic fields one class at a time.
-5. Run the regression gate after every class.
-6. Audit downstream parsers against the enriched sample.
-7. Only after those checks, adopt the enriched W01 schema as the production canonical output.
+1. Added and self-tested the additive regression guard.
+2. Extended manifestation preservation additively.
+3. Passed the full baseline regression.
+4. Added `author_keywords`, publication type, publication date, language and bibliographic identifiers one class at a time.
+5. Passed the full regression after every class.
+6. Audited principal downstream readers in W02 and W08; additive canonical fields are preserved because these stages mutate existing records rather than reconstructing the canonical object.
+7. Adopted the enriched builder as the production W01 canonical output.
+
+The final identifier regression passed for all 32,292 canonical records and 90,137 manifestations with all 32 approved data-quality repairs applied and no existing invariant differences.
