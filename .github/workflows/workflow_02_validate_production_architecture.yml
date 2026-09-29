@@ -109,7 +109,7 @@ jobs:
             --report outputs/second_report.json \
             --recheck-after-days 90 \
             --delay 0
-          Rscript -e "library(jsonlite);r<-fromJSON('outputs/second_report.json');stopifnot(r\$counts\$deferred_recent_attempts==6L,r\$counts\$scopus_attempted==0L);cat('PASS: recent unresolved attempts deferred; zero Scopus calls\n')"
+          Rscript -e "library(jsonlite);r<-fromJSON('outputs/second_report.json');stopifnot(r\$counts\$deferred_recent_attempts==r\$counts\$eligible_doi_missing_metadata,r\$counts\$scopus_attempted==0L,r\$counts\$scopus_author_keywords_attempted==0L);cat('PASS: all recent eligible records deferred; zero Scopus calls\n')"
 
       - name: Verify zero second-run patch and stable cumulative state
         shell: bash
