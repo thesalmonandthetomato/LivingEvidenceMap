@@ -210,7 +210,7 @@ jobs:
           getpath(){ Rscript -e "x<-jsonlite::fromJSON('outputs/source_files.json');cat(x\$files[['$1']])"; }
           Rscript scripts/updater/workflow_01_build_canonical_jsonl.R             --cluster-map outputs/final/manifestation_cluster_map.csv             --strip-actions outputs/final/abstract_strip_actions.jsonl             --data-quality-repairs outputs/human_gate/data_quality_repairs.normalised.jsonl             --repair-audit outputs/canonical/data_quality_repair_application.jsonl             --lens "$(getpath lens)"             --scopus "$(getpath scopus)"             --openalex "$(getpath openalex)"             --agricola "$(getpath agricola)"             --wos "$(getpath wos)"             --run-id "$RUN_ID"             --output outputs/canonical/records.jsonl             --manifest outputs/canonical/canonical_manifest.json
 
-      - name: Validate canonical cardinality and schema boundary
+      - name: Validate production canonical schema boundary
         shell: Rscript {0}
         run: |
           library(jsonlite)
@@ -220,13 +220,47 @@ jobs:
           stopifnot(m$records == s$clusters)
           stopifnot(m$source_manifestations == 90137L)
           stopifnot(m$records > 0L)
+
+          required_canonical <- c(
+            'title','abstract','doi','authors','year','journal','volume','issue','pages',
+            'author_keywords','publication_type','publication_date','language',
+            'issn','eissn','issn_l','pmid','field_provenance'
+          )
+          required_added_provenance <- c(
+            'author_keywords','publication_type','publication_date','language',
+            'issn','eissn','issn_l','pmid'
+          )
+
           con <- file('outputs/canonical/records.jsonl','rt',encoding='UTF-8')
-          first <- fromJSON(readLines(con,n=1L,warn=FALSE),simplifyVector=FALSE)
-          close(con)
-          stopifnot(first$schema_version == 'living-evidence-map-canonical-v1')
-          stopifnot(first$identity$record_id_type == 'deduplication_cluster_id')
-          stopifnot(length(first$manifestations) >= 1L)
-          cat(sprintf('PASS: canonical boundary validated: %d works from %d manifestations\n',m$records,m$source_manifestations))
+          on.exit(close(con),add=TRUE)
+          n <- 0L
+          mans <- 0L
+          repeat {
+            lines <- readLines(con,n=250L,warn=FALSE)
+            if(!length(lines)) break
+            for(line in lines){
+              if(!nzchar(trimws(line))) next
+              r <- fromJSON(line,simplifyVector=FALSE)
+              n <- n + 1L
+              stopifnot(r$schema_version == 'living-evidence-map-canonical-v1')
+              stopifnot(r$identity$record_id_type == 'deduplication_cluster_id')
+              stopifnot(all(required_canonical %in% names(r$canonical)))
+              stopifnot(all(required_added_provenance %in% names(r$canonical$field_provenance)))
+              stopifnot(length(r$manifestations) >= 1L)
+              for(mm in r$manifestations){
+                stopifnot('manifestation_metadata' %in% names(mm))
+                stopifnot(is.list(mm$manifestation_metadata))
+                if(identical(mm$source,'openalex')){
+                  stopifnot(is.null(mm$manifestation_metadata$author_keywords))
+                }
+                mans <- mans + 1L
+              }
+            }
+          }
+          close(con); on.exit(NULL,add=FALSE)
+          stopifnot(n == m$records)
+          stopifnot(mans == m$source_manifestations)
+          cat(sprintf('PASS: production canonical schema validated: %d works from %d manifestations\n',n,mans))
 
       - name: Write pre-archive run report
         shell: bash
