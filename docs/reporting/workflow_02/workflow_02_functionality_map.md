@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Workflow 02 enriches the canonical work records produced by Workflow 01 when bibliographic metadata remain incomplete. It operates only on canonical records with a DOI and a missing title and/or abstract, queries Europe PMC first and Scopus second, applies only verified missing-field fills, quarantines conflicting provider metadata, and preserves Workflow 01 work identity, source manifestations and existing populated metadata.
+Workflow 02 enriches the canonical work records produced by Workflow 01 when bibliographic metadata remain incomplete. It operates on canonical records with a DOI and a missing title, abstract and/or genuine author keywords, queries Europe PMC first, retains the established Scopus fallback for title/abstract repair, and uses Scopus author keywords only through an EID already preserved in a Workflow 01 Scopus manifestation. It applies only verified missing-field fills, quarantines conflicting provider metadata, and preserves Workflow 01 work identity, source manifestations and existing populated metadata.
 
 Workflow 02 is implemented as a sparse enrichment layer over the immutable Workflow 01 canonical corpus. It does not republish the complete canonical JSONL on every run. Instead, the automated production process stores a cumulative enrichment patch keyed by stable Workflow 01 `record_id`, plus provider audit, retry state and corpus-quality reports. The enriched canonical JSONL is reconstructed deterministically by applying that patch to the exact upstream Workflow 01 canonical checksum.
 
@@ -119,13 +119,13 @@ Workflow 02 records this checksum in its durable state so enrichment provenance 
 A canonical record is eligible for provider lookup only when:
 
 - a DOI is present; and
-- the canonical title and/or canonical abstract is missing.
+- the canonical title, canonical abstract and/or canonical author-keyword field is missing.
 
 Workflow 02 does not query records that already contain both fields.
 
 ### Existing-field protection
 
-Workflow 02 never overwrites an already populated canonical title or abstract.
+Workflow 02 never overwrites an already populated canonical title, abstract or author-keyword field.
 
 The patch builder validates that any changed title or abstract was previously missing and that no Workflow 01 identity, manifestation, DOI or unrelated record field changed.
 
@@ -140,19 +140,19 @@ This order reduces unnecessary Scopus calls while retaining Scopus as the broade
 
 ### Europe PMC matching
 
-Europe PMC metadata are accepted only where the provider returns the exact normalised DOI requested.
-
-Returned abstracts are subject to the title-consistency guard where a provider title and canonical title are both available.
+Europe PMC metadata are accepted only where the provider returns the exact normalised DOI requested. For abstract and author-keyword fills, an existing canonical title must also agree with the provider title at Jaro-Winkler similarity ≥0.90. Where the canonical title itself is missing, exact DOI identity may fill that title first; subsequent Europe PMC fields are then accepted only under the resulting title-consistency guard.
 
 ### Scopus matching
 
-Scopus retrieval proceeds through:
+Scopus title/abstract retrieval retains the previously validated route:
 
 1. direct Abstract Retrieval by DOI using `view=META_ABS`;
 2. if direct retrieval does not return usable metadata, Scopus Search by DOI;
 3. if the search yields one compatible candidate, retrieval by EID using `META_ABS`.
 
 EID fallback is accepted only when the resulting full Scopus record returns the exact requested DOI.
+
+For `author_keywords`, W02 does **not** infer or discover an EID through DOI search. It uses only a Scopus EID already retained in the W01 manifestation metadata, then requires retained EID retrieval + exact DOI + title similarity ≥0.90 before applying genuine Scopus `author-keyword` values.
 
 ### Title-consistency guard
 
@@ -182,7 +182,7 @@ The previous patch is applied in fill-missing mode to the current Workflow 01 co
 
 ### 3. Discover due enrichment candidates
 
-Workflow 02 scans the canonical corpus and selects records with a DOI and missing title and/or abstract.
+Workflow 02 scans the canonical corpus and selects records with a DOI and a missing title, abstract and/or author-keyword field.
 
 Records with recent non-technical enrichment attempts are deferred according to the configured recheck period.
 
@@ -192,9 +192,7 @@ Europe PMC is queried first. Exact DOI equality is required before any field can
 
 ### 5. Query Scopus
 
-Scopus is queried only for records that still lack title and/or abstract after Europe PMC.
-
-Direct DOI retrieval is attempted first, followed by DOI search and EID retrieval where needed.
+For residual missing title/abstract fields, the established Scopus DOI retrieval route is retained. For residual missing author keywords, Scopus is queried only when W01 already contains a retained Scopus EID; this lookup does not use DOI search to discover an identifier.
 
 ### 6. Apply verified fills and quarantine conflicts
 
@@ -210,7 +208,7 @@ Each patch records:
 
 - stable `record_id`;
 - input DOI;
-- newly filled title and/or abstract where applicable;
+- newly filled title, abstract and/or author keywords where applicable;
 - provider responsible for each applied field;
 - provider outcome metadata;
 - enrichment completion date;
@@ -247,6 +245,7 @@ Workflow 02 inventories the final enriched corpus and records:
 - records with DOI;
 - records missing title;
 - records missing abstract;
+- records missing author keywords;
 - records missing both title and abstract.
 
 A separate queue is written for records missing both fields.
@@ -409,7 +408,7 @@ Downstream workflows must preserve the stable Workflow 01 `record_id` and source
 
 ## Methods text for research reporting
 
-> **Workflow 02: bibliographic metadata enrichment.** Canonical records with a DOI but a missing title and/or abstract were subjected to deterministic metadata enrichment. Europe PMC was queried first, with metadata accepted only where the returned DOI exactly matched the requested normalised DOI. Records remaining incomplete were queried against Scopus using direct DOI-based abstract retrieval and, where necessary, DOI search followed by EID retrieval. Existing populated canonical fields were never overwritten by the automated process. Returned abstracts were accepted only when provider and canonical titles were consistent, using a Jaro-Winkler similarity threshold of 0.90 where both titles were available; conflicting metadata were quarantined rather than applied. Automated enrichment was stored as a sparse patch keyed to stable canonical work identifiers rather than as a duplicate full corpus, and both current and cumulative patch states were replayed against the authoritative upstream corpus before archival. Provider outcomes, accepted fills, quarantined conflicts, checksums and lineage were retained for provenance, and the cumulative sparse enrichment state was replayed against the exact upstream canonical corpus before archival.
+> **Workflow 02: bibliographic metadata enrichment.** Canonical records with a DOI but a missing title, abstract and/or author-keyword field were subjected to deterministic metadata enrichment. Europe PMC was queried first, with metadata accepted only where the returned DOI exactly matched the requested normalised DOI; abstract and author-keyword fills additionally required title agreement at a Jaro-Winkler similarity of at least 0.90. Records remaining incomplete for title or abstract were queried against Scopus using direct DOI-based abstract retrieval and, where necessary, DOI search followed by EID retrieval. Missing author keywords were queried in Scopus only through an EID already retained in the Workflow 01 manifestation and were accepted only after exact DOI and title-consistency checks. Existing populated canonical fields were never overwritten by the automated process. Returned abstracts were accepted only when provider and canonical titles were consistent, using a Jaro-Winkler similarity threshold of 0.90 where both titles were available; conflicting metadata were quarantined rather than applied. Automated enrichment was stored as a sparse patch keyed to stable canonical work identifiers rather than as a duplicate full corpus, and both current and cumulative patch states were replayed against the authoritative upstream corpus before archival. Provider outcomes, accepted fills, quarantined conflicts, checksums and lineage were retained for provenance, and the cumulative sparse enrichment state was replayed against the exact upstream canonical corpus before archival.
 
 ## Reporting status
 
@@ -417,7 +416,7 @@ Workflow 02 is considered validated when:
 
 - the Workflow 01 canonical JSONL is consumed without a schema adapter;
 - stable work identities and source manifestations remain unchanged;
-- existing title, abstract and DOI values are not overwritten;
+- existing title, abstract, author-keyword and DOI values are not overwritten;
 - only DOI-bearing records with missing target fields are queried;
 - provider matches satisfy exact DOI and title-consistency rules;
 - conflicting provider metadata are quarantined;
