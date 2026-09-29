@@ -1,4 +1,4 @@
-name: Workflow 02 - Production metadata enrichment and repair
+name: Workflow 02 - Production bibliographic enrichment and repair
 
 on:
   workflow_call:
@@ -284,7 +284,7 @@ jobs:
           cp outputs/workflow02/final_inventory.json outputs/workflow02_state/
           cp outputs/workflow02/missing_both_queue.jsonl outputs/workflow02_state/
           cp outputs/workflow02/cumulative_patch_replay.json outputs/workflow02_state/
-          Rscript -e "library(jsonlite);x<-list(schema='living-evidence-map-workflow02-state-manifest-v1',workflow='02',github_run_id=Sys.getenv('GITHUB_RUN_ID'),workflow01_pointer=Sys.getenv('W01_POINTER'),workflow01_canonical_sha256=Sys.getenv('W01_SHA'),previous_workflow02_pointer=if(nzchar(Sys.getenv('PREV_W02_POINTER')))Sys.getenv('PREV_W02_POINTER') else NULL,final_enriched_sha256=digest::digest(file='outputs/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE),created_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'));writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/workflow02_state/state_manifest.json')"
+          Rscript -e "library(jsonlite);x<-list(schema='living-evidence-map-workflow02-state-manifest-v1',workflow='02',repairable_fields=c('title','abstract','author_keywords'),github_run_id=Sys.getenv('GITHUB_RUN_ID'),workflow01_pointer=Sys.getenv('W01_POINTER'),workflow01_canonical_sha256=Sys.getenv('W01_SHA'),previous_workflow02_pointer=if(nzchar(Sys.getenv('PREV_W02_POINTER')))Sys.getenv('PREV_W02_POINTER') else NULL,final_enriched_sha256=digest::digest(file='outputs/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE),created_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'));writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/workflow02_state/state_manifest.json')"
 
       - name: Publish sparse Workflow 02 state to restricted Zenodo
         if: ${{ inputs.publish == true }}
