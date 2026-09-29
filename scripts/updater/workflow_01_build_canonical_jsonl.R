@@ -105,6 +105,119 @@ field <- function(r,name){
   }
   NULL
 }
+manifestation_metadata <- function(r){
+  src <- source_kind(r)
+  if(src=="lens"){
+    can <- r$canonical %||% list()
+    raw <- (r$lens %||% list())$raw_payload %||% list()
+    return(list(
+      source_identity=list(
+        lens_id=scalar((r$identity %||% list())$lens_id %||% can$lens_id)
+      ),
+      author_keywords=can$keywords %||% raw$keywords %||% NULL,
+      indexing_terms=NULL,
+      publication_type=can$publication_type %||% raw$publication_type %||% NULL,
+      publication_date=clean_text(raw$date_published),
+      language=NULL,
+      identifiers=list(
+        issn=NULL,eissn=NULL,issn_l=NULL,pmid=NULL,
+        scopus_eid=NULL,scopus_id=NULL,openalex_id=NULL,agricola_id=NULL,wos_uid=NULL
+      ),
+      structured_authors=can$authors %||% raw$authors %||% NULL,
+      affiliations_or_institutions=NULL,
+      source_specific=list()
+    ))
+  }
+
+  m <- r$mapped_fields %||% list()
+  sid <- r$sidecar_identity %||% list()
+
+  if(src=="scopus"){
+    return(list(
+      source_identity=list(scopus_eid=sid$scopus_eid %||% NULL,scopus_id=sid$scopus_id %||% NULL),
+      author_keywords=NULL,
+      indexing_terms=NULL,
+      publication_type=m$publication_type %||% NULL,
+      publication_date=m$publication_date %||% NULL,
+      language=NULL,
+      identifiers=list(
+        issn=NULL,eissn=NULL,issn_l=NULL,pmid=NULL,
+        scopus_eid=sid$scopus_eid %||% NULL,scopus_id=sid$scopus_id %||% NULL,
+        openalex_id=NULL,agricola_id=NULL,wos_uid=NULL
+      ),
+      structured_authors=m$authors %||% NULL,
+      affiliations_or_institutions=m$affiliations %||% NULL,
+      source_specific=list(first_author_only=TRUE)
+    ))
+  }
+
+  if(src=="openalex"){
+    return(list(
+      source_identity=list(openalex_id=sid$openalex_id %||% NULL),
+      author_keywords=NULL,
+      indexing_terms=m$indexing_terms %||% NULL,
+      publication_type=m$publication_type %||% NULL,
+      publication_date=m$publication_date %||% NULL,
+      language=NULL,
+      identifiers=list(
+        issn=NULL,eissn=NULL,
+        issn_l=(m$primary_location %||% list())$issn_l %||% NULL,
+        pmid=NULL,scopus_eid=NULL,scopus_id=NULL,
+        openalex_id=sid$openalex_id %||% NULL,agricola_id=NULL,wos_uid=NULL
+      ),
+      structured_authors=m$authors %||% NULL,
+      affiliations_or_institutions=m$institutions %||% NULL,
+      source_specific=list(
+        open_access=m$open_access %||% NULL,
+        primary_location=m$primary_location %||% NULL
+      )
+    ))
+  }
+
+  if(src=="agricola"){
+    return(list(
+      source_identity=list(agricola_id=sid$agricola_id %||% NULL,europe_pmc_source=sid$europe_pmc_source %||% NULL),
+      author_keywords=m$author_keywords %||% NULL,
+      indexing_terms=NULL,
+      publication_type=m$publication_type %||% NULL,
+      publication_date=m$first_publication_date %||% NULL,
+      language=m$language %||% NULL,
+      identifiers=list(
+        issn=NULL,eissn=NULL,issn_l=NULL,pmid=NULL,
+        scopus_eid=NULL,scopus_id=NULL,openalex_id=NULL,
+        agricola_id=sid$agricola_id %||% NULL,wos_uid=NULL
+      ),
+      structured_authors=m$authors %||% NULL,
+      affiliations_or_institutions=m$affiliation %||% NULL,
+      source_specific=list(author_string=m$author_string %||% NULL)
+    ))
+  }
+
+  if(src=="wos"){
+    return(list(
+      source_identity=list(wos_uid=sid$wos_uid %||% NULL),
+      author_keywords=m$author_keywords %||% NULL,
+      indexing_terms=NULL,
+      publication_type=m$publication_type %||% NULL,
+      publication_date=NULL,
+      language=NULL,
+      identifiers=list(
+        issn=m$issn %||% NULL,eissn=m$eissn %||% NULL,issn_l=NULL,pmid=m$pmid %||% NULL,
+        scopus_eid=NULL,scopus_id=NULL,openalex_id=NULL,agricola_id=NULL,
+        wos_uid=sid$wos_uid %||% NULL
+      ),
+      structured_authors=m$authors %||% NULL,
+      affiliations_or_institutions=NULL,
+      source_specific=list(
+        source_types=m$source_types %||% NULL,
+        times_cited_wos=m$times_cited_wos %||% NULL
+      )
+    ))
+  }
+
+  list()
+}
+
 author_strings <- function(x){
   if(is.null(x)||!length(x)) return(character())
   one <- function(z){
@@ -326,6 +439,7 @@ for(cid in sort(names(clusters))){
       volume=field(r,"volume"),
       issue=field(r,"issue"),
       pages=field(r,"pages"),
+      manifestation_metadata=manifestation_metadata(r),
       abstract_stripped=stripped,
       abstract_strip_provenance=if(keys[[i]] %in% strip_keys) strip_audit[[keys[[i]]]] else NULL
     )
