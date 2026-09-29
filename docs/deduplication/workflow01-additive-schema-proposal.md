@@ -76,7 +76,7 @@ Preserve source-level dates. At work level, normalise only recognisable ISO-like
 
 **language**
 
-Preserve where supplied. Do not infer language from title or abstract.
+Preserve only explicit source-supplied language values. At work level, retain the distinct non-empty explicit values, deduplicated case-insensitively while preserving first-source spelling, and record contributing manifestation keys as provenance. Do not infer language from title or abstract.
 
 **ISSN/eISSN/ISSN-L/PMID**
 
