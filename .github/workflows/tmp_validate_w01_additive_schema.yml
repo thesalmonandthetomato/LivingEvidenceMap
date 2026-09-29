@@ -6,6 +6,8 @@ on:
     branches: [workflow01-final-architecture]
     paths:
       - '.github/workflows/tmp_validate_w01_additive_schema.yml'
+      - 'scripts/updater/workflow_01_build_canonical_jsonl.R'
+      - 'scripts/updater/workflow_01_validate_additive_schema.R'
 
 permissions:
   contents: read
@@ -43,3 +45,55 @@ jobs:
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_01_validate_additive_schema.R             --baseline baseline/canonical/records.jsonl             --candidate baseline/canonical/records.jsonl             --report outputs/self_test_report.json
+
+
+      - name: Locate archived Workflow 01 rebuild inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cm="$(find baseline -type f -path '*/workflow01_full_five_source/manifestation_cluster_map.csv' -print -quit)"
+          lens="$(find baseline -type f -path '*/workflow01_seed/lens_records_for_deduplication.jsonl' -print -quit)"
+          scopus="$(find baseline -type f -path '*/workflow01_seed/scopus_records_for_deduplication.jsonl' -print -quit)"
+          openalex="$(find baseline -type f -path '*/workflow01_seed/openalex_records_for_deduplication.jsonl' -print -quit)"
+          agricola="$(find baseline -type f -path '*/workflow01_seed/agricola_records_for_deduplication.jsonl' -print -quit)"
+          wos="$(find baseline -type f -path '*/workflow01_seed/wos_records_for_deduplication.jsonl' -print -quit)"
+          strip="$(find baseline -type f -path '*/workflow01_full_five_source/abstract_strip_actions.jsonl' -print -quit || true)"
+          for v in cm lens scopus openalex agricola wos; do
+            eval "p=\${$v}"
+            [ -s "$p" ] || { echo "Missing required archived input: $v" >&2; find baseline -maxdepth 4 -type f | sort >&2; exit 1; }
+            echo "$v=$p" >> "$GITHUB_OUTPUT"
+          done
+          if [ -n "$strip" ] && [ -f "$strip" ]; then echo "strip=$strip" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Build enriched candidate from archived W01 state
+        shell: bash
+        env:
+          RUN_ID: additive-schema-validation
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          args=(
+            --cluster-map '${{ steps.inputs.outputs.cm }}'
+            --lens '${{ steps.inputs.outputs.lens }}'
+            --scopus '${{ steps.inputs.outputs.scopus }}'
+            --openalex '${{ steps.inputs.outputs.openalex }}'
+            --agricola '${{ steps.inputs.outputs.agricola }}'
+            --wos '${{ steps.inputs.outputs.wos }}'
+            --run-id "$RUN_ID"
+            --output candidate/records.jsonl
+            --manifest candidate/manifest.json
+          )
+          if [ -n '${{ steps.inputs.outputs.strip }}' ]; then
+            args+=(--strip-actions '${{ steps.inputs.outputs.strip }}')
+          fi
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R "${args[@]}"
+
+      - name: Validate manifestation enrichment is strictly additive
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_validate_additive_schema.R \
+            --baseline baseline/canonical/records.jsonl \
+            --candidate candidate/records.jsonl \
+            --report outputs/manifestation_enrichment_regression.json
