@@ -1,0 +1,129 @@
+name: Temporary - benchmark Scopus DOI author keywords
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_workflow02_scopus_keyword_doi_benchmark.yml'
+      - 'scripts/updater/tmp_workflow_02_scopus_keyword_doi_benchmark.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','stringdist','digest','data.table'))
+
+      - name: Parse benchmark script
+        shell: Rscript {0}
+        run: parse(file='scripts/updater/tmp_workflow_02_scopus_keyword_doi_benchmark.R')
+
+      - name: Restore authoritative Workflow 01 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-36128255337.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root baseline
+
+      - name: Locate archived Workflow 01 rebuild inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cm="$(find baseline -type f -path '*/workflow01_full_five_source/manifestation_cluster_map.csv' -print -quit)"
+          lens="$(find baseline -type f -path '*/workflow01_seed/lens_records_for_deduplication.jsonl' -print -quit)"
+          scopus="$(find baseline -type f -path '*/workflow01_seed/scopus_records_for_deduplication.jsonl' -print -quit)"
+          openalex="$(find baseline -type f -path '*/workflow01_seed/openalex_records_for_deduplication.jsonl' -print -quit)"
+          agricola="$(find baseline -type f -path '*/workflow01_seed/agricola_records_for_deduplication.jsonl' -print -quit)"
+          wos="$(find baseline -type f -path '*/workflow01_seed/wos_records_for_deduplication.jsonl' -print -quit)"
+          strip="$(find baseline -type f -path '*/workflow01_full_five_source/abstract_strip_actions.jsonl' -print -quit || true)"
+          repairs="$(find baseline -type f -path '*/provenance/cumulative_data_quality_repairs.jsonl' -print -quit || true)"
+          for v in cm lens scopus openalex agricola wos; do
+            eval "p=\${$v}"
+            [ -s "$p" ] || exit 1
+            echo "$v=$p" >> "$GITHUB_OUTPUT"
+          done
+          if [ -n "$strip" ]; then echo "strip=$strip" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$repairs" ]; then echo "repairs=$repairs" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Build enriched W01 candidate
+        env:
+          RUN_ID: scopus-keyword-benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          args=(
+            --cluster-map '${{ steps.inputs.outputs.cm }}'
+            --lens '${{ steps.inputs.outputs.lens }}'
+            --scopus '${{ steps.inputs.outputs.scopus }}'
+            --openalex '${{ steps.inputs.outputs.openalex }}'
+            --agricola '${{ steps.inputs.outputs.agricola }}'
+            --wos '${{ steps.inputs.outputs.wos }}'
+            --run-id "$RUN_ID"
+            --output candidate/records.jsonl
+            --manifest candidate/manifest.json
+          )
+          if [ -n '${{ steps.inputs.outputs.strip }}' ]; then args+=(--strip-actions '${{ steps.inputs.outputs.strip }}'); fi
+          if [ -n '${{ steps.inputs.outputs.repairs }}' ]; then
+            args+=(--data-quality-repairs '${{ steps.inputs.outputs.repairs }}')
+            args+=(--repair-audit candidate/data_quality_repair_application.jsonl)
+          fi
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R "${args[@]}"
+
+      - name: Run 100-record direct DOI keyword benchmark
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/scopus_keyword_benchmark
+          Rscript scripts/updater/tmp_workflow_02_scopus_keyword_doi_benchmark.R \
+            --input candidate/records.jsonl \
+            --audit outputs/scopus_keyword_benchmark/audit.jsonl \
+            --report outputs/scopus_keyword_benchmark/report.json \
+            --sample-n 100 \
+            --seed 29092026 \
+            --delay 0.15
+
+      - name: Validate benchmark
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          r <- fromJSON('outputs/scopus_keyword_benchmark/report.json')
+          stopifnot(r$status=='PASS',r$scopus_sample_n==100L)
+          stopifnot(r$scopus_author_keyword_fills_accepted <= 100L)
+          stopifnot(r$scopus_doi_mismatches >= 0L,r$scopus_title_mismatches >= 0L)
+          cat(sprintf('PASS: Scopus direct DOI keyword benchmark: accepted=%d/100 (%.1f%%), DOI mismatch=%d, title mismatch=%d\n',
+                      r$scopus_author_keyword_fills_accepted,100*r$scopus_author_keyword_yield,
+                      r$scopus_doi_mismatches,r$scopus_title_mismatches))
+
+      - name: Upload benchmark audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scopus-keyword-doi-benchmark-${{ github.run_id }}
+          path: outputs/scopus_keyword_benchmark/
+          retention-days: 30
+          if-no-files-found: warn
