@@ -1,0 +1,45 @@
+name: Temporary - validate W01 additive schema guard
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_validate_w01_additive_schema.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest','data.table'))
+
+      - name: Restore authoritative Workflow 01 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R             --pointer docs/deduplication/zenodo/run-36128255337.json             --pointer-dir docs/deduplication/zenodo             --output-root baseline
+          test -s baseline/canonical/records.jsonl
+
+      - name: Self-test additive regression guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_validate_additive_schema.R             --baseline baseline/canonical/records.jsonl             --candidate baseline/canonical/records.jsonl             --report outputs/self_test_report.json
