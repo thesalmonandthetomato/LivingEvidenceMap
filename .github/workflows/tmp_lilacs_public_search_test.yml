@@ -1,0 +1,128 @@
+name: Temporary - LILACS public search test
+
+on:
+  push:
+    branches:
+      - tmp-lilacs-api-test
+    paths:
+      - '.github/workflows/tmp_lilacs_public_search_test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-lilacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-lilacs-api-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite"))
+
+      - name: Probe public BVS/LILACS endpoints
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(httr2)
+            library(jsonlite)
+          })
+
+          dir.create("outputs/lilacs_test", recursive=TRUE, showWarnings=FALSE)
+          base <- "https://pesquisa.bvsalud.org/portal/"
+
+          mk <- function(output, format) {
+            x <- list(
+              output=output, lang="en", from=0, sort="", format=format,
+              count=5, page=1, index="tw", q="salmon"
+            )
+            x[["filter[db][]"]] <- "LILACS"
+            x
+          }
+
+          candidates <- list(
+            html=mk("site","summary"),
+            format_json=mk("site","json"),
+            output_json=mk("json","summary"),
+            output_xml=mk("xml","summary"),
+            output_rss=mk("rss","summary")
+          )
+
+          rows <- list()
+
+          for (nm in names(candidates)) {
+            req <- request(base) |>
+              req_headers(
+                Accept="*/*",
+                `User-Agent`="LivingEvidenceMap temporary LILACS test"
+              )
+
+            req <- do.call(req_url_query, c(list(req), candidates[[nm]])) |>
+              req_error(is_error=function(resp) FALSE)
+
+            resp <- req_perform(req)
+            body <- tryCatch(resp_body_string(resp), error=function(e) "")
+            headers <- resp_headers(resp)
+            ct <- if (!is.null(headers[["content-type"]])) headers[["content-type"]] else NA_character_
+
+            writeLines(body, file.path("outputs/lilacs_test", paste0(nm, ".txt")), useBytes=TRUE)
+
+            rows[[length(rows)+1L]] <- data.frame(
+              probe=nm,
+              http_status=resp_status(resp),
+              content_type=ct,
+              bytes=nchar(body, type="bytes"),
+              contains_LILACS=grepl("LILACS", body, fixed=TRUE),
+              contains_salmon=grepl("salmon", tolower(body), fixed=TRUE),
+              contains_json_marker=grepl('"response"|\\{"', body, perl=TRUE),
+              contains_xml_marker=grepl("^\\s*<\\?xml|<response|<rss", body, perl=TRUE),
+              stringsAsFactors=FALSE
+            )
+          }
+
+          out <- do.call(rbind, rows)
+          print(out, row.names=FALSE)
+          write.csv(out, "outputs/lilacs_test/probe_summary.csv", row.names=FALSE)
+
+          html <- readLines("outputs/lilacs_test/html.txt", warn=FALSE, encoding="UTF-8")
+          html <- paste(html, collapse="\n")
+
+          patterns <- c(
+            result_count="([0-9][0-9., ]*)\\s+(results|resultados|resultados encontrados)",
+            lilacs_ids="lil-[0-9]+",
+            doi="10\\.[0-9]{4,9}/[-._;()/:A-Za-z0-9]+",
+            export="(export|xml|rss|ris|csv|download)"
+          )
+
+          evidence <- lapply(names(patterns), function(nm) {
+            m <- gregexpr(patterns[[nm]], html, perl=TRUE, ignore.case=TRUE)
+            hits <- regmatches(html, m)[[1]]
+            if (identical(hits, character(0))) hits <- character()
+            list(pattern=nm, matches=unique(head(hits, 20)))
+          })
+          names(evidence) <- names(patterns)
+
+          writeLines(
+            toJSON(evidence, auto_unbox=TRUE, pretty=TRUE, null="null"),
+            "outputs/lilacs_test/html_evidence.json"
+          )
+
+          cat("\nHTML EVIDENCE\n")
+          print(evidence)
+
+      - name: Upload probe artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lilacs-public-search-test-${{ github.run_id }}
+          path: outputs/lilacs_test/
+          retention-days: 7
+          if-no-files-found: error
