@@ -37,13 +37,19 @@ clean <- function(x){
   if(is.na(s)||!nzchar(s)) NULL else s
 }
 missing <- function(x) is.null(clean(x))
+keywords_missing <- function(x){
+  if(is.null(x) || !length(x)) return(TRUE)
+  vals <- trimws(gsub("[[:space:]]+"," ",as.character(unlist(x,use.names=FALSE))))
+  vals <- vals[!is.na(vals) & nzchar(vals)]
+  !length(vals)
+}
 rid <- function(r) clean((r$identity %||% list())$record_id)
 same_without_allowed <- function(a,b){
   aa<-a; bb<-b
   if(is.null(aa$canonical)) aa$canonical<-list()
   if(is.null(bb$canonical)) bb$canonical<-list()
-  aa$canonical$title<-NULL; aa$canonical$abstract<-NULL
-  bb$canonical$title<-NULL; bb$canonical$abstract<-NULL
+  aa$canonical$title<-NULL; aa$canonical$abstract<-NULL; aa$canonical$author_keywords<-NULL
+  bb$canonical$title<-NULL; bb$canonical$abstract<-NULL; bb$canonical$author_keywords<-NULL
   aa$metadata_enrichment<-NULL; bb$metadata_enrichment<-NULL
   identical(aa,bb)
 }
@@ -63,7 +69,7 @@ aud_by_id <- setNames(aud,vapply(aud,function(x) clean(x$record_id) %||% "",char
 if(anyDuplicated(names(aud_by_id))) stop("Duplicate record IDs in enrichment audit",call.=FALSE)
 
 patches <- list(); retry <- list()
-changed_title <- 0L; changed_abstract <- 0L; attempted <- 0L; technical <- 0L
+changed_title <- 0L; changed_abstract <- 0L; changed_author_keywords <- 0L; attempted <- 0L; technical <- 0L
 for(i in seq_along(inp)){
   a<-inp[[i]]; b<-out[[i]]
   ida<-rid(a); idb<-rid(b)
@@ -75,15 +81,18 @@ for(i in seq_along(inp)){
 
   at<-(a$canonical %||% list())$title; bt<-(b$canonical %||% list())$title
   aa<-(a$canonical %||% list())$abstract; ba<-(b$canonical %||% list())$abstract
-  tchg <- !identical(at,bt); achg <- !identical(aa,ba)
+  ak<-(a$canonical %||% list())$author_keywords; bk<-(b$canonical %||% list())$author_keywords
+  tchg <- !identical(at,bt); achg <- !identical(aa,ba); kchg <- !identical(ak,bk)
   if(tchg && (!missing(at) || missing(bt))) stop(sprintf("Invalid title overwrite for %s",ida),call.=FALSE)
   if(achg && (!missing(aa) || missing(ba))) stop(sprintf("Invalid abstract overwrite for %s",ida),call.=FALSE)
+  if(kchg && (!keywords_missing(ak) || keywords_missing(bk))) stop(sprintf("Invalid author_keywords overwrite for %s",ida),call.=FALSE)
   if(tchg) changed_title<-changed_title+1L
   if(achg) changed_abstract<-changed_abstract+1L
+  if(kchg) changed_author_keywords<-changed_author_keywords+1L
 
   meta <- b$metadata_enrichment
   meta_changed <- !identical(a$metadata_enrichment,b$metadata_enrichment)
-  if(meta_changed || tchg || achg){
+  if(meta_changed || tchg || achg || kchg){
     attempted<-attempted+1L
     au <- aud_by_id[[ida]]
     if(is.null(au)) stop(sprintf("new Workflow 02 state exists without audit row for %s",ida),call.=FALSE)
@@ -97,6 +106,7 @@ for(i in seq_along(inp)){
       input_doi=clean((a$canonical %||% list())$doi),
       title=if(tchg) list(value=bt,provider=provider_for("title")) else NULL,
       abstract=if(achg) list(value=ba,provider=provider_for("abstract")) else NULL,
+      author_keywords=if(kchg) list(value=bk,provider=provider_for("author_keywords")) else NULL,
       metadata_enrichment=meta,
       audit=au
     )
@@ -104,19 +114,22 @@ for(i in seq_along(inp)){
 
     eptech <- identical(clean((au$europe_pmc %||% list())$outcome),"technical_error")
     sctech <- identical(clean((au$scopus %||% list())$outcome),"technical_error")
-    if(eptech || sctech){
+    sktech <- identical(clean((au$scopus_keywords %||% list())$outcome),"technical_error")
+    if(eptech || sctech || sktech){
       technical<-technical+1L
       retry[[length(retry)+1L]] <- list(
         record_id=ida,
         doi=clean((a$canonical %||% list())$doi),
         title_missing_after=missing(bt),
         abstract_missing_after=missing(ba),
+        author_keywords_missing_after=keywords_missing(bk),
         europe_pmc_technical_error=eptech,
         scopus_technical_error=sctech,
+        scopus_keywords_technical_error=sktech,
         audit=au
       )
     }
-  } else if(tchg || achg) stop(sprintf("Changed metadata without Workflow 02 provenance for %s",ida),call.=FALSE)
+  } else if(tchg || achg || kchg) stop(sprintf("Changed metadata without Workflow 02 provenance for %s",ida),call.=FALSE)
 }
 
 writejl(patches,patch_path); writejl(retry,retry_path)
@@ -133,9 +146,10 @@ report <- list(
   patch_records=length(patches),
   title_fills=changed_title,
   abstract_fills=changed_abstract,
+  author_keyword_fills=changed_author_keywords,
   technical_retry_records=length(retry),
   created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(report,auto_unbox=TRUE,pretty=TRUE,null="null"),report_path,useBytes=TRUE)
-cat(sprintf("PASS: Workflow 02 patch ledger: %d attempted records; %d title fills; %d abstract fills; %d technical retries\n",
-            attempted,changed_title,changed_abstract,length(retry)))
+cat(sprintf("PASS: Workflow 02 patch ledger: %d attempted records; %d title fills; %d abstract fills; %d author-keyword fills; %d technical retries\n",
+            attempted,changed_title,changed_abstract,changed_author_keywords,length(retry)))
