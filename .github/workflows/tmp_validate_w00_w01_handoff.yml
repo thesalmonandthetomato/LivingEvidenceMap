@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p adapted/{scopus,openalex,agricola,wos}
+          mkdir -p adapted/{lens,scopus,openalex,agricola,wos}
 
           source_child_dir() {
             local source="$1"
@@ -61,16 +61,20 @@ jobs:
             printf '%s' "$p"
           }
 
+          LENS_INPUT="$(source_child_dir lens)"
           SCOPUS_INPUT="$(source_child_dir scopus)"
           OPENALEX_INPUT="$(source_child_dir openalex)"
           AGRICOLA_INPUT="$(source_child_dir agricola)"
           WOS_INPUT="$(source_child_dir wos)"
 
+          echo "Lens input: $LENS_INPUT"
           echo "Scopus input: $SCOPUS_INPUT"
           echo "OpenAlex input: $OPENALEX_INPUT"
           echo "AGRICOLA input: $AGRICOLA_INPUT"
           echo "WoS input: $WOS_INPUT"
 
+          Rscript scripts/updater/workflow_01r_lens_sidecar_adapter.R \
+            --input-dir "$LENS_INPUT" --output-dir adapted/lens
           Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R \
             --input-dir "$SCOPUS_INPUT" --output-dir adapted/scopus
           Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R \
