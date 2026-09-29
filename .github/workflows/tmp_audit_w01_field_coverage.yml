@@ -1,0 +1,194 @@
+name: Temporary - audit W01 field coverage and compatibility
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_audit_w01_field_coverage.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest','data.table'))
+
+      - name: Restore authoritative Workflow 01 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: Rscript {0}
+        run: |
+          status <- system2("Rscript", c(
+            "scripts/updater/workflow_01_restore_current_state.R",
+            "--pointer", "docs/deduplication/zenodo/run-36128255337.json",
+            "--pointer-dir", "docs/deduplication/zenodo",
+            "--output-root", "tmp_w01"
+          ))
+          if(status != 0L) stop("Workflow 01 restore failed")
+
+      - name: Quantify retained source-field coverage
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          present <- function(x){
+            if(is.null(x) || length(x)==0L) return(FALSE)
+            z <- unlist(x,use.names=FALSE)
+            if(!length(z)) return(FALSE)
+            any(!is.na(z) & nzchar(trimws(as.character(z))))
+          }
+          read_jsonl <- function(path, fn){
+            con <- file(path,"rt",encoding="UTF-8"); on.exit(close(con))
+            repeat{
+              lines <- readLines(con,n=500L,warn=FALSE)
+              if(!length(lines)) break
+              for(line in lines){
+                if(nzchar(trimws(line))) fn(fromJSON(line,simplifyVector=FALSE))
+              }
+            }
+          }
+
+          specs <- list(
+            lens=list(
+              path="tmp_w01/workflow01_seed/lens_records_for_deduplication.jsonl",
+              root="canonical",
+              fields=c("title","abstract","authors","year","source","doi","keywords","publication_type"),
+              ids=c("identity.lens_id","identity.record_id")
+            ),
+            scopus=list(
+              path="tmp_w01/workflow01_seed/scopus_records_for_deduplication.jsonl",
+              root="mapped_fields",
+              fields=c("title","abstract","authors","first_author","year","publication_date","source","doi","keywords","publication_type","affiliations"),
+              ids=c("sidecar_identity.scopus_eid","sidecar_identity.scopus_id","sidecar_identity.doi")
+            ),
+            openalex=list(
+              path="tmp_w01/workflow01_seed/openalex_records_for_deduplication.jsonl",
+              root="mapped_fields",
+              fields=c("title","abstract","authors","year","publication_date","source","doi","keywords","publication_type","institutions","open_access","primary_location"),
+              ids=c("sidecar_identity.openalex_id","sidecar_identity.doi")
+            ),
+            agricola=list(
+              path="tmp_w01/workflow01_seed/agricola_records_for_deduplication.jsonl",
+              root="mapped_fields",
+              fields=c("title","abstract","authors","year","source","doi","keywords","publication_type","author_string","affiliation","language","first_publication_date"),
+              ids=c("sidecar_identity.agricola_id","sidecar_identity.europe_pmc_source","sidecar_identity.doi")
+            ),
+            wos=list(
+              path="tmp_w01/workflow01_seed/wos_records_for_deduplication.jsonl",
+              root="mapped_fields",
+              fields=c("title","abstract","authors","year","source","doi","keywords","publication_type","volume","issue","pages","issn","eissn","pmid","source_types","times_cited_wos"),
+              ids=c("sidecar_identity.wos_uid","sidecar_identity.doi")
+            )
+          )
+
+          get_path <- function(x,path){
+            parts <- strsplit(path,".",fixed=TRUE)[[1]]
+            cur <- x
+            for(p in parts){
+              if(is.null(cur) || !is.list(cur) || is.null(cur[[p]])) return(NULL)
+              cur <- cur[[p]]
+            }
+            cur
+          }
+
+          cat("=== SOURCE FIELD COVERAGE ===\n")
+          for(src in names(specs)){
+            sp <- specs[[src]]
+            if(!file.exists(sp$path)) stop("Missing source file: ",sp$path)
+            counts <- setNames(integer(length(sp$fields)),sp$fields)
+            idcounts <- setNames(integer(length(sp$ids)),sp$ids)
+            n <- 0L
+            structured_authors <- 0L
+            author_identifier_records <- 0L
+            read_jsonl(sp$path,function(r){
+              n <<- n+1L
+              root <- if(sp$root=="canonical") r$canonical %||% list() else r$mapped_fields %||% list()
+              for(f in sp$fields) if(present(root[[f]])) counts[[f]] <<- counts[[f]]+1L
+              for(id in sp$ids) if(present(get_path(r,id))) idcounts[[id]] <<- idcounts[[id]]+1L
+              aa <- root$authors
+              if(is.list(aa) && length(aa)){
+                structured_authors <<- structured_authors+1L
+                hasid <- any(vapply(aa,function(a){
+                  if(!is.list(a)) return(FALSE)
+                  any(vapply(c("openalex_author_id","orcid","author_id","researcher_id","researcherId"),
+                             function(k) present(a[[k]]),logical(1)))
+                },logical(1)))
+                if(hasid) author_identifier_records <<- author_identifier_records+1L
+              }
+            })
+            cat(sprintf("\nSOURCE=%s RECORDS=%d\n",src,n))
+            for(f in names(counts)) cat(sprintf("FIELD %s n=%d pct=%.2f\n",f,counts[[f]],100*counts[[f]]/n))
+            for(id in names(idcounts)) cat(sprintf("ID %s n=%d pct=%.2f\n",id,idcounts[[id]],100*idcounts[[id]]/n))
+            cat(sprintf("STRUCTURED_AUTHORS n=%d pct=%.2f\n",structured_authors,100*structured_authors/n))
+            cat(sprintf("AUTHOR_IDENTIFIER_RECORDS n=%d pct=%.2f\n",author_identifier_records,100*author_identifier_records/n))
+          }
+
+          cat("\n=== CURRENT W01 CANONICAL/MANIFESTATION FIELD COVERAGE ===\n")
+          can_path <- "tmp_w01/canonical/records.jsonl"
+          can_fields <- c("title","abstract","doi","authors","year","journal","volume","issue","pages","keywords","publication_type","publication_date","issn","eissn","pmid","language")
+          man_fields <- c("source","source_record_id","title","abstract","doi","authors","year","journal","volume","issue","pages","keywords","publication_type","publication_date","issn","eissn","pmid","language","identifiers","affiliations","institutions")
+          cc <- setNames(integer(length(can_fields)),can_fields)
+          mc <- setNames(integer(length(man_fields)),man_fields)
+          nrec <- 0L; nman <- 0L
+          read_jsonl(can_path,function(r){
+            nrec <<- nrec+1L
+            ca <- r$canonical %||% list()
+            for(f in can_fields) if(present(ca[[f]])) cc[[f]] <<- cc[[f]]+1L
+            mans <- r$manifestations %||% list()
+            for(m in mans){
+              nman <<- nman+1L
+              for(f in man_fields) if(present(m[[f]])) mc[[f]] <<- mc[[f]]+1L
+            }
+          })
+          cat(sprintf("CANONICAL_RECORDS=%d MANIFESTATIONS=%d\n",nrec,nman))
+          for(f in names(cc)) cat(sprintf("CANONICAL_FIELD %s n=%d pct=%.2f\n",f,cc[[f]],100*cc[[f]]/nrec))
+          for(f in names(mc)) cat(sprintf("MANIFESTATION_FIELD %s n=%d pct=%.2f\n",f,mc[[f]],100*mc[[f]]/nman))
+
+      - name: Audit downstream identity and schema dependencies
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            list.files("scripts",pattern="\\.R$",recursive=TRUE,full.names=TRUE),
+            list.files(".github/workflows",pattern="\\.ya?ml$",recursive=TRUE,full.names=TRUE)
+          )
+          files <- sort(unique(files))
+          patterns <- c(
+            record_id="record_id",
+            identity_record_id="identity.*record_id",
+            canonical_doi="canonical.*doi",
+            canonical_title="canonical.*title",
+            manifestations="manifestations",
+            source_record_id="source_record_id",
+            canonical_schema_v1="living-evidence-map-canonical-v1",
+            field_provenance="field_provenance"
+          )
+          cat("=== DOWNSTREAM DEPENDENCY SCAN ===\n")
+          for(nm in names(patterns)){
+            cat(sprintf("\nPATTERN=%s\n",nm))
+            total <- 0L
+            for(f in files){
+              x <- tryCatch(readLines(f,warn=FALSE),error=function(e)character())
+              hit <- grep(patterns[[nm]],x,ignore.case=FALSE,perl=TRUE)
+              if(length(hit)){
+                total <- total+length(hit)
+                for(i in hit) cat(sprintf("%s:%d:%s\n",f,i,trimws(x[[i]])))
+              }
+            }
+            cat(sprintf("MATCHES=%d\n",total))
+          }
