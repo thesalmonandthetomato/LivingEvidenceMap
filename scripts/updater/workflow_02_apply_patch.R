@@ -22,6 +22,14 @@ clean<-function(x){
   if(is.na(s)||!nzchar(s)) NULL else s
 }
 missing<-function(x) is.null(clean(x))
+field_missing<-function(field,x){
+  if(identical(field,"author_keywords")){
+    if(is.null(x)||!length(x)) return(TRUE)
+    z<-trimws(gsub("[[:space:]]+"," ",as.character(unlist(x,use.names=FALSE))))
+    return(!length(z[!is.na(z)&nzchar(z)]))
+  }
+  missing(x)
+}
 readjl<-function(p){
   x<-readLines(p,warn=FALSE,encoding="UTF-8");x<-x[nzchar(trimws(x))]
   lapply(seq_along(x),function(i) fromJSON(x[[i]],simplifyVector=FALSE))
@@ -47,12 +55,12 @@ repeat{
   if(!is.null(p)){
     seen<-c(seen,rid)
     if(is.null(r$canonical)) r$canonical<-list()
-    for(field in c("title","abstract")){
+    for(field in c("title","abstract","author_keywords")){
       z<-p[[field]]
       if(is.null(z)) next
       newv<-z$value
       cur<-r$canonical[[field]]
-      can_apply<-missing(cur) || identical(cur,newv)
+      can_apply<-field_missing(field,cur) || identical(cur,newv)
       if(mode=="exact" && !can_apply) stop(sprintf("Exact patch conflict for %s %s",rid,field),call.=FALSE)
       if(can_apply){
         r$canonical[[field]]<-newv
