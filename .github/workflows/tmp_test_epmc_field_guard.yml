@@ -1,0 +1,137 @@
+name: Temporary - test Europe PMC field guard
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_test_epmc_field_guard.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest','data.table','stringdist'))
+
+      - name: Restore authoritative Workflow 01 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R             --pointer docs/deduplication/zenodo/run-36128255337.json             --pointer-dir docs/deduplication/zenodo             --output-root baseline
+
+      - name: Run Europe PMC field guard test
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(jsonlite)
+            library(httr2)
+            library(stringdist)
+          })
+
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          clean <- function(x){
+            if(is.null(x)||!length(x)) return(NULL)
+            y <- trimws(as.character(x[[1L]]))
+            if(!nzchar(y)) NULL else gsub("[[:space:]]+"," ",y)
+          }
+          nd <- function(x){
+            x <- clean(x); if(is.null(x)) return(NULL)
+            x <- tolower(x)
+            x <- sub("^https?://(dx\\.)?doi\\.org/","",x,perl=TRUE)
+            x <- sub("^doi:\\s*","",x,perl=TRUE)
+            x <- sub("[?#].*$","",x,perl=TRUE)
+            x <- sub("[.,;:]+$","",x,perl=TRUE)
+            if(nzchar(x)) x else NULL
+          }
+          nt <- function(x){
+            x <- clean(x); if(is.null(x)) return(NULL)
+            tolower(gsub("[^[:alnum:]]+"," ",x))
+          }
+          tsim <- function(a,b){
+            a <- nt(a); b <- nt(b)
+            if(is.null(a)||is.null(b)) return(NA_real_)
+            1-stringdist(a,b,method="jw",p=0.1)
+          }
+          extract_keywords <- function(h){
+            x <- ((h$keywordList %||% list())$keyword) %||% NULL
+            if(is.null(x)||!length(x)) return(character())
+            z <- trimws(as.character(unlist(x,use.names=FALSE)))
+            unique(z[nzchar(z)])
+          }
+          lookup <- function(d){
+            req <- request("https://www.ebi.ac.uk/europepmc/webservices/rest/search") |>
+              req_url_query(query=sprintf('DOI:"%s"',d),format="json",resultType="core",pageSize=5) |>
+              req_headers(Accept="application/json")
+            resp <- req_perform(req)
+            st <- resp_status(resp)
+            if(st>=400L) return(list(outcome=paste0("http_",st)))
+            obj <- fromJSON(resp_body_string(resp),simplifyVector=FALSE)
+            hits <- ((obj$resultList %||% list())$result) %||% list()
+            exact <- Filter(function(h) identical(nd(h$doi),d),hits)
+            if(!length(exact)) return(list(outcome="no_exact_doi"))
+            h <- exact[[1L]]
+            list(
+              outcome="exact_doi",
+              title=clean(h$title),
+              abstract=clean(h$abstractText),
+              year=clean(h$pubYear),
+              journal=clean(h$journalTitle),
+              keywords=extract_keywords(h)
+            )
+          }
+
+          lines <- readLines("baseline/canonical/records.jsonl",warn=FALSE)
+          lines <- lines[nzchar(trimws(lines))]
+          recs <- lapply(lines,fromJSON,simplifyVector=FALSE)
+          ok <- vapply(recs,function(r){
+            ca <- r$canonical %||% list()
+            !is.null(nd(ca$doi)) && !is.null(clean(ca$title))
+          },logical(1))
+          pool <- recs[ok]
+          idx <- unique(round(seq(1,length(pool),length.out=min(40L,length(pool)))))
+          sample <- pool[idx]
+
+          exact_n <- pass_n <- quarantine_n <- kw_n <- 0L
+          for(r in sample){
+            ca <- r$canonical %||% list()
+            rid <- as.character((r$identity %||% list())$record_id %||% "")
+            d <- nd(ca$doi)
+            ep <- tryCatch(lookup(d),error=function(e)list(outcome="technical_error"))
+            cat(sprintf("\nRECORD_ID=%s\nDOI=%s\nOUTCOME=%s\n",rid,d,ep$outcome))
+            if(!identical(ep$outcome,"exact_doi")) next
+            exact_n <- exact_n+1L
+            ts <- tsim(ca$title,ep$title)
+            cy <- clean(ca$year); ey <- clean(ep$year)
+            ya <- if(is.null(cy)||is.null(ey)) NA else identical(substr(cy,1,4),substr(ey,1,4))
+            cj <- clean(ca$journal); ej <- clean(ep$journal)
+            js <- if(is.null(cj)||is.null(ej)) NA_real_ else 1-stringdist(tolower(cj),tolower(ej),method="jw",p=0.1)
+            guard <- !is.na(ts) && ts>=0.90
+            if(guard) pass_n <- pass_n+1L else quarantine_n <- quarantine_n+1L
+            if(length(ep$keywords)) kw_n <- kw_n+1L
+            cat(sprintf("TITLE_SIM=%.5f\n",ts))
+            cat(sprintf("YEAR_AGREE=%s\n",if(is.na(ya))"NA" else as.character(ya)))
+            cat(sprintf("JOURNAL_SIM=%s\n",if(is.na(js))"NA" else sprintf("%.5f",js)))
+            cat(sprintf("ABSTRACT_PRESENT=%s\n",!is.null(ep$abstract)))
+            cat(sprintf("KEYWORDS_N=%d\n",length(ep$keywords)))
+            cat(sprintf("GUARD=%s\n",if(guard)"PASS" else "QUARANTINE"))
+          }
+          cat(sprintf("\nSUMMARY sampled=%d exact_doi=%d guard_pass=%d quarantined=%d with_keywords=%d\n",
+                      length(sample),exact_n,pass_n,quarantine_n,kw_n))
