@@ -241,6 +241,57 @@ year_value <- function(x){
   if(m[[1L]]<0L) return(NULL)
   as.integer(regmatches(s,m)[[1L]])
 }
+normalise_publication_date <- function(x){
+  x <- clean_text(x)
+  if(is.null(x)) return(NULL)
+  if(grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$",x)) return(x)
+  if(grepl("^[0-9]{4}-[0-9]{2}$",x)) return(x)
+  if(grepl("^[0-9]{4}$",x)) return(x)
+  m <- regexpr("(18|19|20|21)[0-9]{2}(-[0-9]{2})?(-[0-9]{2})?",x,perl=TRUE)
+  if(m[[1L]]<0L) return(NULL)
+  regmatches(x,m)[[1L]]
+}
+
+pick_publication_date <- function(mans, manifestation_keys){
+  vals <- character()
+  keys <- character()
+  specificity <- integer()
+
+  for(i in seq_along(mans)){
+    x <- ((mans[[i]]$manifestation_metadata %||% list())$publication_date) %||% NULL
+    if(is.null(x) || !length(x)) next
+    for(v in as.character(unlist(x,use.names=FALSE))){
+      d <- normalise_publication_date(v)
+      if(is.null(d)) next
+      vals <- c(vals,d)
+      keys <- c(keys,manifestation_keys[[i]])
+      specificity <- c(specificity,nchar(d))
+    }
+  }
+
+  if(!length(vals)){
+    return(list(value=NULL,provenance=list(selection="prefer_most_specific_iso_then_modal",source_keys=character())))
+  }
+
+  best_spec <- max(specificity)
+  keep <- specificity==best_spec
+  v <- vals[keep]
+  k <- keys[keep]
+  freq <- table(v)
+  best_n <- max(freq)
+  candidates <- sort(names(freq)[freq==best_n])
+  chosen <- candidates[[1L]]
+  contributing <- unique(k[v==chosen])
+
+  list(
+    value=chosen,
+    provenance=list(
+      selection="prefer_most_specific_iso_then_modal",
+      source_keys=unname(contributing)
+    )
+  )
+}
+
 collect_manifestation_metadata_values <- function(mans, manifestation_keys, field_name, selection_label){
   values <- character()
   norm_seen <- new.env(hash=TRUE,parent=emptyenv())
@@ -555,6 +606,7 @@ for(cid in sort(names(clusters))){
   publication_type_pick <- collect_manifestation_metadata_values(
     mans,mk,"publication_type","union_distinct_source_values_case_insensitive"
   )
+  publication_date_pick <- pick_publication_date(mans,mk)
   rec <- list(
     schema_version="living-evidence-map-canonical-v1",
     identity=list(record_id=cid,record_id_type="deduplication_cluster_id"),
@@ -570,12 +622,14 @@ for(cid in sort(names(clusters))){
       pages=pages_pick$value,
       author_keywords=author_keywords_pick$value,
       publication_type=publication_type_pick$value,
+      publication_date=publication_date_pick$value,
       field_provenance=list(
         title=title_pick$source_key,abstract=abstract_pick$source_key,doi=doi_pick$source_key,
         authors=authors_pick$source_key,year=year_pick$source_key,journal=journal_pick$source_key,
         volume=volume_pick$source_key,issue=issue_pick$source_key,pages=pages_pick$source_key,
         author_keywords=author_keywords_pick$provenance,
-        publication_type=publication_type_pick$provenance
+        publication_type=publication_type_pick$provenance,
+        publication_date=publication_date_pick$provenance
       )    ),
     manifestations=mans,
     provenance=list(
