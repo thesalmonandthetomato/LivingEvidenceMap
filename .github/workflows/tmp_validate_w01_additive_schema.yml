@@ -52,12 +52,14 @@ jobs:
           agricola="$(find baseline -type f -path '*/workflow01_seed/agricola_records_for_deduplication.jsonl' -print -quit)"
           wos="$(find baseline -type f -path '*/workflow01_seed/wos_records_for_deduplication.jsonl' -print -quit)"
           strip="$(find baseline -type f -path '*/workflow01_full_five_source/abstract_strip_actions.jsonl' -print -quit || true)"
+          repairs="$(find baseline -type f -path '*/provenance/cumulative_data_quality_repairs.jsonl' -print -quit || true)"
           for v in cm lens scopus openalex agricola wos; do
             eval "p=\${$v}"
             [ -s "$p" ] || { echo "Missing required archived input: $v" >&2; find baseline -maxdepth 4 -type f | sort >&2; exit 1; }
             echo "$v=$p" >> "$GITHUB_OUTPUT"
           done
           if [ -n "$strip" ] && [ -f "$strip" ]; then echo "strip=$strip" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$repairs" ] && [ -f "$repairs" ]; then echo "repairs=$repairs" >> "$GITHUB_OUTPUT"; fi
 
       - name: Build enriched candidate from archived W01 state
         shell: bash
@@ -79,6 +81,10 @@ jobs:
           )
           if [ -n '${{ steps.inputs.outputs.strip }}' ]; then
             args+=(--strip-actions '${{ steps.inputs.outputs.strip }}')
+          fi
+          if [ -n '${{ steps.inputs.outputs.repairs }}' ]; then
+            args+=(--data-quality-repairs '${{ steps.inputs.outputs.repairs }}')
+            args+=(--repair-audit candidate/data_quality_repair_application.jsonl)
           fi
           Rscript scripts/updater/workflow_01_build_canonical_jsonl.R "${args[@]}"
 
