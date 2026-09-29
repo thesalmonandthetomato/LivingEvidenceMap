@@ -381,9 +381,12 @@ counts <- list(
   eligible_doi_missing_metadata=0L,
   europepmc_title_filled=0L,
   europepmc_abstract_filled=0L,
+  europepmc_author_keywords_filled=0L,
   scopus_attempted=0L,
   scopus_title_filled=0L,
   scopus_abstract_filled=0L,
+  scopus_author_keywords_attempted=0L,
+  scopus_author_keywords_filled=0L,
   scopus_http_404=0L,
   conflicts_quarantined=0L,
   still_missing_after=0L,
@@ -409,7 +412,8 @@ for(i in seq_along(rows)){
   d <- norm_doi(r$canonical$doi)
   missing_title_before <- is_missing(r$canonical$title)
   missing_abstract_before <- is_missing(r$canonical$abstract)
-  eligible <- !is.null(d) && (missing_title_before || missing_abstract_before)
+  missing_author_keywords_before <- keywords_missing(r$canonical$author_keywords)
+  eligible <- !is.null(d) && (missing_title_before || missing_abstract_before || missing_author_keywords_before)
   if(!eligible) next
   counts$eligible_doi_missing_metadata <- counts$eligible_doi_missing_metadata + 1L
   if(!previous_attempt_due(r$metadata_enrichment)){
@@ -424,30 +428,58 @@ for(i in seq_along(rows)){
     doi=d,
     missing_title_before=missing_title_before,
     missing_abstract_before=missing_abstract_before,
+    missing_author_keywords_before=missing_author_keywords_before,
+    retained_scopus_eid=retained_scopus_eid(r),
     europe_pmc=NULL,
     scopus=NULL,
+    scopus_keywords=NULL,
     applied=list(),
     quarantined=list()
   )
 
-  ep <- tryCatch(epmc_lookup(d),error=function(e)list(outcome="technical_error",error=conditionMessage(e),title=NULL,abstract=NULL,returned_doi=NULL,status=NULL,attempts=NULL))
+  ep <- tryCatch(
+    epmc_lookup(d),
+    error=function(e) list(outcome="technical_error",error=conditionMessage(e),title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,status=NULL,attempts=NULL)
+  )
   rec_audit$europe_pmc <- ep
 
   if(identical(ep$returned_doi,d)){
+    # For records with an existing canonical title, all Europe PMC fields require
+    # independent title agreement. When title itself is missing, exact DOI is the
+    # available identity guard for filling the title; other fields are not applied
+    # until a title-consistent identity can be established.
+    canonical_title_before <- clean_text(r$canonical$title)
+    ep_sim <- if(!is.null(canonical_title_before) && !is.null(ep$title)) title_similarity(canonical_title_before,ep$title) else NA_real_
+    ep_title_guard <- !is.null(canonical_title_before) && !is.null(ep$title) && !is.na(ep_sim) && ep_sim>=0.90
+
     if(is_missing(r$canonical$title) && !is.null(ep$title)){
       r$canonical$title <- ep$title
       counts$europepmc_title_filled <- counts$europepmc_title_filled + 1L
-      rec_audit$applied <- c(rec_audit$applied,list(list(provider="europe_pmc",field="title")))
+      rec_audit$applied <- c(rec_audit$applied,list(list(provider="europe_pmc",field="title",identity_guard="exact_doi")))
+      canonical_title_before <- ep$title
+      ep_sim <- 1
+      ep_title_guard <- TRUE
     }
+
     if(is_missing(r$canonical$abstract) && !is.null(ep$abstract)){
-      sim <- title_similarity(r$canonical$title,ep$title)
-      if(is.null(ep$title) || is_missing(r$canonical$title) || is.na(sim) || sim>=0.90){
+      if(ep_title_guard){
         r$canonical$abstract <- ep$abstract
         counts$europepmc_abstract_filled <- counts$europepmc_abstract_filled + 1L
-        rec_audit$applied <- c(rec_audit$applied,list(list(provider="europe_pmc",field="abstract",title_similarity=sim)))
+        rec_audit$applied <- c(rec_audit$applied,list(list(provider="europe_pmc",field="abstract",title_similarity=ep_sim)))
       } else {
         counts$conflicts_quarantined <- counts$conflicts_quarantined + 1L
-        rec_audit$quarantined <- c(rec_audit$quarantined,list(list(provider="europe_pmc",field="abstract",reason="title_mismatch",title_similarity=sim)))
+        rec_audit$quarantined <- c(rec_audit$quarantined,list(list(provider="europe_pmc",field="abstract",reason="title_guard_failed",title_similarity=ep_sim)))
+      }
+    }
+
+    if(keywords_missing(r$canonical$author_keywords) && length(ep$author_keywords)){
+      if(ep_title_guard){
+        r$canonical$author_keywords <- ep$author_keywords
+        counts$europepmc_author_keywords_filled <- counts$europepmc_author_keywords_filled + 1L
+        rec_audit$applied <- c(rec_audit$applied,list(list(provider="europe_pmc",field="author_keywords",title_similarity=ep_sim)))
+      } else {
+        counts$conflicts_quarantined <- counts$conflicts_quarantined + 1L
+        rec_audit$quarantined <- c(rec_audit$quarantined,list(list(provider="europe_pmc",field="author_keywords",reason="title_guard_failed",title_similarity=ep_sim)))
       }
     }
   }
@@ -487,10 +519,39 @@ for(i in seq_along(rows)){
 
   still_missing_title <- is_missing(r$canonical$title)
   still_missing_abstract <- is_missing(r$canonical$abstract)
-  if(still_missing_title || still_missing_abstract) counts$still_missing_after <- counts$still_missing_after + 1L
+  still_missing_author_keywords <- keywords_missing(r$canonical$author_keywords)
+
+  # Author keywords use only a Scopus EID already retained in the W01 manifestation.
+  # No DOI search-derived EID is accepted for keyword enrichment.
+  eid_for_keywords <- retained_scopus_eid(r)
+  if(still_missing_author_keywords && !is.null(eid_for_keywords)){
+    counts$scopus_author_keywords_attempted <- counts$scopus_author_keywords_attempted + 1L
+    sk <- tryCatch(
+      scopus_lookup_eid(eid_for_keywords),
+      error=function(e) list(outcome="technical_error",error=conditionMessage(e),title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=eid_for_keywords,status=NULL,attempts=NULL)
+    )
+    rec_audit$scopus_keywords <- sk
+    sim <- if(!is.null(sk$title) && !is_missing(r$canonical$title)) title_similarity(r$canonical$title,sk$title) else NA_real_
+    guard_ok <- identical(sk$returned_doi,d) && !is.null(sk$title) && !is_missing(r$canonical$title) && !is.na(sim) && sim>=0.90
+    if(guard_ok && length(sk$author_keywords)){
+      r$canonical$author_keywords <- sk$author_keywords
+      counts$scopus_author_keywords_filled <- counts$scopus_author_keywords_filled + 1L
+      rec_audit$applied <- c(rec_audit$applied,list(list(provider="scopus",field="author_keywords",eid=eid_for_keywords,title_similarity=sim,identity_guard="retained_eid+exact_doi+title")))
+    } else if(length(sk$author_keywords) && !guard_ok){
+      counts$conflicts_quarantined <- counts$conflicts_quarantined + 1L
+      rec_audit$quarantined <- c(rec_audit$quarantined,list(list(provider="scopus",field="author_keywords",reason="retained_eid_identity_guard_failed",eid=eid_for_keywords,returned_doi=sk$returned_doi,title_similarity=sim)))
+    }
+    Sys.sleep(delay)
+  }
+
+  still_missing_title <- is_missing(r$canonical$title)
+  still_missing_abstract <- is_missing(r$canonical$abstract)
+  still_missing_author_keywords <- keywords_missing(r$canonical$author_keywords)
+  if(still_missing_title || still_missing_abstract || still_missing_author_keywords) counts$still_missing_after <- counts$still_missing_after + 1L
 
   technical_error <- identical(clean_text(ep$outcome),"technical_error") ||
-    (!is.null(rec_audit$scopus) && identical(clean_text(rec_audit$scopus$outcome),"technical_error"))
+    (!is.null(rec_audit$scopus) && identical(clean_text(rec_audit$scopus$outcome),"technical_error")) ||
+    (!is.null(rec_audit$scopus_keywords) && identical(clean_text(rec_audit$scopus_keywords$outcome),"technical_error"))
   if(technical_error) counts$technical_error_records <- counts$technical_error_records + 1L
   filled_fields <- vapply(rec_audit$applied,function(z) clean_text(z$field) %||% "",character(1))
   filled_fields <- unique(filled_fields[nzchar(filled_fields)])
@@ -502,8 +563,10 @@ for(i in seq_along(rows)){
     doi=d,
     title_missing_after=still_missing_title,
     abstract_missing_after=still_missing_abstract,
+    author_keywords_missing_after=still_missing_author_keywords,
     europe_pmc_outcome=clean_text(ep$outcome),
     scopus_outcome=if(is.null(rec_audit$scopus)) NULL else clean_text(rec_audit$scopus$outcome),
+    scopus_keywords_outcome=if(is.null(rec_audit$scopus_keywords)) NULL else clean_text(rec_audit$scopus_keywords$outcome),
     technical_error=technical_error,
     filled_fields=filled_fields,
     recheck_after_days=recheck_after_days
@@ -521,12 +584,12 @@ report <- list(
   implementation_language="R",
   provider_order=c("europe_pmc","scopus"),
   policy=list(
-    eligibility="DOI present and title or abstract missing",
+    eligibility="DOI present and title, abstract, or author keywords missing",
     overwrite_existing_fields=FALSE,
-    europe_pmc_match="exact normalised DOI",
+    europe_pmc_match="exact normalised DOI plus canonical/provider title similarity >= 0.90 for abstract/author-keyword fills; exact DOI may fill a missing title",
     scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
     abstract_title_guard="if a title is present on both sides, Jaro-Winkler similarity must be >= 0.90; otherwise quarantine",
-    provider_fallback="Scopus queried only if metadata remain missing after Europe PMC",
+    provider_fallback="existing Scopus DOI/EID path retained for missing title/abstract; author keywords use only a Scopus EID retained in the Workflow 01 manifestation",
     repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days)
   ),
   trial_limit=if(is.infinite(limit)) NULL else limit,
