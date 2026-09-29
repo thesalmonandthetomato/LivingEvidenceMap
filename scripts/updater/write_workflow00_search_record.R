@@ -25,6 +25,7 @@ window_from <- arg("--window-from","")
 window_to <- arg("--window-to","")
 known_native_results <- suppressWarnings(as.integer(arg("--known-native-results","")))
 new_native_results <- suppressWarnings(as.integer(arg("--new-native-results","")))
+source_manifest <- arg("--source-manifest","")
 output_root <- arg("--output-root","outputs/updater/search_record")
 
 req <- c(source,run_type,query,parent_run_id)
@@ -40,14 +41,22 @@ base <- sprintf("%s_%s_parent-%s_child-%s_attempt-%s",stamp,safe_source,parent_r
 dir <- file.path(output_root,folder)
 dir.create(dir,recursive=TRUE,showWarnings=FALSE)
 
+database_scope <- NULL
+if (nzchar(source_manifest)) {
+  if (!file.exists(source_manifest)) stop(sprintf("source manifest not found: %s", source_manifest), call.=FALSE)
+  source_manifest_obj <- fromJSON(source_manifest, simplifyVector=FALSE)
+  database_scope <- source_manifest_obj$database_scope
+}
+
 record <- list(
-  schema_version="1.1",
+  schema_version="1.2",
   recorded_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
   source=source,
   run_type=run_type,
   search_version=if(nzchar(search_version)) search_version else NULL,
   additional_search_term=if(nzchar(additional_search_term)) additional_search_term else NULL,
   search_string=query,
+  database_scope=database_scope,
   search_window=if(nzchar(window_from)||nzchar(window_to)) list(
     from=if(nzchar(window_from)) window_from else NULL,
     to=if(nzchar(window_to)) window_to else NULL
@@ -103,6 +112,37 @@ md <- c(
   query,
   "```"
 )
+
+if (!is.null(database_scope)) {
+  value_or <- function(x, fallback="not recorded") {
+    if (is.null(x) || length(x) == 0L || !nzchar(as.character(x[[1L]]))) fallback else as.character(x[[1L]])
+  }
+  dbs <- database_scope$databases_searched
+  db_lines <- character()
+  if (!is.null(dbs) && length(dbs)) {
+    db_lines <- vapply(dbs, function(x) {
+      code <- if (is.null(x$code)) "" else as.character(x$code)
+      name <- if (is.null(x$name)) "" else as.character(x$name)
+      if (nzchar(code)) sprintf("- %s (code: %s)", name, code) else sprintf("- %s", name)
+    }, character(1))
+  }
+  md <- c(
+    md,
+    "",
+    "## Database scope",
+    "",
+    sprintf("- **Platform:** %s", value_or(database_scope$platform)),
+    sprintf("- **API product:** %s", value_or(database_scope$api_product)),
+    sprintf("- **API database parameter:** %s", value_or(database_scope$database_parameter)),
+    "- **Databases searched:**",
+    db_lines,
+    sprintf("- **Selection method:** %s", value_or(database_scope$selection_method)),
+    sprintf("- **Coverage recorded at (UTC):** %s", value_or(database_scope$recorded_at_utc)),
+    sprintf("- **Coverage note:** %s", value_or(database_scope$institutional_coverage_note)),
+    sprintf("- **Core Collection editions:** %s", value_or(database_scope$core_collection_editions))
+  )
+}
+
 if (nzchar(additional_search_term)) {
   md <- c(md,"","## Ad hoc expansion","","The immutable species block was unchanged.", sprintf("Additional search term: `%s`",additional_search_term))
 }
