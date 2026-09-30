@@ -2,6 +2,7 @@
 suppressPackageStartupMessages({library(httr2);library(jsonlite);library(digest)})
 
 args<-commandArgs(trailingOnly=TRUE)
+`%||%`<-function(x,y)if(is.null(x))y else x
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 state_dir<-normalizePath(arg("--state-dir"),mustWork=TRUE)
 source_run_id<-arg("--source-run-id");source_commit<-arg("--source-commit");publication_run_id<-arg("--publication-run-id")
