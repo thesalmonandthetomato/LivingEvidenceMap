@@ -77,25 +77,25 @@ if (!all(expected_intact %in% keys)) stop("Repair preflight failed: verified int
 if (target_name %in% keys) stop("Repair preflight failed: target RIS file already present", call. = FALSE)
 
 pending_ix <- which(keys == pending_name)
-if (length(pending_ix) != 1L) stop("Repair preflight failed: expected exactly one source_registry.json entry", call. = FALSE)
-pending_entry <- entries[[pending_ix]]
-if (!identical(status_of(pending_entry), "pending")) {
-  stop(sprintf("Repair preflight failed: source_registry.json status is %s", status_of(pending_entry)), call. = FALSE)
+if (length(pending_ix) > 1L) stop("Repair preflight failed: multiple source_registry.json entries", call. = FALSE)
+if (length(pending_ix) == 1L) {
+  pending_entry <- entries[[pending_ix]]
+  if (!identical(status_of(pending_entry), "pending")) {
+    stop(sprintf("Repair preflight failed: source_registry.json status is %s, not pending", status_of(pending_entry)), call. = FALSE)
+  }
+  pending_self <- scalar(pending_entry$links$self)
+  if (is.null(pending_self)) pending_self <- paste0(files_url, "/", URLencode(pending_name, reserved = TRUE))
+  cat("DELETE dangling pending source_registry.json\n")
+  perform(
+    request(pending_self) |> req_method("DELETE") |> auth(),
+    c(200L, 204L, 504L),
+    "delete dangling source_registry.json",
+    60
+  )
+  entries <- get_entries()
+  keys <- vapply(entries, function(x) or_else(key_of(x), ""), character(1))
+  if (pending_name %in% keys) stop("Dangling source_registry.json still present after delete attempt", call. = FALSE)
 }
-pending_self <- scalar(pending_entry$links$self)
-if (is.null(pending_self)) pending_self <- paste0(files_url, "/", URLencode(pending_name, reserved = TRUE))
-
-cat("DELETE dangling pending source_registry.json\n")
-perform(
-  request(pending_self) |> req_method("DELETE") |> auth(),
-  c(200L, 204L),
-  "delete dangling source_registry.json",
-  60
-)
-
-entries <- get_entries()
-keys <- vapply(entries, function(x) or_else(key_of(x), ""), character(1))
-if (pending_name %in% keys) stop("Dangling source_registry.json still present after delete", call. = FALSE)
 if (target_name %in% keys) stop("Target unexpectedly appeared before restore", call. = FALSE)
 
 cat(sprintf("INITIALISE %s\n", target_name))
