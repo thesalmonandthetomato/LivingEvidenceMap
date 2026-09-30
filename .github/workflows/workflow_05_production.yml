@@ -1,0 +1,207 @@
+name: Workflow 05 - deterministic species production
+
+on:
+  workflow_call:
+    inputs:
+      workflow04_pointer_path:
+        required: true
+        type: string
+      lean_pointer_path:
+        required: true
+        type: string
+      publish:
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      workflow04_pointer_path:
+        description: 'Authoritative current Workflow 04 pointer'
+        required: true
+        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        type: string
+      lean_pointer_path:
+        description: 'Authoritative current post-W02 lean canonical pointer corresponding to W04'
+        required: true
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      publish:
+        description: 'Publish validated W05 state to restricted Zenodo'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  species:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('digest','dplyr','jsonlite','readr','tibble','testthat','httr2'))
+
+      - name: Validate implementation and vocabulary
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_04_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
+          parse(file='scripts/updater/workflow_05_materialise_retained.R')
+          parse(file='scripts/updater/workflow_05_species_coding.R')
+          parse(file='scripts/updater/workflow_05_archive_state_to_zenodo.R')
+          parse(file='scripts/updater/workflow_05_update_zenodo_registry.R')
+          source('R/species_detect.R')
+          x<-readr::read_csv('config/deterministic_concepts.csv',show_col_types=FALSE)
+          stopifnot(identical(names(x),c('coding','entity','terms')))
+          testthat::test_file('tests/testthat/test-species.R',reporter='summary')
+          cat('PASS: W05 implementation and deterministic vocabulary validated\n')
+
+      - name: Restore current Workflow 04 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W04_POINTER: ${{ inputs.workflow04_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/w04
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer "$W04_POINTER"             --output-dir inputs/w04
+          INC=$(find inputs/w04 -type f -name workflow04_included_record_ids.txt -print -quit)
+          test -n "$INC"
+          mkdir -p inputs/workflow05
+          cp "$INC" inputs/workflow05/workflow04_included_record_ids.txt
+
+          EXPECTED_IDS_SHA=$(P="$W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$included_record_ids_sha256)')
+          ACTUAL_IDS_SHA=$(P=inputs/workflow05/workflow04_included_record_ids.txt Rscript -e 'cat(digest::digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')
+          test "$EXPECTED_IDS_SHA" = "$ACTUAL_IDS_SHA"
+
+          EXPECTED_RECORDS=$(P="$W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(as.integer(x$retained))')
+          ACTUAL_IDS=$(Rscript -e 'x<-readLines("inputs/workflow05/workflow04_included_record_ids.txt",warn=FALSE);cat(sum(nzchar(trimws(x))))')
+          test "$EXPECTED_RECORDS" = "$ACTUAL_IDS"
+          echo "EXPECTED_RECORDS=$EXPECTED_RECORDS" >> "$GITHUB_ENV"
+
+      - name: Resolve complete current retained canonical records
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CAN=$(find inputs/w04 -type f -name workflow04_included_canonical.jsonl -print -quit)
+          if [ -n "$CAN" ]; then
+            cp "$CAN" inputs/workflow05/retained_canonical.jsonl
+            echo "PASS: using complete retained canonical JSONL from current W04 archive"
+          else
+            rm -rf inputs/lean
+            Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R               --pointer "$LEAN_POINTER"               --output-dir inputs/lean
+            Rscript scripts/updater/workflow_05_materialise_retained.R               --canonical inputs/lean/canonical_lean.jsonl               --included-ids inputs/workflow05/workflow04_included_record_ids.txt               --output inputs/workflow05/retained_canonical.jsonl               --expected-records "$EXPECTED_RECORDS"
+            echo "PASS: materialised retained canonical JSONL from authoritative lean checkpoint"
+          fi
+
+          Rscript -e '
+            library(jsonlite)
+            x<-readLines("inputs/workflow05/retained_canonical.jsonl",warn=FALSE);x<-x[nzchar(trimws(x))]
+            stopifnot(length(x)==as.integer(Sys.getenv("EXPECTED_RECORDS")))
+            ids<-vapply(x,function(z)as.character(fromJSON(z,simplifyVector=FALSE)$identity$record_id),character(1))
+            exp<-readLines("inputs/workflow05/workflow04_included_record_ids.txt",warn=FALSE);exp<-exp[nzchar(trimws(exp))]
+            stopifnot(setequal(ids,exp),!anyDuplicated(ids))
+            cat(sprintf("PASS: %d complete W04-retained canonical records ready for W05\n",length(x)))
+          '
+
+      - name: Run deterministic species coding
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_05_species_coding.R             --input inputs/workflow05/retained_canonical.jsonl             --dictionary config/deterministic_concepts.csv             --output-dir outputs/workflow05_species_coding             --expected-records "$EXPECTED_RECORDS"
+
+      - name: Validate complete W05 output
+        shell: Rscript {0}
+        run: |
+          library(readr)
+          library(jsonlite)
+          x<-read_csv('outputs/workflow05_species_coding/workflow05_species_coded.csv',show_col_types=FALSE)
+          m<-fromJSON('outputs/workflow05_species_coding/workflow05_manifest.json')
+          n<-as.integer(Sys.getenv('EXPECTED_RECORDS'))
+          stopifnot(
+            nrow(x)==n,
+            as.integer(m$records)==n,
+            !anyDuplicated(x$record_id),
+            !any(is.na(x$farmed_species)),
+            !any(is.na(x$farmed_species_codes))
+          )
+          cat(sprintf('PASS: W05 complete deterministic species layer contains %d records\n',n))
+
+      - name: Build sparse durable W05 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow05_state
+          Rscript -e '
+            library(readr)
+            x<-read_csv("outputs/workflow05_species_coding/workflow05_species_coded.csv",show_col_types=FALSE)
+            write_csv(x[,c("record_sequence","record_id","farmed_species_codes","farmed_species")],
+                      "outputs/workflow05_state/workflow05_species_layer.csv",na="")
+          '
+          cp outputs/workflow05_species_coding/species_codes_long.csv outputs/workflow05_state/
+          cp outputs/workflow05_species_coding/species_matches.csv outputs/workflow05_state/
+          cp outputs/workflow05_species_coding/species_record_counts.csv outputs/workflow05_state/
+          cp outputs/workflow05_species_coding/workflow05_manifest.json outputs/workflow05_state/
+          cp config/deterministic_concepts.csv outputs/workflow05_state/
+
+      - name: Publish W05 state
+        if: ${{ inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W04_POINTER: ${{ inputs.workflow04_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          W04_RECORD=$(P="$W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$zenodo_record_id)')
+          W04_SHA=$(P="$W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$workflow04_final_screening_layer_sha256)')
+          mkdir -p outputs/workflow05_zenodo
+          Rscript scripts/updater/workflow_05_archive_state_to_zenodo.R             --state-dir outputs/workflow05_state             --source-run-id "$GITHUB_RUN_ID"             --source-commit "$GITHUB_SHA"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow05_zenodo             --upstream-w04-record-id "$W04_RECORD"             --upstream-w04-layer-sha256 "$W04_SHA"
+
+      - name: Register W05 state
+        if: ${{ inputs.publish == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_05_update_zenodo_registry.R             --receipt outputs/workflow05_zenodo/zenodo_receipt.json             --registry docs/workflow05/zenodo_registry.csv             --pointer-dir docs/workflow05/zenodo
+          git add docs/workflow05/zenodo_registry.csv docs/workflow05/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register Workflow 05 species state $GITHUB_RUN_ID"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload W05 handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow05-species-coding-${{ github.run_id }}
+          path: |
+            outputs/workflow05_species_coding/
+            outputs/workflow05_state/
+            outputs/workflow05_zenodo/
+          retention-days: 90
+          if-no-files-found: error
