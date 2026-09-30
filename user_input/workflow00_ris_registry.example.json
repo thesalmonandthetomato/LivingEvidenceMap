@@ -9,7 +9,9 @@
     "name": "CAB Abstracts",
     "short_name": "cab",
     "platform": null,
-    "database_scope": ["CAB Abstracts"]
+    "database_scope": [
+      "CAB Abstracts"
+    ]
   },
   "search": {
     "description": "Full CAB Abstracts search for the Living Evidence Map.",
@@ -38,5 +40,12 @@
         "notes": null
       }
     ]
+  },
+  "staging": {
+    "method": "zenodo_draft",
+    "reserved_doi": "10.5281/zenodo.REPLACE_ME",
+    "deposition_id": null,
+    "publish_after_validation": false,
+    "notes": "Upload raw RIS chunks to this existing Zenodo draft first. W00 completes the same draft and leaves it unpublished."
   }
 }
