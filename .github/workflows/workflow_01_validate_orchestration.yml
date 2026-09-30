@@ -66,6 +66,25 @@ jobs:
             cat(sprintf('PASS YAML: %s\n', f))
           }
 
+      - name: Reject unsafe inline R shell quoting
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            '.github/workflows/workflow_01_production.yml',
+            '.github/workflows/workflow_01_resume_after_human_review.yml'
+          )
+          for (f in files) {
+            lines <- readLines(f, warn=FALSE)
+            bad <- grepl('Rscript -e "', lines, fixed=TRUE) & grepl('\\$[A-Za-z_]', lines)
+            if (any(bad)) {
+              stop(sprintf(
+                'Unsafe shell-expanded inline R in %s line(s): %s',
+                f, paste(which(bad), collapse=', ')
+              ))
+            }
+            cat(sprintf('PASS inline-R shell quoting: %s\n', f))
+          }
+
       - name: Validate Workflow 01 source catalogue
         shell: Rscript {0}
         run: |
