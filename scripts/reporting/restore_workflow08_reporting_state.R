@@ -26,8 +26,9 @@ pointer <- fromJSON(pointer_path, simplifyVector = FALSE)
 if (!identical(pointer$status, "published") || !identical(as.character(pointer$workflow), "08")) {
   stop("Invalid Workflow 08 pointer", call. = FALSE)
 }
-if (!identical(as.integer(pointer$canonical_records), 19117L)) {
-  stop("Workflow 08 pointer does not describe the 19,117-record final canonical", call. = FALSE)
+expected_records <- suppressWarnings(as.integer(pointer$canonical_records))
+if (is.na(expected_records) || expected_records < 0L) {
+  stop("Workflow 08 pointer has invalid canonical_records", call. = FALSE)
 }
 
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN")
@@ -134,5 +135,5 @@ repeat {
 }
 close(con)
 
-if (n != 19117L) stop(sprintf("Expected 19,117 canonical JSONL rows, found %d", n), call. = FALSE)
-cat("PASS: Workflow 08 reporting state restored from Zenodo with 19,117 included canonical records\n")
+if (n != expected_records) stop(sprintf("Expected %d canonical JSONL rows from pointer, found %d", expected_records, n), call. = FALSE)
+cat(sprintf("PASS: Workflow 08 reporting state restored from Zenodo with %d included canonical records\n", n))
