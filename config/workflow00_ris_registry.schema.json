@@ -200,6 +200,22 @@
                   "string",
                   "null"
                 ]
+              },
+              "bytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "description": "Resolved raw file size in bytes; may be null before W00 validation."
+              },
+              "sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "Resolved SHA-256 of the raw RIS chunk; may be null before W00 validation."
               }
             }
           },
