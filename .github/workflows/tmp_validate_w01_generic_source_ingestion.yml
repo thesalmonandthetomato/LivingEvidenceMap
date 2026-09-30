@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PRIOR_N="$(Rscript -e "x<-jsonlite::fromJSON('previous_state/workflow01_full_five_source/summary.json');cat(x$source_manifestations)")"
+          PRIOR_N="$(Rscript -e 'x<-jsonlite::fromJSON("previous_state/workflow01_full_five_source/summary.json");cat(x$source_manifestations)')"
           mkdir -p outputs/workflow01_union
           Rscript scripts/updater/workflow_01_deduplication_build_union.R \
             --old-dir previous_state/workflow01_seed \
