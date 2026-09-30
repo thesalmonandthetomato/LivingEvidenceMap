@@ -1,0 +1,280 @@
+name: Workflow 08 - living finalisation
+
+on:
+  workflow_dispatch:
+    inputs:
+      lean_pointer_path:
+        description: Current post-W02 lean canonical pointer
+        required: true
+        type: string
+      workflow03_pointer_path:
+        description: Current W03 pointer
+        required: true
+        type: string
+      workflow04_pointer_path:
+        description: Current W04 pointer
+        required: true
+        type: string
+      workflow05_pointer_path:
+        description: Current W05 pointer
+        required: true
+        type: string
+      workflow06_pointer_path:
+        description: Current W06 pointer
+        required: true
+        type: string
+      workflow07_pointer_path:
+        description: Current W07 pointer
+        required: true
+        type: string
+      prior_workflow08_pointer_path:
+        description: Prior W08 pointer, or none for first run
+        required: true
+        default: docs/workflow08/zenodo/run-36442875006.json
+        type: string
+      new_decisions_path:
+        description: Optional repo JSONL resolving all new/changed W08 issues
+        required: false
+        default: ''
+        type: string
+      publish:
+        description: Publish resolved W08 state to restricted Zenodo
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  workflow08:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','dplyr','digest','httr2'))
+
+      - name: Parse implementation
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_03_restore_lean_checkpoint.R',
+            'scripts/updater/workflow_03_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_04_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_05_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_06_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_07_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_08_restore_adjudication_ledger.R',
+            'scripts/updater/workflow_08_build_review_queue_dynamic.R',
+            'scripts/updater/workflow_08_migrate_legacy_geography_decisions.R',
+            'scripts/updater/workflow_08_reuse_decisions.R',
+            'scripts/updater/workflow_08_finalize_canonical_dynamic.R',
+            'scripts/updater/workflow_08_partition_final_outputs_dynamic.R',
+            'scripts/updater/workflow_08_archive_to_zenodo.R'
+          )
+          invisible(lapply(files, parse))
+          cat('PASS: W08 production implementation parses\n')
+
+      - name: Restore current W03-W07 states
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEAN: ${{ inputs.lean_pointer_path }}
+          W03: ${{ inputs.workflow03_pointer_path }}
+          W04: ${{ inputs.workflow04_pointer_path }}
+          W05: ${{ inputs.workflow05_pointer_path }}
+          W06: ${{ inputs.workflow06_pointer_path }}
+          W07: ${{ inputs.workflow07_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/current
+          mkdir -p inputs/current
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R --pointer "$LEAN" --output-dir inputs/current/lean
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R --pointer "$W03" --output-dir inputs/current/w03
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R --pointer "$W04" --output-dir inputs/current/w04
+          Rscript scripts/updater/workflow_05_restore_state_from_zenodo.R --pointer "$W05" --output-dir inputs/current/w05
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R --pointer "$W06" --output-dir inputs/current/w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R --pointer "$W07" --output-dir inputs/current/w07
+
+      - name: Resolve current handoff files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$(find inputs/current/lean -type f -name canonical_lean.jsonl -print -quit)" inputs/current/canonical_lean.jsonl
+          cp "$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)" inputs/current/publication_status.jsonl
+          cp "$(find inputs/current/w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)" inputs/current/workflow04_final_screening_layer.jsonl
+          cp "$(find inputs/current/w05 -type f -name workflow05_species_layer.csv -print -quit)" inputs/current/workflow05_species_layer.csv
+          cp "$(find inputs/current/w05 -type f -name species_matches.csv -print -quit)" inputs/current/species_matches.csv
+          cp "$(find inputs/current/w06 -type f -name workflow06_geography_layer.csv -print -quit)" inputs/current/workflow06_geography_layer.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_records.csv -print -quit)" inputs/current/workflow07_records.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_workflow08_human_review_queue.csv -print -quit)" inputs/current/workflow07_review.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_pathway_scores_retained.csv -print -quit)" inputs/current/workflow07_scores.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_record_qc.csv -print -quit)" inputs/current/workflow07_qc.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_late_automatic_exclusions.csv -print -quit)" inputs/current/workflow07_late.csv
+
+          GROUND=$(find inputs/current/w06 -type f -name geography_ungrounded_evidence.csv -print -quit)
+          if [ -n "$GROUND" ]; then
+            cp "$GROUND" inputs/current/workflow06_grounding_residual.csv
+          else
+            Rscript -e 'readr::write_csv(data.frame(record_id=character()),"inputs/current/workflow06_grounding_residual.csv")'
+          fi
+
+          for p in inputs/current/canonical_lean.jsonl inputs/current/publication_status.jsonl inputs/current/workflow04_final_screening_layer.jsonl inputs/current/workflow05_species_layer.csv inputs/current/species_matches.csv inputs/current/workflow06_geography_layer.csv inputs/current/workflow07_records.csv inputs/current/workflow07_review.csv inputs/current/workflow07_scores.csv inputs/current/workflow07_qc.csv inputs/current/workflow07_late.csv; do
+            test -f "$p"
+          done
+
+      - name: Build current W08 issues
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_08_build_review_queue_dynamic.R             --w05 inputs/current/workflow05_species_layer.csv             --w06 inputs/current/workflow06_geography_layer.csv             --w06-grounding-residual inputs/current/workflow06_grounding_residual.csv             --w07-records inputs/current/workflow07_records.csv             --w07-review inputs/current/workflow07_review.csv             --w07-scores inputs/current/workflow07_scores.csv             --w07-late-exclusions inputs/current/workflow07_late.csv             --output-dir outputs/workflow08_intake
+
+      - name: Restore prior W08 adjudications
+        if: ${{ inputs.prior_workflow08_pointer_path != 'none' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          PRIOR: ${{ inputs.prior_workflow08_pointer_path }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/prior_w08
+          Rscript scripts/updater/workflow_08_restore_adjudication_ledger.R             --pointer "$PRIOR"             --output inputs/prior_w08/prior_ledger.jsonl
+
+          MISSING=$(P=inputs/prior_w08/prior_ledger.jsonl Rscript -e '
+            library(jsonlite)
+            x<-readLines(Sys.getenv("P"),warn=FALSE);x<-x[nzchar(trimws(x))]
+            n<-sum(vapply(x,function(z){
+              r<-fromJSON(z,simplifyVector=FALSE);h<-r$issue_state_sha256
+              is.null(h)||!length(h)||!nzchar(trimws(as.character(h[[1]])))
+            },logical(1)))
+            cat(n)
+          ')
+
+          if [ "$MISSING" -gt 0 ]; then
+            gh run download 36320650383 -n workflow08-review-intake-36320650383 -D inputs/prior_w08/legacy_queue
+            cp "$(find inputs/prior_w08/legacy_queue -type f -name workflow08_review_queue.jsonl -print -quit)" inputs/prior_w08/prior_queue.jsonl
+          fi
+
+      - name: Migrate currently relevant pre-ledger geography decisions
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_08_migrate_legacy_geography_decisions.R             --queue outputs/workflow08_intake/workflow08_review_queue_current.jsonl             --legacy data/workflow08/geography_adjudication_decisions.jsonl             --output outputs/workflow08_legacy_geo.jsonl
+
+      - name: Build reusable prior ledger
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          readj <- function(p){
+            if(!file.exists(p)) return(list())
+            x <- readLines(p,warn=FALSE);x <- x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          rows <- c(readj('inputs/prior_w08/prior_ledger.jsonl'),readj('outputs/workflow08_legacy_geo.jsonl'))
+          keys <- if(length(rows)) vapply(rows,function(z)as.character(z$review_key),character(1)) else character()
+          if(any(!nzchar(keys))||anyDuplicated(keys)) stop('Duplicate/missing prior W08 review key')
+          con <- file('outputs/workflow08_prior_combined.jsonl','wt')
+          for(z in rows) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
+          close(con)
+
+      - name: Reuse unchanged human decisions
+        env:
+          PRIOR: ${{ inputs.prior_workflow08_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --queue outputs/workflow08_intake/workflow08_review_queue_current.jsonl
+            --prior-ledger outputs/workflow08_prior_combined.jsonl
+            --output-dir outputs/workflow08_reuse
+          )
+          if [ -f inputs/prior_w08/prior_queue.jsonl ]; then
+            ARGS+=(--prior-queue inputs/prior_w08/prior_queue.jsonl)
+          fi
+          Rscript scripts/updater/workflow_08_reuse_decisions.R "${ARGS[@]}"
+
+      - name: Stop if new human review is required
+        env:
+          NEW_DECISIONS_PATH: ${{ inputs.new_decisions_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PENDING=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow08_reuse/workflow08_reuse_manifest.json");cat(as.integer(x$pending_issues))')
+          echo "Pending W08 issues: $PENDING"
+          if [ "$PENDING" -gt 0 ] && [ -z "$NEW_DECISIONS_PATH" ]; then
+            echo "Human review required. Download the workflow08-review-state artifact and rerun with new_decisions_path." >&2
+            exit 2
+          fi
+
+      - name: Build complete current decision ledger
+        env:
+          NEW_DECISIONS_PATH: ${{ inputs.new_decisions_path }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          readj <- function(p){
+            if(!nzchar(p)||!file.exists(p)) return(list())
+            x<-readLines(p,warn=FALSE);x<-x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          reused <- readj('outputs/workflow08_reuse/workflow08_reused_decisions.jsonl')
+          fresh <- readj(Sys.getenv('NEW_DECISIONS_PATH'))
+          rows <- c(reused,fresh)
+          keys <- if(length(rows)) vapply(rows,function(z)as.character(z$review_key),character(1)) else character()
+          if(any(!nzchar(keys))||anyDuplicated(keys)) stop('Complete W08 ledger has duplicate/missing review_key')
+
+          pending <- readj('outputs/workflow08_reuse/workflow08_pending_review_queue.jsonl')
+          pkeys <- unlist(lapply(pending,function(r){
+            rid<-as.character(r$record_id)
+            vapply(r$issues,function(i)paste(rid,as.character(i$issue_type),sep='::'),character(1))
+          }),use.names=FALSE)
+          if(length(pkeys)&&!all(pkeys%in%keys)) stop('Fresh W08 decisions do not resolve every pending issue')
+
+          dir.create('outputs/workflow08',recursive=TRUE)
+          con<-file('outputs/workflow08/human_decisions_complete.jsonl','wt')
+          for(z in rows)writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
+          close(con)
+
+      - name: Assemble and partition definitive W08 canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_finalize_canonical_dynamic.R             --canonical inputs/current/canonical_lean.jsonl             --w03 inputs/current/publication_status.jsonl             --w04 inputs/current/workflow04_final_screening_layer.jsonl             --w05 inputs/current/workflow05_species_layer.csv             --w05-matches inputs/current/species_matches.csv             --w06 inputs/current/workflow06_geography_layer.csv             --w07-scores inputs/current/workflow07_scores.csv             --w07-qc inputs/current/workflow07_qc.csv             --w07-late-exclusions inputs/current/workflow07_late.csv             --decisions outputs/workflow08/human_decisions_complete.jsonl             --ontology data/reference/topic_ontology_v3_6.csv             --output outputs/workflow08/post_adjudication_all.jsonl             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl             --manifest outputs/workflow08/post_adjudication_manifest.json
+
+          Rscript scripts/updater/workflow_08_partition_final_outputs_dynamic.R             --assembled outputs/workflow08/post_adjudication_all.jsonl             --old-manifest outputs/workflow08/post_adjudication_manifest.json             --canonical-output outputs/workflow08/living_evidence_map_canonical_final.jsonl             --exclusions-output outputs/workflow08/workflow08_excluded_records.csv             --manifest-output outputs/workflow08/workflow08_final_manifest.json
+
+          rm outputs/workflow08/post_adjudication_all.jsonl outputs/workflow08/post_adjudication_manifest.json
+
+      - name: Publish W08 state
+        if: ${{ inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          mkdir -p outputs/workflow08_zenodo
+          Rscript scripts/updater/workflow_08_archive_to_zenodo.R             --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl             --exclusions outputs/workflow08/workflow08_excluded_records.csv             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl             --manifest outputs/workflow08/workflow08_final_manifest.json             --source-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow08_zenodo
+
+      - name: Upload review and final state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow08-review-state-${{ github.run_id }}
+          path: |
+            outputs/workflow08_intake/
+            outputs/workflow08_reuse/
+            outputs/workflow08/
+            outputs/workflow08_zenodo/
+          retention-days: 90
+          if-no-files-found: warn
