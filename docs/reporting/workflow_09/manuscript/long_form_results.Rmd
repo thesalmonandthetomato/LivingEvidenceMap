@@ -191,7 +191,7 @@ stopifnot(
 
 The review process is outlined in the flow diagram in Figure 1. Across the `r length(flow$sources)` databases searched, a total of `r fmt(flow$combined_search_results)` search results was obtained. Following deduplication, `r fmt(flow$deduplicated_records)` unique candidate records remained. Title and abstract repair and enrichment supplemented `r fmt(flow$records_enriched_workflow02)` records, whilst a sweep for retractions identified `r fmt(flow$retractions_excluded)` records that were excluded from further analysis.
 
-Following title-and-abstract screening, later targeted rescreening and final adjudication, `r fmt(n_total)` records were included in the map. Species annotations were obtained for all `r fmt(n_total)` records, geography for `r fmt(n_geo_coded)` records, and topic classifications for `r fmt(n_topic_coded)` records.
+Following screening of titles and abstracts, `r fmt(n_total)` were included in the map, and passed on to annotation. Species annotations were obtained for all `r fmt(n_total)` records, geography for `r fmt(n_geo_coded)` records, and topic classifications for `r fmt(n_topic_coded)` records.
 
 ```{r fig-flow, fig.cap="***Figure 1.*** *Flow of records through database searching, deduplication, record repair and enrichment, retraction screening, title-and-abstract screening, annotation and inclusion in the Living Evidence Map.*"}
 include_figure(here::here("visualisations", "figure_07_flow_diagram.png"))
