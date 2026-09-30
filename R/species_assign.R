@@ -5,7 +5,7 @@
 # eligible farmed species are retained as co-primary rather than arbitrarily
 # selecting one.
 
-assign_farmed_species <- function(species_mentions) {
+assign_farmed_species <- function(species_mentions, generic_species_id = "UNSPEC_SALMON") {
   required <- c("species_id", "preferred_name", "is_farmed_candidate")
   missing <- setdiff(required, names(species_mentions))
   if (length(missing) > 0L) stop("Species mentions are missing: ", paste(missing, collapse = ", "), call. = FALSE)
@@ -24,8 +24,8 @@ assign_farmed_species <- function(species_mentions) {
   non_target <- unique_species[unique_species$is_farmed_candidate %in% FALSE, , drop = FALSE]
   non_target_names <- if (nrow(non_target)) paste(sort(unique(non_target$preferred_name)), collapse = "; ") else NA_character_
 
-  specific <- nrow(farmed) > 0L && any(farmed$species_id != "UNSPEC_SALMON")
-  if (specific) farmed <- farmed[farmed$species_id != "UNSPEC_SALMON", , drop = FALSE]
+  specific <- nrow(farmed) > 0L && any(farmed$species_id != generic_species_id)
+  if (specific) farmed <- farmed[farmed$species_id != generic_species_id, , drop = FALSE]
 
   if (nrow(farmed) == 0L) {
     none$non_target_species <- non_target_names
