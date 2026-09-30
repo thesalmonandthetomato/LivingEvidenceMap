@@ -203,12 +203,12 @@ testthat::test_that("generic trout and salmonid-only records remain NONE", {
 
 
 test_that("W05 vocabulary excludes ambiguous spring salmon phrase", {
-  d <- read.csv("user_input/workflow05_species_dictionary_reference.csv", stringsAsFactors = FALSE, check.names = FALSE)
+  d <- read.csv(file.path(project_root, "user_input", "workflow05_species_dictionary_reference.csv"), stringsAsFactors = FALSE, check.names = FALSE)
   expect_false(any(tolower(d$synonym) == "spring salmon"))
 })
 
 test_that("generic salmon plurals map to unspecified species", {
-  d <- read.csv("user_input/workflow05_species_dictionary_reference.csv", stringsAsFactors = FALSE, check.names = FALSE)
+  d <- read.csv(file.path(project_root, "user_input", "workflow05_species_dictionary_reference.csv"), stringsAsFactors = FALSE, check.names = FALSE)
   for (term in c("Salmons", "salmones")) {
     m <- detect_species_mentions(term, NA_character_, d)
     expect_true(any(m$species_id == "UNSPEC_SALMON"), info = term)
@@ -216,7 +216,7 @@ test_that("generic salmon plurals map to unspecified species", {
 })
 
 test_that("species matcher tolerates case spaces hyphens and markup", {
-  d <- read.csv("user_input/workflow05_species_dictionary_reference.csv", stringsAsFactors = FALSE, check.names = FALSE)
+  d <- read.csv(file.path(project_root, "user_input", "workflow05_species_dictionary_reference.csv"), stringsAsFactors = FALSE, check.names = FALSE)
 
   cases <- c(
     "ATLANTIC SALMON",
@@ -235,7 +235,7 @@ test_that("species matcher tolerates case spaces hyphens and markup", {
 })
 
 test_that("listed misspellings remain deterministic matches", {
-  d <- read.csv("user_input/workflow05_species_dictionary_reference.csv", stringsAsFactors = FALSE, check.names = FALSE)
+  d <- read.csv(file.path(project_root, "user_input", "workflow05_species_dictionary_reference.csv"), stringsAsFactors = FALSE, check.names = FALSE)
   cases <- c("Oncorhynchus mykkis", "Oncorhyncus mykiss", "Salmo giardneri")
   for (txt in cases) {
     m <- detect_species_mentions(txt, NA_character_, d)
@@ -244,7 +244,7 @@ test_that("listed misspellings remain deterministic matches", {
 })
 
 test_that("W05 deterministic concepts use exactly three columns", {
-  x <- readr::read_csv("user_input/workflow05_deterministic_concepts.csv", show_col_types = FALSE)
+  x <- readr::read_csv(file.path(project_root, "user_input", "workflow05_deterministic_concepts.csv"), show_col_types = FALSE)
   expect_identical(names(x), c("coding", "entity", "terms"))
   expect_true(all(x$entity == "farmed species"))
   expect_false(any(grepl("spring salmon", x$terms, ignore.case = TRUE, fixed = TRUE)))
