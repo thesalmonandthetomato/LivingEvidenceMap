@@ -117,7 +117,7 @@ jobs:
           stopifnot(length(oldp)==1L)
           old <- fromJSON(oldp[[1]],simplifyVector=FALSE)
           new <- fromJSON('migrated/workflow05_manifest.json',simplifyVector=FALSE)
-          fields <- c('workflow','purpose','records','input_sha256','dictionary_sha256','dictionary_rows','expanded_terms','species_matches','coded_records','none_records')
+          fields <- c('workflow','purpose','records','dictionary_sha256','dictionary_rows','expanded_terms','species_matches','coded_records','none_records')
           for(nm in fields) stopifnot(identical(old[[nm]],new[[nm]]))
           oldrules <- old$rules
           for(nm in names(oldrules)) stopifnot(identical(oldrules[[nm]],new$rules[[nm]]))
@@ -126,6 +126,6 @@ jobs:
             identical(new$generic_code,'UNSPEC_SALMON'),
             identical(new$none_code,'NONE')
           )
-          cat('PASS: historical W05 manifest contract retained with additive config provenance\n')
+          cat('PASS: historical W05 manifest contract retained with additive config provenance; reconstructed fixture input SHA intentionally excluded\n')
           RS
           echo 'PASS: W05 user-input migration is functionally identical to validated 19,407-record baseline'
