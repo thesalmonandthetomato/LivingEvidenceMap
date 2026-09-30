@@ -44,16 +44,15 @@ The principal deviations from the original protocol and subsequent methodologica
 
 ## Search strategy
 
-The search strategy combined terms describing eligible salmon species with terms identifying aquaculture, farming and commercial production. The original search was developed and tested in The Lens bibliographic database. Original searches were performed on September 22nd 2026, with an initial screening of a validation set performed on 11th November 2024 in The Lens. The searches ultimately applied across all databases are provided in Additional File 1.
+The search strategy combined terms describing eligible salmon species with terms identifying aquaculture, farming and commercial production. The original search was developed and tested in The Lens bibliographic database, with an initial validation set screened on 11 November 2024. The living search architecture now applies one version-controlled conceptual strategy across all included sources, with source-specific syntax and field restrictions recorded in Workflow 00 provenance. Search dates and retrieved-result counts are therefore source- and update-specific rather than fixed in the manuscript text.
 
-Table 1. Search strategy and representative hits in The Lens
+Table 1. Conceptual search strategy
 
-| Substring number | Substring | Hits in Lens 27/09/26 |
-| --- | --- | --- |
-| #1 | ((title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (abstract:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)) OR (keyword:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) | 4,664,409 |
-| #2 | ((title:(salmon OR Salmo OR Oncorhynchus)) OR (abstract:(salmon OR Salmo OR Oncorhynchus)) OR (keyword:(salmon OR Salmo OR Oncorhynchus))) | 158,889 |
-| #3 | #1 AND #2 | 24,343 |
-| #4 | #3 filtered > excl. dataset, excl. report, excl. libguide, excl. news | 23,852 |
+| Substring number | Substring |
+| --- | --- |
+| #1 | farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* |
+| #2 | salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout" |
+| #3 | #1 AND #2 |
 
 The living evidence map was subsequently expanded to retrieve bibliographic records independently from seven sources. Five are harvested through automated database workflows:
 
@@ -80,7 +79,7 @@ During development of the original protocol, a benchmark list of 17 articles of 
 
 ### Search update
 
-The evidence map has been converted into a living resource in September 2026. Search updates are ingested fortnightly through a reproducible multi-source workflow in which each bibliographic source is harvested separately, and source provenance is retained. Records newly retrieved in an update are standardised, repaired where possible, reconciled against the existing canonical corpus and passed through the same screening and annotation framework used for the living map. This report is based on searches performed on 22nd September 2026.
+The evidence map has been converted into a living resource in September 2026. Search updates are ingested fortnightly through a reproducible multi-source workflow in which each bibliographic source is harvested separately, and source provenance is retained. Records newly retrieved in an update are standardised, repaired where possible, reconciled against the existing canonical corpus and passed through the same screening and annotation framework used for the living map. The reporting workflow uses the latest validated source states available for the current living-map release; exact search dates, fields, restrictions and retrieved counts are retained in the Workflow 00 provenance for each source.
 
 ## Reference library repair
 
