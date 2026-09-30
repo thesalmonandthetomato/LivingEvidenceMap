@@ -82,8 +82,10 @@ if (!identical(tolower(as.character(run_manifest$dictionary_sha256)), tolower(co
   stop("Three-column concepts SHA does not match the validated W05 run manifest", call. = FALSE)
 }
 config_sha <- digest(file = paths$coding_config, algo = "sha256", serialize = FALSE)
-if (!identical(tolower(as.character(run_manifest$coding_config_sha256)), tolower(config_sha))) {
-  stop("Workflow 05 coding-config SHA does not match the validated W05 run manifest", call. = FALSE)
+if (!is.null(run_manifest$coding_config_sha256) && nzchar(as.character(run_manifest$coding_config_sha256))) {
+  if (!identical(tolower(as.character(run_manifest$coding_config_sha256)), tolower(config_sha))) {
+    stop("Workflow 05 coding-config SHA does not match the validated W05 run manifest", call. = FALSE)
+  }
 }
 
 sha <- lapply(paths, function(p) digest(file = p, algo = "sha256", serialize = FALSE))
