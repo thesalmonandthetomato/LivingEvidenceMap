@@ -1,4 +1,4 @@
-name: Workflow 00 - Complete manual RIS Zenodo draft
+name: Workflow 00 - Manual RIS Zenodo
 
 on:
   workflow_dispatch:
@@ -7,19 +7,23 @@ on:
         description: 'Path to the manual RIS registry JSON in user_input/'
         required: true
         type: string
-  push:
-    branches:
-      - workflow01-final-architecture
-    paths:
-      - 'user_input/manual_ris_proquest_run.trigger'
+      operation:
+        description: 'Validate, complete the existing draft, or publish the completed restricted record'
+        required: true
+        default: validate
+        type: choice
+        options:
+          - validate
+          - complete
+          - publish
 
 permissions:
   contents: read
 
 jobs:
-  complete-existing-draft:
+  manual-ris:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v4
@@ -27,33 +31,11 @@ jobs:
           ref: ${{ github.ref_name }}
           persist-credentials: false
 
-      - name: Preflight existing Zenodo draft
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          REGISTRY_PATH: ${{ inputs.registry_path }}
+      - name: Validate workflow input
         shell: bash
         run: |
           set -euo pipefail
-          dep_id="$(jq -r '.staging.deposition_id // empty' "$REGISTRY_PATH")"
-          if [ -z "$dep_id" ]; then
-            doi="$(jq -r '.staging.reserved_doi // empty' "$REGISTRY_PATH")"
-            dep_id="${doi##*.}"
-          fi
-          test -n "$dep_id"
-          url="https://zenodo.org/api/records/$dep_id/draft"
-          for attempt in 1 2 3 4 5 6; do
-            code="$(curl -sS -o /tmp/zenodo_draft.json -w '%{http_code}' \
-              -H "Authorization: Bearer $ZENODO_ACCESS_TOKEN" "$url" || true)"
-            echo "Zenodo draft preflight attempt $attempt: HTTP $code"
-            if [ "$code" = "200" ]; then
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "Zenodo draft remained unavailable after preflight retries." >&2
-          cat /tmp/zenodo_draft.json >&2 || true
-          exit 1
+          test -f '${{ inputs.registry_path }}'
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
@@ -65,38 +47,48 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('httr2','jsonlite','digest'))
 
-      - name: Verify registered RIS files directly
-        if: ${{ github.event_name == 'push' }}
+      - name: Validate existing Zenodo draft
+        if: ${{ inputs.operation == 'validate' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          REGISTRY_PATH: user_input/workflow00_ris_proquest_2026-09-30.json
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_00_verify_zenodo_ris_integrity.R \
-            --registry "$REGISTRY_PATH" \
-            --output-dir outputs/updater/workflow00_ris_integrity
-
-
-      - name: Complete existing Zenodo draft
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          REGISTRY_PATH: ${{ github.event_name == 'workflow_dispatch' && inputs.registry_path || 'user_input/workflow00_ris_proquest_2026-09-30.json' }}
-          VALIDATE_ONLY: ${{ github.event_name == 'push' && 'true' || 'false' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f "$REGISTRY_PATH"
           Rscript scripts/updater/workflow_00_complete_ris_zenodo_draft.R \
-            --registry "$REGISTRY_PATH" \
-            --validate-only "$VALIDATE_ONLY" \
+            --registry '${{ inputs.registry_path }}' \
+            --validate-only true \
             --output-dir outputs/updater/workflow00_manual_ris_zenodo
 
-      - name: Upload validation receipt and audits
+      - name: Complete existing Zenodo draft
+        if: ${{ inputs.operation == 'complete' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_complete_ris_zenodo_draft.R \
+            --registry '${{ inputs.registry_path }}' \
+            --validate-only false \
+            --output-dir outputs/updater/workflow00_manual_ris_zenodo
+
+      - name: Publish completed restricted Zenodo record
+        if: ${{ inputs.operation == 'publish' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_publish_ris_zenodo_record.R \
+            --registry '${{ inputs.registry_path }}' \
+            --output-dir outputs/updater/workflow00_manual_ris_publish
+
+      - name: Upload run artefacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow00-manual-ris-zenodo-${{ github.run_id }}
-          path: outputs/updater/workflow00_manual_ris_zenodo/
+          name: workflow00-manual-ris-${{ inputs.operation }}-${{ github.run_id }}
+          path: |
+            outputs/updater/workflow00_manual_ris_zenodo/
+            outputs/updater/workflow00_manual_ris_publish/
           retention-days: 7
           if-no-files-found: warn
