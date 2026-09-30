@@ -42,7 +42,7 @@ The authoritative analytical data remain the Workflow 08 canonical JSONL. Workfl
               [version-controlled Workflow 09 package]
 ```
 
-Workflow 09 additionally restores the authoritative Workflow 01, Workflow 02 and Workflow 04 states where they are required for source-contribution and review-flow reporting. Those restored states are reporting inputs only and do not replace the final Workflow 08 inclusion decisions.
+Workflow 09 additionally restores the authoritative Workflow 01 and Workflow 02 states where they are required for source-contribution and review-flow reporting. Final inclusion IDs and exclusions come from Workflow 08, so database-contribution reporting reflects the definitive included corpus rather than an intermediate screening state.
 
 ## Components
 
@@ -79,7 +79,7 @@ Some figures require information that is intentionally not duplicated into the i
 
 - Workflow 01 canonical/source-provenance state for database-contribution analysis;
 - Workflow 02 cumulative enrichment state for record-repair counts;
-- Workflow 04 final screening state for before/after source contribution and screening-flow counts; and
+- Workflow 08 final included record IDs for after-screening source contribution; and
 - Workflow 08 exclusions for final flow accounting.
 
 Stable `record_id` values are used to reconcile these reporting layers.
