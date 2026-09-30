@@ -30,3 +30,11 @@ The W00 archive for the logical search should retain all raw RIS chunks, the reg
 RIS imports use the existing downstream manifestation identity contract: `source` is the stable database code from `database.short_name`, and `source_record_id` is derived from the source-native record identifier. Search-run metadata remains in the W00 registry/archive and is not added as a new canonical JSON field.
 
 For the complete manual upload procedure using a Zenodo draft, see `docs/search_record/manual_ris_ingestion.md`.
+
+The permanent GitHub Actions entry point is `.github/workflows/workflow_00_manual_ris_zenodo.yml`. It exposes three explicit operations:
+
+- `validate`: read-only discovery, parsing, deduplication and count validation;
+- `complete`: repeat validation, resolve raw-file SHA-256 fingerprints and add the derived W00 package to the same existing Zenodo draft;
+- `publish`: reverify the archived raw files and exact file set, require restricted access, then publish that same record.
+
+Manual RIS processing is R-only. Raw RIS files are staged in Zenodo and must not be committed to the repository.
