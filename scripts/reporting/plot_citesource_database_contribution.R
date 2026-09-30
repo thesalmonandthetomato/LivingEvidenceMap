@@ -87,7 +87,7 @@ if (anyDuplicated(canonical_sources$duplicate_id)) stop("Duplicate canonical rec
 
 
 # Machine-readable provenance matrix: one row per canonical work, one logical
-# indicator per database, plus the Workflow 04 inclusion state when supplied.
+# indicator per database, plus the final inclusion state when supplied.
 source_presence <- canonical_sources |>
   transmute(
     record_id = duplicate_id,
@@ -98,15 +98,15 @@ source_membership <- strsplit(source_presence$cite_source, ", ", fixed = TRUE)
 for (lab in unname(source_labels)) {
   source_presence[[lab]] <- vapply(source_membership, function(x) lab %in% x, logical(1))
 }
-source_presence$included_w04 <- source_presence$record_id %in% included_ids
+source_presence$included_final <- source_presence$record_id %in% included_ids
 
 if (length(included_ids)) {
   missing_included <- setdiff(included_ids, source_presence$record_id)
   if (length(missing_included)) {
-    stop(sprintf("%d Workflow 04 included record_id values are absent from the canonical provenance matrix", length(missing_included)), call. = FALSE)
+    stop(sprintf("%d final included record_id values are absent from the canonical provenance matrix", length(missing_included)), call. = FALSE)
   }
-  if (sum(source_presence$included_w04) != length(included_ids)) {
-    stop("Workflow 04 included-record count does not match provenance matrix", call. = FALSE)
+  if (sum(source_presence$included_final) != length(included_ids)) {
+    stop("final included-record count does not match provenance matrix", call. = FALSE)
   }
 }
 
@@ -140,7 +140,7 @@ source_summary <- classified |>
 screening_summary <- tibble(
   database = unname(source_labels),
   deduplicated_records = vapply(unname(source_labels), function(lab) sum(source_presence[[lab]]), integer(1)),
-  included_records = vapply(unname(source_labels), function(lab) sum(source_presence[[lab]] & source_presence$included_w04), integer(1))
+  included_records = vapply(unname(source_labels), function(lab) sum(source_presence[[lab]] & source_presence$included_final), integer(1))
 ) |>
   mutate(
     included_share_of_source = included_records / deduplicated_records,
@@ -155,7 +155,7 @@ write.csv(
 
 
 # Paired source-contribution figure: black = all deduplicated canonical works;
-# olive = Workflow 04 included works. This is separate from, and complementary
+# olive = final included works. This is separate from, and complementary
 # to, the source-intersection UpSet figure below.
 bar_long <- screening_summary |>
   select(database, deduplicated_records, included_records) |>
@@ -285,12 +285,12 @@ intersection_summary <- tibble(
   record_id = source_presence$record_id,
   intersection = intersection_key,
   degree = intersection_degree,
-  included_w04 = source_presence$included_w04
+  included_final = source_presence$included_final
 ) |>
   group_by(intersection, degree) |>
   summarise(
     deduplicated_records = n(),
-    included_records = sum(included_w04),
+    included_records = sum(included_final),
     .groups = "drop"
   ) |>
   arrange(desc(degree), desc(deduplicated_records), intersection)
@@ -299,7 +299,7 @@ if (sum(intersection_summary$deduplicated_records) != nrow(source_presence)) {
   stop("Exact intersection counts do not sum to all canonical records", call. = FALSE)
 }
 if (length(included_ids) && sum(intersection_summary$included_records) != length(included_ids)) {
-  stop("Exact included intersection counts do not sum to Workflow 04 included records", call. = FALSE)
+  stop("Exact included intersection counts do not sum to final included records", call. = FALSE)
 }
 
 write.csv(
@@ -449,7 +449,7 @@ report <- list(
   schema = "living-evidence-map-citesource-contribution-v1",
   status = "PASS",
   canonical_records = nrow(canonical_sources),
-  workflow04_included_records = if (length(included_ids)) length(included_ids) else NULL,
+  final_included_records = if (length(included_ids)) length(included_ids) else NULL,
   databases = unname(source_labels),
   interpretation = list(
     source_set_size = "Number of deduplicated canonical works with at least one manifestation from the database",
