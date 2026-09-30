@@ -87,7 +87,7 @@ jobs:
             --input proquest=current_sources/proquest/records.jsonl \
             --expected-prior-manifestations "$PRIOR_N" \
             --output-dir outputs/workflow01_union
-          TOTAL="$(Rscript -e "x<-jsonlite::fromJSON('outputs/workflow01_union/union_manifest.json');cat(x$union_manifestations)")"
+          TOTAL="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow01_union/union_manifest.json");cat(x$union_manifestations)')"
           test "$TOTAL" = "118527"
 
       - name: Validate seven-source metadata indexing only
