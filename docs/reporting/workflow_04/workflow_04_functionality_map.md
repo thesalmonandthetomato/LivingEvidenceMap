@@ -78,7 +78,9 @@ deterministic record sharding
 | Component | Function |
 |---|---|
 | `.github/workflows/workflow_04_consensus.yml` | Production controller for restoring authoritative Workflow 03 inputs, validating eligibility, running deterministic shards, and merging the consensus layer. |
-| `scripts/updater/workflow_04_luna_consensus.R` | Applies the immutable relevance-screening prompt, performs two independent Luna passes, triggers a third pass for disagreement/uncertainty/technical failure, and assigns 2-of-2 or 2-of-3 consensus decisions. |
+| `user_input/workflow04_screening_prompt.txt` | Authoritative project-specific relevance-screening prompt supplied to the model. |
+| `user_input/workflow04_screening_config.json` | Versioned W04 user-input contract containing the prompt path, prompt version, structured-output schema name and required prompt SHA-256. |
+| `scripts/updater/workflow_04_luna_consensus.R` | Loads and integrity-checks the user-supplied relevance-screening prompt, performs two independent Luna passes, triggers a third pass for disagreement/uncertainty/technical failure, and assigns 2-of-2 or 2-of-3 consensus decisions. |
 | `scripts/updater/workflow_04_merge_consensus.R` | Merges shard outputs and validates complete, unique record coverage, prompt identity and allowed decision states. |
 | `scripts/updater/workflow_04_agreement_audit.R` | Reproducibly calculates model-pass agreement and comparison statistics for reporting and validation. |
 | `docs/reporting/workflow_04/workflow_04_functionality_map.md` | Methodological and reporting description of the production workflow. |
@@ -107,15 +109,20 @@ Each pass is an independent API classification using the same record metadata an
 
 ### Immutable screening prompt
 
-The production prompt version is:
+The project-specific screening inputs now reside under `user_input/`:
+
+- `user_input/workflow04_screening_prompt.txt`; and
+- `user_input/workflow04_screening_config.json`.
+
+The config records the prompt path, prompt version, structured-output schema name and required SHA-256. For the current salmon map the production prompt version remains:
 
 `workflow04-v3-salmon-lice-clarification`
 
-The required SHA-256 is:
+and the required SHA-256 remains:
 
 `ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69`
 
-The screening implementation calculates the prompt checksum at runtime and fails if it differs from the required checksum.
+`workflow_04_luna_consensus.R` reads these values at runtime, reconstructs the prompt exactly from the text file and fails if its calculated checksum differs from the configured checksum. This preserves the original immutable-prompt behaviour while separating project-specific eligibility content from generic screening mechanics.
 
 ### Eligible species and contexts
 
@@ -273,7 +280,8 @@ GitHub retains lightweight methodological and reporting material, including:
 
 - Workflow 04 R scripts;
 - GitHub Actions workflow definitions;
-- the immutable prompt definition and checksum;
+- the project-specific prompt and W04 screening config under `user_input/`;
+- the immutable prompt checksum recorded by the config and screening outputs;
 - this functionality/methods report;
 - the separate ad hoc actions report;
 - the reproducible agreement-audit script; and
@@ -365,6 +373,7 @@ Workflow 04 is considered methodologically complete when:
 
 - the authoritative Workflow 03 lean canonical and publication-status states are restored and identity-validated;
 - records flagged by Workflow 03 as retracted or withdrawn are excluded before screening;
+- the W04 user-input config resolves to the intended prompt, prompt version and schema name;
 - the immutable screening prompt passes its SHA-256 integrity check;
 - every W03-eligible record receives two independent Luna classifications;
 - every disagreement, uncertain result or technical failure receives a third pass;
