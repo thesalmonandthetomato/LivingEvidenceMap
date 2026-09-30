@@ -201,16 +201,24 @@ jobs:
           echo "batch_count=$BATCH_COUNT" >> "$GITHUB_OUTPUT"
           echo "due_records=$DUE_RECORDS" >> "$GITHUB_OUTPUT"
 
-      - name: Upload prepared immutable batch input
+      - name: Upload compact immutable batch inputs
         uses: actions/upload-artifact@v4
         with:
-          name: workflow02-prepared-${{ github.run_id }}
+          name: workflow02-batch-inputs-${{ github.run_id }}
+          path: outputs/workflow02_plan/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload immutable finalization state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-finalize-input-${{ github.run_id }}
           path: |
             workflow01_state/canonical/records.jsonl
             workflow01_sha.txt
             previous_cumulative_patch.jsonl
             outputs/workflow02/input_with_previous_state.jsonl
-            outputs/workflow02_plan/
+            outputs/workflow02_plan/plan.json
           retention-days: 30
           if-no-files-found: error
 
@@ -241,11 +249,11 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('jsonlite','digest','httr2','stringdist'))
 
-      - name: Download prepared immutable batch input
+      - name: Download compact immutable batch inputs
         uses: actions/download-artifact@v4
         with:
-          name: workflow02-prepared-${{ github.run_id }}
-          path: prepared
+          name: workflow02-batch-inputs-${{ github.run_id }}
+          path: prepared-plan
 
       - name: Run selected enrichment batch
         if: ${{ matrix.batch != 'none' }}
@@ -258,14 +266,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/batch
-          IDS="prepared/outputs/workflow02_plan/batch-$BATCH.txt"
-          test -s "$IDS"
-          echo "Starting Workflow 02 batch $BATCH with $(wc -l < "$IDS") records"
-          Rscript scripts/updater/workflow_02_metadata_enrichment.R             --input prepared/outputs/workflow02/input_with_previous_state.jsonl             --output outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --report outputs/batch/enrichment_report.json             --record-ids "$IDS"             --progress-every 50             --delay 0.2             --recheck-after-days "$RECHECK"
+          BATCH_INPUT="prepared-plan/batch-$BATCH.jsonl"
+          test -s "$BATCH_INPUT"
+          echo "Starting Workflow 02 batch $BATCH with $(wc -l < "$BATCH_INPUT") records"
+          Rscript scripts/updater/workflow_02_metadata_enrichment.R             --input "$BATCH_INPUT"             --output outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --report outputs/batch/enrichment_report.json             --progress-every 50             --delay 0.2             --recheck-after-days "$RECHECK"
 
-          Rscript scripts/updater/workflow_02_build_patch.R             --input prepared/outputs/workflow02/input_with_previous_state.jsonl             --enriched outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --enrichment-report outputs/batch/enrichment_report.json             --patch outputs/batch/current_patch.jsonl             --retry-queue outputs/batch/retry_queue.jsonl             --report outputs/batch/current_patch_report.json
+          Rscript scripts/updater/workflow_02_build_patch.R             --input "$BATCH_INPUT"             --enriched outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --enrichment-report outputs/batch/enrichment_report.json             --patch outputs/batch/current_patch.jsonl             --retry-queue outputs/batch/retry_queue.jsonl             --report outputs/batch/current_patch_report.json
 
-          Rscript scripts/updater/workflow_02_apply_patch.R             --input prepared/outputs/workflow02/input_with_previous_state.jsonl             --patch outputs/batch/current_patch.jsonl             --output outputs/batch/replayed.jsonl             --report outputs/batch/replay_report.json             --mode exact
+          Rscript scripts/updater/workflow_02_apply_patch.R             --input "$BATCH_INPUT"             --patch outputs/batch/current_patch.jsonl             --output outputs/batch/replayed.jsonl             --report outputs/batch/replay_report.json             --mode exact
 
           Rscript -e "library(digest);stopifnot(digest(file='outputs/batch/replayed.jsonl',algo='sha256',serialize=FALSE)==digest(file='outputs/batch/enriched.jsonl',algo='sha256',serialize=FALSE));cat('PASS: batch exact replay verified\n')"
           rm -f outputs/batch/enriched.jsonl outputs/batch/replayed.jsonl
@@ -310,10 +318,10 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('jsonlite','digest','httr2'))
 
-      - name: Download prepared state
+      - name: Download immutable finalization state
         uses: actions/download-artifact@v4
         with:
-          name: workflow02-prepared-${{ github.run_id }}
+          name: workflow02-finalize-input-${{ github.run_id }}
           path: prepared
 
       - name: Download all durable batch checkpoints
