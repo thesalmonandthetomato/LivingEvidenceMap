@@ -1,5 +1,5 @@
 name: Temporary - validate batched Workflow 02
-# rerun after full prepare dependency alignment
+# restartability validation: checkpoint stamping phase
 
 on:
   push:
@@ -18,8 +18,8 @@ jobs:
     with:
       workflow01_pointer_path: docs/deduplication/zenodo/run-36128255337.json
       previous_workflow02_pointer_path: docs/enrichment/zenodo/run-36137804187.json
-      batch_size: '50'
-      max_records: '100'
+      batch_size: '2'
+      max_records: '4'
       recheck_after_days: '0'
       publish: false
     secrets: inherit
