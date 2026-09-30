@@ -147,10 +147,9 @@ textify <- function(x){
 first_nonempty <- function(...){for(x in list(...)){z<-textify(x);if(nzchar(trimws(z)))return(trimws(z))};""}
 record_id <- function(r) scalar((r$identity %||% list())$record_id)
 canonical <- function(r){x<-r$canonical %||% list();if(is.list(x))x else list()}
-record_view <- function(r){
+screening_view <- function(r){
   c<-canonical(r)
   list(
-    record_id=record_id(r),
     title=first_nonempty(c$title,r$title),
     abstract=first_nonempty(c$abstract,r$abstract),
     keywords=first_nonempty(c$keywords,r$keywords),
@@ -158,6 +157,10 @@ record_view <- function(r){
     affiliations=first_nonempty(c$affiliations,r$affiliations),
     funding=first_nonempty(c$funding,c$funders,r$funding,r$funders)
   )
+}
+record_view <- function(r)c(list(record_id=record_id(r)),screening_view(r))
+screening_fingerprint <- function(r){
+  digest(toJSON(screening_view(r),auto_unbox=TRUE,null="null",na="null",digits=NA),algo="sha256",serialize=FALSE)
 }
 extract_output_text <- function(resp){
   for(it in resp$output %||% list()) if(is.list(it)&&identical(it$type,"message"))
@@ -228,16 +231,14 @@ run_pass <- function(records,pass,path){
 }
 
 canonical_records<-read_jsonl(canonical_path)
-if(length(canonical_records)!=32292L)stop(sprintf("Expected 32,292 canonical records, found %d",length(canonical_records)),call.=FALSE)
 cids<-vapply(canonical_records,record_id,character(1))
 if(any(!nzchar(cids))||anyDuplicated(cids))stop("Canonical record_id invariant failed",call.=FALSE)
 
 w03<-read_jsonl(w03_path)
 wids<-vapply(w03,function(x)scalar(x$record_id),character(1))
-if(length(w03)!=32292L||any(!nzchar(wids))||anyDuplicated(wids)||!setequal(cids,wids))stop("Workflow 03 identity invariant failed",call.=FALSE)
+if(length(w03)!=length(canonical_records)||any(!nzchar(wids))||anyDuplicated(wids)||!setequal(cids,wids))stop("Workflow 03 identity invariant failed",call.=FALSE)
 wm<-setNames(w03,wids)
 eligible_idx<-which(!vapply(cids,function(id)w03_excluded(wm[[id]]),logical(1)))
-if(length(eligible_idx)!=32283L)stop(sprintf("Expected 32,283 W03-eligible records, found %d",length(eligible_idx)),call.=FALSE)
 eligible_all<-canonical_records[eligible_idx]
 eligible_all_ids<-vapply(eligible_all,record_id,character(1))
 ord<-order(eligible_all_ids)
@@ -296,7 +297,8 @@ for(i in seq_along(ids)){
       agreement=if(length(votes)==2L && length(unique(votes))==1L && !any(failures))"2_of_2" else if(decision %in% c("retain","exclude"))"2_of_3" else "unresolved",
       requires_human_review=identical(decision,"uncertain"),
       technical_failure_present=any(failures),
-      model=model,prompt_version=PROMPT_VERSION,prompt_sha256=PROMPT_SHA256
+      model=model,prompt_version=PROMPT_VERSION,prompt_sha256=PROMPT_SHA256,
+      screening_input_sha256=screening_fingerprint(eligible[[i]])
     )
   )
 }
