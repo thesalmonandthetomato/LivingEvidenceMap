@@ -1,5 +1,5 @@
 name: Temporary - validate batched Workflow 02
-# restartability validation: checkpoint stamping phase
+# restartability validation: cross-run reuse phase
 
 on:
   push:
@@ -18,6 +18,7 @@ jobs:
     with:
       workflow01_pointer_path: docs/deduplication/zenodo/run-36128255337.json
       previous_workflow02_pointer_path: docs/enrichment/zenodo/run-36137804187.json
+      resume_run_id: '36703207505'
       batch_size: '2'
       max_records: '4'
       recheck_after_days: '0'
