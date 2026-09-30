@@ -152,7 +152,11 @@ Scopus title/abstract retrieval retains the previously validated route:
 
 EID fallback is accepted only when the resulting full Scopus record returns the exact requested DOI.
 
-For `author_keywords`, W02 does **not** infer or discover an EID through DOI search. It uses only a Scopus EID already retained in the W01 manifestation metadata, then requires retained EID retrieval + exact DOI + title similarity ≥0.90 before applying genuine Scopus `author-keyword` values.
+For `author_keywords`, W02 uses Scopus `FULL` retrieval because `META_ABS` does not expose the required author-keyword field reliably. If a Scopus EID is already retained in the W01 manifestation, W02 retrieves that EID with `view=FULL`. If no retained EID is available, W02 attempts direct Abstract Retrieval by DOI with `view=FULL`. In both cases, keywords are accepted only when the returned DOI exactly matches and the provider title has Jaro-Winkler similarity ≥0.90 to the canonical title. If direct DOI retrieval returns no record or HTTP 404, W02 stops; it does not perform a further DOI-search → EID fallback for author keywords.
+
+### Author-keyword route validation
+
+The keyword route was benchmarked on 100 deterministic post-Europe-PMC records with DOI + canonical title + missing author keywords + no retained Scopus EID. Direct Scopus DOI `FULL` retrieval returned 20 records, of which 8 contained author keywords and 7 passed the DOI + title guard, giving a 7% accepted yield. A follow-up benchmark applied Scopus Search → EID → `FULL` retrieval to 50 of the direct-DOI HTTP 404 records and recovered 0 additional records. Production W02 therefore uses direct DOI `FULL` retrieval as the final Scopus keyword fallback and does not search for an EID after a direct DOI miss.
 
 ### Title-consistency guard
 
@@ -192,7 +196,7 @@ Europe PMC is queried first. Exact DOI equality is required before any field can
 
 ### 5. Query Scopus
 
-For residual missing title/abstract fields, the established Scopus DOI retrieval route is retained. For residual missing author keywords, Scopus is queried only when W01 already contains a retained Scopus EID; this lookup does not use DOI search to discover an identifier.
+For residual missing title/abstract fields, the established Scopus DOI retrieval route is retained. For residual missing author keywords, W02 first uses a retained Scopus EID with `view=FULL` where available; otherwise it tries direct DOI `FULL` retrieval. No further Scopus Search → EID fallback is used for keywords after a direct DOI miss.
 
 ### 6. Apply verified fills and quarantine conflicts
 
@@ -408,7 +412,7 @@ Downstream workflows must preserve the stable Workflow 01 `record_id` and source
 
 ## Methods text for research reporting
 
-> **Workflow 02: bibliographic metadata enrichment.** Canonical records with a DOI but a missing title, abstract and/or author-keyword field were subjected to deterministic metadata enrichment. Europe PMC was queried first, with metadata accepted only where the returned DOI exactly matched the requested normalised DOI; abstract and author-keyword fills additionally required title agreement at a Jaro-Winkler similarity of at least 0.90. Records remaining incomplete for title or abstract were queried against Scopus using direct DOI-based abstract retrieval and, where necessary, DOI search followed by EID retrieval. Missing author keywords were queried in Scopus only through an EID already retained in the Workflow 01 manifestation and were accepted only after exact DOI and title-consistency checks. Existing populated canonical fields were never overwritten by the automated process. Returned abstracts were accepted only when provider and canonical titles were consistent, using a Jaro-Winkler similarity threshold of 0.90 where both titles were available; conflicting metadata were quarantined rather than applied. Automated enrichment was stored as a sparse patch keyed to stable canonical work identifiers rather than as a duplicate full corpus, and both current and cumulative patch states were replayed against the authoritative upstream corpus before archival. Provider outcomes, accepted fills, quarantined conflicts, checksums and lineage were retained for provenance, and the cumulative sparse enrichment state was replayed against the exact upstream canonical corpus before archival.
+> **Workflow 02: bibliographic metadata enrichment.** Canonical records with a DOI but a missing title, abstract and/or author-keyword field were subjected to deterministic metadata enrichment. Europe PMC was queried first, with metadata accepted only where the returned DOI exactly matched the requested normalised DOI; abstract and author-keyword fills additionally required title agreement at a Jaro-Winkler similarity of at least 0.90. Records remaining incomplete for title or abstract were queried against Scopus using direct DOI-based abstract retrieval and, where necessary, DOI search followed by EID retrieval. Missing author keywords were queried in Scopus using `FULL` retrieval, first through an EID already retained in the Workflow 01 manifestation and, where no EID was available, through direct DOI retrieval. Author keywords were accepted only after exact DOI and title-consistency checks; direct DOI misses were left unresolved rather than escalated to an additional Scopus search step. Existing populated canonical fields were never overwritten by the automated process. Returned abstracts were accepted only when provider and canonical titles were consistent, using a Jaro-Winkler similarity threshold of 0.90 where both titles were available; conflicting metadata were quarantined rather than applied. Automated enrichment was stored as a sparse patch keyed to stable canonical work identifiers rather than as a duplicate full corpus, and both current and cumulative patch states were replayed against the authoritative upstream corpus before archival. Provider outcomes, accepted fills, quarantined conflicts, checksums and lineage were retained for provenance, and the cumulative sparse enrichment state was replayed against the exact upstream canonical corpus before archival.
 
 ## Reporting status
 
