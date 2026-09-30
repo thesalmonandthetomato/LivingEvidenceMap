@@ -1,6 +1,10 @@
 name: Workflow 02 - Production batched enrichment
 
 on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/workflow_02_batched_production.yml'
   workflow_dispatch:
     inputs:
       resume_run_id:
@@ -19,7 +23,7 @@ jobs:
     with:
       workflow01_pointer_path: docs/deduplication/zenodo/run-36128255337.json
       previous_workflow02_pointer_path: docs/enrichment/zenodo/run-36137804187.json
-      resume_run_id: ${{ inputs.resume_run_id }}
+      resume_run_id: ''
       batch_size: '500'
       max_records: '0'
       recheck_after_days: '0'
