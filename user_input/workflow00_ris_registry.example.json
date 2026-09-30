@@ -1,0 +1,51 @@
+{
+  "schema_version": "workflow00-source-registry-v1",
+  "acquisition": {
+    "method": "ris_upload",
+    "source_format": "RIS",
+    "notes": "One logical search exported in two RIS chunks."
+  },
+  "database": {
+    "name": "CAB Abstracts",
+    "short_name": "cab",
+    "platform": null,
+    "database_scope": [
+      "CAB Abstracts"
+    ]
+  },
+  "search": {
+    "description": "Full CAB Abstracts search for the Living Evidence Map.",
+    "search_date": "2026-09-30",
+    "search_string": null,
+    "search_fields": null,
+    "limits": null,
+    "reported_results": null,
+    "notes": "Replace null fields with the exact search details available from the source."
+  },
+  "field_semantics": {
+    "ris_KW": "indexing_terms"
+  },
+  "input": {
+    "expected_chunk_count": 2,
+    "encoding": "UTF-8",
+    "files": [
+      {
+        "filename": "cab_abstracts_2026-09-30_part01.ris",
+        "exported_at": null,
+        "notes": null
+      },
+      {
+        "filename": "cab_abstracts_2026-09-30_part02.ris",
+        "exported_at": null,
+        "notes": null
+      }
+    ]
+  },
+  "staging": {
+    "method": "zenodo_draft",
+    "reserved_doi": "10.5281/zenodo.REPLACE_ME",
+    "deposition_id": null,
+    "publish_after_validation": false,
+    "notes": "Upload raw RIS chunks to this existing Zenodo draft first. W00 completes the same draft and leaves it unpublished."
+  }
+}
