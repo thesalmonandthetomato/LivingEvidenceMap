@@ -99,7 +99,6 @@ if(length(missing_target)) stop(sprintf(
   "Delta target dropped previous source(s): %s",paste(missing_target,collapse=", ")
 ),call.=FALSE)
 
-replayed_inputs <- list()
 for(src in target_sources){
   target <- source_target[[src]]
   filename <- as.character(target$filename %||% paste0(src,"_records_for_deduplication.jsonl"))
@@ -115,14 +114,7 @@ for(src in target_sources){
   if(!identical(tolower(sha(out)),tolower(as.character(target$current_sha256)))) {
     stop(sprintf("%s replay SHA-256 does not match target",src),call.=FALSE)
   }
-  replayed_inputs[[src]] <- out
 }
-writeLines(toJSON(list(
-  schema="living-evidence-map-workflow01-source-inputs-v1",
-  status="replayed",
-  sources=replayed_inputs
-),auto_unbox=TRUE,pretty=TRUE,null="null"),
-file.path(output_root,"workflow01_seed","source_inputs.json"))
 
 align_cols <- function(a,b){
   cols <- union(names(a),names(b))
