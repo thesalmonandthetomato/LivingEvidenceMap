@@ -1,0 +1,27 @@
+name: Workflow 02 - Production batched enrichment
+
+on:
+  workflow_dispatch:
+    inputs:
+      resume_run_id:
+        description: 'Optional failed/interrupted production run ID to resume from validated checkpoints'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  production:
+    uses: ./.github/workflows/workflow_02_batched.yml
+    with:
+      workflow01_pointer_path: docs/deduplication/zenodo/run-36128255337.json
+      previous_workflow02_pointer_path: docs/enrichment/zenodo/run-36137804187.json
+      resume_run_id: ${{ inputs.resume_run_id }}
+      batch_size: '500'
+      max_records: '0'
+      recheck_after_days: '0'
+      publish: true
+    secrets: inherit
