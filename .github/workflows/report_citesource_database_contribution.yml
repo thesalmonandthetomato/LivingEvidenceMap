@@ -54,21 +54,32 @@ jobs:
             --output-root workflow01_state
           test -s workflow01_state/canonical/records.jsonl
 
-      - name: Restore authoritative Workflow 04 inclusion set
+      - name: Restore authoritative final Workflow 08 inclusion set
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          W04_POINTER="$(ls docs/workflow04/zenodo/run-*.json | sort -V | tail -1)"
-          test -n "$W04_POINTER"
-          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
-            --pointer "$W04_POINTER" \
-            --output-dir workflow04_state
-          INC="$(find workflow04_state -type f -name workflow04_included_record_ids.txt -print -quit)"
-          test -n "$INC"
-          cp "$INC" workflow04_included_record_ids.txt
-          Rscript -e 'x<-readLines("workflow04_included_record_ids.txt",warn=FALSE);x<-x[nzchar(trimws(x))];stopifnot(!anyDuplicated(x));cat(sprintf("PASS: authoritative W04 inclusion set contains %d unique record IDs\n",length(x)))'
+          W08_POINTER="$(ls docs/workflow08/zenodo/run-*.json | sort -V | tail -1)"
+          test -n "$W08_POINTER"
+          Rscript scripts/reporting/restore_workflow08_reporting_state.R \
+            --pointer "$W08_POINTER" \
+            --output-dir workflow08_reporting_state
+          Rscript -e '
+            library(jsonlite)
+            p <- "workflow08_reporting_state/living_evidence_map_canonical_final.jsonl"
+            con <- file(p,"rt",encoding="UTF-8"); on.exit(close(con))
+            ids <- character()
+            repeat {
+              x <- readLines(con,n=5000L,warn=FALSE)
+              if(!length(x)) break
+              x <- x[nzchar(trimws(x))]
+              ids <- c(ids,vapply(x,function(z)as.character(fromJSON(z,simplifyVector=FALSE)$identity$record_id),character(1)))
+            }
+            stopifnot(length(ids)>0L,!anyDuplicated(ids),all(nzchar(ids)))
+            writeLines(ids,"workflow08_final_included_record_ids.txt",useBytes=TRUE)
+            cat(sprintf("PASS: authoritative final W08 inclusion set contains %d unique record IDs\n",length(ids)))
+          '
 
       - name: Generate CiteSource contribution figure
         shell: bash
@@ -76,7 +87,7 @@ jobs:
           set -euo pipefail
           Rscript scripts/reporting/plot_citesource_database_contribution.R \
             --input workflow01_state/canonical/records.jsonl \
-            --included-ids workflow04_included_record_ids.txt \
+            --included-ids workflow08_final_included_record_ids.txt \
             --output-dir outputs/citesource_contribution
 
       - name: Validate outputs
@@ -87,7 +98,7 @@ jobs:
           s <- read.csv("outputs/citesource_contribution/source_contribution_summary.csv")
           stopifnot(
             r$status == "PASS",
-            r$canonical_records >= r$workflow04_included_records,
+            r$canonical_records >= r$final_included_records,
             nrow(s) == length(r$databases),
             file.exists("outputs/citesource_contribution/source_provenance_screening.csv"),
             file.exists("outputs/citesource_contribution/source_contribution_screening_summary.csv"),
@@ -102,10 +113,10 @@ jobs:
           ix <- read.csv("outputs/citesource_contribution/source_intersection_screening_summary.csv")
           stopifnot(
             nrow(p) == r$canonical_records,
-            sum(p$included_w04) == r$workflow04_included_records,
+            sum(p$included_final) == r$final_included_records,
             nrow(ss) == length(r$databases),
             sum(ix$deduplicated_records) == r$canonical_records,
-            sum(ix$included_records) == r$workflow04_included_records
+            sum(ix$included_records) == r$final_included_records
           )
           cat("PASS: CiteSource full paired UpSet and provenance summaries validated\n")
 
