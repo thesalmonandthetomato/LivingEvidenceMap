@@ -227,7 +227,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_04_luna_consensus.R             --canonical prepared/outputs/workflow04_prepare/screen_queue_canonical.jsonl             --workflow03-status prepared/outputs/workflow04_prepare/screen_queue_workflow03.jsonl             --output-dir outputs/shard-${{ matrix.shard }}             --model gpt-5.6-luna             --shard-index ${{ matrix.shard }}             --shard-count 8             --checkpoint-every 25
+          Rscript scripts/updater/workflow_04_luna_consensus.R             --canonical prepared/outputs/workflow04_prepare/screen_queue_canonical.jsonl             --workflow03-status prepared/outputs/workflow04_prepare/screen_queue_workflow03.jsonl             --screening-config user_input/workflow04_screening_config.json             --output-dir outputs/shard-${{ matrix.shard }}             --model gpt-5.6-luna             --shard-index ${{ matrix.shard }}             --shard-count 8             --checkpoint-every 25
 
       - name: Upload shard
         if: always()
@@ -360,7 +360,7 @@ jobs:
           set -euo pipefail
           LEAN_SHA=$(P="$LEAN_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$lean_canonical_sha256)')
           W03_SHA=$(P="$W03_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$publication_status_sha256)')
-          PROMPT_SHA=ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69
+          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("user_input/workflow04_screening_config.json",simplifyVector=FALSE);p<-paste(readLines(x$prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\\n");h<-digest::digest(p,algo="sha256",serialize=FALSE);stopifnot(identical(h,x$expected_prompt_sha256));cat(h)')"
           mkdir -p outputs/workflow04_zenodo
           Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R             --state-dir outputs/workflow04_final             --source-run-id "$GITHUB_RUN_ID"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow04_zenodo             --upstream-lean-sha256 "$LEAN_SHA"             --upstream-workflow03-sha256 "$W03_SHA"             --prompt-sha256 "$PROMPT_SHA"
 
