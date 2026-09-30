@@ -1,0 +1,6 @@
+{
+  "schema": "living-evidence-map-workflow04-screening-config-v1",
+  "prompt_path": "user_input/workflow04_screening_prompt.txt",
+  "prompt_version": "workflow04-v3-salmon-lice-clarification",
+  "expected_prompt_sha256": "ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69"
+}
