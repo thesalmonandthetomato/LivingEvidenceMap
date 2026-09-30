@@ -98,11 +98,11 @@ norm_words <- function(x) {
 source_kind <- function(r) {
   if (is.list(r$lens)) return("lens")
   p <- scalar((r$source %||% list())$provider)
-  if (identical(p,"scopus")) return("scopus")
-  if (identical(p,"openalex")) return("openalex")
+  if (is.null(p)) stop("Source provider is missing",call.=FALSE)
   if (identical(p,"agricola_via_europe_pmc")) return("agricola")
   if (identical(p,"wos_starter")) return("wos")
-  stop(sprintf("Unknown source provider: %s", p %||% "<missing>"), call.=FALSE)
+  if (!grepl("^[a-z0-9][a-z0-9_-]*$",p)) stop(sprintf("Invalid source provider slug: %s",p),call.=FALSE)
+  p
 }
 source_record_id <- function(r) {
   if (source_kind(r)=="lens") return(as.character((r$identity %||% list())$lens_id %||% (r$identity %||% list())$record_id %||% ""))
@@ -136,23 +136,29 @@ read_abstract_map <- function(path) {
   rbindlist(rows, use.names=TRUE, fill=TRUE)
 }
 
-upstream_files <- c(
-  lens="lens_records_for_deduplication.jsonl",
-  scopus="scopus_records_for_deduplication.jsonl",
-  openalex="openalex_records_for_deduplication.jsonl",
-  agricola="agricola_records_for_deduplication.jsonl",
-  wos="wos_records_for_deduplication.jsonl"
-)
-abs_maps <- lapply(upstream_files, function(nm) {
-  p <- file.path(upstream_dir, nm)
-  if (!file.exists(p)) {
-    hits <- list.files(upstream_dir, pattern=paste0("^", nm, "$"),
-                       recursive=TRUE, full.names=TRUE)
-    if (!length(hits)) stop(sprintf("Upstream source file missing: %s", nm), call.=FALSE)
-    p <- hits[[1L]]
+source_manifest_path <- file.path(upstream_dir,"source_inputs.json")
+if (file.exists(source_manifest_path)) {
+  sm <- fromJSON(source_manifest_path,simplifyVector=FALSE)
+  if (!identical(sm$schema,"living-evidence-map-workflow01-source-inputs-v1")) {
+    stop("Unsupported upstream source-input manifest schema",call.=FALSE)
   }
-  read_abstract_map(p)
-})
+  if (is.null(sm$sources) || !length(sm$sources) || is.null(names(sm$sources))) {
+    stop("Upstream source-input manifest contains no sources",call.=FALSE)
+  }
+  upstream_paths <- vapply(sm$sources,function(z)as.character(z[[1L]]),character(1))
+} else {
+  upstream_paths <- list.files(
+    upstream_dir,
+    pattern="_records_for_deduplication\\.jsonl$",
+    full.names=TRUE
+  )
+  names(upstream_paths) <- sub("_records_for_deduplication\\.jsonl$","",basename(upstream_paths))
+}
+if (!length(upstream_paths)) stop("No upstream source files found",call.=FALSE)
+if (any(!file.exists(upstream_paths))) {
+  stop(sprintf("Upstream source file(s) missing: %s",paste(names(upstream_paths)[!file.exists(upstream_paths)],collapse=", ")),call.=FALSE)
+}
+abs_maps <- lapply(upstream_paths, read_abstract_map)
 abs_map <- unique(rbindlist(abs_maps, use.names=TRUE, fill=TRUE),
                   by=c("source","source_record_id"))
 setkey(abs_map, source, source_record_id)

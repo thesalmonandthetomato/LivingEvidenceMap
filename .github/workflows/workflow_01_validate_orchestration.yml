@@ -24,6 +24,7 @@ on:
       - 'scripts/updater/workflow_01_source_identity_filter.R'
       - 'scripts/updater/workflow_01_deduplication_build_union.R'
       - 'scripts/updater/workflow_01_deduplication_incremental_candidates.R'
+      - 'scripts/updater/workflow_01_deduplication_incremental_score.R'
       - 'scripts/updater/workflow_01_apply_adjudications_and_recluster.R'
 
 permissions:
@@ -97,6 +98,7 @@ jobs:
             'scripts/updater/workflow_01_source_identity_filter.R',
             'scripts/updater/workflow_01_deduplication_build_union.R',
             'scripts/updater/workflow_01_deduplication_incremental_candidates.R',
+            'scripts/updater/workflow_01_deduplication_incremental_score.R',
             'scripts/updater/workflow_01_apply_adjudications_and_recluster.R'
           )
           for (f in files) {
