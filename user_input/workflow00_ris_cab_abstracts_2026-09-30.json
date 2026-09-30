@@ -22,8 +22,8 @@
       "Abstract"
     ],
     "limits": [],
-    "reported_results": null,
-    "notes": "No other restrictions. W00 will verify the complete exported record total from the existing Zenodo draft."
+    "reported_results": 26816,
+    "notes": "No other restrictions. Final Zenodo export contains 26,816 records; W00 validation confirmed 26,816 parsed and unique records with no exact duplicate rows."
   },
   "field_semantics": {
     "ris_KW": "indexing_terms"
@@ -36,8 +36,16 @@
     "notes": "Complete this existing Zenodo draft in place and leave it unpublished after validation."
   },
   "input": {
-    "expected_chunk_count": null,
+    "expected_chunk_count": 1,
     "encoding": "UTF-8",
-    "files": []
+    "files": [
+      {
+        "filename": "cabi_20260400935 (1).ris",
+        "exported_at": null,
+        "notes": "Final CAB Abstracts RIS export retained in existing Zenodo draft.",
+        "bytes": 88573077,
+        "sha256": "adce3b55ae62b7b910c6309230ce789593f3e346c57042760ed7fb2418e37313"
+      }
+    ]
   }
 }
