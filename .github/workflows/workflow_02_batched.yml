@@ -100,7 +100,7 @@ jobs:
 
       - name: Install preparation dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest'))
+        run: install.packages(c('jsonlite','digest','httr2'))
 
       - name: Parse batched Workflow 02 scripts
         shell: Rscript {0}
