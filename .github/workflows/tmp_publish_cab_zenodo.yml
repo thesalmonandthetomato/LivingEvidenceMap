@@ -1,0 +1,45 @@
+name: Temporary - publish CAB restricted Zenodo record
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'user_input/manual_ris_cab_publish.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Reverify CAB raw RIS SHA-256
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_verify_zenodo_ris_integrity.R \
+            --registry user_input/workflow00_ris_cab_abstracts_2026-09-30.json \
+            --output-dir outputs/updater/workflow00_cab_final_integrity
+
+      - name: Guard and publish existing restricted CAB draft
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: Rscript scripts/updater/tmp_publish_cab_zenodo.R
