@@ -128,18 +128,24 @@ jobs:
           test -s production/docs/workflow10-preview-data.js
           echo "PASS: isolated search trial added; existing Workflow 10 preview preserved"
 
-      - name: Add Workflow 09 methodology page
+      - name: Add Workflow 09 methodology and results pages
         shell: bash
         run: |
           set -euo pipefail
           METHODS='workflow10/docs/reporting/workflow_09/manuscript/methods.html'
+          RESULTS='workflow10/docs/reporting/workflow_09/manuscript/results.html'
           test -s "$METHODS"
+          test -s "$RESULTS"
           cp "$METHODS" production/docs/methodology.html
+          cp "$RESULTS" production/docs/results.html
 
           grep -q "The status of academic research on salmon farming: a living evidence map" production/docs/methodology.html
+          grep -q "The status of academic research on salmon farming: a living evidence map" production/docs/results.html
           grep -q 'href="./methodology.html"' production/docs/workflow10-preview.html
           grep -q 'href="./methodology.html"' production/docs/workflow10-search-trial.html
-          echo "PASS: Workflow 09 methodology page added and dashboard links verified"
+          grep -q 'href="./results.html"' production/docs/workflow10-preview.html
+          grep -q 'href="./results.html"' production/docs/workflow10-search-trial.html
+          echo "PASS: Workflow 09 methodology/results pages added and dashboard links verified"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
