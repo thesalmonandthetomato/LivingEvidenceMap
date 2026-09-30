@@ -46,8 +46,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          W01_POINTER="$(ls docs/deduplication/zenodo/run-*.json | sort -V | tail -1)"
+          test -n "$W01_POINTER"
           Rscript scripts/updater/workflow_01_restore_current_state.R \
-            --pointer docs/deduplication/zenodo/run-36128255337.json \
+            --pointer "$W01_POINTER" \
             --pointer-dir docs/deduplication/zenodo \
             --output-root workflow01_state
           test -s workflow01_state/canonical/records.jsonl
@@ -58,13 +60,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          W04_POINTER="$(ls docs/workflow04/zenodo/run-*.json | sort -V | tail -1)"
+          test -n "$W04_POINTER"
           Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
-            --pointer docs/workflow04/zenodo/run-36227737500.json \
+            --pointer "$W04_POINTER" \
             --output-dir workflow04_state
           INC="$(find workflow04_state -type f -name workflow04_included_record_ids.txt -print -quit)"
           test -n "$INC"
           cp "$INC" workflow04_included_record_ids.txt
-          Rscript -e 'x<-readLines("workflow04_included_record_ids.txt",warn=FALSE);x<-x[nzchar(trimws(x))];stopifnot(length(x)==19407L,!anyDuplicated(x));cat("PASS: authoritative W04 inclusion set contains 19,407 unique record IDs\n")'
+          Rscript -e 'x<-readLines("workflow04_included_record_ids.txt",warn=FALSE);x<-x[nzchar(trimws(x))];stopifnot(!anyDuplicated(x));cat(sprintf("PASS: authoritative W04 inclusion set contains %d unique record IDs\n",length(x)))'
 
       - name: Generate CiteSource contribution figure
         shell: bash
@@ -83,9 +87,8 @@ jobs:
           s <- read.csv("outputs/citesource_contribution/source_contribution_summary.csv")
           stopifnot(
             r$status == "PASS",
-            r$canonical_records == 32292L,
-            r$workflow04_included_records == 19407L,
-            nrow(s) == 5L,
+            r$canonical_records >= r$workflow04_included_records,
+            nrow(s) == length(r$databases),
             file.exists("outputs/citesource_contribution/source_provenance_screening.csv"),
             file.exists("outputs/citesource_contribution/source_contribution_screening_summary.csv"),
             file.exists("outputs/citesource_contribution/source_intersection_screening_summary.csv"),
@@ -98,11 +101,11 @@ jobs:
           ss <- read.csv("outputs/citesource_contribution/source_contribution_screening_summary.csv")
           ix <- read.csv("outputs/citesource_contribution/source_intersection_screening_summary.csv")
           stopifnot(
-            nrow(p) == 32292L,
-            sum(p$included_w04) == 19407L,
-            nrow(ss) == 5L,
-            sum(ix$deduplicated_records) == 32292L,
-            sum(ix$included_records) == 19407L
+            nrow(p) == r$canonical_records,
+            sum(p$included_w04) == r$workflow04_included_records,
+            nrow(ss) == length(r$databases),
+            sum(ix$deduplicated_records) == r$canonical_records,
+            sum(ix$included_records) == r$workflow04_included_records
           )
           cat("PASS: CiteSource full paired UpSet and provenance summaries validated\n")
 
