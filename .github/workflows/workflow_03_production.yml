@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: 'Records to scan; 0 = all 32,292'
+        description: 'Records to scan; 0 = all records in the incoming lean canonical checkpoint'
         required: true
         default: '20'
         type: string
@@ -130,7 +130,11 @@ jobs:
           fi
           SHA="$(Rscript -e 'cat(digest::digest(file="workflow03_input/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
           test "$SHA" = "$EXPECTED_SHA"
+          EXPECTED_RECORDS="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);n<-as.integer(x$canonical_records);if(is.na(n)||n<1L)stop("Pointer lacks valid canonical_records");cat(n)')"
+          ACTUAL_RECORDS="$(Rscript -e 'x<-readLines("workflow03_input/canonical_lean.jsonl",warn=FALSE);cat(sum(nzchar(trimws(x))))')"
+          test "$ACTUAL_RECORDS" = "$EXPECTED_RECORDS"
           echo "LEAN_SHA=$SHA" >> "$GITHUB_ENV"
+          echo "EXPECTED_RECORDS=$EXPECTED_RECORDS" >> "$GITHUB_ENV"
 
       - name: Run publication-status scan
         env:
@@ -157,9 +161,10 @@ jobs:
           library(jsonlite)
           x<-fromJSON('outputs/workflow03/report.json',simplifyVector=FALSE)
           stopifnot(x$status=='PASS')
-          expected<-as.integer(Sys.getenv('LIMIT'))
-          if(expected>0L) stopifnot(as.integer(x$records_scanned)==expected)
-          if(expected==0L) stopifnot(as.integer(x$records_scanned)==32292L)
+          requested<-as.integer(Sys.getenv('LIMIT'))
+          full_n<-as.integer(Sys.getenv('EXPECTED_RECORDS'))
+          if(requested>0L) stopifnot(as.integer(x$records_scanned)==requested)
+          if(requested==0L) stopifnot(!is.na(full_n),full_n>0L,as.integer(x$records_scanned)==full_n)
           allowed<-c('normal','retracted','withdrawn','corrected','expression_of_concern','warning')
           counts<-unlist(x$code_counts)
           stopifnot(all(names(counts)%in%allowed),sum(as.integer(counts))==as.integer(x$records_scanned))
@@ -185,7 +190,8 @@ jobs:
             --publication-run-id "$GITHUB_RUN_ID" \
             --repository "$GITHUB_REPOSITORY" \
             --output-dir outputs/workflow03_zenodo \
-            --upstream-lean-sha256 "$LEAN_SHA"
+            --upstream-lean-sha256 "$LEAN_SHA" \
+            --expected-records "$EXPECTED_RECORDS"
 
       - name: Register authoritative Workflow 03 layer
         id: handoff
