@@ -1,4 +1,5 @@
 name: TEMP W07 historical durable bootstrap
+# one-off migration; remove after successful durable checkpoint registration
 
 on:
   push:
