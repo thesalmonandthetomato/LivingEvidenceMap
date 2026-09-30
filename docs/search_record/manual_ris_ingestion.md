@@ -1,97 +1,130 @@
-# Manual RIS ingestion via a Zenodo draft
+# Manual RIS ingestion via an existing Zenodo draft
 
 Use this procedure for database searches that must be exported manually as RIS, including searches split across multiple files.
 
-## Before uploading
+## 1. Run and document the final search
 
-1. Run the final database search and record the exact:
-   - database and platform;
-   - search date;
-   - Boolean search string;
-   - fields/scope searched where known;
-   - limits applied;
-   - total number of results reported by the database.
-2. Export the complete result set as RIS.
-3. If the database limits export size, export consecutive chunks. Do not intentionally deduplicate or modify the RIS files.
+Record:
 
-## Stage the raw search in Zenodo
+- database and platform;
+- search date;
+- exact search string;
+- searched fields/scope;
+- any limits;
+- reported result count.
+
+Export the complete result set as RIS. If the database imposes an export limit, export consecutive chunks without editing or deduplicating them.
+
+## 2. Stage the raw search in Zenodo
 
 1. Create a new Zenodo upload and keep it as a **draft**.
-2. Set the intended file visibility to **restricted** where database licensing requires this.
+2. Set access to **restricted** where required by database licensing.
 3. Upload every raw RIS chunk exactly as exported.
-4. Reserve a DOI if desired.
-5. **Save the draft but do not publish it.**
-6. Record the reserved DOI and, when available, the Zenodo deposition/draft identifier.
+4. Reserve the DOI.
+5. Save the draft but do not publish it.
 
 The raw RIS files must not be committed to Git or Git LFS.
 
-## Create the Workflow 00 registry
+## 3. Create the Workflow 00 registry
 
-Create one JSON registry under `user_input/` for the entire logical search, not one registry per chunk. Follow:
+Create one registry under `user_input/` for the logical search. Follow:
 
 - `config/workflow00_ris_registry.schema.json`
 - `user_input/workflow00_ris_registry.example.json`
 
-The registry must list every RIS filename under `input.files`. Record `input.expected_chunk_count` and `search.reported_results` whenever known.
+The registry identifies the database, search, RIS keyword semantics and existing Zenodo draft.
 
-`database.short_name` is the stable source code propagated through the existing W01 `source` field. Do not create a separate search-run/source-ID field in the canonical JSON.
+`database.short_name` is the stable source code propagated through the existing W01 `source` field.
 
-## Workflow 00 validation
+The registry may initially leave `input.files` empty. Workflow 00 can discover the RIS files from the existing Zenodo draft. When the draft is completed, the archived `source_registry.json` records every raw filename, byte size and SHA-256 checksum.
 
-The R importer must:
+## 4. Run operation: validate
 
-1. retrieve all listed RIS files from the Zenodo draft;
-2. verify that the supplied filenames exactly match the registry;
-3. compute SHA-256 for every chunk;
-4. reject byte-identical duplicated chunks;
-5. parse every complete RIS record;
-6. derive the source-native `source_record_id`;
-7. identify repeated native IDs within and across chunks;
-8. collapse duplicates only when the complete RIS payload is identical;
-9. fail when the same native ID has conflicting payloads;
-10. combine unique records into one W00 handover JSONL;
-11. compare the unique record count with `search.reported_results`;
-12. fail completeness validation when the counts differ.
+Run **Workflow 00 - Manual RIS Zenodo** and select:
 
-A failed validation must leave diagnostic checksum/duplicate audit files available for inspection.
+- the registry path;
+- operation: `validate`.
 
-## Complete the same Zenodo draft
+Validation is read-only. It:
 
-After validation succeeds, W00 adds the following to the **same draft**:
+1. authenticates with `ZENODO_ACCESS_TOKEN`;
+2. resolves the existing Zenodo draft;
+3. discovers the RIS chunks;
+4. downloads the raw files;
+5. computes byte sizes and SHA-256 checksums;
+6. rejects byte-identical duplicated chunks;
+7. parses all complete RIS records;
+8. derives source-native `source_record_id` values;
+9. collapses repeated source IDs only when the complete raw RIS payload is identical;
+10. fails on conflicting payloads for the same source ID;
+11. combines unique records into one W00 handover JSONL;
+12. compares the unique record count with `search.reported_results` when supplied.
 
-- all raw RIS chunks already uploaded;
+No Zenodo files are created, replaced or published during `validate`.
+
+## 5. Run operation: complete
+
+After validation passes, run the same workflow with operation:
+
+`complete`
+
+This repeats the validation and then adds the derived Workflow 00 package to the **same existing Zenodo draft**:
+
 - `source_registry.json`;
-- combined `handoff/records.jsonl`;
+- `records.jsonl`;
 - `manifest.json`;
 - `SHA256SUMS`;
-- chunk checksum audit;
-- exact-duplicate native-ID audit;
-- any conflict audit generated during validation.
+- `chunk_file_checksums.csv`;
+- `exact_duplicate_source_record_ids.csv`.
 
-The manual RIS workflow **must not create a new Zenodo deposition**. It authenticates with the repository secret `ZENODO_ACCESS_TOKEN`, resolves the existing draft from the registry's deposition ID or reserved DOI, and completes that draft in place.
+The completed archival registry contains the resolved raw RIS filenames, byte sizes and SHA-256 checksums.
 
-The initial production workflow also **does not publish the draft automatically**. After validation succeeds it uploads the derived W00 files to the existing draft and leaves it unpublished for human inspection. Publication is therefore a separate deliberate action.
+The workflow must never create a new Zenodo deposition for a manual RIS search.
 
-## Updates
+## 6. Run operation: publish
 
-A later search of the same database is a new logical W00 search and should use a new Zenodo draft and new registry. W01 uses the existing `source + source_record_id` identity to recognise manifestations already present and passes only genuinely new source records into downstream bibliographic deduplication.
+After inspecting the completed draft, run the same workflow with operation:
 
-Search-run history remains in the W00 registries and Zenodo archives rather than being propagated as a new field through the canonical JSON.
+`publish`
 
+Publication is guarded. Workflow 00:
 
-## Running the GitHub workflow
+1. confirms the Zenodo record is still a draft;
+2. confirms the DOI matches the registry;
+3. requires Zenodo access to be `restricted`;
+4. reads the archived `source_registry.json` back from Zenodo;
+5. re-downloads every raw RIS file and verifies its byte size and SHA-256;
+6. requires the exact expected raw + derived file set;
+7. requires every file to have `status=completed`;
+8. publishes that same existing draft;
+9. verifies the published DOI.
 
-Run **Workflow 00 - Complete manual RIS Zenodo draft** on the branch containing the registry and supply the registry path, for example:
+Publication is therefore a separate deliberate operation after validation and completion.
 
-`user_input/workflow00_ris_proquest_2026-09-30.json`
+## Outputs and identity
 
-The workflow uses the existing repository secret `ZENODO_ACCESS_TOKEN`. No token should be written to the registry or committed to Git.
+The published restricted Zenodo record is the authoritative Workflow 00 archive for that logical search.
 
-If `input.files` is empty, W00 discovers all `.ris` files in the existing Zenodo draft and writes them into the resolved registry used for validation. If filenames are already listed, the draft must contain exactly that RIS file set.
+Manual RIS imports use the existing downstream manifestation identity contract:
 
-The workflow never creates a deposition and currently refuses to run when `publish_after_validation=true`.
+- `source` = stable database code from `database.short_name`;
+- `source_record_id` = source-native record identifier.
 
+Search-run metadata remains in the Workflow 00 registry/archive and is not added as a separate canonical JSON field.
 
-### GitHub Actions availability
+## Later search updates
 
-GitHub requires a `workflow_dispatch` workflow file to exist on the repository's default branch before it can be launched manually from the Actions interface. Development copies on feature branches can be reviewed and tested statically, but the manual Zenodo job should not be expected to appear as runnable until this workflow has been deliberately incorporated into the default branch. Do not copy raw RIS files to Git as a workaround.
+A later search of the same database is a new logical Workflow 00 search:
+
+1. create a new restricted Zenodo draft;
+2. export and upload the new RIS result set;
+3. create a new registry;
+4. run `validate`;
+5. run `complete`;
+6. run `publish`.
+
+Workflow 01 will later use the existing `source + source_record_id` identity to recognise database manifestations already known and pass genuinely new records into downstream bibliographic reconciliation.
+
+## GitHub Actions availability
+
+The manual workflow is `.github/workflows/workflow_00_manual_ris_zenodo.yml`. GitHub requires a manually dispatched workflow to be available on the repository's default branch before it appears normally in the Actions interface. Development remains on `workflow01-final-architecture` until deliberately incorporated into `main`.
