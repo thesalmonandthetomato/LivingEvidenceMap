@@ -1,10 +1,9 @@
 {
   "schema_version": "workflow00-source-registry-v1",
-  "source_ID": "cab_abstracts_2026-09-30_full",
   "acquisition": {
     "method": "ris_upload",
     "source_format": "RIS",
-    "notes": null
+    "notes": "One logical search exported in two RIS chunks."
   },
   "database": {
     "name": "CAB Abstracts",
@@ -25,8 +24,19 @@
     "ris_KW": "indexing_terms"
   },
   "input": {
-    "filename": "cab_abstracts_2026-09-30.ris",
-    "exported_at": null,
-    "encoding": "UTF-8"
+    "expected_chunk_count": 2,
+    "encoding": "UTF-8",
+    "files": [
+      {
+        "filename": "cab_abstracts_2026-09-30_part01.ris",
+        "exported_at": null,
+        "notes": null
+      },
+      {
+        "filename": "cab_abstracts_2026-09-30_part02.ris",
+        "exported_at": null,
+        "notes": null
+      }
+    ]
   }
 }
