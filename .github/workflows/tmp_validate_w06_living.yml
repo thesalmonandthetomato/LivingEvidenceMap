@@ -1,0 +1,184 @@
+name: Temporary - validate W06 living architecture
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'user_input/w06_living_validation.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('yaml','dplyr','readr','jsonlite','digest','tibble','fs','here','stringi'))
+
+      - name: Parse permanent W06 implementation
+        shell: Rscript {0}
+        run: |
+          yaml::read_yaml('.github/workflows/workflow_06_production.yml')
+          parse(file='scripts/updater/workflow_06_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_06_prepare_current_inputs.R')
+          parse(file='scripts/updater/workflow_06_prepare_incremental.R')
+          parse(file='scripts/reporting/workflow05_geography_semantic_production.R')
+          parse(file='scripts/reporting/workflow06_geography_semantic_merge.R')
+          parse(file='scripts/updater/workflow_06_merge_incremental.R')
+          parse(file='scripts/updater/workflow_06_archive_state_to_zenodo.R')
+          cat('PASS: W06 permanent implementation parses\n')
+
+      - name: Assert legacy production locks removed
+        shell: Rscript {0}
+        run: |
+          files<-c(
+            '.github/workflows/workflow_06_production.yml',
+            'scripts/updater/workflow_06_prepare_current_inputs.R',
+            'scripts/updater/workflow_06_prepare_incremental.R',
+            'scripts/reporting/workflow05_geography_semantic_production.R',
+            'scripts/reporting/workflow06_geography_semantic_merge.R',
+            'scripts/updater/workflow_06_merge_incremental.R',
+            'scripts/updater/workflow_06_archive_state_to_zenodo.R'
+          )
+          txt<-paste(vapply(files,function(p)paste(readLines(p,warn=FALSE),collapse='\n'),character(1)),collapse='\n')
+          stopifnot(!grepl('19407|19,407',txt))
+          stopifnot(!grepl('work-60e645a39d981a54|work-a933887a625b37d8|work-e8046bb0876a1942|work-f026296875ea14e0',txt))
+          cat('PASS: no historical population/failure-repair locks in permanent W06 production path\n')
+
+      - name: Build synthetic first-run current geography input
+        shell: Rscript {0}
+        run: |
+          library(readr);library(digest);library(jsonlite)
+          dir.create('tmp/first',recursive=TRUE)
+          fp<-function(t,a)digest(toJSON(list(title=t,abstract=a),auto_unbox=TRUE),algo='sha256',serialize=FALSE)
+          x<-data.frame(
+            record_sequence=1:3,
+            record_id=c('A','B','C'),
+            title=c('Study in Norway','Study in Chile','No geography'),
+            abstract=c('Samples were collected from salmon farms in Norway.','Farm observations were made in Chile.','Commercial salmon farming study.'),
+            geography_input_sha256=c(fp('Study in Norway','Samples were collected from salmon farms in Norway.'),
+                                    fp('Study in Chile','Farm observations were made in Chile.'),
+                                    fp('No geography','Commercial salmon farming study.')),
+            deterministic_primary_countries=c('Norway','Chile',''),
+            deterministic_primary_iso3c=c('NOR','CHL',''),
+            geography_review_required=c(FALSE,FALSE,FALSE),
+            geography_review_reason=c('','','')
+          )
+          write_csv(x,'tmp/first/current.csv',na='')
+
+      - name: Test first-run preparation and merge
+        shell: Rscript {0}
+        run: |
+          library(readr);library(jsonlite)
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_06_prepare_incremental.R',
+            '--current','tmp/first/current.csv',
+            '--output-dir','tmp/first/prepare'
+          ))
+          stopifnot(status==0L)
+          p<-fromJSON('tmp/first/prepare/prepare_manifest.json')
+          stopifnot(p$mode=='first_run',p$current_records==3L,p$screen_queue_records==3L,p$reusable_records==0L)
+
+          q<-read_csv('tmp/first/prepare/screen_queue_records.csv',show_col_types=FALSE)
+          fresh<-q
+          fresh$geography_status<-c('RESOLVED','RESOLVED','NONE')
+          fresh$luna_iso3c<-c('NOR','CHL','')
+          fresh$luna_country_names<-c('Norway','Chile','')
+          fresh$luna_evidence<-c('salmon farms in Norway','made in Chile','')
+          fresh$luna_mapping_reason<-c('Country explicitly named','Country explicitly named','')
+          fresh$evidence_all_grounded<-TRUE
+          fresh$geography_reason<-c('Norway is substantive','Chile is substantive','No substantive geography')
+          fresh$llm_failed<-FALSE
+          fresh$llm_error<-''
+          write_csv(fresh,'tmp/first/fresh.csv',na='')
+
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_06_merge_incremental.R',
+            '--current','tmp/first/current.csv',
+            '--reused','tmp/first/prepare/reused_geography.csv',
+            '--fresh','tmp/first/fresh.csv',
+            '--prepare-manifest','tmp/first/prepare/prepare_manifest.json',
+            '--prompt','config/workflow06_geography_semantic_prompt_v2.txt',
+            '--output-dir','tmp/first/final'
+          ))
+          stopifnot(status==0L)
+          s<-fromJSON('tmp/first/final/workflow06_validated_summary.json')
+          stopifnot(s$records==3L,s$reused_records==0L,s$newly_screened_records==3L,s$resolved_n==2L,s$none_n==1L)
+          cat('PASS: W06 synthetic first-run mode\n')
+
+      - name: Test synthetic update reuse/change/new/removal
+        shell: Rscript {0}
+        run: |
+          library(readr);library(jsonlite);library(digest)
+          dir.create('tmp/update',recursive=TRUE)
+          fp<-function(t,a)digest(toJSON(list(title=t,abstract=a),auto_unbox=TRUE),algo='sha256',serialize=FALSE)
+          x<-data.frame(
+            record_sequence=1:3,
+            record_id=c('A','B','D'),
+            title=c('Study in Norway','Study in Chile','Study in Scotland'),
+            abstract=c('Samples were collected from salmon farms in Norway.','UPDATED farm observations were made in Chile.','Samples were collected at Scottish salmon farms.'),
+            geography_input_sha256=c(fp('Study in Norway','Samples were collected from salmon farms in Norway.'),
+                                    fp('Study in Chile','UPDATED farm observations were made in Chile.'),
+                                    fp('Study in Scotland','Samples were collected at Scottish salmon farms.')),
+            deterministic_primary_countries=c('Norway','Chile','United Kingdom'),
+            deterministic_primary_iso3c=c('NOR','CHL','GBR'),
+            geography_review_required=c(FALSE,FALSE,FALSE),
+            geography_review_reason=c('','','')
+          )
+          write_csv(x,'tmp/update/current.csv',na='')
+
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_06_prepare_incremental.R',
+            '--current','tmp/update/current.csv',
+            '--prior-geography','tmp/first/final/workflow06_geography_layer.csv',
+            '--output-dir','tmp/update/prepare'
+          ))
+          stopifnot(status==0L)
+          p<-fromJSON('tmp/update/prepare/prepare_manifest.json')
+          stopifnot(p$mode=='update',p$current_records==3L,p$reusable_records==1L,p$screen_queue_records==2L,
+                    p$new_record_ids==1L,p$changed_title_abstract==1L,p$prior_records_no_longer_current==1L)
+          reuse<-read_csv('tmp/update/prepare/reused_geography.csv',show_col_types=FALSE)
+          stopifnot(identical(reuse$record_id,'A'))
+          q<-read_csv('tmp/update/prepare/screen_queue_records.csv',show_col_types=FALSE)
+          stopifnot(setequal(q$record_id,c('B','D')))
+
+          fresh<-q
+          fresh$geography_status<-c('RESOLVED','RESOLVED')
+          fresh$luna_iso3c<-c('CHL','GBR')
+          fresh$luna_country_names<-c('Chile','United Kingdom')
+          fresh$luna_evidence<-c('made in Chile','Scottish salmon farms')
+          fresh$luna_mapping_reason<-c('Country explicitly named','Scotland maps to United Kingdom')
+          fresh$evidence_all_grounded<-TRUE
+          fresh$geography_reason<-c('Chile is substantive','Scotland is substantive')
+          fresh$llm_failed<-FALSE
+          fresh$llm_error<-''
+          write_csv(fresh,'tmp/update/fresh.csv',na='')
+
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_06_merge_incremental.R',
+            '--current','tmp/update/current.csv',
+            '--reused','tmp/update/prepare/reused_geography.csv',
+            '--fresh','tmp/update/fresh.csv',
+            '--prepare-manifest','tmp/update/prepare/prepare_manifest.json',
+            '--prompt','config/workflow06_geography_semantic_prompt_v2.txt',
+            '--output-dir','tmp/update/final'
+          ))
+          stopifnot(status==0L)
+          s<-fromJSON('tmp/update/final/workflow06_validated_summary.json')
+          stopifnot(s$records==3L,s$reused_records==1L,s$newly_screened_records==2L,s$resolved_n==3L)
+          layer<-read_csv('tmp/update/final/workflow06_geography_layer.csv',show_col_types=FALSE)
+          stopifnot(setequal(layer$record_id,c('A','B','D')),layer$luna_iso3c[layer$record_id=='A']=='NOR')
+          cat('PASS: W06 synthetic update reuse/change/new/removal behaviour\n')
