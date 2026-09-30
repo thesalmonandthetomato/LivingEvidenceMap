@@ -1,0 +1,24 @@
+name: Temporary - validate batched Workflow 02
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_run_batched_workflow02_trial.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  trial:
+    uses: ./.github/workflows/workflow_02_batched.yml
+    with:
+      workflow01_pointer_path: docs/deduplication/zenodo/run-36128255337.json
+      previous_workflow02_pointer_path: docs/enrichment/zenodo/run-36137804187.json
+      batch_size: '50'
+      max_records: '100'
+      recheck_after_days: '0'
+      publish: false
+    secrets: inherit
