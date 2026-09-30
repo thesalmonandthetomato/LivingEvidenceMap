@@ -1,0 +1,38 @@
+name: Workflow 02 - Manual technical repair
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow01_pointer_path:
+        description: 'Authoritative Workflow 01 pointer'
+        required: true
+        default: 'docs/deduplication/zenodo/run-36128255337.json'
+        type: string
+      previous_workflow02_pointer_path:
+        description: 'Latest published Workflow 02 state'
+        required: true
+        default: 'docs/enrichment/zenodo/run-36725200424.json'
+        type: string
+      resume_run_id:
+        description: 'Optional interrupted repair run ID to resume'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  repair:
+    uses: ./.github/workflows/workflow_02_batched.yml
+    with:
+      workflow01_pointer_path: ${{ inputs.workflow01_pointer_path }}
+      previous_workflow02_pointer_path: ${{ inputs.previous_workflow02_pointer_path }}
+      mode: 'repair'
+      resume_run_id: ${{ inputs.resume_run_id }}
+      batch_size: '100'
+      max_records: '0'
+      recheck_after_days: '0'
+      publish: true
+    secrets: inherit
