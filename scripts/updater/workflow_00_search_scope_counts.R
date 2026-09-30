@@ -200,7 +200,8 @@ out <- list(
   counted_at_utc = now_utc(),
   search_date = search_date,
   search_version = plan$search_version,
-  search_strategy = plan$search_strategy,
+  immutable_species_terms = plan$immutable_species_terms,
+  base_farm_terms = plan$base_farm_terms,
   source_queries = q,
   result_policy = "Counts only. No search-result records or raw API responses are written to disk.",
   counts = lapply(seq_len(nrow(rows)), function(i) {
