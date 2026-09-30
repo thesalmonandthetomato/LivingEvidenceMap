@@ -68,10 +68,25 @@ After validation succeeds, W00 adds the following to the **same draft**:
 - exact-duplicate native-ID audit;
 - any conflict audit generated during validation.
 
-Only after all validation checks pass should W00 publish the restricted Zenodo record. The resulting Zenodo record is the authoritative W00 archive for that logical search.
+The manual RIS workflow **must not create a new Zenodo deposition**. It authenticates with the repository secret `ZENODO_ACCESS_TOKEN`, resolves the existing draft from the registry's deposition ID or reserved DOI, and completes that draft in place.
+
+The initial production workflow also **does not publish the draft automatically**. After validation succeeds it uploads the derived W00 files to the existing draft and leaves it unpublished for human inspection. Publication is therefore a separate deliberate action.
 
 ## Updates
 
 A later search of the same database is a new logical W00 search and should use a new Zenodo draft and new registry. W01 uses the existing `source + source_record_id` identity to recognise manifestations already present and passes only genuinely new source records into downstream bibliographic deduplication.
 
 Search-run history remains in the W00 registries and Zenodo archives rather than being propagated as a new field through the canonical JSON.
+
+
+## Running the GitHub workflow
+
+Run **Workflow 00 - Complete manual RIS Zenodo draft** on the branch containing the registry and supply the registry path, for example:
+
+`user_input/workflow00_ris_proquest_2026-09-30.json`
+
+The workflow uses the existing repository secret `ZENODO_ACCESS_TOKEN`. No token should be written to the registry or committed to Git.
+
+If `input.files` is empty, W00 discovers all `.ris` files in the existing Zenodo draft and writes them into the resolved registry used for validation. If filenames are already listed, the draft must contain exactly that RIS file set.
+
+The workflow never creates a deposition and currently refuses to run when `publish_after_validation=true`.
