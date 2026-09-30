@@ -35,12 +35,8 @@ jobs:
           Rscript -e 'parse(file="scripts/updater/workflow_02_build_human_review.R");cat("PASS: script parses\n")'
           rm -rf /tmp/w02gate && mkdir -p /tmp/w02gate
 
-          cat > /tmp/w02gate/input.jsonl <<'EOF'
-{"identity":{"record_id":"work-1"},"canonical":{"doi":"10.1/a","title":"Canonical title","abstract":null}}
-EOF
-          cat > /tmp/w02gate/audit-zero.jsonl <<'EOF'
-{"record_id":"work-1","doi":"10.1/a","quarantined":[]}
-EOF
+          printf '%s\n' '{"identity":{"record_id":"work-1"},"canonical":{"doi":"10.1/a","title":"Canonical title","abstract":null}}' > /tmp/w02gate/input.jsonl
+          printf '%s\n' '{"record_id":"work-1","doi":"10.1/a","quarantined":[]}' > /tmp/w02gate/audit-zero.jsonl
           Rscript scripts/updater/workflow_02_build_human_review.R \
             --input /tmp/w02gate/input.jsonl \
             --audit /tmp/w02gate/audit-zero.jsonl \
@@ -48,9 +44,7 @@ EOF
             --status /tmp/w02gate/zero-status.json
           Rscript -e 'x<-jsonlite::fromJSON("/tmp/w02gate/zero-status.json");stopifnot(identical(x$requires_human_review,FALSE),x$blocking_cases==0)'
 
-          cat > /tmp/w02gate/audit-one.jsonl <<'EOF'
-{"record_id":"work-1","doi":"10.1/a","europe_pmc":{"title":"Different title"},"scopus":null,"quarantined":[{"provider":"europe_pmc","field":"abstract","reason":"title_guard_failed","title_similarity":0.42}]}
-EOF
+          printf '%s\n' '{"record_id":"work-1","doi":"10.1/a","europe_pmc":{"title":"Different title"},"scopus":null,"quarantined":[{"provider":"europe_pmc","field":"abstract","reason":"title_guard_failed","title_similarity":0.42}]}' > /tmp/w02gate/audit-one.jsonl
           Rscript scripts/updater/workflow_02_build_human_review.R \
             --input /tmp/w02gate/input.jsonl \
             --audit /tmp/w02gate/audit-one.jsonl \
