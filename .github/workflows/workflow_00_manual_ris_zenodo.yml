@@ -11,7 +11,7 @@ on:
     branches:
       - workflow01-final-architecture
     paths:
-      - 'user_input/.manual_ris_proquest_run'
+      - 'user_input/manual_ris_proquest_run.trigger'
 
 permissions:
   contents: read
