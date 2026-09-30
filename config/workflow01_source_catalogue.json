@@ -1,0 +1,34 @@
+{
+  "schema": "living-evidence-map-workflow01-source-catalogue-v1",
+  "description": "Authoritative source catalogue for Workflow 01 ingestion. Legacy API sources are restored from the accepted Workflow 00 state; manual RIS sources are restored from their published restricted Zenodo records via their registries.",
+  "sources": {
+    "lens": {
+      "kind": "workflow00_state",
+      "source": "lens"
+    },
+    "scopus": {
+      "kind": "workflow00_state",
+      "source": "scopus"
+    },
+    "openalex": {
+      "kind": "workflow00_state",
+      "source": "openalex"
+    },
+    "agricola": {
+      "kind": "workflow00_state",
+      "source": "agricola"
+    },
+    "wos": {
+      "kind": "workflow00_state",
+      "source": "wos"
+    },
+    "cab": {
+      "kind": "manual_ris",
+      "registry": "user_input/workflow00_ris_cab_abstracts_2026-09-30.json"
+    },
+    "proquest": {
+      "kind": "manual_ris",
+      "registry": "user_input/workflow00_ris_proquest_2026-09-30.json"
+    }
+  }
+}
