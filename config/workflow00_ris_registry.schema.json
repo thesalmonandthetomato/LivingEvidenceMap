@@ -176,7 +176,7 @@
         },
         "files": {
           "type": "array",
-          "minItems": 1,
+          "minItems": 0,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -202,7 +202,8 @@
                 ]
               }
             }
-          }
+          },
+          "description": "RIS files for the logical search. May be empty before W00 resolves an existing Zenodo draft; the completed registry must list every RIS file."
         }
       }
     },
@@ -211,7 +212,8 @@
       "additionalProperties": false,
       "required": [
         "method",
-        "reserved_doi"
+        "reserved_doi",
+        "publish_after_validation"
       ],
       "properties": {
         "method": {
@@ -228,7 +230,9 @@
           ]
         },
         "publish_after_validation": {
-          "const": true
+          "type": "boolean",
+          "default": false,
+          "description": "Manual RIS completion must not create a new Zenodo deposition. False leaves the completed existing deposition as a draft for human review."
         },
         "notes": {
           "type": [
