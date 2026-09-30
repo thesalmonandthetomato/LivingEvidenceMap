@@ -15,12 +15,30 @@ if(any(vapply(list(canonical,exclusions,ledger,manifest,source_run_id,repository
 for(p in c(canonical,exclusions,ledger,manifest)) if(!file.exists(p)) stop("Missing W08 archive file: ",p,call.=FALSE)
 
 m <- fromJSON(manifest,simplifyVector=FALSE)
+source_n <- suppressWarnings(as.integer(m$source_canonical_population))
+included_n <- suppressWarnings(as.integer(m$canonical_records))
+excluded_n <- suppressWarnings(as.integer(m$excluded_records))
+decision_n <- suppressWarnings(as.integer(m$w08_decision_issues))
 if(!identical(m$status,"PASS") ||
-   as.integer(m$source_canonical_population)!=32292L ||
-   as.integer(m$canonical_records)!=19117L ||
-   as.integer(m$excluded_records)!=13175L ||
-   as.integer(m$w08_decision_issues)!=811L ||
-   !identical(m$canonical_contains_excluded_records,FALSE)) stop("Corrected W08 manifest is not validated",call.=FALSE)
+   any(is.na(c(source_n,included_n,excluded_n,decision_n))) ||
+   any(c(source_n,included_n,excluded_n,decision_n) < 0L) ||
+   source_n != included_n + excluded_n ||
+   !identical(m$canonical_contains_excluded_records,FALSE)) {
+  stop("Workflow 08 manifest failed dynamic publication invariants",call.=FALSE)
+}
+expected_sha <- c(
+  canonical=as.character(m$final_canonical_jsonl_sha256),
+  exclusions=as.character(m$excluded_records_csv_sha256),
+  ledger=as.character(m$adjudication_ledger_sha256)
+)
+actual_sha <- c(
+  canonical=digest(file=canonical,algo="sha256",serialize=FALSE),
+  exclusions=digest(file=exclusions,algo="sha256",serialize=FALSE),
+  ledger=digest(file=ledger,algo="sha256",serialize=FALSE)
+)
+if(any(!nzchar(expected_sha)) || !identical(tolower(actual_sha),tolower(expected_sha))) {
+  stop("Workflow 08 archive inputs do not match manifest checksums",call.=FALSE)
+}
 
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN")
 if(!nzchar(token)) stop("ZENODO_ACCESS_TOKEN is not set",call.=FALSE)
