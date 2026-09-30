@@ -2,10 +2,11 @@ name: Workflow 09 - publish validated failed-run artifact
 
 on:
   workflow_dispatch:
-  push:
-    branches: [workflow01-final-architecture]
-    paths:
-      - 'docs/reporting/.run_workflow09_publish_artifact'
+    inputs:
+      source_run_id:
+        description: 'Workflow 09 run ID containing a validated publication-package artifact'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -28,14 +29,34 @@ jobs:
           set -euo pipefail
           rm -rf docs/reporting/workflow_09_from_artifact
           mkdir -p docs/reporting/workflow_09_from_artifact
-          gh run download 36457265617 \
-            -n workflow09-publication-package-36457265617 \
+          RUN_ID="${{ inputs.source_run_id }}"
+          test -n "$RUN_ID"
+          gh run download "$RUN_ID" \
+            -n "workflow09-publication-package-$RUN_ID" \
             -D docs/reporting/workflow_09_from_artifact
           test -s docs/reporting/workflow_09_from_artifact/data/living_evidence_map_canonical_final.ris
           test -s docs/reporting/workflow_09_from_artifact/manuscript/methods.docx
           test -s docs/reporting/workflow_09_from_artifact/manuscript/results.docx
           test -s docs/reporting/workflow_09_from_artifact/manuscript/methods.pdf
           test -s docs/reporting/workflow_09_from_artifact/manuscript/results.pdf
+
+      - name: Validate recovered package identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s docs/reporting/workflow_09_from_artifact/data/living_evidence_map_canonical_final.ris.manifest.json
+          test -s docs/reporting/workflow_09_from_artifact/flow_counts.json
+          Rscript -e '
+            library(jsonlite)
+            m <- fromJSON("docs/reporting/workflow_09_from_artifact/data/living_evidence_map_canonical_final.ris.manifest.json")
+            f <- fromJSON("docs/reporting/workflow_09_from_artifact/flow_counts.json", simplifyVector=FALSE)
+            stopifnot(
+              as.integer(m$records) > 0L,
+              as.integer(f$counts$final_included) == as.integer(m$records),
+              nzchar(as.character(m$source_jsonl_sha256))
+            )
+            cat(sprintf("PASS: recovered package reconciles at %d records\n", as.integer(m$records)))
+          '
 
       - name: Publish package into Workflow 09 docs
         shell: bash
