@@ -1,0 +1,115 @@
+name: Temporary - validate W08 living intake
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'user_input/w08_living_intake_validation.trigger'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','dplyr','digest'))
+
+      - name: Parse W08 living intake implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_08_build_review_queue_dynamic.R')
+          parse(file='scripts/updater/workflow_08_reuse_decisions.R')
+          parse(file='scripts/updater/workflow_08_restore_adjudication_ledger.R')
+          cat('PASS: W08 living intake scripts parse\n')
+
+      - name: Synthetic reuse/change/new test
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create('tmp',showWarnings=FALSE)
+          h<-function(rid,type,title,abstract,av){
+            state<-list(review_key=paste(rid,type,sep='::'),record_id=rid,issue_type=type,source_workflow='06',
+                        title=title,abstract=abstract,automated_value=av,allowed_human_outcomes=c('assign_country_set','assign_none'))
+            digest::digest(toJSON(state,auto_unbox=TRUE,null='null',na='null',digits=NA,pretty=FALSE),algo='sha256',serialize=FALSE)
+          }
+          oldq<-list(
+            list(record_id='A',title='A title',abstract='A abs',issues=list(list(source_workflow='06',issue_type='geography_unresolved',automated_value=list(x='oldA'),allowed_human_outcomes=c('assign_country_set','assign_none')))),
+            list(record_id='B',title='B title',abstract='B abs',issues=list(list(source_workflow='06',issue_type='geography_unresolved',automated_value=list(x='oldB'),allowed_human_outcomes=c('assign_country_set','assign_none'))))
+          )
+          newq<-list(
+            list(record_id='A',title='A title',abstract='A abs',issues=list(list(source_workflow='06',issue_type='geography_unresolved',automated_value=list(x='oldA'),allowed_human_outcomes=c('assign_country_set','assign_none'),issue_state_sha256=h('A','geography_unresolved','A title','A abs',list(x='oldA'))))),
+            list(record_id='B',title='B title',abstract='B CHANGED',issues=list(list(source_workflow='06',issue_type='geography_unresolved',automated_value=list(x='oldB'),allowed_human_outcomes=c('assign_country_set','assign_none'),issue_state_sha256=h('B','geography_unresolved','B title','B CHANGED',list(x='oldB'))))),
+            list(record_id='C',title='C title',abstract='C abs',issues=list(list(source_workflow='06',issue_type='geography_unresolved',automated_value=list(x='newC'),allowed_human_outcomes=c('assign_country_set','assign_none'),issue_state_sha256=h('C','geography_unresolved','C title','C abs',list(x='newC')))))
+          )
+          ledger<-list(
+            list(review_key='A::geography_unresolved',record_id='A',issue_type='geography_unresolved',decision='assign_none',final_value=list(geography_status='NONE')),
+            list(review_key='B::geography_unresolved',record_id='B',issue_type='geography_unresolved',decision='assign_none',final_value=list(geography_status='NONE'))
+          )
+          wr<-function(x,p){con<-file(p,'wt');for(z in x)writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con);close(con)}
+          wr(oldq,'tmp/oldq.jsonl');wr(newq,'tmp/newq.jsonl');wr(ledger,'tmp/ledger.jsonl')
+          status<-system2(file.path(R.home('bin'),'Rscript'),c('scripts/updater/workflow_08_reuse_decisions.R',
+            '--queue','tmp/newq.jsonl','--prior-ledger','tmp/ledger.jsonl','--prior-queue','tmp/oldq.jsonl','--output-dir','tmp/reuse'))
+          stopifnot(status==0L)
+          m<-fromJSON('tmp/reuse/workflow08_reuse_manifest.json')
+          stopifnot(m$current_issues==3L,m$reused_issues==1L,m$pending_issues==2L,m$new_issues==1L,m$changed_issues==1L)
+          cat('PASS: synthetic W08 reuse/change/new behaviour\n')
+
+      - name: Restore historical W08 artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/historical_queue tmp/historical_final
+          gh run download 36320650383 -n workflow08-review-intake-36320650383 -D tmp/historical_queue
+          gh run download 36442875006 -n workflow08-final-36442875006 -D tmp/historical_final
+          test -s tmp/historical_queue/workflow08_intake/workflow08_review_queue.jsonl
+          test -s tmp/historical_final/workflow08/workflow08_adjudication_ledger.jsonl
+
+      - name: Validate all 811 historical decisions reusable
+        shell: bash
+        run: |
+          set -euo pipefail
+          Q=tmp/historical_queue/workflow08_intake/workflow08_review_queue.jsonl
+          L=tmp/historical_final/workflow08/workflow08_adjudication_ledger.jsonl
+          CUR=tmp/current_with_hashes.jsonl
+          Q="$Q" CUR="$CUR" Rscript -e '
+            library(jsonlite);library(digest)
+            clean<-function(x){if(is.null(x)||!length(x))return("");z<-as.character(x[[1]]);if(is.na(z))"" else z}
+            h<-function(x)digest(toJSON(x,auto_unbox=TRUE,null="null",na="null",digits=NA,pretty=FALSE),algo="sha256",serialize=FALSE)
+            q<-readLines(Sys.getenv("Q"),warn=FALSE);q<-q[nzchar(trimws(q))]
+            con<-file(Sys.getenv("CUR"),"wt")
+            for(ln in q){
+              r<-fromJSON(ln,simplifyVector=FALSE);rid<-clean(r$record_id)
+              for(i in seq_along(r$issues)){
+                z<-r$issues[[i]]
+                state<-list(review_key=paste(rid,clean(z$issue_type),sep="::"),record_id=rid,issue_type=clean(z$issue_type),
+                            source_workflow=clean(z$source_workflow),title=clean(r$title),abstract=clean(r$abstract),
+                            automated_value=z$automated_value,allowed_human_outcomes=z$allowed_human_outcomes)
+                r$issues[[i]]$issue_state_sha256<-h(state)
+              }
+              writeLines(toJSON(r,auto_unbox=TRUE,null="null",na="null",digits=NA),con)
+            }
+            close(con)
+          '
+          Rscript scripts/updater/workflow_08_reuse_decisions.R             --queue "$CUR"             --prior-ledger "$L"             --prior-queue "$Q"             --output-dir tmp/historical_reuse
+          Rscript -e '
+            x<-jsonlite::fromJSON("tmp/historical_reuse/workflow08_reuse_manifest.json")
+            stopifnot(x$current_issues==811L,x$reused_issues==811L,x$pending_issues==0L,x$new_issues==0L,x$changed_issues==0L)
+            cat("PASS: all 811 historical W08 decisions reproduce as reusable\n")
+          '
