@@ -1,0 +1,50 @@
+name: TEMP W08 structural validation
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_w08_structural_validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+      - name: Structural validation
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_03_restore_lean_checkpoint.R',
+            'scripts/updater/workflow_03_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_04_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_05_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_06_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_07_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_08_restore_adjudication_ledger.R',
+            'scripts/updater/workflow_08_build_review_queue_dynamic.R',
+            'scripts/updater/workflow_08_migrate_legacy_geography_decisions.R',
+            'scripts/updater/workflow_08_reuse_decisions.R',
+            'scripts/updater/workflow_08_finalize_canonical_dynamic.R',
+            'scripts/updater/workflow_08_partition_final_outputs_dynamic.R',
+            'scripts/updater/workflow_08_archive_to_zenodo.R'
+          )
+          stopifnot(all(file.exists(files)))
+          invisible(lapply(files, parse))
+          ctl <- readLines('.github/workflows/workflow_08_production.yml', warn=FALSE)
+          arc <- readLines('scripts/updater/workflow_08_archive_to_zenodo.R', warn=FALSE)
+          stopifnot(any(grepl('workflow_05_restore_state_from_zenodo.R', ctl, fixed=TRUE)))
+          stopifnot(any(grepl('Complete W08 ledger does not exactly equal the current W08 issue set', ctl, fixed=TRUE)))
+          forbidden <- c('32292L','19117L','13175L','811L')
+          stopifnot(!any(vapply(forbidden,function(x)any(grepl(x,arc,fixed=TRUE)),logical(1))))
+          cat('PASS: W08 structural validation\n')
