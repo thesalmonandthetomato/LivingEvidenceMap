@@ -149,7 +149,7 @@ if (!nzchar(provider_slug)) provider_slug <- "ris"
 
 make_source_record_id <- function(r, i) {
   candidates <- c(
-    scalar(first_present(r, c("AN", "ID", "UT", "M3"))),
+    scalar(first_present(r, c("AN", "ID", "UT"))),
     norm_doi(first_present(r, c("DO"))),
     scalar(first_present(r, c("UR")))
   )
@@ -189,7 +189,8 @@ normalise_record <- function(r, i) {
       provider = provider_slug,
       source_format = "ris",
       source_collection = database_name,
-      source_ID = source_ID
+      source_ID = source_ID,
+      source_IDs = list(source_ID)
     ),
     sidecar_identity = list(
       sidecar_record_id = source_record_id,
@@ -220,10 +221,16 @@ normalise_record <- function(r, i) {
     ),
     source_specific = list(
       ris_keyword_semantics = kw_semantics,
-      ris_tags = r
+      database_export_label = clean_text(r$DB),
+      publisher = clean_text(r$PB),
+      publication_place = clean_text(r$PP),
+      record_url = clean_text(r$UR),
+      country_of_publication = clean_text(r$C4),
+      elocation = clean_text(r$C6)
     ),
     provenance = list(
       source_ID = source_ID,
+      source_IDs = list(source_ID),
       acquisition_method = "ris_upload",
       database = registry$database,
       search = registry$search,
