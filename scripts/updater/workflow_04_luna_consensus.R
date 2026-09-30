@@ -254,7 +254,27 @@ if(subshard_count>1L){
   eligible<-eligible[sub_membership==subshard_index]
 }
 if(max_records>0L) eligible<-eligible[seq_len(min(max_records,length(eligible)))]
-if(!length(eligible)) stop("Selected shard is empty",call.=FALSE)
+
+if(!length(eligible)){
+  write_jsonl(list(),file.path(output_dir,"workflow04_consensus_layer.jsonl"))
+  summary<-list(
+    schema="living-evidence-map-workflow04-luna-consensus-v1",
+    status="PASS",
+    canonical_records=length(canonical_records),
+    workflow03_excluded=length(canonical_records)-length(eligible_idx),
+    workflow03_eligible=length(eligible_idx),
+    shard_index=shard_index,shard_count=shard_count,
+    subshard_index=subshard_index,subshard_count=subshard_count,
+    records_screened=0L,pass1_records=0L,pass2_records=0L,
+    third_pass_records=0L,two_of_two_agreement=0L,
+    final_retain=0L,final_exclude=0L,final_unresolved=0L,
+    model=model,prompt_version=PROMPT_VERSION,prompt_sha256=PROMPT_SHA256,
+    prompt_immutable_check=TRUE,created_at_utc=now_utc()
+  )
+  writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),file.path(output_dir,"summary.json"),useBytes=TRUE)
+  cat(sprintf("PASS: Workflow 04 shard %d/%d is empty for a %d-record queue\n",shard_index,shard_count,length(eligible_idx)))
+  quit(save="no",status=0L)
+}
 
 p1_path<-file.path(output_dir,"pass1.jsonl")
 p2_path<-file.path(output_dir,"pass2.jsonl")
