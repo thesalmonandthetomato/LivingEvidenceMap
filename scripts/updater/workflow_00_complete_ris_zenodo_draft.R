@@ -247,7 +247,7 @@ cmd_args <- c(
   "--registry", resolved_registry,
   "--output-dir", ingest_dir
 )
-status <- system2("Rscript", cmd_args)
+status <- system2("Rscript", args = vapply(cmd_args, shQuote, character(1)))
 if (!identical(status, 0L)) stop(sprintf("RIS ingestion failed with exit status %s", status), call. = FALSE)
 
 derived <- c(
