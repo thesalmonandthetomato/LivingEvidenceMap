@@ -134,10 +134,41 @@ jobs:
           set -euo pipefail
           METHODS='workflow10/docs/reporting/workflow_09/manuscript/methods.html'
           RESULTS='workflow10/docs/reporting/workflow_09/manuscript/results.html'
+          FIGURES='workflow10/docs/reporting/workflow_09/figures'
           test -s "$METHODS"
           test -s "$RESULTS"
+          test -d "$FIGURES"
           cp "$METHODS" production/docs/methodology.html
           cp "$RESULTS" production/docs/results.html
+          mkdir -p production/docs/report-figures
+          cp "$FIGURES"/*.png production/docs/report-figures/
+
+          Rscript - <<'RS'
+          p <- "production/docs/results.html"
+          x <- paste(readLines(p, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+          replacements <- c(
+            "../../visualisations/figure_07_flow_diagram.png" = "./report-figures/figure_01_flow_diagram.png",
+            "../citesource_contribution/database_contribution_upset.png" = "./report-figures/figure_02_database_contribution.png",
+            "../../visualisations/figure_01_records_by_publication_year.png" = "./report-figures/figure_03_publication_year_species.png",
+            "../../visualisations/figure_05_records_by_publication_year_high_level_topic.png" = "./report-figures/figure_04_publication_year_topics.png",
+            "../../visualisations/figure_03_choropleth_records_by_country.png" = "./report-figures/figure_05_country_choropleth.png",
+            "../../visualisations/figure_02_records_by_country.png" = "./report-figures/figure_06_country_species.png",
+            "../../visualisations/topic_hierarchy/figure_04a_top_level_topics.png" = "./report-figures/figure_07_top_level_topics.png",
+            "../../visualisations/topic_hierarchy/figure_04a_hierarchy_production.png" = "./report-figures/figure_08_production.png",
+            "../../visualisations/topic_hierarchy/figure_04b_hierarchy_environment.png" = "./report-figures/figure_09_environment.png",
+            "../../visualisations/topic_hierarchy/figure_04c_hierarchy_methods.png" = "./report-figures/figure_10_methods.png",
+            "../../visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.png" = "./report-figures/figure_11_industry_and_governance.png",
+            "../../visualisations/topic_hierarchy/figure_04e_hierarchy_product.png" = "./report-figures/figure_12_product.png",
+            "../../visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.png" = "./report-figures/figure_13_people_and_society.png",
+            "../../visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.png" = "./report-figures/figure_14_inputs_and_resources.png",
+            "../../visualisations/figure_08_umbrella_review.png" = "./report-figures/figure_15_umbrella_review.png"
+          )
+          for (src in names(replacements)) {
+            if (!grepl(src, x, fixed = TRUE)) stop(sprintf("Expected results figure path missing: %s", src), call. = FALSE)
+            x <- gsub(src, replacements[[src]], x, fixed = TRUE)
+          }
+          writeLines(x, p, useBytes = TRUE)
+          RS
 
           grep -q "The status of academic research on salmon farming: a living evidence map" production/docs/methodology.html
           grep -q "The status of academic research on salmon farming: a living evidence map" production/docs/results.html
@@ -145,7 +176,17 @@ jobs:
           grep -q 'href="./methodology.html"' production/docs/workflow10-search-trial.html
           grep -q 'href="./results.html"' production/docs/workflow10-preview.html
           grep -q 'href="./results.html"' production/docs/workflow10-search-trial.html
-          echo "PASS: Workflow 09 methodology/results pages added and dashboard links verified"
+          test "$(find production/docs/report-figures -maxdepth 1 -type f -name '*.png' | wc -l)" -eq 15
+          test "$(grep -o 'src="./report-figures/[^"]*"' production/docs/results.html | wc -l)" -eq 15
+          if grep -q '../../visualisations/' production/docs/results.html; then
+            echo "ERROR: unresolved visualisations path remains in deployed results HTML" >&2
+            exit 1
+          fi
+          if grep -q '../citesource_contribution/' production/docs/results.html; then
+            echo "ERROR: unresolved CiteSource figure path remains in deployed results HTML" >&2
+            exit 1
+          fi
+          echo "PASS: Workflow 09 methodology/results pages and all 15 result figures added"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
