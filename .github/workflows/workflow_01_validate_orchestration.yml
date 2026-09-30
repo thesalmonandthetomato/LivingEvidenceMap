@@ -79,7 +79,7 @@ jobs:
           )
           cat(sprintf('PASS source catalogue: %d sources\n', length(x$sources)))
 
-      - name: Parse Workflow 01 R implementation
+      - name: Parse Workflow 01 generic R implementation
         shell: Rscript {0}
         run: |
           files <- c(
