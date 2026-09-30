@@ -33,7 +33,8 @@ paths <- list(
   matches = file.path(state_dir, "species_matches.csv"),
   counts = file.path(state_dir, "species_record_counts.csv"),
   run_manifest = file.path(state_dir, "workflow05_manifest.json"),
-  concepts = file.path(state_dir, "deterministic_concepts.csv")
+  concepts = file.path(state_dir, "deterministic_concepts.csv"),
+  coding_config = file.path(state_dir, "workflow05_coding_config.json")
 )
 for (p in paths) if (!file.exists(p)) stop(sprintf("Missing Workflow 05 state file: %s", basename(p)), call. = FALSE)
 
@@ -43,18 +44,26 @@ matches <- read.csv(paths$matches, stringsAsFactors = FALSE, check.names = FALSE
 counts <- read.csv(paths$counts, stringsAsFactors = FALSE, check.names = FALSE)
 concepts <- read.csv(paths$concepts, stringsAsFactors = FALSE, check.names = FALSE)
 run_manifest <- fromJSON(paths$run_manifest, simplifyVector = FALSE)
+coding_config <- fromJSON(paths$coding_config, simplifyVector = FALSE)
+entity_value <- as.character(coding_config$entity_value)
+generic_code <- as.character(coding_config$generic_code)
+none_code <- as.character(coding_config$none_code)
+if (!length(entity_value) || !nzchar(entity_value[[1L]])) stop("Workflow 05 coding config lacks entity_value", call. = FALSE)
+if (!length(generic_code) || !nzchar(generic_code[[1L]])) stop("Workflow 05 coding config lacks generic_code", call. = FALSE)
+if (!length(none_code) || !nzchar(none_code[[1L]])) stop("Workflow 05 coding config lacks none_code", call. = FALSE)
+entity_value <- entity_value[[1L]]; generic_code <- generic_code[[1L]]; none_code <- none_code[[1L]]
 
 stopifnot(
   nrow(layer) > 0L,
   !anyDuplicated(layer$record_id),
   all(c("record_sequence","record_id","farmed_species_codes","farmed_species") %in% names(layer)),
   identical(names(concepts), c("coding","entity","terms")),
-  nrow(concepts) == 9L,
-  all(concepts$entity == "farmed species")
+  nrow(concepts) > 0L,
+  all(concepts$entity == entity_value)
 )
 records_n <- nrow(layer)
-none_n <- sum(layer$farmed_species_codes == "NONE")
-coded_n <- sum(layer$farmed_species_codes != "NONE")
+none_n <- sum(layer$farmed_species_codes == none_code)
+coded_n <- sum(layer$farmed_species_codes != none_code)
 matches_n <- nrow(matches)
 if(as.integer(run_manifest$records) != records_n ||
    as.integer(run_manifest$coded_records) != coded_n ||
@@ -62,18 +71,19 @@ if(as.integer(run_manifest$records) != records_n ||
    as.integer(run_manifest$species_matches) != matches_n){
   stop("Workflow 05 run manifest counts do not match archived state",call.=FALSE)
 }
-if (any(grepl("spring salmon", concepts$terms, ignore.case = TRUE, fixed = TRUE))) stop("spring salmon must not be present", call. = FALSE)
-if (!any(grepl("Salmons", concepts$terms, fixed = TRUE))) stop("Salmons missing from concepts", call. = FALSE)
-if (!any(grepl("salmones", concepts$terms, fixed = TRUE))) stop("salmones missing from concepts", call. = FALSE)
 if (any(grepl("primary|co-primary|assignment_role", names(layer), ignore.case = TRUE))) stop("Obsolete species-role field present in W05 layer", call. = FALSE)
 
-named <- codes[codes$species_id != "UNSPEC_SALMON", c("record_id","species_id"), drop = FALSE]
-generic_ids <- unique(codes$record_id[codes$species_id == "UNSPEC_SALMON"])
-if (length(intersect(unique(named$record_id), generic_ids))) stop("UNSPEC_SALMON co-occurs with a named species in W05 codes", call. = FALSE)
+named <- codes[codes$species_id != generic_code, c("record_id","species_id"), drop = FALSE]
+generic_ids <- unique(codes$record_id[codes$species_id == generic_code])
+if (length(intersect(unique(named$record_id), generic_ids))) stop("Configured generic code co-occurs with a specific code in W05 codes", call. = FALSE)
 
 concepts_sha <- digest(file = paths$concepts, algo = "sha256", serialize = FALSE)
 if (!identical(tolower(as.character(run_manifest$dictionary_sha256)), tolower(concepts_sha))) {
   stop("Three-column concepts SHA does not match the validated W05 run manifest", call. = FALSE)
+}
+config_sha <- digest(file = paths$coding_config, algo = "sha256", serialize = FALSE)
+if (!identical(tolower(as.character(run_manifest$coding_config_sha256)), tolower(config_sha))) {
+  stop("Workflow 05 coding-config SHA does not match the validated W05 run manifest", call. = FALSE)
 }
 
 sha <- lapply(paths, function(p) digest(file = p, algo = "sha256", serialize = FALSE))
@@ -111,8 +121,12 @@ manifest <- list(
   coded_records = coded_n,
   none_records = none_n,
   species_matches = matches_n,
-  concept_rows = 9L,
+  concept_rows = nrow(concepts),
   concept_schema = c("coding","entity","terms"),
+  entity_value = entity_value,
+  generic_code = generic_code,
+  none_code = none_code,
+  workflow05_coding_config_sha256 = sha$coding_config,
   workflow05_species_layer_sha256 = sha$layer,
   species_codes_long_sha256 = sha$codes,
   species_matches_sha256 = sha$matches,
