@@ -68,12 +68,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          W01_POINTER="$(ls docs/deduplication/zenodo/run-*.json | sort -V | tail -1)"
+          W04_POINTER="$(ls docs/workflow04/zenodo/run-*.json | sort -V | tail -1)"
+          test -n "$W01_POINTER"
+          test -n "$W04_POINTER"
           Rscript scripts/updater/workflow_01_restore_current_state.R \
-            --pointer docs/deduplication/zenodo/run-36128255337.json \
+            --pointer "$W01_POINTER" \
             --pointer-dir docs/deduplication/zenodo \
             --output-root workflow01_state
           Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
-            --pointer docs/workflow04/zenodo/run-36227737500.json \
+            --pointer "$W04_POINTER" \
             --output-dir workflow04_state
           INC="$(find workflow04_state -type f -name workflow04_included_record_ids.txt -print -quit)"
           test -n "$INC"
@@ -86,8 +90,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          W02_POINTER="$(ls docs/workflow02/zenodo/run-*.json | sort -V | tail -1)"
+          test -n "$W02_POINTER"
           Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
-            --pointer docs/workflow02/zenodo/run-36137804187.json \
+            --pointer "$W02_POINTER" \
             --output-dir workflow02_reporting_state
           PATCH="$(find workflow02_reporting_state -type f -name cumulative_patch.jsonl -print -quit)"
           test -n "$PATCH"
@@ -253,22 +259,34 @@ jobs:
           canonical <- "workflow08_reporting_state/living_evidence_map_canonical_final.jsonl"
           w08_pointer <- fromJSON(Sys.getenv("W08_POINTER"))
           expected_sha <- tolower(as.character(w08_pointer$final_canonical_jsonl_sha256))
+          expected_n <- as.integer(w08_pointer$canonical_records)
           stopifnot(
             identical(w08_pointer$status, "published"),
-            identical(w08_pointer$annotation_preservation, "lossless-upstream-handoff-v1"),
-            as.integer(w08_pointer$canonical_records) == 19117L,
+            !is.na(expected_n),
+            expected_n >= 0L,
+            grepl("^lossless-upstream-handoff-v", as.character(w08_pointer$annotation_preservation)),
             identical(
               tolower(digest(canonical, algo = "sha256", file = TRUE, serialize = FALSE)),
               expected_sha
             )
           )
 
+          con <- file(canonical, "rt", encoding = "UTF-8")
+          canonical_n <- 0L
+          repeat {
+            z <- readLines(con, n = 5000L, warn = FALSE)
+            if (!length(z)) break
+            canonical_n <- canonical_n + sum(nzchar(trimws(z)))
+          }
+          close(con)
+          stopifnot(canonical_n == expected_n)
+
           ris_manifest <- fromJSON("docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris.manifest.json")
-          stopifnot(as.integer(ris_manifest$records) == 19117L)
+          stopifnot(as.integer(ris_manifest$records) == expected_n)
           stopifnot(identical(tolower(ris_manifest$source_jsonl_sha256), expected_sha))
 
           flow <- fromJSON("docs/reporting/workflow_09/flow_counts.json", simplifyVector = FALSE)
-          stopifnot(as.integer(flow$counts$final_included) == 19117L)
+          stopifnot(as.integer(flow$counts$final_included) == expected_n)
 
           stems <- c(
             "flow_diagram","database_contribution","publication_year_species",
