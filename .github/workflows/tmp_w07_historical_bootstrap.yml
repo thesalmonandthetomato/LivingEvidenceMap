@@ -49,7 +49,7 @@ jobs:
           rm -rf inputs/w07_bootstrap
           mkdir -p inputs/w07_bootstrap/w06 inputs/w07_bootstrap/handoff inputs/w07_bootstrap/zero inputs/w07_bootstrap/qc
 
-          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R             --pointer docs/workflow06/zenodo/run-36265092530.json             --output-dir inputs/w07_bootstrap/w06
+          gh run download 36265092530             -n workflow06-geography-production-36265092530             -D inputs/w07_bootstrap/w06
 
           gh run download 36264955447             -n workflow07-topic-handoff-36264955447             -D inputs/w07_bootstrap/handoff
 
