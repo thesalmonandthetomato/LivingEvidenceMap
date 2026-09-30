@@ -1,0 +1,391 @@
+name: Workflow 04 - relevance screening production
+
+on:
+  workflow_call:
+    inputs:
+      lean_pointer_path:
+        required: true
+        type: string
+      workflow03_pointer_path:
+        required: true
+        type: string
+      prior_workflow04_pointer_path:
+        required: false
+        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        type: string
+      prior_lean_pointer_path:
+        required: false
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      manual_decisions_path:
+        required: false
+        default: ''
+        type: string
+      publish:
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+      OPENAI_API_KEY:
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      lean_pointer_path:
+        description: 'Authoritative current post-W02 lean canonical pointer'
+        required: true
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      workflow03_pointer_path:
+        description: 'Authoritative current Workflow 03 pointer'
+        required: true
+        default: 'docs/publication_status/zenodo/run-36172718538.json'
+        type: string
+      prior_workflow04_pointer_path:
+        description: 'Prior authoritative W04 pointer; use none for a first run'
+        required: true
+        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        type: string
+      prior_lean_pointer_path:
+        description: 'Prior canonical pointer used only to bootstrap fingerprints for legacy W04 states'
+        required: false
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      manual_decisions_path:
+        description: 'Optional repo JSONL resolving residual W04 uncertain records'
+        required: false
+        default: ''
+        type: string
+      publish:
+        description: 'Publish a fully resolved W04 state to restricted Zenodo'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      queue_n: ${{ steps.queue.outputs.queue_n }}
+      mode: ${{ steps.queue.outputs.mode }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','stringi'))
+
+      - name: Parse W04 implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
+          parse(file='scripts/updater/workflow_03_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_04_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_04_prepare_incremental.R')
+          parse(file='scripts/updater/workflow_04_luna_consensus.R')
+          parse(file='scripts/updater/workflow_04_merge_consensus.R')
+          parse(file='scripts/updater/workflow_04_merge_incremental.R')
+          parse(file='scripts/updater/workflow_04_archive_state_to_zenodo.R')
+          cat('PASS: W04 production scripts parse\n')
+
+      - name: Restore current W03 inputs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path }}
+          W03_POINTER: ${{ inputs.workflow03_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/current
+          mkdir -p inputs/current
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R             --pointer "$LEAN_POINTER"             --output-dir inputs/current/canonical
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R             --pointer "$W03_POINTER"             --output-dir inputs/current/w03
+          CAN=$(find inputs/current/canonical -type f -name canonical_lean.jsonl -print -quit)
+          STA=$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)
+          test -n "$CAN"; test -n "$STA"
+          cp "$CAN" inputs/current/canonical_lean.jsonl
+          cp "$STA" inputs/current/publication_status.jsonl
+
+      - name: Restore prior W04 state
+        if: ${{ inputs.prior_workflow04_pointer_path != 'none' && inputs.prior_workflow04_pointer_path != '' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          PRIOR_W04: ${{ inputs.prior_workflow04_pointer_path }}
+          PRIOR_LEAN: ${{ inputs.prior_lean_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/prior_w04 inputs/prior_canonical
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer "$PRIOR_W04"             --output-dir inputs/prior_w04
+          PRIOR_LAYER=$(find inputs/prior_w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)
+          test -n "$PRIOR_LAYER"
+          cp "$PRIOR_LAYER" inputs/prior_workflow04_layer.jsonl
+
+          MISSING_FP=$(P=inputs/prior_workflow04_layer.jsonl Rscript -e '
+            library(jsonlite)
+            x<-readLines(Sys.getenv("P"),warn=FALSE);x<-x[nzchar(trimws(x))]
+            n<-sum(vapply(x,function(z){r<-fromJSON(z,simplifyVector=FALSE);s<-r$screening$screening_input_sha256;if(is.null(s)||!length(s))return(TRUE);!nzchar(trimws(as.character(s[[1L]])))},logical(1)))
+            cat(n)
+          ')
+          echo "Prior W04 rows without fingerprints: $MISSING_FP"
+          if [ "$MISSING_FP" -gt 0 ]; then
+            test -n "$PRIOR_LEAN"
+            Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R               --pointer "$PRIOR_LEAN"               --output-dir inputs/prior_canonical
+            P=$(find inputs/prior_canonical -type f -name canonical_lean.jsonl -print -quit)
+            test -n "$P"
+            cp "$P" inputs/prior_canonical_lean.jsonl
+          fi
+
+      - name: Prepare first-run/update queue
+        id: queue
+        env:
+          PRIOR_W04_INPUT: ${{ inputs.prior_workflow04_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --canonical inputs/current/canonical_lean.jsonl
+            --workflow03-status inputs/current/publication_status.jsonl
+            --output-dir outputs/workflow04_prepare
+          )
+          if [ "$PRIOR_W04_INPUT" != "none" ] && [ -n "$PRIOR_W04_INPUT" ]; then
+            ARGS+=(--prior-workflow04 inputs/prior_workflow04_layer.jsonl)
+            if [ -f inputs/prior_canonical_lean.jsonl ]; then
+              ARGS+=(--prior-canonical inputs/prior_canonical_lean.jsonl)
+            fi
+          fi
+          Rscript scripts/updater/workflow_04_prepare_incremental.R "${ARGS[@]}"
+          QUEUE_N=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_prepare/prepare_manifest.json");cat(as.integer(x$screen_queue_records))')
+          MODE=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_prepare/prepare_manifest.json");cat(as.character(x$mode))')
+          echo "queue_n=$QUEUE_N" >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable W04 prepared state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-prepared-${{ github.run_id }}
+          path: |
+            inputs/current/canonical_lean.jsonl
+            inputs/current/publication_status.jsonl
+            outputs/workflow04_prepare/
+          retention-days: 7
+          if-no-files-found: error
+
+  screen:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.queue_n != '0' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1,2,3,4,5,6,7,8]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest','stringi'))
+
+      - name: Download prepared state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-prepared-${{ github.run_id }}
+          path: prepared
+
+      - name: Screen incremental queue shard
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_luna_consensus.R             --canonical prepared/outputs/workflow04_prepare/screen_queue_canonical.jsonl             --workflow03-status prepared/outputs/workflow04_prepare/screen_queue_workflow03.jsonl             --output-dir outputs/shard-${{ matrix.shard }}             --model gpt-5.6-luna             --shard-index ${{ matrix.shard }}             --shard-count 8             --checkpoint-every 25
+
+      - name: Upload shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-incremental-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: outputs/shard-${{ matrix.shard }}/
+          retention-days: 90
+          if-no-files-found: warn
+
+  merge-new:
+    needs: [prepare,screen]
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.screen.result == 'success' || needs.screen.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download shard outputs
+        if: ${{ needs.prepare.outputs.queue_n != '0' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow04-incremental-shard-*-${{ github.run_id }}
+          path: shards
+          merge-multiple: false
+
+      - name: Merge new screening decisions
+        if: ${{ needs.prepare.outputs.queue_n != '0' }}
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_04_merge_consensus.R             --input-root shards             --output-dir outputs/workflow04_new_consensus             --expected-shards 8
+
+      - name: Create empty new layer when nothing requires screening
+        if: ${{ needs.prepare.outputs.queue_n == '0' }}
+        shell: bash
+        run: |
+          mkdir -p outputs/workflow04_new_consensus
+          : > outputs/workflow04_new_consensus/workflow04_consensus_layer.jsonl
+          Rscript -e 'jsonlite::write_json(list(schema="living-evidence-map-workflow04-luna-consensus-merged-v1",status="PASS",workflow03_eligible=0L,consensus_records=0L,final_retain=0L,final_exclude=0L,final_unresolved=0L), "outputs/workflow04_new_consensus/summary.json",auto_unbox=TRUE,pretty=TRUE)'
+
+      - name: Upload merged new layer
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-new-consensus-${{ github.run_id }}
+          path: outputs/workflow04_new_consensus/
+          retention-days: 90
+          if-no-files-found: error
+
+  finalise:
+    needs: [prepare,merge-new]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.merge-new.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Download prepared state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-prepared-${{ github.run_id }}
+          path: prepared
+
+      - name: Download merged new layer
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-new-consensus-${{ github.run_id }}
+          path: new_consensus
+
+      - name: Build complete current W04 state
+        env:
+          MANUAL_PATH: ${{ inputs.manual_decisions_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --canonical prepared/inputs/current/canonical_lean.jsonl
+            --workflow03-status prepared/inputs/current/publication_status.jsonl
+            --reused-layer prepared/outputs/workflow04_prepare/reused_workflow04_layer.jsonl
+            --new-consensus new_consensus/workflow04_consensus_layer.jsonl
+            --prepare-manifest prepared/outputs/workflow04_prepare/prepare_manifest.json
+            --output-dir outputs/workflow04_final
+          )
+          if [ -n "$MANUAL_PATH" ]; then ARGS+=(--manual-decisions "$MANUAL_PATH"); fi
+          Rscript scripts/updater/workflow_04_merge_incremental.R "${ARGS[@]}"
+
+      - name: Inspect final status
+        id: status
+        shell: bash
+        run: |
+          STATUS=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(x$status)')
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "Workflow 04 status: $STATUS"
+
+      - name: Publish resolved W04 state
+        if: ${{ steps.status.outputs.status == 'PASS' && inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path }}
+          W03_POINTER: ${{ inputs.workflow03_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LEAN_SHA=$(P="$LEAN_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$lean_canonical_sha256)')
+          W03_SHA=$(P="$W03_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$publication_status_sha256)')
+          PROMPT_SHA=ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69
+          mkdir -p outputs/workflow04_zenodo
+          Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R             --state-dir outputs/workflow04_final             --source-run-id "$GITHUB_RUN_ID"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow04_zenodo             --upstream-lean-sha256 "$LEAN_SHA"             --upstream-workflow03-sha256 "$W03_SHA"             --prompt-sha256 "$PROMPT_SHA"
+
+      - name: Register resolved W04 state
+        if: ${{ steps.status.outputs.status == 'PASS' && inputs.publish == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_04_update_zenodo_registry.R             --receipt outputs/workflow04_zenodo/zenodo_receipt.json             --registry docs/workflow04/zenodo_registry.csv             --pointer-dir docs/workflow04/zenodo
+          git add docs/workflow04/zenodo_registry.csv docs/workflow04/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register Workflow 04 screening state $GITHUB_RUN_ID"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload W04 handoff/review state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-production-${{ github.run_id }}
+          path: |
+            outputs/workflow04_final/
+            outputs/workflow04_zenodo/
+          retention-days: 90
+          if-no-files-found: error
