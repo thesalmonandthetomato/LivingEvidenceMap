@@ -191,10 +191,13 @@ scopus_extract <- function(obj){
       if(!is.null(biblio)) abstract <- clean_abstract(paste(unlist(biblio,use.names=FALSE),collapse=" "))
     }
   }
+  head <- (((rr[["item"]] %||% list())[["bibrecord"]] %||% list())[["head"]] %||% list())
+  citation_info <- head[["citation-info"]] %||% list()
   keyword_candidates <- list(
     (rr[["authkeywords"]] %||% list())[["author-keyword"]],
     (rr[["author-keywords"]] %||% list())[["author-keyword"]],
-    (((rr[["item"]] %||% list())[["bibrecord"]] %||% list())[["head"]] %||% list())[["author-keywords"]]
+    (head[["author-keywords"]] %||% list())[["author-keyword"]],
+    (citation_info[["author-keywords"]] %||% list())[["author-keyword"]]
   )
   author_keywords <- character()
   for(k in keyword_candidates){
@@ -297,6 +300,38 @@ scopus_lookup_eid <- function(eid){
   list(status=st,title=ex$title,abstract=ex$abstract,author_keywords=ex$author_keywords,returned_doi=ex$doi,eid=ex$eid %||% eid,
        outcome=if(!is.null(ex$title)||!is.null(ex$abstract)||length(ex$author_keywords))"metadata_returned" else "success_no_metadata",
        attempts=z$attempts)
+}
+
+scopus_lookup_eid_full <- function(eid){
+  endpoint <- paste0("https://api.elsevier.com/content/abstract/eid/",URLencode(eid,reserved=TRUE))
+  req <- request(endpoint) |>
+    req_url_query(view="FULL") |>
+    scopus_headers()
+  z <- perform_retry(req)
+  st <- resp_status(z$resp)
+  if(st>=400L) return(list(status=st,title=NULL,author_keywords=character(),returned_doi=NULL,eid=eid,outcome=paste0("http_",st),attempts=z$attempts,route="retained_eid_full"))
+  parsed <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
+  if(is.null(parsed)) return(list(status=st,title=NULL,author_keywords=character(),returned_doi=NULL,eid=eid,outcome="invalid_json",attempts=z$attempts,route="retained_eid_full"))
+  ex <- scopus_extract(parsed)
+  list(status=st,title=ex$title,author_keywords=ex$author_keywords,returned_doi=ex$doi,eid=ex$eid %||% eid,
+       outcome=if(length(ex$author_keywords))"metadata_returned" else "success_no_keywords",
+       attempts=z$attempts,route="retained_eid_full")
+}
+
+scopus_lookup_doi_full <- function(d){
+  endpoint <- paste0("https://api.elsevier.com/content/abstract/doi/",URLencode(d,reserved=TRUE))
+  req <- request(endpoint) |>
+    req_url_query(view="FULL") |>
+    scopus_headers()
+  z <- perform_retry(req)
+  st <- resp_status(z$resp)
+  if(st>=400L) return(list(status=st,title=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,outcome=paste0("http_",st),attempts=z$attempts,route="direct_doi_full"))
+  parsed <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
+  if(is.null(parsed)) return(list(status=st,title=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,outcome="invalid_json",attempts=z$attempts,route="direct_doi_full"))
+  ex <- scopus_extract(parsed)
+  list(status=st,title=ex$title,author_keywords=ex$author_keywords,returned_doi=ex$doi,eid=ex$eid,
+       outcome=if(length(ex$author_keywords))"metadata_returned" else "success_no_keywords",
+       attempts=z$attempts,route="direct_doi_full")
 }
 
 scopus_lookup <- function(d){
@@ -521,25 +556,41 @@ for(i in seq_along(rows)){
   still_missing_abstract <- is_missing(r$canonical$abstract)
   still_missing_author_keywords <- keywords_missing(r$canonical$author_keywords)
 
-  # Author keywords use only a Scopus EID already retained in the W01 manifestation.
-  # No DOI search-derived EID is accepted for keyword enrichment.
+  # Author-keyword repair order after Europe PMC:
+  # 1) retained Scopus EID -> FULL;
+  # 2) if no retained EID, direct DOI -> FULL;
+  # 3) if direct DOI returns no record/404, stop. No DOI-search -> EID fallback.
   eid_for_keywords <- retained_scopus_eid(r)
-  if(still_missing_author_keywords && !is.null(eid_for_keywords)){
+  if(still_missing_author_keywords){
     counts$scopus_author_keywords_attempted <- counts$scopus_author_keywords_attempted + 1L
-    sk <- tryCatch(
-      scopus_lookup_eid(eid_for_keywords),
-      error=function(e) list(outcome="technical_error",error=conditionMessage(e),title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=eid_for_keywords,status=NULL,attempts=NULL)
-    )
+    sk <- if(!is.null(eid_for_keywords)){
+      tryCatch(
+        scopus_lookup_eid_full(eid_for_keywords),
+        error=function(e) list(outcome="technical_error",error=conditionMessage(e),title=NULL,author_keywords=character(),returned_doi=NULL,eid=eid_for_keywords,status=NULL,attempts=NULL,route="retained_eid_full")
+      )
+    } else {
+      tryCatch(
+        scopus_lookup_doi_full(d),
+        error=function(e) list(outcome="technical_error",error=conditionMessage(e),title=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,status=NULL,attempts=NULL,route="direct_doi_full")
+      )
+    }
     rec_audit$scopus_keywords <- sk
     sim <- if(!is.null(sk$title) && !is_missing(r$canonical$title)) title_similarity(r$canonical$title,sk$title) else NA_real_
     guard_ok <- identical(sk$returned_doi,d) && !is.null(sk$title) && !is_missing(r$canonical$title) && !is.na(sim) && sim>=0.90
     if(guard_ok && length(sk$author_keywords)){
       r$canonical$author_keywords <- sk$author_keywords
       counts$scopus_author_keywords_filled <- counts$scopus_author_keywords_filled + 1L
-      rec_audit$applied <- c(rec_audit$applied,list(list(provider="scopus",field="author_keywords",eid=eid_for_keywords,title_similarity=sim,identity_guard="retained_eid+exact_doi+title")))
+      rec_audit$applied <- c(rec_audit$applied,list(list(
+        provider="scopus",field="author_keywords",eid=sk$eid,title_similarity=sim,
+        route=sk$route,
+        identity_guard=if(!is.null(eid_for_keywords))"retained_eid+exact_doi+title" else "direct_doi+exact_doi+title"
+      )))
     } else if(length(sk$author_keywords) && !guard_ok){
       counts$conflicts_quarantined <- counts$conflicts_quarantined + 1L
-      rec_audit$quarantined <- c(rec_audit$quarantined,list(list(provider="scopus",field="author_keywords",reason="retained_eid_identity_guard_failed",eid=eid_for_keywords,returned_doi=sk$returned_doi,title_similarity=sim)))
+      rec_audit$quarantined <- c(rec_audit$quarantined,list(list(
+        provider="scopus",field="author_keywords",reason="keyword_identity_guard_failed",
+        route=sk$route,eid=sk$eid,returned_doi=sk$returned_doi,title_similarity=sim
+      )))
     }
     Sys.sleep(delay)
   }
@@ -589,7 +640,7 @@ report <- list(
     europe_pmc_match="exact normalised DOI plus canonical/provider title similarity >= 0.90 for abstract/author-keyword fills; exact DOI may fill a missing title",
     scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
     abstract_title_guard="if a title is present on both sides, Jaro-Winkler similarity must be >= 0.90; otherwise quarantine",
-    provider_fallback="existing Scopus DOI/EID path retained for missing title/abstract; author keywords use only a Scopus EID retained in the Workflow 01 manifestation",
+    provider_fallback="existing Scopus DOI/EID path retained for missing title/abstract; author keywords use retained Scopus EID FULL retrieval when available, otherwise direct DOI FULL retrieval; no DOI-search fallback after a direct DOI miss",
     repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days)
   ),
   trial_limit=if(is.infinite(limit)) NULL else limit,
