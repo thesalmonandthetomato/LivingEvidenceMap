@@ -1,17 +1,7 @@
 name: Workflow 02 - Production batched enrichment
 
 on:
-  push:
-    branches: [workflow01-final-architecture]
-    paths:
-      - '.github/workflows/workflow_02_batched_production.yml'
   workflow_dispatch:
-    inputs:
-      resume_run_id:
-        description: 'Optional failed/interrupted production run ID to resume from validated checkpoints'
-        required: false
-        default: ''
-        type: string
 
 permissions:
   contents: write
