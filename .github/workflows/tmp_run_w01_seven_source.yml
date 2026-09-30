@@ -1,0 +1,22 @@
+name: Temporary - launch seven-source W01 production
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'user_input/w01_seven_source_production.trigger'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  launch:
+    uses: ./.github/workflows/workflow_01_production.yml
+    with:
+      workflow00_pointer_path: docs/search_record/state/current.json
+      previous_workflow01_pointer_path: docs/deduplication/zenodo/run-36128255337.json
+      model: gpt-5.6-luna
+      auto_threshold: '0.95'
+    secrets: inherit
