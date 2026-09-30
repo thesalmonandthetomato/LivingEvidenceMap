@@ -13,20 +13,25 @@ arg <- function(flag, default=NULL){
   args[[i+1L]]
 }
 input_dir <- arg("--input-dir")
-out_dir <- arg("--output-dir","outputs/workflow05_geography_production_merged")
+out_dir <- arg("--output-dir","outputs/workflow06_geography_production_merged")
+expected_shards <- as.integer(arg("--expected-shards","20"))
+expected_records <- as.integer(arg("--expected-records","0"))
 if(is.null(input_dir)||!dir.exists(input_dir)) stop("--input-dir is required")
+if(is.na(expected_shards)||expected_shards<1L)stop("--expected-shards must be >=1",call.=FALSE)
+if(is.na(expected_records)||expected_records<0L)stop("--expected-records must be >=0",call.=FALSE)
 dir.create(out_dir,recursive=TRUE,showWarnings=FALSE)
 
 files <- list.files(input_dir,pattern="geography_results\\.csv$",recursive=TRUE,full.names=TRUE)
-if(length(files)!=20L) stop(sprintf("Expected 20 shard CSVs, found %d",length(files)))
-x <- bind_rows(lapply(files,read_csv,show_col_types=FALSE)) |> arrange(record_sequence)
-stopifnot(nrow(x)==19407L,!anyDuplicated(x$record_id),!anyDuplicated(x$record_sequence))
-if(!identical(sort(as.integer(x$record_sequence)),seq_len(19407L))) stop("record_sequence is not exactly 1:19407")
+if(length(files)!=expected_shards) stop(sprintf("Expected %d shard CSVs, found %d",expected_shards,length(files)))
+x <- bind_rows(lapply(files,read_csv,show_col_types=FALSE,progress=FALSE)) |> arrange(record_sequence)
+if(expected_records>0L&&nrow(x)!=expected_records)stop(sprintf("Expected %d screened records, found %d",expected_records,nrow(x)),call.=FALSE)
+if(anyDuplicated(x$record_id)||anyDuplicated(x$record_sequence))stop("Merged geography identity/sequence invariant failed",call.=FALSE)
 
 jsonl <- list.files(input_dir,pattern="geography_results\\.jsonl$",recursive=TRUE,full.names=TRUE)
-if(length(jsonl)!=20L) stop(sprintf("Expected 20 shard JSONL files, found %d",length(jsonl)))
+if(length(jsonl)!=expected_shards) stop(sprintf("Expected %d shard JSONL files, found %d",expected_shards,length(jsonl)))
 json_lines <- unlist(lapply(jsonl,readLines,warn=FALSE,encoding="UTF-8"),use.names=FALSE)
-if(length(json_lines)!=19407L) stop(sprintf("Expected 19,407 JSONL records, found %d",length(json_lines)))
+json_lines <- json_lines[nzchar(trimws(json_lines))]
+if(length(json_lines)!=nrow(x)) stop(sprintf("Expected %d JSONL records, found %d",nrow(x),length(json_lines)))
 ids <- vapply(json_lines,function(z) as.character(fromJSON(z,simplifyVector=FALSE)$record_id),character(1))
 if(anyDuplicated(ids)||!setequal(ids,x$record_id)) stop("JSONL record IDs do not match merged CSV")
 
@@ -42,11 +47,18 @@ statuses <- x |> count(geography_status,name="n") |> mutate(pct=100*n/nrow(x))
 write_csv(patterns,file.path(out_dir,"discrepancy_patterns.csv"),na="")
 write_csv(statuses,file.path(out_dir,"geography_status_counts.csv"),na="")
 
+sum_files<-list.files(input_dir,pattern="summary\\.json$",recursive=TRUE,full.names=TRUE)
+if(length(sum_files)!=expected_shards)stop(sprintf("Expected %d shard summaries, found %d",expected_shards,length(sum_files)),call.=FALSE)
+shard_summaries<-lapply(sum_files,fromJSON,simplifyVector=FALSE)
+prompt_shas<-unique(vapply(shard_summaries,function(z)as.character(z$prompt_sha256),character(1)))
+if(length(prompt_shas)!=1L)stop("Prompt SHA mismatch across W06 shards",call.=FALSE)
+if(sum(vapply(shard_summaries,function(z)as.integer(z$n),integer(1)))!=nrow(x))stop("Shard summary record counts do not sum to merged rows",call.=FALSE)
+
 summary <- list(
   records=nrow(x),
   model="gpt-5.6-luna",
   reasoning="low",
-  prompt_sha256="ce20acddf42e494a799d08b130d3e1bace95746035a7ad8e625fc8046a1bd07a",
+  prompt_sha256=prompt_shas[[1L]],
   resolved_n=sum(x$geography_status=="RESOLVED"),
   none_n=sum(x$geography_status=="NONE"),
   unresolved_n=sum(x$geography_status=="UNRESOLVED"),
