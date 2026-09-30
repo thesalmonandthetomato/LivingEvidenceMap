@@ -27,6 +27,32 @@ jobs:
           ref: ${{ github.ref_name }}
           persist-credentials: false
 
+      - name: Preflight existing Zenodo draft
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          REGISTRY_PATH: ${{ github.event_name == 'workflow_dispatch' && inputs.registry_path || 'user_input/workflow00_ris_proquest_2026-09-30.json' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dep_id="$(jq -r '.staging.deposition_id // empty' "$REGISTRY_PATH")"
+          if [ -z "$dep_id" ]; then
+            doi="$(jq -r '.staging.reserved_doi // empty' "$REGISTRY_PATH")"
+            dep_id="${doi##*.}"
+          fi
+          test -n "$dep_id"
+          url="https://zenodo.org/api/records/$dep_id/draft"
+          for attempt in 1 2 3 4 5 6; do
+            code="$(curl -sS -o /tmp/zenodo_draft.json -w '%{http_code}'               -H "Authorization: Bearer $ZENODO_ACCESS_TOKEN" "$url" || true)"
+            echo "Zenodo draft preflight attempt $attempt: HTTP $code"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Zenodo draft remained unavailable after preflight retries." >&2
+          cat /tmp/zenodo_draft.json >&2 || true
+          exit 1
+
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
         with:
