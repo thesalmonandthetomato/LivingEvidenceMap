@@ -41,9 +41,12 @@ x <- records |>
   ) |>
   arrange(record_sequence)
 
-stopifnot(nrow(x)==19407L,!anyDuplicated(x$record_id),!anyDuplicated(x$record_sequence))
+if(!nrow(x)) stop("Workflow 06 screening queue is empty; semantic coder should not be invoked",call.=FALSE)
+stopifnot(!anyDuplicated(x$record_id),!anyDuplicated(x$record_sequence))
+if(!"geography_input_sha256"%in%names(x)){
+  x$geography_input_sha256 <- mapply(function(t,a)digest(toJSON(list(title=ifelse(is.na(t),"",t),abstract=ifelse(is.na(a),"",a)),auto_unbox=TRUE,null="null",na="null"),algo="sha256",serialize=FALSE),x$title,x$abstract,USE.NAMES=FALSE)
+}
 samp <- x |> filter(((record_sequence - 1L) %% shard_count) == (shard_id - 1L))
-stopifnot(nrow(samp)>0L,!anyDuplicated(samp$record_id))
 
 prompt <- paste(readLines(prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n")
 prompt_sha <- digest(file=prompt_path,algo="sha256",serialize=FALSE)
@@ -198,6 +201,7 @@ call_one <- function(row){
   list(
     record_id=as.character(row$record_id),
     record_sequence=as.integer(row$record_sequence),
+    geography_input_sha256=as.character(row$geography_input_sha256),
     geography_status=as.character(a$geography_status),
     locations=locs,
     geography_reason=as.character(a$geography_reason),
@@ -216,6 +220,30 @@ if(file.exists(jsonl_path)) file.remove(jsonl_path)
 rows <- vector("list",nrow(samp))
 message(sprintf("Production geography shard %d/%d: %d records.",shard_id,shard_count,nrow(samp)))
 
+if(!nrow(samp)){
+  empty <- x[0,] |>
+    transmute(
+      record_id=as.character(record_id),record_sequence=as.integer(record_sequence),
+      title=as.character(title),abstract=as.character(abstract),geography_input_sha256=as.character(geography_input_sha256),
+      deterministic_primary_countries=as.character(deterministic_primary_countries),
+      deterministic_primary_iso3c=as.character(deterministic_primary_iso3c),
+      geography_review_required=as.logical(geography_review_required),
+      geography_review_reason=as.character(geography_review_reason),
+      geography_status=character(),luna_iso3c=character(),luna_country_names=character(),
+      luna_evidence=character(),luna_mapping_reason=character(),evidence_all_grounded=logical(),
+      geography_reason=character(),llm_failed=logical(),llm_error=character(),
+      det_iso3c=character(),exact_agreement=logical(),deterministic_none=logical(),luna_none=logical(),discrepancy_type=character()
+    )
+  write_csv(empty,file.path(out_dir,"geography_results.csv"),na="")
+  write_csv(empty,file.path(out_dir,"geography_qc_flags.csv"),na="")
+  file.create(jsonl_path)
+  summary<-list(shard_id=shard_id,shard_count=shard_count,n=0L,model="gpt-5.6-luna",reasoning="low",prompt_sha256=prompt_sha,
+                resolved_n=0L,none_n=0L,unresolved_n=0L,evidence_ungrounded_n=0L,llm_failures_n=0L,deterministic_exact_agreement_n=0L)
+  writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),file.path(out_dir,"summary.json"))
+  cat(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),"\n")
+  quit(save="no",status=0L)
+}
+
 for(i in seq_len(nrow(samp))){
   row <- samp[i,,drop=FALSE]
   ans <- tryCatch(
@@ -223,6 +251,7 @@ for(i in seq_len(nrow(samp))){
     error=function(e) list(
       record_id=as.character(row$record_id),
       record_sequence=as.integer(row$record_sequence),
+      geography_input_sha256=as.character(row$geography_input_sha256),
       geography_status="UNRESOLVED",
       locations=list(),
       geography_reason="",
@@ -239,6 +268,7 @@ for(i in seq_len(nrow(samp))){
   rows[[i]] <- tibble(
     record_id=ans$record_id,
     record_sequence=ans$record_sequence,
+    geography_input_sha256=ans$geography_input_sha256,
     geography_status=ans$geography_status,
     luna_iso3c=ans$luna_iso3c,
     luna_country_names=ans$luna_country_names,
@@ -257,7 +287,7 @@ for(i in seq_len(nrow(samp))){
 
 llm <- bind_rows(rows)
 cmp <- samp |>
-  select(record_id,record_sequence,title,abstract,deterministic_primary_countries,
+  select(record_id,record_sequence,title,abstract,geography_input_sha256,deterministic_primary_countries,
          deterministic_primary_iso3c,geography_review_required,geography_review_reason) |>
   left_join(llm,by=c("record_id","record_sequence")) |>
   mutate(
