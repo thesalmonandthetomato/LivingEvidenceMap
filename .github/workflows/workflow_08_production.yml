@@ -279,6 +279,44 @@ jobs:
           mkdir -p outputs/workflow08_zenodo
           Rscript scripts/updater/workflow_08_archive_to_zenodo.R             --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl             --exclusions outputs/workflow08/workflow08_excluded_records.csv             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl             --manifest outputs/workflow08/workflow08_final_manifest.json             --source-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow08_zenodo
 
+      - name: Register W08 state
+        if: ${{ inputs.publish == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+
+          mkdir -p docs/workflow08/zenodo
+          cp outputs/workflow08_zenodo/zenodo_receipt.json "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
+
+          if [ ! -f docs/workflow08/zenodo_registry.csv ]; then
+            echo 'source_run_id,zenodo_record_id,doi,canonical_sha256,published_at_utc' > docs/workflow08/zenodo_registry.csv
+          fi
+
+          RECEIPT=outputs/workflow08_zenodo/zenodo_receipt.json REG=docs/workflow08/zenodo_registry.csv Rscript -e '
+            x <- jsonlite::fromJSON(Sys.getenv("RECEIPT"))
+            reg <- read.csv(Sys.getenv("REG"),stringsAsFactors=FALSE)
+            sid <- as.character(x$source_github_run_id)
+            reg <- reg[as.character(reg$source_run_id)!=sid,,drop=FALSE]
+            row <- data.frame(
+              source_run_id=sid,
+              zenodo_record_id=as.character(x$zenodo_record_id),
+              doi=as.character(x$doi),
+              canonical_sha256=as.character(x$final_canonical_jsonl_sha256),
+              published_at_utc=as.character(x$published_at_utc),
+              stringsAsFactors=FALSE
+            )
+            write.csv(rbind(reg,row),Sys.getenv("REG"),row.names=FALSE,quote=FALSE)
+          '
+
+          git add docs/workflow08/zenodo_registry.csv "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
+          if ! git diff --cached --quiet; then
+            git commit -m "Register Workflow 08 final state $GITHUB_RUN_ID"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
       - name: Upload review and final state
         if: always()
         uses: actions/upload-artifact@v4
