@@ -72,7 +72,9 @@ source_labels <- c(
   scopus = "Scopus",
   openalex = "OpenAlex",
   agricola = "AGRICOLA",
-  wos = "WoSCC"
+  wos = "WoSCC",
+  cab = "CAB Abstracts",
+  proquest = "ProQuest/PQD&T"
 )
 source_counts_raw <- setNames(integer(length(source_labels)), names(source_labels))
 n_deduplicated <- 0L
@@ -215,16 +217,19 @@ box <- function(id, x, y, w, h, label, stage) {
   data.frame(id, x, y, w, h, label, stage, stringsAsFactors = FALSE)
 }
 
-source_box_w <- 1.45
+source_box_w <- 1.18
 process_box_w <- 2.75
+source_x <- seq(1.75, 9.53, length.out = length(source_labels))
+source_boxes <- bind_rows(lapply(seq_along(source_labels), function(i) {
+  box(
+    names(source_labels)[[i]], source_x[[i]], 12.00, source_box_w, 0.76,
+    paste0(unname(source_labels[[i]]), "\nn = ", fmt(source_counts[[unname(source_labels[[i]])]])),
+    "source"
+  )
+}))
 
 boxes <- bind_rows(
-  box("agricola", 2.60, 12.00, source_box_w, 0.76, paste0("AGRICOLA\nn = ", fmt(source_counts[["AGRICOLA"]])), "source"),
-  box("lens",     4.12, 12.00, source_box_w, 0.76, paste0("The Lens\nn = ", fmt(source_counts[["The Lens"]])), "source"),
-  box("openalex", 5.64, 12.00, source_box_w, 0.76, paste0("OpenAlex\nn = ", fmt(source_counts[["OpenAlex"]])), "source"),
-  box("scopus",   7.16, 12.00, source_box_w, 0.76, paste0("Scopus\nn = ", fmt(source_counts[["Scopus"]])), "source"),
-  box("wos",      8.68, 12.00, source_box_w, 0.76, paste0("WoSCC\nn = ", fmt(source_counts[["WoSCC"]])), "source"),
-
+  source_boxes,
   box("combined", 5.64, 10.88, process_box_w, 0.76, paste0("Combined search results\nn = ", fmt(n_combined)), "search"),
   box("dedup", 5.64, 9.78, process_box_w, 0.76, paste0("Deduplicated records\nn = ", fmt(n_deduplicated)), "screen"),
   box("dupes", 9.15, 9.78, process_box_w, 0.76, paste0("Duplicate records removed\nn = ", fmt(n_duplicates_removed)), "exclude"),
@@ -248,12 +253,12 @@ boxes <- bind_rows(
 )
 
 source_vertical <- data.frame(
-  x = c(2.60, 4.12, 5.64, 7.16, 8.68),
-  y = rep(11.62, 5),
-  xend = c(2.60, 4.12, 5.64, 7.16, 8.68),
-  yend = rep(11.43, 5)
+  x = source_x,
+  y = rep(11.62, length(source_x)),
+  xend = source_x,
+  yend = rep(11.43, length(source_x))
 )
-source_collector <- data.frame(x = 2.60, y = 11.43, xend = 8.68, yend = 11.43)
+source_collector <- data.frame(x = min(source_x), y = 11.43, xend = max(source_x), yend = 11.43)
 
 main_arrows <- data.frame(
   x = rep(5.64, 9),
