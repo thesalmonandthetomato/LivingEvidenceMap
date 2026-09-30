@@ -484,6 +484,72 @@ Validated production additions are:
 
 The production finalisation workflow now validates the presence of these canonical fields and provenance entries across the entire output, verifies manifestation metadata on every manifestation, and explicitly guards against OpenAlex generated terms entering manifestation author keywords.
 
+## Generic source ingestion architecture
+
+Workflow 01 source ingestion is no longer limited to the original five databases.
+
+The authoritative source catalogue is:
+
+`config/workflow01_source_catalogue.json`
+
+Each catalogue entry declares:
+
+- a stable source namespace;
+- the acquisition/restoration kind;
+- the prepared W01 input path;
+- for manual RIS sources, the W00 registry that identifies the published restricted Zenodo record.
+
+Two restoration classes are currently supported:
+
+1. `workflow00_state`: the established W00 composite state used for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science;
+2. `manual_ris`: a published restricted W00 RIS archive restored from Zenodo using its committed W00 registry.
+
+The catalogue is converted into a validated W01 source-input manifest. Union construction emits a corresponding manifest for the complete prior-plus-new manifestation union. Candidate generation, scoring and canonicalisation consume this manifest rather than a hard-coded source list.
+
+New source providers therefore use their stable lower-case W00 `database.short_name` directly as the W01 `source` namespace, except for the retained legacy aliases:
+
+- `agricola_via_europe_pmc` -> `agricola`;
+- `wos_starter` -> `wos`.
+
+The manifestation identity remains:
+
+`source + source_record_id`
+
+No additional search-event identifier is introduced into the canonical JSONL.
+
+### Manual-RIS validation
+
+The generic ingestion route was validated against the current authoritative W01 state in GitHub Actions run `36727268372`.
+
+The validation restored:
+
+- CAB Abstracts: 26,816 manifestations;
+- ProQuest Dissertations & Theses Global: 1,574 manifestations.
+
+It then confirmed:
+
+- 90,137 historical W01 manifestations were preserved in their exact existing row order;
+- 28,390 new manifestations were appended;
+- the seven-source union contained 118,527 manifestations;
+- CAB contributed exactly 26,816 rows to the normalised metadata index;
+- ProQuest contributed exactly 1,574 rows;
+- no existing manifestation identity was lost or reordered.
+
+This validation stopped after metadata indexing. It did not run duplicate scoring, LLM adjudication or canonical publication.
+
+### Durable state
+
+The source-generic contract also applies to:
+
+- incremental scoring;
+- Workflow 01 delta construction;
+- delta replay;
+- human-review checkpoint creation;
+- checkpoint source reconstruction;
+- resume-after-human-review canonicalisation.
+
+Source files are discovered from the current W01 seed/source manifest and persisted by source namespace. A newly introduced source may therefore have no corresponding file in the previous state; it is treated as an append-only new source. Existing sources may never disappear or change their historical prefix.
+
 ## Remaining downstream work
 
-Workflow 02 may fill missing title, abstract and author keywords using separately validated Europe PMC and Scopus enrichment. Future database additions must extend the source restoration/adapter layer without changing the established W01 identity or deduplication semantics.
+Workflow 02 may fill missing title, abstract and author keywords using separately validated Europe PMC and Scopus enrichment. Future database additions should be registered through the W01 source catalogue and must preserve the established W01 identity and deduplication semantics.
