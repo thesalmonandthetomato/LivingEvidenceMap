@@ -67,6 +67,20 @@ year_from <- function(x) {
   if (m[[1L]] < 0L) return(NULL)
   as.integer(regmatches(x, m))
 }
+parse_sn <- function(x) {
+  vals <- as_values(x)
+  if (is.null(vals)) return(list(issn=NULL,isbn=NULL,raw=NULL))
+  tokens <- unlist(strsplit(vals, "[[:space:];,]+", perl=TRUE), use.names=FALSE)
+  tokens <- tokens[nzchar(tokens)]
+  clean <- gsub("[^0-9Xx]", "", tokens)
+  issn <- tokens[grepl("^[0-9]{4}-?[0-9]{3}[0-9Xx]$", tokens)]
+  isbn <- tokens[nchar(clean) %in% c(10L,13L) & grepl("^[0-9Xx-]+$", tokens)]
+  list(
+    issn=if(length(issn)) unique(issn) else NULL,
+    isbn=if(length(isbn)) unique(tokens[nchar(clean) %in% c(10L,13L) & grepl("^[0-9Xx-]+$", tokens)]) else NULL,
+    raw=vals
+  )
+}
 
 registry <- fromJSON(registry_path, simplifyVector = FALSE)
 required_top <- c("schema_version", "source_ID", "acquisition", "database", "search", "field_semantics", "input")
@@ -178,7 +192,9 @@ normalise_record <- function(r, i) {
   publication_type <- unique(c(as_values(r$TY) %||% character(), as_values(r$M3) %||% character()))
   if (!length(publication_type)) publication_type <- NULL
   language <- as_values(r$LA)
-  issn <- as_values(r$SN)
+  sn <- parse_sn(r$SN)
+  issn <- sn$issn
+  isbn <- sn$isbn
   volume <- clean_text(r$VL)
   issue <- clean_text(r$IS)
   pages <- clean_text(first_present(r, c("SP", "EP")))
@@ -213,6 +229,7 @@ normalise_record <- function(r, i) {
       issue = issue,
       pages = pages,
       issn = issn,
+      isbn = isbn,
       eissn = NULL,
       issn_l = NULL,
       language = language,
@@ -222,6 +239,7 @@ normalise_record <- function(r, i) {
     source_specific = list(
       ris_keyword_semantics = kw_semantics,
       database_export_label = clean_text(r$DB),
+      serial_number_raw = sn$raw,
       publisher = clean_text(r$PB),
       publication_place = clean_text(r$PP),
       record_url = clean_text(r$UR),
