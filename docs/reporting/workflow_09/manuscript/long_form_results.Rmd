@@ -197,7 +197,7 @@ Following screening of titles and abstracts, `r fmt(n_total)` were included in t
 include_figure(here::here("visualisations", "figure_07_flow_diagram.png"))
 ```
 
-Database provenance was retained through deduplication, allowing the contribution and overlap of the five bibliographic sources to be compared before and after relevance screening. Figure 2 shows database contribution to the deduplicated corpus and to the final included set of titles and abstracts, together with the exact source intersections.
+Database provenance was retained through deduplication, allowing the contribution and overlap of the seven bibliographic sources to be compared before and after relevance screening. Figure 2 shows database contribution to the deduplicated corpus and to the final included set of titles and abstracts, together with the exact source intersections.
 
 ```{r fig-source-contribution, fig.cap="***Figure 2.*** *Contribution and overlap of bibliographic databases before and after relevance screening. Black bars show all deduplicated canonical records and olive-green bars show records retained after title and abstract screening; the matrix identifies the database combination defining each exact intersection.*"}
 include_figure(here::here("outputs", "citesource_contribution", "database_contribution_upset.png"))
