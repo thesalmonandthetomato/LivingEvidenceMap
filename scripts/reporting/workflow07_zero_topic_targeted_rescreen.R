@@ -148,7 +148,19 @@ if(anyDuplicated(X$record_id)) stop("Duplicate record IDs")
 X <- X[order(X$record_id),,drop=FALSE]
 membership <- ((seq_len(nrow(X))-1L) %% shard_count)+1L
 Q <- X[membership==shard_index,,drop=FALSE]
-if(!nrow(Q)) stop("Empty shard")
+if(!nrow(Q)){
+  write_jsonl(list(),file.path(output_dir,"final_rescreen.jsonl"))
+  summary <- list(
+    schema="living-evidence-map-workflow07-zero-topic-targeted-rescreen-v1",
+    records=0L,shard_index=shard_index,shard_count=shard_count,
+    third_pass_records=0L,final_include=0L,final_exclude=0L,final_uncertain=0L,
+    human_review_candidates=0L,prompt_version=PROMPT_VERSION,prompt_sha256=PROMPT_SHA256,model=model,
+    created_at_utc=now_utc()
+  )
+  write_json(summary,file.path(output_dir,"summary.json"),pretty=TRUE,auto_unbox=TRUE,null="null")
+  cat(toJSON(summary,pretty=TRUE,auto_unbox=TRUE),"\n")
+  quit(save="no",status=0L)
+}
 
 p1 <- run_pass(Q,1L,file.path(output_dir,"pass1.jsonl"))
 p2 <- run_pass(Q,2L,file.path(output_dir,"pass2.jsonl"))
