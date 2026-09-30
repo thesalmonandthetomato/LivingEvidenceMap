@@ -77,7 +77,7 @@ jobs:
             --output-dir outputs/workflow04_zenodo \
             --upstream-lean-sha256 1d3977537c1498a728c9fe04ff958874f4a7727ad344a02ba3ef00adb2f755c7 \
             --upstream-workflow03-sha256 0665f75882a1042fed55a56b71082836431c457ec7dea53a0c6793bf64215a79 \
-            --prompt-sha256 ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69
+            --prompt-sha256 "$(Rscript -e 'x<-jsonlite::fromJSON("user_input/workflow04_screening_config.json",simplifyVector=FALSE);p<-paste(readLines(x$prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\\n");h<-digest::digest(p,algo="sha256",serialize=FALSE);stopifnot(identical(h,x$expected_prompt_sha256));cat(h)')"
 
       - name: Register authoritative Workflow 04 state
         shell: bash
