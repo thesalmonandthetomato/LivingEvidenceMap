@@ -88,15 +88,15 @@ jobs:
           set -euo pipefail
           test -s "workflow00_registry/$W00_POINTER"
           test -s "$PREV_W01_POINTER"
-          Rscript -e "x<-jsonlite::fromJSON('$PREV_W01_POINTER');stopifnot(x$status=='published',x$state %in% c('final','delta'),x$visibility=='restricted')"
+          PREV_POINTER="$PREV_W01_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("PREV_POINTER"));stopifnot(x$status=="published",x$state %in% c("final","delta"),x$visibility=="restricted")'
           POINTER="workflow00_registry/$W00_POINTER"
           SCHEMA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(if(is.null(x$schema)) "" else x$schema)')"
           if [ "$SCHEMA" = "living-evidence-map-workflow00-state-v1" ]; then
             Rscript scripts/updater/workflow_00_validate_state.R --state "$POINTER"
             SOURCES="lens,scopus,openalex,agricola,wos"
           else
-            Rscript -e "x<-jsonlite::fromJSON('$POINTER');s<-unlist(x$sources);stopifnot(x$status=='published',x$visibility=='restricted',length(s)>0L,all(s %in% c('lens','scopus','openalex','agricola','wos')))"
-            SOURCES="$(Rscript -e "x<-jsonlite::fromJSON('$POINTER');cat(paste(unlist(x$sources),collapse=','))")"
+            POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));s<-unlist(x$sources);stopifnot(x$status=="published",x$visibility=="restricted",length(s)>0L,all(s %in% c("lens","scopus","openalex","agricola","wos")))'
+            SOURCES="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(paste(unlist(x$sources),collapse=","))')"
           fi
           echo "W00_SOURCES=$SOURCES" >> "$GITHUB_ENV"
 
@@ -298,7 +298,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PREV_RUN="$(Rscript -e "x<-jsonlite::fromJSON('previous_state/workflow01_current_state_restore_audit.json');cat(x$latest_github_run_id)")"
+          PREV_RUN="$(Rscript -e 'x<-jsonlite::fromJSON("previous_state/workflow01_current_state_restore_audit.json");cat(x$latest_github_run_id)')"
           mkdir -p outputs/workflow01_incremental_rescore
           Rscript scripts/updater/workflow_01_deduplication_identifier_rescore.R \
             --input-dir outputs/workflow01_incremental_score \
@@ -321,7 +321,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/adjudication
-          N="$(Rscript -e "x<-jsonlite::fromJSON('outputs/workflow01_pre_adjudication/summary.json');cat(x$manual_review_pairs)")"
+          N="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow01_pre_adjudication/summary.json");cat(x$manual_review_pairs)')"
           if [ "$N" -eq 0 ]; then
             : > outputs/adjudication/cases.jsonl
           else
@@ -481,7 +481,7 @@ jobs:
             --decisions outputs/human_gate/human_decisions.jsonl \
             --repairs outputs/human_gate/data_quality_repairs.jsonl \
             --output-dir outputs/human_gate/normalised
-          SHA="$(Rscript -e "x<-jsonlite::fromJSON('outputs/adjudication/human_review_package/review_manifest.json');cat(x$queue_sha256)")"
+          SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/adjudication/human_review_package/review_manifest.json");cat(x$queue_sha256)')"
           Rscript scripts/updater/workflow_01_validate_human_review_state.R \
             --queue outputs/adjudication/human_review_package/human_review_cases.jsonl \
             --decisions outputs/human_gate/normalised/human_decisions.normalised.jsonl \
@@ -544,7 +544,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript -e "library(jsonlite);m<-fromJSON('outputs/canonical/canonical_manifest.json');s<-fromJSON('outputs/final/summary.json');stopifnot(m$source_manifestations==s$source_manifestations,m$records==s$clusters,m$records>0L)"
+          Rscript -e 'library(jsonlite);m<-fromJSON("outputs/canonical/canonical_manifest.json");s<-fromJSON("outputs/final/summary.json");stopifnot(m$source_manifestations==s$source_manifestations,m$records==s$clusters,m$records>0L)'
           Rscript scripts/updater/workflow_01_build_delta.R \
             --previous-root previous_state \
             --current-seed-root outputs/workflow01_union \

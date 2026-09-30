@@ -61,7 +61,7 @@ jobs:
           test -s "$POINTER"
           test -s "$DECISIONS"
           if [ -n "$REPAIRS" ]; then test -f "$REPAIRS"; fi
-          Rscript -e "x<-jsonlite::fromJSON('$POINTER');stopifnot(x$status=='published',x$state=='pre_adjudication',x$visibility=='restricted')"
+          POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));stopifnot(x$status=="published",x$state=="pre_adjudication",x$visibility=="restricted")'
 
       - name: Restore compact pre-adjudication checkpoint
         env:
@@ -128,7 +128,7 @@ jobs:
             --new-decisions "$CHECKPOINT_DIR/incremental_rescored_pairs.csv" \
             --metadata outputs/workflow01_candidates/normalised_metadata.csv \
             --output-dir outputs/workflow01_pre_adjudication
-          Rscript -e "library(jsonlite);a<-fromJSON('outputs/workflow01_pre_adjudication/summary.json');b<-fromJSON(file.path(Sys.getenv('CHECKPOINT_DIR'),'pre_adjudication_summary.json'));stopifnot(a$source_manifestations==b$source_manifestations,a$incremental_pair_decisions==b$incremental_pair_decisions,a$manual_review_pairs==b$manual_review_pairs);cat('PASS: reconstructed pre-adjudication summary matches checkpoint\n')"
+          Rscript -e 'library(jsonlite);a<-fromJSON("outputs/workflow01_pre_adjudication/summary.json");b<-fromJSON(file.path(Sys.getenv("CHECKPOINT_DIR"),"pre_adjudication_summary.json"));stopifnot(a$source_manifestations==b$source_manifestations,a$incremental_pair_decisions==b$incremental_pair_decisions,a$manual_review_pairs==b$manual_review_pairs);cat("PASS: reconstructed pre-adjudication summary matches checkpoint\n")'
 
       - name: Normalise submitted human decisions and repairs
         env:
@@ -153,7 +153,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SHA="$(Rscript -e "x<-jsonlite::fromJSON(file.path(Sys.getenv('CHECKPOINT_DIR'),'human_review_package','review_manifest.json'));cat(x$queue_sha256)")"
+          SHA="$(Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("CHECKPOINT_DIR"),"human_review_package","review_manifest.json"));cat(x$queue_sha256)')"
           Rscript scripts/updater/workflow_01_validate_human_review_state.R \
             --queue "$CHECKPOINT_DIR/human_review_package/human_review_cases.jsonl" \
             --decisions outputs/human_gate/normalised/human_decisions.normalised.jsonl \
@@ -258,7 +258,7 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --out-md docs/deduplication/runs/run-$GITHUB_RUN_ID.md \
             --out-json docs/deduplication/runs/run-$GITHUB_RUN_ID.json
-          CHECKPOINT_RUN="$(Rscript -e "x<-jsonlite::fromJSON(Sys.getenv('CHECKPOINT_POINTER'));cat(x$github_run_id)")"
+          CHECKPOINT_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CHECKPOINT_POINTER"));cat(x$github_run_id)')"
           printf '{"checkpoint_run_id":"%s","resolved_by_run_id":"%s","status":"resolved"}\n' "$CHECKPOINT_RUN" "$GITHUB_RUN_ID" > "docs/deduplication/checkpoints/resolutions/run-$CHECKPOINT_RUN.json"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
