@@ -18,6 +18,11 @@ on:
       - 'scripts/updater/workflow_01_apply_checkpoint_sources.R'
       - 'scripts/updater/workflow_01_archive_delta_to_zenodo.R'
       - 'scripts/updater/workflow_01_build_canonical_jsonl.R'
+      - 'scripts/updater/workflow_01_prepare_source_catalogue.R'
+      - 'scripts/updater/workflow_01_restore_manual_ris_from_zenodo.R'
+      - 'scripts/updater/workflow_01_source_identity_filter.R'
+      - 'scripts/updater/workflow_01_deduplication_build_union.R'
+      - 'scripts/updater/workflow_01_deduplication_incremental_candidates.R'
       - 'scripts/updater/workflow_01_apply_adjudications_and_recluster.R'
 
 permissions:
@@ -73,6 +78,11 @@ jobs:
             'scripts/updater/workflow_01_apply_checkpoint_sources.R',
             'scripts/updater/workflow_01_archive_delta_to_zenodo.R',
             'scripts/updater/workflow_01_build_canonical_jsonl.R',
+            'scripts/updater/workflow_01_prepare_source_catalogue.R',
+            'scripts/updater/workflow_01_restore_manual_ris_from_zenodo.R',
+            'scripts/updater/workflow_01_source_identity_filter.R',
+            'scripts/updater/workflow_01_deduplication_build_union.R',
+            'scripts/updater/workflow_01_deduplication_incremental_candidates.R',
             'scripts/updater/workflow_01_apply_adjudications_and_recluster.R'
           )
           for (f in files) {
