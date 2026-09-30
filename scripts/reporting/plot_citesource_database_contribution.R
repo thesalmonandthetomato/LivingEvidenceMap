@@ -28,7 +28,9 @@ source_labels <- c(
   scopus = "Scopus",
   openalex = "OpenAlex",
   agricola = "AGRICOLA",
-  wos = "Web of Science"
+  wos = "Web of Science",
+  cab = "CAB Abstracts",
+  proquest = "ProQuest/PQD&T"
 )
 
 
