@@ -12,13 +12,20 @@ old_dir <- arg("--old-dir")
 expected_prior <- suppressWarnings(as.integer(arg("--expected-prior-manifestations",NA_character_)))
 output_dir <- arg("--output-dir")
 
+input_manifest_path <- arg("--input-manifest",NULL)
 input_pos <- which(args == "--input")
 inputs <- if (length(input_pos)) vapply(input_pos,function(i) {
   if (i == length(args)) stop("Missing value after --input",call.=FALSE)
   args[[i+1L]]
 },character(1)) else character()
 
-if (length(inputs)) {
+if (!is.null(input_manifest_path)) {
+  if (!file.exists(input_manifest_path)) stop(sprintf("Input manifest not found: %s",input_manifest_path),call.=FALSE)
+  im <- fromJSON(input_manifest_path,simplifyVector=FALSE)
+  if (!identical(im$schema,"living-evidence-map-workflow01-source-inputs-v1")) stop("Unsupported source-input manifest schema",call.=FALSE)
+  if (is.null(im$sources) || !length(im$sources) || is.null(names(im$sources))) stop("Source-input manifest contains no sources",call.=FALSE)
+  current_paths <- vapply(im$sources,function(z)as.character(z[[1L]]),character(1))
+} else if (length(inputs)) {
   if (any(!grepl("^[^=]+=",inputs))) stop("Each --input must be source=path",call.=FALSE)
   source_names <- sub("=.*$","",inputs)
   current_paths <- sub("^[^=]+=","",inputs)
@@ -33,7 +40,7 @@ if (length(inputs)) {
     wos=arg("--current-wos")
   )
   if (any(vapply(current_paths,is.null,logical(1)))) {
-    stop("Provide repeated --input source=path arguments, or all legacy --current-* source paths",call.=FALSE)
+    stop("Provide --input-manifest, repeated --input source=path arguments, or all legacy --current-* source paths",call.=FALSE)
   }
 }
 
@@ -133,6 +140,18 @@ for (src in names(current_paths)) {
 s <- do.call(rbind,summary_rows)
 if (!is.na(expected_prior) && old_total != expected_prior) stop(sprintf("Preserved corpus should contain %d manifestations, found %d",expected_prior,old_total),call.=FALSE)
 write.csv(s,file.path(output_dir,"union_source_counts.csv"),row.names=FALSE)
+
+union_inputs <- setNames(
+  lapply(s$source,function(src)file.path(output_dir,paste0(src,"_records_for_deduplication.jsonl"))),
+  s$source
+)
+writeLines(toJSON(list(
+  schema="living-evidence-map-workflow01-source-inputs-v1",
+  status="validated_union",
+  sources=union_inputs
+),auto_unbox=TRUE,pretty=TRUE,null="null"),
+file.path(output_dir,"source_inputs.json"))
+
 writeLines(toJSON(list(
   workflow="01_deduplication_incremental_union",
   status="success",

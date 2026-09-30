@@ -18,13 +18,20 @@ strip_path <- arg("--strip-actions")
 repairs_path <- arg("--data-quality-repairs",NULL)
 repair_audit_path <- arg("--repair-audit",NULL)
 
+input_manifest_path <- arg("--input-manifest",NULL)
 input_pos <- which(args == "--input")
 inputs <- if(length(input_pos)) vapply(input_pos,function(i){
   if(i==length(args)) stop("Missing value after --input",call.=FALSE)
   args[[i+1L]]
 },character(1)) else character()
 
-if(length(inputs)){
+if(!is.null(input_manifest_path)){
+  if(!file.exists(input_manifest_path)) stop(sprintf("Input manifest not found: %s",input_manifest_path),call.=FALSE)
+  im <- fromJSON(input_manifest_path,simplifyVector=FALSE)
+  if(!identical(im$schema,"living-evidence-map-workflow01-source-inputs-v1")) stop("Unsupported source-input manifest schema",call.=FALSE)
+  if(is.null(im$sources) || !length(im$sources) || is.null(names(im$sources))) stop("Source-input manifest contains no sources",call.=FALSE)
+  source_paths <- vapply(im$sources,function(z)as.character(z[[1L]]),character(1))
+} else if(length(inputs)){
   if(any(!grepl("^[^=]+=",inputs))) stop("Each --input must be source=path",call.=FALSE)
   source_names <- sub("=.*$","",inputs)
   source_paths <- sub("^[^=]+=","",inputs)
@@ -39,7 +46,7 @@ if(length(inputs)){
     wos=arg("--wos")
   )
   if(any(vapply(source_paths,is.null,logical(1)))) {
-    stop("Provide repeated --input source=path arguments, or all five legacy source flags",call.=FALSE)
+    stop("Provide --input-manifest, repeated --input source=path arguments, or all five legacy source flags",call.=FALSE)
   }
 }
 

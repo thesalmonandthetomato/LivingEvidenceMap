@@ -246,19 +246,26 @@ jobs:
             cp previous_state/workflow01_seed/wos_records_for_deduplication.jsonl current_sources/wos/wos_starter_sidecar_records.jsonl
           fi
 
+      - name: Restore catalogue manual sources and validate source inputs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs
+          Rscript scripts/updater/workflow_01_prepare_source_catalogue.R \
+            --catalogue config/workflow01_source_catalogue.json \
+            --output-manifest outputs/workflow01_source_inputs.json
+
       - name: Build provenance-safe prior-plus-new manifestation union
         shell: bash
         run: |
           set -euo pipefail
-          PRIOR_N="$(Rscript -e "x<-jsonlite::fromJSON('previous_state/workflow01_full_five_source/summary.json');cat(x$source_manifestations)")"
+          PRIOR_N="$(Rscript -e 'x<-jsonlite::fromJSON("previous_state/workflow01_full_five_source/summary.json");cat(x$source_manifestations)')"
           mkdir -p outputs/workflow01_union
           Rscript scripts/updater/workflow_01_deduplication_build_union.R \
             --old-dir previous_state/workflow01_seed \
-            --current-lens current_sources/lens/records.jsonl \
-            --current-scopus current_sources/scopus/scopus_sidecar_records.jsonl \
-            --current-openalex current_sources/openalex/openalex_sidecar_records.jsonl \
-            --current-agricola current_sources/agricola/agricola_sidecar_records.jsonl \
-            --current-wos current_sources/wos/wos_starter_sidecar_records.jsonl \
+            --input-manifest outputs/workflow01_source_inputs.json \
             --expected-prior-manifestations "$PRIOR_N" \
             --output-dir outputs/workflow01_union
 
@@ -268,11 +275,7 @@ jobs:
           set -euo pipefail
           mkdir -p outputs/workflow01_candidates
           Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
-            --lens outputs/workflow01_union/lens_records_for_deduplication.jsonl \
-            --scopus outputs/workflow01_union/scopus_records_for_deduplication.jsonl \
-            --openalex outputs/workflow01_union/openalex_records_for_deduplication.jsonl \
-            --agricola outputs/workflow01_union/agricola_records_for_deduplication.jsonl \
-            --wos outputs/workflow01_union/wos_records_for_deduplication.jsonl \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
             --old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
             --output-dir outputs/workflow01_candidates \
             --score-n 1 \
@@ -531,11 +534,7 @@ jobs:
             --strip-actions outputs/final/abstract_strip_actions.jsonl \
             --data-quality-repairs outputs/final/cumulative_data_quality_repairs.jsonl \
             --repair-audit outputs/canonical/data_quality_repair_application.jsonl \
-            --lens outputs/workflow01_union/lens_records_for_deduplication.jsonl \
-            --scopus outputs/workflow01_union/scopus_records_for_deduplication.jsonl \
-            --openalex outputs/workflow01_union/openalex_records_for_deduplication.jsonl \
-            --agricola outputs/workflow01_union/agricola_records_for_deduplication.jsonl \
-            --wos outputs/workflow01_union/wos_records_for_deduplication.jsonl \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
             --run-id "$GITHUB_RUN_ID" \
             --output outputs/canonical/records.jsonl \
             --manifest outputs/canonical/canonical_manifest.json
@@ -625,6 +624,8 @@ jobs:
         with:
           name: workflow01-production-${{ github.run_id }}
           path: |
+            outputs/workflow01_source_inputs.json
+            outputs/workflow01_union/source_inputs.json
             outputs/workflow01_union/union_manifest.json
             outputs/workflow01_candidates/incremental_summary.json
             outputs/workflow01_incremental_rescore/summary.json
