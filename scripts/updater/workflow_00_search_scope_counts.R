@@ -199,9 +199,10 @@ out <- list(
   status = "success",
   counted_at_utc = now_utc(),
   search_date = search_date,
-  search_version = plan$search_version,
-  immutable_species_terms = plan$immutable_species_terms,
-  base_farm_terms = plan$base_farm_terms,
+  search_input_path = plan$input_path,
+  original_search_string = plan$original_search_string,
+  normalised_search_string = plan$normalised_search_string,
+  boolean_validation = plan$validation,
   source_queries = q,
   result_policy = "Counts only. No search-result records or raw API responses are written to disk.",
   counts = lapply(seq_len(nrow(rows)), function(i) {
