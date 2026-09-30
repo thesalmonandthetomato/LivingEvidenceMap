@@ -43,8 +43,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          W08_POINTER="$(ls docs/workflow08/zenodo/run-*.json | sort -V | tail -1)"
+          test -n "$W08_POINTER"
           Rscript scripts/reporting/restore_workflow08_reporting_state.R \
-            --pointer docs/workflow08/zenodo/run-36329841121.json \
+            --pointer "$W08_POINTER" \
             --output-dir workflow08_reporting_state
           test -s workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
 
