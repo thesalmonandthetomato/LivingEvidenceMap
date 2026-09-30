@@ -63,6 +63,7 @@ read_jsonl <- function(path){
 
 rows <- read_jsonl(input_path)
 due <- character()
+due_rows <- list()
 eligible_total <- 0L
 deferred <- 0L
 
@@ -83,10 +84,15 @@ for(r in rows){
   rid <- clean_text((r$identity %||% list())$record_id %||% (r$identity %||% list())$lens_id)
   if(is.null(rid)) stop("Eligible Workflow 02 record missing identity.record_id",call.=FALSE)
   due <- c(due,rid)
+  due_rows[[length(due_rows)+1L]] <- r
 }
 
 if(anyDuplicated(due)) stop("Duplicate record IDs in Workflow 02 due set",call.=FALSE)
-if(max_records>0L && length(due)>max_records) due <- due[seq_len(max_records)]
+if(max_records>0L && length(due)>max_records){
+  keep <- seq_len(max_records)
+  due <- due[keep]
+  due_rows <- due_rows[keep]
+}
 
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 batch_count <- if(length(due)) ceiling(length(due)/batch_size) else 0L
@@ -97,10 +103,22 @@ if(batch_count){
     lo <- (i-1L)*batch_size+1L
     hi <- min(i*batch_size,length(due))
     ids <- due[lo:hi]
+    batch_rows <- due_rows[lo:hi]
     batch <- sprintf("%04d",i)
-    p <- file.path(output_dir,paste0("batch-",batch,".txt"))
-    writeLines(ids,p,useBytes=TRUE)
-    include[[length(include)+1L]] <- list(batch=batch,records=length(ids))
+
+    ids_path <- file.path(output_dir,paste0("batch-",batch,".txt"))
+    writeLines(ids,ids_path,useBytes=TRUE)
+
+    jsonl_path <- file.path(output_dir,paste0("batch-",batch,".jsonl"))
+    con <- file(jsonl_path,"wt",encoding="UTF-8")
+    for(z in batch_rows) writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null",digits=NA),con,useBytes=TRUE)
+    close(con)
+
+    include[[length(include)+1L]] <- list(
+      batch=batch,
+      records=length(ids),
+      input_sha256=digest(file=jsonl_path,algo="sha256",serialize=FALSE)
+    )
   }
 }
 
