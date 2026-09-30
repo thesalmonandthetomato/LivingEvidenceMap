@@ -52,17 +52,11 @@ if (any(vapply(expected, function(x) is.null(x$bytes) || is.null(x$sha256), logi
 }
 
 auth <- function(req) req |> req_headers(Authorization = paste("Bearer", token))
-perform <- function(req, label, timeout = 1800) {
-  resp <- req |>
+perform <- function(req, timeout = 1800) {
+  req |>
     req_timeout(timeout) |>
     req_error(is_error = function(resp) FALSE) |>
     req_perform()
-  status <- resp_status(resp)
-  if (status != 200L) {
-    body <- tryCatch(resp_body_string(resp), error = function(e) "")
-    stop(sprintf("Zenodo %s returned HTTP %d: %s", label, status, body), call. = FALSE)
-  }
-  resp
 }
 
 results <- list()
@@ -73,7 +67,25 @@ for (x in expected) {
   encoded <- URLencode(x$filename, reserved = TRUE)
   url <- sprintf("https://zenodo.org/api/records/%s/draft/files/%s/content", dep_id, encoded)
   cat(sprintf("VERIFY DOWNLOAD %s\n", x$filename))
-  resp <- perform(request(url) |> auth(), paste0("direct file download: ", x$filename))
+  resp <- perform(request(url) |> auth())
+  status <- resp_status(resp)
+
+  if (status != 200L) {
+    body <- tryCatch(resp_body_string(resp), error = function(e) "")
+    results[[length(results) + 1L]] <- list(
+      filename = x$filename,
+      expected_bytes = x$bytes,
+      actual_bytes = NULL,
+      expected_sha256 = x$sha256,
+      actual_sha256 = NULL,
+      http_status = status,
+      error = body,
+      match = FALSE
+    )
+    cat(sprintf("VERIFY %s HTTP=%d match=FALSE\n", x$filename, status))
+    next
+  }
+
   out <- file.path(download_dir, x$filename)
   writeBin(resp_body_raw(resp), out)
   got_bytes <- unname(file.info(out)$size)
@@ -85,6 +97,8 @@ for (x in expected) {
     actual_bytes = got_bytes,
     expected_sha256 = x$sha256,
     actual_sha256 = got_sha,
+    http_status = status,
+    error = NULL,
     match = ok
   )
   cat(sprintf("VERIFY %s bytes=%s sha256=%s match=%s\n", x$filename, got_bytes, got_sha, ok))
