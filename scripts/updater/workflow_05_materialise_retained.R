@@ -2,11 +2,14 @@
 suppressPackageStartupMessages({library(jsonlite);library(digest)})
 args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
-canonical<-arg("--canonical");included<-arg("--included-ids");output<-arg("--output");expected<-as.integer(arg("--expected-records","19407"))
+canonical<-arg("--canonical");included<-arg("--included-ids");output<-arg("--output");expected<-as.integer(arg("--expected-records","0"))
 if(any(vapply(list(canonical,included,output),is.null,logical(1))))stop("Required: --canonical --included-ids --output",call.=FALSE)
 `%||%`<-function(x,y)if(is.null(x))y else x
 ids<-readLines(included,warn=FALSE,encoding="UTF-8");ids<-ids[nzchar(trimws(ids))]
-if(length(ids)!=expected||anyDuplicated(ids))stop("Included ID set cardinality/uniqueness failed",call.=FALSE)
+if(anyDuplicated(ids))stop("Included ID set contains duplicate record_id values",call.=FALSE)
+if(is.na(expected)||expected<0L)stop("--expected-records must be >= 0",call.=FALSE)
+if(expected>0L&&length(ids)!=expected)stop(sprintf("Expected %d included IDs, found %d",expected,length(ids)),call.=FALSE)
+expected<-length(ids)
 wanted<-setNames(rep(FALSE,length(ids)),ids);seen<-setNames(rep(FALSE,length(ids)),ids)
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
 inp<-file(canonical,"rt",encoding="UTF-8");out<-file(output,"wt",encoding="UTF-8");on.exit({close(inp);close(out)},add=TRUE)
