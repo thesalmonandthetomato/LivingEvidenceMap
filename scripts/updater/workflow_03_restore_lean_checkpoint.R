@@ -14,6 +14,8 @@ if(!identical(x$status,"published") || !identical(x$visibility,"restricted") ||
 }
 expected_sha <- tolower(as.character(x$lean_canonical_sha256))
 if(!nzchar(expected_sha)) stop("Lean checkpoint pointer lacks lean_canonical_sha256",call.=FALSE)
+expected_records <- suppressWarnings(as.integer(x$canonical_records))
+if(is.na(expected_records) || expected_records < 1L) stop("Lean checkpoint pointer lacks a valid canonical_records count",call.=FALSE)
 
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN")
 if(!nzchar(token)) stop("ZENODO_ACCESS_TOKEN required",call.=FALSE)
@@ -56,7 +58,7 @@ actual_sha <- digest(file=lean,algo="sha256",serialize=FALSE)
 if(!identical(tolower(actual_sha),expected_sha)) stop(sprintf("Lean canonical SHA mismatch: %s",actual_sha),call.=FALSE)
 
 r <- fromJSON(report,simplifyVector=FALSE)
-stopifnot(identical(r$status,"PASS"),as.integer(r$canonical_records)==32292L,
+stopifnot(identical(r$status,"PASS"),as.integer(r$canonical_records)==expected_records,
           isTRUE(r$record_ids_unchanged),isTRUE(r$non_manifestation_fields_unchanged),
           isTRUE(r$manifestation_refs_exact),
           identical(tolower(as.character(r$output_lean_canonical_sha256)),expected_sha))
