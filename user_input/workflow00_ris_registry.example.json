@@ -21,6 +21,9 @@
     "reported_results": null,
     "notes": "Replace null fields with the exact search details available from the source."
   },
+  "field_semantics": {
+    "ris_KW": "indexing_terms"
+  },
   "input": {
     "filename": "cab_abstracts_2026-09-30.ris",
     "exported_at": null,
