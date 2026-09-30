@@ -61,7 +61,10 @@ eligible_total <- as.integer(er$counts$eligible_doi_missing_metadata %||% length
 deferred <- as.integer(er$counts$deferred_recent_attempts %||% 0L)
 attemptable <- max(0L,eligible_total-deferred)
 lim <- er$trial_limit %||% Inf
-expected_audit <- if(is.infinite(lim)) attemptable else min(attemptable,as.integer(lim))
+processed_reported <- er$processed_eligible_records %||% NULL
+expected_audit <- if(!is.null(processed_reported)) {
+  as.integer(processed_reported)
+} else if(is.infinite(lim)) attemptable else min(attemptable,as.integer(lim))
 if(length(aud) != expected_audit) {
   stop(sprintf("Audit cardinality does not match processed eligible records: expected %d found %d",expected_audit,length(aud)),call.=FALSE)
 }
