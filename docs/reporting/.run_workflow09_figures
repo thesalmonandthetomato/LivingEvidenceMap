@@ -1,2 +1,2 @@
-trigger workflow09 render after caption/flow updates
+trigger workflow09 render after duplicate Results subtitle removal
 requested 2026-09-30
