@@ -24,6 +24,7 @@ dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN")
 if (!nzchar(token)) stop("ZENODO_ACCESS_TOKEN is not set", call. = FALSE)
 
+`%||%` <- function(x, y) if (is.null(x)) y else x
 scalar <- function(x) {
   if (is.null(x) || !length(x)) return(NULL)
   y <- trimws(as.character(x[[1L]]))
@@ -35,6 +36,32 @@ doi <- scalar(registry$staging$reserved_doi)
 dep_id <- scalar(registry$staging$deposition_id)
 if (is.null(dep_id) && !is.null(doi)) dep_id <- sub("^.*\\.", "", doi)
 if (is.null(dep_id)) stop("Could not determine Zenodo draft/deposition ID", call. = FALSE)
+
+# Inspect the modern draft file-entry list without modifying the draft.
+files_url <- sprintf("https://zenodo.org/api/records/%s/draft/files", dep_id)
+files_resp <- request(files_url) |>
+  auth() |>
+  req_timeout(60) |>
+  req_error(is_error = function(resp) FALSE) |>
+  req_perform()
+files_status <- resp_status(files_resp)
+cat(sprintf("DRAFT FILE LIST HTTP=%d\n", files_status))
+draft_entries <- list()
+if (files_status == 200L) {
+  files_body <- resp_body_json(files_resp, simplifyVector = FALSE)
+  draft_entries <- if (!is.null(files_body$entries)) files_body$entries else if (is.list(files_body) && is.null(names(files_body))) files_body else list()
+  for (entry in draft_entries) {
+    key <- scalar(entry$key) %||% scalar(entry$filename) %||% scalar(entry$name)
+    status <- scalar(entry$status) %||% "unknown"
+    size <- entry$size %||% entry$filesize %||% NULL
+    checksum <- scalar(entry$checksum)
+    cat(sprintf("DRAFT FILE key=%s status=%s size=%s checksum=%s\n",
+                key %||% "<none>", status, as.character(size %||% NA), checksum %||% "<none>"))
+  }
+} else {
+  body <- tryCatch(resp_body_string(files_resp), error = function(e) "")
+  cat(sprintf("DRAFT FILE LIST ERROR %s\n", body))
+}
 
 files <- registry$input$files
 if (is.null(files) || !length(files)) stop("Registry contains no input.files to verify", call. = FALSE)
@@ -108,6 +135,13 @@ all_ok <- all(vapply(results, function(x) isTRUE(x$match), logical(1)))
 receipt <- list(
   status = if (all_ok) "pass" else "fail",
   zenodo_deposition_id = dep_id,
+  draft_file_list_http_status = files_status,
+  draft_file_entries = lapply(draft_entries, function(entry) list(
+    key = scalar(entry$key) %||% scalar(entry$filename) %||% scalar(entry$name),
+    status = scalar(entry$status),
+    size = entry$size %||% entry$filesize %||% NULL,
+    checksum = scalar(entry$checksum)
+  )),
   files = results,
   zenodo_write_performed = FALSE,
   verified_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
