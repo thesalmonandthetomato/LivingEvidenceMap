@@ -468,6 +468,43 @@ jobs:
           fi
           echo "Human review required; final Workflow 01 delta publication is intentionally paused."
 
+      - name: Upload Workflow 01 human-review package
+        id: upload_review
+        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-human-review-${{ github.run_id }}
+          path: outputs/adjudication/human_review_package/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Build Workflow 01 review notification email
+        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        env:
+          REVIEW_EMAIL: ${{ secrets.REVIEW_EMAIL }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_build_review_email_payload.R \
+            --workflow 01 \
+            --manifest outputs/adjudication/human_review_package/review_manifest.json \
+            --artifact-url '${{ steps.upload_review.outputs.artifact-url }}' \
+            --workflow-url '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            --output outputs/adjudication/human_review_package/email_payload.json
+
+      - name: Email Workflow 01 review notification
+        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_send_review_email.R \
+            --payload outputs/adjudication/human_review_package/email_payload.json
       - name: Create empty human-review gate for automatic continuation
         if: ${{ steps.adjudication.outputs.pending_count == '0' }}
         shell: bash
