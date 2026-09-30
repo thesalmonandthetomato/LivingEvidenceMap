@@ -17,10 +17,12 @@ output_dir <- arg("--output-dir")
 batch_size <- as.integer(arg("--batch-size","1000"))
 recheck_after_days <- as.numeric(arg("--recheck-after-days","90"))
 max_records <- as.integer(arg("--max-records","0"))
+mode <- tolower(arg("--mode","incremental"))
 if(is.null(input_path)||is.null(output_dir)) stop("Required: --input --output-dir",call.=FALSE)
 if(is.na(batch_size)||batch_size<1L) stop("--batch-size must be >= 1",call.=FALSE)
 if(is.na(recheck_after_days)||recheck_after_days<0) stop("--recheck-after-days must be >= 0",call.=FALSE)
 if(is.na(max_records)||max_records<0L) stop("--max-records must be >= 0",call.=FALSE)
+if(!mode %in% c("incremental","repair","backfill")) stop("--mode must be incremental, repair, or backfill",call.=FALSE)
 
 `%||%` <- function(x,y) if(is.null(x)) y else x
 clean_text <- function(x){
@@ -76,10 +78,19 @@ for(r in rows){
   )
   if(!eligible) next
   eligible_total <- eligible_total + 1L
-  if(!previous_attempt_due(r$metadata_enrichment)){
+
+  meta <- r$metadata_enrichment
+  select <- switch(
+    mode,
+    incremental = is.null(meta) || !is.list(meta),
+    repair = is.list(meta) && isTRUE(meta$technical_error),
+    backfill = previous_attempt_due(meta)
+  )
+  if(!select){
     deferred <- deferred + 1L
     next
   }
+
   rid <- clean_text((r$identity %||% list())$record_id %||% (r$identity %||% list())$lens_id)
   if(is.null(rid)) stop("Eligible Workflow 02 record missing identity.record_id",call.=FALSE)
   due <- c(due,rid)
@@ -127,6 +138,7 @@ writeLines(toJSON(matrix,auto_unbox=TRUE,null="null"),matrix_path,useBytes=TRUE)
 
 plan <- list(
   schema="living-evidence-map-workflow02-batch-plan-v1",
+  mode=mode,
   input_sha256=digest(file=input_path,algo="sha256",serialize=FALSE),
   total_records=length(rows),
   eligible_records=eligible_total,
@@ -139,4 +151,4 @@ plan <- list(
   created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(plan,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(output_dir,"plan.json"),useBytes=TRUE)
-cat(sprintf("PASS: Workflow 02 plan: %d due records in %d batches of up to %d\n",length(due),batch_count,batch_size))
+cat(sprintf("PASS: Workflow 02 plan (%s): %d due records in %d batches of up to %d\n",mode,length(due),batch_count,batch_size))
