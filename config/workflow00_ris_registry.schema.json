@@ -1,18 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://thesalmonandthetomato.org/schemas/workflow00-ris-registry-v1.json",
-  "title": "LivingEvidenceMap Workflow 00 RIS source registry",
+  "title": "LivingEvidenceMap Workflow 00 RIS search registry",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "source_ID", "acquisition", "database", "search", "field_semantics", "input"],
+  "required": ["schema_version", "acquisition", "database", "search", "field_semantics", "input"],
   "properties": {
     "schema_version": { "const": "workflow00-source-registry-v1" },
-    "source_ID": {
-      "type": "string",
-      "minLength": 3,
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-      "description": "Stable identifier for this specific search/import event. It must not be reused for a different search."
-    },
     "acquisition": {
       "type": "object",
       "additionalProperties": false,
@@ -26,10 +20,15 @@
     "database": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name"],
+      "required": ["name", "short_name"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
-        "short_name": { "type": ["string", "null"] },
+        "short_name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "description": "Stable database/source code propagated as the existing W01 source value."
+        },
         "platform": { "type": ["string", "null"] },
         "database_scope": {
           "type": ["array", "null"],
@@ -67,18 +66,31 @@
         "ris_KW": {
           "type": "string",
           "enum": ["author_keywords", "indexing_terms", "mixed", "unknown"],
-          "description": "Semantic interpretation of RIS KW supplied by the exporting database. W00 must not assume KW means author keywords."
+          "description": "Semantic interpretation of RIS KW supplied by the exporting database."
         }
       }
     },
     "input": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["filename"],
+      "required": ["files"],
       "properties": {
-        "filename": { "type": "string", "minLength": 1 },
-        "exported_at": { "type": ["string", "null"], "format": "date-time" },
-        "encoding": { "type": ["string", "null"], "default": "UTF-8" }
+        "expected_chunk_count": { "type": ["integer", "null"], "minimum": 1 },
+        "encoding": { "type": ["string", "null"], "default": "UTF-8" },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["filename"],
+            "properties": {
+              "filename": { "type": "string", "minLength": 1 },
+              "exported_at": { "type": ["string", "null"], "format": "date-time" },
+              "notes": { "type": ["string", "null"] }
+            }
+          }
+        }
       }
     }
   }
