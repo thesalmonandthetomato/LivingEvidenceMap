@@ -103,11 +103,15 @@ cmap<-setNames(canonical,cids)
 included_canonical<-unname(cmap[included_ids])
 write_jsonl(included_canonical,file.path(output_dir,"workflow04_included_canonical.jsonl"))
 
-# Lossless schema-preservation check: every included output object must be
-# byte-semantically identical to its current canonical input object.
-for(id in included_ids){
+# Lossless schema-preservation check: every included object written to disk
+# must be semantically identical to its complete current canonical input object.
+written_included<-read_jsonl(file.path(output_dir,"workflow04_included_canonical.jsonl"))
+written_ids<-if(length(written_included))vapply(written_included,rid_can,character(1))else character()
+if(!identical(written_ids,included_ids))stop("Included canonical output order/identity mismatch",call.=FALSE)
+for(i in seq_along(included_ids)){
+  id<-included_ids[[i]]
   src<-toJSON(cmap[[id]],auto_unbox=TRUE,null="null",na="null",digits=NA)
-  out<-toJSON(cmap[[id]],auto_unbox=TRUE,null="null",na="null",digits=NA)
+  out<-toJSON(written_included[[i]],auto_unbox=TRUE,null="null",na="null",digits=NA)
   if(!identical(src,out))stop(sprintf("Canonical schema preservation failed for %s",id),call.=FALSE)
 }
 
