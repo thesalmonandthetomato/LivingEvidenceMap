@@ -28,9 +28,10 @@ jobs:
           persist-credentials: false
 
       - name: Preflight existing Zenodo draft
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          REGISTRY_PATH: ${{ github.event_name == 'workflow_dispatch' && inputs.registry_path || 'user_input/workflow00_ris_proquest_2026-09-30.json' }}
+          REGISTRY_PATH: ${{ inputs.registry_path }}
         shell: bash
         run: |
           set -euo pipefail
@@ -42,7 +43,8 @@ jobs:
           test -n "$dep_id"
           url="https://zenodo.org/api/records/$dep_id/draft"
           for attempt in 1 2 3 4 5 6; do
-            code="$(curl -sS -o /tmp/zenodo_draft.json -w '%{http_code}'               -H "Authorization: Bearer $ZENODO_ACCESS_TOKEN" "$url" || true)"
+            code="$(curl -sS -o /tmp/zenodo_draft.json -w '%{http_code}' \
+              -H "Authorization: Bearer $ZENODO_ACCESS_TOKEN" "$url" || true)"
             echo "Zenodo draft preflight attempt $attempt: HTTP $code"
             if [ "$code" = "200" ]; then
               exit 0
@@ -62,6 +64,19 @@ jobs:
       - name: Install dependencies
         shell: Rscript {0}
         run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Verify registered RIS files directly
+        if: ${{ github.event_name == 'push' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          REGISTRY_PATH: user_input/workflow00_ris_proquest_2026-09-30.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_verify_zenodo_ris_integrity.R \
+            --registry "$REGISTRY_PATH" \
+            --output-dir outputs/updater/workflow00_ris_integrity
+
 
       - name: Complete existing Zenodo draft
         env:
