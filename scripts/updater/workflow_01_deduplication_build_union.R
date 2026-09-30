@@ -9,16 +9,36 @@ arg <- function(flag, default=NULL) {
   args[[i+1L]]
 }
 old_dir <- arg("--old-dir")
-current_lens <- arg("--current-lens")
-current_scopus <- arg("--current-scopus")
-current_openalex <- arg("--current-openalex")
-current_agricola <- arg("--current-agricola")
-current_wos <- arg("--current-wos")
 expected_prior <- suppressWarnings(as.integer(arg("--expected-prior-manifestations",NA_character_)))
 output_dir <- arg("--output-dir")
-if (any(vapply(list(old_dir,current_lens,current_scopus,current_openalex,current_agricola,current_wos,output_dir),is.null,logical(1)))) {
-  stop("Required: --old-dir --current-lens --current-scopus --current-openalex --current-agricola --current-wos --output-dir",call.=FALSE)
+
+input_pos <- which(args == "--input")
+inputs <- if (length(input_pos)) vapply(input_pos,function(i) {
+  if (i == length(args)) stop("Missing value after --input",call.=FALSE)
+  args[[i+1L]]
+},character(1)) else character()
+
+if (length(inputs)) {
+  if (any(!grepl("^[^=]+=",inputs))) stop("Each --input must be source=path",call.=FALSE)
+  source_names <- sub("=.*$","",inputs)
+  current_paths <- sub("^[^=]+=","",inputs)
+  names(current_paths) <- source_names
+  if (anyDuplicated(source_names)) stop("Each source may be supplied only once",call.=FALSE)
+} else {
+  current_paths <- c(
+    lens=arg("--current-lens"),
+    scopus=arg("--current-scopus"),
+    openalex=arg("--current-openalex"),
+    agricola=arg("--current-agricola"),
+    wos=arg("--current-wos")
+  )
+  if (any(vapply(current_paths,is.null,logical(1)))) {
+    stop("Provide repeated --input source=path arguments, or all legacy --current-* source paths",call.=FALSE)
+  }
 }
+
+if (is.null(old_dir) || is.null(output_dir)) stop("Required: --old-dir --output-dir",call.=FALSE)
+if (!length(current_paths)) stop("At least one current source input is required",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
 `%||%` <- function(x,y) if (is.null(x)) y else x
@@ -30,11 +50,11 @@ scalar <- function(x) {
 source_kind <- function(r) {
   if (is.list(r$lens)) return("lens")
   p <- scalar((r$source %||% list())$provider)
-  if (identical(p,"scopus")) return("scopus")
-  if (identical(p,"openalex")) return("openalex")
+  if (is.null(p)) stop("Source provider is missing",call.=FALSE)
   if (identical(p,"agricola_via_europe_pmc")) return("agricola")
   if (identical(p,"wos_starter")) return("wos")
-  stop(sprintf("Unknown source provider: %s",p %||% "<missing>"),call.=FALSE)
+  if (!grepl("^[a-z0-9][a-z0-9_-]*$",p)) stop(sprintf("Invalid source provider slug: %s",p),call.=FALSE)
+  p
 }
 source_record_id <- function(r) {
   src <- source_kind(r)
@@ -60,20 +80,7 @@ ids_for_lines <- function(lines, expected_source) {
   ids
 }
 
-old_names <- c(
-  lens="lens_records_for_deduplication.jsonl",
-  scopus="scopus_records_for_deduplication.jsonl",
-  openalex="openalex_records_for_deduplication.jsonl",
-  agricola="agricola_records_for_deduplication.jsonl",
-  wos="wos_records_for_deduplication.jsonl"
-)
-current_paths <- c(
-  lens=current_lens,
-  scopus=current_scopus,
-  openalex=current_openalex,
-  agricola=current_agricola,
-  wos=current_wos
-)
+legacy_required_sources <- c("lens","scopus","openalex","agricola","wos")
 
 summary_rows <- list()
 old_total <- 0L
@@ -82,12 +89,15 @@ appended_total <- 0L
 for (src in names(current_paths)) {
   old_lines <- character()
   old_ids <- character()
-  if (src %in% names(old_names)) {
-    hits <- list.files(old_dir,pattern=paste0("^",old_names[[src]],"$"),recursive=TRUE,full.names=TRUE)
-    if (length(hits)!=1L) stop(sprintf("Expected exactly one preserved %s file, found %d",src,length(hits)),call.=FALSE)
+  old_filename <- paste0(src,"_records_for_deduplication.jsonl")
+  hits <- list.files(old_dir,pattern=paste0("^",old_filename,"$"),recursive=TRUE,full.names=TRUE)
+  if (length(hits)>1L) stop(sprintf("Expected at most one preserved %s file, found %d",src,length(hits)),call.=FALSE)
+  if (length(hits)==1L) {
     old_lines <- read_lines_nonempty(hits[[1L]])
     old_ids <- ids_for_lines(old_lines,src)
     if (anyDuplicated(old_ids)) stop(sprintf("Duplicate preserved %s source IDs",src),call.=FALSE)
+  } else if (src %in% legacy_required_sources) {
+    stop(sprintf("Required preserved source file missing for legacy source %s",src),call.=FALSE)
   }
 
   cur_lines <- read_lines_nonempty(current_paths[[src]])
