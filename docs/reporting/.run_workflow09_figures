@@ -1,25 +1,2 @@
-purpose=render_workflow09_manuscript_figures_for_visual_review
-canonical_records=19117
-canonical_sha256=ab5f10fd7b70c5a210c06770ab1f7548a5eac4b48cb9f0326fede6d751e8df67
-source_branch=workflow01-final-architecture
-retry=choropleth_unmatched_geography_audit
-rerender=approved_visual_refinements_2026-09-28
-rerender=review_requested_after_restoring_agreed_topic_figures_2026-09-28
-rerender=flow_counts_from_workflow00_02_2026-09-28
-rerender=equal_box_widths_flow_diagram_2026-09-28
-rerender=geography_uncoded_box_2026-09-28
-
-2026-09-28 regenerate dynamic flow counts from authoritative pipeline data
-
-2026-09-28 render data-driven Results and cropped Figure 15
-
-2026-09-28 render revised Results without emerging-topics section
-
-2026-09-28 render revised Results text and manuscript document
-
-2026-09-28 rerender topic figures without internal headings/subheadings/footer text
-2026-09-28 full rerender after final figure alignment updates
-2026-09-28 finalise Workflow 09 publication package and RIS export
-2026-09-28 final Workflow 09 publication package with RIS and manuscript outputs
-2026-09-28 rerun final package after commit-order fix and lossless W08 publication
-2026-09-28 rerun after compressed W08 restore fix
+trigger workflow09 render after caption/flow updates
+requested 2026-09-30
