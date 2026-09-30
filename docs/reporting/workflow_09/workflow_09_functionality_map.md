@@ -117,7 +117,7 @@ Workflow 09 publishes 15 final manuscript figures in both PNG and PDF formats.
 | Figure | Content | Authoritative implementation |
 |---:|---|---|
 | 1 | Review/process flow | `visualisations/07_flow_diagram.R` |
-| 2 | Database contribution and overlap before/after screening | `scripts/reporting/plot_citesource_database_contribution.R` |
+| 2 | Database contribution and overlap for the deduplicated and definitive final included corpora | `scripts/reporting/plot_citesource_database_contribution.R` |
 | 3 | Publication year × focal species | `visualisations/01_records_by_publication_year.R` |
 | 4 | Publication year × high-level topic | `visualisations/05_records_by_publication_year_high_level_topic.R` |
 | 5 | Global country choropleth | `visualisations/03_choropleth_records_by_country.R` |
