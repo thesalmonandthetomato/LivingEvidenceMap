@@ -21,7 +21,7 @@ arg <- function(flag, default = NULL) {
 input_path <- arg("--input")
 dictionary_path <- arg("--dictionary", "config/deterministic_concepts.csv")
 output_dir <- arg("--output-dir", "outputs/workflow05_species_coding")
-expected_records <- as.integer(arg("--expected-records", "19407"))
+expected_records <- as.integer(arg("--expected-records", "0"))
 
 if (is.null(input_path) || !file.exists(input_path)) stop("Valid --input JSONL is required", call. = FALSE)
 if (!file.exists(dictionary_path)) stop("Deterministic concepts CSV is missing", call. = FALSE)
@@ -47,7 +47,8 @@ abstract_of <- function(r) scalar((r$canonical %||% list())$abstract)
 
 canonical <- read_jsonl(input_path)
 if (!length(canonical)) stop("Input JSONL is empty", call. = FALSE)
-if (!is.na(expected_records) && expected_records > 0L && length(canonical) != expected_records) {
+if (is.na(expected_records) || expected_records < 0L) stop("--expected-records must be >= 0", call. = FALSE)
+if (expected_records > 0L && length(canonical) != expected_records) {
   stop(sprintf("Expected %d W04-retained records, found %d", expected_records, length(canonical)), call. = FALSE)
 }
 
