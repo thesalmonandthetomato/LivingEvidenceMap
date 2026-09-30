@@ -112,16 +112,31 @@ if (!is.null(reserved_doi) && !(reserved_doi %in% candidate_dois(dep))) {
 }
 
 files <- dep$files
+if (is.null(files) || !length(files)) {
+  files_url <- scalar(dep$links$files) %||% paste0(api, "/", dep_id, "/files")
+  files_resp <- perform(
+    request(files_url) |> auth(),
+    200L,
+    paste0("deposition file listing ", dep_id),
+    60
+  )
+  files <- resp_body_json(files_resp, simplifyVector = FALSE)
+}
 if (is.null(files) || !length(files)) stop(sprintf("Zenodo draft %s contains no files", dep_id), call. = FALSE)
 
-file_name <- function(x) scalar(x$filename) %||% scalar(x$key)
-file_download <- function(x) scalar(x$links$download) %||% scalar(x$links$self)
-zenodo_files <- lapply(files, function(x) list(
-  name = file_name(x),
-  download = file_download(x),
-  checksum = scalar(x$checksum),
-  size = x$filesize %||% x$size %||% NULL
-))
+bucket <- scalar(dep$links$bucket)
+if (is.null(bucket)) stop("Zenodo draft response is missing bucket URL", call. = FALSE)
+
+file_name <- function(x) scalar(x$filename) %||% scalar(x$key) %||% scalar(x$name)
+zenodo_files <- lapply(files, function(x) {
+  nm <- file_name(x)
+  list(
+    name = nm,
+    download = if (is.null(nm)) NULL else paste0(bucket, "/", URLencode(nm, reserved = TRUE)),
+    checksum = scalar(x$checksum),
+    size = x$filesize %||% x$size %||% NULL
+  )
+})
 zenodo_files <- zenodo_files[vapply(zenodo_files, function(x) !is.null(x$name), logical(1))]
 ris_files <- zenodo_files[grepl("\\.ris$", vapply(zenodo_files, `[[`, character(1), "name"), ignore.case = TRUE)]
 if (!length(ris_files)) stop(sprintf("Zenodo draft %s contains no .ris files", dep_id), call. = FALSE)
@@ -209,7 +224,7 @@ if (length(missing)) stop(sprintf("Expected derived file(s) missing: %s", paste(
 dep <- get_deposition(dep_id)
 if (isTRUE(dep$submitted)) stop("Zenodo draft was published during validation; refusing to modify it", call. = FALSE)
 bucket <- scalar(dep$links$bucket)
-if (is.null(bucket)) stop("Zenodo draft response is missing bucket URL", call. = FALSE)
+if (is.null(bucket)) stop("Zenodo draft response is missing bucket URL after validation", call. = FALSE)
 
 uploaded <- list()
 for (nm in names(derived)) {
