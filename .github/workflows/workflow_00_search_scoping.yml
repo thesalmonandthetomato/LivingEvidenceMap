@@ -3,10 +3,10 @@ name: Workflow 00 - Count-only search scoping
 on:
   workflow_dispatch:
     inputs:
-      search_strategy_path:
-        description: 'Repository path to Workflow 00 search strategy JSON'
+      search_string_path:
+        description: 'Repository path to plain-text Boolean scoping search string'
         required: true
-        default: 'user_input/workflow00_search_strategy.json'
+        default: 'user_input/scoping_search_string.txt'
         type: string
 
 permissions:
@@ -44,22 +44,21 @@ jobs:
       - name: Parse scoping implementation
         shell: Rscript {0}
         run: |
-          parse(file='scripts/updater/workflow_00_search_orchestrator.R')
+          parse(file='scripts/updater/workflow_00_validate_scoping_search.R')
           parse(file='scripts/updater/workflow_00_search_scope_counts.R')
           cat('PASS: Workflow 00 scoping scripts parse\n')
 
-      - name: Build production-equivalent full-search queries
+      - name: Validate Boolean scoping search string
         env:
-          SEARCH_STRATEGY: ${{ inputs.search_strategy_path }}
+          SEARCH_STRING: ${{ inputs.search_string_path }}
         shell: bash
         run: |
           set -euo pipefail
-          test -s "$SEARCH_STRATEGY"
+          test -s "$SEARCH_STRING"
           mkdir -p outputs/workflow00_search_scope/plan
-          Rscript scripts/updater/workflow_00_search_orchestrator.R \
-            --run-type full \
-            --config "$SEARCH_STRATEGY" \
-            --output-dir outputs/workflow00_search_scope/plan
+          Rscript scripts/updater/workflow_00_validate_scoping_search.R \
+            --input "$SEARCH_STRING" \
+            --output outputs/workflow00_search_scope/plan/search_plan.json
 
       - name: Run count-only API searches
         env:
@@ -116,6 +115,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -s outputs/workflow00_search_scope/plan/search_plan.json
           test -s outputs/workflow00_search_scope/search_scope_counts.csv
           test -s outputs/workflow00_search_scope/search_scope_counts.json
           test -s outputs/workflow00_search_scope/search_scoping_report.Rmd
@@ -131,6 +131,7 @@ jobs:
         with:
           name: workflow00-search-scoping-${{ github.run_id }}
           path: |
+            outputs/workflow00_search_scope/plan/search_plan.json
             outputs/workflow00_search_scope/search_scope_counts.csv
             outputs/workflow00_search_scope/search_scope_counts.json
             outputs/workflow00_search_scope/search_scoping_report.Rmd
