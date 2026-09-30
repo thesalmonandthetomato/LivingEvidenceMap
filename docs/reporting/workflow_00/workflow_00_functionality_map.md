@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Workflow 00 manages reproducible literature searching across the supported bibliographic sources. It converts a single version-controlled search strategy into source-specific queries, executes each selected source independently, records the exact searches performed, and preserves both lightweight provenance in the repository and durable search outputs in Zenodo.
+Workflow 00 manages reproducible literature searching across the supported bibliographic sources. It contains two deliberately separate pathways: (1) an independent count-only search-scoping stage for testing a manually supplied Boolean search string without harvesting records, and (2) the production search-orchestration pathway that converts the version-controlled production strategy into source-specific queries, retrieves records, records provenance, and archives accepted search outputs.
 
 This document is intended to serve two purposes:
 
@@ -11,9 +11,27 @@ This document is intended to serve two purposes:
 
 ## Functionality map
 
-Functionally, Workflow 00 comprises one parent orchestrator plus one reusable source handler. The parent launches the handler independently for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science. The handler then invokes the appropriate source-specific R ingestion code.
+Functionally, Workflow 00 has an independent scoping pathway and a production harvesting pathway. The scoping pathway is manually dispatched and never feeds Workflow 01. The production pathway comprises one parent orchestrator plus one reusable source handler; the parent launches the handler independently for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science, and the handler invokes the appropriate source-specific R ingestion code.
 
 ```text
+INDEPENDENT SEARCH SCOPING
+--------------------------
+user_input/scoping_search_string.txt
+          |
+          v
+workflow_00_search_scoping.yml
+          |
+          |-- validate Boolean syntax before any API call
+          |-- translate one database-neutral expression to source syntax
+          |-- request counts only from Lens / Scopus / OpenAlex / AGRICOLA / WoS
+          |-- retain no bibliographic records or raw API responses
+          '-- render CSV + JSON + Rmd + HTML scoping report
+          
+          [no W01 handoff, no Zenodo, no production-state mutation]
+
+
+PRODUCTION SEARCHING
+--------------------
 user_input/workflow00_search_strategy.json
           |
           v
@@ -28,9 +46,7 @@ workflow_00_search_orchestrator.yml
   |-- WoS -------|          '--> source-specific R ingestion
   |
   |-- optional expansion reconciliation by native source ID
-  |
   |-- archive search documentation in repository
-  |
   '-- archive complete search run to restricted Zenodo record
                               |
                               v
@@ -41,6 +57,11 @@ workflow_00_search_orchestrator.yml
 
 | Component | Function |
 |---|---|
+| `user_input/scoping_search_string.txt` | Manually editable, database-neutral Boolean search string used only by the independent scoping stage. |
+| `scripts/updater/workflow_00_validate_scoping_search.R` | Validates the scoping string before any API call and translates the validated expression into source-specific field syntax. |
+| `scripts/updater/workflow_00_search_scope_counts.R` | Performs count-only API requests for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science and writes the count metadata. |
+| `.github/workflows/workflow_00_search_scoping.yml` | Standalone manually dispatched scoping controller. It validates, counts, renders the report and uploads only count/report artefacts. |
+| `docs/reporting/workflow_00/search_scoping_report.Rmd` | Short R Markdown template for the scoping search string, date, source status and reported hit counts. |
 | `user_input/workflow00_search_strategy.json` | Authoritative search concept definition. Stores the search version, immutable species terms and farm/aquaculture terms. |
 | `scripts/updater/workflow_00_search_orchestrator.R` | Translates the common strategy into syntax appropriate for each source and defines full, fortnightly and expansion searches. |
 | `.github/workflows/workflow_00_search_orchestrator.yml` | Parent controller. Selects sources, creates the search plan, launches source jobs, checks completion, archives documentation and deposits the completed run on Zenodo. |
@@ -88,7 +109,38 @@ The repository therefore preserves both the rule used to generate each query and
 
 ## Run modes
 
-Workflow 00 supports three run modes.
+Workflow 00 production supports three run modes. In addition, W00 provides a separate count-only scoping mode that is intentionally outside the production chain.
+
+### Search scoping
+
+Search scoping is a manually dispatched, count-only stage for testing a Boolean search string before deciding whether to run a full production search.
+
+The editable input is:
+
+`user_input/scoping_search_string.txt`
+
+The accepted input is a database-neutral Boolean expression using:
+
+- `AND`, `OR`, and `NOT`;
+- parentheses;
+- straight double quotes for phrases; and
+- `*` wildcards.
+
+Before any API request, the validator requires balanced parentheses and quotes, valid Boolean grammar, no missing or dangling operators, no empty groups or quoted phrases, and no database-specific field codes such as `TITLE=`, `TS=`, or `TITLE-ABS-KEY(...)`. Invalid syntax causes the workflow to fail immediately.
+
+After validation, the expression is translated into the current source-specific field scopes and a count-only request is made to each API-backed W00 source. Only the provider-reported result total is retained.
+
+To trigger a scoping run:
+
+1. edit `user_input/scoping_search_string.txt` on `workflow01-final-architecture`;
+2. open **Actions** in GitHub;
+3. select **Workflow 00 - Count-only search scoping**;
+4. click **Run workflow**;
+5. select branch `workflow01-final-architecture`;
+6. leave the default input path as `user_input/scoping_search_string.txt` unless testing another version-controlled text file; and
+7. run the workflow.
+
+The GitHub Actions job summary displays the count table directly. The downloadable artefact contains the validated search plan, CSV and JSON count tables, the R Markdown source and the rendered HTML report.
 
 ### Full
 
@@ -188,6 +240,10 @@ Workflow 00 remains the authoritative raw-source layer. Raw API/source payloads 
 
 > **Workflow 00: literature searching and provenance.** Searches were managed by a reproducible R-based orchestration workflow. A version-controlled configuration defined a common species concept and aquaculture/farming concept, from which database-specific queries were generated for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science. The parent workflow executed each selected source independently through a reusable source handler and source-specific ingestion script. For every search, the exact query, execution date, database-reported result count, successfully downloaded record count and workflow provenance were recorded in machine-readable JSON and human-readable Markdown files. Full searches, fortnightly updates and controlled search-term expansions used the same strategy definition. Search outputs were retained as short-lived GitHub Actions artefacts for seven days and deposited durably as restricted, checksum-verified Zenodo records, with persistent DOI and provenance pointers maintained in the repository.
 
+### Search-scoping methods text
+
+> **Search scoping.** Before production retrieval, candidate Boolean search strings could be evaluated using an independent count-only Workflow 00 scoping stage. A manually editable database-neutral Boolean expression was validated for balanced parentheses and quotation marks, Boolean grammar and absence of database-specific field codes before any API request was made. The validated expression was translated programmatically into source-specific title, abstract and keyword syntax for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science Core Collection. Only provider-reported hit counts were retained; bibliographic records and raw API responses were not stored. The workflow produced a dated R Markdown/HTML report containing the exact search string and per-source hit counts and did not alter production Workflow 00 state or trigger downstream processing.
+
 ## Reporting status
 
 Workflow 00 state integrity is validated by `scripts/updater/workflow_00_validate_state.R`, which requires exactly the five expected sources, valid archive references and harvest checksums, and non-empty duplicate-free source-native ID registries. Source-native ID reconciliation is now consistently enforced for fortnightly updates across all five sources. Automatic replacement of a complete source entry in `current.json` by a fortnightly archive nevertheless remains disabled because a fortnightly archive is a delta, not a complete source snapshot. The logical state model must therefore preserve the baseline plus accepted source-level deltas rather than treating the newest delta archive as the whole source.
@@ -201,19 +257,27 @@ Workflow 00 is considered complete when:
 - the Zenodo DOI, record identifier and manifest checksum are registered in the repository; and
 - downstream restoration of the archived source inputs has been validated.
 
-## Independent search scoping stage
+## Scoping-stage isolation and outputs
 
-Workflow 00 includes a standalone count-only search scoping workflow at `.github/workflows/workflow_00_search_scoping.yml`. It is manually dispatched and is not part of the production harvesting or fortnightly update chain.
+The independent search-scoping pathway is intentionally non-destructive and non-promotional. It does **not**:
 
-The scoping stage reads a manually editable database-neutral Boolean expression from `user_input/scoping_search_string.txt`. Before any API request, `scripts/updater/workflow_00_validate_scoping_search.R` validates the expression for balanced straight double quotes, balanced parentheses, valid Boolean grammar, and absence of database-specific field codes. Accepted operators are `AND`, `OR`, and `NOT`; quoted phrases and `*` wildcards are allowed. Invalid input stops the workflow immediately. The validated expression is then translated into source-specific title/abstract/keyword field syntax for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science Core Collection, after which only the provider-reported result count is requested. API responses are held only in memory long enough to extract the total; bibliographic result records and raw API responses are not written to disk.
+- harvest or retain bibliographic result records;
+- retain raw API responses;
+- create RIS files;
+- update source-native ID registries;
+- alter `current.json` or any other accepted W00 production state;
+- create or update a Zenodo deposit;
+- trigger Workflow 01; or
+- modify the production search strategy in `user_input/workflow00_search_strategy.json`.
 
-CAB Abstracts and ProQuest Dissertations & Theses Global remain manual-ingest sources and are reported as not automatically counted because W00 has no API implementation for them.
+For the five API-backed sources, the scoping run writes only the reported count and associated provenance. CAB Abstracts and ProQuest Dissertations & Theses Global are retained in the report as current manual-ingest W00 sources and are marked as not automatically counted because no W00 API implementation exists for them.
 
-Outputs are limited to:
+The scoping artefact contains:
 
+- `plan/search_plan.json`, recording the exact input string, validation result and generated source queries;
 - `search_scope_counts.csv`;
 - `search_scope_counts.json`;
 - `search_scoping_report.Rmd`; and
-- rendered `search_scoping_report.html`.
+- `search_scoping_report.html`.
 
-The report records the exact manually supplied Boolean search string, validation status, source, date, hit count and source status. The same count table is also written to the GitHub Actions job summary. The scoping workflow does not update source-ID registries, publish to Zenodo, create harvest artefacts, or trigger Workflow 01.
+The exact manually supplied Boolean string, run date, validation status, source, hit count and source status are therefore preserved without creating a bibliographic harvest.
