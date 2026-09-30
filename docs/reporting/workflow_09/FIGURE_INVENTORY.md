@@ -5,7 +5,7 @@ Workflow 09 publishes 15 final manuscript figures in both PNG and PDF under `doc
 | Manuscript figure | Purpose | Permanent figure file stem | R implementation |
 |---:|---|---|---|
 | 1 | Review/process flow | `figure_01_flow_diagram` | `visualisations/07_flow_diagram.R` |
-| 2 | Database contribution and exact source overlap before/after relevance screening | `figure_02_database_contribution` | `scripts/reporting/plot_citesource_database_contribution.R` |
+| 2 | Database contribution and exact source overlap for the deduplicated and definitive final included corpora | `figure_02_database_contribution` | `scripts/reporting/plot_citesource_database_contribution.R` |
 | 3 | Records by publication year and focal species | `figure_03_publication_year_species` | `visualisations/01_records_by_publication_year.R` |
 | 4 | High-level topic assignments by publication year | `figure_04_publication_year_topics` | `visualisations/05_records_by_publication_year_high_level_topic.R` |
 | 5 | Global distribution of included records by substantive study country | `figure_05_country_choropleth` | `visualisations/03_choropleth_records_by_country.R` |
