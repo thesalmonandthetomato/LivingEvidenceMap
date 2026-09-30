@@ -176,6 +176,22 @@ flow_path <- flow_candidates[nzchar(flow_candidates) & file.exists(flow_candidat
 if (is.na(flow_path) || !nzchar(flow_path)) stop("No Workflow 09 flow-count JSON available.", call. = FALSE)
 flow <- fromJSON(flow_path, simplifyVector = FALSE)$counts
 
+# Figure 2 must come from the CiteSource analysis generated for this reporting run.
+citesource_dir <- Sys.getenv(
+  "CITESOURCE_OUTPUT_DIR",
+  unset = here::here("outputs", "citesource_contribution")
+)
+citesource_report_path <- file.path(citesource_dir, "report.json")
+citesource_figure_path <- file.path(citesource_dir, "database_contribution_upset.png")
+if (!file.exists(citesource_report_path) || !file.exists(citesource_figure_path)) {
+  stop("Current-run CiteSource outputs are required for Figure 2.", call. = FALSE)
+}
+citesource_report <- fromJSON(citesource_report_path)
+stopifnot(
+  identical(as.character(citesource_report$status), "PASS"),
+  as.integer(citesource_report$final_included_records) == n_total
+)
+
 stopifnot(
   as.integer(flow$final_included) == n_total,
   as.integer(flow$final_geography_coded) == n_geo_coded,
@@ -200,7 +216,7 @@ include_figure(here::here("visualisations", "figure_07_flow_diagram.png"))
 Database provenance was retained through deduplication, allowing the contribution and overlap of the seven bibliographic sources to be compared for the deduplicated corpus and the definitive final included corpus. Figure 2 shows both stages together with the exact source intersections.
 
 ```{r fig-source-contribution, fig.cap="***Figure 2.*** *Contribution and overlap of bibliographic databases in the deduplicated corpus and definitive final included corpus. Black bars show all deduplicated canonical records and olive-green bars show final included records; the matrix identifies the database combination defining each exact intersection.*"}
-include_figure(here::here("outputs", "citesource_contribution", "database_contribution_upset.png"))
+include_figure(citesource_figure_path)
 ```
 
 ## Publication year
