@@ -32,9 +32,11 @@ if(!file.exists(screening_config_path)) stop("Workflow 04 screening config is mi
 SCREENING_CONFIG <- fromJSON(screening_config_path,simplifyVector=FALSE)
 PROMPT_PATH <- scalar(SCREENING_CONFIG$prompt_path)
 PROMPT_VERSION <- scalar(SCREENING_CONFIG$prompt_version)
+RESPONSE_SCHEMA_NAME <- scalar(SCREENING_CONFIG$response_schema_name)
 EXPECTED_PROMPT_SHA256 <- scalar(SCREENING_CONFIG$expected_prompt_sha256)
 if(!nzchar(PROMPT_PATH)||!file.exists(PROMPT_PATH)) stop("Workflow 04 screening prompt file is missing",call.=FALSE)
 if(!nzchar(PROMPT_VERSION)) stop("Workflow 04 screening config lacks prompt_version",call.=FALSE)
+if(!nzchar(RESPONSE_SCHEMA_NAME)) stop("Workflow 04 screening config lacks response_schema_name",call.=FALSE)
 if(!grepl("^[0-9a-f]{64}$",EXPECTED_PROMPT_SHA256)) stop("Workflow 04 screening config has invalid expected_prompt_sha256",call.=FALSE)
 SYSTEM_PROMPT <- paste(readLines(PROMPT_PATH,warn=FALSE,encoding="UTF-8"),collapse="\n")
 PROMPT_SHA256 <- digest::digest(SYSTEM_PROMPT,algo="sha256",serialize=FALSE)
@@ -96,7 +98,7 @@ screen_one <- function(r,pass){
         list(role="system",content=list(list(type="input_text",text=SYSTEM_PROMPT))),
         list(role="user",content=list(list(type="input_text",text=user_text)))
       ),
-      text=list(verbosity="low",format=list(type="json_schema",name="salmon_aquaculture_relevance_screen",strict=TRUE,schema=schema))
+      text=list(verbosity="low",format=list(type="json_schema",name=RESPONSE_SCHEMA_NAME,strict=TRUE,schema=schema))
     )
     resp<-request("https://api.openai.com/v1/responses") |>
       req_auth_bearer_token(Sys.getenv("OPENAI_API_KEY")) |>
