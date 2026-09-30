@@ -33,8 +33,8 @@
     "method": "zenodo_draft",
     "reserved_doi": "10.5281/zenodo.23058211",
     "deposition_id": null,
-    "publish_after_validation": true,
-    "notes": "Keep this Zenodo record as a draft until W00 has added the registry, normalised handover JSONL, manifest, checksum and duplicate-audit files."
+    "publish_after_validation": false,
+    "notes": "W00 must complete this existing Zenodo draft in place and leave it unpublished for human inspection after validation."
   },
   "input": {
     "expected_chunk_count": 5,
