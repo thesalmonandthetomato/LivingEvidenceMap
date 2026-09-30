@@ -1,0 +1,399 @@
+name: Workflow 06 - geography production
+
+on:
+  workflow_call:
+    inputs:
+      workflow04_pointer_path:
+        required: true
+        type: string
+      workflow05_pointer_path:
+        required: true
+        type: string
+      lean_pointer_path:
+        required: true
+        type: string
+      prior_workflow06_pointer_path:
+        required: false
+        default: 'docs/workflow06/zenodo/run-36265092530.json'
+        type: string
+      prior_workflow04_pointer_path:
+        required: false
+        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        type: string
+      prior_lean_pointer_path:
+        required: false
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      publish:
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+      OPENAI_API_KEY:
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      workflow04_pointer_path:
+        description: 'Current authoritative W04 pointer'
+        required: true
+        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        type: string
+      workflow05_pointer_path:
+        description: 'Current authoritative W05 pointer'
+        required: true
+        default: 'docs/workflow05/zenodo/run-36268840588.json'
+        type: string
+      lean_pointer_path:
+        description: 'Current authoritative post-W02 lean canonical pointer'
+        required: true
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      prior_workflow06_pointer_path:
+        description: 'Prior authoritative W06 pointer; use none for a first run'
+        required: true
+        default: 'docs/workflow06/zenodo/run-36265092530.json'
+        type: string
+      prior_workflow04_pointer_path:
+        description: 'Prior W04 pointer used only to bootstrap legacy W06 fingerprints'
+        required: false
+        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        type: string
+      prior_lean_pointer_path:
+        description: 'Prior lean pointer used only if prior W04 archive lacks retained canonical JSONL'
+        required: false
+        default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      publish:
+        description: 'Publish resolved automated W06 state to restricted Zenodo'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      queue_n: ${{ steps.queue.outputs.queue_n }}
+      mode: ${{ steps.queue.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('dplyr','readr','jsonlite','digest','httr2','tibble','stringi','fs','here'))
+
+      - name: Parse W06 implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_04_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
+          parse(file='scripts/updater/workflow_05_materialise_retained.R')
+          parse(file='scripts/updater/workflow_06_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_06_prepare_current_inputs.R')
+          parse(file='scripts/updater/workflow_06_prepare_incremental.R')
+          parse(file='scripts/reporting/workflow05_geography_semantic_production.R')
+          parse(file='scripts/reporting/workflow06_geography_semantic_merge.R')
+          parse(file='scripts/updater/workflow_06_merge_incremental.R')
+          parse(file='scripts/updater/workflow_06_archive_state_to_zenodo.R')
+          cat('PASS: W06 production scripts parse\n')
+
+      - name: Restore current W04 retained corpus
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W04_POINTER: ${{ inputs.workflow04_pointer_path }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/current_w04 inputs/current_lean
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer "$W04_POINTER" --output-dir inputs/current_w04
+          INC=$(find inputs/current_w04 -type f -name workflow04_included_record_ids.txt -print -quit)
+          test -n "$INC"
+          CAN=$(find inputs/current_w04 -type f -name workflow04_included_canonical.jsonl -print -quit)
+          mkdir -p inputs/current
+          cp "$INC" inputs/current/included_ids.txt
+          if [ -n "$CAN" ]; then
+            cp "$CAN" inputs/current/retained_canonical.jsonl
+          else
+            Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R               --pointer "$LEAN_POINTER" --output-dir inputs/current_lean
+            Rscript scripts/updater/workflow_05_materialise_retained.R               --canonical inputs/current_lean/canonical_lean.jsonl               --included-ids inputs/current/included_ids.txt               --output inputs/current/retained_canonical.jsonl
+          fi
+
+      - name: Verify current W05 population
+        env:
+          W05_POINTER: ${{ inputs.workflow05_pointer_path }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p<-fromJSON(Sys.getenv('W05_POINTER'),simplifyVector=FALSE)
+          n<-length(Filter(nzchar,trimws(readLines('inputs/current/included_ids.txt',warn=FALSE))))
+          stopifnot(as.integer(p$records)==n)
+          cat(sprintf('PASS: W04 retained population matches W05 records: %d\n',n))
+
+      - name: Build current deterministic geography inputs
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_06_prepare_current_inputs.R             --input inputs/current/retained_canonical.jsonl             --output-dir outputs/workflow06_current
+
+      - name: Restore prior W06 state
+        if: ${{ inputs.prior_workflow06_pointer_path != 'none' && inputs.prior_workflow06_pointer_path != '' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          PRIOR_W06: ${{ inputs.prior_workflow06_pointer_path }}
+          PRIOR_W04: ${{ inputs.prior_workflow04_pointer_path }}
+          PRIOR_LEAN: ${{ inputs.prior_lean_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/prior_w06 inputs/prior_w04 inputs/prior_lean
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R             --pointer "$PRIOR_W06" --output-dir inputs/prior_w06
+          LAYER=$(find inputs/prior_w06 -type f -name workflow06_geography_layer.csv -print -quit)
+          test -n "$LAYER"
+          cp "$LAYER" inputs/prior_geography.csv
+
+          HAS_FP=$(P=inputs/prior_geography.csv Rscript -e '
+            x<-read.csv(Sys.getenv("P"),stringsAsFactors=FALSE,check.names=FALSE)
+            cat(as.integer("geography_input_sha256"%in%names(x) && all(nzchar(trimws(ifelse(is.na(x$geography_input_sha256),"",x$geography_input_sha256))))))
+          ')
+          if [ "$HAS_FP" = "0" ]; then
+            Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R               --pointer "$PRIOR_W04" --output-dir inputs/prior_w04
+            CAN=$(find inputs/prior_w04 -type f -name workflow04_included_canonical.jsonl -print -quit)
+            INC=$(find inputs/prior_w04 -type f -name workflow04_included_record_ids.txt -print -quit)
+            test -n "$INC"
+            if [ -n "$CAN" ]; then
+              cp "$CAN" inputs/prior_canonical.jsonl
+            else
+              Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R                 --pointer "$PRIOR_LEAN" --output-dir inputs/prior_lean
+              Rscript scripts/updater/workflow_05_materialise_retained.R                 --canonical inputs/prior_lean/canonical_lean.jsonl                 --included-ids "$INC"                 --output inputs/prior_canonical.jsonl
+            fi
+          fi
+
+      - name: Prepare W06 first-run/update queue
+        id: queue
+        env:
+          PRIOR_W06_INPUT: ${{ inputs.prior_workflow06_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --current outputs/workflow06_current/records_for_geography.csv
+            --output-dir outputs/workflow06_prepare
+          )
+          if [ "$PRIOR_W06_INPUT" != "none" ] && [ -n "$PRIOR_W06_INPUT" ]; then
+            ARGS+=(--prior-geography inputs/prior_geography.csv)
+            if [ -f inputs/prior_canonical.jsonl ]; then ARGS+=(--prior-canonical inputs/prior_canonical.jsonl); fi
+          fi
+          Rscript scripts/updater/workflow_06_prepare_incremental.R "${ARGS[@]}"
+          Q=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow06_prepare/prepare_manifest.json");cat(as.integer(x$screen_queue_records))')
+          M=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow06_prepare/prepare_manifest.json");cat(as.character(x$mode))')
+          echo "queue_n=$Q" >> "$GITHUB_OUTPUT"
+          echo "mode=$M" >> "$GITHUB_OUTPUT"
+
+      - name: Upload prepared W06 state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-prepared-${{ github.run_id }}
+          path: |
+            outputs/workflow06_current/
+            outputs/workflow06_prepare/
+          retention-days: 7
+          if-no-files-found: error
+
+  screen:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.queue_n != '0' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1,2,3,4,5,6,7,8]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('dplyr','readr','jsonlite','httr2','digest'))
+
+      - name: Download prepared W06 state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow06-prepared-${{ github.run_id }}
+          path: prepared
+
+      - name: Screen geography queue shard
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          Rscript scripts/reporting/workflow05_geography_semantic_production.R             --records prepared/outputs/workflow06_prepare/screen_queue_records.csv             --deterministic prepared/outputs/workflow06_prepare/screen_queue_deterministic.csv             --prompt config/workflow06_geography_semantic_prompt_v2.txt             --output-dir outputs/shard-${{ matrix.shard }}             --shard-id ${{ matrix.shard }}             --shard-count 8
+
+      - name: Upload W06 shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-incremental-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: outputs/shard-${{ matrix.shard }}/
+          retention-days: 90
+          if-no-files-found: warn
+
+  merge-new:
+    needs: [prepare,screen]
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.screen.result == 'success' || needs.screen.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('dplyr','readr','jsonlite'))
+
+      - name: Download W06 shards
+        if: ${{ needs.prepare.outputs.queue_n != '0' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow06-incremental-shard-*-${{ github.run_id }}
+          path: shards
+          merge-multiple: false
+
+      - name: Merge fresh W06 results
+        if: ${{ needs.prepare.outputs.queue_n != '0' }}
+        env:
+          QUEUE_N: ${{ needs.prepare.outputs.queue_n }}
+        shell: bash
+        run: |
+          Rscript scripts/reporting/workflow06_geography_semantic_merge.R             --input-dir shards             --output-dir outputs/workflow06_new             --expected-shards 8             --expected-records "$QUEUE_N"
+
+      - name: Create empty fresh W06 result when queue is empty
+        if: ${{ needs.prepare.outputs.queue_n == '0' }}
+        shell: Rscript {0}
+        run: |
+          library(readr)
+          dir.create('outputs/workflow06_new',recursive=TRUE)
+          write_csv(data.frame(record_id=character(),record_sequence=integer(),title=character(),abstract=character(),
+                               geography_input_sha256=character(),deterministic_primary_countries=character(),
+                               deterministic_primary_iso3c=character(),geography_review_required=logical(),
+                               geography_review_reason=character(),geography_status=character(),luna_iso3c=character(),
+                               luna_country_names=character(),luna_evidence=character(),luna_mapping_reason=character(),
+                               evidence_all_grounded=logical(),geography_reason=character(),llm_failed=logical(),
+                               llm_error=character(),det_iso3c=character(),exact_agreement=logical(),
+                               deterministic_none=logical(),luna_none=logical(),discrepancy_type=character()),
+                    'outputs/workflow06_new/geography_semantic_final.csv',na='')
+          file.create('outputs/workflow06_new/geography_semantic_final.jsonl')
+
+      - name: Upload fresh W06 result
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-new-${{ github.run_id }}
+          path: outputs/workflow06_new/
+          retention-days: 90
+          if-no-files-found: error
+
+  finalise:
+    needs: [prepare,merge-new]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.merge-new.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('dplyr','readr','jsonlite','digest','httr2'))
+
+      - name: Download prepared state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow06-prepared-${{ github.run_id }}
+          path: prepared
+
+      - name: Download fresh geography
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow06-new-${{ github.run_id }}
+          path: fresh
+
+      - name: Build complete current W06 state
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_06_merge_incremental.R             --current prepared/outputs/workflow06_current/records_for_geography.csv             --reused prepared/outputs/workflow06_prepare/reused_geography.csv             --fresh fresh/geography_semantic_final.csv             --prepare-manifest prepared/outputs/workflow06_prepare/prepare_manifest.json             --prompt config/workflow06_geography_semantic_prompt_v2.txt             --output-dir outputs/workflow06_final
+
+      - name: Publish W06 state
+        if: ${{ inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W05_POINTER: ${{ inputs.workflow05_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          W05_RECORD=$(P="$W05_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$zenodo_record_id)')
+          W05_SHA=$(P="$W05_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$workflow05_species_layer_sha256)')
+          mkdir -p outputs/workflow06_zenodo
+          Rscript scripts/updater/workflow_06_archive_state_to_zenodo.R             --state-dir outputs/workflow06_final             --source-run-id "$GITHUB_RUN_ID"             --source-commit "$GITHUB_SHA"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow06_zenodo             --upstream-w05-record-id "$W05_RECORD"             --upstream-w05-layer-sha256 "$W05_SHA"
+
+      - name: Register W06 state
+        if: ${{ inputs.publish == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_06_update_zenodo_registry.R             --receipt outputs/workflow06_zenodo/zenodo_receipt.json             --registry docs/workflow06/zenodo_registry.csv             --pointer-dir docs/workflow06/zenodo
+          git add docs/workflow06/zenodo_registry.csv docs/workflow06/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register Workflow 06 geography state $GITHUB_RUN_ID"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload W06 handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-geography-production-${{ github.run_id }}
+          path: |
+            outputs/workflow06_final/
+            outputs/workflow06_zenodo/
+          retention-days: 90
+          if-no-files-found: error
