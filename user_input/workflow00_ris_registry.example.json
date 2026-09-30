@@ -1,0 +1,29 @@
+{
+  "schema_version": "workflow00-source-registry-v1",
+  "source_ID": "cab_abstracts_2026-09-30_full",
+  "acquisition": {
+    "method": "ris_upload",
+    "source_format": "RIS",
+    "notes": null
+  },
+  "database": {
+    "name": "CAB Abstracts",
+    "short_name": "cab",
+    "platform": null,
+    "database_scope": ["CAB Abstracts"]
+  },
+  "search": {
+    "description": "Full CAB Abstracts search for the Living Evidence Map.",
+    "search_date": "2026-09-30",
+    "search_string": null,
+    "search_fields": null,
+    "limits": null,
+    "reported_results": null,
+    "notes": "Replace null fields with the exact search details available from the source."
+  },
+  "input": {
+    "filename": "cab_abstracts_2026-09-30.ris",
+    "exported_at": null,
+    "encoding": "UTF-8"
+  }
+}
