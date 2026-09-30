@@ -32,7 +32,10 @@ dir.create(out_dir,recursive=TRUE,showWarnings=FALSE)
 records <- read_csv(records_path,show_col_types=FALSE)
 det <- read_csv(det_path,show_col_types=FALSE)
 
-x <- records |>
+records_base <- records |>
+  select(-any_of(c("deterministic_primary_countries","deterministic_primary_iso3c",
+                   "geography_review_required","geography_review_reason")))
+x <- records_base |>
   inner_join(
     det |>
       select(record_id, deterministic_primary_countries, deterministic_primary_iso3c,
