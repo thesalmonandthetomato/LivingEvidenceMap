@@ -8,6 +8,7 @@ on:
       - '.github/workflows/workflow_01_production.yml'
       - '.github/workflows/workflow_01_resume_after_human_review.yml'
       - '.github/workflows/workflow_01_validate_orchestration.yml'
+      - 'config/workflow01_source_catalogue.json'
       - 'scripts/updater/workflow_01_build_delta.R'
       - 'scripts/updater/workflow_01_replay_delta.R'
       - 'scripts/updater/workflow_01_restore_current_state.R'
@@ -63,6 +64,19 @@ jobs:
             stopifnot(is.list(x), !is.null(x$name), !is.null(x$jobs))
             cat(sprintf('PASS YAML: %s\n', f))
           }
+
+      - name: Validate Workflow 01 source catalogue
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x <- fromJSON('config/workflow01_source_catalogue.json', simplifyVector=FALSE)
+          stopifnot(
+            identical(x$schema, 'living-evidence-map-workflow01-source-catalogue-v1'),
+            is.list(x$sources),
+            length(x$sources) >= 5L,
+            all(vapply(x$sources, function(z) !is.null(z$kind) && !is.null(z$prepared_path), logical(1)))
+          )
+          cat(sprintf('PASS source catalogue: %d sources\n', length(x$sources)))
 
       - name: Parse Workflow 01 R implementation
         shell: Rscript {0}
