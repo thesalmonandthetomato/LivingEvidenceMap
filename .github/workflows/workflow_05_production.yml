@@ -70,7 +70,7 @@ jobs:
           parse(file='scripts/updater/workflow_05_archive_state_to_zenodo.R')
           parse(file='scripts/updater/workflow_05_update_zenodo_registry.R')
           source('R/species_detect.R')
-          x<-readr::read_csv('config/deterministic_concepts.csv',show_col_types=FALSE)
+          x<-readr::read_csv('user_input/workflow05_deterministic_concepts.csv',show_col_types=FALSE)
           stopifnot(identical(names(x),c('coding','entity','terms')))
           testthat::test_file('tests/testthat/test-species.R',reporter='summary')
           cat('PASS: W05 implementation and deterministic vocabulary validated\n')
@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_05_species_coding.R             --input inputs/workflow05/retained_canonical.jsonl             --dictionary config/deterministic_concepts.csv             --output-dir outputs/workflow05_species_coding             --expected-records "$EXPECTED_RECORDS"
+          Rscript scripts/updater/workflow_05_species_coding.R             --input inputs/workflow05/retained_canonical.jsonl             --config user_input/workflow05_coding_config.json             --dictionary user_input/workflow05_deterministic_concepts.csv             --output-dir outputs/workflow05_species_coding             --expected-records "$EXPECTED_RECORDS"
 
       - name: Validate complete W05 output
         shell: Rscript {0}
@@ -164,7 +164,8 @@ jobs:
           cp outputs/workflow05_species_coding/species_matches.csv outputs/workflow05_state/
           cp outputs/workflow05_species_coding/species_record_counts.csv outputs/workflow05_state/
           cp outputs/workflow05_species_coding/workflow05_manifest.json outputs/workflow05_state/
-          cp config/deterministic_concepts.csv outputs/workflow05_state/
+          cp user_input/workflow05_deterministic_concepts.csv outputs/workflow05_state/deterministic_concepts.csv
+          cp user_input/workflow05_coding_config.json outputs/workflow05_state/workflow05_coding_config.json
 
       - name: Publish W05 state
         if: ${{ inputs.publish == true }}
