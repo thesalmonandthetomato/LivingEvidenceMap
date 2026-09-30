@@ -19,11 +19,31 @@ arg <- function(flag, default = NULL) {
   args[[i + 1L]]
 }
 
-lens_path <- arg("--lens")
-scopus_path <- arg("--scopus")
-openalex_path <- arg("--openalex")
-agricola_path <- arg("--agricola")
-wos_path <- arg("--wos")
+input_pos <- which(args == "--input")
+inputs <- if (length(input_pos)) vapply(input_pos,function(i) {
+  if (i == length(args)) stop("Missing value after --input",call.=FALSE)
+  args[[i+1L]]
+},character(1)) else character()
+
+if (length(inputs)) {
+  if (any(!grepl("^[^=]+=",inputs))) stop("Each --input must be source=path",call.=FALSE)
+  source_names <- sub("=.*$","",inputs)
+  paths <- sub("^[^=]+=","",inputs)
+  names(paths) <- source_names
+  if (anyDuplicated(source_names)) stop("Each source may be supplied only once",call.=FALSE)
+} else {
+  paths <- c(
+    lens=arg("--lens"),
+    scopus=arg("--scopus"),
+    openalex=arg("--openalex"),
+    agricola=arg("--agricola"),
+    wos=arg("--wos")
+  )
+  if (any(vapply(paths,is.null,logical(1)))) {
+    stop("Provide repeated --input source=path arguments, or all five legacy source flags",call.=FALSE)
+  }
+}
+
 old_metadata_path <- arg("--old-metadata",NULL)
 old_manifestation_map_path <- arg("--old-manifestation-map",NULL)
 output_dir <- arg("--output-dir")
@@ -32,9 +52,7 @@ sample_key <- arg("--sample-key", "workflow02-v2-candidate-benchmark-v1")
 workflow01_run_id <- arg("--workflow01-run-id", "unknown")
 validate_index_only <- identical(tolower(arg("--validate-index-only", "false")), "true")
 
-if (any(vapply(list(lens_path, scopus_path, openalex_path, agricola_path, wos_path, output_dir), is.null, logical(1)))) {
-  stop("Required: --lens --scopus --openalex --agricola --wos --output-dir", call. = FALSE)
-}
+if (is.null(output_dir) || !length(paths)) stop("Required: --output-dir and at least one source input",call.=FALSE)
 if (is.null(old_metadata_path) && is.null(old_manifestation_map_path)) {
   stop("Provide either --old-metadata or --old-manifestation-map", call.=FALSE)
 }
@@ -228,7 +246,6 @@ read_jsonl <- function(path, fun) {
 }
 
 progress("reading and normalising all source records")
-paths <- c(lens=lens_path,scopus=scopus_path,openalex=openalex_path,agricola=agricola_path,wos=wos_path)
 rows <- list(); n_by_source <- integer()
 for (src in names(paths)) {
   n_by_source[[src]] <- read_jsonl(paths[[src]], function(r,i) {
