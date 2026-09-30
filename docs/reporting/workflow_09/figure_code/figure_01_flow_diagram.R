@@ -239,9 +239,9 @@ boxes <- bind_rows(
   box("retained", 5.64, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_retained_final)), "retain"),
 
   box("species", 5.64, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
-  box("geography", 5.64, 3.13, process_box_w, 0.76, paste0("Geography annotation\nn = ", fmt(n_final_included)), "annotate"),
+  box("geography", 5.64, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
   box("geo_uncoded", 9.15, 3.13, process_box_w, 0.76, paste0("Included but uncoded for geography\nn = ", fmt(n_geography_uncoded)), "result"),
-  box("topic", 5.64, 2.08, process_box_w, 0.76, paste0("Records entering topic annotation\nn = ", fmt(n_final_included)), "annotate"),
+  box("topic", 5.64, 2.08, process_box_w, 0.76, paste0("Records with topic annotation\nn = ", fmt(n_topic_coded)), "annotate"),
   box("uncoded", 9.15, 2.08, process_box_w, 0.76, paste0("Included but uncoded for topics\nn = ", fmt(n_topic_uncoded)), "result"),
 
   box("map", 5.64, 0.88, process_box_w, 0.86, paste0("Living Evidence Map\nn = ", fmt(n_final_included)), "map")
