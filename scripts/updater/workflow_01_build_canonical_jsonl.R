@@ -17,16 +17,37 @@ cluster_map_path <- arg("--cluster-map")
 strip_path <- arg("--strip-actions")
 repairs_path <- arg("--data-quality-repairs",NULL)
 repair_audit_path <- arg("--repair-audit",NULL)
-lens_path <- arg("--lens")
-scopus_path <- arg("--scopus")
-openalex_path <- arg("--openalex")
-agricola_path <- arg("--agricola")
-wos_path <- arg("--wos")
+
+input_pos <- which(args == "--input")
+inputs <- if(length(input_pos)) vapply(input_pos,function(i){
+  if(i==length(args)) stop("Missing value after --input",call.=FALSE)
+  args[[i+1L]]
+},character(1)) else character()
+
+if(length(inputs)){
+  if(any(!grepl("^[^=]+=",inputs))) stop("Each --input must be source=path",call.=FALSE)
+  source_names <- sub("=.*$","",inputs)
+  source_paths <- sub("^[^=]+=","",inputs)
+  names(source_paths) <- source_names
+  if(anyDuplicated(source_names)) stop("Each source may be supplied only once",call.=FALSE)
+} else {
+  source_paths <- c(
+    lens=arg("--lens"),
+    scopus=arg("--scopus"),
+    openalex=arg("--openalex"),
+    agricola=arg("--agricola"),
+    wos=arg("--wos")
+  )
+  if(any(vapply(source_paths,is.null,logical(1)))) {
+    stop("Provide repeated --input source=path arguments, or all five legacy source flags",call.=FALSE)
+  }
+}
+
 run_id <- arg("--run-id")
 output_path <- arg("--output")
 manifest_path <- arg("--manifest")
-required <- list(cluster_map_path,lens_path,scopus_path,openalex_path,agricola_path,wos_path,run_id,output_path,manifest_path)
-if(any(vapply(required,is.null,logical(1)))) stop("Required: --cluster-map --lens --scopus --openalex --agricola --wos --run-id --output --manifest",call.=FALSE)
+required <- list(cluster_map_path,run_id,output_path,manifest_path)
+if(any(vapply(required,is.null,logical(1))) || !length(source_paths)) stop("Required: --cluster-map, at least one source input, --run-id --output --manifest",call.=FALSE)
 
 `%||%` <- function(x,y) if(is.null(x)) y else x
 scalar <- function(x){
@@ -215,7 +236,27 @@ manifestation_metadata <- function(r){
     ))
   }
 
-  list()
+  # Generic sidecar/RIS manifestation. This preserves additive metadata but
+  # does not alter any deduplication logic or legacy source semantics.
+  return(list(
+    source_identity=list(source_record_id=sid$source_record_id %||% sid$sidecar_record_id %||% NULL),
+    author_keywords=m$author_keywords %||% NULL,
+    indexing_terms=m$indexing_terms %||% NULL,
+    publication_type=m$publication_type %||% NULL,
+    publication_date=m$publication_date %||% NULL,
+    language=m$language %||% NULL,
+    identifiers=list(
+      issn=m$issn %||% NULL,
+      eissn=m$eissn %||% NULL,
+      issn_l=m$issn_l %||% NULL,
+      pmid=m$pmid %||% NULL,
+      scopus_eid=NULL,scopus_id=NULL,openalex_id=NULL,agricola_id=NULL,wos_uid=NULL,
+      isbn=m$isbn %||% NULL
+    ),
+    structured_authors=m$structured_authors %||% m$authors %||% NULL,
+    affiliations_or_institutions=m$affiliations %||% m$institutions %||% NULL,
+    source_specific=r$source_specific %||% list()
+  ))
 }
 
 author_strings <- function(x){
@@ -508,7 +549,6 @@ read_source <- function(path,expected){
   }
   n
 }
-source_paths <- c(lens=lens_path,scopus=scopus_path,openalex=openalex_path,agricola=agricola_path,wos=wos_path)
 source_counts <- vapply(names(source_paths),function(src)read_source(source_paths[[src]],src),integer(1))
 all_keys <- ls(records,all.names=TRUE)
 missing <- setdiff(cluster_map$key,all_keys)
