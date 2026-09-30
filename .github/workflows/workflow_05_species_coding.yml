@@ -34,7 +34,7 @@ jobs:
         shell: Rscript {0}
         run: |
           source("R/species_detect.R")
-          x <- readr::read_csv("config/deterministic_concepts.csv", show_col_types=FALSE)
+          x <- readr::read_csv("user_input/workflow05_deterministic_concepts.csv", show_col_types=FALSE)
           stopifnot(identical(names(x), c("coding","entity","terms")))
           testthat::test_file("tests/testthat/test-species.R", reporter = "summary")
 
@@ -79,7 +79,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_05_species_coding.R             --input inputs/workflow05/retained_canonical.jsonl             --dictionary config/deterministic_concepts.csv             --output-dir outputs/workflow05_species_coding             --expected-records 19407
+          Rscript scripts/updater/workflow_05_species_coding.R             --input inputs/workflow05/retained_canonical.jsonl             --config user_input/workflow05_coding_config.json             --dictionary user_input/workflow05_deterministic_concepts.csv             --output-dir outputs/workflow05_species_coding             --expected-records 19407
 
       - name: Validate W05 output
         shell: Rscript {0}
