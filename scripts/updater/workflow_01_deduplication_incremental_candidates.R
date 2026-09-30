@@ -320,6 +320,11 @@ if (validate_index_only) {
   quit(save="no", status=0L)
 }
 
+# Incremental candidate construction: prior manifestations occupy the preserved
+# historical prefix. Never materialise old-old candidate pairs because their
+# decisions are restored from the previous Workflow 01 state and must not be
+# recomputed. This is a memory optimisation only; candidate rules are unchanged.
+prior_n <- length(old_keys)
 pairs <- new.env(hash=TRUE,parent=emptyenv())
 add_pairs_from_groups <- function(dt,key_col,block,max_group=500L) {
   x <- dt[!is.na(get(key_col)) & nzchar(get(key_col)),.(idx,key=get(key_col))]
@@ -333,6 +338,7 @@ add_pairs_from_groups <- function(dt,key_col,block,max_group=500L) {
     cmb <- combn(v,2L)
     for (j in seq_len(ncol(cmb))) {
       a <- min(cmb[1L,j],cmb[2L,j]); b <- max(cmb[1L,j],cmb[2L,j])
+      if (a <= prior_n && b <= prior_n) next
       k <- paste(a,b,sep="::")
       if (!exists(k,pairs,inherits=FALSE)) assign(k,list(i=a,j=b,blocks=block),pairs)
       else {
@@ -403,8 +409,12 @@ cand <- cand[shared_rare_qgrams>=2L]
 title_len <- nchar(meta$title_norm,type="chars")
 cand[,len_ratio:=pmin(title_len[record_i],title_len[record_j])/pmax(title_len[record_i],title_len[record_j])]
 cand <- cand[is.finite(len_ratio) & len_ratio>=0.75]
-progress("rare q-gram candidate join complete",nrow(cand),nrow(cand))
-checkpoint("qgram_candidate_join_complete",nrow(cand),NULL,list(candidate_pairs=nrow(cand)))
+full_qgram_candidate_n <- nrow(cand)
+cand <- cand[record_i > prior_n | record_j > prior_n]
+progress("rare q-gram candidate join complete",nrow(cand),nrow(cand),
+         sprintf("incremental=%d old-old excluded=%d",nrow(cand),full_qgram_candidate_n-nrow(cand)))
+checkpoint("qgram_candidate_join_complete",nrow(cand),NULL,
+           list(candidate_pairs=nrow(cand),old_old_qgram_pairs_excluded=full_qgram_candidate_n-nrow(cand)))
 
 for (k in seq_len(nrow(cand))) {
   a <- cand$record_i[[k]]; b <- cand$record_j[[k]]
@@ -417,8 +427,8 @@ for (k in seq_len(nrow(cand))) {
 }
 rm(qgram_rows,qdt,qfreq,sig,cand); gc()
 pair_keys <- ls(pairs,all.names=TRUE)
-progress("full-corpus candidate generation complete",length(pair_keys),length(pair_keys))
-checkpoint("candidate_generation_complete",length(pair_keys),length(pair_keys),list(total_candidate_pairs=length(pair_keys)))
+progress("incremental candidate generation complete",length(pair_keys),length(pair_keys))
+checkpoint("candidate_generation_complete",length(pair_keys),length(pair_keys),list(incremental_candidate_pairs=length(pair_keys)))
 
 # Materialise lightweight candidate table before any expensive scoring.
 light <- vector("list",length(pair_keys))
@@ -428,19 +438,17 @@ for (k in seq_along(pair_keys)) {
 }
 candidate_dt <- rbindlist(light)
 
-# Incremental extension: preserve every decision from the prior 72,941-manifestation
-# corpus. Only candidate pairs involving at least one manifestation absent from the
-# prior normalised metadata are retained for scoring.
-meta[, prior_corpus := idx <= length(old_keys)]
+# Incremental extension: every candidate in memory already contains at least
+# one newly appended manifestation. Historical old-old decisions remain restored
+# from the previous Workflow 01 state and are never reconstructed here.
+meta[, prior_corpus := idx <= prior_n]
 matched_prior <- sum(meta$prior_corpus)
 new_n <- sum(!meta$prior_corpus)
-if (matched_prior != length(old_keys)) stop("Prior-corpus cardinality mismatch", call.=FALSE)
+if (matched_prior != prior_n) stop("Prior-corpus cardinality mismatch", call.=FALSE)
 
-candidate_dt[, prior_i := meta$prior_corpus[record_i]]
-candidate_dt[, prior_j := meta$prior_corpus[record_j]]
-full_candidate_n <- nrow(candidate_dt)
-candidate_dt <- candidate_dt[!(prior_i & prior_j)]
-candidate_dt[, c("prior_i","prior_j") := NULL]
+if (nrow(candidate_dt) && any(
+  meta$prior_corpus[candidate_dt$record_i] & meta$prior_corpus[candidate_dt$record_j]
+)) stop("Old-old pair escaped incremental candidate construction",call.=FALSE)
 
 fwrite(candidate_dt,file.path(output_dir,"all_candidate_pairs.csv"))
 fwrite(meta[,.(idx,source,source_record_id,prior_corpus)],
@@ -450,17 +458,17 @@ writeLines(toJSON(list(
   prior_manifestations=matched_prior,
   appended_manifestations=new_n,
   union_manifestations=nrow(meta),
-  full_candidate_pairs_before_prior_filter=full_candidate_n,
+  full_candidate_pairs_before_prior_filter=NULL,
   incremental_candidate_pairs=nrow(candidate_dt),
-  old_old_pairs_excluded=full_candidate_n-nrow(candidate_dt)
+  old_old_pairs_excluded_during_construction=TRUE
 ), auto_unbox=TRUE, pretty=TRUE),
 file.path(output_dir,"incremental_summary.json"))
 
 progress("incremental candidate artefact written",nrow(candidate_dt),nrow(candidate_dt),
-         sprintf("prior=%d appended=%d old-old excluded=%d",matched_prior,new_n,full_candidate_n-nrow(candidate_dt)))
+         sprintf("prior=%d appended=%d; old-old excluded during construction",matched_prior,new_n))
 checkpoint("candidate_artifact_written",nrow(candidate_dt),nrow(candidate_dt),
            list(prior_manifestations=matched_prior,appended_manifestations=new_n,
-                old_old_pairs_excluded=full_candidate_n-nrow(candidate_dt)))
+                old_old_pairs_excluded_during_construction=TRUE))
 
 # Deterministic stratified scoring sample.
 candidate_dt[,primary_block:=tstrsplit(blocks,";",fixed=TRUE,keep=1L)]
