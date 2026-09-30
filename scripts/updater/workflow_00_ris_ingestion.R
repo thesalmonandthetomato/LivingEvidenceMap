@@ -6,21 +6,34 @@ suppressPackageStartupMessages({
 })
 
 args <- commandArgs(trailingOnly = TRUE)
-arg <- function(flag, default = NULL) {
+
+arg_one <- function(flag, default = NULL) {
   i <- match(flag, args)
   if (is.na(i)) return(default)
   if (i == length(args)) stop(sprintf("Missing value after %s", flag), call. = FALSE)
   args[[i + 1L]]
 }
-
-ris_path <- arg("--ris")
-registry_path <- arg("--registry")
-output_dir <- arg("--output-dir", "outputs/updater/workflow00_ris")
-if (is.null(ris_path) || is.null(registry_path)) {
-  stop("Required: --ris <file.ris> --registry <registry.json>", call. = FALSE)
+arg_many <- function(flag) {
+  pos <- which(args == flag)
+  if (!length(pos)) return(character())
+  vapply(pos, function(i) {
+    if (i == length(args)) stop(sprintf("Missing value after %s", flag), call. = FALSE)
+    args[[i + 1L]]
+  }, character(1))
 }
-if (!file.exists(ris_path)) stop(sprintf("RIS file not found: %s", ris_path), call. = FALSE)
+
+ris_paths <- arg_many("--ris")
+registry_path <- arg_one("--registry")
+output_dir <- arg_one("--output-dir", "outputs/updater/workflow00_ris")
+
+if (!length(ris_paths) || is.null(registry_path)) {
+  stop("Required: one or more --ris <file.ris> arguments and --registry <registry.json>", call. = FALSE)
+}
+if (any(!file.exists(ris_paths))) {
+  stop(sprintf("RIS file(s) not found: %s", paste(ris_paths[!file.exists(ris_paths)], collapse = ", ")), call. = FALSE)
+}
 if (!file.exists(registry_path)) stop(sprintf("Registry file not found: %s", registry_path), call. = FALSE)
+if (anyDuplicated(basename(ris_paths))) stop("Supplied RIS filenames must be unique", call. = FALSE)
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -69,39 +82,69 @@ year_from <- function(x) {
 }
 parse_sn <- function(x) {
   vals <- as_values(x)
-  if (is.null(vals)) return(list(issn=NULL,isbn=NULL,raw=NULL))
-  tokens <- unlist(strsplit(vals, "[[:space:];,]+", perl=TRUE), use.names=FALSE)
+  if (is.null(vals)) return(list(issn = NULL, isbn = NULL, raw = NULL))
+  tokens <- unlist(strsplit(vals, "[[:space:];,]+", perl = TRUE), use.names = FALSE)
   tokens <- tokens[nzchar(tokens)]
   clean <- gsub("[^0-9Xx]", "", tokens)
   issn <- tokens[grepl("^[0-9]{4}-?[0-9]{3}[0-9Xx]$", tokens)]
-  isbn <- tokens[nchar(clean) %in% c(10L,13L) & grepl("^[0-9Xx-]+$", tokens)]
+  isbn_ix <- nchar(clean) %in% c(10L, 13L) & grepl("^[0-9Xx-]+$", tokens)
   list(
-    issn=if(length(issn)) unique(issn) else NULL,
-    isbn=if(length(isbn)) unique(tokens[nchar(clean) %in% c(10L,13L) & grepl("^[0-9Xx-]+$", tokens)]) else NULL,
-    raw=vals
+    issn = if (length(issn)) unique(issn) else NULL,
+    isbn = if (any(isbn_ix)) unique(tokens[isbn_ix]) else NULL,
+    raw = vals
   )
 }
+sha256_file <- function(path) digest(file = path, algo = "sha256", serialize = FALSE)
+record_hash <- function(r) digest(toJSON(r, auto_unbox = TRUE, null = "null", na = "null", digits = NA),
+                                  algo = "sha256", serialize = FALSE)
 
 registry <- fromJSON(registry_path, simplifyVector = FALSE)
-required_top <- c("schema_version", "source_ID", "acquisition", "database", "search", "field_semantics", "input")
+required_top <- c("schema_version", "acquisition", "database", "search", "field_semantics", "input")
 missing_top <- required_top[!vapply(required_top, function(nm) !is.null(registry[[nm]]), logical(1))]
 if (length(missing_top)) stop(sprintf("Registry missing required field(s): %s", paste(missing_top, collapse = ", ")), call. = FALSE)
 if (!identical(registry$schema_version, "workflow00-source-registry-v1")) stop("Unsupported registry schema_version", call. = FALSE)
-source_ID <- scalar(registry$source_ID)
-if (is.null(source_ID) || !grepl("^[A-Za-z0-9][A-Za-z0-9._:-]*$", source_ID)) stop("Invalid source_ID", call. = FALSE)
 if (!identical(scalar(registry$acquisition$method), "ris_upload")) stop("Registry acquisition.method must be ris_upload", call. = FALSE)
 if (!identical(scalar(registry$acquisition$source_format), "RIS")) stop("Registry acquisition.source_format must be RIS", call. = FALSE)
+
 database_name <- scalar(registry$database$name)
+provider_slug <- scalar(registry$database$short_name)
 if (is.null(database_name)) stop("Registry database.name is required", call. = FALSE)
+if (is.null(provider_slug) || !grepl("^[a-z0-9][a-z0-9_-]*$", provider_slug)) {
+  stop("Registry database.short_name must be a stable lower-case source code", call. = FALSE)
+}
+
 kw_semantics <- scalar(registry$field_semantics$ris_KW)
 allowed_kw_semantics <- c("author_keywords", "indexing_terms", "mixed", "unknown")
 if (is.null(kw_semantics) || !(kw_semantics %in% allowed_kw_semantics)) {
   stop("Registry field_semantics.ris_KW must be author_keywords, indexing_terms, mixed, or unknown", call. = FALSE)
 }
-expected_filename <- scalar(registry$input$filename)
-if (is.null(expected_filename)) stop("Registry input.filename is required", call. = FALSE)
-if (!identical(basename(ris_path), basename(expected_filename))) {
-  stop(sprintf("RIS filename does not match registry input.filename: %s != %s", basename(ris_path), basename(expected_filename)), call. = FALSE)
+
+registry_files <- registry$input$files
+if (is.null(registry_files) || !length(registry_files)) stop("Registry input.files must contain at least one file", call. = FALSE)
+registered_names <- vapply(registry_files, function(x) scalar(x$filename) %||% "", character(1))
+if (any(!nzchar(registered_names))) stop("Every registry input.files entry requires filename", call. = FALSE)
+if (anyDuplicated(registered_names)) stop("Registry input.files contains duplicate filenames", call. = FALSE)
+
+supplied_names <- basename(ris_paths)
+if (!setequal(registered_names, supplied_names)) {
+  missing <- setdiff(registered_names, supplied_names)
+  extra <- setdiff(supplied_names, registered_names)
+  stop(sprintf("RIS inputs do not match registry. Missing: [%s]. Extra: [%s].",
+               paste(missing, collapse = ", "), paste(extra, collapse = ", ")), call. = FALSE)
+}
+ris_paths <- ris_paths[match(registered_names, supplied_names)]
+
+expected_chunks <- registry$input$expected_chunk_count
+if (!is.null(expected_chunks) && as.integer(expected_chunks) != length(ris_paths)) {
+  stop(sprintf("Expected %d RIS chunks but received %d", as.integer(expected_chunks), length(ris_paths)), call. = FALSE)
+}
+
+file_sha <- vapply(ris_paths, sha256_file, character(1))
+dup_sha <- unique(file_sha[duplicated(file_sha) | duplicated(file_sha, fromLast = TRUE)])
+if (length(dup_sha)) {
+  dup_files <- lapply(dup_sha, function(h) basename(ris_paths[file_sha == h]))
+  msg <- vapply(seq_along(dup_sha), function(i) paste(dup_files[[i]], collapse = " = "), character(1))
+  stop(sprintf("Duplicate RIS chunk content detected by SHA-256: %s", paste(msg, collapse = "; ")), call. = FALSE)
 }
 
 parse_ris <- function(path) {
@@ -125,11 +168,11 @@ parse_ris <- function(path) {
       tag <- hit[[2L]]
       value <- hit[[3L]]
       if (tag == "TY") {
-        if (!is.null(current)) stop("Encountered TY before previous RIS record ended with ER", call. = FALSE)
+        if (!is.null(current)) stop(sprintf("%s: TY before previous record ended with ER", basename(path)), call. = FALSE)
         current <- list()
         current <- append_tag(current, tag, value)
       } else if (tag == "ER") {
-        if (is.null(current)) stop("Encountered ER outside an RIS record", call. = FALSE)
+        if (is.null(current)) stop(sprintf("%s: ER outside an RIS record", basename(path)), call. = FALSE)
         records[[length(records) + 1L]] <- current
         current <- NULL
       } else if (!is.null(current)) {
@@ -144,24 +187,14 @@ parse_ris <- function(path) {
         else current[[last_tag]][[length(vals)]] <- paste(vals[[length(vals)]], cont)
       }
     } else if (nzchar(trimws(line)) && !is.null(current)) {
-      stop(sprintf("Unparseable non-empty RIS line: %s", line), call. = FALSE)
+      stop(sprintf("%s: unparseable non-empty RIS line: %s", basename(path), line), call. = FALSE)
     }
   }
-  if (!is.null(current)) stop("RIS file ended before ER terminator", call. = FALSE)
+  if (!is.null(current)) stop(sprintf("%s: file ended before ER terminator", basename(path)), call. = FALSE)
   records
 }
 
-raw_records <- parse_ris(ris_path)
-if (!length(raw_records)) stop("RIS file contains zero complete records", call. = FALSE)
-
-provider_slug <- scalar(registry$database$short_name)
-if (is.null(provider_slug)) {
-  provider_slug <- tolower(gsub("[^A-Za-z0-9]+", "_", database_name))
-  provider_slug <- gsub("^_+|_+$", "", provider_slug)
-}
-if (!nzchar(provider_slug)) provider_slug <- "ris"
-
-make_source_record_id <- function(r, i) {
+make_source_record_id <- function(r) {
   candidates <- c(
     scalar(first_present(r, c("AN", "ID", "UT"))),
     norm_doi(first_present(r, c("DO"))),
@@ -178,7 +211,7 @@ make_source_record_id <- function(r, i) {
   paste0(provider_slug, ":ris_sha256:", substr(digest(payload, algo = "sha256", serialize = FALSE), 1L, 24L))
 }
 
-normalise_record <- function(r, i) {
+normalise_record <- function(r) {
   title <- clean_text(first_present(r, c("TI", "T1", "CT", "BT")))
   abstract <- clean_text(first_present(r, c("AB", "N2")))
   authors <- as_values(c(r$AU %||% list(), r$A1 %||% list()))
@@ -193,20 +226,16 @@ normalise_record <- function(r, i) {
   if (!length(publication_type)) publication_type <- NULL
   language <- as_values(r$LA)
   sn <- parse_sn(r$SN)
-  issn <- sn$issn
-  isbn <- sn$isbn
   volume <- clean_text(r$VL)
   issue <- clean_text(r$IS)
   pages <- clean_text(first_present(r, c("SP", "EP")))
-  source_record_id <- make_source_record_id(r, i)
+  source_record_id <- make_source_record_id(r)
 
   list(
     source = list(
       provider = provider_slug,
       source_format = "ris",
-      source_collection = database_name,
-      source_ID = source_ID,
-      source_IDs = list(source_ID)
+      source_collection = database_name
     ),
     sidecar_identity = list(
       sidecar_record_id = source_record_id,
@@ -228,8 +257,8 @@ normalise_record <- function(r, i) {
       volume = volume,
       issue = issue,
       pages = pages,
-      issn = issn,
-      isbn = isbn,
+      issn = sn$issn,
+      isbn = sn$isbn,
       eissn = NULL,
       issn_l = NULL,
       language = language,
@@ -247,35 +276,103 @@ normalise_record <- function(r, i) {
       elocation = clean_text(r$C6)
     ),
     provenance = list(
-      source_ID = source_ID,
-      source_IDs = list(source_ID),
       acquisition_method = "ris_upload",
-      database = registry$database,
-      search = registry$search,
       raw_payload_location = "Workflow 00 restricted Zenodo search archive",
       raw_payload_duplicated_in_canonical_jsonl = FALSE
     )
   )
 }
 
-records <- lapply(seq_along(raw_records), function(i) normalise_record(raw_records[[i]], i))
-ids <- vapply(records, function(x) x$sidecar_identity$source_record_id, character(1))
-if (any(!nzchar(ids))) stop("One or more normalised records lack source_record_id", call. = FALSE)
-if (anyDuplicated(ids)) {
-  dup <- unique(ids[duplicated(ids)])
-  stop(sprintf("Duplicate source_record_id values within RIS import: %s", paste(head(dup, 10L), collapse = ", ")), call. = FALSE)
+chunk_records <- vector("list", length(ris_paths))
+chunk_audit <- vector("list", length(ris_paths))
+all_rows <- list()
+
+for (j in seq_along(ris_paths)) {
+  path <- ris_paths[[j]]
+  raw <- parse_ris(path)
+  if (!length(raw)) stop(sprintf("%s contains zero complete RIS records", basename(path)), call. = FALSE)
+  ids <- vapply(raw, make_source_record_id, character(1))
+  hashes <- vapply(raw, record_hash, character(1))
+
+  chunk_records[[j]] <- raw
+  chunk_audit[[j]] <- list(
+    filename = basename(path),
+    bytes = unname(file.info(path)$size),
+    sha256 = file_sha[[j]],
+    parsed_records = length(raw),
+    unique_source_record_ids = length(unique(ids)),
+    duplicate_source_record_ids_within_chunk = length(ids) - length(unique(ids))
+  )
+
+  for (i in seq_along(raw)) {
+    all_rows[[length(all_rows) + 1L]] <- list(
+      chunk = basename(path),
+      source_record_id = ids[[i]],
+      payload_sha256 = hashes[[i]],
+      raw = raw[[i]]
+    )
+  }
 }
 
+all_ids <- vapply(all_rows, function(x) x$source_record_id, character(1))
+id_groups <- split(seq_along(all_rows), all_ids)
+duplicate_groups <- id_groups[lengths(id_groups) > 1L]
+
+conflicts <- list()
+exact_duplicates <- list()
+for (id in names(duplicate_groups)) {
+  ix <- duplicate_groups[[id]]
+  hashes <- unique(vapply(all_rows[ix], function(x) x$payload_sha256, character(1)))
+  chunks <- unique(vapply(all_rows[ix], function(x) x$chunk, character(1)))
+  if (length(hashes) > 1L) {
+    conflicts[[length(conflicts) + 1L]] <- data.frame(
+      source_record_id = id,
+      occurrences = length(ix),
+      chunks = paste(chunks, collapse = ";"),
+      distinct_payload_hashes = length(hashes),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    exact_duplicates[[length(exact_duplicates) + 1L]] <- data.frame(
+      source_record_id = id,
+      occurrences = length(ix),
+      chunks = paste(chunks, collapse = ";"),
+      duplicate_rows_removed = length(ix) - 1L,
+      stringsAsFactors = FALSE
+    )
+  }
+}
+
+audit_dir <- file.path(output_dir, "audit")
 raw_dir <- file.path(output_dir, "raw")
 registry_dir <- file.path(output_dir, "registry")
 handoff_dir <- file.path(output_dir, "handoff")
+dir.create(audit_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(raw_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(registry_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(handoff_dir, recursive = TRUE, showWarnings = FALSE)
 
-raw_copy <- file.path(raw_dir, basename(ris_path))
+if (length(conflicts)) {
+  conflict_df <- do.call(rbind, conflicts)
+  write.csv(conflict_df, file.path(audit_dir, "conflicting_source_record_ids.csv"), row.names = FALSE)
+  stop(sprintf("Conflicting payloads found for %d repeated source_record_id values; refusing to combine chunks", nrow(conflict_df)), call. = FALSE)
+}
+
+exact_df <- if (length(exact_duplicates)) do.call(rbind, exact_duplicates) else
+  data.frame(source_record_id = character(), occurrences = integer(), chunks = character(),
+             duplicate_rows_removed = integer(), stringsAsFactors = FALSE)
+write.csv(exact_df, file.path(audit_dir, "exact_duplicate_source_record_ids.csv"), row.names = FALSE)
+
+keep_ix <- vapply(id_groups, function(ix) ix[[1L]], integer(1))
+keep_ix <- sort(unname(keep_ix))
+unique_rows <- all_rows[keep_ix]
+records <- lapply(unique_rows, function(x) normalise_record(x$raw))
+
+for (j in seq_along(ris_paths)) {
+  dest <- file.path(raw_dir, basename(ris_paths[[j]]))
+  if (!file.copy(ris_paths[[j]], dest, overwrite = TRUE)) stop(sprintf("Failed to stage %s", basename(ris_paths[[j]])), call. = FALSE)
+}
 registry_copy <- file.path(registry_dir, "source_registry.json")
-if (!file.copy(ris_path, raw_copy, overwrite = TRUE)) stop("Failed to stage raw RIS", call. = FALSE)
 if (!file.copy(registry_path, registry_copy, overwrite = TRUE)) stop("Failed to stage source registry", call. = FALSE)
 
 handoff_path <- file.path(handoff_dir, "records.jsonl")
@@ -283,35 +380,81 @@ con <- file(handoff_path, "wt", encoding = "UTF-8")
 for (r in records) writeLines(toJSON(r, auto_unbox = TRUE, null = "null", na = "null", digits = NA), con, useBytes = TRUE)
 close(con)
 
-sha <- function(path) digest(file = path, algo = "sha256", serialize = FALSE)
+parsed_total <- length(all_rows)
+unique_total <- length(records)
+duplicates_removed <- parsed_total - unique_total
+reported <- registry$search$reported_results
+count_match <- if (is.null(reported)) NULL else identical(as.integer(reported), unique_total)
+
+file_manifest <- lapply(seq_along(ris_paths), function(j) {
+  staged <- file.path(raw_dir, basename(ris_paths[[j]]))
+  list(
+    filename = basename(ris_paths[[j]]),
+    path = file.path("raw", basename(ris_paths[[j]])),
+    bytes = unname(file.info(staged)$size),
+    sha256 = sha256_file(staged),
+    parsed_records = chunk_audit[[j]]$parsed_records,
+    unique_source_record_ids = chunk_audit[[j]]$unique_source_record_ids,
+    duplicate_source_record_ids_within_chunk = chunk_audit[[j]]$duplicate_source_record_ids_within_chunk
+  )
+})
+
+status <- if (isFALSE(count_match)) "record_count_mismatch" else "success"
 manifest <- list(
-  schema = "living-evidence-map-workflow00-ris-harvest-v1",
-  status = "success",
-  source_ID = source_ID,
+  schema = "living-evidence-map-workflow00-ris-harvest-v2",
+  status = status,
   source = provider_slug,
   database = registry$database,
   search = registry$search,
   acquisition = registry$acquisition,
-  records_retrieved = length(records),
-  reported_results = registry$search$reported_results %||% NULL,
-  complete_download = if (is.null(registry$search$reported_results)) NULL else identical(as.integer(registry$search$reported_results), length(records)),
-  handoff_contract = "Workflow 00 -> Workflow 01 common normalised manifestation structure",
+  chunks = list(
+    expected = expected_chunks %||% NULL,
+    received = length(ris_paths),
+    files = file_manifest,
+    duplicate_file_checksums = 0L
+  ),
+  records = list(
+    parsed_across_chunks = parsed_total,
+    exact_duplicate_rows_removed = duplicates_removed,
+    unique_records_for_handover = unique_total,
+    conflicting_source_record_ids = 0L,
+    reported_search_results = reported %||% NULL,
+    reported_results_match_unique_records = count_match
+  ),
+  handoff_contract = "Workflow 00 -> Workflow 01 existing source + source_record_id manifestation identity",
   files = list(
-    raw_ris = list(path = file.path("raw", basename(ris_path)), bytes = unname(file.info(raw_copy)$size), sha256 = sha(raw_copy)),
-    registry = list(path = file.path("registry", "source_registry.json"), bytes = unname(file.info(registry_copy)$size), sha256 = sha(registry_copy)),
-    handoff_jsonl = list(path = file.path("handoff", "records.jsonl"), bytes = unname(file.info(handoff_path)$size), sha256 = sha(handoff_path))
+    registry = list(path = file.path("registry", "source_registry.json"),
+                    bytes = unname(file.info(registry_copy)$size),
+                    sha256 = sha256_file(registry_copy)),
+    handoff_jsonl = list(path = file.path("handoff", "records.jsonl"),
+                         bytes = unname(file.info(handoff_path)$size),
+                         sha256 = sha256_file(handoff_path)),
+    duplicate_audit = list(path = file.path("audit", "exact_duplicate_source_record_ids.csv"),
+                           bytes = unname(file.info(file.path(audit_dir, "exact_duplicate_source_record_ids.csv"))$size),
+                           sha256 = sha256_file(file.path(audit_dir, "exact_duplicate_source_record_ids.csv")))
   ),
   generated_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
 )
-writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"),
-           file.path(output_dir, "manifest.json"))
 
-checksum_lines <- c(
-  sprintf("%s  %s", manifest$files$raw_ris$sha256, manifest$files$raw_ris$path),
-  sprintf("%s  %s", manifest$files$registry$sha256, manifest$files$registry$path),
-  sprintf("%s  %s", manifest$files$handoff_jsonl$sha256, manifest$files$handoff_jsonl$path)
-)
+manifest_path <- file.path(output_dir, "manifest.json")
+writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"), manifest_path)
+
+checksum_paths <- c(ris_paths = file.path(raw_dir, basename(ris_paths)),
+                    registry = registry_copy,
+                    handoff = handoff_path,
+                    duplicate_audit = file.path(audit_dir, "exact_duplicate_source_record_ids.csv"),
+                    manifest = manifest_path)
+checksum_lines <- vapply(checksum_paths, function(p) {
+  rel <- substring(p, nchar(output_dir) + 2L)
+  sprintf("%s  %s", sha256_file(p), rel)
+}, character(1))
 writeLines(checksum_lines, file.path(output_dir, "SHA256SUMS"))
 
-message(sprintf("PASS: normalised %d RIS records for source_ID=%s", length(records), source_ID))
+if (isFALSE(count_match)) {
+  stop(sprintf("Unique RIS record count (%d) does not match registry search.reported_results (%d). Audit outputs were written.",
+               unique_total, as.integer(reported)), call. = FALSE)
+}
+
+message(sprintf("PASS: %d RIS chunk(s), %d parsed rows, %d exact duplicate row(s) removed, %d unique records for source=%s",
+                length(ris_paths), parsed_total, duplicates_removed, unique_total, provider_slug))
 message(sprintf("W00 handover: %s", handoff_path))
