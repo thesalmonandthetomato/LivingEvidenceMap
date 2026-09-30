@@ -54,11 +54,11 @@ norm_doi <- function(x){
 source_kind <- function(r){
   if(is.list(r$lens)) return("lens")
   p <- scalar((r$source %||% list())$provider)
-  if(identical(p,"scopus")) return("scopus")
-  if(identical(p,"openalex")) return("openalex")
+  if(is.null(p)) stop("Source provider is missing",call.=FALSE)
   if(identical(p,"agricola_via_europe_pmc")) return("agricola")
   if(identical(p,"wos_starter")) return("wos")
-  stop(sprintf("Unknown source provider: %s",p %||% "<missing>"),call.=FALSE)
+  if(!grepl("^[a-z0-9][a-z0-9_-]*$",p)) stop(sprintf("Invalid source provider slug: %s",p),call.=FALSE)
+  p
 }
 source_record_id <- function(r){
   src <- source_kind(r)
