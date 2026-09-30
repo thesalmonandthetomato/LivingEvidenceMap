@@ -4,31 +4,38 @@
   "sources": {
     "lens": {
       "kind": "workflow00_state",
-      "source": "lens"
+      "source": "lens",
+      "prepared_path": "current_sources/lens/records.jsonl"
     },
     "scopus": {
       "kind": "workflow00_state",
-      "source": "scopus"
+      "source": "scopus",
+      "prepared_path": "current_sources/scopus/scopus_sidecar_records.jsonl"
     },
     "openalex": {
       "kind": "workflow00_state",
-      "source": "openalex"
+      "source": "openalex",
+      "prepared_path": "current_sources/openalex/openalex_sidecar_records.jsonl"
     },
     "agricola": {
       "kind": "workflow00_state",
-      "source": "agricola"
+      "source": "agricola",
+      "prepared_path": "current_sources/agricola/agricola_sidecar_records.jsonl"
     },
     "wos": {
       "kind": "workflow00_state",
-      "source": "wos"
+      "source": "wos",
+      "prepared_path": "current_sources/wos/wos_starter_sidecar_records.jsonl"
     },
     "cab": {
       "kind": "manual_ris",
-      "registry": "user_input/workflow00_ris_cab_abstracts_2026-09-30.json"
+      "registry": "user_input/workflow00_ris_cab_abstracts_2026-09-30.json",
+      "prepared_path": "current_sources/cab/records.jsonl"
     },
     "proquest": {
       "kind": "manual_ris",
-      "registry": "user_input/workflow00_ris_proquest_2026-09-30.json"
+      "registry": "user_input/workflow00_ris_proquest_2026-09-30.json",
+      "prepared_path": "current_sources/proquest/records.jsonl"
     }
   }
 }
