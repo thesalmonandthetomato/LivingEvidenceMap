@@ -40,6 +40,7 @@ jobs:
             identical(cfg$schema, 'living-evidence-map-workflow04-screening-config-v1'),
             identical(cfg$prompt_path, 'user_input/workflow04_screening_prompt.txt'),
             identical(cfg$prompt_version, 'workflow04-v3-salmon-lice-clarification'),
+            identical(cfg$response_schema_name, 'salmon_aquaculture_relevance_screen'),
             identical(cfg$expected_prompt_sha256, 'ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69'),
             file.exists(cfg$prompt_path)
           )
@@ -55,6 +56,7 @@ jobs:
           grep -Fq -- '--screening-config user_input/workflow04_screening_config.json' .github/workflows/workflow_04_production.yml
           grep -Fq 'workflow04_screening_config.json' .github/workflows/workflow_04_publish_baseline.yml
           grep -Fq 'screening_config_path <- arg("--screening-config","user_input/workflow04_screening_config.json")' scripts/updater/workflow_04_luna_consensus.R
+          grep -Fq 'name=RESPONSE_SCHEMA_NAME,strict=TRUE,schema=schema' scripts/updater/workflow_04_luna_consensus.R
           if grep -Fq 'You are screening bibliographic records for inclusion in a living evidence map of commercial aquaculture of Atlantic salmon' scripts/updater/workflow_04_luna_consensus.R; then
             echo 'Historical topic-specific prompt remains embedded in W04 R code' >&2
             exit 1
