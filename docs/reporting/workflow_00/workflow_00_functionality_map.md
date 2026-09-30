@@ -200,3 +200,20 @@ Workflow 00 is considered complete when:
 - the complete parent search run is deposited on Zenodo;
 - the Zenodo DOI, record identifier and manifest checksum are registered in the repository; and
 - downstream restoration of the archived source inputs has been validated.
+
+## Independent search scoping stage
+
+Workflow 00 includes a standalone count-only search scoping workflow at `.github/workflows/workflow_00_search_scoping.yml`. It is manually dispatched and is not part of the production harvesting or fortnightly update chain.
+
+The scoping stage uses the same `user_input/workflow00_search_strategy.json` and the same source-specific query planner as production W00, then requests only the provider-reported result count for each implemented API source: Lens, Scopus, OpenAlex, AGRICOLA and Web of Science Core Collection. API responses are held only in memory long enough to extract the total; bibliographic result records and raw API responses are not written to disk.
+
+CAB Abstracts and ProQuest Dissertations & Theses Global remain manual-ingest sources and are reported as not automatically counted because W00 has no API implementation for them.
+
+Outputs are limited to:
+
+- `search_scope_counts.csv`;
+- `search_scope_counts.json`;
+- `search_scoping_report.Rmd`; and
+- rendered `search_scoping_report.html`.
+
+The report records the search version, search concepts, source, date, hit count and source status. The same count table is also written to the GitHub Actions job summary. The scoping workflow does not update source-ID registries, publish to Zenodo, create harvest artefacts, or trigger Workflow 01.
