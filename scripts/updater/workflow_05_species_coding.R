@@ -19,12 +19,36 @@ arg <- function(flag, default = NULL) {
 }
 
 input_path <- arg("--input")
-dictionary_path <- arg("--dictionary", "config/deterministic_concepts.csv")
+config_path <- arg("--config", "user_input/workflow05_coding_config.json")
+dictionary_path <- arg("--dictionary")
 output_dir <- arg("--output-dir", "outputs/workflow05_species_coding")
 expected_records <- as.integer(arg("--expected-records", "0"))
 
 if (is.null(input_path) || !file.exists(input_path)) stop("Valid --input JSONL is required", call. = FALSE)
-if (!file.exists(dictionary_path)) stop("Deterministic concepts CSV is missing", call. = FALSE)
+if (!file.exists(config_path)) stop("Workflow 05 coding config is missing", call. = FALSE)
+coding_config <- fromJSON(config_path, simplifyVector = FALSE)
+cfg_scalar <- function(x) {
+  if (is.null(x) || !length(x)) return("")
+  y <- as.character(x[[1L]])
+  if (is.na(y)) "" else trimws(y)
+}
+if (is.null(dictionary_path) || !nzchar(trimws(dictionary_path))) dictionary_path <- cfg_scalar(coding_config$dictionary_path)
+if (!nzchar(dictionary_path) || !file.exists(dictionary_path)) stop("Deterministic concepts CSV is missing", call. = FALSE)
+
+entity_value <- cfg_scalar(coding_config$entity_value)
+generic_code <- cfg_scalar(coding_config$generic_code)
+none_code <- cfg_scalar(coding_config$none_code)
+default_group <- cfg_scalar(coding_config$default_group)
+is_candidate <- isTRUE(coding_config$is_candidate)
+code_map <- unlist(coding_config$code_map, use.names = TRUE)
+scientific_genera <- tolower(trimws(unlist(coding_config$scientific_genera, use.names = FALSE)))
+pluralisable_common_head_terms <- tolower(trimws(unlist(coding_config$pluralisable_common_head_terms, use.names = FALSE)))
+
+if (!nzchar(entity_value)) stop("Workflow 05 config lacks entity_value", call. = FALSE)
+if (!nzchar(generic_code)) stop("Workflow 05 config lacks generic_code", call. = FALSE)
+if (!nzchar(none_code)) stop("Workflow 05 config lacks none_code", call. = FALSE)
+if (!length(code_map) || any(!nzchar(names(code_map))) || any(!nzchar(as.character(code_map)))) stop("Workflow 05 config has invalid code_map", call. = FALSE)
+if (!generic_code %in% unname(code_map)) stop("Workflow 05 generic_code is absent from code_map", call. = FALSE)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
@@ -69,35 +93,20 @@ if (!nrow(concepts)) stop("W05 concepts CSV contains zero rows", call. = FALSE)
 if (any(!nzchar(trimws(concepts$coding))) || any(!nzchar(trimws(concepts$entity))) || any(!nzchar(trimws(concepts$terms)))) {
   stop("Every W05 concept row requires non-empty coding, entity and terms", call. = FALSE)
 }
-if (any(concepts$entity != "farmed species")) {
-  stop("Current W05 expects entity = 'farmed species' for all rows", call. = FALSE)
+if (any(concepts$entity != entity_value)) {
+  stop(sprintf("W05 concepts must use entity = '%s'", entity_value), call. = FALSE)
 }
 
-code_map <- c(
-  "Atlantic salmon" = "SAL_SALAR",
-  "Rainbow trout" = "ONC_MYKISS",
-  "Chinook salmon" = "ONC_TSHAWYTSCHA",
-  "Coho salmon" = "ONC_KISUTCH",
-  "Sockeye salmon" = "ONC_NERKA",
-  "Chum salmon" = "ONC_KETA",
-  "Pink salmon" = "ONC_GORBUSCHA",
-  "Masu salmon" = "ONC_MASOU",
-  "Unspecified species" = "UNSPEC_SALMON"
-)
 if (!all(concepts$coding %in% names(code_map))) {
-  stop("Concept CSV contains an unrecognised farmed-species coding", call. = FALSE)
+  stop("Concept CSV contains a coding absent from Workflow 05 code_map", call. = FALSE)
 }
 
 infer_synonym_type <- function(coding, term) {
   term <- trimws(term)
-  if (identical(coding, "Unspecified species")) return("generic")
+  if (identical(unname(code_map[[coding]]), generic_code)) return("generic")
   if (grepl("^[[:alpha:]]\\.[[:space:]]+[[:alpha:]-]+$", term, perl = TRUE)) return("abbreviation")
 
   first <- tolower(strsplit(term, "[[:space:]]+", perl = TRUE)[[1L]][1L])
-  scientific_genera <- c(
-    "salmo", "oncorhynchus", "onchorhynchus", "onchorrhychus",
-    "onchorynchus", "oncorhyncus", "ooncorhynchus", "parasalmo"
-  )
   if (first %in% scientific_genera) return("scientific")
   "common"
 }
@@ -112,8 +121,8 @@ expanded <- lapply(seq_len(nrow(concepts)), function(i) {
     scientific_name = "",
     synonym = terms,
     synonym_type = vapply(terms, function(term) infer_synonym_type(coding, term), character(1)),
-    is_farmed_candidate = TRUE,
-    default_group = "salmon",
+    is_farmed_candidate = is_candidate,
+    default_group = default_group,
     notes = ""
   )
 })
@@ -123,7 +132,7 @@ message(sprintf("Workflow 05: deterministic title/abstract species coding for %d
 
 mention_list <- vector("list", nrow(records))
 for (i in seq_len(nrow(records))) {
-  m <- detect_species_mentions(records$title[[i]], records$abstract[[i]], dictionary)
+  m <- detect_species_mentions(records$title[[i]], records$abstract[[i]], dictionary, generic_species_id = generic_code, pluralisable_common_head_terms = pluralisable_common_head_terms)
   if (nrow(m)) {
     m$record_sequence <- records$record_sequence[[i]]
     m$record_id <- records$record_id[[i]]
@@ -142,8 +151,8 @@ if (nrow(mentions)) {
     distinct(record_id, species_id, preferred_name) |>
     group_by(record_id) |>
     group_modify(function(.x, .y) {
-      if (any(.x$species_id != "UNSPEC_SALMON")) {
-        .x <- .x |> filter(species_id != "UNSPEC_SALMON")
+      if (any(.x$species_id != generic_code)) {
+        .x <- .x |> filter(species_id != generic_code)
       }
       .x
     }) |>
@@ -167,8 +176,8 @@ summary_by_record <- if (nrow(codes)) {
 handoff <- records |>
   left_join(summary_by_record, by = "record_id") |>
   mutate(
-    farmed_species_codes = coalesce(farmed_species_codes, "NONE"),
-    farmed_species = coalesce(farmed_species, "NONE")
+    farmed_species_codes = coalesce(farmed_species_codes, none_code),
+    farmed_species = coalesce(farmed_species, none_code)
   )
 
 stopifnot(
@@ -195,8 +204,12 @@ manifest <- list(
   dictionary_rows = nrow(concepts),
   expanded_terms = nrow(dictionary),
   species_matches = nrow(mentions),
-  coded_records = sum(handoff$farmed_species_codes != "NONE"),
-  none_records = sum(handoff$farmed_species_codes == "NONE"),
+  coded_records = sum(handoff$farmed_species_codes != none_code),
+  none_records = sum(handoff$farmed_species_codes == none_code),
+  coding_config_sha256 = digest(file = config_path, algo = "sha256", serialize = FALSE),
+  entity_value = entity_value,
+  generic_code = generic_code,
+  none_code = none_code,
   rules = list(
     sources = c("title", "abstract"),
     deterministic_lexical_matching = TRUE,
@@ -207,7 +220,9 @@ manifest <- list(
     matcher_behaviour_inferred_from_terms = TRUE,
     fuzzy_matching = FALSE,
     semantic_inference = FALSE,
-    unspecified_suppressed_when_named_species_present = TRUE
+    generic_code_suppressed_when_specific_code_present = TRUE,
+    generic_code = generic_code,
+    pluralisable_common_head_terms = pluralisable_common_head_terms
   )
 )
 writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE), file.path(output_dir, "workflow05_manifest.json"))
