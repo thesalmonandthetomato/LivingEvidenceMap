@@ -223,10 +223,6 @@ if (length(registered_names)) {
 registry$staging$deposition_id <- dep_id
 
 resolved_registry <- file.path(output_dir, "resolved_source_registry.json")
-writeLines(
-  toJSON(registry, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"),
-  resolved_registry
-)
 
 download_dir <- file.path(output_dir, "downloaded_ris")
 dir.create(download_dir, recursive = TRUE, showWarnings = FALSE)
@@ -242,6 +238,30 @@ for (i in seq_along(ris_files)) {
   if (!file.exists(out) || file.info(out)$size <= 0) stop(sprintf("Downloaded RIS file is empty: %s", z$name), call. = FALSE)
   local_ris[[i]] <- out
 }
+
+# Resolve and verify authoritative raw-file fingerprints before ingestion.
+for (i in seq_along(local_ris)) {
+  nm <- basename(local_ris[[i]])
+  bytes <- unname(file.info(local_ris[[i]])$size)
+  sha <- digest(file = local_ris[[i]], algo = "sha256", serialize = FALSE)
+  reg_ix <- which(vapply(registry$input$files, function(x) identical(scalar(x$filename), nm), logical(1)))
+  if (length(reg_ix) != 1L) stop(sprintf("Resolved registry does not contain exactly one entry for %s", nm), call. = FALSE)
+  existing_bytes <- registry$input$files[[reg_ix]]$bytes
+  existing_sha <- scalar(registry$input$files[[reg_ix]]$sha256)
+  if (!is.null(existing_bytes) && as.integer(existing_bytes) != as.integer(bytes)) {
+    stop(sprintf("Registered byte size mismatch for %s: expected %s, got %s", nm, existing_bytes, bytes), call. = FALSE)
+  }
+  if (!is.null(existing_sha) && !identical(existing_sha, sha)) {
+    stop(sprintf("Registered SHA-256 mismatch for %s: expected %s, got %s", nm, existing_sha, sha), call. = FALSE)
+  }
+  registry$input$files[[reg_ix]]$bytes <- bytes
+  registry$input$files[[reg_ix]]$sha256 <- sha
+}
+
+writeLines(
+  toJSON(registry, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"),
+  resolved_registry
+)
 
 ingest_dir <- file.path(output_dir, "ingestion")
 ingest_script <- "scripts/updater/workflow_00_ris_ingestion.R"
