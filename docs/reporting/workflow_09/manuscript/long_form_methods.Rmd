@@ -55,14 +55,20 @@ Table 1. Search strategy and representative hits in The Lens
 | #3 | #1 AND #2 | 24,343 |
 | #4 | #3 filtered > excl. dataset, excl. report, excl. libguide, excl. news | 23,852 |
 
-The living evidence map was subsequently expanded to retrieve bibliographic records independently from the following databases, all accessed via their APIs:
+The living evidence map was subsequently expanded to retrieve bibliographic records independently from seven sources. Five are harvested through automated database workflows:
 
-- The Lens (filtered to exclude datasets, reports, libguides, news)
+- The Lens
 - OpenAlex
 - Scopus
 - Web of Science (Web of Science Core Collection: Science Citation Index Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation Index (SSCI) 1981-present, Arts & Humanities Citation Index (AHCI) 2017-present, Emerging Sources Citation Index (ESCI) 2005-present; Current Contents Connect; MEDLINE; Preprint Citation Index; Research Commons)
 - AGRICOLA
-Database-specific implementations were derived from the same underlying conceptual search and adapted to the syntax and indexing of each source. Search strings are stored as version-controlled user inputs in the project repository.
+
+Two further sources are imported from manually exported RIS files because they are not harvested through the automated API workflows:
+
+- CAB Abstracts, accessed via CABI Digital Library
+- ProQuest Dissertations & Theses Global (PQD&T), accessed via ProQuest
+
+Database-specific implementations were derived from the same underlying conceptual search and adapted to the syntax and indexing of each source. Search strings, search dates, fields and source-specific restrictions are stored as version-controlled user inputs and provenance records in the project repository.
 
 ### Searches for grey literature
 
