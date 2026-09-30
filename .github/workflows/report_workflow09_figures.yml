@@ -150,6 +150,7 @@ jobs:
         env:
           CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
           FLOW_COUNTS_JSON: ${{ github.workspace }}/visualisations/figure_07_flow_diagram_counts.json
+          CITESOURCE_OUTPUT_DIR: ${{ github.workspace }}/outputs/citesource_contribution
         shell: Rscript {0}
         run: |
           dir.create("outputs/workflow09_manuscript", recursive = TRUE, showWarnings = FALSE)
