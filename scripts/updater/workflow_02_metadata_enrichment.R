@@ -20,6 +20,8 @@ output_path <- arg("--output")
 audit_path <- arg("--audit")
 report_path <- arg("--report")
 limit_arg <- arg("--limit",NULL)
+record_ids_path <- arg("--record-ids",NULL)
+progress_every <- as.integer(arg("--progress-every","100"))
 delay <- as.numeric(arg("--delay","0.2"))
 recheck_after_days <- as.numeric(arg("--recheck-after-days","90"))
 if(is.na(recheck_after_days) || recheck_after_days < 0) stop("--recheck-after-days must be >= 0",call.=FALSE)
@@ -28,6 +30,14 @@ if(any(vapply(list(input_path,output_path,audit_path,report_path),is.null,logica
 }
 limit <- if(is.null(limit_arg)) Inf else as.integer(limit_arg)
 if(!is.infinite(limit) && (is.na(limit)||limit<1L)) stop("--limit must be positive",call.=FALSE)
+if(is.na(progress_every) || progress_every < 1L) stop("--progress-every must be >= 1",call.=FALSE)
+selected_record_ids <- NULL
+if(!is.null(record_ids_path)){
+  if(!file.exists(record_ids_path)) stop("--record-ids file not found",call.=FALSE)
+  selected_record_ids <- unique(trimws(readLines(record_ids_path,warn=FALSE,encoding="UTF-8")))
+  selected_record_ids <- selected_record_ids[nzchar(selected_record_ids)]
+  if(!length(selected_record_ids)) stop("--record-ids contains no record IDs",call.=FALSE)
+}
 
 scopus_key <- Sys.getenv("SCOPUS_API_TOKEN")
 scopus_insttoken <- Sys.getenv("SCOPUS_INSTTOKEN")
@@ -444,6 +454,7 @@ previous_attempt_due <- function(meta){
 for(i in seq_along(rows)){
   r <- rows[[i]]
   if(is.null(r$canonical)) r$canonical <- list()
+  record_id <- clean_text((r$identity %||% list())$record_id %||% (r$identity %||% list())$lens_id)
   d <- norm_doi(r$canonical$doi)
   missing_title_before <- is_missing(r$canonical$title)
   missing_abstract_before <- is_missing(r$canonical$abstract)
@@ -455,11 +466,17 @@ for(i in seq_along(rows)){
     counts$deferred_recent_attempts <- counts$deferred_recent_attempts + 1L
     next
   }
+  if(!is.null(selected_record_ids) && (is.null(record_id) || !(record_id %in% selected_record_ids))) next
   if(processed_eligible>=limit) next
   processed_eligible <- processed_eligible + 1L
+  if(processed_eligible == 1L || processed_eligible %% progress_every == 0L){
+    target <- if(is.null(selected_record_ids)) if(is.infinite(limit)) "all due" else as.character(limit) else as.character(length(selected_record_ids))
+    cat(sprintf("PROGRESS: processed %d / %s selected eligible records\n",processed_eligible,target))
+    flush.console()
+  }
 
   rec_audit <- list(
-    record_id=clean_text((r$identity %||% list())$record_id %||% (r$identity %||% list())$lens_id),
+    record_id=record_id,
     doi=d,
     missing_title_before=missing_title_before,
     missing_abstract_before=missing_abstract_before,
@@ -626,6 +643,12 @@ for(i in seq_along(rows)){
   audit[[length(audit)+1L]] <- rec_audit
 }
 
+if(!is.null(selected_record_ids)){
+  audited_ids <- vapply(audit,function(x) clean_text(x$record_id) %||% "",character(1))
+  missing_selected <- setdiff(selected_record_ids,audited_ids)
+  if(length(missing_selected)) stop(sprintf("%d selected record IDs were not processed; first: %s",length(missing_selected),paste(head(missing_selected,5),collapse=", ")),call.=FALSE)
+}
+
 write_jsonl(rows,output_path)
 write_jsonl(audit,audit_path)
 
@@ -644,6 +667,9 @@ report <- list(
     repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days)
   ),
   trial_limit=if(is.infinite(limit)) NULL else limit,
+  selected_record_ids_file=if(is.null(record_ids_path)) NULL else record_ids_path,
+  selected_record_ids=if(is.null(selected_record_ids)) NULL else length(selected_record_ids),
+  processed_eligible_records=processed_eligible,
   counts=counts,
   input_sha256=input_sha,
   output_sha256=digest(file=output_path,algo="sha256",serialize=FALSE),
