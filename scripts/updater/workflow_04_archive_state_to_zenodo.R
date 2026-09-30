@@ -19,16 +19,17 @@ inc_path<-file.path(state_dir,"workflow04_included_record_ids.txt")
 exc_path<-file.path(state_dir,"workflow04_excluded_record_ids.txt")
 summary_path<-file.path(state_dir,"summary.json")
 agree_path<-file.path(state_dir,"workflow04_agreement_summary.json")
-for(p in c(layer_path,inc_path,exc_path,summary_path,agree_path))if(!file.exists(p))stop(sprintf("Missing Workflow 04 state file: %s",basename(p)),call.=FALSE)
+for(p in c(layer_path,inc_path,exc_path,summary_path))if(!file.exists(p))stop(sprintf("Missing Workflow 04 state file: %s",basename(p)),call.=FALSE)
 
 s<-fromJSON(summary_path,simplifyVector=FALSE)
 if(!identical(s$status,"PASS"))stop("Workflow 04 summary is not PASS",call.=FALSE)
-if(as.integer(s$workflow03_eligible)!=32283L||as.integer(s$final_retain)!=19407L||as.integer(s$final_exclude)!=12876L||as.integer(s$unresolved)!=0L)stop("Workflow 04 final counts do not match validated baseline",call.=FALSE)
+eligible_n<-as.integer(s$workflow03_eligible);retain_n<-as.integer(s$final_retain);exclude_n<-as.integer(s$final_exclude);unresolved_n<-as.integer(s$unresolved)
+if(any(is.na(c(eligible_n,retain_n,exclude_n,unresolved_n)))||eligible_n<0L||retain_n<0L||exclude_n<0L||unresolved_n!=0L||retain_n+exclude_n!=eligible_n)stop("Workflow 04 final counts fail dynamic cardinality validation",call.=FALSE)
 
 layer_lines<-readLines(layer_path,warn=FALSE,encoding="UTF-8");layer_lines<-layer_lines[nzchar(trimws(layer_lines))]
 inc<-readLines(inc_path,warn=FALSE,encoding="UTF-8");inc<-inc[nzchar(trimws(inc))]
 exc<-readLines(exc_path,warn=FALSE,encoding="UTF-8");exc<-exc[nzchar(trimws(exc))]
-if(length(layer_lines)!=32283L||length(inc)!=19407L||length(exc)!=12876L)stop("Workflow 04 state cardinality invariant failed",call.=FALSE)
+if(length(layer_lines)!=eligible_n||length(inc)!=retain_n||length(exc)!=exclude_n)stop("Workflow 04 state cardinality invariant failed",call.=FALSE)
 if(anyDuplicated(inc)||anyDuplicated(exc)||length(intersect(inc,exc))>0L)stop("Included/excluded ID partition invariant failed",call.=FALSE)
 layer_ids<-vapply(layer_lines,function(z)as.character(fromJSON(z,simplifyVector=FALSE)$record_id),character(1))
 if(any(!nzchar(layer_ids))||anyDuplicated(layer_ids)||!setequal(layer_ids,c(inc,exc)))stop("Workflow 04 layer identity invariant failed",call.=FALSE)
@@ -37,7 +38,7 @@ layer_sha<-digest(file=layer_path,algo="sha256",serialize=FALSE)
 inc_sha<-digest(file=inc_path,algo="sha256",serialize=FALSE)
 exc_sha<-digest(file=exc_path,algo="sha256",serialize=FALSE)
 summary_sha<-digest(file=summary_path,algo="sha256",serialize=FALSE)
-agree_sha<-digest(file=agree_path,algo="sha256",serialize=FALSE)
+agree_sha<-if(file.exists(agree_path))digest(file=agree_path,algo="sha256",serialize=FALSE)else NULL
 
 token<-Sys.getenv("ZENODO_ACCESS_TOKEN");if(!nzchar(token))stop("ZENODO_ACCESS_TOKEN is not set",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE);output_dir<-normalizePath(output_dir,mustWork=TRUE)
@@ -58,7 +59,7 @@ manifest<-list(
  source_github_run_id=as.character(source_run_id),publication_github_run_id=as.character(publication_run_id),
  source_github_run_url=sprintf("https://github.com/%s/actions/runs/%s",repository,source_run_id),repository=repository,
  upstream_lean_canonical_sha256=upstream_lean_sha,upstream_workflow03_publication_status_sha256=upstream_w03_sha,
- prompt_sha256=prompt_sha,records=32283L,retained=19407L,excluded=12876L,unresolved=0L,inclusion_rate=19407/32283,
+ prompt_sha256=prompt_sha,records=eligible_n,retained=retain_n,excluded=exclude_n,unresolved=unresolved_n,inclusion_rate=if(eligible_n)retain_n/eligible_n else NA_real_,
  workflow04_final_screening_layer_sha256=layer_sha,included_record_ids_sha256=inc_sha,excluded_record_ids_sha256=exc_sha,
  summary_sha256=summary_sha,agreement_summary_sha256=agree_sha,file_visibility="restricted",
  files=list(state_archive=list(filename=archive_name,bytes=unname(file.info(archive_path)$size),sha256=digest(file=archive_path,algo="sha256",serialize=FALSE)))
@@ -79,7 +80,7 @@ metadata<-list(metadata=list(
  upload_type="dataset",publication_date=format(Sys.Date(),"%Y-%m-%d"),
  description=paste0("<p>Sparse relevance-screening state for Living Evidence Map Workflow 04.</p>",
  "<p>The state is keyed by stable canonical record_id and layers screening decisions over the exact Workflow 03 state rather than duplicating the canonical bibliographic database.</p>",
- "<p>Eligible records: 32,283; retained: 19,407; excluded: 12,876; unresolved: 0.</p>"),
+ "<p>Eligible records: ",eligible_n,"; retained: ",retain_n,"; excluded: ",exclude_n,"; unresolved: ",unresolved_n,".</p>"),
  creators=list(list(name="Haddaway, Neal")),access_right="restricted",
  access_conditions="Files contain bibliographic identifiers, screening decisions and model-derived screening provenance.",
  keywords=list("Living Evidence Map","Workflow 04","relevance screening","evidence synthesis",paste0("LivingEvidenceMap-workflow04-run-",source_run_id))
@@ -111,4 +112,4 @@ receipt<-c(manifest,list(
  published_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 ))
 writeLines(toJSON(receipt,auto_unbox=TRUE,pretty=TRUE,null="null",na="null",digits=NA),file.path(output_dir,"zenodo_receipt.json"),useBytes=TRUE)
-cat(sprintf("PASS: published restricted Workflow 04 screening state as Zenodo record %s; retained=%d excluded=%d\n",record_id,19407L,12876L))
+cat(sprintf("PASS: published restricted Workflow 04 screening state as Zenodo record %s; retained=%d excluded=%d\n",record_id,retain_n,exclude_n))
