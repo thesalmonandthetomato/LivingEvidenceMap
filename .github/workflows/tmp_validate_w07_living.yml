@@ -1,0 +1,245 @@
+name: Temporary - validate W07 living architecture
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'user_input/w07_living_validation.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('yaml','readr','dplyr','jsonlite','digest'))
+
+      - name: Parse permanent W07 implementation
+        shell: Rscript {0}
+        run: |
+          yaml::read_yaml('.github/workflows/workflow_07_production.yml')
+          parse(file='scripts/updater/workflow_07_prepare_incremental.R')
+          parse(file='scripts/updater/workflow_07_merge_incremental_topics.R')
+          parse(file='scripts/updater/workflow_07_prepare_zero_rescreen_incremental.R')
+          parse(file='scripts/updater/workflow_07_merge_zero_rescreen_incremental.R')
+          parse(file='scripts/reporting/workflow07_zero_topic_targeted_rescreen.R')
+          parse(file='scripts/reporting/workflow07_apply_retention_and_review_rules.R')
+          parse(file='scripts/updater/workflow_07_archive_state_to_zenodo.R')
+          parse(file='scripts/updater/workflow_07_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_07_update_zenodo_registry.R')
+          cat('PASS: W07 permanent implementation parses\n')
+
+      - name: Assert historical population locks removed
+        shell: Rscript {0}
+        run: |
+          files<-c(
+            '.github/workflows/workflow_07_production.yml',
+            'scripts/updater/workflow_07_prepare_incremental.R',
+            'scripts/updater/workflow_07_merge_incremental_topics.R',
+            'scripts/updater/workflow_07_prepare_zero_rescreen_incremental.R',
+            'scripts/updater/workflow_07_merge_zero_rescreen_incremental.R',
+            'scripts/updater/workflow_07_archive_state_to_zenodo.R'
+          )
+          txt<-paste(vapply(files,function(p)paste(readLines(p,warn=FALSE),collapse='\n'),character(1)),collapse='\n')
+          stopifnot(!grepl('19407|19,407|12297|12,297|7110|7,110',txt))
+          cat('PASS: no baseline population locks in permanent W07 production path\n')
+
+      - name: Build synthetic first-run inputs
+        shell: Rscript {0}
+        run: |
+          library(readr);library(jsonlite)
+          dir.create('tmp/first',recursive=TRUE)
+          current<-data.frame(
+            record_id=c('A','B','C'),
+            title=c('Environmental effects of salmon farms','Sparse salmon farming record','Social impacts of salmon aquaculture'),
+            abstract=c('Study of environmental effects from commercial salmon farms.','Commercial salmon farming.','Study of social impacts of salmon aquaculture workers.'),
+            stringsAsFactors=FALSE
+          )
+          write_csv(current,'tmp/first/current.csv',na='')
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_07_prepare_incremental.R',
+            '--current','tmp/first/current.csv',
+            '--ontology','data/reference/topic_ontology_v3_6.csv',
+            '--prompt','data/reference/topic_system_prompt_v3_6.txt',
+            '--output-dir','tmp/first/prepare'
+          ))
+          stopifnot(status==0L)
+          p<-fromJSON('tmp/first/prepare/prepare_manifest.json')
+          stopifnot(p$mode=='first_run',p$current_records==3L,p$reusable_records==0L,p$screen_queue_records==3L)
+
+          scores<-data.frame(
+            record_id=c('A','C'),
+            path_id=c('V3_001','V3_052'),
+            hierarchy_path=c('Environment','People and society'),
+            confidence_n=c(3L,2L),
+            confidence_label=c('3/3','2/3'),
+            stars=c('★★★','★★'),
+            role_a=c('PRIMARY','PRIMARY'),role_b=c('PRIMARY','PRIMARY'),role_c=c('PRIMARY',''),
+            reason_a=c('environment','social'),reason_b=c('environment','social'),reason_c=c('environment',''),
+            stringsAsFactors=FALSE
+          )
+          write_csv(scores,'tmp/first/fresh_scores.csv',na='')
+          rr<-expand.grid(record_id=c('A','B','C'),pass=c('a','b','c'),stringsAsFactors=FALSE)
+          write_csv(rr,'tmp/first/fresh_results.csv',na='')
+
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_07_merge_incremental_topics.R',
+            '--current-records','tmp/first/prepare/current_topic_records.csv',
+            '--reused-scores','tmp/first/prepare/reused_topic_pathway_scores.csv',
+            '--fresh-scores','tmp/first/fresh_scores.csv',
+            '--fresh-record-results','tmp/first/fresh_results.csv',
+            '--prepare-manifest','tmp/first/prepare/prepare_manifest.json',
+            '--ontology','data/reference/topic_ontology_v3_6.csv',
+            '--output-dir','tmp/first/topic'
+          ))
+          stopifnot(status==0L)
+          m<-fromJSON('tmp/first/topic/workflow07_topic_complete_manifest.json')
+          stopifnot(m$records==3L,m$reused_records==0L,m$fresh_records==3L,m$zero_code_records==1L)
+
+      - name: Complete synthetic first-run zero routing
+        shell: Rscript {0}
+        run: |
+          library(jsonlite);library(readr)
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_07_prepare_zero_rescreen_incremental.R',
+            '--zero-records','tmp/first/topic/workflow07_zero_code_records.csv',
+            '--current-records','tmp/first/topic/workflow07_records.csv',
+            '--output-dir','tmp/first/zero_prepare'
+          ))
+          stopifnot(status==0L)
+          zp<-fromJSON('tmp/first/zero_prepare/zero_prepare_manifest.json')
+          stopifnot(zp$zero_topic_records==1L,zp$reused_zero_rescreen==0L,zp$zero_rescreen_queue_records==1L)
+
+          fresh<-list(list(record_id='B',decision='include',votes=list('include','include'),include_votes=2L,exclude_votes=0L,
+                           agreement='2_of_2',requires_human_review=FALSE,technical_failure_present=FALSE,
+                           prompt_version='synthetic',prompt_sha256='synthetic',model='gpt-5.6-luna'))
+          con<-file('tmp/first/fresh_zero.jsonl','wt');for(z in fresh)writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con);close(con)
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_07_merge_zero_rescreen_incremental.R',
+            '--zero-records','tmp/first/topic/workflow07_zero_code_records.csv',
+            '--reused','tmp/first/zero_prepare/reused_zero_topic_rescreen.jsonl',
+            '--fresh','tmp/first/fresh_zero.jsonl',
+            '--output-dir','tmp/first/zero'
+          ))
+          stopifnot(status==0L)
+
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/reporting/workflow07_apply_retention_and_review_rules.R',
+            '--scores','tmp/first/topic/workflow07_topic_pathway_scores.csv',
+            '--records','tmp/first/topic/workflow07_topic_record_summary.csv',
+            '--ontology','data/reference/topic_ontology_v3_6.csv',
+            '--zero-rescreen','tmp/first/zero/workflow07_zero_topic_targeted_rescreen.jsonl',
+            '--output-dir','tmp/first/qc'
+          ))
+          stopifnot(status==0L)
+          q<-fromJSON('tmp/first/qc/workflow07_qc_summary.json')
+          stopifnot(q$records==3L,q$zero_topic_records==1L,q$included_uncoded_records==1L,q$late_automatic_exclusions==0L)
+          cat('PASS: W07 synthetic first-run topic and zero-topic routing\n')
+
+      - name: Test synthetic living update
+        shell: Rscript {0}
+        run: |
+          library(readr);library(jsonlite)
+          dir.create('tmp/update',recursive=TRUE)
+          current<-data.frame(
+            record_id=c('A','B','D'),
+            title=c('Environmental effects of salmon farms','Sparse salmon farming record','Fish health on salmon farms'),
+            abstract=c('Study of environmental effects from commercial salmon farms.','UPDATED sparse commercial salmon farming record.','Disease and health in commercial salmon farms.'),
+            stringsAsFactors=FALSE
+          )
+          write_csv(current,'tmp/update/current.csv',na='')
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_07_prepare_incremental.R',
+            '--current','tmp/update/current.csv',
+            '--prior-records','tmp/first/topic/workflow07_records.csv',
+            '--prior-scores','tmp/first/topic/workflow07_topic_pathway_scores.csv',
+            '--prior-manifest','tmp/first/topic/workflow07_topic_complete_manifest.json',
+            '--ontology','data/reference/topic_ontology_v3_6.csv',
+            '--prompt','data/reference/topic_system_prompt_v3_6.txt',
+            '--output-dir','tmp/update/prepare'
+          ))
+          stopifnot(status==0L)
+          p<-fromJSON('tmp/update/prepare/prepare_manifest.json')
+          stopifnot(p$mode=='update',p$current_records==3L,p$reusable_records==1L,p$screen_queue_records==2L,
+                    p$new_record_ids==1L,p$changed_title_abstract==1L,p$prior_records_no_longer_current==1L)
+          reused<-read_csv('tmp/update/prepare/reused_topic_records.csv',show_col_types=FALSE)
+          stopifnot(identical(reused$record_id,'A'))
+          queue<-read_csv('tmp/update/prepare/topic_screen_queue.csv',show_col_types=FALSE)
+          stopifnot(setequal(queue$record_id,c('B','D')))
+
+          scores<-data.frame(
+            record_id='D',path_id='V3_088',hierarchy_path='Fish health',
+            confidence_n=3L,confidence_label='3/3',stars='★★★',
+            role_a='PRIMARY',role_b='PRIMARY',role_c='PRIMARY',
+            reason_a='health',reason_b='health',reason_c='health',stringsAsFactors=FALSE
+          )
+          write_csv(scores,'tmp/update/fresh_scores.csv',na='')
+          rr<-expand.grid(record_id=c('B','D'),pass=c('a','b','c'),stringsAsFactors=FALSE)
+          write_csv(rr,'tmp/update/fresh_results.csv',na='')
+
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_07_merge_incremental_topics.R',
+            '--current-records','tmp/update/prepare/current_topic_records.csv',
+            '--reused-scores','tmp/update/prepare/reused_topic_pathway_scores.csv',
+            '--fresh-scores','tmp/update/fresh_scores.csv',
+            '--fresh-record-results','tmp/update/fresh_results.csv',
+            '--prepare-manifest','tmp/update/prepare/prepare_manifest.json',
+            '--ontology','data/reference/topic_ontology_v3_6.csv',
+            '--output-dir','tmp/update/topic'
+          ))
+          stopifnot(status==0L)
+          m<-fromJSON('tmp/update/topic/workflow07_topic_complete_manifest.json')
+          stopifnot(m$records==3L,m$reused_records==1L,m$fresh_records==2L,m$zero_code_records==1L)
+
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_07_prepare_zero_rescreen_incremental.R',
+            '--zero-records','tmp/update/topic/workflow07_zero_code_records.csv',
+            '--current-records','tmp/update/topic/workflow07_records.csv',
+            '--prior-records','tmp/first/topic/workflow07_records.csv',
+            '--prior-zero-rescreen','tmp/first/zero/workflow07_zero_topic_targeted_rescreen.jsonl',
+            '--output-dir','tmp/update/zero_prepare'
+          ))
+          stopifnot(status==0L)
+          zp<-fromJSON('tmp/update/zero_prepare/zero_prepare_manifest.json')
+          stopifnot(zp$zero_topic_records==1L,zp$reused_zero_rescreen==0L,zp$zero_rescreen_queue_records==1L)
+
+          fresh<-list(list(record_id='B',decision='exclude',votes=list('exclude','exclude'),include_votes=0L,exclude_votes=2L,
+                           agreement='2_of_2',requires_human_review=TRUE,technical_failure_present=FALSE,
+                           prompt_version='synthetic',prompt_sha256='synthetic',model='gpt-5.6-luna'))
+          con<-file('tmp/update/fresh_zero.jsonl','wt');for(z in fresh)writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con);close(con)
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/updater/workflow_07_merge_zero_rescreen_incremental.R',
+            '--zero-records','tmp/update/topic/workflow07_zero_code_records.csv',
+            '--reused','tmp/update/zero_prepare/reused_zero_topic_rescreen.jsonl',
+            '--fresh','tmp/update/fresh_zero.jsonl',
+            '--output-dir','tmp/update/zero'
+          ))
+          stopifnot(status==0L)
+          status<-system2(file.path(R.home('bin'),'Rscript'),c(
+            'scripts/reporting/workflow07_apply_retention_and_review_rules.R',
+            '--scores','tmp/update/topic/workflow07_topic_pathway_scores.csv',
+            '--records','tmp/update/topic/workflow07_topic_record_summary.csv',
+            '--ontology','data/reference/topic_ontology_v3_6.csv',
+            '--zero-rescreen','tmp/update/zero/workflow07_zero_topic_targeted_rescreen.jsonl',
+            '--output-dir','tmp/update/qc'
+          ))
+          stopifnot(status==0L)
+          q<-fromJSON('tmp/update/qc/workflow07_qc_summary.json')
+          stopifnot(q$records==3L,q$zero_topic_records==1L,q$late_automatic_exclusions==1L)
+          late<-read_csv('tmp/update/qc/workflow07_late_automatic_exclusions.csv',show_col_types=FALSE)
+          stopifnot(identical(late$record_id,'B'))
+          cat('PASS: W07 synthetic living update reuse/change/new/removal and zero-topic routing\n')
