@@ -1,0 +1,43 @@
+{
+  "schema_version": "workflow00-source-registry-v1",
+  "acquisition": {
+    "method": "ris_upload",
+    "source_format": "RIS",
+    "notes": "Manual RIS export from CAB Abstracts via CABI Digital Library."
+  },
+  "database": {
+    "name": "CAB Abstracts",
+    "short_name": "cab",
+    "platform": "CABI Digital Library",
+    "database_scope": [
+      "CAB Abstracts"
+    ]
+  },
+  "search": {
+    "description": "Living Evidence Map salmon farming search in CAB Abstracts.",
+    "search_date": "2026-09-30",
+    "search_string": "(salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)",
+    "search_fields": [
+      "Title",
+      "Abstract"
+    ],
+    "limits": [],
+    "reported_results": null,
+    "notes": "No other restrictions. W00 will verify the complete exported record total from the existing Zenodo draft."
+  },
+  "field_semantics": {
+    "ris_KW": "indexing_terms"
+  },
+  "staging": {
+    "method": "zenodo_draft",
+    "reserved_doi": "10.5281/zenodo.23058344",
+    "deposition_id": null,
+    "publish_after_validation": false,
+    "notes": "Complete this existing Zenodo draft in place and leave it unpublished after validation."
+  },
+  "input": {
+    "expected_chunk_count": null,
+    "encoding": "UTF-8",
+    "files": []
+  }
+}
