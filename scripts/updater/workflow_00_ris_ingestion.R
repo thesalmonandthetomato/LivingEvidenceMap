@@ -69,7 +69,7 @@ year_from <- function(x) {
 }
 
 registry <- fromJSON(registry_path, simplifyVector = FALSE)
-required_top <- c("schema_version", "source_ID", "acquisition", "database", "search", "input")
+required_top <- c("schema_version", "source_ID", "acquisition", "database", "search", "field_semantics", "input")
 missing_top <- required_top[!vapply(required_top, function(nm) !is.null(registry[[nm]]), logical(1))]
 if (length(missing_top)) stop(sprintf("Registry missing required field(s): %s", paste(missing_top, collapse = ", ")), call. = FALSE)
 if (!identical(registry$schema_version, "workflow00-source-registry-v1")) stop("Unsupported registry schema_version", call. = FALSE)
@@ -79,6 +79,11 @@ if (!identical(scalar(registry$acquisition$method), "ris_upload")) stop("Registr
 if (!identical(scalar(registry$acquisition$source_format), "RIS")) stop("Registry acquisition.source_format must be RIS", call. = FALSE)
 database_name <- scalar(registry$database$name)
 if (is.null(database_name)) stop("Registry database.name is required", call. = FALSE)
+kw_semantics <- scalar(registry$field_semantics$ris_KW)
+allowed_kw_semantics <- c("author_keywords", "indexing_terms", "mixed", "unknown")
+if (is.null(kw_semantics) || !(kw_semantics %in% allowed_kw_semantics)) {
+  stop("Registry field_semantics.ris_KW must be author_keywords, indexing_terms, mixed, or unknown", call. = FALSE)
+}
 expected_filename <- scalar(registry$input$filename)
 if (is.null(expected_filename)) stop("Registry input.filename is required", call. = FALSE)
 if (!identical(basename(ris_path), basename(expected_filename))) {
@@ -167,8 +172,11 @@ normalise_record <- function(r, i) {
   journal <- clean_text(first_present(r, c("JO", "JF", "JA", "T2")))
   pub_date <- clean_text(first_present(r, c("DA", "Y1", "PY")))
   year <- year_from(first_present(r, c("PY", "Y1", "DA")))
-  author_keywords <- as_values(r$KW)
-  publication_type <- as_values(r$TY)
+  ris_keywords <- as_values(r$KW)
+  author_keywords <- if (identical(kw_semantics, "author_keywords")) ris_keywords else NULL
+  indexing_terms <- if (kw_semantics %in% c("indexing_terms", "mixed", "unknown")) ris_keywords else NULL
+  publication_type <- unique(c(as_values(r$TY) %||% character(), as_values(r$M3) %||% character()))
+  if (!length(publication_type)) publication_type <- NULL
   language <- as_values(r$LA)
   issn <- as_values(r$SN)
   volume <- clean_text(r$VL)
@@ -198,6 +206,7 @@ normalise_record <- function(r, i) {
       source = journal,
       doi = doi,
       author_keywords = author_keywords,
+      indexing_terms = indexing_terms,
       publication_type = publication_type,
       volume = volume,
       issue = issue,
@@ -210,6 +219,7 @@ normalise_record <- function(r, i) {
       institutions = NULL
     ),
     source_specific = list(
+      ris_keyword_semantics = kw_semantics,
       ris_tags = r
     ),
     provenance = list(
