@@ -240,8 +240,8 @@ boxes <- bind_rows(
   box("retractions", 9.15, 7.58, process_box_w, 0.76, paste0("Retractions excluded\nn = ", fmt(n_w03)), "exclude"),
 
   box("screened", 5.64, 6.48, process_box_w, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
-  box("excluded_ta", 9.15, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_excluded_ta_total)), "exclude"),
-  box("retained", 5.64, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_retained_final)), "retain"),
+  box("excluded_ta", 9.15, 6.48, process_box_w, 0.76, paste0("Records excluded during screening /\nfinal adjudication\nn = ", fmt(n_excluded_ta_total)), "exclude"),
+  box("retained", 5.64, 5.38, process_box_w, 0.76, paste0("Records retained after screening /\nadjudication\nn = ", fmt(n_retained_final)), "retain"),
 
   box("species", 5.64, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
   box("geography", 5.64, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
@@ -399,7 +399,7 @@ counts <- list(
     records_enriched_workflow02 = n_enriched,
     retractions_excluded = n_w03,
     title_abstract_screened = n_screened_ta,
-    title_abstract_excluded_total = n_excluded_ta_total,
+    screening_and_adjudication_excluded_total = n_excluded_ta_total,
     workflow04_exclusions = n_w04,
     workflow07_late_exclusions = n_w07,
     workflow08_exclusions = n_w08,
@@ -433,7 +433,7 @@ readr::write_csv(
       "records_enriched_workflow02",
       "retractions_excluded",
       "records_screened_title_abstract",
-      "records_excluded_title_abstract_total",
+      "records_excluded_screening_and_adjudication_total",
       "records_retained_final",
       "final_geography_coded",
       "final_geography_uncoded",
