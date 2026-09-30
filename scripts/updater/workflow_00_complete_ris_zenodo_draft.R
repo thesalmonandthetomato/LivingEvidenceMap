@@ -16,6 +16,7 @@ arg <- function(flag, default = NULL) {
 
 registry_path <- arg("--registry")
 output_dir <- arg("--output-dir", "outputs/updater/workflow00_manual_ris_zenodo")
+validate_only <- tolower(arg("--validate-only", "false")) %in% c("true","1","yes")
 if (is.null(registry_path) || !file.exists(registry_path)) {
   stop("Required: --registry <registry.json>", call. = FALSE)
 }
@@ -261,6 +262,40 @@ derived <- c(
 missing <- names(derived)[!file.exists(derived)]
 if (length(missing)) stop(sprintf("Expected derived file(s) missing: %s", paste(missing, collapse = ", ")), call. = FALSE)
 
+manifest <- fromJSON(file.path(ingest_dir, "manifest.json"), simplifyVector = FALSE)
+
+if (isTRUE(validate_only)) {
+  validation_receipt <- list(
+    status = "validated_only_no_zenodo_write",
+    zenodo_deposition_id = dep_id,
+    reserved_doi = reserved_doi,
+    zenodo_api_mode = api_mode,
+    source = scalar(registry$database$short_name),
+    database = registry$database,
+    ris_files = lapply(zenodo_files[grepl("\\.ris$", vapply(zenodo_files, `[[`, character(1), "name"), ignore.case = TRUE)], function(z) list(
+      name = z$name,
+      size = z$size,
+      zenodo_checksum = z$checksum
+    )),
+    unique_records_for_handover = manifest$records$unique_records_for_handover,
+    exact_duplicate_rows_removed = manifest$records$exact_duplicate_rows_removed,
+    reported_search_results = manifest$records$reported_search_results,
+    reported_results_match_unique_records = manifest$records$reported_results_match_unique_records,
+    zenodo_write_performed = FALSE,
+    completed_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
+  )
+  writeLines(
+    toJSON(validation_receipt, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null"),
+    file.path(output_dir, "validation_only_receipt.json")
+  )
+  cat(sprintf(
+    "PASS VALIDATE-ONLY: existing Zenodo draft %s; %s unique records; no Zenodo write performed\n",
+    dep_id,
+    manifest$records$unique_records_for_handover
+  ))
+  quit(save = "no", status = 0L)
+}
+
 # Upload derived files back into the same existing draft. Never publish here.
 uploaded <- list()
 
@@ -291,7 +326,11 @@ if (identical(api_mode, "rdm")) {
     init_body <- resp_body_json(init_resp, simplifyVector = FALSE)
     init_entries <- extract_entries(init_body)
     if (!length(init_entries)) stop(sprintf("Zenodo did not return an initialised file entry for %s", nm), call. = FALSE)
-    ent <- init_entries[[1L]]
+    init_match <- init_entries[vapply(init_entries, function(x) identical(file_name(x), nm), logical(1))]
+    if (length(init_match) != 1L) {
+      stop(sprintf("Zenodo initialisation response did not contain exactly one entry for %s", nm), call. = FALSE)
+    }
+    ent <- init_match[[1L]]
     content_url <- scalar(ent$links$content)
     commit_url <- scalar(ent$links$commit)
     if (is.null(content_url) || is.null(commit_url)) {
@@ -351,7 +390,6 @@ if (identical(api_mode, "rdm")) {
   }
 }
 
-manifest <- fromJSON(file.path(ingest_dir, "manifest.json"), simplifyVector = FALSE)
 receipt <- list(
   status = "validated_and_uploaded_to_existing_draft",
   zenodo_deposition_id = dep_id,
