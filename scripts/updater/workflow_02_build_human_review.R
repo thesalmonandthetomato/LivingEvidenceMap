@@ -70,7 +70,7 @@ repeat {
   for (line in x) {
     rec <- fromJSON(line, simplifyVector = FALSE)
     rid <- clean(rec$identity$record_id)
-    if (!is.na(rid) && !is.null(wanted[[rid]])) {
+    if (!is.na(rid) && rid %in% names(wanted)) {
       context[[rid]] <- list(
         record_id = rid,
         doi = clean(rec$canonical$doi),
