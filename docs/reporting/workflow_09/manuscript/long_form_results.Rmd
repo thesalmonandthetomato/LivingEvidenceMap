@@ -1,6 +1,5 @@
 ---
 title: "The status of academic research on salmon farming: a living evidence map"
-subtitle: "Results"
 output:
   word_document:
     toc: false
