@@ -192,13 +192,13 @@ The review process is outlined in the flow diagram in Figure 1. Across the `r le
 
 Following screening of titles and abstracts, `r fmt(n_total)` were included in the map, and passed on to annotation. Species annotations were obtained for all `r fmt(n_total)` records, geography for `r fmt(n_geo_coded)` records, and topic classifications for `r fmt(n_topic_coded)` records.
 
-```{r fig-flow, fig.cap="**Figure 1.** *Flow of records through database searching, deduplication, record repair and enrichment, retraction screening, title-and-abstract screening, annotation and inclusion in the Living Evidence Map.*"}
+```{r fig-flow, fig.cap="***Figure 1.*** *Flow of records through database searching, deduplication, record repair and enrichment, retraction screening, title-and-abstract screening, annotation and inclusion in the Living Evidence Map.*"}
 include_figure(here::here("visualisations", "figure_07_flow_diagram.png"))
 ```
 
 Database provenance was retained through deduplication, allowing the contribution and overlap of the five bibliographic sources to be compared before and after relevance screening. Figure 2 shows database contribution to the deduplicated corpus and to the final included set of titles and abstracts, together with the exact source intersections.
 
-```{r fig-source-contribution, fig.cap="**Figure 2.** *Contribution and overlap of bibliographic databases before and after relevance screening. Black bars show all deduplicated canonical records and olive-green bars show records retained after title and abstract screening; the matrix identifies the database combination defining each exact intersection.*"}
+```{r fig-source-contribution, fig.cap="***Figure 2.*** *Contribution and overlap of bibliographic databases before and after relevance screening. Black bars show all deduplicated canonical records and olive-green bars show records retained after title and abstract screening; the matrix identifies the database combination defining each exact intersection.*"}
 include_figure(here::here("outputs", "citesource_contribution", "database_contribution_upset.png"))
 ```
 
@@ -208,13 +208,13 @@ The volume of academic evidence on salmon farming increased markedly over time. 
 
 The three largest focal species categories were `r nth_species(1)$species` (`r fmt(nth_species(1)$n)` records; `r pct(nth_species(1)$n)`), `r nth_species(2)$species` (`r fmt(nth_species(2)$n)`; `r pct(nth_species(2)$n)`) and `r nth_species(3)$species` (`r fmt(nth_species(3)$n)`; `r pct(nth_species(3)$n)`). Species categories are not mutually exclusive because individual records can refer to more than one eligible farmed species.
 
-```{r fig-year-species, fig.cap="**Figure 3.** *Records by publication year and focal farmed species.*"}
+```{r fig-year-species, fig.cap="***Figure 3.*** *Records by publication year and focal farmed species.*"}
 include_figure(here::here("visualisations", "figure_01_records_by_publication_year.png"))
 ```
 
 The thematic composition of the literature also expanded through time. The largest high-level topic was `r topic_name(1, 1)`, followed by `r topic_name(1, 2)`. Because records can receive more than one high-level topic, annual stacked totals represent topic-record assignments rather than mutually exclusive studies.
 
-```{r fig-year-topic, fig.cap="**Figure 4.** *Topic-assignment frequency for high-level topics by publication year.*"}
+```{r fig-year-topic, fig.cap="***Figure 4.*** *Topic-assignment frequency for high-level topics by publication year.*"}
 include_figure(here::here("visualisations", "figure_05_records_by_publication_year_high_level_topic.png"))
 ```
 
@@ -222,11 +222,11 @@ include_figure(here::here("visualisations", "figure_05_records_by_publication_ye
 
 A substantive study country could be resolved for `r fmt(n_geo_coded)` records (`r pct(n_geo_coded)`), while `r fmt(n_geo_uncoded)` included records (`r pct(n_geo_uncoded)`) did not contain sufficient evidence for a defensible country-level assignment. Among records with assigned geography (Figure 5), the largest country evidence bases were `r paste(vapply(1:6, function(i) paste0(nth_country(i)$country_name, " (", fmt(nth_country(i)$n), if (i == 1) " records)" else ")"), character(1)), collapse = ", ")`. Countries demonstrated strong species-specificity, as expected (Figure 6), with the major Atlantic salmon producing countries contributing most to the evidence base, and a large number of other countries contributing collectively to rainbow trout research (e.g. Turkey). Records may be assigned to more than one country where the substantive study spans multiple countries.
 
-```{r fig-choropleth, fig.cap="**Figure 5.** *Global distribution of included records by substantive study country.*"}
+```{r fig-choropleth, fig.cap="***Figure 5.*** *Global distribution of included records by substantive study country.*"}
 include_figure(here::here("visualisations", "figure_03_choropleth_records_by_country.png"))
 ```
 
-```{r fig-country-species, fig.cap="**Figure 6.** *Records per country for the 20 most frequently represented study countries, by focal farmed species.*"}
+```{r fig-country-species, fig.cap="***Figure 6.*** *Records per country for the 20 most frequently represented study countries, by focal farmed species.*"}
 include_figure(here::here("visualisations", "figure_02_records_by_country.png"))
 ```
 
@@ -236,7 +236,7 @@ At least one topic was assigned to `r fmt(n_topic_coded)` of the `r fmt(n_total)
 
 The evidence base was strongly oriented towards `r topic_name(1,1)`, represented in `r fmt(topic_count(1,1))` records (`r topic_pct(1,1)`). `r topic_name(1,2)` was the second-largest theme (`r fmt(topic_count(1,2))`; `r topic_pct(1,2)`), followed by `r topic_name(1,3)` (`r fmt(topic_count(1,3))`; `r topic_pct(1,3)`), `r topic_name(1,4)` (`r fmt(topic_count(1,4))`; `r topic_pct(1,4)`) and `r topic_name(1,5)` (`r fmt(topic_count(1,5))`; `r topic_pct(1,5)`). `r topic_name(1,6)` (`r fmt(topic_count(1,6))`; `r topic_pct(1,6)`) and `r topic_name(1,7)` (`r fmt(topic_count(1,7))`; `r topic_pct(1,7)`) were substantially smaller. Theme percentages are not mutually exclusive because a record can be assigned to more than one theme.
 
-```{r fig-top-level-species, fig.cap="**Figure 7.** *High-level topic frequency by focal farmed species. Numbers at bar ends are unique records assigned to each high-level theme; stacked species segments may sum above the unique-record total for multi-species records.*"}
+```{r fig-top-level-species, fig.cap="***Figure 7.*** *High-level topic frequency by focal farmed species. Numbers at bar ends are unique records assigned to each high-level theme; stacked species segments may sum above the unique-record total for multi-species records.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_top_level_topics.png"))
 ```
 
@@ -244,7 +244,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_top_l
 
 Production research was centred on fish performance and biology, fish health, feed and nutrition, breeding and reproduction, and stress and mortality. The most frequently assigned terminal topic was `r topic_name(3,1,level1="Production")` (`r fmt(topic_count(3,1,level1="Production"))` records; `r topic_pct(3,1,level1="Production")`), followed by `r topic_name(3,2,level1="Production")` (`r fmt(topic_count(3,2,level1="Production"))`; `r topic_pct(3,2,level1="Production")`). Other major concentrations included `r topic_name(3,3,level1="Production")` (`r fmt(topic_count(3,3,level1="Production"))`; `r topic_pct(3,3,level1="Production")`), `r topic_name(3,4,level1="Production")` (`r fmt(topic_count(3,4,level1="Production"))`; `r topic_pct(3,4,level1="Production")`), `r topic_name(3,5,level1="Production")` (`r fmt(topic_count(3,5,level1="Production"))`; `r topic_pct(3,5,level1="Production")`) and `r topic_name(3,6,level1="Production")` (`r fmt(topic_count(3,6,level1="Production"))`; `r topic_pct(3,6,level1="Production")`). Sea lice remained a substantial research cluster, including `r fmt(sea_lice$n[1])` records on `r sea_lice$level3[1]` and `r fmt(sea_lice$n[2])` on `r sea_lice$level3[2]`.
 
-```{r fig-production, fig.cap="**Figure 8.** *Topic-assignment frequency within the Production theme.*"}
+```{r fig-production, fig.cap="***Figure 8.*** *Topic-assignment frequency within the Production theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_hierarchy_production.png"))
 ```
 
@@ -252,7 +252,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_hiera
 
 Environmental research was concentrated in `r topic_name(3,1,level1="Environment")` (`r fmt(topic_count(3,1,level1="Environment"))`; `r topic_pct(3,1,level1="Environment")`), `r topic_name(3,2,level1="Environment")` (`r fmt(topic_count(3,2,level1="Environment"))`; `r topic_pct(3,2,level1="Environment")`), `r topic_name(3,3,level1="Environment")` (`r fmt(topic_count(3,3,level1="Environment"))`; `r topic_pct(3,3,level1="Environment")`) and `r topic_name(3,4,level1="Environment")` (`r fmt(topic_count(3,4,level1="Environment"))`; `r topic_pct(3,4,level1="Environment")`).
 
-```{r fig-environment, fig.cap="**Figure 9.** *Topic-assignment frequency within the Environment theme.*"}
+```{r fig-environment, fig.cap="***Figure 9.*** *Topic-assignment frequency within the Environment theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04b_hierarchy_environment.png"))
 ```
 
@@ -260,7 +260,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04b_hiera
 
 Methods research was dominated by `r topic_name(3,1,level1="Methods")` (`r fmt(topic_count(3,1,level1="Methods"))`; `r topic_pct(3,1,level1="Methods")`), followed by `r topic_name(3,2,level1="Methods")` (`r fmt(topic_count(3,2,level1="Methods"))`; `r topic_pct(3,2,level1="Methods")`), `r topic_name(3,3,level1="Methods")` (`r fmt(topic_count(3,3,level1="Methods"))`; `r topic_pct(3,3,level1="Methods")`) and `r topic_name(3,4,level1="Methods")` (`r fmt(topic_count(3,4,level1="Methods"))`; `r topic_pct(3,4,level1="Methods")`).
 
-```{r fig-methods, fig.cap="**Figure 10.** *Topic-assignment frequency within the Methods theme.*"}
+```{r fig-methods, fig.cap="***Figure 10.*** *Topic-assignment frequency within the Methods theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04c_hierarchy_methods.png"))
 ```
 
@@ -268,7 +268,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04c_hiera
 
 Within Industry and governance, `r topic_name(3,1,level1="Industry and governance")` was the largest terminal topic (`r fmt(topic_count(3,1,level1="Industry and governance"))`; `r topic_pct(3,1,level1="Industry and governance")`), followed by `r topic_name(3,2,level1="Industry and governance")` (`r fmt(topic_count(3,2,level1="Industry and governance"))`; `r topic_pct(3,2,level1="Industry and governance")`), `r topic_name(3,3,level1="Industry and governance")` (`r fmt(topic_count(3,3,level1="Industry and governance"))`; `r topic_pct(3,3,level1="Industry and governance")`), `r topic_name(3,4,level1="Industry and governance")` (`r fmt(topic_count(3,4,level1="Industry and governance"))`; `r topic_pct(3,4,level1="Industry and governance")`) and `r topic_name(3,5,level1="Industry and governance")` (`r fmt(topic_count(3,5,level1="Industry and governance"))`; `r topic_pct(3,5,level1="Industry and governance")`).
 
-```{r fig-industry, fig.cap="**Figure 11.** *Topic-assignment frequency within the Industry and governance theme.*"}
+```{r fig-industry, fig.cap="***Figure 11.*** *Topic-assignment frequency within the Industry and governance theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04d_hierarchy_industry_and_governance.png"))
 ```
 
@@ -276,7 +276,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04d_hiera
 
 Product research was led by `r topic_name(3,1,level1="Product")` (`r fmt(topic_count(3,1,level1="Product"))`; `r topic_pct(3,1,level1="Product")`), `r topic_name(3,2,level1="Product")` (`r fmt(topic_count(3,2,level1="Product"))`; `r topic_pct(3,2,level1="Product")`) and `r topic_name(3,3,level1="Product")` (`r fmt(topic_count(3,3,level1="Product"))`; `r topic_pct(3,3,level1="Product")`). `r topic_name(3,4,level1="Product")` and `r topic_name(3,5,level1="Product")` were also prominent.
 
-```{r fig-product, fig.cap="**Figure 12.** *Topic-assignment frequency within the Product theme.*"}
+```{r fig-product, fig.cap="***Figure 12.*** *Topic-assignment frequency within the Product theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04e_hierarchy_product.png"))
 ```
 
@@ -284,7 +284,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04e_hiera
 
 People and society was much smaller than the `r topic_name(1,1)` and `r topic_name(1,2)` evidence bases. The largest terminal topics were `r topic_name(3,1,level1="People and society")` (`r fmt(topic_count(3,1,level1="People and society"))`; `r topic_pct(3,1,level1="People and society")`), `r topic_name(3,2,level1="People and society")` (`r fmt(topic_count(3,2,level1="People and society"))`; `r topic_pct(3,2,level1="People and society")`) and `r topic_name(3,3,level1="People and society")` (`r fmt(topic_count(3,3,level1="People and society"))`; `r topic_pct(3,3,level1="People and society")`). Topics relating to `r human_list(people_under_half$level3)` each represented under 0.5% of the full evidence map.
 
-```{r fig-people, fig.cap="**Figure 13.** *Topic-assignment frequency within the People and society theme.*"}
+```{r fig-people, fig.cap="***Figure 13.*** *Topic-assignment frequency within the People and society theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04f_hierarchy_people_and_society.png"))
 ```
 
@@ -292,7 +292,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04f_hiera
 
 Inputs and resources was the smallest high-level theme. `r topic_name(3,1,level1="Inputs and resources")` accounted for `r fmt(topic_count(3,1,level1="Inputs and resources"))` records (`r topic_pct(3,1,level1="Inputs and resources")`) and was more common than `r topic_name(3,2,level1="Inputs and resources")` (`r fmt(topic_count(3,2,level1="Inputs and resources"))`; `r topic_pct(3,2,level1="Inputs and resources")`), and `r topic_name(3,3,level1="Inputs and resources")` (`r fmt(topic_count(3,3,level1="Inputs and resources"))`; `r topic_pct(3,3,level1="Inputs and resources")`). `r topic_name(3,2,level1="Inputs and resources",smallest=TRUE)` and `r topic_name(3,1,level1="Inputs and resources",smallest=TRUE)` were represented in only `r fmt(topic_count(3,2,level1="Inputs and resources",smallest=TRUE))` (`r topic_pct(3,2,level1="Inputs and resources",smallest=TRUE)`) and `r fmt(topic_count(3,1,level1="Inputs and resources",smallest=TRUE))` (`r topic_pct(3,1,level1="Inputs and resources",smallest=TRUE)`) records, respectively.
 
-```{r fig-inputs, fig.cap="**Figure 14.** *Topic-assignment frequency within the Inputs and resources theme.*"}
+```{r fig-inputs, fig.cap="***Figure 14.*** *Topic-assignment frequency within the Inputs and resources theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04g_hierarchy_inputs_and_resources.png"))
 ```
 
@@ -302,6 +302,6 @@ The supplied manuscript draft compares this evidence map with a recent umbrella 
 
 The social evidence base is particularly weakly represented in the systematic-review literature described in the draft. In the final canonical map, Antimicrobial resistance and One Health accounts for `r topic_pct(3,1,level1="People and society")` of records, Conflict and social licence for `r topic_pct(3,2,level1="People and society")`, and Public discourse and representation for `r topic_pct(3,3,level1="People and society")`; the supplied umbrella-review dataset contains one review on antimicrobial resistance/One Health and none in most of the other social categories. Overall, the comparison continues to indicate that the systematic-review evidence covers a narrower subset of the topics represented across the mapped literature, with particularly strong representation of sea lice and limited coverage of several major physiological, environmental, methodological, governance and social research areas.
 
-```{r fig-secondary, fig.cap="**Figure 15.** *Topic-assignment frequency in the supplied umbrella review of 37 systematic reviews across salmon aquaculture. Data and figure retained from the supplied manuscript draft.*"}
+```{r fig-secondary, fig.cap="***Figure 15.*** *Topic-assignment frequency in the supplied umbrella review of 37 systematic reviews across salmon aquaculture. Data and figure retained from the supplied manuscript draft.*"}
 include_figure(here::here("visualisations", "figure_08_umbrella_review.png"))
 ```
