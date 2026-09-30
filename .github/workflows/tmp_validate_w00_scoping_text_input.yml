@@ -1,0 +1,57 @@
+name: TEMP validate W00 scoping text input
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w00_scoping_text_input.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','rmarkdown','knitr','httr2','yaml'))
+
+      - name: Validate Boolean parser and report contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'parse(file="scripts/updater/workflow_00_validate_scoping_search.R");parse(file="scripts/updater/workflow_00_search_scope_counts.R");yaml::read_yaml(".github/workflows/workflow_00_search_scoping.yml");cat("PASS: scripts/workflow parse\n")'
+          rm -rf /tmp/w00scope && mkdir -p /tmp/w00scope
+          cp user_input/scoping_search_string.txt /tmp/w00scope/valid.txt
+          Rscript scripts/updater/workflow_00_validate_scoping_search.R --input /tmp/w00scope/valid.txt --output /tmp/w00scope/plan.json
+          Rscript -e 'x<-jsonlite::fromJSON("/tmp/w00scope/plan.json");stopifnot(x$status=="valid",length(x$source_queries)==5,grepl("TITLE-ABS-KEY",x$source_queries$scopus,fixed=TRUE),grepl("SRC:AGR",x$source_queries$agricola,fixed=TRUE),grepl("TI=",x$source_queries$wos,fixed=TRUE))'
+
+          printf '%s\n' '(salmon OR trout AND farm*' > /tmp/w00scope/bad-paren.txt
+          if Rscript scripts/updater/workflow_00_validate_scoping_search.R --input /tmp/w00scope/bad-paren.txt --output /tmp/w00scope/bad1.json; then echo 'Malformed parentheses were accepted' >&2; exit 1; fi
+
+          printf '%s\n' 'salmon trout AND farm*' > /tmp/w00scope/bad-operator.txt
+          if Rscript scripts/updater/workflow_00_validate_scoping_search.R --input /tmp/w00scope/bad-operator.txt --output /tmp/w00scope/bad2.json; then echo 'Missing Boolean operator was accepted' >&2; exit 1; fi
+
+          printf '%s\n' 'salmon AND "rainbow trout' > /tmp/w00scope/bad-quote.txt
+          if Rscript scripts/updater/workflow_00_validate_scoping_search.R --input /tmp/w00scope/bad-quote.txt --output /tmp/w00scope/bad3.json; then echo 'Malformed quote was accepted' >&2; exit 1; fi
+
+          printf '%s\n' 'source,access_mode,search_date,hits,status' 'Lens,API count,2026-09-30,100,counted' 'Scopus,API count,2026-09-30,200,counted' 'OpenAlex,API count,2026-09-30,300,counted' 'AGRICOLA,API count,2026-09-30,400,counted' 'Web of Science Core Collection,API count,2026-09-30,500,counted' 'CAB Abstracts,Manual search source,2026-09-30,,not counted: no W00 API implementation' 'ProQuest Dissertations & Theses Global,Manual search source,2026-09-30,,not counted: no W00 API implementation' > /tmp/w00scope/counts.csv
+          Rscript -e 'p<-jsonlite::fromJSON("/tmp/w00scope/plan.json",simplifyVector=FALSE);o<-list(search_date="2026-09-30",search_input_path=p$input_path,original_search_string=p$original_search_string,normalised_search_string=p$normalised_search_string,boolean_validation=p$validation);jsonlite::write_json(o,"/tmp/w00scope/counts.json",auto_unbox=TRUE,pretty=TRUE)'
+          Rscript -e 'rmarkdown::render("docs/reporting/workflow_00/search_scoping_report.Rmd",output_file="report.html",output_dir="/tmp/w00scope",params=list(counts_csv="/tmp/w00scope/counts.csv",counts_json="/tmp/w00scope/counts.json"),quiet=TRUE)'
+          test -s /tmp/w00scope/report.html
+          grep -q 'scoping_search_string.txt' .github/workflows/workflow_00_search_scoping.yml
+          echo 'PASS: W00 manual scoping string validation architecture works'
