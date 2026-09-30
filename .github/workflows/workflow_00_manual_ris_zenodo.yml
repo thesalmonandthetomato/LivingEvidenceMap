@@ -1,0 +1,53 @@
+name: Workflow 00 - Complete manual RIS Zenodo draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      registry_path:
+        description: 'Path to the manual RIS registry JSON in user_input/'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  complete-existing-draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Complete existing Zenodo draft
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f '${{ inputs.registry_path }}'
+          Rscript scripts/updater/workflow_00_complete_ris_zenodo_draft.R \
+            --registry '${{ inputs.registry_path }}' \
+            --output-dir outputs/updater/workflow00_manual_ris_zenodo
+
+      - name: Upload validation receipt and audits
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-manual-ris-zenodo-${{ github.run_id }}
+          path: outputs/updater/workflow00_manual_ris_zenodo/
+          retention-days: 7
+          if-no-files-found: warn
