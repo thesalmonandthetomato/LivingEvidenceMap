@@ -46,7 +46,7 @@ if (isTRUE(registry$staging$publish_after_validation)) {
   stop("Manual RIS draft completion currently requires publish_after_validation=false", call. = FALSE)
 }
 
-api <- "https://zenodo.org/api/deposit/depositions"
+legacy_api <- "https://zenodo.org/api/deposit/depositions"
 auth <- function(req) req |> req_headers(Authorization = paste("Bearer", token))
 
 perform <- function(req, expected, label, timeout = 300) {
@@ -62,9 +62,16 @@ perform <- function(req, expected, label, timeout = 300) {
   resp
 }
 
+perform_maybe <- function(req, timeout = 60) {
+  req |>
+    req_timeout(timeout) |>
+    req_error(is_error = function(resp) FALSE) |>
+    req_perform()
+}
+
 get_deposition <- function(id) {
   resp <- perform(
-    request(paste0(api, "/", id)) |> auth(),
+    request(paste0(legacy_api, "/", id)) |> auth(),
     200L,
     paste0("deposition lookup ", id),
     60
@@ -85,7 +92,7 @@ find_draft_by_doi <- function(doi) {
   matches <- list()
   page <- 1L
   repeat {
-    url <- paste0(api, "?status=draft&size=100&page=", page)
+    url <- paste0(legacy_api, "?status=draft&size=100&page=", page)
     resp <- perform(request(url) |> auth(), 200L, "draft listing", 60)
     items <- resp_body_json(resp, simplifyVector = FALSE)
     if (!length(items)) break
@@ -103,7 +110,6 @@ find_draft_by_doi <- function(doi) {
 dep <- if (!is.null(dep_id)) get_deposition(dep_id) else find_draft_by_doi(reserved_doi)
 dep_id <- as.character(dep$id)
 if (!nzchar(dep_id)) stop("Zenodo draft response is missing deposition id", call. = FALSE)
-
 if (isTRUE(dep$submitted)) {
   stop(sprintf("Zenodo deposition %s is already submitted/published; manual RIS completion only accepts an existing draft", dep_id), call. = FALSE)
 }
@@ -111,30 +117,65 @@ if (!is.null(reserved_doi) && !(reserved_doi %in% candidate_dois(dep))) {
   stop(sprintf("Deposition %s does not match reserved DOI %s", dep_id, reserved_doi), call. = FALSE)
 }
 
-files <- dep$files
-if (is.null(files) || !length(files)) {
-  files_url <- scalar(dep$links$files) %||% paste0(api, "/", dep_id, "/files")
-  files_resp <- perform(
-    request(files_url) |> auth(),
-    200L,
-    paste0("deposition file listing ", dep_id),
-    60
-  )
-  files <- resp_body_json(files_resp, simplifyVector = FALSE)
+# Prefer the modern InvenioRDM draft API used by current Zenodo UI-created drafts.
+rdm_draft_url <- paste0("https://zenodo.org/api/records/", dep_id, "/draft")
+rdm_resp <- perform_maybe(request(rdm_draft_url) |> auth(), 60)
+rdm_draft <- NULL
+if (resp_status(rdm_resp) == 200L) {
+  rdm_draft <- resp_body_json(rdm_resp, simplifyVector = FALSE)
 }
-if (is.null(files) || !length(files)) stop(sprintf("Zenodo draft %s contains no files", dep_id), call. = FALSE)
 
-bucket <- scalar(dep$links$bucket)
-if (is.null(bucket)) stop("Zenodo draft response is missing bucket URL", call. = FALSE)
+extract_entries <- function(x) {
+  if (is.null(x)) return(list())
+  if (!is.null(x$entries)) return(x$entries)
+  if (is.list(x) && is.null(names(x))) return(x)
+  list()
+}
 
-file_name <- function(x) scalar(x$filename) %||% scalar(x$key) %||% scalar(x$name)
-zenodo_files <- lapply(files, function(x) {
+file_name <- function(x) scalar(x$key) %||% scalar(x$filename) %||% scalar(x$name)
+file_checksum <- function(x) scalar(x$checksum)
+file_size <- function(x) x$size %||% x$filesize %||% NULL
+
+api_mode <- NULL
+files_url <- NULL
+file_entries <- list()
+
+if (!is.null(rdm_draft)) {
+  files_url <- scalar(rdm_draft$links$files)
+  if (!is.null(files_url)) {
+    fr <- perform(request(files_url) |> auth(), 200L, "RDM draft file listing", 60)
+    file_entries <- extract_entries(resp_body_json(fr, simplifyVector = FALSE))
+    api_mode <- "rdm"
+  }
+}
+
+if (is.null(api_mode)) {
+  files_url <- scalar(dep$links$files) %||% paste0(legacy_api, "/", dep_id, "/files")
+  fr <- perform(request(files_url) |> auth(), 200L, "legacy deposition file listing", 60)
+  file_entries <- extract_entries(resp_body_json(fr, simplifyVector = FALSE))
+  api_mode <- "legacy"
+}
+
+if (!length(file_entries)) stop(sprintf("Zenodo draft %s contains no files", dep_id), call. = FALSE)
+
+zenodo_files <- lapply(file_entries, function(x) {
   nm <- file_name(x)
+  download <- NULL
+  if (identical(api_mode, "rdm")) {
+    download <- scalar(x$links$content)
+  } else {
+    download <- scalar(x$links$download)
+    if (is.null(download)) {
+      bucket <- scalar(dep$links$bucket)
+      if (!is.null(bucket) && !is.null(nm)) download <- paste0(bucket, "/", URLencode(nm, reserved = TRUE))
+    }
+  }
   list(
     name = nm,
-    download = if (is.null(nm)) NULL else paste0(bucket, "/", URLencode(nm, reserved = TRUE)),
-    checksum = scalar(x$checksum),
-    size = x$filesize %||% x$size %||% NULL
+    download = download,
+    checksum = file_checksum(x),
+    size = file_size(x),
+    entry = x
   )
 })
 zenodo_files <- zenodo_files[vapply(zenodo_files, function(x) !is.null(x$name), logical(1))]
@@ -187,7 +228,7 @@ local_ris <- character(length(ris_files))
 
 for (i in seq_along(ris_files)) {
   z <- ris_files[[i]]
-  if (is.null(z$download)) stop(sprintf("No download link for Zenodo file %s", z$name), call. = FALSE)
+  if (is.null(z$download)) stop(sprintf("No content download link for Zenodo file %s", z$name), call. = FALSE)
   out <- file.path(download_dir, z$name)
   cat(sprintf("ZENODO DOWNLOAD %s\n", z$name))
   resp <- perform(request(z$download) |> auth(), 200L, paste0("file download: ", z$name), 1800)
@@ -220,33 +261,94 @@ derived <- c(
 missing <- names(derived)[!file.exists(derived)]
 if (length(missing)) stop(sprintf("Expected derived file(s) missing: %s", paste(missing, collapse = ", ")), call. = FALSE)
 
-# Refresh the deposition after downloads/validation and upload only derived files.
-dep <- get_deposition(dep_id)
-if (isTRUE(dep$submitted)) stop("Zenodo draft was published during validation; refusing to modify it", call. = FALSE)
-bucket <- scalar(dep$links$bucket)
-if (is.null(bucket)) stop("Zenodo draft response is missing bucket URL after validation", call. = FALSE)
-
+# Upload derived files back into the same existing draft. Never publish here.
 uploaded <- list()
-for (nm in names(derived)) {
-  p <- derived[[nm]]
-  url <- paste0(bucket, "/", URLencode(nm, reserved = TRUE))
-  cat(sprintf("ZENODO UPLOAD %s bytes=%s\n", nm, file.info(p)$size))
-  resp <- perform(
-    request(url) |>
-      req_method("PUT") |>
-      auth() |>
-      req_headers(Expect = "") |>
-      req_body_file(p),
-    c(200L, 201L),
-    paste0("derived file upload: ", nm),
-    1800
-  )
-  body <- tryCatch(resp_body_json(resp, simplifyVector = FALSE), error = function(e) list())
-  uploaded[[nm]] <- list(
-    bytes = unname(file.info(p)$size),
-    sha256 = digest(file = p, algo = "sha256", serialize = FALSE),
-    zenodo_checksum = scalar(body$checksum)
-  )
+
+if (identical(api_mode, "rdm")) {
+  # Refresh file entries to support safe replacement on a re-run.
+  fr <- perform(request(files_url) |> auth(), 200L, "RDM draft file refresh", 60)
+  current_entries <- extract_entries(resp_body_json(fr, simplifyVector = FALSE))
+
+  for (nm in names(derived)) {
+    p <- derived[[nm]]
+    existing <- current_entries[vapply(current_entries, function(x) identical(file_name(x), nm), logical(1))]
+    if (length(existing)) {
+      self_url <- scalar(existing[[1L]]$links$self)
+      if (is.null(self_url)) stop(sprintf("Cannot replace existing draft file %s: missing self link", nm), call. = FALSE)
+      perform(request(self_url) |> req_method("DELETE") |> auth(), 204L, paste0("delete existing derived file: ", nm), 60)
+    }
+
+    init_resp <- perform(
+      request(files_url) |>
+        req_method("POST") |>
+        auth() |>
+        req_headers("Content-Type" = "application/json") |>
+        req_body_json(list(list(key = nm)), auto_unbox = TRUE),
+      c(200L, 201L),
+      paste0("initialise derived file: ", nm),
+      60
+    )
+    init_body <- resp_body_json(init_resp, simplifyVector = FALSE)
+    init_entries <- extract_entries(init_body)
+    if (!length(init_entries)) stop(sprintf("Zenodo did not return an initialised file entry for %s", nm), call. = FALSE)
+    ent <- init_entries[[1L]]
+    content_url <- scalar(ent$links$content)
+    commit_url <- scalar(ent$links$commit)
+    if (is.null(content_url) || is.null(commit_url)) {
+      stop(sprintf("Initialised Zenodo file %s is missing content or commit link", nm), call. = FALSE)
+    }
+
+    cat(sprintf("ZENODO UPLOAD %s bytes=%s\n", nm, file.info(p)$size))
+    perform(
+      request(content_url) |>
+        req_method("PUT") |>
+        auth() |>
+        req_headers("Content-Type" = "application/octet-stream", Expect = "") |>
+        req_body_file(p),
+      c(200L, 201L),
+      paste0("file content upload: ", nm),
+      1800
+    )
+    commit_resp <- perform(
+      request(commit_url) |> req_method("POST") |> auth(),
+      c(200L, 201L, 202L),
+      paste0("file commit: ", nm),
+      120
+    )
+    commit_body <- tryCatch(resp_body_json(commit_resp, simplifyVector = FALSE), error = function(e) list())
+    uploaded[[nm]] <- list(
+      bytes = unname(file.info(p)$size),
+      sha256 = digest(file = p, algo = "sha256", serialize = FALSE),
+      zenodo_checksum = scalar(commit_body$checksum)
+    )
+  }
+} else {
+  dep <- get_deposition(dep_id)
+  if (isTRUE(dep$submitted)) stop("Zenodo draft was published during validation; refusing to modify it", call. = FALSE)
+  bucket <- scalar(dep$links$bucket)
+  if (is.null(bucket)) stop("Legacy Zenodo draft response is missing bucket URL after validation", call. = FALSE)
+
+  for (nm in names(derived)) {
+    p <- derived[[nm]]
+    url <- paste0(bucket, "/", URLencode(nm, reserved = TRUE))
+    cat(sprintf("ZENODO UPLOAD %s bytes=%s\n", nm, file.info(p)$size))
+    resp <- perform(
+      request(url) |>
+        req_method("PUT") |>
+        auth() |>
+        req_headers(Expect = "") |>
+        req_body_file(p),
+      c(200L, 201L),
+      paste0("derived file upload: ", nm),
+      1800
+    )
+    body <- tryCatch(resp_body_json(resp, simplifyVector = FALSE), error = function(e) list())
+    uploaded[[nm]] <- list(
+      bytes = unname(file.info(p)$size),
+      sha256 = digest(file = p, algo = "sha256", serialize = FALSE),
+      zenodo_checksum = scalar(body$checksum)
+    )
+  }
 }
 
 manifest <- fromJSON(file.path(ingest_dir, "manifest.json"), simplifyVector = FALSE)
@@ -254,6 +356,7 @@ receipt <- list(
   status = "validated_and_uploaded_to_existing_draft",
   zenodo_deposition_id = dep_id,
   reserved_doi = reserved_doi,
+  zenodo_api_mode = api_mode,
   source = scalar(registry$database$short_name),
   database = registry$database,
   ris_files = ris_names,
@@ -272,7 +375,8 @@ writeLines(
 )
 
 cat(sprintf(
-  "PASS: completed existing Zenodo draft %s in place; %s unique records; draft remains unpublished\n",
+  "PASS: completed existing Zenodo draft %s in place using %s API; %s unique records; draft remains unpublished\n",
   dep_id,
+  api_mode,
   manifest$records$unique_records_for_handover
 ))
