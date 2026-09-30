@@ -21,7 +21,7 @@ The authoritative analytical data remain the Workflow 08 canonical JSONL. Workfl
                          |                              |
                          v                              v
                 [RIS export]                   [reporting data layer]
-                  19,117 records                       |
+              current included corpus                  |
                          |                              |
                          |                 +------------+-------------+
                          |                 |                          |
@@ -69,9 +69,7 @@ Workflow 09 additionally restores the authoritative Workflow 01, Workflow 02 and
 
 ### Final included corpus
 
-Workflow 09 currently restores the validated lossless Workflow 08 finalisation artifact from GitHub Actions run `36442875006` (`workflow08-final-36442875006`). This run successfully assembled, validated and partitioned the definitive 19,117-record included canonical JSONL with lossless upstream annotation provenance; its subsequent Zenodo upload failed with an HTTP 502 after repeated attempts. Workflow 09 therefore verifies the canonical file against the PASS `workflow08_final_manifest.json` from that artifact before any reporting outputs are accepted. The lossless canonical SHA-256 is `8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c`.
-
-The current evidence-base size is **19,117 included canonical records**.
+Workflow 09 restores the latest registered authoritative Workflow 08 Zenodo pointer from `docs/workflow08/zenodo/`. The restored canonical JSONL is accepted only when its SHA-256 and record count match that pointer. This makes reporting advance automatically with a newly published Workflow 08 state rather than remaining pinned to a historical baseline.
 
 The final Workflow 08 JSONL remains the authoritative representation because it preserves nested workflow provenance, screening state, species coding, geography coding, topic assignments and manifestation references.
 
@@ -161,7 +159,7 @@ A publication package is accepted only when all of the following hold:
 
 1. the restored Workflow 08 JSONL SHA-256 matches the registered authoritative pointer;
 2. the RIS source checksum matches that same JSONL;
-3. the RIS contains exactly 19,117 records;
+3. the RIS record count exactly matches the current Workflow 08 pointer;
 4. the review-flow data reconcile exactly to the final included population and upstream exclusion counts;
 5. all 15 PNG figures exist;
 6. the corresponding PDF figures exist;
@@ -206,13 +204,13 @@ Each production run also uploads the complete `docs/reporting/workflow_09/` publ
 
 ### Authoritative analytical archive
 
-The Workflow 08 layer remains the authoritative source of the canonical JSONL and exclusions. For the current lossless baseline, the validated run artifact is used because the 240 MB JSONL failed to upload to Zenodo with HTTP 502; Workflow 09 does not claim that its RIS or manuscript files replace the canonical archive.
+The Workflow 08 layer remains the authoritative source of the canonical JSONL and exclusions. Workflow 09 restores that state from the latest registered restricted Zenodo publication and does not claim that its RIS or manuscript files replace the canonical archive.
 
 ## Downstream handoff
 
 Workflow 09 is the reporting endpoint for the manuscript and static publication package. Workflow 10 may consume the same final canonical data to build the interactive dashboard, but the dashboard is not authoritative for manuscript counts.
 
-Future living updates should rerun Workflow 09 after a new validated Workflow 08 final state is produced. The current production controller is pinned to the validated lossless baseline run `36442875006` so that the publication package uses the complete provenance-preserving canonical schema rather than the earlier compact W08 export. When a later W08 baseline becomes authoritative, this source reference must be advanced deliberately and its manifest/checksum revalidated.
+Future living updates should rerun Workflow 09 after a new validated Workflow 08 final state is published. The production controller selects the latest registered Workflow 08 pointer and validates its checksum, record count and lossless handoff contract before regenerating the publication package.
 
 ## Methods text for research reporting
 
