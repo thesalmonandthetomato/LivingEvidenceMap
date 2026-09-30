@@ -459,7 +459,7 @@ for(i in seq_along(rows)){
   missing_title_before <- is_missing(r$canonical$title)
   missing_abstract_before <- is_missing(r$canonical$abstract)
   missing_author_keywords_before <- keywords_missing(r$canonical$author_keywords)
-  eligible <- !is.null(d) && (missing_title_before || missing_abstract_before || missing_author_keywords_before)
+  eligible <- !is.null(d) && (missing_title_before || missing_abstract_before)
   if(!eligible) next
   counts$eligible_doi_missing_metadata <- counts$eligible_doi_missing_metadata + 1L
   if(!previous_attempt_due(r$metadata_enrichment)){
@@ -569,57 +569,31 @@ for(i in seq_along(rows)){
     Sys.sleep(delay)
   }
 
-  still_missing_title <- is_missing(r$canonical$title)
-  still_missing_abstract <- is_missing(r$canonical$abstract)
-  still_missing_author_keywords <- keywords_missing(r$canonical$author_keywords)
-
-  # Author-keyword repair order after Europe PMC:
-  # 1) retained Scopus EID -> FULL;
-  # 2) if no retained EID, direct DOI -> FULL;
-  # 3) if direct DOI returns no record/404, stop. No DOI-search -> EID fallback.
-  eid_for_keywords <- retained_scopus_eid(r)
-  if(still_missing_author_keywords){
-    counts$scopus_author_keywords_attempted <- counts$scopus_author_keywords_attempted + 1L
-    sk <- if(!is.null(eid_for_keywords)){
-      tryCatch(
-        scopus_lookup_eid_full(eid_for_keywords),
-        error=function(e) list(outcome="technical_error",error=conditionMessage(e),title=NULL,author_keywords=character(),returned_doi=NULL,eid=eid_for_keywords,status=NULL,attempts=NULL,route="retained_eid_full")
-      )
-    } else {
-      tryCatch(
-        scopus_lookup_doi_full(d),
-        error=function(e) list(outcome="technical_error",error=conditionMessage(e),title=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,status=NULL,attempts=NULL,route="direct_doi_full")
-      )
-    }
-    rec_audit$scopus_keywords <- sk
-    sim <- if(!is.null(sk$title) && !is_missing(r$canonical$title)) title_similarity(r$canonical$title,sk$title) else NA_real_
-    guard_ok <- identical(sk$returned_doi,d) && !is.null(sk$title) && !is_missing(r$canonical$title) && !is.na(sim) && sim>=0.90
-    if(guard_ok && length(sk$author_keywords)){
-      r$canonical$author_keywords <- sk$author_keywords
+  # Author keywords are optional enrichment only. Never issue a dedicated
+  # provider request solely to obtain them. If the Scopus title/abstract lookup
+  # already returned keywords, retain them subject to the same identity guard.
+  if(keywords_missing(r$canonical$author_keywords) && !is.null(rec_audit$scopus) &&
+     identical(rec_audit$scopus$returned_doi,d) && length(rec_audit$scopus$author_keywords)){
+    sc_kw_sim <- if(!is.null(rec_audit$scopus$title) && !is_missing(r$canonical$title)) title_similarity(r$canonical$title,rec_audit$scopus$title) else NA_real_
+    sc_kw_guard <- !is.null(rec_audit$scopus$title) && !is_missing(r$canonical$title) && !is.na(sc_kw_sim) && sc_kw_sim>=0.90
+    if(sc_kw_guard){
+      r$canonical$author_keywords <- rec_audit$scopus$author_keywords
       counts$scopus_author_keywords_filled <- counts$scopus_author_keywords_filled + 1L
       rec_audit$applied <- c(rec_audit$applied,list(list(
-        provider="scopus",field="author_keywords",eid=sk$eid,title_similarity=sim,
-        route=sk$route,
-        identity_guard=if(!is.null(eid_for_keywords))"retained_eid+exact_doi+title" else "direct_doi+exact_doi+title"
-      )))
-    } else if(length(sk$author_keywords) && !guard_ok){
-      counts$conflicts_quarantined <- counts$conflicts_quarantined + 1L
-      rec_audit$quarantined <- c(rec_audit$quarantined,list(list(
-        provider="scopus",field="author_keywords",reason="keyword_identity_guard_failed",
-        route=sk$route,eid=sk$eid,returned_doi=sk$returned_doi,title_similarity=sim
+        provider="scopus",field="author_keywords",eid=rec_audit$scopus$eid,title_similarity=sc_kw_sim,
+        route="existing_title_abstract_lookup",
+        identity_guard="exact_doi+title"
       )))
     }
-    Sys.sleep(delay)
   }
 
   still_missing_title <- is_missing(r$canonical$title)
   still_missing_abstract <- is_missing(r$canonical$abstract)
   still_missing_author_keywords <- keywords_missing(r$canonical$author_keywords)
-  if(still_missing_title || still_missing_abstract || still_missing_author_keywords) counts$still_missing_after <- counts$still_missing_after + 1L
+  if(still_missing_title || still_missing_abstract) counts$still_missing_after <- counts$still_missing_after + 1L
 
   technical_error <- identical(clean_text(ep$outcome),"technical_error") ||
-    (!is.null(rec_audit$scopus) && identical(clean_text(rec_audit$scopus$outcome),"technical_error")) ||
-    (!is.null(rec_audit$scopus_keywords) && identical(clean_text(rec_audit$scopus_keywords$outcome),"technical_error"))
+    (!is.null(rec_audit$scopus) && identical(clean_text(rec_audit$scopus$outcome),"technical_error"))
   if(technical_error) counts$technical_error_records <- counts$technical_error_records + 1L
   filled_fields <- vapply(rec_audit$applied,function(z) clean_text(z$field) %||% "",character(1))
   filled_fields <- unique(filled_fields[nzchar(filled_fields)])
@@ -658,12 +632,12 @@ report <- list(
   implementation_language="R",
   provider_order=c("europe_pmc","scopus"),
   policy=list(
-    eligibility="DOI present and title, abstract, or author keywords missing",
+    eligibility="DOI present and title or abstract missing; author keywords alone do not make a record eligible",
     overwrite_existing_fields=FALSE,
     europe_pmc_match="exact normalised DOI plus canonical/provider title similarity >= 0.90 for abstract/author-keyword fills; exact DOI may fill a missing title",
     scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
     abstract_title_guard="if a title is present on both sides, Jaro-Winkler similarity must be >= 0.90; otherwise quarantine",
-    provider_fallback="existing Scopus DOI/EID path retained for missing title/abstract; author keywords use retained Scopus EID FULL retrieval when available, otherwise direct DOI FULL retrieval; no DOI-search fallback after a direct DOI miss",
+    provider_fallback="existing Scopus DOI/EID path retained for missing title/abstract; author keywords are retained only when returned opportunistically by an already-required Europe PMC or Scopus lookup; no dedicated keyword-only Scopus FULL request",
     repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days)
   ),
   trial_limit=if(is.infinite(limit)) NULL else limit,
