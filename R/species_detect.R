@@ -4,7 +4,7 @@
 # Lexical separators tolerate whitespace and hyphen variants. Overlap handling
 # never allows a generic salmon phrase to erase an explicitly named species.
 
-detect_species_mentions <- function(title = NA_character_, abstract = NA_character_, dictionary) {
+detect_species_mentions <- function(title = NA_character_, abstract = NA_character_, dictionary, generic_species_id = "UNSPEC_SALMON", pluralisable_common_head_terms = c("salmon", "trout")) {
   required <- c("species_id", "preferred_name", "scientific_name", "synonym", "synonym_type", "is_farmed_candidate", "default_group")
   missing <- setdiff(required, names(dictionary))
   if (length(missing) > 0L) stop("Species dictionary is missing: ", paste(missing, collapse = ", "), call. = FALSE)
@@ -74,9 +74,11 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
     # (e.g. "rainbow trouts" or "salmons"). Permit that only for English
     # salmon/trout terms, never for generic 'trout' because it is not a
     # dictionary entry.
-    if (type %in% c("common", "generic") &&
-        grepl("(salmon|trout)$", term, ignore.case = TRUE, perl = TRUE)) {
-      core <- paste0(core, "s?")
+    if (type %in% c("common", "generic") && length(pluralisable_common_head_terms)) {
+      suffix_pattern <- paste(vapply(pluralisable_common_head_terms, escape_regex, character(1)), collapse = "|")
+      if (grepl(paste0("(", suffix_pattern, ")$"), term, ignore.case = TRUE, perl = TRUE)) {
+        core <- paste0(core, "s?")
+      }
     }
     core
   }
@@ -124,8 +126,8 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
         if (!overlaps) next
 
         same_id <- identical(out$species_id[[i]], out$species_id[[j]])
-        i_generic <- identical(out$species_id[[i]], "UNSPEC_SALMON")
-        j_generic <- identical(out$species_id[[j]], "UNSPEC_SALMON")
+        i_generic <- identical(out$species_id[[i]], generic_species_id)
+        j_generic <- identical(out$species_id[[j]], generic_species_id)
 
         if (same_id) {
           if (out$term_length[[j]] > out$term_length[[i]]) {
