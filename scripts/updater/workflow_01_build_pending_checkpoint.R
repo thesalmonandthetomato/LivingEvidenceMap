@@ -6,6 +6,8 @@ suppressPackageStartupMessages({
 })
 
 
+`%||%` <- function(x,y) if(is.null(x)) y else x
+
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag,default=NULL){
   i <- match(flag,args)
@@ -39,18 +41,28 @@ write_lines <- function(x,path){
   if(length(x)) writeLines(x,path,useBytes=TRUE) else file.create(path)
 }
 
-source_files <- c(
-  lens="lens_records_for_deduplication.jsonl",
-  scopus="scopus_records_for_deduplication.jsonl",
-  openalex="openalex_records_for_deduplication.jsonl",
-  agricola="agricola_records_for_deduplication.jsonl",
-  wos="wos_records_for_deduplication.jsonl"
-)
+source_pattern <- "_records_for_deduplication\\.jsonl$"
+current_files <- list.files(current_seed_root,pattern=source_pattern,full.names=TRUE)
+if(!length(current_files)) stop("Current seed contains no source files",call.=FALSE)
+current_sources <- sub(source_pattern,"",basename(current_files))
+if(anyDuplicated(current_sources)) stop("Current seed contains duplicate source namespaces",call.=FALSE)
+names(current_files) <- current_sources
+
+previous_seed_root <- file.path(previous_root,"workflow01_seed")
+previous_files <- if(dir.exists(previous_seed_root)) list.files(previous_seed_root,pattern=source_pattern,full.names=TRUE) else character()
+previous_sources <- sub(source_pattern,"",basename(previous_files))
+if(anyDuplicated(previous_sources)) stop("Previous seed contains duplicate source namespaces",call.=FALSE)
+names(previous_files) <- previous_sources
+missing_current <- setdiff(previous_sources,current_sources)
+if(length(missing_current)) stop(sprintf("Checkpoint current seed dropped source(s): %s",paste(missing_current,collapse=", ")),call.=FALSE)
+
 source_counts <- list()
-for(src in names(source_files)){
-  prev <- file.path(previous_root,"workflow01_seed",source_files[[src]])
-  cur <- file.path(current_seed_root,source_files[[src]])
-  p <- read_nonempty(prev); z <- read_nonempty(cur)
+source_files <- list()
+for(src in sort(current_sources)){
+  prev <- if(src %in% previous_sources) previous_files[[src]] else NULL
+  cur <- current_files[[src]]
+  p <- if(is.null(prev)) character() else read_nonempty(prev)
+  z <- read_nonempty(cur)
   if(length(z)<length(p) || (length(p)&&!identical(z[seq_along(p)],p))){
     stop(sprintf("%s source state is not an append-only extension",src),call.=FALSE)
   }
@@ -58,6 +70,7 @@ for(src in names(source_files)){
   out <- file.path(output_dir,"source_manifestations",paste0(src,"_new.jsonl"))
   write_lines(add,out)
   source_counts[[src]] <- length(add)
+  source_files[[src]] <- basename(cur)
 }
 
 file.copy(incremental_rescore,file.path(output_dir,"incremental_rescored_pairs.csv"),overwrite=TRUE)
@@ -89,6 +102,7 @@ manifest <- list(
   ),
   new_source_manifestations=sum(unlist(source_counts)),
   new_source_manifestations_by_source=source_counts,
+  source_files=source_files,
   pending_human_cases=as.integer(review_manifest$pending_count),
   queue_sha256=as.character(review_manifest$queue_sha256),
   files=list(
@@ -102,5 +116,3 @@ writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
            file.path(output_dir,"checkpoint_manifest.json"),useBytes=TRUE)
 cat(sprintf("PASS: pending Workflow 01 checkpoint: %d new manifestations, %d human-review cases\n",
             manifest$new_source_manifestations,manifest$pending_human_cases))
-
-`%||%` <- function(x,y) if(is.null(x)) y else x

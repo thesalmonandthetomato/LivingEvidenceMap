@@ -7,6 +7,8 @@ suppressPackageStartupMessages({
 })
 
 
+`%||%` <- function(x,y) if(is.null(x)) y else x
+
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag,default=NULL){
   i <- match(flag,args)
@@ -200,5 +202,3 @@ writeLines(toJSON(receipt,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
            file.path(output_dir,"zenodo_receipt.json"),useBytes=TRUE)
 cat(sprintf("PASS: published restricted Workflow 01 delta as Zenodo record %s; archive bytes=%s\n",
             record_id,file.info(archive_path)$size))
-
-`%||%` <- function(x,y) if(is.null(x)) y else x

@@ -111,11 +111,7 @@ jobs:
           set -euo pipefail
           mkdir -p outputs/workflow01_candidates
           Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
-            --lens outputs/workflow01_union/lens_records_for_deduplication.jsonl \
-            --scopus outputs/workflow01_union/scopus_records_for_deduplication.jsonl \
-            --openalex outputs/workflow01_union/openalex_records_for_deduplication.jsonl \
-            --agricola outputs/workflow01_union/agricola_records_for_deduplication.jsonl \
-            --wos outputs/workflow01_union/wos_records_for_deduplication.jsonl \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
             --old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
             --output-dir outputs/workflow01_candidates \
             --score-n 1 \
@@ -205,11 +201,7 @@ jobs:
             --strip-actions outputs/final/abstract_strip_actions.jsonl \
             --data-quality-repairs outputs/final/cumulative_data_quality_repairs.jsonl \
             --repair-audit outputs/canonical/data_quality_repair_application.jsonl \
-            --lens outputs/workflow01_union/lens_records_for_deduplication.jsonl \
-            --scopus outputs/workflow01_union/scopus_records_for_deduplication.jsonl \
-            --openalex outputs/workflow01_union/openalex_records_for_deduplication.jsonl \
-            --agricola outputs/workflow01_union/agricola_records_for_deduplication.jsonl \
-            --wos outputs/workflow01_union/wos_records_for_deduplication.jsonl \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
             --run-id "$GITHUB_RUN_ID" \
             --output outputs/canonical/records.jsonl \
             --manifest outputs/canonical/canonical_manifest.json
@@ -283,6 +275,7 @@ jobs:
           name: workflow01-resume-${{ github.run_id }}
           path: |
             checkpoint_restore/checkpoint_restore_audit.json
+            outputs/workflow01_union/source_inputs.json
             outputs/human_gate/
             outputs/final/summary.json
             outputs/final/cluster_id_aliases.csv

@@ -5,6 +5,8 @@ suppressPackageStartupMessages({
   library(digest)
 })
 
+`%||%` <- function(x,y) if(is.null(x)) y else x
+
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag,default=NULL){
   i <- match(flag,args)
@@ -21,13 +23,6 @@ if(any(vapply(list(previous_seed,checkpoint_dir,output_dir),is.null,logical(1)))
 }
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
-files <- c(
-  lens="lens_records_for_deduplication.jsonl",
-  scopus="scopus_records_for_deduplication.jsonl",
-  openalex="openalex_records_for_deduplication.jsonl",
-  agricola="agricola_records_for_deduplication.jsonl",
-  wos="wos_records_for_deduplication.jsonl"
-)
 append_raw <- function(base,delta,out){
   con_in <- file(base,"rb"); con_out <- file(out,"wb")
   on.exit(close(con_in),add=TRUE); on.exit(close(con_out),add=TRUE)
@@ -55,21 +50,54 @@ count_lines <- function(path){
 }
 
 cm <- fromJSON(file.path(checkpoint_dir,"checkpoint_manifest.json"),simplifyVector=FALSE)
+source_counts_expected <- cm$new_source_manifestations_by_source
+if(is.null(source_counts_expected) || !length(source_counts_expected) || is.null(names(source_counts_expected))) {
+  stop("Checkpoint manifest has no source manifestation counts",call.=FALSE)
+}
+sources <- sort(names(source_counts_expected))
+source_files <- cm$source_files
+if(is.null(source_files) || !length(source_files)){
+  source_files <- setNames(lapply(sources,function(src)paste0(src,"_records_for_deduplication.jsonl")),sources)
+}
+
+previous_files <- if(dir.exists(previous_seed)) {
+  list.files(previous_seed,pattern="_records_for_deduplication\\.jsonl$",full.names=TRUE)
+} else character()
+previous_names <- sub("_records_for_deduplication\\.jsonl$","",basename(previous_files))
+names(previous_files) <- previous_names
+missing_checkpoint <- setdiff(previous_names,sources)
+if(length(missing_checkpoint)) stop(sprintf(
+  "Checkpoint dropped previous source(s): %s",paste(missing_checkpoint,collapse=", ")
+),call.=FALSE)
+
 counts <- list()
-for(src in names(files)){
-  base <- file.path(previous_seed,files[[src]])
+reconstructed_inputs <- list()
+for(src in sources){
+  filename <- as.character(source_files[[src]] %||% paste0(src,"_records_for_deduplication.jsonl"))
+  base <- if(src %in% previous_names) previous_files[[src]] else NULL
+  if(is.null(base)){
+    base <- tempfile(paste0(src,"_empty_"),fileext=".jsonl")
+    file.create(base)
+  }
   delta <- file.path(checkpoint_dir,"source_manifestations",paste0(src,"_new.jsonl"))
-  out <- file.path(output_dir,files[[src]])
-  if(!file.exists(base)||!file.exists(delta)) stop(sprintf("Missing checkpoint source input for %s",src),call.=FALSE)
+  out <- file.path(output_dir,filename)
+  if(!file.exists(delta)) stop(sprintf("Missing checkpoint source input for %s",src),call.=FALSE)
   before <- count_lines(base); add <- count_lines(delta)
   append_raw(base,delta,out)
   after <- count_lines(out)
   if(after!=before+add) stop(sprintf("Source append count mismatch for %s",src),call.=FALSE)
-  expected_add <- as.integer(cm$new_source_manifestations_by_source[[src]])
+  expected_add <- as.integer(source_counts_expected[[src]])
   if(add!=expected_add) stop(sprintf("Checkpoint source count mismatch for %s",src),call.=FALSE)
   counts[[src]] <- list(previous=before,added=add,current=after,
                        sha256=digest(file=out,algo="sha256",serialize=FALSE))
+  reconstructed_inputs[[src]] <- out
 }
+writeLines(toJSON(list(
+  schema="living-evidence-map-workflow01-source-inputs-v1",
+  status="checkpoint_reconstructed",
+  sources=reconstructed_inputs
+),auto_unbox=TRUE,pretty=TRUE,null="null"),
+file.path(output_dir,"source_inputs.json"))
 writeLines(toJSON(list(status="PASS",source_counts=counts),auto_unbox=TRUE,pretty=TRUE),
            file.path(output_dir,"checkpoint_source_reconstruction.json"))
 cat(sprintf("PASS: reconstructed checkpoint source union with %d appended manifestations\n",

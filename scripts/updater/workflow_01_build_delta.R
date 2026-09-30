@@ -89,20 +89,32 @@ if(!identical(previous_pointer$status,"published") || !(previous_pointer$state %
 current_manifest <- fromJSON(current_canonical_manifest,simplifyVector=FALSE)
 
 # 1. Source manifestations: union construction is append-only by source.
-source_files <- c(
-  lens="lens_records_for_deduplication.jsonl",
-  scopus="scopus_records_for_deduplication.jsonl",
-  openalex="openalex_records_for_deduplication.jsonl",
-  agricola="agricola_records_for_deduplication.jsonl",
-  wos="wos_records_for_deduplication.jsonl"
-)
+source_pattern <- "_records_for_deduplication\\.jsonl$"
+current_source_files <- list.files(current_seed_root,pattern=source_pattern,full.names=TRUE)
+if(!length(current_source_files)) stop("Current Workflow 01 seed contains no source files",call.=FALSE)
+current_sources <- sub(source_pattern,"",basename(current_source_files))
+if(anyDuplicated(current_sources)) stop("Current Workflow 01 seed contains duplicate source namespaces",call.=FALSE)
+names(current_source_files) <- current_sources
+
+previous_seed_root <- file.path(previous_root,"workflow01_seed")
+previous_source_files <- if(dir.exists(previous_seed_root)) list.files(previous_seed_root,pattern=source_pattern,full.names=TRUE) else character()
+previous_sources <- sub(source_pattern,"",basename(previous_source_files))
+if(anyDuplicated(previous_sources)) stop("Previous Workflow 01 seed contains duplicate source namespaces",call.=FALSE)
+names(previous_source_files) <- previous_sources
+
+missing_current <- setdiff(previous_sources,current_sources)
+if(length(missing_current)) stop(sprintf(
+  "Current Workflow 01 seed dropped previous source(s): %s",
+  paste(missing_current,collapse=", ")
+),call.=FALSE)
+
 source_delta_counts <- list()
 source_target <- list()
-for(src in names(source_files)){
-  prev <- file.path(previous_root,"workflow01_seed",source_files[[src]])
-  cur <- file.path(current_seed_root,source_files[[src]])
-  if(!file.exists(prev)||!file.exists(cur)) stop(sprintf("Missing %s seed file",src),call.=FALSE)
-  p <- read_nonempty(prev); z <- read_nonempty(cur)
+for(src in sort(current_sources)){
+  prev <- if(src %in% previous_sources) previous_source_files[[src]] else NULL
+  cur <- current_source_files[[src]]
+  p <- if(is.null(prev)) character() else read_nonempty(prev)
+  z <- read_nonempty(cur)
   if(length(z)<length(p)) stop(sprintf("%s current source state is shorter than previous state",src),call.=FALSE)
   if(length(p) && !identical(z[seq_along(p)],p)) {
     stop(sprintf("%s historical source prefix changed; append-only delta is unsafe",src),call.=FALSE)
@@ -112,6 +124,7 @@ for(src in names(source_files)){
   write_lines(add,out)
   source_delta_counts[[src]] <- length(add)
   source_target[[src]] <- list(
+    filename=basename(cur),
     previous_records=length(p),current_records=length(z),added_records=length(add),
     current_sha256=sha(cur),delta_sha256=sha(out)
   )

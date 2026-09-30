@@ -83,24 +83,46 @@ append_file <- function(base,delta,out){
 }
 
 # 1. Replay append-only source manifestations.
-source_files <- c(
-  lens="lens_records_for_deduplication.jsonl",
-  scopus="scopus_records_for_deduplication.jsonl",
-  openalex="openalex_records_for_deduplication.jsonl",
-  agricola="agricola_records_for_deduplication.jsonl",
-  wos="wos_records_for_deduplication.jsonl"
-)
-for(src in names(source_files)){
-  base <- file.path(previous_root,"workflow01_seed",source_files[[src]])
+source_target <- m$target$source_files
+if(is.null(source_target) || !length(source_target) || is.null(names(source_target))) {
+  stop("Delta target contains no source_files",call.=FALSE)
+}
+target_sources <- sort(names(source_target))
+previous_seed_root <- file.path(previous_root,"workflow01_seed")
+previous_files <- if(dir.exists(previous_seed_root)) {
+  list.files(previous_seed_root,pattern="_records_for_deduplication\\.jsonl$",full.names=TRUE)
+} else character()
+previous_names <- sub("_records_for_deduplication\\.jsonl$","",basename(previous_files))
+names(previous_files) <- previous_names
+missing_target <- setdiff(previous_names,target_sources)
+if(length(missing_target)) stop(sprintf(
+  "Delta target dropped previous source(s): %s",paste(missing_target,collapse=", ")
+),call.=FALSE)
+
+replayed_inputs <- list()
+for(src in target_sources){
+  target <- source_target[[src]]
+  filename <- as.character(target$filename %||% paste0(src,"_records_for_deduplication.jsonl"))
+  base <- if(src %in% previous_names) previous_files[[src]] else NULL
+  if(is.null(base)){
+    base <- tempfile(paste0(src,"_empty_"),fileext=".jsonl")
+    file.create(base)
+  }
   delta <- file.path(delta_dir,"source_manifestations",paste0(src,"_new.jsonl"))
-  out <- file.path(output_root,"workflow01_seed",source_files[[src]])
-  if(!file.exists(base)||!file.exists(delta)) stop(sprintf("Missing source replay input for %s",src),call.=FALSE)
+  out <- file.path(output_root,"workflow01_seed",filename)
+  if(!file.exists(delta)) stop(sprintf("Missing source replay delta for %s",src),call.=FALSE)
   append_file(base,delta,out)
-  target <- m$target$source_files[[src]]
   if(!identical(tolower(sha(out)),tolower(as.character(target$current_sha256)))) {
     stop(sprintf("%s replay SHA-256 does not match target",src),call.=FALSE)
   }
+  replayed_inputs[[src]] <- out
 }
+writeLines(toJSON(list(
+  schema="living-evidence-map-workflow01-source-inputs-v1",
+  status="replayed",
+  sources=replayed_inputs
+),auto_unbox=TRUE,pretty=TRUE,null="null"),
+file.path(output_root,"workflow01_seed","source_inputs.json"))
 
 align_cols <- function(a,b){
   cols <- union(names(a),names(b))
