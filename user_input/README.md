@@ -10,6 +10,14 @@ The current configuration retains the validated salmon-farming search concepts. 
 
 Other genuinely user-editable pipeline inputs, such as prompts used by downstream workflows, may be moved here later after their interfaces are reviewed.
 
+## Adding a new API source
+
+For a human-readable guide to adding a new bibliographic API while preserving the generic downstream architecture, see:
+
+`user_input/ADDING_A_NEW_API_SOURCE.md`
+
+The intended pattern is source-specific harvesting and normalisation in Workflow 00, followed by the generic Workflow 01+ pipeline.
+
 ## Workflow 00 generic RIS imports
 
 A manually exported RIS search is treated as one logical Workflow 00 source package, even when the database requires the export to be split into multiple files.
