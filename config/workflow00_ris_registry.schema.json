@@ -4,7 +4,7 @@
   "title": "LivingEvidenceMap Workflow 00 RIS source registry",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "source_ID", "acquisition", "database", "search", "input"],
+  "required": ["schema_version", "source_ID", "acquisition", "database", "search", "field_semantics", "input"],
   "properties": {
     "schema_version": { "const": "workflow00-source-registry-v1" },
     "source_ID": {
@@ -57,6 +57,18 @@
         },
         "reported_results": { "type": ["integer", "null"], "minimum": 0 },
         "notes": { "type": ["string", "null"] }
+      }
+    },
+    "field_semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ris_KW"],
+      "properties": {
+        "ris_KW": {
+          "type": "string",
+          "enum": ["author_keywords", "indexing_terms", "mixed", "unknown"],
+          "description": "Semantic interpretation of RIS KW supplied by the exporting database. W00 must not assume KW means author keywords."
+        }
       }
     },
     "input": {
