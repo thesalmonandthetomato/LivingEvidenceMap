@@ -204,7 +204,11 @@ Only missing canonical fields can be populated.
 
 Returned abstracts are guarded by title similarity. DOI mismatch, title inconsistency or ambiguous Scopus resolution results in quarantine rather than automatic repair.
 
-### 7. Build sparse patch
+### 7. Human-review gate for quarantined conflicts
+
+After enrichment, any quarantined provider conflicts are extracted into a checksum-locked human-review package containing a CSV review sheet, detailed JSONL evidence and a manifest bound to the exact input canonical JSONL and enrichment audit. If at least one quarantined record is present, the package is uploaded as a GitHub Actions artefact and the production workflow deliberately fails before cumulative patch merge, Zenodo publication or downstream handoff. The failed run therefore acts as the explicit attention/notification signal that human adjudication is required. Runs with zero quarantined conflicts continue automatically.
+
+### 8. Build sparse patch
 
 The current enrichment run is converted into one patch record per attempted canonical work.
 
@@ -221,19 +225,19 @@ Each patch records:
 
 Technical provider failures are written separately to a retry queue.
 
-### 8. Validate exact current-patch replay
+### 9. Validate exact current-patch replay
 
 The current patch is applied back to the pre-run canonical state.
 
 The reconstructed JSONL must match the direct enrichment output exactly by SHA-256.
 
-### 9. Merge cumulative Workflow 02 state
+### 10. Merge cumulative Workflow 02 state
 
 The newly generated patch is merged with the prior cumulative patch by stable `record_id`.
 
 New verified field fills update that record’s sparse enrichment state without duplicating the full canonical corpus.
 
-### 10. Validate cumulative reconstruction
+### 11. Validate cumulative reconstruction
 
 The cumulative patch is applied to the pristine authoritative Workflow 01 canonical JSONL.
 
@@ -241,7 +245,7 @@ The result must reproduce the final enriched canonical JSONL exactly by SHA-256.
 
 This is the principal integrity gate before publication.
 
-### 11. Inventory residual missing metadata
+### 12. Inventory residual missing metadata
 
 Workflow 02 inventories the final enriched corpus and records:
 
@@ -254,7 +258,7 @@ Workflow 02 inventories the final enriched corpus and records:
 
 A separate queue is written for records missing both fields.
 
-### 12. Publish durable automated enrichment state
+### 13. Publish durable automated enrichment state
 
 When publication is enabled, only the sparse automated Workflow 02 enrichment state is archived to restricted Zenodo.
 
@@ -424,6 +428,7 @@ Workflow 02 is considered validated when:
 - only DOI-bearing records with missing target fields are queried;
 - provider matches satisfy exact DOI and title-consistency rules;
 - conflicting provider metadata are quarantined;
+- quarantined conflicts trigger a checksum-locked human-review artefact and block publication/downstream handoff until adjudicated;
 - technical failures are separately identifiable and retryable;
 - the current sparse patch exactly reproduces the direct enrichment output;
 - the cumulative patch applied to authoritative Workflow 01 exactly reproduces the final enriched canonical JSONL;
