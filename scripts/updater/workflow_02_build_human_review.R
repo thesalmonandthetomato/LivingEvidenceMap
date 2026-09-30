@@ -44,8 +44,9 @@ dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 audit <- read_jsonl(audit_path)
 conflict_audit <- Filter(function(x) length(coalesce_null(x$quarantined, list())) > 0L, audit)
-conflict_ids <- unique(vapply(conflict_audit, function(x) clean(x$record_id), character(1)))
-conflict_ids <- conflict_ids[!is.na(conflict_ids)]
+raw_conflict_ids <- vapply(conflict_audit, function(x) clean(x$record_id), character(1))
+if (any(is.na(raw_conflict_ids))) stop("Quarantined audit entry missing stable record_id", call. = FALSE)
+conflict_ids <- unique(raw_conflict_ids)
 
 if (!length(conflict_ids)) {
   status <- list(
