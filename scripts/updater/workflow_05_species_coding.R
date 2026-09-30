@@ -220,6 +220,7 @@ manifest <- list(
     matcher_behaviour_inferred_from_terms = TRUE,
     fuzzy_matching = FALSE,
     semantic_inference = FALSE,
+    unspecified_suppressed_when_named_species_present = TRUE,
     generic_code_suppressed_when_specific_code_present = TRUE,
     generic_code = generic_code,
     pluralisable_common_head_terms = pluralisable_common_head_terms
