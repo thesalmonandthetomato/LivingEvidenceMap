@@ -1,1 +1,1 @@
-Validate CAB Abstracts Workflow 00 against existing Zenodo draft 23058344 without writing or publishing.
+Re-run CAB Abstracts Workflow 00 validation after final Zenodo upload completed. Read-only; do not publish.
