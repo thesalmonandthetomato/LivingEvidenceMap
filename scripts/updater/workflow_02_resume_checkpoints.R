@@ -20,6 +20,7 @@ if (is.null(mode) || !mode %in% c("stamp", "select")) {
 
 fingerprint_files <- c(
   ".github/workflows/workflow_02_batched.yml",
+  "scripts/updater/workflow_02_plan_batches.R",
   "scripts/updater/workflow_02_metadata_enrichment.R",
   "scripts/updater/workflow_02_build_patch.R",
   "scripts/updater/workflow_02_apply_patch.R",
