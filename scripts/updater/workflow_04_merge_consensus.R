@@ -26,11 +26,13 @@ if(any(vapply(summaries,function(x)as.integer(x$shard_count)!=expected_shards,lo
 
 expected_sha<-"ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69"
 if(any(vapply(summaries,function(x)!identical(scalar(x$prompt_sha256),expected_sha),logical(1))))stop("Prompt SHA mismatch across shards",call.=FALSE)
-if(any(vapply(summaries,function(x)as.integer(x$workflow03_eligible)!=32283L,logical(1))))stop("W03 eligible count mismatch across shards",call.=FALSE)
+eligible_counts<-vapply(summaries,function(x)as.integer(x$workflow03_eligible),integer(1))
+if(any(is.na(eligible_counts))||length(unique(eligible_counts))!=1L)stop("W03 eligible count mismatch across shards",call.=FALSE)
+expected_records<-eligible_counts[[1L]]
 
 rows<-unlist(lapply(layer_files,read_jsonl),recursive=FALSE)
 ids<-vapply(rows,function(x)scalar(x$record_id),character(1))
-if(length(rows)!=32283L)stop(sprintf("Expected 32,283 consensus rows, found %d",length(rows)),call.=FALSE)
+if(length(rows)!=expected_records)stop(sprintf("Expected %d consensus rows, found %d",expected_records,length(rows)),call.=FALSE)
 if(any(!nzchar(ids))||anyDuplicated(ids))stop("Merged consensus record_id invariant failed",call.=FALSE)
 
 dec<-vapply(rows,function(x)scalar((x$screening %||% list())$decision),character(1))
@@ -45,7 +47,7 @@ write_jsonl(rows,file.path(output_dir,"workflow04_consensus_layer.jsonl"))
 summary<-list(
  schema="living-evidence-map-workflow04-luna-consensus-merged-v1",
  status=if(any(dec=="uncertain"))"HUMAN_REVIEW_REQUIRED" else "PASS",
- workflow03_eligible=32283L,
+ workflow03_eligible=expected_records,
  consensus_records=length(rows),
  final_retain=sum(dec=="retain"),
  final_exclude=sum(dec=="exclude"),
