@@ -17,6 +17,41 @@ if(!startsWith(raw_js,prefix)||!endsWith(raw_js,";")) stopf("Unexpected dashboar
 payload <- fromJSON(substr(raw_js,nchar(prefix)+1L,nchar(raw_js)-1L),simplifyVector=FALSE)
 if(!is.list(payload$records)||!length(payload$records)) stopf("Dashboard payload has no records")
 
+# Restore dashboard-only Level 1/2 topic definitions without changing the
+# analytical ontology or any dashboard interaction logic.
+parent_definitions_path <- Sys.getenv("DASHBOARD_TOPIC_DEFINITIONS_PATH","docs/dashboard-topic-definitions.json")
+if(!file.exists(parent_definitions_path)) stopf("Dashboard parent-topic definitions not found: %s",parent_definitions_path)
+parent_definitions <- fromJSON(parent_definitions_path,simplifyVector=TRUE)
+if(is.null(names(parent_definitions))||!length(parent_definitions)) stopf("Dashboard parent-topic definitions are empty or unnamed")
+defs <- payload$topic_definitions %||% list()
+for(nm in names(parent_definitions)){
+  value <- as.character(parent_definitions[[nm]] %||% "")
+  if(!nzchar(trimws(value))) stopf("Empty dashboard topic definition for: %s",nm)
+  defs[[nm]] <- value
+}
+payload$topic_definitions <- defs
+
+# Every Level 1 and Level 2 path represented in the dashboard must now resolve
+# to a definition. Level 3 definitions continue to come from the ontology.
+parent_paths <- character()
+for(r in payload$records){
+  for(p in (r$topic_paths %||% list())){
+    parts <- as.character(unlist(p,use.names=FALSE))
+    parts <- trimws(parts[nzchar(trimws(parts))])
+    if(length(parts)>=1L) parent_paths <- c(parent_paths,parts[[1L]])
+    if(length(parts)>=2L) parent_paths <- c(parent_paths,paste(parts[1:2],collapse=" > "))
+  }
+}
+parent_paths <- sort(unique(parent_paths))
+missing_parent_defs <- parent_paths[!vapply(parent_paths,function(x){
+  z <- payload$topic_definitions[[x]]
+  !is.null(z) && nzchar(trimws(as.character(z[[1L]] %||% z)))
+},logical(1))]
+if(length(missing_parent_defs)) stopf(
+  "Missing dashboard Level 1/2 topic definitions: %s",
+  paste(missing_parent_defs,collapse="; ")
+)
+
 `%||%` <- function(x,y) if(is.null(x)||length(x)==0L)y else x
 canonical <- new.env(parent=emptyenv(),hash=TRUE)
 con <- file(canonical_jsonl,"rt",encoding="UTF-8")
