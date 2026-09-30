@@ -72,8 +72,7 @@ for(r in rows){
   d <- norm_doi(r$canonical$doi)
   eligible <- !is.null(d) && (
     is_missing(r$canonical$title) ||
-    is_missing(r$canonical$abstract) ||
-    keywords_missing(r$canonical$author_keywords)
+    is_missing(r$canonical$abstract)
   )
   if(!eligible) next
   eligible_total <- eligible_total + 1L
