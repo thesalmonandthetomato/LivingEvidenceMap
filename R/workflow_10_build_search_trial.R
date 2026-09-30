@@ -23,9 +23,9 @@ parent_definitions_path <- Sys.getenv("DASHBOARD_TOPIC_DEFINITIONS_PATH","docs/d
 if(!file.exists(parent_definitions_path)) stopf("Dashboard parent-topic definitions not found: %s",parent_definitions_path)
 parent_definitions <- fromJSON(parent_definitions_path,simplifyVector=TRUE)
 if(is.null(names(parent_definitions))||!length(parent_definitions)) stopf("Dashboard parent-topic definitions are empty or unnamed")
-defs <- payload$topic_definitions %||% list()
+defs <- if(is.null(payload$topic_definitions)) list() else payload$topic_definitions
 for(nm in names(parent_definitions)){
-  value <- as.character(parent_definitions[[nm]] %||% "")
+  value <- if(is.null(parent_definitions[[nm]])) "" else as.character(parent_definitions[[nm]])
   if(!nzchar(trimws(value))) stopf("Empty dashboard topic definition for: %s",nm)
   defs[[nm]] <- value
 }
@@ -35,7 +35,7 @@ payload$topic_definitions <- defs
 # to a definition. Level 3 definitions continue to come from the ontology.
 parent_paths <- character()
 for(r in payload$records){
-  for(p in (r$topic_paths %||% list())){
+  for(p in (if(is.null(r$topic_paths)) list() else r$topic_paths)){
     parts <- as.character(unlist(p,use.names=FALSE))
     parts <- trimws(parts[nzchar(trimws(parts))])
     if(length(parts)>=1L) parent_paths <- c(parent_paths,parts[[1L]])
@@ -45,7 +45,7 @@ for(r in payload$records){
 parent_paths <- sort(unique(parent_paths))
 missing_parent_defs <- parent_paths[!vapply(parent_paths,function(x){
   z <- payload$topic_definitions[[x]]
-  !is.null(z) && nzchar(trimws(as.character(z[[1L]] %||% z)))
+  !is.null(z) && nzchar(trimws(as.character(if(length(z)) z[[1L]] else "")))
 },logical(1))]
 if(length(missing_parent_defs)) stopf(
   "Missing dashboard Level 1/2 topic definitions: %s",
