@@ -376,7 +376,7 @@ jobs:
           mkdir -p outputs/zero-${{ matrix.shard }}
           if [ "$N" -eq 0 ]; then
             : > outputs/zero-${{ matrix.shard }}/final_rescreen.jsonl
-            Rscript -e 'jsonlite::write_json(list(records=0L,shard_index=as.integer(commandArgs(TRUE)[1]),shard_count=4L),"outputs/zero-" %+% "",auto_unbox=TRUE)' ${{ matrix.shard }}
+            SHARD="${{ matrix.shard }}" OUT="outputs/zero-${{ matrix.shard }}/summary.json" Rscript -e 'jsonlite::write_json(list(records=0L,shard_index=as.integer(Sys.getenv("SHARD")),shard_count=4L),Sys.getenv("OUT"),auto_unbox=TRUE,pretty=TRUE)'
           else
             Rscript scripts/reporting/workflow07_zero_topic_targeted_rescreen.R               --input "$Q"               --output-dir outputs/zero-${{ matrix.shard }}               --model gpt-5.6-luna               --shard-index ${{ matrix.shard }}               --shard-count 4
           fi
