@@ -65,7 +65,8 @@ jobs:
           cp "$MATCHES" workflow05_state/species_matches.csv
           cp "$COUNTS" workflow05_state/species_record_counts.csv
           cp "$MANIFEST" workflow05_state/workflow05_manifest.json
-          cp config/deterministic_concepts.csv workflow05_state/deterministic_concepts.csv
+          cp user_input/workflow05_deterministic_concepts.csv workflow05_state/deterministic_concepts.csv
+          cp user_input/workflow05_coding_config.json workflow05_state/workflow05_coding_config.json
           Rscript -e '
             library(jsonlite); library(digest); library(readr)
             m <- fromJSON("workflow05_state/workflow05_manifest.json",simplifyVector=FALSE)
