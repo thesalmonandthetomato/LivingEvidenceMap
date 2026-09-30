@@ -1,0 +1,44 @@
+{
+  "schema_version": "workflow00-source-registry-v1",
+  "acquisition": {
+    "method": "ris_upload",
+    "source_format": "RIS",
+    "notes": "Manual RIS export from ProQuest Dissertations & Theses Global; logical search split across export chunks."
+  },
+  "database": {
+    "name": "ProQuest Dissertations & Theses Global",
+    "short_name": "proquest",
+    "platform": "ProQuest",
+    "database_scope": ["ProQuest Dissertations & Theses Global"]
+  },
+  "search": {
+    "description": "Living Evidence Map salmon farming search in ProQuest Dissertations & Theses Global.",
+    "search_date": "2026-09-30",
+    "search_string": "(salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)",
+    "search_fields": null,
+    "limits": null,
+    "reported_results": 1574,
+    "notes": "Reported result total set to the reconciled four-part export total (400 + 400 + 400 + 374). A separate 20-record file duplicates 20 records in part 1 and is retained in the raw archive for audit."
+  },
+  "field_semantics": {
+    "ris_KW": "indexing_terms"
+  },
+  "staging": {
+    "method": "zenodo_draft",
+    "reserved_doi": "10.5281/zenodo.23058211",
+    "deposition_id": null,
+    "publish_after_validation": true,
+    "notes": "Keep this Zenodo record as a draft until W00 has added the registry, normalised handover JSONL, manifest, checksum and duplicate-audit files."
+  },
+  "input": {
+    "expected_chunk_count": 5,
+    "encoding": "UTF-8",
+    "files": [
+      {"filename": "ProQuestDocuments-2026-09-30 (1).ris", "exported_at": null, "notes": "400 records"},
+      {"filename": "ProQuestDocuments-2026-09-30 (2).ris", "exported_at": null, "notes": "400 records"},
+      {"filename": "ProQuestDocuments-2026-09-30 (3).ris", "exported_at": null, "notes": "400 records"},
+      {"filename": "ProQuestDocuments-2026-09-30 (4).ris", "exported_at": null, "notes": "374 records"},
+      {"filename": "ProQuestDocuments-2026-09-30(1).ris", "exported_at": null, "notes": "20 records; exact duplicates of records already present in part 1; intentionally retained for checksum/duplicate audit"}
+    ]
+  }
+}
