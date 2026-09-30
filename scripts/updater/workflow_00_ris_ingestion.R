@@ -139,12 +139,33 @@ if (!is.null(expected_chunks) && as.integer(expected_chunks) != length(ris_paths
   stop(sprintf("Expected %d RIS chunks but received %d", as.integer(expected_chunks), length(ris_paths)), call. = FALSE)
 }
 
+audit_dir <- file.path(output_dir, "audit")
+dir.create(audit_dir, recursive = TRUE, showWarnings = FALSE)
+
 file_sha <- vapply(ris_paths, sha256_file, character(1))
+file_checksum_audit <- data.frame(
+  filename = basename(ris_paths),
+  bytes = unname(file.info(ris_paths)$size),
+  sha256 = unname(file_sha),
+  stringsAsFactors = FALSE
+)
+write.csv(file_checksum_audit, file.path(audit_dir, "chunk_file_checksums.csv"), row.names = FALSE)
+
 dup_sha <- unique(file_sha[duplicated(file_sha) | duplicated(file_sha, fromLast = TRUE)])
 if (length(dup_sha)) {
-  dup_files <- lapply(dup_sha, function(h) basename(ris_paths[file_sha == h]))
-  msg <- vapply(seq_along(dup_sha), function(i) paste(dup_files[[i]], collapse = " = "), character(1))
-  stop(sprintf("Duplicate RIS chunk content detected by SHA-256: %s", paste(msg, collapse = "; ")), call. = FALSE)
+  dup_rows <- do.call(rbind, lapply(dup_sha, function(h) {
+    files <- basename(ris_paths[file_sha == h])
+    data.frame(
+      sha256 = h,
+      duplicated_filenames = paste(files, collapse = ";"),
+      duplicate_file_count = length(files),
+      stringsAsFactors = FALSE
+    )
+  }))
+  write.csv(dup_rows, file.path(audit_dir, "duplicate_chunk_checksums.csv"), row.names = FALSE)
+  msg <- vapply(seq_along(dup_sha), function(i) paste(basename(ris_paths[file_sha == dup_sha[[i]]]), collapse = " = "), character(1))
+  stop(sprintf("Duplicate RIS chunk content detected by SHA-256: %s. Check audit/chunk_file_checksums.csv and audit/duplicate_chunk_checksums.csv.",
+               paste(msg, collapse = "; ")), call. = FALSE)
 }
 
 parse_ris <- function(path) {
@@ -343,7 +364,6 @@ for (id in names(duplicate_groups)) {
   }
 }
 
-audit_dir <- file.path(output_dir, "audit")
 raw_dir <- file.path(output_dir, "raw")
 registry_dir <- file.path(output_dir, "registry")
 handoff_dir <- file.path(output_dir, "handoff")
@@ -429,6 +449,9 @@ manifest <- list(
     handoff_jsonl = list(path = file.path("handoff", "records.jsonl"),
                          bytes = unname(file.info(handoff_path)$size),
                          sha256 = sha256_file(handoff_path)),
+    chunk_checksum_audit = list(path = file.path("audit", "chunk_file_checksums.csv"),
+                                bytes = unname(file.info(file.path(audit_dir, "chunk_file_checksums.csv"))$size),
+                                sha256 = sha256_file(file.path(audit_dir, "chunk_file_checksums.csv"))),
     duplicate_audit = list(path = file.path("audit", "exact_duplicate_source_record_ids.csv"),
                            bytes = unname(file.info(file.path(audit_dir, "exact_duplicate_source_record_ids.csv"))$size),
                            sha256 = sha256_file(file.path(audit_dir, "exact_duplicate_source_record_ids.csv")))
@@ -442,6 +465,7 @@ writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = "null", na 
 checksum_paths <- c(ris_paths = file.path(raw_dir, basename(ris_paths)),
                     registry = registry_copy,
                     handoff = handoff_path,
+                    chunk_checksum_audit = file.path(audit_dir, "chunk_file_checksums.csv"),
                     duplicate_audit = file.path(audit_dir, "exact_duplicate_source_record_ids.csv"),
                     manifest = manifest_path)
 checksum_lines <- vapply(checksum_paths, function(p) {
