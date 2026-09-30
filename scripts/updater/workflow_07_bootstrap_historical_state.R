@@ -49,6 +49,7 @@ qc_files<-c(
  qc_summary="workflow07_qc_summary.json"
 )
 qc_paths<-file.path(qc_dir,qc_files)
+names(qc_paths)<-names(qc_files)
 for(p in qc_paths)if(!file.exists(p))stop("Missing final W07 QC file: ",p,call.=FALSE)
 qcs<-fromJSON(qc_paths[["qc_summary"]],simplifyVector=FALSE)
 if(as.integer(qcs$records)!=nrow(w06))stop("Final W07 QC population does not match W06/W07 population",call.=FALSE)
