@@ -6,6 +6,8 @@ output:
   html_document:
     toc: true
     toc_float: true
+header-includes:
+  - '<style>.figcaption { margin-bottom: 1.5em; }</style>'
 bibliography: references.bib
 link-citations: true
 reference-section-title: References
