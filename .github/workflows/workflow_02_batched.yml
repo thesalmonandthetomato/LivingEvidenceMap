@@ -10,6 +10,10 @@ on:
         required: false
         default: ''
         type: string
+      resume_run_id:
+        required: false
+        default: ''
+        type: string
       batch_size:
         required: false
         default: '1000'
@@ -44,6 +48,11 @@ on:
         description: 'Previous Workflow 02 pointer'
         required: false
         default: 'docs/enrichment/zenodo/run-36137804187.json'
+        type: string
+      resume_run_id:
+        description: 'Optional prior batched Workflow 02 run ID whose validated checkpoints may be reused'
+        required: false
+        default: ''
         type: string
       batch_size:
         description: 'Eligible records per durable checkpoint batch'
@@ -82,9 +91,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
+      matrix: ${{ steps.resume.outputs.matrix }}
       batch_count: ${{ steps.plan.outputs.batch_count }}
       due_records: ${{ steps.plan.outputs.due_records }}
+      resumed_batches: ${{ steps.resume.outputs.resumed_batches }}
     steps:
       - name: Checkout integration branch
         uses: actions/checkout@v4
@@ -111,6 +121,7 @@ jobs:
           parse(file='scripts/updater/workflow_02_merge_patches.R')
           parse(file='scripts/updater/workflow_02_apply_patch.R')
           parse(file='scripts/updater/workflow_02_aggregate_batches.R')
+          parse(file='scripts/updater/workflow_02_resume_checkpoints.R')
           cat('PASS: batched Workflow 02 scripts parse\n')
 
       - name: Validate input pointers
@@ -201,6 +212,52 @@ jobs:
           echo "batch_count=$BATCH_COUNT" >> "$GITHUB_OUTPUT"
           echo "due_records=$DUE_RECORDS" >> "$GITHUB_OUTPUT"
 
+      - name: Download prior-run batch checkpoints for resume
+        if: ${{ inputs.resume_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf resume-source
+          mkdir -p resume-source
+          gh run download "$RESUME_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "workflow02-batch-*-$RESUME_RUN_ID" \
+            --dir resume-source
+
+      - name: Select strictly compatible prior checkpoints
+        id: resume
+        env:
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02_resumed
+          ARGS=(
+            --mode select
+            --plan-dir outputs/workflow02_plan
+            --output-matrix outputs/workflow02_plan/resume_matrix.json
+            --output-resume-dir outputs/workflow02_resumed
+            --output-report outputs/workflow02_plan/resume_report.json
+          )
+          if [ -n "$RESUME_RUN_ID" ]; then ARGS+=(--resume-root resume-source); fi
+          Rscript scripts/updater/workflow_02_resume_checkpoints.R "${ARGS[@]}"
+          MATRIX="$(tr -d '\n' < outputs/workflow02_plan/resume_matrix.json)"
+          RESUMED="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow02_plan/resume_report.json");cat(x$resumed_batch_count)')"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "resumed_batches=$RESUMED" >> "$GITHUB_OUTPUT"
+
+      - name: Upload validated resumed checkpoints
+        if: ${{ inputs.resume_run_id != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-resumed-checkpoints-${{ github.run_id }}
+          path: outputs/workflow02_resumed/
+          retention-days: 90
+          if-no-files-found: warn
+
       - name: Upload compact immutable batch inputs
         uses: actions/upload-artifact@v4
         with:
@@ -219,6 +276,7 @@ jobs:
             previous_cumulative_patch.jsonl
             outputs/workflow02/input_with_previous_state.jsonl
             outputs/workflow02_plan/plan.json
+            outputs/workflow02_plan/resume_report.json
           retention-days: 30
           if-no-files-found: error
 
@@ -278,6 +336,13 @@ jobs:
           Rscript -e "library(digest);stopifnot(digest(file='outputs/batch/replayed.jsonl',algo='sha256',serialize=FALSE)==digest(file='outputs/batch/enriched.jsonl',algo='sha256',serialize=FALSE));cat('PASS: batch exact replay verified\n')"
           rm -f outputs/batch/enriched.jsonl outputs/batch/replayed.jsonl
 
+          Rscript scripts/updater/workflow_02_resume_checkpoints.R \
+            --mode stamp \
+            --batch "$BATCH" \
+            --input "$BATCH_INPUT" \
+            --checkpoint-dir outputs/batch \
+            --run-id "$GITHUB_RUN_ID"
+
       - name: Create no-op batch checkpoint
         if: ${{ matrix.batch == 'none' }}
         shell: bash
@@ -290,6 +355,7 @@ jobs:
           printf '{"status":"PASS","patch_records":0}\n' > outputs/batch/current_patch_report.json
 
       - name: Upload durable batch checkpoint
+        if: ${{ matrix.batch != 'none' }}
         uses: actions/upload-artifact@v4
         with:
           name: workflow02-batch-${{ matrix.batch }}-${{ github.run_id }}
@@ -324,11 +390,20 @@ jobs:
           name: workflow02-finalize-input-${{ github.run_id }}
           path: prepared
 
-      - name: Download all durable batch checkpoints
+      - name: Download newly completed batch checkpoints
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: workflow02-batch-*-${{ github.run_id }}
           path: batches
+
+      - name: Download validated resumed batch checkpoints
+        if: ${{ inputs.resume_run_id != '' }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow02-resumed-checkpoints-${{ github.run_id }}
+          path: batches/resumed
 
       - name: Merge and verify all completed batches
         env:
@@ -380,6 +455,7 @@ jobs:
           cp outputs/workflow02/missing_both_queue.jsonl outputs/workflow02_state/
           cp outputs/workflow02/cumulative_patch_replay.json outputs/workflow02_state/
           cp prepared/outputs/workflow02_plan/plan.json outputs/workflow02_state/batch_plan.json
+          cp prepared/outputs/workflow02_plan/resume_report.json outputs/workflow02_state/resume_report.json
 
           W01_SHA="$(cat prepared/workflow01_sha.txt)"
           W01_SHA="$W01_SHA" Rscript -e "library(jsonlite);library(digest);x<-list(schema='living-evidence-map-workflow02-state-manifest-v1',workflow='02',execution='deterministic_batched',repairable_fields=c('title','abstract','author_keywords'),github_run_id=Sys.getenv('GITHUB_RUN_ID'),workflow01_pointer=Sys.getenv('W01_POINTER'),workflow01_canonical_sha256=Sys.getenv('W01_SHA'),previous_workflow02_pointer=if(nzchar(Sys.getenv('PREV_W02_POINTER')))Sys.getenv('PREV_W02_POINTER') else NULL,final_enriched_sha256=digest(file='outputs/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE),created_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'));writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/workflow02_state/state_manifest.json')"
