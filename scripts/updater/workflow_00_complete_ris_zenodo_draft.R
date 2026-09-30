@@ -121,9 +121,14 @@ if (!is.null(reserved_doi) && !(reserved_doi %in% candidate_dois(dep))) {
 # Prefer the modern InvenioRDM draft API used by current Zenodo UI-created drafts.
 rdm_draft_url <- paste0("https://zenodo.org/api/records/", dep_id, "/draft")
 rdm_resp <- perform_maybe(request(rdm_draft_url) |> auth(), 60)
+rdm_status <- resp_status(rdm_resp)
+cat(sprintf("ZENODO RDM DRAFT STATUS %d for %s\n", rdm_status, dep_id))
 rdm_draft <- NULL
-if (resp_status(rdm_resp) == 200L) {
+if (rdm_status == 200L) {
   rdm_draft <- resp_body_json(rdm_resp, simplifyVector = FALSE)
+} else if (is.null(scalar(dep$links$bucket))) {
+  body <- tryCatch(resp_body_string(rdm_resp), error = function(e) "")
+  stop(sprintf("Modern Zenodo draft API returned HTTP %d for UI-created draft %s: %s", rdm_status, dep_id, body), call. = FALSE)
 }
 
 extract_entries <- function(x) {
