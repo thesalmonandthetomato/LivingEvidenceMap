@@ -200,15 +200,16 @@ parse_ris <- function(path) {
         current <- append_tag(current, tag, value)
       }
       last_tag <- tag
-    } else if (!is.null(current) && !is.null(last_tag) && grepl("^[[:space:]]+", line)) {
+    } else if (!is.null(current) && !is.null(last_tag) && nzchar(trimws(line))) {
+      # Some database RIS exports wrap long field values onto continuation
+      # lines without preserving leading indentation. A non-tag line inside
+      # an open TY...ER record therefore continues the preceding RIS field.
       cont <- trimws(line)
-      if (nzchar(cont)) {
-        vals <- current[[last_tag]]
-        if (is.null(vals) || !length(vals)) current <- append_tag(current, last_tag, cont)
-        else current[[last_tag]][[length(vals)]] <- paste(vals[[length(vals)]], cont)
-      }
-    } else if (nzchar(trimws(line)) && !is.null(current)) {
-      stop(sprintf("%s: unparseable non-empty RIS line: %s", basename(path), line), call. = FALSE)
+      vals <- current[[last_tag]]
+      if (is.null(vals) || !length(vals)) current <- append_tag(current, last_tag, cont)
+      else current[[last_tag]][[length(vals)]] <- paste(vals[[length(vals)]], cont)
+    } else if (nzchar(trimws(line)) && is.null(current)) {
+      stop(sprintf("%s: non-empty text outside an RIS record: %s", basename(path), line), call. = FALSE)
     }
   }
   if (!is.null(current)) stop(sprintf("%s: file ended before ER terminator", basename(path)), call. = FALSE)
