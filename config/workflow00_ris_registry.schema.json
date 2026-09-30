@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thesalmonandthetomato.org/schemas/workflow00-ris-registry-v1.json",
+  "title": "LivingEvidenceMap Workflow 00 RIS source registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_ID", "acquisition", "database", "search", "input"],
+  "properties": {
+    "schema_version": { "const": "workflow00-source-registry-v1" },
+    "source_ID": {
+      "type": "string",
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "description": "Stable identifier for this specific search/import event. It must not be reused for a different search."
+    },
+    "acquisition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "source_format"],
+      "properties": {
+        "method": { "const": "ris_upload" },
+        "source_format": { "const": "RIS" },
+        "notes": { "type": ["string", "null"] }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "short_name": { "type": ["string", "null"] },
+        "platform": { "type": ["string", "null"] },
+        "database_scope": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "search": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "search_date"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "search_date": { "type": "string", "format": "date" },
+        "search_string": { "type": ["string", "null"] },
+        "search_fields": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "limits": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "reported_results": { "type": ["integer", "null"], "minimum": 0 },
+        "notes": { "type": ["string", "null"] }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename"],
+      "properties": {
+        "filename": { "type": "string", "minLength": 1 },
+        "exported_at": { "type": ["string", "null"], "format": "date-time" },
+        "encoding": { "type": ["string", "null"], "default": "UTF-8" }
+      }
+    }
+  }
+}
