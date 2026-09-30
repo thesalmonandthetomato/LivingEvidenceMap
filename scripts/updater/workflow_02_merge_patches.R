@@ -28,6 +28,7 @@ if(length(cur)) for(x in cur){
   if(is.null(old)){ store[[id]]<-x; next }
   if(!is.null(x$title)) old$title<-x$title
   if(!is.null(x$abstract)) old$abstract<-x$abstract
+  if(!is.null(x$author_keywords)) old$author_keywords<-x$author_keywords
   if(!is.null(x$input_doi)) old$input_doi<-x$input_doi
   old$metadata_enrichment<-x$metadata_enrichment
   old$audit<-x$audit
