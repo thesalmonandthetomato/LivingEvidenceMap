@@ -82,7 +82,8 @@ jobs:
         run: |
           rmarkdown::render(
             'docs/reporting/workflow_00/search_scoping_report.Rmd',
-            output_file = normalizePath('outputs/workflow00_search_scope/search_scoping_report.html', mustWork = FALSE),
+            output_file = 'search_scoping_report.html',
+            output_dir = normalizePath('outputs/workflow00_search_scope', mustWork = TRUE),
             params = list(
               counts_csv = normalizePath('outputs/workflow00_search_scope/search_scope_counts.csv'),
               counts_json = normalizePath('outputs/workflow00_search_scope/search_scope_counts.json')
