@@ -10,6 +10,10 @@ on:
         required: false
         default: ''
         type: string
+      mode:
+        required: false
+        default: 'incremental'
+        type: string
       resume_run_id:
         required: false
         default: ''
@@ -47,7 +51,12 @@ on:
       previous_workflow02_pointer_path:
         description: 'Previous Workflow 02 pointer'
         required: false
-        default: 'docs/enrichment/zenodo/run-36137804187.json'
+        default: 'docs/enrichment/zenodo/run-36725200424.json'
+        type: string
+      mode:
+        description: 'incremental=new eligible records only; repair=previous technical failures; backfill=all due eligible records'
+        required: true
+        default: 'incremental'
         type: string
       resume_run_id:
         description: 'Optional prior batched Workflow 02 run ID whose validated checkpoints may be reused'
@@ -192,6 +201,7 @@ jobs:
           BATCH_SIZE: ${{ inputs.batch_size }}
           MAX_RECORDS: ${{ inputs.max_records }}
           RECHECK: ${{ inputs.recheck_after_days }}
+          MODE: ${{ inputs.mode }}
         shell: bash
         run: |
           set -euo pipefail
@@ -202,7 +212,7 @@ jobs:
             cp workflow01_state/canonical/records.jsonl outputs/workflow02/input_with_previous_state.jsonl
             : > previous_cumulative_patch.jsonl
           fi
-          Rscript scripts/updater/workflow_02_plan_batches.R             --input outputs/workflow02/input_with_previous_state.jsonl             --output-dir outputs/workflow02_plan             --batch-size "$BATCH_SIZE"             --max-records "$MAX_RECORDS"             --recheck-after-days "$RECHECK"
+          Rscript scripts/updater/workflow_02_plan_batches.R             --input outputs/workflow02/input_with_previous_state.jsonl             --output-dir outputs/workflow02_plan             --batch-size "$BATCH_SIZE"             --max-records "$MAX_RECORDS"             --recheck-after-days "$RECHECK"             --mode "$MODE"
 
           MATRIX="$(tr -d '\n' < outputs/workflow02_plan/matrix.json)"
           BATCH_COUNT="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow02_plan/plan.json");cat(x$batch_count)')"
