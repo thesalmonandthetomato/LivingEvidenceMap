@@ -1,5 +1,5 @@
 name: Temporary - validate batched Workflow 02
-# rerun after prepare dependency fix
+# rerun after full prepare dependency alignment
 
 on:
   push:
