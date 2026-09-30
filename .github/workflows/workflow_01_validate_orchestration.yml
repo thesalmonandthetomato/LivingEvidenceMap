@@ -48,7 +48,7 @@ jobs:
           r-version: release
           use-public-rspm: true
 
-      - name: Install validation dependencies
+      - name: Install orchestration validation dependencies
         shell: Rscript {0}
         run: install.packages(c('yaml','jsonlite'))
 
