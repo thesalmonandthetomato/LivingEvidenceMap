@@ -242,6 +242,19 @@ jobs:
           }),use.names=FALSE)
           if(length(pkeys)&&!all(pkeys%in%keys)) stop('Fresh W08 decisions do not resolve every pending issue')
 
+          current <- readr::read_csv('outputs/workflow08_intake/workflow08_issue_index_current.csv',show_col_types=FALSE,progress=FALSE)
+          current_keys <- as.character(current$review_key)
+          if(any(!nzchar(current_keys))||anyDuplicated(current_keys)) stop('Current W08 issue index has duplicate/missing review_key')
+          if(!setequal(keys,current_keys)) stop('Complete W08 ledger does not exactly equal the current W08 issue set')
+          current_hash <- setNames(as.character(current$issue_state_sha256),current_keys)
+          row_hash <- if(length(rows)) setNames(vapply(rows,function(z){
+            h<-z$issue_state_sha256
+            if(is.null(h)||!length(h)) '' else as.character(h[[1]])
+          },character(1)),keys) else character()
+          if(length(current_keys) && any(tolower(row_hash[current_keys]) != tolower(current_hash[current_keys]))) {
+            stop('Complete W08 ledger contains stale issue_state_sha256 values')
+          }
+
           dir.create('outputs/workflow08',recursive=TRUE)
           con<-file('outputs/workflow08/human_decisions_complete.jsonl','wt')
           for(z in rows)writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
