@@ -100,6 +100,8 @@ jobs:
           parse(file='scripts/updater/workflow_02_metadata_enrichment.R')
           parse(file='scripts/updater/workflow_02_build_patch.R')
           parse(file='scripts/updater/workflow_02_build_human_review.R')
+          parse(file='scripts/updater/workflow_build_review_email_payload.R')
+          parse(file='scripts/updater/workflow_01_send_review_email.R')
           parse(file='scripts/updater/workflow_02_apply_patch.R')
           parse(file='scripts/updater/workflow_02_merge_patches.R')
           parse(file='scripts/updater/workflow_02_inventory_state.R')
@@ -245,6 +247,7 @@ jobs:
           echo "blocking_cases=$CASES" >> "$GITHUB_OUTPUT"
 
       - name: Upload Workflow 02 human-review package
+        id: upload_review
         if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
         uses: actions/upload-artifact@v4
         with:
@@ -253,6 +256,33 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+      - name: Build Workflow 02 review notification email
+        if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
+        env:
+          REVIEW_EMAIL: ${{ secrets.REVIEW_EMAIL }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_build_review_email_payload.R \
+            --workflow 02 \
+            --manifest outputs/workflow02_human_review/status.json \
+            --artifact-url '${{ steps.upload_review.outputs.artifact-url }}' \
+            --workflow-url '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            --output outputs/workflow02_human_review/email_payload.json
+
+      - name: Email Workflow 02 review notification
+        if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_send_review_email.R \
+            --payload outputs/workflow02_human_review/email_payload.json
       - name: Stop for Workflow 02 human adjudication
         if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
         shell: bash
