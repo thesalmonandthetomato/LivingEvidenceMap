@@ -29,3 +29,5 @@ The search registry lists every RIS chunk under `input.files` and may record `in
 The W00 archive for the logical search should retain all raw RIS chunks, the registry, the combined handover JSONL, the manifest, checksum file and duplicate audits together in one restricted Zenodo record.
 
 RIS imports use the existing downstream manifestation identity contract: `source` is the stable database code from `database.short_name`, and `source_record_id` is derived from the source-native record identifier. Search-run metadata remains in the W00 registry/archive and is not added as a new canonical JSON field.
+
+For the complete manual upload procedure using a Zenodo draft, see `docs/search_record/manual_ris_ingestion.md`.
