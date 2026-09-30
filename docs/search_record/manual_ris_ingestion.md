@@ -90,3 +90,8 @@ The workflow uses the existing repository secret `ZENODO_ACCESS_TOKEN`. No token
 If `input.files` is empty, W00 discovers all `.ris` files in the existing Zenodo draft and writes them into the resolved registry used for validation. If filenames are already listed, the draft must contain exactly that RIS file set.
 
 The workflow never creates a deposition and currently refuses to run when `publish_after_validation=true`.
+
+
+### GitHub Actions availability
+
+GitHub requires a `workflow_dispatch` workflow file to exist on the repository's default branch before it can be launched manually from the Actions interface. Development copies on feature branches can be reviewed and tested statically, but the manual Zenodo job should not be expected to appear as runnable until this workflow has been deliberately incorporated into the default branch. Do not copy raw RIS files to Git as a workaround.
