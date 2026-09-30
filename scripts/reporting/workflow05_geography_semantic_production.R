@@ -111,8 +111,9 @@ normalise_grounding_text <- function(z){
   z <- gsub("&amp;", "&", z, ignore.case=TRUE, fixed=FALSE)
   z <- gsub("<[^>]+>", " ", z, perl=TRUE)
   z <- gsub("[\u00AD\u200B\uFEFF]", "", z, perl=TRUE)
-  z <- chartr("\u2018\u2019\u201C\u201D\u2010\u2011\u2012\u2013\u2014",
-              "''\\"\\"-----", z)
+  z <- gsub("[\u2018\u2019]", "'", z, perl=TRUE)
+  z <- gsub("[\u201C\u201D]", "\\\"", z, perl=TRUE)
+  z <- gsub("[\u2010\u2011\u2012\u2013\u2014]", "-", z, perl=TRUE)
   z <- gsub("[[:punct:]]+", " ", z, perl=TRUE)
   tolower(norm_ws(z))
 }
