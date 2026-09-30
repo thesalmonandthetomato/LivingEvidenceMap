@@ -133,6 +133,15 @@ registered <- registry$input$files
 registered_names <- if (is.null(registered) || !length(registered)) character() else
   vapply(registered, function(x) scalar(x$filename) %||% "", character(1))
 
+expected_chunk_count <- registry$input$expected_chunk_count
+if (!is.null(expected_chunk_count) && as.integer(expected_chunk_count) != length(ris_names)) {
+  stop(sprintf(
+    "Zenodo draft contains %d RIS chunks but registry input.expected_chunk_count is %d",
+    length(ris_names),
+    as.integer(expected_chunk_count)
+  ), call. = FALSE)
+}
+
 if (length(registered_names)) {
   if (!setequal(registered_names, ris_names)) {
     stop(sprintf(
@@ -147,8 +156,8 @@ if (length(registered_names)) {
     exported_at = NULL,
     notes = "Discovered from existing Zenodo draft by Workflow 00"
   ))
+  registry$input$expected_chunk_count <- length(ris_names)
 }
-registry$input$expected_chunk_count <- length(ris_names)
 registry$staging$deposition_id <- dep_id
 
 resolved_registry <- file.path(output_dir, "resolved_source_registry.json")
