@@ -205,7 +205,7 @@ Workflow 00 is considered complete when:
 
 Workflow 00 includes a standalone count-only search scoping workflow at `.github/workflows/workflow_00_search_scoping.yml`. It is manually dispatched and is not part of the production harvesting or fortnightly update chain.
 
-The scoping stage uses the same `user_input/workflow00_search_strategy.json` and the same source-specific query planner as production W00, then requests only the provider-reported result count for each implemented API source: Lens, Scopus, OpenAlex, AGRICOLA and Web of Science Core Collection. API responses are held only in memory long enough to extract the total; bibliographic result records and raw API responses are not written to disk.
+The scoping stage reads a manually editable database-neutral Boolean expression from `user_input/scoping_search_string.txt`. Before any API request, `scripts/updater/workflow_00_validate_scoping_search.R` validates the expression for balanced straight double quotes, balanced parentheses, valid Boolean grammar, and absence of database-specific field codes. Accepted operators are `AND`, `OR`, and `NOT`; quoted phrases and `*` wildcards are allowed. Invalid input stops the workflow immediately. The validated expression is then translated into source-specific title/abstract/keyword field syntax for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science Core Collection, after which only the provider-reported result count is requested. API responses are held only in memory long enough to extract the total; bibliographic result records and raw API responses are not written to disk.
 
 CAB Abstracts and ProQuest Dissertations & Theses Global remain manual-ingest sources and are reported as not automatically counted because W00 has no API implementation for them.
 
@@ -216,4 +216,4 @@ Outputs are limited to:
 - `search_scoping_report.Rmd`; and
 - rendered `search_scoping_report.html`.
 
-The report records the search version, search concepts, source, date, hit count and source status. The same count table is also written to the GitHub Actions job summary. The scoping workflow does not update source-ID registries, publish to Zenodo, create harvest artefacts, or trigger Workflow 01.
+The report records the exact manually supplied Boolean search string, validation status, source, date, hit count and source status. The same count table is also written to the GitHub Actions job summary. The scoping workflow does not update source-ID registries, publish to Zenodo, create harvest artefacts, or trigger Workflow 01.
