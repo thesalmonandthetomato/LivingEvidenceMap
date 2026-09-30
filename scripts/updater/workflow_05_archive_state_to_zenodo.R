@@ -45,16 +45,23 @@ concepts <- read.csv(paths$concepts, stringsAsFactors = FALSE, check.names = FAL
 run_manifest <- fromJSON(paths$run_manifest, simplifyVector = FALSE)
 
 stopifnot(
-  nrow(layer) == 19407L,
+  nrow(layer) > 0L,
   !anyDuplicated(layer$record_id),
   all(c("record_sequence","record_id","farmed_species_codes","farmed_species") %in% names(layer)),
-  sum(layer$farmed_species_codes == "NONE") == 169L,
-  sum(layer$farmed_species_codes != "NONE") == 19238L,
-  nrow(matches) == 80831L,
   identical(names(concepts), c("coding","entity","terms")),
   nrow(concepts) == 9L,
   all(concepts$entity == "farmed species")
 )
+records_n <- nrow(layer)
+none_n <- sum(layer$farmed_species_codes == "NONE")
+coded_n <- sum(layer$farmed_species_codes != "NONE")
+matches_n <- nrow(matches)
+if(as.integer(run_manifest$records) != records_n ||
+   as.integer(run_manifest$coded_records) != coded_n ||
+   as.integer(run_manifest$none_records) != none_n ||
+   as.integer(run_manifest$species_matches) != matches_n){
+  stop("Workflow 05 run manifest counts do not match archived state",call.=FALSE)
+}
 if (any(grepl("spring salmon", concepts$terms, ignore.case = TRUE, fixed = TRUE))) stop("spring salmon must not be present", call. = FALSE)
 if (!any(grepl("Salmons", concepts$terms, fixed = TRUE))) stop("Salmons missing from concepts", call. = FALSE)
 if (!any(grepl("salmones", concepts$terms, fixed = TRUE))) stop("salmones missing from concepts", call. = FALSE)
@@ -100,10 +107,10 @@ manifest <- list(
   repository = repository,
   upstream_workflow04_zenodo_record_id = as.character(upstream_w04_record_id),
   upstream_workflow04_final_screening_layer_sha256 = upstream_w04_layer_sha,
-  records = 19407L,
-  coded_records = 19238L,
-  none_records = 169L,
-  species_matches = 80831L,
+  records = records_n,
+  coded_records = coded_n,
+  none_records = none_n,
+  species_matches = matches_n,
   concept_rows = 9L,
   concept_schema = c("coding","entity","terms"),
   workflow05_species_layer_sha256 = sha$layer,
@@ -146,7 +153,7 @@ metadata <- list(metadata = list(
     "<p>Sparse deterministic species-coding state for Living Evidence Map Workflow 05.</p>",
     "<p>The layer is keyed by stable canonical record_id and records species codes derived from titles and abstracts using the versioned three-column coding/entity/terms vocabulary. ",
     "It does not duplicate the upstream canonical bibliographic database.</p>",
-    "<p>Records: 19,407; coded to at least one species category: 19,238; NONE: 169; deterministic lexical matches: 80,831.</p>"
+    "<p>Records: ", records_n, "; coded to at least one species category: ", coded_n, "; NONE: ", none_n, "; deterministic lexical matches: ", matches_n, ".</p>"
   ),
   creators = list(list(name = "Haddaway, Neal")),
   access_right = "restricted",
