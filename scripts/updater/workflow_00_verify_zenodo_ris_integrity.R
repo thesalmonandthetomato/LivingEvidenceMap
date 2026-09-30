@@ -37,6 +37,23 @@ dep_id <- scalar(registry$staging$deposition_id)
 if (is.null(dep_id) && !is.null(doi)) dep_id <- sub("^.*\\.", "", doi)
 if (is.null(dep_id)) stop("Could not determine Zenodo draft/deposition ID", call. = FALSE)
 
+files <- registry$input$files
+if (is.null(files) || !length(files)) stop("Registry contains no input.files to verify", call. = FALSE)
+
+expected <- lapply(files, function(x) list(
+  filename = scalar(x$filename),
+  bytes = if (is.null(x$bytes)) NULL else as.integer(x$bytes),
+  sha256 = scalar(x$sha256)
+))
+if (any(vapply(expected, function(x) is.null(x$filename), logical(1)))) {
+  stop("All registry input.files entries require filename", call. = FALSE)
+}
+if (any(vapply(expected, function(x) is.null(x$bytes) || is.null(x$sha256), logical(1)))) {
+  stop("Integrity verification requires bytes and sha256 for every registered file", call. = FALSE)
+}
+
+auth <- function(req) req |> req_headers(Authorization = paste("Bearer", token))
+
 # Inspect the modern draft file-entry list without modifying the draft.
 files_url <- sprintf("https://zenodo.org/api/records/%s/draft/files", dep_id)
 files_resp <- request(files_url) |>
@@ -63,22 +80,6 @@ if (files_status == 200L) {
   cat(sprintf("DRAFT FILE LIST ERROR %s\n", body))
 }
 
-files <- registry$input$files
-if (is.null(files) || !length(files)) stop("Registry contains no input.files to verify", call. = FALSE)
-
-expected <- lapply(files, function(x) list(
-  filename = scalar(x$filename),
-  bytes = if (is.null(x$bytes)) NULL else as.integer(x$bytes),
-  sha256 = scalar(x$sha256)
-))
-if (any(vapply(expected, function(x) is.null(x$filename), logical(1)))) {
-  stop("All registry input.files entries require filename", call. = FALSE)
-}
-if (any(vapply(expected, function(x) is.null(x$bytes) || is.null(x$sha256), logical(1)))) {
-  stop("Integrity verification requires bytes and sha256 for every registered file", call. = FALSE)
-}
-
-auth <- function(req) req |> req_headers(Authorization = paste("Bearer", token))
 perform <- function(req, timeout = 1800) {
   req |>
     req_timeout(timeout) |>
