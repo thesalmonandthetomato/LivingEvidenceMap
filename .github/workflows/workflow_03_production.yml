@@ -16,8 +16,7 @@ on:
         default: true
         type: boolean
       lean_pointer_path:
-        required: false
-        default: 'docs/compaction/zenodo/run-36166883249.json'
+        required: true
         type: string
     secrets:
       ZENODO_ACCESS_TOKEN:
@@ -48,8 +47,7 @@ on:
         type: boolean
       lean_pointer_path:
         description: 'Authoritative post-W02 lean canonical pointer'
-        required: false
-        default: 'docs/compaction/zenodo/run-36166883249.json'
+        required: true
         type: string
 
   push:
@@ -99,7 +97,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           GH_TOKEN: ${{ github.token }}
-          LEAN_POINTER: ${{ inputs.lean_pointer_path || 'docs/compaction/zenodo/run-36166883249.json' }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path }}
         shell: bash
         run: |
           set -euo pipefail
