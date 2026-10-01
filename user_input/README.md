@@ -78,3 +78,14 @@ Workflow 07 keeps its project-specific topic-coding inputs in this directory:
 - `workflow07_zero_topic_rescreen_prompt.txt` is the targeted eligibility rescreen prompt for records receiving zero topic codes across all three topic-coding passes.
 
 The migration preserves the validated ontology and prompt contents. The ontology SHA lock in the current W07 workflows was corrected to match the actual frozen ontology bytes discovered during migration.
+
+
+## Workflow 08 human adjudication
+
+Workflow 08 reuses project-specific coding inputs rather than duplicating them:
+
+- `workflow08_human_review_config.json` defines the reviewer identity, ontology label and the Workflow 05 species-config path used when generating human-review instructions.
+- Species label-to-code mappings are read directly from `workflow05_coding_config.json`.
+- Topic path validation uses `workflow07_topic_ontology.csv`.
+
+Workflow 08 queue construction, issue types, decision reuse, checksum locking and final canonical assembly remain generic workflow infrastructure.
