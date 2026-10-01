@@ -9,6 +9,7 @@ source("R/w01_contract.R", local = TRUE)
 source("R/storage_local.R", local = TRUE)
 source("R/storage_sheets.R", local = TRUE)
 source("R/storage_backend.R", local = TRUE)
+source("R/auth.R", local = TRUE)
 
 queue_path <- Sys.getenv("LEM_W01_QUEUE", unset = "fixtures/w01_real_sample_2.jsonl")
 decision_path <- Sys.getenv("LEM_W01_DECISIONS", unset = "local_state/w01_decisions.jsonl")
@@ -53,6 +54,7 @@ ui <- page_fillable(
   tags$head(tags$style(HTML("
     body { background:#f7f8fa; }
     .app-shell { max-width:1500px; margin:0 auto; padding:20px; width:100%; }
+    .login-shell { max-width:520px; margin:8vh auto 0 auto; padding:20px; width:100%; }
     .record-card { border:1px solid #dde3e8; box-shadow:0 2px 10px rgba(22,33,43,.05); }
     .record-title { font-size:1.15rem; font-weight:700; line-height:1.35; margin-bottom:1rem; }
     .record-meta { display:grid; grid-template-columns:90px 1fr; gap:.25rem .75rem; margin:0; }
@@ -65,45 +67,94 @@ ui <- page_fillable(
     .decision-row .btn { min-width:150px; }
     .saved-note { font-weight:600; color:#1f5d50; }
   "))),
-  div(
-    class = "app-shell",
-    div(class = "d-flex justify-content-between align-items-center mb-3",
-        div(tags$h2("LivingEvidenceMap adjudication", class="mb-0"),
-            tags$div("Workflow 01 · duplicate review", class="text-secondary")),
-        div(textOutput("progress_text"))
-    ),
-    uiOutput("progress_bar"),
-    uiOutput("case_view"),
-    card(
-      class = "mt-3",
-      card_header("Decision"),
-      textAreaInput("rationale", "Rationale", rows = 2,
-                    placeholder = "Brief reason for the decision"),
-      div(
-        class = "decision-row d-flex flex-wrap gap-2",
-        actionButton("duplicate", "Same record", class = "btn-success"),
-        actionButton("not_duplicate", "Different records", class = "btn-outline-danger"),
-        actionButton("uncertain", "Unsure", class = "btn-outline-secondary")
-      ),
-      tags$div(class="mt-2 saved-note", textOutput("save_status"))
-    ),
-    div(
-      class = "d-flex justify-content-between mt-3",
-      actionButton("previous", "← Previous"),
-      actionButton("next", "Next →")
-    )
-  )
+  uiOutput("root_ui")
 )
 
 server <- function(input, output, session) {
+  authenticated <- reactiveVal(FALSE)
+  failed_attempts <- reactiveVal(0L)
+  lock_until <- reactiveVal(as.POSIXct(NA))
   idx <- reactiveVal(1L)
   status <- reactiveVal("")
-  decisions <- reactiveVal(read_active_decisions(decision_path))
+  decisions <- reactiveVal(list())
 
-  current_case <- reactive(cases[[idx()]])
+  output$root_ui <- renderUI({
+    if (!authenticated()) {
+      return(div(
+        class = "login-shell",
+        card(
+          card_header(tags$strong("LivingEvidenceMap adjudication")),
+          tags$p("Enter the adjudication access key to continue."),
+          passwordInput("access_key", "Access key"),
+          actionButton("login", "Continue", class = "btn-primary"),
+          tags$div(class = "mt-2 text-danger", textOutput("login_status"))
+        )
+      ))
+    }
 
-  output$progress_text <- renderText(sprintf("Case %d of %d", idx(), length(cases)))
+    div(
+      class = "app-shell",
+      div(class = "d-flex justify-content-between align-items-center mb-3",
+          div(tags$h2("LivingEvidenceMap adjudication", class="mb-0"),
+              tags$div("Workflow 01 · duplicate review", class="text-secondary")),
+          div(textOutput("progress_text"))
+      ),
+      uiOutput("progress_bar"),
+      uiOutput("case_view"),
+      card(
+        class = "mt-3",
+        card_header("Decision"),
+        textAreaInput("rationale", "Rationale", rows = 2,
+                      placeholder = "Brief reason for the decision"),
+        div(
+          class = "decision-row d-flex flex-wrap gap-2",
+          actionButton("duplicate", "Same record", class = "btn-success"),
+          actionButton("not_duplicate", "Different records", class = "btn-outline-danger"),
+          actionButton("uncertain", "Unsure", class = "btn-outline-secondary")
+        ),
+        tags$div(class="mt-2 saved-note", textOutput("save_status"))
+      ),
+      div(
+        class = "d-flex justify-content-between mt-3",
+        actionButton("previous", "← Previous"),
+        actionButton("next", "Next →")
+      )
+    )
+  })
+
+  login_status <- reactiveVal("")
+  output$login_status <- renderText(login_status())
+
+  observeEvent(input$login, {
+    now <- Sys.time()
+    until <- lock_until()
+    if (!is.na(until) && now < until) {
+      login_status("Too many failed attempts. Try again shortly.")
+      return()
+    }
+    if (access_key_valid(input$access_key)) {
+      authenticated(TRUE)
+      failed_attempts(0L)
+      login_status("")
+      decisions(read_active_decisions(decision_path))
+    } else {
+      n <- failed_attempts() + 1L
+      failed_attempts(n)
+      if (n >= 5L) {
+        lock_until(now + 60)
+        failed_attempts(0L)
+        login_status("Too many failed attempts. Try again in one minute.")
+      } else {
+        login_status("Invalid access key.")
+      }
+    }
+  })
+
+  current_case <- reactive({ req(authenticated()); cases[[idx()]] })
+
+  output$progress_text <- renderText({ req(authenticated()); sprintf("Case %d of %d", idx(), length(cases)) })
   output$progress_bar <- renderUI({
+    req(authenticated())
     pct <- round(100 * idx() / length(cases))
     div(class="progress mb-3",
         div(class="progress-bar", role="progressbar",
@@ -112,6 +163,7 @@ server <- function(input, output, session) {
   })
 
   output$case_view <- renderUI({
+    req(authenticated())
     z <- current_case()
     ev <- z$deterministic_evidence %||% list()
     evidence <- Filter(function(x) !is.null(x$value) && !identical(x$value,""),
@@ -142,6 +194,7 @@ server <- function(input, output, session) {
   })
 
   save_choice <- function(choice) {
+    req(authenticated())
     z <- current_case()
     rationale <- trimws(input$rationale %||% "")
     if (!nzchar(rationale)) {
