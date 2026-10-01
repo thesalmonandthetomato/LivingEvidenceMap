@@ -76,12 +76,15 @@ count_lens <- function(query) {
 }
 
 count_scopus <- function(query) {
-  token <- Sys.getenv("SCOPUS_API_TOKEN", "")
+  token <- trimws(Sys.getenv("SCOPUS_API_TOKEN", ""))
+  inst_token <- trimws(Sys.getenv("SCOPUS_INSTTOKEN", ""))
   if (!nzchar(token)) stop("SCOPUS_API_TOKEN is required", call. = FALSE)
+  if (!nzchar(inst_token)) stop("SCOPUS_INSTTOKEN is required", call. = FALSE)
   req <- request("https://api.elsevier.com/content/search/scopus") |>
     req_headers(
       Accept = "application/json",
       `X-ELS-APIKey` = token,
+      `X-ELS-Insttoken` = inst_token,
       `User-Agent` = "LivingEvidenceMap W00 search scoping"
     ) |>
     req_url_query(query = query, start = 0L, count = 1L, view = "STANDARD") |>
