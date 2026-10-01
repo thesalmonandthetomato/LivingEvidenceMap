@@ -255,3 +255,23 @@ writeLines(toJSON(plan,auto_unbox=TRUE,pretty=TRUE,null="null"),
 writeLines(toJSON(queries,auto_unbox=TRUE,pretty=TRUE,null="null"),
            file.path(output_dir,"source_queries.json"))
 message(sprintf("PASS: Workflow 00 plan created for run_type=%s",run_type))
+
+if (identical(Sys.getenv("GITHUB_WORKFLOW"),"TEMP validate EBSCO W00 integration")) {
+  for (src_name in names(ebsco_cfg$sources)) {
+    out <- file.path("/tmp/ebsco_scope_all",src_name)
+    dir.create(out,recursive=TRUE,showWarnings=FALSE)
+    status <- system2(
+      "Rscript",
+      c(
+        "scripts/updater/workflow_00h_ebsco_scope_count.R",
+        "--source",src_name,
+        "--query",as.character(queries[[src_name]]),
+        "--config","config/workflow00_ebsco_sources.json",
+        "--output-dir",out
+      )
+    )
+    if (!identical(status,0L)) stop(sprintf("Temporary EBSCO scope count failed for %s",src_name),call.=FALSE)
+    m <- fromJSON(file.path(out,"manifest.json"),simplifyVector=FALSE)
+    message(sprintf("SCOPECOUNT|%s|%s|%d",src_name,as.character(m$database_name),as.integer(m$reported_total)))
+  }
+}
