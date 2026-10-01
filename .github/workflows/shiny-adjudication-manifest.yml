@@ -9,7 +9,7 @@ on:
       - '.github/workflows/shiny-adjudication-manifest.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   manifest:
@@ -44,6 +44,21 @@ jobs:
           rsconnect::writeManifest(appDir=".")
           stopifnot(file.exists("manifest.json"))
           cat("PASS: Connect Cloud manifest generated\n")
+
+      - name: Commit manifest if changed
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add shiny/adjudication/manifest.json
+          if git diff --cached --quiet; then
+            echo "PASS: manifest.json already current"
+            exit 0
+          fi
+          git commit -m "build: update Connect Cloud manifest"
+          git push origin HEAD:shiny-adjudication-interface
 
       - uses: actions/upload-artifact@v4
         with:
