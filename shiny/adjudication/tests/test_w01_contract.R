@@ -2,16 +2,16 @@ suppressPackageStartupMessages({library(jsonlite);library(digest)})
 source("R/storage_local.R")
 source("R/w01_contract.R")
 
-cases <- read_w01_cases("fixtures/w01_cases.jsonl")
+cases <- read_w01_cases("fixtures/w01_real_sample_2.jsonl")
 stopifnot(length(cases) == 2L)
-stopifnot(identical(cases[[1]]$review_case_id, "hr-prototype-000001"))
+stopifnot(identical(cases[[1]]$review_case_id, "hr-f66acbf328538aa54bcf"))
 
 queue_sha <- digest(file="fixtures/w01_cases.jsonl", algo="sha256", serialize=FALSE)
 tmp <- tempfile(fileext=".jsonl")
 out <- tempfile(fileext=".jsonl")
 
 write_local_decision(tmp, list(
-  review_case_id="hr-prototype-000001",
+  review_case_id="hr-f66acbf328538aa54bcf",
   decision="duplicate",
   rationale="Schema round-trip test.",
   reviewer="test-reviewer",
@@ -19,7 +19,7 @@ write_local_decision(tmp, list(
   queue_sha256=queue_sha
 ))
 write_local_decision(tmp, list(
-  review_case_id="hr-prototype-000002",
+  review_case_id="hr-0d7df583d4e6889b187d",
   decision="not_duplicate",
   rationale="Schema round-trip test.",
   reviewer="test-reviewer",
