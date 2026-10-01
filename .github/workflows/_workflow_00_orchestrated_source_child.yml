@@ -58,6 +58,7 @@ jobs:
             cba) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             epmc_preprints) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             wos) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            ebsco_*) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             *) echo "Unsupported source: ${{ inputs.source }}" >&2; exit 2 ;;
           esac
 
@@ -97,6 +98,8 @@ jobs:
           FORTNIGHTLY_FROM_DATE: ${{ inputs.fortnightly_from_date }}
           FORTNIGHTLY_TO_DATE: ${{ inputs.fortnightly_to_date }}
           WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+          EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+          EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
         shell: bash
         run: |
           set -euo pipefail
@@ -156,6 +159,14 @@ jobs:
               fi
               Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
               ;;
+            ebsco_*)
+              Rscript scripts/updater/workflow_00g_ebsco_ingestion.R \
+                --source "$SOURCE" \
+                --query "$SEARCH_QUERY" \
+                --config config/workflow00_ebsco_sources.json \
+                --page-size 100 \
+                --output-dir outputs/updater/source_child
+              ;;
           esac
 
 
@@ -177,6 +188,23 @@ jobs:
           test -s outputs/updater/source_delta/updated_native_ids.txt
 
 
+      - name: Seed native-ID registry for EBSCO source
+        if: ${{ inputs.run_type == 'full' && startsWith(inputs.source, 'ebsco_') }}
+        env:
+          SOURCE: ${{ inputs.source }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/empty_native_ids.txt
+          Rscript scripts/updater/workflow_00_ebsco_native_id_reconcile.R \
+            --source "$SOURCE" \
+            --run-type full \
+            --current-root outputs/updater/source_child \
+            --registry /tmp/empty_native_ids.txt \
+            --output-dir outputs/updater/source_delta
+          test -s outputs/updater/source_delta/reconciliation_manifest.json
+          test -f outputs/updater/source_delta/updated_native_ids.txt
+
       - name: Reconcile fortnightly harvest by native source ID
         if: ${{ inputs.run_type == 'fortnightly' }}
         env:
@@ -186,12 +214,21 @@ jobs:
           set -euo pipefail
           registry="data/workflow00/source_id_registry/${SOURCE}_native_ids.txt"
           test -s "$registry"
-          Rscript scripts/updater/workflow_00_native_id_reconcile.R \
-            --source "$SOURCE" \
-            --run-type fortnightly \
-            --current-root outputs/updater/source_child \
-            --registry "$registry" \
-            --output-dir outputs/updater/source_delta
+          if [[ "$SOURCE" == ebsco_* ]]; then
+            Rscript scripts/updater/workflow_00_ebsco_native_id_reconcile.R \
+              --source "$SOURCE" \
+              --run-type fortnightly \
+              --current-root outputs/updater/source_child \
+              --registry "$registry" \
+              --output-dir outputs/updater/source_delta
+          else
+            Rscript scripts/updater/workflow_00_native_id_reconcile.R \
+              --source "$SOURCE" \
+              --run-type fortnightly \
+              --current-root outputs/updater/source_child \
+              --registry "$registry" \
+              --output-dir outputs/updater/source_delta
+          fi
           test -s outputs/updater/source_delta/reconciliation_manifest.json
           test -f outputs/updater/source_delta/updated_native_ids.txt
 
