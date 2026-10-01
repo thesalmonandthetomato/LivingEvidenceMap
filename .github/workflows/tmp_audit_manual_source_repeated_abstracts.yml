@@ -1,0 +1,87 @@
+name: TEMP audit manual-source repeated abstracts
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_audit_manual_source_repeated_abstracts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest','stringi','xml2'))
+      - name: Restore manual W00 sources
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/manual
+          Rscript scripts/updater/workflow_01_restore_manual_ris_from_zenodo.R             --registry user_input/workflow00_ris_cab_abstracts_2026-09-30.json             --source cab --output /tmp/manual/cab.jsonl
+          Rscript scripts/updater/workflow_01_restore_manual_ris_from_zenodo.R             --registry user_input/workflow00_ris_proquest_2026-09-30.json             --source proquest --output /tmp/manual/proquest.jsonl
+      - name: Audit exact normalised abstract groups
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(digest);library(stringi);library(xml2)})
+          scalar <- function(x) {
+            if(is.null(x)||!length(x)) return(NULL)
+            y<-as.character(x[[1L]])
+            if(!nzchar(trimws(y))) NULL else y
+          }
+          strip_markup_text <- function(x) {
+            x<-scalar(x); if(is.null(x)) return(NULL)
+            wrapped<-paste0('<div>',x,'</div>')
+            doc<-tryCatch(suppressWarnings(read_html(wrapped,options=c('RECOVER','NOERROR','NOWARNING'))),error=function(e)NULL)
+            if(!is.null(doc)){node<-xml_find_first(doc,'.//div');if(!inherits(node,'xml_missing'))x<-xml_text(node)}
+            x
+          }
+          norm_words <- function(x) {
+            x<-strip_markup_text(x); if(is.null(x)) return(NULL)
+            x<-stri_trans_tolower(stri_trans_nfkc(x))
+            x<-stri_replace_all_regex(x,'[\\p{P}\\p{S}\\p{Z}\\s]+',' ')
+            x<-trimws(stri_replace_all_regex(x,'\\s+',' '))
+            if(!nzchar(x)) NULL else x
+          }
+          read_source <- function(path,source){
+            ln<-readLines(path,warn=FALSE,encoding='UTF-8'); ln<-ln[nzchar(trimws(ln))]
+            rows<-lapply(ln,fromJSON,simplifyVector=FALSE)
+            h<-vapply(rows,function(r){
+              a<-norm_words((r$mapped_fields %||% list())$abstract)
+              if(is.null(a)) NA_character_ else digest(a,algo='sha256',serialize=FALSE)
+            },character(1))
+            data.frame(source=source,hash=h,stringsAsFactors=FALSE)
+          }
+          `%||%`<-function(x,y)if(is.null(x))y else x
+          x<-rbind(read_source('/tmp/manual/cab.jsonl','cab'),read_source('/tmp/manual/proquest.jsonl','proquest'))
+          summarise <- function(z,label){
+            z<-z[!is.na(z$hash),,drop=FALSE]
+            tab<-sort(table(z$hash),decreasing=TRUE)
+            dup<-tab[tab>1]
+            pairn<-if(length(dup)) sum(as.numeric(dup)*(as.numeric(dup)-1)/2) else 0
+            cat(sprintf('%s: records_with_abstract=%d unique_abstracts=%d repeated_groups=%d records_in_repeated_groups=%d pair_combinations=%d max_group=%d\n',
+              label,nrow(z),length(tab),length(dup),if(length(dup))sum(dup) else 0,pairn,if(length(tab))max(tab) else 0))
+            if(length(dup)){
+              top<-head(dup,10)
+              for(i in seq_along(top)) cat(sprintf('%s TOP%d count=%d pair_combinations=%d hash_prefix=%s\n',
+                label,i,as.integer(top[[i]]),as.integer(top[[i]])*(as.integer(top[[i]])-1)/2,substr(names(top)[[i]],1,12)))
+            }
+          }
+          summarise(x[x$source=='cab',],'CAB')
+          summarise(x[x$source=='proquest',],'PROQUEST')
+          summarise(x,'COMBINED')
