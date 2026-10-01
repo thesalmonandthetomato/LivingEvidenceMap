@@ -48,9 +48,11 @@ actual_sha <- digest(file=queue_path,algo="sha256",serialize=FALSE)
 if(!identical(actual_sha,expected_sha)) {
   stop(sprintf("Queue SHA mismatch: manifest=%s actual=%s",expected_sha,actual_sha),call.=FALSE)
 }
-manifest_n <- suppressWarnings(as.integer(manifest$cases))
-if(is.na(manifest_n) || manifest_n!=length(lines)) {
-  stop(sprintf("Queue count mismatch: manifest=%s JSONL=%d",as.character(manifest$cases),length(lines)),call.=FALSE)
+manifest_n <- suppressWarnings(as.integer(unlist(manifest$cases,use.names=FALSE)))
+if(length(manifest_n)!=1L || is.na(manifest_n[[1L]]) || manifest_n[[1L]]!=length(lines)) {
+  manifest_cases_display <- paste(as.character(unlist(manifest$cases,use.names=FALSE)),collapse=",")
+  if(!nzchar(manifest_cases_display)) manifest_cases_display <- "<missing>"
+  stop(sprintf("Queue count mismatch: manifest=%s JSONL=%d",manifest_cases_display,length(lines)),call.=FALSE)
 }
 
 payload <- data.frame(
