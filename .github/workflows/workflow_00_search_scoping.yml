@@ -84,8 +84,8 @@ jobs:
             output_file = 'search_scoping_report.html',
             output_dir = normalizePath('outputs/workflow00_search_scope', mustWork = TRUE),
             params = list(
-              counts_csv = normalizePath('outputs/workflow00_search_scope/search_scope_counts.csv'),
-              counts_json = normalizePath('outputs/workflow00_search_scope/search_scope_counts.json')
+              counts_csv = file.path(Sys.getenv('GITHUB_WORKSPACE'),'outputs/workflow00_search_scope/search_scope_counts.csv'),
+              counts_json = file.path(Sys.getenv('GITHUB_WORKSPACE'),'outputs/workflow00_search_scope/search_scope_counts.json')
             ),
             quiet = TRUE
           )
