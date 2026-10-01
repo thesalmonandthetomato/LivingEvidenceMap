@@ -1,0 +1,32 @@
+name: TEMP validate W06 prompt migration
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w06_prompt_migration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - name: Validate W06 prompt relocation
+        shell: bash
+        run: |
+          set -euo pipefail
+          OLD=config/workflow06_geography_semantic_prompt_v2.txt
+          NEW=user_input/workflow06_geography_semantic_prompt.txt
+          cmp "$OLD" "$NEW"
+          test "$(sha256sum "$NEW" | cut -d' ' -f1)" = "2ef4a9f2099878ae825395f3f09b329f219bfd3a185d3704a8662c52bcff70ed"
+          grep -q -- '--prompt user_input/workflow06_geography_semantic_prompt.txt' .github/workflows/workflow_06_production.yml
+          ! grep -q 'config/workflow06_geography_semantic_prompt_v2.txt' .github/workflows/workflow_06_production.yml
+          grep -q 'user_input/workflow06_geography_semantic_prompt.txt' scripts/reporting/workflow05_geography_semantic_production.R
+          ! grep -q 'config/workflow06_geography_semantic_prompt_v2.txt' scripts/reporting/workflow05_geography_semantic_production.R
+          echo 'PASS: W06 prompt migration is byte-identical and preserves locked SHA'
