@@ -359,15 +359,20 @@ jobs:
             x <- z$deterministic_evidence$classifier_rule
             if(is.null(x)||!length(x)||!nzchar(as.character(x[[1L]]))) '<missing>' else as.character(x[[1L]])
           },character(1)) else character()
-          recs <- if(n) unique(unlist(lapply(rows,function(z)c(
-            paste0(z$record_i$source$provider %||% '',':',z$record_i$sidecar_identity$source_record_id %||% ''),
-            paste0(z$record_j$source$provider %||% '',':',z$record_j$sidecar_identity$source_record_id %||% '')
-          )),use.names=FALSE)) else character()
+          manifest_path <- paste0(p,'.manifest.json')
+          if(!file.exists(manifest_path)) stop('Adjudication case manifest is missing',call.=FALSE)
+          manifest <- fromJSON(manifest_path,simplifyVector=FALSE)
+          manifest_cases <- as.integer(manifest$cases)
+          manifest_records <- as.integer(manifest$unique_bibliographic_records)
+          if(is.na(manifest_cases) || manifest_cases != n) {
+            stop(sprintf('Case manifest count mismatch: JSONL=%d manifest=%s',n,as.character(manifest$cases)),call.=FALSE)
+          }
+          if(is.na(manifest_records) || manifest_records < 0L) stop('Invalid unique_bibliographic_records in case manifest',call.=FALSE)
           s <- list(
             schema='living-evidence-map-workflow01-llm-preflight-v1',
             cases=n,
             max_llm_cases=max_n,
-            unique_bibliographic_records=length(recs),
+            unique_bibliographic_records=manifest_records,
             classifier_rule_counts=as.list(table(rule)),
             status=if(n<=max_n)'within_budget_ceiling' else 'blocked_over_budget_ceiling'
           )
@@ -721,6 +726,7 @@ jobs:
             outputs/workflow01_incremental_rescore/summary.json
             outputs/workflow01_pre_adjudication/summary.json
             outputs/workflow01_pre_adjudication/manual_review_pairs.csv
+            outputs/adjudication/cases.jsonl
             outputs/adjudication/cases.jsonl.manifest.json
             outputs/adjudication/preflight_summary.json
             outputs/adjudication/chunks/
