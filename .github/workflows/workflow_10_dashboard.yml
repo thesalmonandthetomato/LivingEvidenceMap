@@ -114,29 +114,7 @@ jobs:
           pointer <- fromJSON(Sys.getenv('W08_POINTER'),simplifyVector=FALSE)
           expected_n <- as.integer(pointer$canonical_records)
           expected_sha <- tolower(as.character(pointer$final_canonical_jsonl_sha256))
-          stopifnot(!is.na(expected_n),expected_n>0L,grepl('^[0-9a-f]{64}
-
-          stars <- unlist(lapply(payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
-          stopifnot(length(stars)>0L,all(nzchar(stars)),all(stars %in% c('★','★★','★★★')))
-
-          html <- paste(readLines('docs/dashboard-redesign-temp.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
-          stopifnot(grepl('Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).',html,fixed=TRUE))
-          stopifnot(file.exists('outputs/workflow10/dashboard-redesign-temp-standalone.html'))
-
-          cat(sprintf(
-            'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
-            pointer$zenodo_record_id,nrow(csv),length(stars)
-          ))
-
-      - name: Upload Workflow 10 dashboard artefact
-        uses: actions/upload-artifact@v4
-        with:
-          name: workflow10-dashboard-${{ github.run_id }}
-          path: |
-            outputs/workflow10/
-          retention-days: 30
-          if-no-files-found: error
-,expected_sha))
+          stopifnot(!is.na(expected_n),expected_n>0L,grepl('^[0-9a-f]{64}$',expected_sha))
 
           csv <- read_csv('outputs/workflow10/living_evidence_map.csv',show_col_types=FALSE,progress=FALSE)
           stopifnot(nrow(csv)==expected_n,!anyDuplicated(csv$record_id))
