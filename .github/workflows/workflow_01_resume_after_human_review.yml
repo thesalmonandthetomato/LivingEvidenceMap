@@ -1,5 +1,7 @@
 name: Workflow 01 - Resume after human duplicate adjudication
 
+# Trigger note: character-preserved delta replay
+
 on:
   workflow_dispatch:
     inputs:
