@@ -435,9 +435,9 @@ if (length(non_conflict_idx)) {
   set(x, i = non_conflict_idx, j = "one_abstract_missing",
       value = one_missing_vec[non_conflict_idx])
   set(x, i = non_conflict_idx, j = "first_author_match",
-      value = first_author_match_vec[non_conflict_idx])
+      value = x$first_author_match_vec[non_conflict_idx])
   set(x, i = non_conflict_idx, j = "journal_match",
-      value = journal_match_vec[non_conflict_idx])
+      value = x$journal_match_vec[non_conflict_idx])
   set(x, i = non_conflict_idx, j = "preprint_pair",
       value = preprint_pair_vec[non_conflict_idx])
 }
