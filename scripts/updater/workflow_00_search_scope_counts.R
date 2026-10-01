@@ -28,7 +28,7 @@ search_date <- format(Sys.Date(), "%Y-%m-%d")
 plan <- fromJSON(plan_path, simplifyVector = FALSE)
 q <- plan$source_queries
 
-required_queries <- c("lens", "scopus", "openalex", "agricola", "wos")
+required_queries <- c("lens", "scopus", "openalex", "agricola", "pubmed", "ethos", "cba", "epmc_preprints", "wos")
 missing_queries <- required_queries[vapply(required_queries, function(x) is.null(q[[x]]) || !nzchar(trimws(as.character(q[[x]]))), logical(1))]
 if (length(missing_queries)) stop(sprintf("Search plan missing source queries: %s", paste(missing_queries, collapse = ", ")), call. = FALSE)
 
@@ -112,7 +112,7 @@ count_openalex <- function(query) {
   n
 }
 
-count_agricola <- function(query) {
+count_europe_pmc <- function(query, label) {
   req <- request("https://www.ebi.ac.uk/europepmc/webservices/rest/search") |>
     req_headers(Accept = "application/json", `User-Agent` = "LivingEvidenceMap W00 search scoping") |>
     req_url_query(
@@ -124,10 +124,10 @@ count_agricola <- function(query) {
       synonym = "false"
     ) |>
     req_error(is_error = function(resp) FALSE)
-  resp <- retry_request(req, "AGRICOLA/Europe PMC")
+  resp <- retry_request(req, label)
   x <- fromJSON(resp_body_string(resp), simplifyVector = FALSE)
   n <- scalar_int(x$hitCount)
-  if (is.na(n)) stop("AGRICOLA response did not contain hitCount", call. = FALSE)
+  if (is.na(n)) stop(sprintf("%s response did not contain hitCount", label), call. = FALSE)
   n
 }
 
@@ -159,11 +159,31 @@ message("Counting OpenAlex...")
 openalex_n <- count_openalex(as.character(q$openalex))
 message(sprintf("OpenAlex: %d", openalex_n))
 message("Counting AGRICOLA...")
-agricola_n <- count_agricola(as.character(q$agricola))
+agricola_n <- count_europe_pmc(as.character(q$agricola),"AGRICOLA/Europe PMC")
 message(sprintf("AGRICOLA: %d", agricola_n))
+message("Counting PubMed/MEDLINE...")
+pubmed_n <- count_europe_pmc(as.character(q$pubmed),"PubMed/MEDLINE via Europe PMC")
+message(sprintf("PubMed/MEDLINE: %d", pubmed_n))
+message("Counting EThOS...")
+ethos_n <- count_europe_pmc(as.character(q$ethos),"EThOS via Europe PMC")
+message(sprintf("EThOS: %d", ethos_n))
+message("Counting Chinese Biological Abstracts...")
+cba_n <- count_europe_pmc(as.character(q$cba),"Chinese Biological Abstracts via Europe PMC")
+message(sprintf("Chinese Biological Abstracts: %d", cba_n))
+message("Counting Europe PMC preprints...")
+preprints_n <- count_europe_pmc(as.character(q$epmc_preprints),"Europe PMC preprints")
+message(sprintf("Europe PMC preprints: %d", preprints_n))
 message("Counting Web of Science...")
 wos_n <- count_wos(as.character(q$wos))
 message(sprintf("Web of Science: %d", wos_n))
+
+read_manual_reported <- function(path) {
+  if (!file.exists(path)) return(NA_integer_)
+  x <- fromJSON(path, simplifyVector=FALSE)
+  suppressWarnings(as.integer(x$search$reported_results))
+}
+cab_n <- read_manual_reported("user_input/workflow00_ris_cab_abstracts_2026-09-30.json")
+proquest_n <- read_manual_reported("user_input/workflow00_ris_proquest_2026-09-30.json")
 
 rows <- data.frame(
   source = c(
@@ -171,21 +191,25 @@ rows <- data.frame(
     "Scopus",
     "OpenAlex",
     "AGRICOLA",
+    "PubMed/MEDLINE",
+    "EThOS",
+    "Chinese Biological Abstracts",
+    "Europe PMC preprints",
     "Web of Science Core Collection",
     "CAB Abstracts",
     "ProQuest Dissertations & Theses Global"
   ),
   access_mode = c(
-    rep("API count", 5),
-    "Manual search source",
-    "Manual search source"
+    rep("API count", 9),
+    "Manual W00 registry count",
+    "Manual W00 registry count"
   ),
-  search_date = rep(search_date, 7),
-  hits = c(lens_n, scopus_n, openalex_n, agricola_n, wos_n, NA_integer_, NA_integer_),
+  search_date = c(rep(search_date, 9), "2026-09-30", "2026-09-30"),
+  hits = c(lens_n, scopus_n, openalex_n, agricola_n, pubmed_n, ethos_n, cba_n, preprints_n, wos_n, cab_n, proquest_n),
   status = c(
-    rep("counted", 5),
-    "not counted: no W00 API implementation",
-    "not counted: no W00 API implementation"
+    rep("counted live", 9),
+    "validated W00 manual-search reported count",
+    "validated W00 manual-search reported count"
   ),
   stringsAsFactors = FALSE
 )
