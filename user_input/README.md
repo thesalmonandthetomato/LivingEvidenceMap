@@ -10,6 +10,17 @@ The current configuration retains the validated salmon-farming search concepts. 
 
 Other genuinely user-editable pipeline inputs, such as prompts used by downstream workflows, may be moved here later after their interfaces are reviewed.
 
+## Workflow 00 Europe PMC API sources
+
+Four additional API sources are implemented in Workflow 00 and generated from the same authoritative `workflow00_search_strategy.json` concepts:
+
+- PubMed/MEDLINE via Europe PMC `SRC:MED`;
+- EThOS theses via Europe PMC `SRC:ETH`;
+- Chinese Biological Abstracts via Europe PMC `SRC:CBA`;
+- Europe PMC preprints via Europe PMC `SRC:PPR`.
+
+They are independently selectable and default to off. Activation is intentionally deferred until the current CAB Abstracts and ProQuest Dissertations & Theses update has completed the full pipeline.
+
 ## Adding a new API source
 
 For a human-readable guide to adding a new bibliographic API while preserving the generic downstream architecture, see:
