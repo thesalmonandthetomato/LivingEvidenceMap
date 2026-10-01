@@ -39,17 +39,14 @@ on:
       workflow04_pointer_path:
         description: 'Current authoritative W04 pointer'
         required: true
-        default: 'docs/workflow04/zenodo/run-36227737500.json'
         type: string
       workflow05_pointer_path:
         description: 'Current authoritative W05 pointer'
         required: true
-        default: 'docs/workflow05/zenodo/run-36268840588.json'
         type: string
       lean_pointer_path:
         description: 'Current authoritative post-W02 lean canonical pointer'
         required: true
-        default: 'docs/compaction/zenodo/run-36166883249.json'
         type: string
       prior_workflow06_pointer_path:
         description: 'Prior authoritative W06 pointer; use none for a first run'
