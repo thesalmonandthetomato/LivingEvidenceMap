@@ -724,7 +724,10 @@ jobs:
             outputs/workflow01_candidates/pathological_repeated_abstract_groups.csv
             outputs/workflow01_candidates/pathological_abstract_strip_actions.jsonl
             outputs/workflow01_incremental_rescore/summary.json
+            outputs/workflow01_incremental_rescore/rescored_sample.csv
             outputs/workflow01_pre_adjudication/summary.json
+            outputs/workflow01_pre_adjudication/combined_pair_decisions.csv
+            outputs/workflow01_pre_adjudication/manifestation_cluster_map.csv
             outputs/workflow01_pre_adjudication/manual_review_pairs.csv
             outputs/adjudication/cases.jsonl
             outputs/adjudication/cases.jsonl.manifest.json
