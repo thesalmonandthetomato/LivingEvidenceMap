@@ -6,7 +6,7 @@ cases <- read_w01_cases("fixtures/w01_real_sample_2.jsonl")
 stopifnot(length(cases) == 2L)
 stopifnot(identical(cases[[1]]$review_case_id, "hr-f66acbf328538aa54bcf"))
 
-queue_sha <- digest(file="fixtures/w01_cases.jsonl", algo="sha256", serialize=FALSE)
+queue_sha <- digest(file="fixtures/w01_real_sample_2.jsonl", algo="sha256", serialize=FALSE)
 tmp <- tempfile(fileext=".jsonl")
 out <- tempfile(fileext=".jsonl")
 
