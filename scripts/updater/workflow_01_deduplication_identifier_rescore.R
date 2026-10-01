@@ -414,182 +414,205 @@ for (n in seq_along(conflict_candidates)) {
 
 # Second-stage high-confidence promotions learned from the human-reviewed queue.
 # Human labels are never used to make decisions; they are used only below for evaluation.
+#
+# IMPORTANT: the original implementation applied these rules row-by-row across the
+# complete scored candidate table. That was semantically correct but prohibitively
+# slow at living-update scale because repeated single-cell writes caused excessive
+# copying. All rule inputs are already precomputed above, so apply the exact same
+# ordered rule set vectorially. Rule precedence and identifier-conflict overrides
+# are preserved.
 x[, promotion_reason := ""]
 x[, one_abstract_missing := FALSE]
 x[, first_author_match := FALSE]
 x[, journal_match := FALSE]
 x[, preprint_pair := FALSE]
 
-for (i in seq_len(nrow(x))) {
-  if (i == 1L || i %% 10000L == 0L || i == nrow(x)) {
-    progress("applying promotion and rescore rules", i, nrow(x))
-    checkpoint("promotion_rescore", i, nrow(x),
-               list(duplicates_so_far=sum(x$rescored_classification[seq_len(i)] == "duplicate", na.rm=TRUE)))
-  }
-  pm <- list(
-    abstract_missing_i=x$abstract_missing_i[[i]],
-    abstract_missing_j=x$abstract_missing_j[[i]],
-    first_author_match=x$first_author_match_vec[[i]],
-    exact_author_match=x$exact_author_match_vec[[i]],
-    journal_match=x$journal_match_vec[[i]],
-    journal_containment=x$journal_containment_vec[[i]],
-    year_diff=x$year_diff_vec[[i]],
-    doi_i_present=x$doi_i_present_vec[[i]],
-    doi_j_present=x$doi_j_present_vec[[i]],
-    preprint_i=x$preprint_i_vec[[i]],
-    preprint_j=x$preprint_j_vec[[i]]
-  )
+non_conflict <- !x$identifier_conflict
+x[non_conflict, one_abstract_missing := one_missing_vec[non_conflict]]
+x[non_conflict, first_author_match := first_author_match_vec[non_conflict]]
+x[non_conflict, journal_match := journal_match_vec[non_conflict]]
+x[non_conflict, preprint_pair := preprint_pair_vec[non_conflict]]
 
-  # Very narrow overrides for title-internal identifier discrepancies validated
-  # against the complete human-labelled set.
-  if (isTRUE(x$identifier_conflict[[i]])) {
-    one_doi_present <- xor(pm$doi_i_present, pm$doi_j_present)
-    both_doi_present <- pm$doi_i_present && pm$doi_j_present
-    exact_pub_year <- !is.na(pm$year_diff) && pm$year_diff == 0L
+# Narrow identifier-conflict overrides are evaluated first, exactly as in the
+# original row-wise implementation. The second rule only applies where the first
+# did not fire.
+conflict_idx <- which(x$identifier_conflict)
+if (length(conflict_idx)) {
+  one_doi_present_vec <- xor(x$doi_i_present_vec, x$doi_j_present_vec)
+  both_doi_present_vec <- x$doi_i_present_vec & x$doi_j_present_vec
+  exact_pub_year_vec <- !is.na(x$year_diff_vec) & x$year_diff_vec == 0L
 
-    if (one_doi_present && pm$exact_author_match && exact_pub_year &&
-        !is.na(x$title_similarity[[i]]) && x$title_similarity[[i]] >= 0.99) {
-      x$rescored_classification[[i]] <- "duplicate"
-      x$rescored_rule[[i]] <- "identifier_conflict_single_doi_exact_author_year"
-      x$promotion_reason[[i]] <- "identifier_conflict_single_doi_exact_author_year"
-      next
-    }
+  m1 <- x$identifier_conflict &
+    one_doi_present_vec &
+    x$exact_author_match_vec &
+    exact_pub_year_vec &
+    !is.na(x$title_similarity) &
+    x$title_similarity >= 0.99
 
-    if (both_doi_present && pm$exact_author_match && exact_pub_year &&
-        !is.na(x$title_similarity[[i]]) && x$title_similarity[[i]] >= 0.98 &&
-        !is.na(x$ordered_coverage[[i]]) && x$ordered_coverage[[i]] >= 0.98 &&
-        !is.na(x$shingle_containment[[i]]) && x$shingle_containment[[i]] >= 0.90) {
-      x$rescored_classification[[i]] <- "duplicate"
-      x$rescored_rule[[i]] <- "identifier_conflict_strong_content_exact_author_year"
-      x$promotion_reason[[i]] <- "identifier_conflict_strong_content_exact_author_year"
-      next
-    }
-
-    next
+  if (any(m1)) {
+    x[m1, `:=`(
+      rescored_classification = "duplicate",
+      rescored_rule = "identifier_conflict_single_doi_exact_author_year",
+      promotion_reason = "identifier_conflict_single_doi_exact_author_year"
+    )]
   }
 
-  one_missing <- xor(pm$abstract_missing_i, pm$abstract_missing_j)
-  preprint_pair <- xor(pm$preprint_i, pm$preprint_j) || (pm$preprint_i || pm$preprint_j)
-  x$one_abstract_missing[[i]] <- one_missing
-  x$first_author_match[[i]] <- pm$first_author_match
-  x$journal_match[[i]] <- pm$journal_match
-  x$preprint_pair[[i]] <- preprint_pair
+  m2 <- x$identifier_conflict &
+    !m1 &
+    both_doi_present_vec &
+    x$exact_author_match_vec &
+    exact_pub_year_vec &
+    !is.na(x$title_similarity) &
+    x$title_similarity >= 0.98 &
+    !is.na(x$ordered_coverage) &
+    x$ordered_coverage >= 0.98 &
+    !is.na(x$shingle_containment) &
+    x$shingle_containment >= 0.90
 
-  yd_ok_1 <- is.na(pm$year_diff) || pm$year_diff <= 1L
-  yd_ok_2 <- is.na(pm$year_diff) || pm$year_diff <= 2L
-  tlen <- min(title_length_norm(x$title_i[[i]]), title_length_norm(x$title_j[[i]]))
-  exact_title <- isTRUE(x$exact_title[[i]])
-  containment <- isTRUE(x$title_containment[[i]])
-  tsim <- x$title_similarity[[i]]
-  exact_abs <- isTRUE(x$exact_abstract[[i]])
-  strong_abs <- isTRUE(x$strong_abstract[[i]])
-
-  promote <- FALSE
-  reason <- ""
-
-  # Long normalised title containment is a high-precision identity signal in the
-  # human-reviewed benchmark. Structured identifiers are checked above first.
-  if (containment && tlen >= 30L) {
-    promote <- TRUE
-    reason <- "long_title_containment_no_identifier_conflict"
-  }
-
-  # Missing abstract on one manifestation must not act as negative evidence.
-  # Require a long exact title, compatible year, and independent corroboration.
-  if (!promote && one_missing && exact_title && tlen >= 30L && yd_ok_1 &&
-      (pm$first_author_match || pm$journal_match || preprint_pair)) {
-    promote <- TRUE
-    reason <- "exact_title_missing_abstract_corroborated"
-  }
-
-  # Exact substantive abstract plus very strong title agreement can override a different DOI.
-  # Generic/reused boilerplate abstracts are protected because title agreement is required.
-  if (!promote && exact_abs && tlen >= 30L && yd_ok_1 &&
-      !is.na(tsim) && tsim >= 0.95) {
-    promote <- TRUE
-    reason <- "exact_abstract_high_title_agreement"
-  }
-
-  # Long near-identical content can override DOI conflict when the title independently agrees.
-  if (!promote && strong_abs && tlen >= 30L &&
-      (exact_title || containment || (!is.na(tsim) && tsim >= 0.97))) {
-    promote <- TRUE
-    reason <- "strong_abstract_high_title_agreement"
-  }
-
-  # Explicit preprint -> publication manifestations: DOI change is expected, not contradictory.
-  # Human validation supports exact normalised title + compatible year as sufficient
-  # when one side is a recognised preprint manifestation and no structured-title
-  # identifier conflict has been found.
-  if (!promote && preprint_pair && exact_title && tlen >= 20L && yd_ok_2) {
-    promote <- TRUE
-    reason <- "preprint_exact_title_compatible_year"
-  }
-
-
-  # Preprint-publication pairs may legitimately change title and DOI. Very strong
-  # substantive content is sufficient when the preprint signal is explicit.
-  if (!promote && preprint_pair &&
-      !is.na(x$ordered_coverage[[i]]) && x$ordered_coverage[[i]] >= 0.98 &&
-      !is.na(x$shingle_containment[[i]]) && x$shingle_containment[[i]] >= 0.90) {
-    promote <- TRUE
-    reason <- "preprint_strong_content_manifestation"
-  }
-
-  # Strong near-identical content plus first-author agreement safely recovered
-  # additional publication manifestations in the human validation set.
-  if (!promote && pm$first_author_match &&
-      !is.na(tsim) && tsim >= 0.93 &&
-      !is.na(x$ordered_coverage[[i]]) && x$ordered_coverage[[i]] >= 0.92 &&
-      !is.na(x$shingle_containment[[i]]) && x$shingle_containment[[i]] >= 0.69) {
-    promote <- TRUE
-    reason <- "strong_content_first_author_title_agreement"
-  }
-
-  # Exact short titles can be safe when independently corroborated by both author
-  # and source/journal. Exclude known generic metadata titles.
-  if (!promote && exact_title && tlen >= 10L &&
-      pm$first_author_match && pm$journal_match &&
-      !is_generic_exact_title(x$title_i[[i]]) &&
-      !is_generic_exact_title(x$title_j[[i]])) {
-    promote <- TRUE
-    reason <- "exact_short_title_author_journal"
-  }
-
-
-  # Exact bibliographic title with same publication year and journal-name
-  # containment can resolve source-title variants even when author attribution differs.
-  if (!promote && exact_title && tlen >= 20L &&
-      !pm$doi_i_present && !pm$doi_j_present &&
-      !is.na(pm$year_diff) && pm$year_diff == 0L &&
-      pm$journal_containment &&
-      !is_generic_exact_title(x$title_i[[i]]) &&
-      !is_generic_exact_title(x$title_j[[i]])) {
-    promote <- TRUE
-    reason <- "exact_title_year_journal_containment_no_doi"
-  }
-
-  # Typographical title variants can be promoted at very high similarity when
-  # first author agrees.
-  if (!promote && !exact_title && !is.na(tsim) && tsim >= 0.995 &&
-      tlen >= 30L && pm$first_author_match) {
-    promote <- TRUE
-    reason <- "near_exact_title_first_author"
-  }
-
-  # Version-family DOI pairs with essentially the same title are manifestations of one work.
-  if (!promote && isTRUE(x$same_doi_family[[i]]) && !is.na(tsim) && tsim >= 0.97 && tlen >= 30L) {
-    promote <- TRUE
-    reason <- "doi_family_high_title_agreement"
-  }
-
-  if (promote && x$rescored_classification[[i]] != "duplicate") {
-    x$rescored_classification[[i]] <- "duplicate"
-    x$rescored_rule[[i]] <- reason
-    x$promotion_reason[[i]] <- reason
+  if (any(m2)) {
+    x[m2, `:=`(
+      rescored_classification = "duplicate",
+      rescored_rule = "identifier_conflict_strong_content_exact_author_year",
+      promotion_reason = "identifier_conflict_strong_content_exact_author_year"
+    )]
   }
 }
 
+# Non-conflict promotion rules are first-match-wins. Rows already classified as
+# duplicate are intentionally left unchanged, matching the original final guard
+# `if (promote && rescored_classification != "duplicate")`.
+eligible_for_promotion <- non_conflict & x$rescored_classification != "duplicate"
+
+generic_i_vec <- vapply(x$title_i, is_generic_exact_title, logical(1))
+generic_j_vec <- vapply(x$title_j, is_generic_exact_title, logical(1))
+
+apply_promotion <- function(mask, reason) {
+  fire <- eligible_for_promotion & x$promotion_reason == "" & mask
+  if (any(fire)) {
+    x[fire, `:=`(
+      rescored_classification = "duplicate",
+      rescored_rule = reason,
+      promotion_reason = reason
+    )]
+  }
+  invisible(NULL)
+}
+
+apply_promotion(
+  x$title_containment %in% TRUE &
+    tlen_vec >= 30L,
+  "long_title_containment_no_identifier_conflict"
+)
+
+apply_promotion(
+  one_missing_vec &
+    x$exact_title %in% TRUE &
+    tlen_vec >= 30L &
+    yd_ok_1_vec &
+    (x$first_author_match_vec | x$journal_match_vec | preprint_pair_vec),
+  "exact_title_missing_abstract_corroborated"
+)
+
+apply_promotion(
+  x$exact_abstract %in% TRUE &
+    tlen_vec >= 30L &
+    yd_ok_1_vec &
+    !is.na(x$title_similarity) &
+    x$title_similarity >= 0.95,
+  "exact_abstract_high_title_agreement"
+)
+
+apply_promotion(
+  strong_abs_vec &
+    tlen_vec >= 30L &
+    (
+      x$exact_title %in% TRUE |
+      x$title_containment %in% TRUE |
+      (!is.na(x$title_similarity) & x$title_similarity >= 0.97)
+    ),
+  "strong_abstract_high_title_agreement"
+)
+
+apply_promotion(
+  preprint_pair_vec &
+    x$exact_title %in% TRUE &
+    tlen_vec >= 20L &
+    yd_ok_2_vec,
+  "preprint_exact_title_compatible_year"
+)
+
+apply_promotion(
+  preprint_pair_vec &
+    !is.na(x$ordered_coverage) &
+    x$ordered_coverage >= 0.98 &
+    !is.na(x$shingle_containment) &
+    x$shingle_containment >= 0.90,
+  "preprint_strong_content_manifestation"
+)
+
+apply_promotion(
+  x$first_author_match_vec &
+    !is.na(x$title_similarity) &
+    x$title_similarity >= 0.93 &
+    !is.na(x$ordered_coverage) &
+    x$ordered_coverage >= 0.92 &
+    !is.na(x$shingle_containment) &
+    x$shingle_containment >= 0.69,
+  "strong_content_first_author_title_agreement"
+)
+
+apply_promotion(
+  x$exact_title %in% TRUE &
+    tlen_vec >= 10L &
+    x$first_author_match_vec &
+    x$journal_match_vec &
+    !generic_i_vec &
+    !generic_j_vec,
+  "exact_short_title_author_journal"
+)
+
+apply_promotion(
+  x$exact_title %in% TRUE &
+    tlen_vec >= 20L &
+    !x$doi_i_present_vec &
+    !x$doi_j_present_vec &
+    !is.na(x$year_diff_vec) &
+    x$year_diff_vec == 0L &
+    x$journal_containment_vec &
+    !generic_i_vec &
+    !generic_j_vec,
+  "exact_title_year_journal_containment_no_doi"
+)
+
+apply_promotion(
+  !(x$exact_title %in% TRUE) &
+    !is.na(x$title_similarity) &
+    x$title_similarity >= 0.995 &
+    tlen_vec >= 30L &
+    x$first_author_match_vec,
+  "near_exact_title_first_author"
+)
+
+apply_promotion(
+  same_family_vec &
+    !is.na(x$title_similarity) &
+    x$title_similarity >= 0.97 &
+    tlen_vec >= 30L,
+  "doi_family_high_title_agreement"
+)
+
+progress(
+  "promotion and rescore rules applied",
+  nrow(x),
+  nrow(x),
+  paste("promotions:", sum(nzchar(x$promotion_reason)))
+)
+checkpoint(
+  "promotion_rescore",
+  nrow(x),
+  nrow(x),
+  list(duplicates_so_far = sum(x$rescored_classification == "duplicate", na.rm = TRUE))
+)
 
 # Candidate generation is deliberately broad. Deduplication routing depends
 # only on duplicate-identity evidence. Relevance/exclusion status is not used here.
