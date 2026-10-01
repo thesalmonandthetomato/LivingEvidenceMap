@@ -53,6 +53,10 @@ jobs:
             scopus) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             openalex) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             agricola) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            pubmed) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            ethos) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            cba) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            epmc_preprints) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             wos) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             *) echo "Unsupported source: ${{ inputs.source }}" >&2; exit 2 ;;
           esac
@@ -124,6 +128,22 @@ jobs:
                 echo "AGRICOLA returned 0 records; skipping sidecar adaptation."
                 mkdir -p outputs/updater/source_child_sidecar
                 printf '{"source":"agricola","records":0,"status":"empty_harvest"}\n' > outputs/updater/source_child_sidecar/empty_harvest.json
+              fi
+              ;;
+            pubmed|ethos|cba|epmc_preprints)
+              case "$SOURCE" in
+                pubmed) code=MED; collection="PubMed/MEDLINE" ;;
+                ethos) code=ETH; collection="EThOS theses" ;;
+                cba) code=CBA; collection="Chinese Biological Abstracts" ;;
+                epmc_preprints) code=PPR; collection="Europe PMC preprints" ;;
+              esac
+              Rscript scripts/updater/workflow_00f_europe_pmc_source_ingestion.R                 --query "$SEARCH_QUERY"                 --source-code "$code"                 --source-slug "$SOURCE"                 --source-collection "$collection"                 --max-records all                 --page-size 100                 --output-dir outputs/updater/source_child
+              epmc_n="$(Rscript -e 'x <- jsonlite::fromJSON("outputs/updater/source_child/manifest.json", simplifyVector=FALSE); cat(if(is.null(x$records_retrieved))0L else as.integer(x$records_retrieved))')"
+              if [ "$epmc_n" -gt 0 ]; then
+                Rscript scripts/updater/workflow_01x_europe_pmc_sidecar_adapter.R                   --input-dir outputs/updater/source_child                   --output-dir outputs/updater/source_child_sidecar                   --source-code "$code"                   --source-slug "$SOURCE"                   --source-collection "$collection"
+              else
+                mkdir -p outputs/updater/source_child_sidecar
+                printf '{"source":"%s","records":0,"status":"empty_harvest"}\n' "$SOURCE" > outputs/updater/source_child_sidecar/empty_harvest.json
               fi
               ;;
             wos)
