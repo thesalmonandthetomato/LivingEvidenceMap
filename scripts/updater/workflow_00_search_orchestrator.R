@@ -12,6 +12,7 @@ arg <- function(flag, default=NULL) {
 run_type <- arg("--run-type")
 additional_search_term <- trimws(arg("--additional-search-term",""))
 config_path <- arg("--config","user_input/workflow00_search_strategy.json")
+ebsco_config_path <- arg("--ebsco-config","config/workflow00_ebsco_sources.json")
 output_dir <- arg("--output-dir","outputs/updater/workflow00_plan")
 
 if (!(run_type %in% c("full","fortnightly","expansion"))) {
@@ -19,6 +20,8 @@ if (!(run_type %in% c("full","fortnightly","expansion"))) {
 }
 
 cfg <- fromJSON(config_path, simplifyVector=TRUE)
+ebsco_cfg <- fromJSON(ebsco_config_path, simplifyVector=FALSE)
+if (is.null(ebsco_cfg$sources) || !length(ebsco_cfg$sources)) stop("EBSCO source catalogue contains no sources", call.=FALSE)
 
 if (run_type=="expansion" && !nzchar(additional_search_term)) {
   stop("Expansion mode requires --additional-search-term", call.=FALSE)
@@ -98,6 +101,19 @@ wos_query <- if (run_type=="expansion") {
   wos_new_block
 }
 
+ebsco_block <- function(fields, terms) {
+  paste0("(",paste(vapply(fields,function(tag) sprintf("%s (%s)",tag,terms),character(1)),collapse=" OR "),")")
+}
+ebsco_queries <- lapply(names(ebsco_cfg$sources),function(src_name) {
+  fields <- unlist(ebsco_cfg$sources[[src_name]]$search_fields,use.names=FALSE)
+  if (!length(fields)) stop(sprintf("EBSCO source %s has no configured search_fields",src_name),call.=FALSE)
+  new_q <- sprintf("(%s AND %s)",ebsco_block(fields,species),ebsco_block(fields,farm))
+  if (run_type=="expansion") {
+    sprintf("(%s AND NOT %s)",new_q,ebsco_block(fields,old_farm))
+  } else new_q
+})
+names(ebsco_queries) <- names(ebsco_cfg$sources)
+
 # Fortnightly date windows are source-specific. Only fields whose day-level semantics
 # have been explicitly verified are encoded here.
 today <- Sys.Date()
@@ -120,7 +136,7 @@ if (run_type=="fortnightly") {
   epmc_preprints_query <- sprintf("(%s) AND %s",epmc_preprints_query,creation_window)
 }
 
-queries <- list(
+queries <- c(list(
   lens=lens_query,
   scopus=scopus_query,
   openalex=openalex_query,
@@ -130,7 +146,7 @@ queries <- list(
   cba=cba_query,
   epmc_preprints=epmc_preprints_query,
   wos=wos_query
-)
+), ebsco_queries)
 
 update_methods <- list(
   lens=list(
@@ -200,6 +216,16 @@ support <- list(
   epmc_preprints=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   wos=list(full=TRUE,fortnightly=TRUE,expansion=TRUE)
 )
+
+for (src_name in names(ebsco_cfg$sources)) {
+  support[[src_name]] <- list(full=TRUE,fortnightly=TRUE,expansion=TRUE)
+  update_methods[[src_name]] <- list(
+    retrieval_filter="none; complete EBSCO query is re-harvested",
+    field_scope=unlist(ebsco_cfg$sources[[src_name]]$search_fields,use.names=FALSE),
+    window_rule="complete query rerun; exact EBSCO accession-number reconciliation retains only unseen manifestations",
+    limitation="No reliable EBSCO indexing-date filter has been verified for this profile; complete re-harvest prioritises recall and provenance over API efficiency."
+  )
+}
 
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 plan <- list(
