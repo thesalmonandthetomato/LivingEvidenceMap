@@ -428,10 +428,19 @@ x[, journal_match := FALSE]
 x[, preprint_pair := FALSE]
 
 non_conflict <- !x$identifier_conflict
-x[non_conflict, one_abstract_missing := one_missing_vec[non_conflict]]
-x[non_conflict, first_author_match := first_author_match_vec[non_conflict]]
-x[non_conflict, journal_match := journal_match_vec[non_conflict]]
-x[non_conflict, preprint_pair := preprint_pair_vec[non_conflict]]
+non_conflict_idx <- which(non_conflict)
+if (length(non_conflict_idx)) {
+  # Use explicit integer row indices to preserve the old row-wise assignment
+  # semantics exactly, including FALSE values when source metadata are missing.
+  set(x, i = non_conflict_idx, j = "one_abstract_missing",
+      value = one_missing_vec[non_conflict_idx])
+  set(x, i = non_conflict_idx, j = "first_author_match",
+      value = first_author_match_vec[non_conflict_idx])
+  set(x, i = non_conflict_idx, j = "journal_match",
+      value = journal_match_vec[non_conflict_idx])
+  set(x, i = non_conflict_idx, j = "preprint_pair",
+      value = preprint_pair_vec[non_conflict_idx])
+}
 
 # Narrow identifier-conflict overrides are evaluated first, exactly as in the
 # original row-wise implementation. The second rule only applies where the first
