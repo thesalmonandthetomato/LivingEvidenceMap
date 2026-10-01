@@ -55,10 +55,10 @@ if also present                    if present
 
 | Component | Function |
 |---|---|
-| `.github/workflows/workflow_05_species_coding.yml` | Production controller for restoring the validated Workflow 04 retained corpus, validating the three-column vocabulary, running deterministic species coding, validating outputs, and creating the handoff artefact. |
+| `.github/workflows/workflow_05_production.yml` | Production controller for restoring the validated Workflow 04 retained corpus, validating the three-column vocabulary, running deterministic species coding, validating outputs, and creating the handoff artefact. |
 | `scripts/updater/workflow_05_species_coding.R` | Applies deterministic title/abstract species matching and writes record-level and long-form species outputs. |
 | `R/species_detect.R` | Implements case-insensitive lexical matching, markup normalisation, whitespace/hyphen tolerance, scientific-name abbreviation handling, OCR-spacing tolerance, overlap handling, and validated plural behaviour. |
-| `config/deterministic_concepts.csv` | Versioned runtime vocabulary with exactly `coding, entity, terms`. |
+| `user_input/workflow05_deterministic_concepts.csv` | Versioned runtime vocabulary with exactly `coding, entity, terms`. |
 | `scripts/updater/workflow_05_archive_state_to_zenodo.R` | Validates and publishes the sparse accepted W05 species layer to restricted Zenodo storage. |
 | `scripts/updater/workflow_05_update_zenodo_registry.R` | Registers the published Zenodo checkpoint and repository pointer. |
 | `docs/reporting/workflow_05/workflow_05_functionality_map.md` | Methodological and reporting description of the production workflow. |
@@ -82,7 +82,7 @@ Workflow 05 may use the verified Workflow 04 Actions handoff cache when availabl
 
 The runtime vocabulary is:
 
-`config/deterministic_concepts.csv`
+`user_input/workflow05_deterministic_concepts.csv`
 
 It contains **exactly three columns**:
 
