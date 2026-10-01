@@ -5,7 +5,7 @@ on:
     branches:
       - workflow01-final-architecture
     paths:
-      - 'docs/workflow04/.run_shiny_validation_publish'
+      - 'docs/workflow04/run_shiny_validation_publish.txt'
   workflow_dispatch:
     inputs:
       lean_pointer_path:
