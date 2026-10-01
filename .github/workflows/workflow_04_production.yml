@@ -36,12 +36,10 @@ on:
       lean_pointer_path:
         description: 'Authoritative current post-W02 lean canonical pointer'
         required: true
-        default: 'docs/compaction/zenodo/run-36166883249.json'
         type: string
       workflow03_pointer_path:
         description: 'Authoritative current Workflow 03 pointer'
         required: true
-        default: 'docs/publication_status/zenodo/run-36172718538.json'
         type: string
       prior_workflow04_pointer_path:
         description: 'Prior authoritative W04 pointer; use none for a first run'
