@@ -1,0 +1,163 @@
+name: TEMP diagnose W01 real delta replay
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_diagnose_w01_real_delta_replay.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+
+    steps:
+      - name: Checkout W01 branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.6.0'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest","httr2","xml2"))
+
+      - name: Download source and failed-resume artefacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diag/production diag/failed
+          gh run download 36866644366 \
+            --repo thesalmonandthetomato/LivingEvidenceMap \
+            --name workflow01-production-36866644366 \
+            --dir diag/production
+          gh run download 36929259139 \
+            --repo thesalmonandthetomato/LivingEvidenceMap \
+            --name workflow01-resume-36929259139 \
+            --dir diag/failed
+          test -s diag/production/workflow01_pre_adjudication/combined_pair_decisions.csv
+          test -s diag/production/workflow01_pre_adjudication/manifestation_cluster_map.csv
+          test -s diag/production/pending_checkpoint/all_adjudications.jsonl
+          test -s diag/production/pending_checkpoint/previous_workflow01_pointer.json
+          test -s diag/failed/outputs/human_gate/normalised/human_decisions.normalised.jsonl
+          test -s diag/failed/outputs/human_gate/human_review_integrity.json
+          test -s diag/failed/outputs/delta/pair_decision_upserts.csv
+
+      - name: Restore previous authoritative W01 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer diag/production/pending_checkpoint/previous_workflow01_pointer.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root diag/previous
+          test -s diag/previous/workflow01_full_five_source/final_pair_decisions.csv
+          test -s diag/previous/workflow01_full_five_source/manifestation_cluster_map.csv
+
+      - name: Rebuild adjudicated pair target only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diag/target
+          : > diag/empty_repairs.jsonl
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
+            --combined-decisions diag/production/workflow01_pre_adjudication/combined_pair_decisions.csv \
+            --manifestation-map diag/production/workflow01_pre_adjudication/manifestation_cluster_map.csv \
+            --llm-adjudications diag/production/pending_checkpoint/all_adjudications.jsonl \
+            --human-decisions diag/failed/outputs/human_gate/normalised/human_decisions.normalised.jsonl \
+            --human-integrity-manifest diag/failed/outputs/human_gate/human_review_integrity.json \
+            --data-quality-repairs diag/empty_repairs.jsonl \
+            --previous-cluster-map diag/previous/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --output-dir diag/target
+          test -s diag/target/final_pair_decisions.csv
+
+      - name: Compare target with replayed pair state
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(data.table)
+            library(digest)
+          })
+
+          readc <- function(p) fread(p, na.strings=c("","NA"), colClasses="character")
+          align_cols <- function(a,b){
+            cols <- union(names(a),names(b))
+            for(nm in setdiff(cols,names(a))) a[[nm]] <- NA_character_
+            for(nm in setdiff(cols,names(b))) b[[nm]] <- NA_character_
+            list(a=a[,..cols],b=b[,..cols],cols=cols)
+          }
+          norm <- function(x) {
+            y <- as.character(x)
+            y[is.na(y)] <- "<NA>"
+            y
+          }
+
+          prev <- readc("diag/previous/workflow01_full_five_source/final_pair_decisions.csv")
+          ups <- readc("diag/failed/outputs/delta/pair_decision_upserts.csv")
+          target <- readc("diag/target/final_pair_decisions.csv")
+
+          stopifnot(!anyDuplicated(prev$pair_key), !anyDuplicated(ups$pair_key), !anyDuplicated(target$pair_key))
+
+          ab <- align_cols(prev,ups); prev <- ab$a; ups <- ab$b
+          prev <- prev[!(pair_key %in% ups$pair_key)]
+          replay <- rbindlist(list(prev,ups),use.names=TRUE,fill=TRUE)
+
+          ab <- align_cols(replay,target); replay <- ab$a; target <- ab$b; cols <- ab$cols
+          setkey(replay,pair_key); setkey(target,pair_key)
+
+          cat("Target rows:", nrow(target), "\n")
+          cat("Replay rows:", nrow(replay), "\n")
+          cat("Target columns:", length(names(target)), "\n")
+          cat("Replay columns:", length(names(replay)), "\n")
+
+          missing_replay <- setdiff(target$pair_key,replay$pair_key)
+          extra_replay <- setdiff(replay$pair_key,target$pair_key)
+          cat("Missing replay keys:", length(missing_replay), "\n")
+          cat("Extra replay keys:", length(extra_replay), "\n")
+
+          common <- intersect(target$pair_key,replay$pair_key)
+          t <- target[J(common)]
+          r <- replay[J(common)]
+          stopifnot(identical(t$pair_key,r$pair_key))
+
+          diff_counts <- setNames(integer(length(cols)),cols)
+          anydiff <- rep(FALSE,length(common))
+          for(nm in cols){
+            d <- norm(t[[nm]]) != norm(r[[nm]])
+            diff_counts[[nm]] <- sum(d)
+            anydiff <- anydiff | d
+          }
+
+          cat("Rows with any semantic difference:", sum(anydiff), "\n")
+          dc <- sort(diff_counts[diff_counts>0],decreasing=TRUE)
+          if(length(dc)){
+            cat("Differing columns:\n")
+            print(dc)
+            bad <- which(anydiff)
+            cat("First differing pair keys:\n")
+            print(head(common[bad],20))
+            for(i in head(bad,5)){
+              cat("\nPAIR", common[[i]], "\n")
+              changed <- cols[norm(t[i,..cols]) != norm(r[i,..cols])]
+              for(nm in changed){
+                cat("  ",nm,": target=[",norm(t[[nm]][[i]]),"] replay=[",norm(r[[nm]][[i]]),"]\n",sep="")
+              }
+            }
+          }
+
+          if(length(missing_replay) || length(extra_replay) || any(anydiff)){
+            stop("DIAGNOSTIC: replay differs from target; see counts above",call.=FALSE)
+          }
+          cat("PASS: real pair replay exactly matches target\n")
