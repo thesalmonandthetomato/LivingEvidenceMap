@@ -18,7 +18,7 @@ on:
       - 'config/global_country_gazetteer_v3.csv'
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   TOPIC_ONTOLOGY_PATH: 'user_input/workflow07_topic_ontology.csv'
@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
-          fetch-depth: 1
+          fetch-depth: 0
 
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -153,3 +153,31 @@ jobs:
             outputs/workflow10/
           retention-days: 30
           if-no-files-found: error
+
+      - name: Mark current-run dashboard stage complete
+        shell: Rscript {0}
+        run: |
+          status <- system2("Rscript",c(
+            "scripts/updater/workflow_current_run_status_observer.R",
+            "--force-stage","W10"
+          ))
+          if(status != 0L) stop("Failed to update current-run W10 status",call.=FALSE)
+
+      - name: Commit current-run reporting metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d docs/current_run ]; then
+            echo "No active current-run status exists; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs/current_run
+          if git diff --cached --quiet; then
+            echo "No W10 reporting changes to commit."
+            exit 0
+          fi
+          git commit -m "Complete current-run live status [skip ci]"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
