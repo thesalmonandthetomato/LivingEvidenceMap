@@ -20,7 +20,7 @@ arg <- function(flag, default=NULL){
 }
 records_path <- arg("--records")
 old_path <- arg("--old")
-dict_path <- arg("--dictionary","config/species_dictionary.csv")
+dict_path <- arg("--dictionary","user_input/workflow05_species_dictionary_reference.csv")
 out_dir <- arg("--output-dir","outputs/workflow05_species_only_rerun")
 dir.create(out_dir,recursive=TRUE,showWarnings=FALSE)
 
