@@ -67,7 +67,8 @@ assign_primary_country <- function(
   species_adjective <- function(context, matched) {
     if (!nzchar(matched) || !nzchar(context)) return(FALSE)
     escaped <- stringr::str_replace_all(matched, "([\\\\.^$|()\\[\\]{}*+?])", "\\\\\\1")
-    head_pattern <- paste(vapply(species_adjective_heads, regex_escape, character(1L)), collapse = "|")\n    pattern <- paste0("\\b", escaped, "\\s+(", head_pattern, ")\\b")
+    head_pattern <- paste(vapply(species_adjective_heads, regex_escape, character(1L)), collapse = "|")
+    pattern <- paste0("\\b", escaped, "\\s+(", head_pattern, ")\\b")
     stringr::str_detect(context, stringr::regex(pattern, ignore_case = TRUE))
   }
 
