@@ -274,10 +274,27 @@ jobs:
         if: ${{ inputs.publish == true }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          PRIOR_W08_POINTER: ${{ inputs.prior_workflow08_pointer_path }}
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p outputs/workflow08_zenodo
-          Rscript scripts/updater/workflow_08_archive_to_zenodo.R             --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl             --exclusions outputs/workflow08/workflow08_excluded_records.csv             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl             --manifest outputs/workflow08/workflow08_final_manifest.json             --source-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow08_zenodo
+          ARGS=(
+            --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl
+            --exclusions outputs/workflow08/workflow08_excluded_records.csv
+            --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl
+            --manifest outputs/workflow08/workflow08_final_manifest.json
+            --source-run-id "$GITHUB_RUN_ID"
+            --repository "$GITHUB_REPOSITORY"
+            --output-dir outputs/workflow08_zenodo
+          )
+          if [ "$PRIOR_W08_POINTER" != "none" ] && [ -n "$PRIOR_W08_POINTER" ]; then
+            test -s "$PRIOR_W08_POINTER"
+            SUPER_ID="$(P="$PRIOR_W08_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(as.character(x$zenodo_record_id))')"
+            SUPER_DOI="$(P="$PRIOR_W08_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(as.character(x$doi))')"
+            ARGS+=(--supersedes-record-id "$SUPER_ID" --supersedes-doi "$SUPER_DOI")
+          fi
+          Rscript scripts/updater/workflow_08_archive_to_zenodo.R "${ARGS[@]}"
 
       - name: Register W08 state
         if: ${{ inputs.publish == true }}
@@ -292,23 +309,30 @@ jobs:
           cp outputs/workflow08_zenodo/zenodo_receipt.json "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
 
           if [ ! -f docs/workflow08/zenodo_registry.csv ]; then
-            echo 'source_run_id,zenodo_record_id,doi,canonical_sha256,published_at_utc' > docs/workflow08/zenodo_registry.csv
+            echo 'source_run_id,zenodo_record_id,doi,canonical_sha256,exclusions_sha256,status,supersedes_zenodo_record_id,published_at_utc' > docs/workflow08/zenodo_registry.csv
           fi
 
           RECEIPT=outputs/workflow08_zenodo/zenodo_receipt.json REG=docs/workflow08/zenodo_registry.csv Rscript -e '
-            x <- jsonlite::fromJSON(Sys.getenv("RECEIPT"))
+            x <- jsonlite::fromJSON(Sys.getenv("RECEIPT"),simplifyVector=FALSE)
             reg <- read.csv(Sys.getenv("REG"),stringsAsFactors=FALSE)
+            required <- c("source_run_id","zenodo_record_id","doi","canonical_sha256","exclusions_sha256","status","supersedes_zenodo_record_id","published_at_utc")
+            if(!all(required %in% names(reg))) stop("Workflow 08 registry schema is incomplete")
             sid <- as.character(x$source_github_run_id)
+            zid <- as.character(x$zenodo_record_id)
             reg <- reg[as.character(reg$source_run_id)!=sid,,drop=FALSE]
+            reg$status[reg$status=="authoritative"] <- "superseded"
             row <- data.frame(
               source_run_id=sid,
-              zenodo_record_id=as.character(x$zenodo_record_id),
+              zenodo_record_id=zid,
               doi=as.character(x$doi),
               canonical_sha256=as.character(x$final_canonical_jsonl_sha256),
+              exclusions_sha256=as.character(x$excluded_records_csv_sha256),
+              status="authoritative",
+              supersedes_zenodo_record_id=if(is.null(x$supersedes_zenodo_record_id))"" else as.character(x$supersedes_zenodo_record_id),
               published_at_utc=as.character(x$published_at_utc),
               stringsAsFactors=FALSE
             )
-            write.csv(rbind(reg,row),Sys.getenv("REG"),row.names=FALSE,quote=FALSE)
+            write.csv(rbind(reg[,required,drop=FALSE],row),Sys.getenv("REG"),row.names=FALSE,quote=FALSE)
           '
 
           git add docs/workflow08/zenodo_registry.csv "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
