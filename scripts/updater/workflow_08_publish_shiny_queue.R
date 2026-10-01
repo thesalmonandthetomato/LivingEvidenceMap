@@ -6,6 +6,8 @@ suppressPackageStartupMessages({
   library(googlesheets4)
 })
 
+`%||%` <- function(x,y) if(is.null(x)||length(x)==0L) y else x
+
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag, default=NULL) {
   i <- match(flag,args)
