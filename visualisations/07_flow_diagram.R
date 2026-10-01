@@ -382,9 +382,15 @@ ggsave(
 )
 
 # Machine-readable output generated from the same analysis used for the figure.
+search_update_date <- trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
+if (nzchar(search_update_date) && !grepl("^\\d{4}-\\d{2}-\\d{2}$", search_update_date)) {
+  stop("SEARCH_UPDATE_DATE must be YYYY-MM-DD when supplied.", call. = FALSE)
+}
+
 counts <- list(
   schema = "living-evidence-map-workflow09-flow-counts-v2",
   generated_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ"),
+  search_update_date = if (nzchar(search_update_date)) search_update_date else NULL,
   inputs = list(
     workflow01_canonical_jsonl = list(path = prescreen_path, sha256 = digest(prescreen_path, algo = "sha256", file = TRUE, serialize = FALSE)),
     workflow02_cumulative_patch_jsonl = list(path = w02_patch_path, sha256 = digest(w02_patch_path, algo = "sha256", file = TRUE, serialize = FALSE)),
