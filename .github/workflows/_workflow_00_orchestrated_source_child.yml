@@ -48,19 +48,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "${{ inputs.source }}" in
-            lens) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            scopus) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            openalex) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            agricola) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            pubmed) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            ethos) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            cba) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            epmc_preprints) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            wos) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            ebsco_*) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            *) echo "Unsupported source: ${{ inputs.source }}" >&2; exit 2 ;;
-          esac
+          echo "branch=$WORKFLOW00_ORCHESTRATOR_BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Checkout source implementation
         uses: actions/checkout@v4
