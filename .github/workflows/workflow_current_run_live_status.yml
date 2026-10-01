@@ -1,0 +1,88 @@
+name: Reporting - Current run live status
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/search_record/full_search/*.json'
+      - 'docs/search_record/fortnightly_update/*.json'
+      - 'docs/search_record/ad_hoc/*.json'
+      - 'docs/deduplication/zenodo_registry.csv'
+      - 'docs/enrichment/zenodo_registry.csv'
+      - 'docs/publication_status/zenodo_registry.csv'
+      - 'docs/workflow04/zenodo_registry.csv'
+      - 'docs/workflow05/zenodo_registry.csv'
+      - 'docs/workflow06/zenodo_registry.csv'
+      - 'docs/workflow07/zenodo_registry.csv'
+      - 'docs/workflow08/zenodo_registry.csv'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: current-run-live-status
+  cancel-in-progress: false
+
+jobs:
+  update-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install reporting dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','readr','httr2'))
+
+      - name: Resolve changed provenance files
+        shell: Rscript {0}
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          before <- Sys.getenv("BEFORE_SHA")
+          after <- Sys.getenv("AFTER_SHA")
+          zero <- grepl("^0+$",before)
+          args <- if(!nzchar(before) || zero) c("show","--pretty=","--name-only",after) else c("diff","--name-only",before,after)
+          x <- system2("git",args,stdout=TRUE,stderr=TRUE)
+          x <- unique(trimws(x[nzchar(trimws(x))]))
+          writeLines(x,"changed_files.txt")
+          cat(paste(x,collapse="\n"),"\n")
+
+      - name: Update current-run status
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: Rscript {0}
+        run: |
+          parse(file="scripts/updater/workflow_current_run_status_observer.R")
+          status <- system2("Rscript",c(
+            "scripts/updater/workflow_current_run_status_observer.R",
+            "--changed-files","changed_files.txt"
+          ))
+          if(status != 0L) stop("Current-run status observer failed",call.=FALSE)
+
+      - name: Commit reporting metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs/current_run
+          if git diff --cached --quiet; then
+            echo "No current-run reporting changes to commit."
+            exit 0
+          fi
+          git commit -m "Update current-run live status [skip ci]"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
