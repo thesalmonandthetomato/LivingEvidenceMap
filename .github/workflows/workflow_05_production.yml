@@ -22,12 +22,10 @@ on:
       workflow04_pointer_path:
         description: 'Authoritative current Workflow 04 pointer'
         required: true
-        default: 'docs/workflow04/zenodo/run-36227737500.json'
         type: string
       lean_pointer_path:
         description: 'Authoritative current post-W02 lean canonical pointer corresponding to W04'
         required: true
-        default: 'docs/compaction/zenodo/run-36166883249.json'
         type: string
       publish:
         description: 'Publish validated W05 state to restricted Zenodo'
