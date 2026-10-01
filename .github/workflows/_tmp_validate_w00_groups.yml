@@ -1,0 +1,90 @@
+name: Temporary W00 grouped selection validation
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/_tmp_validate_w00_groups.yml'
+      - '.github/workflows/workflow_00_search_orchestrator.yml'
+      - 'scripts/updater/workflow_00_resolve_source_selection.R'
+      - 'config/workflow00_source_groups.json'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - name: Parse orchestrator YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/workflow_00_search_orchestrator.yml"); puts "PASS: YAML parses"'
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+      - name: Validate grouped full-run selection
+        env:
+          W00_GROUP_CORE_MULTIDISCIPLINARY: 'true'
+          W00_GROUP_HEALTH_MEDICINE: 'true'
+          W00_GROUP_SOCIAL_SCIENCES: 'true'
+          W00_GROUP_ENVIRONMENT_AGRICULTURE: 'false'
+          W00_GROUP_EDUCATION: 'false'
+          W00_GROUP_REGIONAL: 'false'
+          W00_GROUP_MEDIA_COMMUNICATION: 'false'
+          W00_GROUP_HUMANITIES: 'false'
+          W00_GROUP_SPORT_TOURISM: 'false'
+          W00_GROUP_GREY_PREPRINTS: 'false'
+          W00_ADDITIONAL_SOURCES: 'ebsco_africa_wide'
+          W00_EXCLUDE_SOURCES: 'ebsco_amed'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/tmp_groups
+          Rscript scripts/updater/workflow_00_resolve_source_selection.R \
+            --run-type full \
+            --saved data/workflow00/source_selection.json \
+            --output outputs/tmp_groups/full.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --group-config config/workflow00_source_groups.json
+          Rscript - <<'RS'
+          library(jsonlite)
+          x <- fromJSON("outputs/tmp_groups/full.json", simplifyVector=FALSE)
+          s <- unlist(x$selected_sources,use.names=FALSE)
+          stopifnot(all(c("lens","scopus","wos","openalex","pubmed","ebsco_medline","ebsco_cinahl",
+                          "ebsco_psycinfo","ebsco_econlit","ebsco_political_science",
+                          "ebsco_family_society","ebsco_africa_wide") %in% s))
+          stopifnot(!("ebsco_amed" %in% s))
+          stopifnot(sum(s=="ebsco_psycinfo")==1L)
+          stopifnot(identical(unlist(x$selected_groups,use.names=FALSE),
+                             c("core_multidisciplinary","health_medicine","social_sciences")))
+          cat("PASS: grouped selection resolves, overlaps deduplicate, add/exclude work\n")
+          RS
+      - name: Validate frozen update selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp outputs/tmp_groups/full.json outputs/tmp_groups/saved.json
+          W00_GROUP_ENVIRONMENT_AGRICULTURE=true \
+          W00_ADDITIONAL_SOURCES=ebsco_eric \
+          Rscript scripts/updater/workflow_00_resolve_source_selection.R \
+            --run-type fortnightly \
+            --saved outputs/tmp_groups/saved.json \
+            --output outputs/tmp_groups/update.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --group-config config/workflow00_source_groups.json
+          Rscript - <<'RS'
+          library(jsonlite)
+          a <- fromJSON("outputs/tmp_groups/full.json", simplifyVector=FALSE)
+          b <- fromJSON("outputs/tmp_groups/update.json", simplifyVector=FALSE)
+          stopifnot(identical(unlist(a$selected_sources,use.names=FALSE),
+                             unlist(b$selected_sources,use.names=FALSE)))
+          stopifnot(identical(b$selection_origin,"saved_full_run"))
+          cat("PASS: fortnightly run ignores new group/additional inputs and reuses frozen source set\n")
+          RS
