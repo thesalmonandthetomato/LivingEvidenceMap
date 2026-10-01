@@ -54,12 +54,11 @@ jobs:
           test "$NEW_P_SHA" = "f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0"
           echo "PASS prompt locked SHA remains valid"
 
-          # Preserve the pre-existing ontology lock unchanged during this
-          # non-instrumental migration. It is stale relative to the current
-          # ontology bytes and must be handled separately from relocation.
-          grep -q "EXPECTED_ONTOLOGY_SHA256: '5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43'" .github/workflows/workflow_07_production.yml
-          grep -q "EXPECTED_ONTOLOGY_SHA256: '5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43'" .github/workflows/workflow_07_topic_coding.yml
-          echo "PASS pre-existing ontology lock preserved unchanged"
+          test "$NEW_O_SHA" = "4ad41f90e35099fdf5f0eb463c86d9245d07b357940804a4faa090eba452f798"
+          echo "PASS ontology locked SHA is correct"
+          grep -q "EXPECTED_ONTOLOGY_SHA256: '4ad41f90e35099fdf5f0eb463c86d9245d07b357940804a4faa090eba452f798'" .github/workflows/workflow_07_production.yml
+          grep -q "EXPECTED_ONTOLOGY_SHA256: '4ad41f90e35099fdf5f0eb463c86d9245d07b357940804a4faa090eba452f798'" .github/workflows/workflow_07_topic_coding.yml
+          echo "PASS W07 ontology lock corrected"
 
           echo "CHECK production paths"
           grep -q 'TOPIC_ONTOLOGY_PATH: user_input/workflow07_topic_ontology.csv' .github/workflows/workflow_07_production.yml
