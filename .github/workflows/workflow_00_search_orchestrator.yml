@@ -313,15 +313,6 @@ jobs:
       - name: Download current expansion harvests
         env:
           GH_TOKEN: ${{ github.token }}
-          LENS_SELECTED: ${{ inputs.lens }}
-          SCOPUS_SELECTED: ${{ inputs.scopus }}
-          OPENALEX_SELECTED: ${{ inputs.openalex }}
-          AGRICOLA_SELECTED: ${{ inputs.agricola }}
-          PUBMED_SELECTED: ${{ inputs.pubmed }}
-          ETHOS_SELECTED: ${{ inputs.ethos }}
-          CBA_SELECTED: ${{ inputs.cba }}
-          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
-          WOS_SELECTED: ${{ inputs.wos }}
         shell: bash
         run: |
           set -euo pipefail
@@ -341,15 +332,6 @@ jobs:
       - name: Build historical native-ID inputs
         env:
           GH_TOKEN: ${{ github.token }}
-          LENS_SELECTED: ${{ inputs.lens }}
-          SCOPUS_SELECTED: ${{ inputs.scopus }}
-          OPENALEX_SELECTED: ${{ inputs.openalex }}
-          AGRICOLA_SELECTED: ${{ inputs.agricola }}
-          PUBMED_SELECTED: ${{ inputs.pubmed }}
-          ETHOS_SELECTED: ${{ inputs.ethos }}
-          CBA_SELECTED: ${{ inputs.cba }}
-          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
-          WOS_SELECTED: ${{ inputs.wos }}
         shell: bash
         run: |
           set -euo pipefail
@@ -404,15 +386,6 @@ jobs:
 
       - name: Reconcile expansion by native source ID
         env:
-          LENS_SELECTED: ${{ inputs.lens }}
-          SCOPUS_SELECTED: ${{ inputs.scopus }}
-          OPENALEX_SELECTED: ${{ inputs.openalex }}
-          AGRICOLA_SELECTED: ${{ inputs.agricola }}
-          PUBMED_SELECTED: ${{ inputs.pubmed }}
-          ETHOS_SELECTED: ${{ inputs.ethos }}
-          CBA_SELECTED: ${{ inputs.cba }}
-          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
-          WOS_SELECTED: ${{ inputs.wos }}
         shell: bash
         run: |
           set -euo pipefail
@@ -552,15 +525,6 @@ jobs:
         if: ${{ inputs.run_type == 'fortnightly' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          LENS_SELECTED: ${{ inputs.lens }}
-          SCOPUS_SELECTED: ${{ inputs.scopus }}
-          OPENALEX_SELECTED: ${{ inputs.openalex }}
-          AGRICOLA_SELECTED: ${{ inputs.agricola }}
-          PUBMED_SELECTED: ${{ inputs.pubmed }}
-          ETHOS_SELECTED: ${{ inputs.ethos }}
-          CBA_SELECTED: ${{ inputs.cba }}
-          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
-          WOS_SELECTED: ${{ inputs.wos }}
         shell: bash
         run: |
           set -euo pipefail
@@ -584,10 +548,6 @@ jobs:
         if: ${{ inputs.run_type == 'full' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          PUBMED_SELECTED: ${{ inputs.pubmed }}
-          ETHOS_SELECTED: ${{ inputs.ethos }}
-          CBA_SELECTED: ${{ inputs.cba }}
-          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
         shell: bash
         run: |
           set -euo pipefail
@@ -705,15 +665,6 @@ jobs:
         id: stage
         env:
           GH_TOKEN: ${{ github.token }}
-          LENS_SELECTED: ${{ inputs.lens }}
-          SCOPUS_SELECTED: ${{ inputs.scopus }}
-          OPENALEX_SELECTED: ${{ inputs.openalex }}
-          AGRICOLA_SELECTED: ${{ inputs.agricola }}
-          PUBMED_SELECTED: ${{ inputs.pubmed }}
-          ETHOS_SELECTED: ${{ inputs.ethos }}
-          CBA_SELECTED: ${{ inputs.cba }}
-          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
-          WOS_SELECTED: ${{ inputs.wos }}
           RUN_TYPE: ${{ inputs.run_type }}
         shell: bash
         run: |
