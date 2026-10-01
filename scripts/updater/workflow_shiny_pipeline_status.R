@@ -27,8 +27,10 @@ enriched_records <- blank_to_na(arg("--enriched-records",""))
 retracted_records <- blank_to_na(arg("--retracted-records",""))
 screened_include <- blank_to_na(arg("--screened-include",""))
 screened_exclude <- blank_to_na(arg("--screened-exclude",""))
-geography_coded <- blank_to_na(arg("--geography-coded",""))
-topic_coded <- blank_to_na(arg("--topic-coded",""))
+geography_with <- blank_to_na(arg("--geography-with",""))
+geography_without <- blank_to_na(arg("--geography-without",""))
+topic_with <- blank_to_na(arg("--topic-with",""))
+topic_without <- blank_to_na(arg("--topic-without",""))
 completed_through <- blank_to_na(arg("--completed-through",""))
 active_workflow <- blank_to_na(arg("--active-workflow",""))
 status_label <- blank_to_na(arg("--status-label",""))
@@ -44,7 +46,8 @@ cols <- c(
   "event_id","update_id","event_at_utc","stage","workflow_run_id",
   "last_search_date","canonical_existing","search_results_total",
   "deduplicated_records","enriched_records","retracted_records",
-  "screened_include","screened_exclude","geography_coded","topic_coded",
+  "screened_include","screened_exclude",
+  "geography_with","geography_without","topic_with","topic_without",
   "completed_through","active_workflow","status_label"
 )
 
@@ -72,8 +75,10 @@ incoming <- list(
   retracted_records=retracted_records,
   screened_include=screened_include,
   screened_exclude=screened_exclude,
-  geography_coded=geography_coded,
-  topic_coded=topic_coded,
+  geography_with=geography_with,
+  geography_without=geography_without,
+  topic_with=topic_with,
+  topic_without=topic_without,
   completed_through=completed_through,
   active_workflow=active_workflow,
   status_label=status_label
@@ -101,8 +106,10 @@ row <- data.frame(
   retracted_records=value("retracted_records"),
   screened_include=value("screened_include"),
   screened_exclude=value("screened_exclude"),
-  geography_coded=value("geography_coded"),
-  topic_coded=value("topic_coded"),
+  geography_with=value("geography_with"),
+  geography_without=value("geography_without"),
+  topic_with=value("topic_with"),
+  topic_without=value("topic_without"),
   completed_through=value("completed_through"),
   active_workflow=value("active_workflow"),
   status_label=value("status_label"),
