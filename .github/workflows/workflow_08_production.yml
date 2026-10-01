@@ -225,6 +225,17 @@ jobs:
               --ontology user_input/workflow07_topic_ontology.csv \
               --sheet-id "$LEM_GOOGLE_SHEET_ID" \
               --credential "$RUNNER_TEMP/lem-google-service-account.json"
+            BATCH_META="$(LEM_CRED="$RUNNER_TEMP/lem-google-service-account.json" LEM_SHEET="$LEM_GOOGLE_SHEET_ID" Rscript -e 'suppressPackageStartupMessages(library(googlesheets4));gs4_auth(path=Sys.getenv("LEM_CRED"),cache=FALSE);x<-read_sheet(Sys.getenv("LEM_SHEET"),sheet="queue_w08_active",col_types="c");stopifnot(nrow(x)>0);cat(paste(x$batch_id[[1]],x$queue_sha256[[1]],sep="|"))')"
+            BATCH_ID="${BATCH_META%%|*}"
+            QUEUE_SHA="${BATCH_META#*|}"
+            Rscript scripts/updater/workflow_shiny_batch_status.R \
+              --stage "08" \
+              --batch-id "$BATCH_ID" \
+              --queue-sha256 "$QUEUE_SHA" \
+              --status published \
+              --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+              --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+              --source-run-id "$GITHUB_RUN_ID"
           fi
 
       - name: Stop if new human review is required
