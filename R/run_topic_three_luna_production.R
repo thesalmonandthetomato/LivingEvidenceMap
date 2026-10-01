@@ -12,8 +12,8 @@ api_root <- "https://api.openai.com/v1"
 model <- "gpt-5.6-luna"
 out_dir <- Sys.getenv("TOPIC_PROD_OUTPUT_DIR", "outputs/workflow06_topic_v3_6_pilot")
 queue_path <- file.path(out_dir, "input_queue.csv")
-ontology_path <- Sys.getenv("TOPIC_ONTOLOGY_PATH", "data/reference/topic_ontology_v3_6.csv")
-system_prompt_path <- Sys.getenv("TOPIC_SYSTEM_PROMPT_PATH", "data/reference/topic_system_prompt_v3_6.txt")
+ontology_path <- Sys.getenv("TOPIC_ONTOLOGY_PATH", "user_input/workflow07_topic_ontology.csv")
+system_prompt_path <- Sys.getenv("TOPIC_SYSTEM_PROMPT_PATH", "user_input/workflow07_topic_system_prompt.txt")
 master_path <- Sys.getenv("TOPIC_MASTER_PATH", "data/master/current/living_evidence_map_master.csv")
 chunk_size <- as.integer(Sys.getenv("TOPIC_CHUNK_SIZE", "50"))
 poll_seconds <- as.integer(Sys.getenv("BATCH_POLL_SECONDS", "20"))
