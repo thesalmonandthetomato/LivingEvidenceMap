@@ -1,0 +1,198 @@
+name: Dry-run export Shiny decisions to W01
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/shiny-adjudication-dry-run-export-w01.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+      DECISIONS_TAB: 'decisions'
+      BATCH_ID: 'w01-legacy-recovery-730-36049567027'
+      EXPECTED_QUEUE_SHA256: 'de0d376b2b2a0aea9cc13942f4f72ac9d6e0263cbd488ca508e005271c8dc582'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.6.0'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("googlesheets4","jsonlite","digest"))
+
+      - name: Download frozen W01 queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w01-return-test"
+          gh run download 36049567027 \
+            --repo thesalmonandthetomato/LivingEvidenceMap \
+            --name workflow01-recovered-730-cases-36049567027 \
+            --dir "$RUNNER_TEMP/w01-return-test"
+          test -s "$RUNNER_TEMP/w01-return-test/cases.jsonl"
+          test -s "$RUNNER_TEMP/w01-return-test/cases.jsonl.manifest.json"
+
+      - name: Prepare Google credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Export and validate decisions
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(googlesheets4)
+            library(jsonlite)
+            library(digest)
+          })
+
+          root <- file.path(Sys.getenv("RUNNER_TEMP"), "w01-return-test")
+          queue_path <- file.path(root, "cases.jsonl")
+          queue_manifest_path <- file.path(root, "cases.jsonl.manifest.json")
+          output_path <- file.path(root, "w01_shiny_decisions.jsonl")
+          output_manifest_path <- file.path(root, "w01_shiny_decisions.manifest.json")
+
+          expected_sha <- Sys.getenv("EXPECTED_QUEUE_SHA256")
+          queue_sha <- digest(file = queue_path, algo = "sha256", serialize = FALSE)
+          stopifnot(identical(queue_sha, expected_sha))
+
+          queue_lines <- readLines(queue_path, warn = FALSE, encoding = "UTF-8")
+          queue_lines <- queue_lines[nzchar(trimws(queue_lines))]
+          stopifnot(length(queue_lines) == 730L)
+
+          queue_cases <- lapply(queue_lines, fromJSON, simplifyVector = FALSE)
+          queue_ids <- vapply(queue_cases, function(x) as.character(x$review_case_id), character(1))
+          stopifnot(length(unique(queue_ids)) == length(queue_ids))
+
+          queue_manifest <- fromJSON(queue_manifest_path, simplifyVector = FALSE)
+          stopifnot(identical(as.character(queue_manifest$output_sha256), expected_sha))
+          stopifnot(identical(as.integer(queue_manifest$cases), 730L))
+
+          gs4_auth(path = Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"), cache = FALSE)
+          sheet_id <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
+          tab <- Sys.getenv("DECISIONS_TAB")
+          d <- read_sheet(sheet_id, sheet = tab, col_types = "c")
+
+          required_sheet <- c(
+            "decision_id","review_case_id","decision","rationale","reviewer",
+            "resolved_at_utc","queue_sha256","supersedes_decision_id"
+          )
+          missing <- setdiff(required_sheet, names(d))
+          if (length(missing)) stop("Decisions sheet missing field(s): ", paste(missing, collapse = ", "))
+
+          d <- d[d$queue_sha256 == expected_sha, required_sheet, drop = FALSE]
+          if (!nrow(d)) {
+            stop("No decisions found for the frozen 730-case queue; make at least one Shiny decision before rerunning this dry-run export")
+          }
+
+          if (any(!d$review_case_id %in% queue_ids)) {
+            bad <- unique(d$review_case_id[!d$review_case_id %in% queue_ids])
+            stop("Decision(s) reference case IDs outside frozen queue: ", paste(bad, collapse = ", "))
+          }
+
+          parsed_time <- as.POSIXct(d$resolved_at_utc, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+          if (any(is.na(parsed_time))) stop("One or more decisions have invalid resolved_at_utc")
+
+          ord <- order(parsed_time, seq_len(nrow(d)), decreasing = TRUE)
+          d <- d[ord, , drop = FALSE]
+          active <- d[!duplicated(d$review_case_id), , drop = FALSE]
+
+          allowed <- c("duplicate","not_duplicate","uncertain")
+          if (any(!active$decision %in% allowed)) {
+            stop("Invalid W01 decision value(s): ", paste(unique(active$decision[!active$decision %in% allowed]), collapse = ", "))
+          }
+
+          required_nonempty <- c("review_case_id","decision","rationale","reviewer","resolved_at_utc","queue_sha256")
+          for (nm in required_nonempty) {
+            if (any(!nzchar(trimws(active[[nm]])))) stop("Active decision missing required field: ", nm)
+          }
+
+          if (any(active$queue_sha256 != expected_sha)) stop("Queue SHA mismatch after filtering")
+          if (anyDuplicated(active$review_case_id)) stop("Duplicate active review_case_id after resolution")
+
+          active <- active[match(queue_ids[queue_ids %in% active$review_case_id], active$review_case_id), , drop = FALSE]
+
+          con <- file(output_path, "wt", encoding = "UTF-8")
+          on.exit(close(con), add = TRUE)
+          for (i in seq_len(nrow(active))) {
+            out <- list(
+              review_case_id = active$review_case_id[[i]],
+              decision = active$decision[[i]],
+              rationale = active$rationale[[i]],
+              reviewer = active$reviewer[[i]],
+              resolved_at_utc = active$resolved_at_utc[[i]],
+              queue_sha256 = active$queue_sha256[[i]]
+            )
+            writeLines(toJSON(out, auto_unbox = TRUE, null = "null", na = "null"), con, useBytes = TRUE)
+          }
+          close(con)
+          on.exit(NULL)
+
+          exported_lines <- readLines(output_path, warn = FALSE, encoding = "UTF-8")
+          stopifnot(length(exported_lines) == nrow(active))
+          exported <- lapply(exported_lines, fromJSON, simplifyVector = FALSE)
+
+          for (x in exported) {
+            stopifnot(
+              identical(names(x), c("review_case_id","decision","rationale","reviewer","resolved_at_utc","queue_sha256")),
+              x$decision %in% allowed,
+              x$review_case_id %in% queue_ids,
+              identical(as.character(x$queue_sha256), expected_sha)
+            )
+          }
+
+          export_sha <- digest(file = output_path, algo = "sha256", serialize = FALSE)
+          manifest <- list(
+            schema = "living-evidence-map-workflow01-shiny-dry-run-export-manifest-v1",
+            dry_run = TRUE,
+            write_back_performed = FALSE,
+            workflow_resume_triggered = FALSE,
+            batch_id = Sys.getenv("BATCH_ID"),
+            source_workflow_run = 36049567027,
+            queue_cases = length(queue_ids),
+            queue_sha256 = expected_sha,
+            decision_log_rows_for_batch = nrow(d),
+            active_decisions_exported = nrow(active),
+            unresolved_cases = length(queue_ids) - nrow(active),
+            export_file = basename(output_path),
+            export_sha256 = export_sha,
+            generated_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
+          )
+          writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE), output_manifest_path, useBytes = TRUE)
+
+          cat("PASS: W01 Shiny return-path dry run validated\n")
+          cat("Active decisions exported:", nrow(active), "\n")
+          cat("Unresolved cases:", length(queue_ids) - nrow(active), "\n")
+          cat("Export SHA-256:", export_sha, "\n")
+
+      - name: Upload dry-run artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-shiny-return-path-dry-run-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/w01-return-test/w01_shiny_decisions.jsonl
+            ${{ runner.temp }}/w01-return-test/w01_shiny_decisions.manifest.json
+          if-no-files-found: error
+          retention-days: 30
