@@ -30,25 +30,41 @@ jobs:
           OLD_P=data/reference/topic_system_prompt_v3_6.txt
           NEW_P=user_input/workflow07_topic_system_prompt.txt
 
+          echo "CHECK ontology byte identity"
           cmp "$OLD_O" "$NEW_O"
+          echo "PASS ontology byte identity"
+
+          echo "CHECK prompt byte identity"
           cmp "$OLD_P" "$NEW_P"
+          echo "PASS prompt byte identity"
 
-          test "$(sha256sum "$NEW_O" | cut -d' ' -f1)" = "5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43"
-          test "$(sha256sum "$NEW_P" | cut -d' ' -f1)" = "f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0"
+          O_SHA="$(sha256sum "$NEW_O" | cut -d' ' -f1)"
+          P_SHA="$(sha256sum "$NEW_P" | cut -d' ' -f1)"
+          echo "ontology sha=$O_SHA"
+          echo "prompt sha=$P_SHA"
 
+          test "$O_SHA" = "5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43"
+          echo "PASS ontology locked SHA"
+          test "$P_SHA" = "f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0"
+          echo "PASS prompt locked SHA"
+
+          echo "CHECK production paths"
           grep -q 'TOPIC_ONTOLOGY_PATH: user_input/workflow07_topic_ontology.csv' .github/workflows/workflow_07_production.yml
           grep -q 'TOPIC_SYSTEM_PROMPT_PATH: user_input/workflow07_topic_system_prompt.txt' .github/workflows/workflow_07_production.yml
           grep -q 'TOPIC_ONTOLOGY_PATH: user_input/workflow07_topic_ontology.csv' .github/workflows/workflow_07_topic_coding.yml
           grep -q 'TOPIC_SYSTEM_PROMPT_PATH: user_input/workflow07_topic_system_prompt.txt' .github/workflows/workflow_07_topic_coding.yml
           grep -q 'user_input/workflow07_topic_ontology.csv' R/run_topic_three_luna_production.R
           grep -q 'user_input/workflow07_topic_system_prompt.txt' R/run_topic_three_luna_production.R
+          echo "PASS production paths"
 
+          echo "CHECK old paths absent from current execution files"
           ! grep -q 'data/reference/topic_ontology_v3_6.csv' .github/workflows/workflow_07_production.yml
           ! grep -q 'data/reference/topic_system_prompt_v3_6.txt' .github/workflows/workflow_07_production.yml
           ! grep -q 'data/reference/topic_ontology_v3_6.csv' .github/workflows/workflow_07_topic_coding.yml
           ! grep -q 'data/reference/topic_system_prompt_v3_6.txt' .github/workflows/workflow_07_topic_coding.yml
           ! grep -q 'data/reference/topic_ontology_v3_6.csv' R/run_topic_three_luna_production.R
           ! grep -q 'data/reference/topic_system_prompt_v3_6.txt' R/run_topic_three_luna_production.R
+          echo "PASS old paths absent"
 
           echo 'PASS: W07 ontology and prompt migration are byte-identical with locked SHA values preserved'
 
