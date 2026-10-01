@@ -1,0 +1,131 @@
+name: Workflow 04 - Finalise human validation batch
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_id:
+        description: 'Active W04 validation batch ID'
+        required: true
+        type: string
+      queue_sha256:
+        description: 'Exact active W04 queue SHA-256'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  finalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+      BATCH_ID: ${{ inputs.batch_id }}
+      QUEUE_SHA256: ${{ inputs.queue_sha256 }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.6.0'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('googlesheets4','jsonlite','digest'))
+
+      - name: Prepare Google credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Validate and export completed W04 validation decisions
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(googlesheets4)
+            library(jsonlite)
+            library(digest)
+          })
+          ss <- Sys.getenv('LEM_GOOGLE_SHEET_ID')
+          batch_id <- Sys.getenv('BATCH_ID')
+          queue_sha <- tolower(Sys.getenv('QUEUE_SHA256'))
+          gs4_auth(path=Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cache=FALSE)
+
+          q <- read_sheet(ss,sheet='queue_w04_validation_active',col_types='c')
+          req <- c('batch_id','queue_sha256','case_index','review_case_id','case_json')
+          stopifnot(all(req %in% names(q)),nrow(q)>0)
+          q <- q[order(as.integer(q$case_index)),,drop=FALSE]
+          if(length(unique(q$batch_id))!=1L || unique(q$batch_id)[[1L]]!=batch_id) stop('W04 batch ID mismatch')
+          if(length(unique(q$queue_sha256))!=1L || tolower(unique(q$queue_sha256)[[1L]])!=queue_sha) stop('W04 queue SHA metadata mismatch')
+          reconstructed <- paste0(paste(q$case_json,collapse='\n'),'\n')
+          if(tolower(digest(reconstructed,algo='sha256',serialize=FALSE))!=queue_sha) stop('W04 queue reconstruction SHA mismatch')
+
+          d <- read_sheet(ss,sheet='decisions_w04_validation',col_types='c')
+          needed <- c('decision_id','review_case_id','record_id','decision','rationale','reviewer','resolved_at_utc','queue_sha256')
+          stopifnot(all(needed %in% names(d)))
+          d <- d[tolower(as.character(d$queue_sha256))==queue_sha,,drop=FALSE]
+          if(!nrow(d)) stop('No W04 decisions for active queue')
+          d <- d[order(as.character(d$resolved_at_utc),seq_len(nrow(d)),decreasing=TRUE),,drop=FALSE]
+          active <- d[!duplicated(as.character(d$review_case_id)),,drop=FALSE]
+          qids <- as.character(q$review_case_id)
+          active <- active[match(qids,as.character(active$review_case_id)),,drop=FALSE]
+          if(any(is.na(active$review_case_id))) stop('W04 validation batch is incomplete')
+          if(any(!as.character(active$decision) %in% c('retain','exclude','uncertain'))) stop('Invalid W04 validation decision')
+
+          dir.create('outputs/w04_validation_completed',recursive=TRUE,showWarnings=FALSE)
+          out <- 'outputs/w04_validation_completed/human_validation_decisions.jsonl'
+          con <- file(out,'wt',encoding='UTF-8')
+          for(i in seq_len(nrow(active))){
+            z <- as.list(active[i,needed,drop=FALSE])
+            writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null'),con,useBytes=TRUE)
+          }
+          close(con)
+          out_sha <- digest(file=out,algo='sha256',serialize=FALSE)
+          manifest <- list(
+            schema='living-evidence-map-workflow04-human-validation-complete-v1',
+            status='PASS',
+            batch_id=batch_id,
+            queue_sha256=queue_sha,
+            records=nrow(q),
+            decisions=nrow(active),
+            decision_file_sha256=out_sha,
+            finalised_by_github_run_id=Sys.getenv('GITHUB_RUN_ID'),
+            finalised_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ')
+          )
+          writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE),'outputs/w04_validation_completed/manifest.json')
+          writeLines(out_sha,'outputs/w04_validation_completed/decision_sha256.txt')
+          cat(sprintf('PASS: finalised W04 human validation batch %s (%d records)\n',batch_id,nrow(q)))
+
+      - name: Acknowledge consumed W04 Shiny batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT_SHA="$(cat outputs/w04_validation_completed/decision_sha256.txt)"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "04" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA256" \
+            --status consumed \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --output-sha256 "$OUTPUT_SHA" \
+            --message "Workflow 04 human validation decisions validated and exported."
+
+      - name: Upload completed validation batch
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-human-validation-complete-${{ github.run_id }}
+          path: outputs/w04_validation_completed/
+          retention-days: 90
+          if-no-files-found: error
