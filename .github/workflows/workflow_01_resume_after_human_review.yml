@@ -56,7 +56,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest','httr2','stringdist','stringi','xml2'))
+        run: install.packages(c('data.table','jsonlite','digest','httr2','stringdist','stringi','xml2','googlesheets4'))
 
       - name: Resolve resume inputs
         env:
@@ -294,6 +294,30 @@ jobs:
             git commit -m "Record resumed Workflow 01 delta run $GITHUB_RUN_ID"
             git push origin "HEAD:$WORKFLOW01_BRANCH"
           fi
+
+      - name: Acknowledge consumed W01 Shiny batch
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          CHECKPOINT_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$github_run_id)')"
+          QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("CHECKPOINT_DIR"),"human_review_package","review_manifest.json"));cat(x$queue_sha256)')"
+          OUTPUT_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/canonical/records.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "01" \
+            --batch-id "w01-run-$CHECKPOINT_RUN" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status consumed \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$CHECKPOINT_RUN" \
+            --output-sha256 "$OUTPUT_SHA" \
+            --message "Workflow 01 decisions applied; validated delta archived and registered."
 
       - name: Upload short-lived resume audit
         if: always()
