@@ -2,8 +2,8 @@
 suppressPackageStartupMessages({library(jsonlite);library(readr);library(digest)})
 args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
-canonical_path<-arg("--canonical");w03_path<-arg("--w03");w04_path<-arg("--w04");w05_path<-arg("--w05");w05_matches_path<-arg("--w05-matches");w06_path<-arg("--w06");w07_scores_path<-arg("--w07-scores");w07_qc_path<-arg("--w07-qc");w07_late_path<-arg("--w07-late-exclusions");decisions_path<-arg("--decisions");ontology_path<-arg("--ontology");out_path<-arg("--output");ledger_path<-arg("--ledger");manifest_path<-arg("--manifest")
-req<-c(canonical_path,w03_path,w04_path,w05_path,w05_matches_path,w06_path,w07_scores_path,w07_qc_path,w07_late_path,decisions_path,ontology_path,out_path,ledger_path,manifest_path)
+canonical_path<-arg("--canonical");w03_path<-arg("--w03");w04_path<-arg("--w04");w05_path<-arg("--w05");w05_matches_path<-arg("--w05-matches");w06_path<-arg("--w06");w07_scores_path<-arg("--w07-scores");w07_qc_path<-arg("--w07-qc");w07_late_path<-arg("--w07-late-exclusions");decisions_path<-arg("--decisions");ontology_path<-arg("--ontology");species_config_path<-arg("--species-config","user_input/workflow05_coding_config.json");out_path<-arg("--output");ledger_path<-arg("--ledger");manifest_path<-arg("--manifest")
+req<-c(canonical_path,w03_path,w04_path,w05_path,w05_matches_path,w06_path,w07_scores_path,w07_qc_path,w07_late_path,decisions_path,ontology_path,species_config_path,out_path,ledger_path,manifest_path)
 if(any(is.na(req)|!nzchar(req)))stop("Missing required Workflow 08 finalisation argument",call.=FALSE)
 `%||%`<-function(x,y)if(is.null(x)||length(x)==0L)y else x
 clean<-function(x){z<-as.character(x%||%"");if(length(z)==0L||is.na(z[[1L]]))"" else z[[1L]]}
@@ -34,8 +34,10 @@ if(length(setdiff(vapply(decisions,function(z)clean(z$record_id),character(1)),w
 w05_match_split<-split(seq_len(nrow(w05_matches)),as.character(w05_matches$record_id))
 ret<-scores[scores$retained_for_analysis%in%TRUE,,drop=FALSE];ret_split<-split(seq_len(nrow(ret)),as.character(ret$record_id));onto_i<-setNames(seq_len(nrow(onto)),as.character(onto$path_id))
 score_key<-paste(as.character(ret$record_id),as.character(ret$path_id),sep="\r");if(anyDuplicated(score_key))stop("Duplicate retained W07 record/path score",call.=FALSE);score_i<-setNames(seq_len(nrow(ret)),score_key)
-code_for_label<-c("Atlantic salmon"="SAL_SALAR","Rainbow trout"="ONC_MYKISS","Chinook salmon"="ONC_TSHAWYTSCHA","Coho salmon"="ONC_KISUTCH","Sockeye salmon"="ONC_NERKA","Chum salmon"="ONC_KETA","Pink salmon"="ONC_GORBUSCHA","Masu salmon"="ONC_MASOU","Unspecified species"="UNSPEC_SALMON")
-country_names<-c(CAN="Canada",BIH="Bosnia and Herzegovina",DNK="Denmark",FIN="Finland",ISL="Iceland",NOR="Norway",SWE="Sweden",FRA="France",CHL="Chile",IRL="Ireland",FRO="Faroe Islands")
+species_config<-fromJSON(species_config_path,simplifyVector=FALSE)
+code_map<-species_config$code_map
+if(is.null(code_map)||!length(code_map)||is.null(names(code_map)))stop("Workflow 05 species config lacks named code_map",call.=FALSE)
+code_for_label<-unlist(code_map,use.names=TRUE)
 row_payload<-function(df,i,drop=character()){if(is.null(i)||!length(i))return(NULL);z<-as.list(df[i[[1L]],setdiff(names(df),drop),drop=FALSE]);lapply(z,function(v){if(length(v)==0L||is.na(v[[1L]]))NULL else v[[1L]]})}
 rows_payload<-function(df,idx,drop=character()){if(is.null(idx)||!length(idx))return(list());lapply(idx,function(i)row_payload(df,i,drop))}
 score_payload<-function(rid,pid){i<-score_i[[paste(rid,pid,sep="\r")]];if(is.null(i))return(NULL);row_payload(ret,i,drop=c("record_id","path_id","hierarchy_path"))}
