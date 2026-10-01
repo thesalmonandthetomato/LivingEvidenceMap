@@ -37,8 +37,8 @@ permissions:
 
 env:
   TOPIC_PROD_OUTPUT_DIR: outputs/workflow07_topic_v3_6_fresh
-  TOPIC_ONTOLOGY_PATH: data/reference/topic_ontology_v3_6.csv
-  TOPIC_SYSTEM_PROMPT_PATH: data/reference/topic_system_prompt_v3_6.txt
+  TOPIC_ONTOLOGY_PATH: user_input/workflow07_topic_ontology.csv
+  TOPIC_SYSTEM_PROMPT_PATH: user_input/workflow07_topic_system_prompt.txt
   TOPIC_CHUNK_SIZE: '500'
   BATCH_POLL_SECONDS: '20'
   BATCH_MAX_WAIT_SECONDS: '7200'
@@ -550,7 +550,7 @@ jobs:
           Rscript scripts/reporting/workflow07_apply_retention_and_review_rules.R \
             --scores restored/outputs/workflow07_topic_final/workflow07_topic_pathway_scores.csv \
             --records restored/outputs/workflow07_topic_final/workflow07_topic_record_summary.csv \
-            --ontology data/reference/topic_ontology_v3_6.csv \
+            --ontology user_input/workflow07_topic_ontology.csv \
             --zero-rescreen outputs/workflow07_zero_topic_rescreen_merged/workflow07_zero_topic_targeted_rescreen.jsonl \
             --output-dir outputs/workflow07_topic_final_qc
           test -s outputs/workflow07_topic_final_qc/WORKFLOW07_QC_PASS.ok
