@@ -49,4 +49,4 @@ knitr::kable(
 )
 ```
 
-CAB Abstracts and ProQuest Dissertations & Theses Global are currently manual-ingest Workflow 00 sources and therefore do not have an automated API count in this report.
+CAB Abstracts and ProQuest Dissertations & Theses Global are manual-ingest Workflow 00 sources. Their rows report the validated result totals recorded in the current W00 source registries rather than live API counts.
