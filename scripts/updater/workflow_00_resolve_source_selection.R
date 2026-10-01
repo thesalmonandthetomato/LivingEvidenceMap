@@ -43,6 +43,11 @@ parse_source_list <- function(x) {
   unique(z[nzchar(z)])
 }
 
+legacy_env_name <- function(src) paste0("W00_SELECT_",toupper(gsub("[^A-Za-z0-9]","_",src)))
+selected_legacy_sources <- function() {
+  supported[vapply(supported,function(src) identical(tolower(Sys.getenv(legacy_env_name(src))),"true"),logical(1))]
+}
+
 if (run_type=="full") {
   selected_groups <- selected_groups_from_env()
   additional_sources <- parse_source_list(Sys.getenv("W00_ADDITIONAL_SOURCES"))
@@ -58,8 +63,14 @@ if (run_type=="full") {
   selected <- selected[!(selected %in% excluded_sources)]
   selected <- supported[supported %in% selected]
 
+  legacy_selected <- selected_legacy_sources()
+  if (!length(selected) && length(legacy_selected)) {
+    selected <- legacy_selected
+    origin <- "legacy_full_run_inputs"
+  } else {
+    origin <- "full_run_group_inputs"
+  }
   if (!length(selected)) stop("Select at least one database group or additional source for a full Workflow 00 run",call.=FALSE)
-  origin <- "full_run_group_inputs"
   baseline_run_id <- Sys.getenv("GITHUB_RUN_ID")
 } else {
   if (!file.exists(saved_path)) {
