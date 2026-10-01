@@ -10,7 +10,8 @@ manifest <- arg("--manifest")
 source_run_id <- arg("--source-run-id")
 repository <- arg("--repository")
 output_dir <- arg("--output-dir")
-supersedes_doi <- arg("--supersedes-doi","10.5281/zenodo.22998606")
+supersedes_record_id <- arg("--supersedes-record-id","")
+supersedes_doi <- arg("--supersedes-doi","")
 if(any(vapply(list(canonical,exclusions,ledger,manifest,source_run_id,repository,output_dir),is.null,logical(1)))) stop("Required W08 Zenodo arguments missing",call.=FALSE)
 for(p in c(canonical,exclusions,ledger,manifest)) if(!file.exists(p)) stop("Missing W08 archive file: ",p,call.=FALSE)
 
@@ -56,20 +57,20 @@ perform <- function(req,expected,label,timeout=600){
 }
 
 metadata <- list(metadata=list(
-  title=sprintf("Living Evidence Map Workflow 08 corrected final canonical dataset | run %s",source_run_id),
+  title=sprintf("Living Evidence Map Workflow 08 final canonical dataset | run %s",source_run_id),
   upload_type="dataset",
   publication_date=format(Sys.Date(),"%Y-%m-%d"),
   description=paste0(
-    "<p>Corrected definitive post-adjudication output for the Living Evidence Map after Workflows 03-08.</p>",
+    "<p>Definitive post-adjudication output for the Living Evidence Map after Workflows 03-08.</p>",
     "<p>The canonical JSONL contains only the ",m$canonical_records," final included records. ",
     "The ",m$excluded_records," excluded records are supplied separately as bibliographic metadata plus final exclusion stage and reason.</p>",
-    "<p>This archive supersedes Workflow 08 Zenodo record 22998606 (",supersedes_doi,"), whose canonical JSONL incorrectly retained excluded records.</p>",
+    if(nzchar(supersedes_record_id)) paste0("<p>This archive supersedes Workflow 08 Zenodo record ",supersedes_record_id,if(nzchar(supersedes_doi))paste0(" (",supersedes_doi,")")else "",".</p>") else "",
     "<p>The deposit also contains the complete machine-readable Workflow 08 adjudication ledger and checksum/provenance manifest.</p>"
   ),
   creators=list(list(name="Haddaway, Neal")),
   access_right="restricted",
   access_conditions="The canonical dataset contains bibliographic metadata and provider-derived content whose redistribution may be restricted by source terms.",
-  keywords=list("Living Evidence Map","Workflow 08","human adjudication","canonical JSONL","exclusions","salmon aquaculture",paste0("LivingEvidenceMap-workflow08-corrected-run-",source_run_id))
+  keywords=list("Living Evidence Map","Workflow 08","human adjudication","canonical JSONL","exclusions",paste0("LivingEvidenceMap-workflow08-run-",source_run_id))
 ))
 
 created <- perform(
@@ -112,8 +113,8 @@ receipt <- list(
   status="published",
   workflow="08",
   state="corrected_final_adjudicated_canonical",
-  supersedes_zenodo_record_id="22998606",
-  supersedes_doi=supersedes_doi,
+  supersedes_zenodo_record_id=if(nzchar(supersedes_record_id))supersedes_record_id else NULL,
+  supersedes_doi=if(nzchar(supersedes_doi))supersedes_doi else NULL,
   source_github_run_id=as.character(source_run_id),
   source_github_run_url=sprintf("https://github.com/%s/actions/runs/%s",repository,source_run_id),
   source_canonical_population=as.integer(m$source_canonical_population),
@@ -138,4 +139,4 @@ receipt <- list(
   published_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(receipt,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),file.path(output_dir,"zenodo_receipt.json"),useBytes=TRUE)
-cat(sprintf("PASS: published corrected Workflow 08 archive as Zenodo record %s; DOI=%s\n",record_id,receipt$doi))
+cat(sprintf("PASS: published Workflow 08 archive as Zenodo record %s; DOI=%s\n",record_id,receipt$doi))
