@@ -57,6 +57,10 @@ output_dir <- arg("--output-dir")
 score_n <- as.integer(arg("--score-n", "2000"))
 sample_key <- arg("--sample-key", "workflow02-v2-candidate-benchmark-v1")
 workflow01_run_id <- arg("--workflow01-run-id", "unknown")
+repeated_abstract_min_group <- as.integer(arg("--repeated-abstract-min-group", "50"))
+repeated_abstract_min_title_diversity <- as.numeric(arg("--repeated-abstract-min-title-diversity", "0.80"))
+if (is.na(repeated_abstract_min_group) || repeated_abstract_min_group < 2L) stop("--repeated-abstract-min-group must be >=2",call.=FALSE)
+if (!is.finite(repeated_abstract_min_title_diversity) || repeated_abstract_min_title_diversity < 0 || repeated_abstract_min_title_diversity > 1) stop("--repeated-abstract-min-title-diversity must be 0..1",call.=FALSE)
 validate_index_only <- identical(tolower(arg("--validate-index-only", "false")), "true")
 
 if (is.null(output_dir) || !length(paths)) stop("Required: --output-dir and at least one source input",call.=FALSE)
@@ -307,6 +311,79 @@ meta[, corpus_key := NULL]
 stopifnot(identical(as.character(meta$source[seq_along(old_keys)]),as.character(old_meta$source)))
 stopifnot(identical(as.character(meta$source_record_id[seq_along(old_keys)]),as.character(old_meta$source_record_id)))
 
+# Quarantine pathological repeated abstracts in newly appended manifestations.
+# A source-level abstract copied across many mostly distinct titles is metadata
+# contamination, not evidence that every pair is the same publication. Preserve
+# the raw/source record upstream, but remove the contaminated abstract from
+# deduplication features and emit immutable strip actions for canonical materialisation.
+prior_n <- length(old_keys)
+meta[, is_new_manifestation := idx > prior_n]
+abstract_groups <- meta[
+  !is.na(abstract_hash) & nzchar(abstract_hash),
+  .(
+    records=.N,
+    new_records=sum(is_new_manifestation),
+    unique_titles=uniqueN(title_norm[!is.na(title_norm) & nzchar(title_norm)]),
+    unique_dois=uniqueN(doi_norm[!is.na(doi_norm) & nzchar(doi_norm)]),
+    unique_years=uniqueN(year[!is.na(year)]),
+    unique_authors=uniqueN(author_norm[!is.na(author_norm) & nzchar(author_norm)])
+  ),
+  by=.(source,abstract_hash)
+]
+abstract_groups[, title_diversity := fifelse(records>0L,unique_titles/records,0)]
+pathological_groups <- abstract_groups[
+  records >= repeated_abstract_min_group &
+  new_records > 0L &
+  title_diversity >= repeated_abstract_min_title_diversity
+]
+fwrite(pathological_groups,file.path(output_dir,"pathological_repeated_abstract_groups.csv"))
+
+strip_path <- file.path(output_dir,"pathological_abstract_strip_actions.jsonl")
+strip_con <- file(strip_path,"wt",encoding="UTF-8")
+if (nrow(pathological_groups)) {
+  bad <- meta[pathological_groups,on=.(source,abstract_hash),nomatch=0L][is_new_manifestation==TRUE]
+  if (anyDuplicated(paste(bad$source,bad$source_record_id,sep="::"))) {
+    stop("Pathological repeated-abstract detector produced duplicate source identities",call.=FALSE)
+  }
+  stat_lookup <- pathological_groups
+  setkey(stat_lookup,source,abstract_hash)
+  for (i in seq_len(nrow(bad))) {
+    st <- stat_lookup[.(bad$source[[i]],bad$abstract_hash[[i]])]
+    action <- list(
+      source=as.character(bad$source[[i]]),
+      source_record_id=as.character(bad$source_record_id[[i]]),
+      action="strip_abstract",
+      reason="pathological_repeated_abstract_across_distinct_titles",
+      original_abstract=NULL,
+      detection=list(
+        abstract_hash=as.character(bad$abstract_hash[[i]]),
+        source_group_records=as.integer(st$records[[1L]]),
+        source_group_new_records=as.integer(st$new_records[[1L]]),
+        unique_titles=as.integer(st$unique_titles[[1L]]),
+        title_diversity=as.numeric(st$title_diversity[[1L]]),
+        unique_dois=as.integer(st$unique_dois[[1L]]),
+        unique_years=as.integer(st$unique_years[[1L]]),
+        unique_authors=as.integer(st$unique_authors[[1L]]),
+        min_group_threshold=repeated_abstract_min_group,
+        min_title_diversity_threshold=repeated_abstract_min_title_diversity
+      ),
+      decision_source="automatic_pathological_repeated_abstract_guard"
+    )
+    writeLines(toJSON(action,auto_unbox=TRUE,null="null",na="null"),strip_con,useBytes=TRUE)
+  }
+  bad_keys <- paste(bad$source,bad$source_record_id,sep="::")
+  meta[paste(source,source_record_id,sep="::") %in% bad_keys, `:=`(
+    abstract_norm=NA_character_,
+    abstract_hash=NA_character_
+  )]
+  progress("pathological repeated abstracts quarantined",length(bad_keys),length(bad_keys),
+           sprintf("groups=%d",nrow(pathological_groups)))
+} else {
+  progress("pathological repeated abstract audit complete",0L,0L,"no groups quarantined")
+}
+close(strip_con)
+meta[, is_new_manifestation := NULL]
+
 fwrite(meta[,.(idx,source,source_record_id,title,title_norm,doi_norm,doi_family,abstract_hash,author_norm,year,journal_norm,volume_norm,issue_norm,pages_norm)],
        file.path(output_dir,"normalised_metadata.csv"))
 progress("normalisation complete",nrow(meta),nrow(meta),
@@ -324,7 +401,6 @@ if (validate_index_only) {
 # historical prefix. Never materialise old-old candidate pairs because their
 # decisions are restored from the previous Workflow 01 state and must not be
 # recomputed. This is a memory optimisation only; candidate rules are unchanged.
-prior_n <- length(old_keys)
 pairs <- new.env(hash=TRUE,parent=emptyenv())
 add_pairs_from_groups <- function(dt,key_col,block,max_group=500L) {
   x <- dt[!is.na(get(key_col)) & nzchar(get(key_col)),.(idx,key=get(key_col))]
