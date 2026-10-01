@@ -263,15 +263,32 @@ jobs:
             case "$source" in lens|scopus|openalex|agricola|wos) continue;; esac
             prepare_direct_source "$source"
           done
-      - name: Restore catalogue manual sources and validate source inputs
+      - name: Build runtime source catalogue and validate source inputs
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p outputs
+          W00_SOURCES="$W00_SOURCES" Rscript -e '
+            library(jsonlite)
+            p <- fromJSON("config/workflow01_source_catalogue.json", simplifyVector=FALSE)
+            src <- trimws(strsplit(Sys.getenv("W00_SOURCES"), ",", fixed=TRUE)[[1L]])
+            src <- src[nzchar(src)]
+            for (s in src) {
+              if (is.null(p$sources[[s]])) {
+                p$sources[[s]] <- list(
+                  kind="workflow00_state",
+                  source=s,
+                  prepared_path=file.path("current_sources",s,"records.jsonl")
+                )
+              }
+            }
+            writeLines(toJSON(p,auto_unbox=TRUE,pretty=TRUE,null="null"),
+                       "outputs/workflow01_runtime_source_catalogue.json")
+          '
           Rscript scripts/updater/workflow_01_prepare_source_catalogue.R \
-            --catalogue config/workflow01_source_catalogue.json \
+            --catalogue outputs/workflow01_runtime_source_catalogue.json \
             --output-manifest outputs/workflow01_source_inputs.json
 
       - name: Build provenance-safe prior-plus-new manifestation union
