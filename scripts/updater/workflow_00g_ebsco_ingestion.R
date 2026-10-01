@@ -263,6 +263,7 @@ manifest <- list(
   source=source_slug,
   database_code=db_code,
   database_name=db_name,
+  database_scope=list(provider="EBSCOhost EIT",database_code=db_code,database_name=db_name,field_scope=search_fields),
   query=query,
   search_fields=search_fields,
   live_database_name=live_name,
