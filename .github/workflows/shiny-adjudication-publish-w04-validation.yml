@@ -66,8 +66,8 @@ jobs:
       - name: Restore authoritative W04 screening inputs
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          LEAN_POINTER: ${{ inputs.lean_pointer_path }}
-          W03_POINTER: ${{ inputs.workflow03_pointer_path }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path || 'docs/compaction/zenodo/run-36166883249.json' }}
+          W03_POINTER: ${{ inputs.workflow03_pointer_path || 'docs/publication_status/zenodo/run-36172718538.json' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -91,8 +91,8 @@ jobs:
 
       - name: Build deterministic randomised W04 validation queue
         env:
-          SAMPLE_SIZE: ${{ inputs.sample_size }}
-          RANDOM_SEED: ${{ inputs.randomisation_seed }}
+          SAMPLE_SIZE: ${{ inputs.sample_size || '500' }}
+          RANDOM_SEED: ${{ inputs.randomisation_seed || 'w04-validation-2026-10-01-v1' }}
         shell: bash
         run: |
           set -euo pipefail
