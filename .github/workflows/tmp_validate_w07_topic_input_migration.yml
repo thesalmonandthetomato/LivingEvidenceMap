@@ -38,15 +38,28 @@ jobs:
           cmp "$OLD_P" "$NEW_P"
           echo "PASS prompt byte identity"
 
-          O_SHA="$(sha256sum "$NEW_O" | cut -d' ' -f1)"
-          P_SHA="$(sha256sum "$NEW_P" | cut -d' ' -f1)"
-          echo "ontology sha=$O_SHA"
-          echo "prompt sha=$P_SHA"
+          OLD_O_SHA="$(sha256sum "$OLD_O" | cut -d' ' -f1)"
+          NEW_O_SHA="$(sha256sum "$NEW_O" | cut -d' ' -f1)"
+          OLD_P_SHA="$(sha256sum "$OLD_P" | cut -d' ' -f1)"
+          NEW_P_SHA="$(sha256sum "$NEW_P" | cut -d' ' -f1)"
+          echo "old ontology sha=$OLD_O_SHA"
+          echo "new ontology sha=$NEW_O_SHA"
+          echo "old prompt sha=$OLD_P_SHA"
+          echo "new prompt sha=$NEW_P_SHA"
 
-          test "$O_SHA" = "5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43"
-          echo "PASS ontology locked SHA"
-          test "$P_SHA" = "f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0"
-          echo "PASS prompt locked SHA"
+          test "$OLD_O_SHA" = "$NEW_O_SHA"
+          echo "PASS ontology SHA preserved by relocation"
+          test "$OLD_P_SHA" = "$NEW_P_SHA"
+          echo "PASS prompt SHA preserved by relocation"
+          test "$NEW_P_SHA" = "f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0"
+          echo "PASS prompt locked SHA remains valid"
+
+          # Preserve the pre-existing ontology lock unchanged during this
+          # non-instrumental migration. It is stale relative to the current
+          # ontology bytes and must be handled separately from relocation.
+          grep -q "EXPECTED_ONTOLOGY_SHA256: '5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43'" .github/workflows/workflow_07_production.yml
+          grep -q "EXPECTED_ONTOLOGY_SHA256: '5d78959f86d40f200f7dc7c3184a2d5ab61fd89d1450be7fbff39c2578246a43'" .github/workflows/workflow_07_topic_coding.yml
+          echo "PASS pre-existing ontology lock preserved unchanged"
 
           echo "CHECK production paths"
           grep -q 'TOPIC_ONTOLOGY_PATH: user_input/workflow07_topic_ontology.csv' .github/workflows/workflow_07_production.yml
