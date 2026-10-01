@@ -70,27 +70,15 @@ jobs:
             slug="$1"; code="$2"; collection="${3//_/ }"
             root="/tmp/$slug"
             mkdir -p "$root/raw" "$root/sidecar" "$root/reconcile"
-            SLUG="$slug" CODE="$code" Rscript - <<'RS'
-            library(jsonlite)
-            slug <- Sys.getenv('SLUG'); code <- Sys.getenv('CODE')
-            rec <- list(
-              id=paste0(code,'12345'), source=code,
-              title=paste('Fixture',slug,'record'),
-              abstractText='salmon aquaculture fixture abstract',
-              pubYear='2026', doi=paste0('10.1234/',slug,'.fixture'),
-              authorList=list(author=list(list(fullName='Example Author'))),
-              keywordList=list(keyword=list('salmon','aquaculture')),
-              pubTypeList=list(pubType=list('research article')),
-              firstPublicationDate='2026-09-30'
-            )
-            x <- list(hitCount=1,nextCursorMark='AoI=',resultList=list(result=list(rec)))
-            writeLines(toJSON(x,auto_unbox=TRUE,null='null'),file.path('/tmp',slug,'raw','response_000001.json'))
-            RS
-            Rscript scripts/updater/workflow_01x_europe_pmc_sidecar_adapter.R               --input-dir "$root" --output-dir "$root/sidecar"               --source-code "$code" --source-slug "$slug" --source-collection "$collection"
+            SLUG="$slug" CODE="$code" Rscript -e 'library(jsonlite); slug<-Sys.getenv("SLUG"); code<-Sys.getenv("CODE"); rec<-list(id=paste0(code,"12345"),source=code,title=paste("Fixture",slug,"record"),abstractText="salmon aquaculture fixture abstract",pubYear="2026",doi=paste0("10.1234/",slug,".fixture"),authorList=list(author=list(list(fullName="Example Author"))),keywordList=list(keyword=list("salmon","aquaculture")),pubTypeList=list(pubType=list("research article")),firstPublicationDate="2026-09-30"); x<-list(hitCount=1,nextCursorMark="AoI=",resultList=list(result=list(rec))); writeLines(toJSON(x,auto_unbox=TRUE,null="null"),file.path("/tmp",slug,"raw","response_000001.json"))'
+            Rscript scripts/updater/workflow_01x_europe_pmc_sidecar_adapter.R \
+              --input-dir "$root" --output-dir "$root/sidecar" \
+              --source-code "$code" --source-slug "$slug" --source-collection "$collection"
             : > "$root/known.txt"
-            Rscript scripts/updater/workflow_00_native_id_reconcile.R               --source "$slug" --run-type full --current-root "$root"               --registry "$root/known.txt" --output-dir "$root/reconcile"
+            Rscript scripts/updater/workflow_00_native_id_reconcile.R \
+              --source "$slug" --run-type full --current-root "$root" \
+              --registry "$root/known.txt" --output-dir "$root/reconcile"
             test -s "$root/reconcile/updated_native_ids.txt"
-            grep -qx "$code:$code"12345 "$root/reconcile/updated_native_ids.txt" && exit 90 || true
             grep -qx "$code:${code}12345" "$root/reconcile/updated_native_ids.txt"
             test -s "$root/sidecar/${slug}_sidecar_records.jsonl"
           done
