@@ -1,4 +1,4 @@
-name: TEMP W01 deterministic dry run after abstract guard
+name: TEMP W01 repaired production run
 
 on:
   push:
@@ -19,5 +19,5 @@ jobs:
       previous_workflow01_pointer_path: docs/deduplication/zenodo/run-36128255337.json
       model: gpt-5.6-luna
       auto_threshold: '0.95'
-      max_llm_cases: 0
+      max_llm_cases: 500
     secrets: inherit
