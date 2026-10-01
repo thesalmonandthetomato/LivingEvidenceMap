@@ -1,0 +1,48 @@
+name: Temporary - validate W01 vectorised rescore
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'user_input/tmp_validate_w01_rescore.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Parse W01 rescore
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_01_deduplication_identifier_rescore.R')
+          cat('PASS: W01 rescore parses\n')
+      - name: Static invariants
+        shell: Rscript {0}
+        run: |
+          x <- readLines('scripts/updater/workflow_01_deduplication_identifier_rescore.R', warn=FALSE)
+          z <- paste(x, collapse='\n')
+          stopifnot(
+            grepl('long_title_containment_no_identifier_conflict', z, fixed=TRUE),
+            grepl('exact_title_missing_abstract_corroborated', z, fixed=TRUE),
+            grepl('exact_abstract_high_title_agreement', z, fixed=TRUE),
+            grepl('strong_abstract_high_title_agreement', z, fixed=TRUE),
+            grepl('preprint_exact_title_compatible_year', z, fixed=TRUE),
+            grepl('preprint_strong_content_manifestation', z, fixed=TRUE),
+            grepl('strong_content_first_author_title_agreement', z, fixed=TRUE),
+            grepl('exact_short_title_author_journal', z, fixed=TRUE),
+            grepl('exact_title_year_journal_containment_no_doi', z, fixed=TRUE),
+            grepl('near_exact_title_first_author', z, fixed=TRUE),
+            grepl('doi_family_high_title_agreement', z, fixed=TRUE),
+            grepl('identifier_conflict_single_doi_exact_author_year', z, fixed=TRUE),
+            grepl('identifier_conflict_strong_content_exact_author_year', z, fixed=TRUE)
+          )
+          cat('PASS: all historical decision-rule identifiers retained\n')
