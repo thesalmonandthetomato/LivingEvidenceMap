@@ -553,3 +553,19 @@ Source files are discovered from the current W01 seed/source manifest and persis
 ## Remaining downstream work
 
 Workflow 02 may fill missing title, abstract and author keywords using separately validated Europe PMC and Scopus enrichment. Future database additions should be registered through the W01 source catalogue and must preserve the established W01 identity and deduplication semantics.
+
+
+### Additional Europe PMC API sources
+
+Workflow 00 supports four additional independently archived Europe PMC collections:
+
+| W00 source | Europe PMC source code | Native identity |
+|---|---|---|
+| PubMed/MEDLINE | `MED` | `MED:<id>` |
+| EThOS theses | `ETH` | `ETH:<id>` |
+| Chinese Biological Abstracts | `CBA` | `CBA:<id>` |
+| Europe PMC preprints | `PPR` | `PPR:<id>` |
+
+The shared Europe PMC sidecar adapter preserves the source-specific identity and maps title, abstract, structured authors, year, journal/source, DOI, keywords where supplied, publication type, language and publication date into the existing generic W01 sidecar contract. Raw Europe PMC response payloads remain authoritative in Workflow 00 archives.
+
+No cross-database duplicate suppression occurs in Workflow 00. Exact native source-ID reconciliation removes only records already harvested from the same Europe PMC source during living updates. Bibliographic deduplication between these sources and Lens, Scopus, OpenAlex, AGRICOLA, Web of Science, CAB Abstracts or ProQuest remains a Workflow 01 responsibility.
