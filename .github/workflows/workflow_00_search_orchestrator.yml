@@ -503,7 +503,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p expansion_current
-          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
+          for source in "${SOURCES[@]}"; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
@@ -536,21 +537,16 @@ jobs:
           matches_source() {
             local source="$1" name="$2"
             case "$source" in
-              lens) [[ "$name" == workflow00-lens-harvest-* ]] ;;
               scopus) [[ "$name" == workflow00-scopus-harvest-* || "$name" == scopus-full-search-* ]] ;;
               openalex) [[ "$name" == workflow00-openalex-harvest-* || "$name" == openalex-full-search-* ]] ;;
               agricola) [[ "$name" == workflow00-agricola-harvest-* || "$name" == agricola-full-search-* ]] ;;
-              pubmed) [[ "$name" == workflow00-pubmed-harvest-* ]] ;;
-              ethos) [[ "$name" == workflow00-ethos-harvest-* ]] ;;
-              cba) [[ "$name" == workflow00-cba-harvest-* ]] ;;
-              epmc_preprints) [[ "$name" == workflow00-epmc_preprints-harvest-* ]] ;;
               wos) [[ "$name" == workflow00-wos-harvest-* || "$name" == wos-starter-full-search-* ]] ;;
-              ebsco_*) [[ "$name" == workflow00-${source}-harvest-* ]] ;;
-              *) return 1 ;;
+              *) [[ "$name" == workflow00-${source}-harvest-* ]] ;;
             esac
           }
 
-          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
+          for source in "${SOURCES[@]}"; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
@@ -598,7 +594,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/updater/expansion_reconciliation
-          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
+          for source in "${SOURCES[@]}"; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
@@ -745,7 +742,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p downloaded_fortnightly
-          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
+          for source in "${SOURCES[@]}"; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
@@ -771,7 +769,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p downloaded_full_native
-          for source in pubmed ethos cba epmc_preprints ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
+          for source in "${SOURCES[@]}"; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
@@ -781,8 +780,10 @@ jobs:
             gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
               --name "workflow00-${source}-harvest-$GITHUB_RUN_ID" \
               --dir "$dest"
-            test -s "$dest/source_delta/reconciliation_manifest.json"
-            test -s "$dest/source_delta/updated_native_ids.txt"
+            if [ -d "$dest/source_delta" ]; then
+              test -s "$dest/source_delta/reconciliation_manifest.json"
+              test -s "$dest/source_delta/updated_native_ids.txt"
+            fi
           done
 
       - name: Archive search records and source-ID registries
@@ -803,7 +804,8 @@ jobs:
             mkdir -p data/workflow00/source_id_registry
             test -s downloaded_plan/source_selection.json
             cp downloaded_plan/source_selection.json data/workflow00/source_selection.json
-            for source in pubmed ethos cba epmc_preprints ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+            IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
+          for source in "${SOURCES[@]}"; do
               src="downloaded_full_native/$source/source_delta"
               [ -d "$src" ] || continue
               cp "$src/updated_native_ids.txt" "data/workflow00/source_id_registry/${source}_native_ids.txt"
@@ -816,7 +818,8 @@ jobs:
           if [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
             mkdir -p data/workflow00/source_id_registry
             mkdir -p "docs/search_record/fortnightly_update/reconciliation/$GITHUB_RUN_ID"
-            for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+            IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
+          for source in "${SOURCES[@]}"; do
               src="downloaded_fortnightly/$source/source_delta"
               [ -d "$src" ] || continue
               cp "$src/updated_native_ids.txt" "data/workflow00/source_id_registry/${source}_native_ids.txt"
@@ -899,7 +902,8 @@ jobs:
             --dir zenodo_staging/plan
 
           sources=()
-          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
+          for source in "${SOURCES[@]}"; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
