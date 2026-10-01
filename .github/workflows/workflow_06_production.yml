@@ -250,7 +250,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         shell: bash
         run: |
-          Rscript scripts/reporting/workflow05_geography_semantic_production.R             --records prepared/outputs/workflow06_prepare/screen_queue_records.csv             --deterministic prepared/outputs/workflow06_prepare/screen_queue_deterministic.csv             --prompt config/workflow06_geography_semantic_prompt_v2.txt             --output-dir outputs/shard-${{ matrix.shard }}             --shard-id ${{ matrix.shard }}             --shard-count 8
+          Rscript scripts/reporting/workflow05_geography_semantic_production.R             --records prepared/outputs/workflow06_prepare/screen_queue_records.csv             --deterministic prepared/outputs/workflow06_prepare/screen_queue_deterministic.csv             --prompt user_input/workflow06_geography_semantic_prompt.txt             --output-dir outputs/shard-${{ matrix.shard }}             --shard-id ${{ matrix.shard }}             --shard-count 8
 
       - name: Upload W06 shard
         if: always()
@@ -357,7 +357,7 @@ jobs:
       - name: Build complete current W06 state
         shell: bash
         run: |
-          Rscript scripts/updater/workflow_06_merge_incremental.R             --current prepared/outputs/workflow06_current/records_for_geography.csv             --reused prepared/outputs/workflow06_prepare/reused_geography.csv             --fresh fresh/geography_semantic_final.csv             --prepare-manifest prepared/outputs/workflow06_prepare/prepare_manifest.json             --prompt config/workflow06_geography_semantic_prompt_v2.txt             --output-dir outputs/workflow06_final
+          Rscript scripts/updater/workflow_06_merge_incremental.R             --current prepared/outputs/workflow06_current/records_for_geography.csv             --reused prepared/outputs/workflow06_prepare/reused_geography.csv             --fresh fresh/geography_semantic_final.csv             --prepare-manifest prepared/outputs/workflow06_prepare/prepare_manifest.json             --prompt user_input/workflow06_geography_semantic_prompt.txt             --output-dir outputs/workflow06_final
 
       - name: Publish W06 state
         if: ${{ inputs.publish == true }}
