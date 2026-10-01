@@ -21,7 +21,7 @@ jobs:
 
     env:
       LEM_STORAGE_BACKEND: google_sheets
-      LEM_GOOGLE_SHEET_ID: ${{ vars.LEM_GOOGLE_SHEET_ID }}
+      LEM_GOOGLE_SHEET_ID: 1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs
       LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
       LEM_GOOGLE_DECISIONS_TAB: decisions
 
