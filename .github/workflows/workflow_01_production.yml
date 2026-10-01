@@ -49,7 +49,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: workflow01-production
@@ -531,6 +531,18 @@ jobs:
           path: outputs/adjudication/human_review_package/
           retention-days: 90
           if-no-files-found: error
+
+      - name: Publish human-review queue to Shiny sidecar
+        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run shiny-adjudication-publish-w01-queue.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$WORKFLOW01_BRANCH" \
+            -f source_run_id="$GITHUB_RUN_ID"
 
       - name: Build Workflow 01 review notification email
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
