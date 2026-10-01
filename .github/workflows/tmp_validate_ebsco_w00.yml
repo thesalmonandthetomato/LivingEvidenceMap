@@ -39,7 +39,8 @@ jobs:
             "scripts/updater/workflow_00_search_orchestrator.R",
             "scripts/updater/workflow_00_resolve_source_selection.R",
             "scripts/updater/workflow_00g_ebsco_ingestion.R",
-            "scripts/updater/workflow_00_ebsco_native_id_reconcile.R"
+            "scripts/updater/workflow_00_ebsco_native_id_reconcile.R",
+            "scripts/updater/workflow_00_archive_to_zenodo.R"
           )
           for (f in files) {
             parse(file=f)
@@ -52,6 +53,18 @@ jobs:
           yaml::read_yaml(".github/workflows/workflow_00_search_orchestrator.yml")
           yaml::read_yaml(".github/workflows/_workflow_00_orchestrated_source_child.yml")
           cat("PASS: YAML parsed\n")
+
+      - name: Validate manual input ceiling
+        shell: Rscript {0}
+        run: |
+          x <- readLines(".github/workflows/workflow_00_search_orchestrator.yml",warn=FALSE)
+          a <- grep("^  workflow_dispatch:$",x)
+          b <- grep("^permissions:$",x)
+          stopifnot(length(a)==1L,length(b)>=1L)
+          z <- x[(a+1L):(min(b[b>a])-1L)]
+          n <- sum(grepl("^      [a-zA-Z0-9_]+:$",z))
+          stopifnot(n==25L)
+          cat("PASS: workflow_dispatch uses exactly 25 inputs\n")
 
       - name: Validate query generation and source catalogue
         shell: bash
