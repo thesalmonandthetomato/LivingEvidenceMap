@@ -1,0 +1,21 @@
+name: TEMP cancel unintended W01 run
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_cancel_unintended_w01.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel unintended queued W01 run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel 36868959767 --repo "$GITHUB_REPOSITORY"
