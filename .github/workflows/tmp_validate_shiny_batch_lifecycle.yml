@@ -29,7 +29,8 @@ jobs:
           files <- c(
             'scripts/updater/workflow_shiny_batch_status.R',
             'scripts/updater/workflow_08_publish_shiny_queue.R',
-            'scripts/updater/workflow_08_export_shiny_decisions.R'
+            'scripts/updater/workflow_08_export_shiny_decisions.R',
+            'scripts/updater/workflow_08_finalize_canonical_dynamic.R'
           )
           invisible(lapply(files,parse))
           cat('PASS: lifecycle R scripts parse\n')
