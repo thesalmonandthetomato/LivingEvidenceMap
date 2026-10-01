@@ -341,7 +341,7 @@ jobs:
       additional_search_term: ${{ inputs.additional_search_term }}
     secrets: inherit
 
-  epmc-preprints:
+  epmc_preprints:
     needs: validate-and-plan
     if: ${{ inputs.epmc_preprints }}
     uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
@@ -372,7 +372,7 @@ jobs:
     secrets: inherit
 
   reconcile-expansion:
-    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc-preprints, wos]
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc_preprints, wos]
     if: ${{ always() && inputs.run_type == 'expansion' && needs.validate-and-plan.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -394,7 +394,7 @@ jobs:
           PUBMED_RESULT: ${{ needs.pubmed.result }}
           ETHOS_RESULT: ${{ needs.ethos.result }}
           CBA_RESULT: ${{ needs.cba.result }}
-          EPMC_PREPRINTS_RESULT: ${{ needs.epmc-preprints.result }}
+          EPMC_PREPRINTS_RESULT: ${{ needs.epmc_preprints.result }}
           WOS_RESULT: ${{ needs.wos.result }}
         shell: bash
         run: |
@@ -606,7 +606,7 @@ jobs:
           if-no-files-found: error
 
   archive-search-records:
-    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc-preprints, wos, reconcile-expansion]
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc_preprints, wos, reconcile-expansion]
     if: ${{ always() && needs.validate-and-plan.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -628,7 +628,7 @@ jobs:
           PUBMED_RESULT: ${{ needs.pubmed.result }}
           ETHOS_RESULT: ${{ needs.ethos.result }}
           CBA_RESULT: ${{ needs.cba.result }}
-          EPMC_PREPRINTS_RESULT: ${{ needs.epmc-preprints.result }}
+          EPMC_PREPRINTS_RESULT: ${{ needs.epmc_preprints.result }}
           WOS_RESULT: ${{ needs.wos.result }}
           RECONCILE_RESULT: ${{ needs.reconcile-expansion.result }}
           RUN_TYPE: ${{ inputs.run_type }}
