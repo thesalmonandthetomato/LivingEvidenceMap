@@ -19,7 +19,7 @@ run_type <- arg("--run-type","fortnightly")
 if (is.null(source)||is.null(current_root)||is.null(output_dir)) {
   stop("--source, --current-root and --output-dir are required",call.=FALSE)
 }
-if (!(source %in% c("lens","scopus","openalex","agricola","wos"))) stop("Unsupported source",call.=FALSE)
+if (!(source %in% c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos"))) stop("Unsupported source",call.=FALSE)
 if (!nzchar(registry_path) && !nzchar(history_root)) stop("Supply --registry or --history-root",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
@@ -49,12 +49,13 @@ extract_from_json_file <- function(path, source) {
       if (!nzchar(id)) stop(sprintf("Missing OpenAlex Work ID in %s",path),call.=FALSE)
       out[[length(out)+1L]] <- list(id=id,record=r)
     }
-  } else if (source=="agricola") {
+  } else if (source %in% c("agricola","pubmed","ethos","cba","epmc_preprints")) {
+    expected_src <- c(agricola="AGR",pubmed="MED",ethos="ETH",cba="CBA",epmc_preprints="PPR")[[source]]
     rows <- x[["resultList"]][["result"]] %||% list()
     for (r in rows) {
       sid <- scalar(r[["id"]]); src <- scalar(r[["source"]])
-      if (!nzchar(sid)||!nzchar(src)) stop(sprintf("Missing AGRICOLA Europe PMC source/id in %s",path),call.=FALSE)
-      if (src!="AGR") stop(sprintf("Non-AGRICOLA source %s found in %s",src,path),call.=FALSE)
+      if (!nzchar(sid)||!nzchar(src)) stop(sprintf("Missing Europe PMC source/id for %s in %s",source,path),call.=FALSE)
+      if (src!=expected_src) stop(sprintf("Unexpected Europe PMC source %s for %s in %s",src,source,path),call.=FALSE)
       out[[length(out)+1L]] <- list(id=paste(src,sid,sep=":"),record=r)
     }
   } else if (source=="wos") {
@@ -129,6 +130,10 @@ write_filtered_source <- function(records,source,root) {
     scopus=list("search-results"=list(entry=rows)),
     openalex=list(results=rows),
     agricola=list(hitCount=length(rows),resultList=list(result=rows)),
+    pubmed=list(hitCount=length(rows),resultList=list(result=rows)),
+    ethos=list(hitCount=length(rows),resultList=list(result=rows)),
+    cba=list(hitCount=length(rows),resultList=list(result=rows)),
+    epmc_preprints=list(hitCount=length(rows),resultList=list(result=rows)),
     wos=list(metadata=list(total=length(rows)),hits=rows)
   )
   writeLines(toJSON(payload,auto_unbox=TRUE,null="null",na="null",digits=NA),
@@ -194,6 +199,10 @@ manifest <- list(
     scopus="Scopus EID",
     openalex="OpenAlex Work ID",
     agricola="Europe PMC AGR source + ID",
+    pubmed="Europe PMC MED source + ID",
+    ethos="Europe PMC ETH source + ID",
+    cba="Europe PMC CBA source + ID",
+    epmc_preprints="Europe PMC PPR source + ID",
     wos="Web of Science UID"
   ),
   current_raw_records=length(current_ids_raw),
