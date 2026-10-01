@@ -23,6 +23,9 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
+      - name: Install validator dependencies
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
 
       - name: Validate current upstream pointers fail closed
         shell: Rscript {0}
