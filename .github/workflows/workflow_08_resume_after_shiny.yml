@@ -131,7 +131,7 @@ jobs:
           if(any(!nzchar(current_keys))||anyDuplicated(current_keys)) stop('Current W08 issue index invalid')
           if(!setequal(keys,current_keys)) stop('Complete W08 ledger does not exactly equal current issue set')
           current_hash <- setNames(as.character(current$issue_state_sha256),current_keys)
-          row_hash <- setNames(vapply(rows,function(z)as.character(z$issue_state_sha256 %||% ''),character(1)),keys)
+          row_hash <- setNames(vapply(rows,function(z){h<-z$issue_state_sha256;if(is.null(h)||!length(h))'' else as.character(h[[1L]])},character(1)),keys)
           if(any(tolower(row_hash[current_keys])!=tolower(current_hash[current_keys]))) stop('Complete W08 ledger has stale issue-state SHA')
 
           dir.create('outputs/workflow08',recursive=TRUE,showWarnings=FALSE)
