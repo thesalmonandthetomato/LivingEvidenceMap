@@ -312,6 +312,30 @@ jobs:
             git push origin HEAD:"$WORKFLOW02_BRANCH"
           fi
 
+      - name: Acknowledge consumed W02 Shiny batch
+        if: ${{ inputs.publish == true }}
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          QUEUE_SHA="$(cat outputs/w02_resume/queue_sha256.txt)"
+          OUTPUT_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/workflow02/enriched.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "02" \
+            --batch-id "w02-run-$SOURCE_RUN_ID" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status consumed \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --output-sha256 "$OUTPUT_SHA" \
+            --message "Workflow 02 human decisions applied; resumed sparse state archived and registered."
+
       - name: Upload validated resumed W02 handoff
         if: ${{ inputs.publish == true }}
         uses: actions/upload-artifact@v4
