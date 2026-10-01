@@ -65,7 +65,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','readr','dplyr','digest','httr2'))
+        run: install.packages(c('jsonlite','readr','dplyr','digest','httr2','googlesheets4'))
 
       - name: Parse implementation
         shell: Rscript {0}
@@ -81,6 +81,7 @@ jobs:
             'scripts/updater/workflow_08_build_review_queue_dynamic.R',
             'scripts/updater/workflow_08_migrate_legacy_geography_decisions.R',
             'scripts/updater/workflow_08_reuse_decisions.R',
+            'scripts/updater/workflow_08_publish_shiny_queue.R',
             'scripts/updater/workflow_08_finalize_canonical_dynamic.R',
             'scripts/updater/workflow_08_partition_final_outputs_dynamic.R',
             'scripts/updater/workflow_08_archive_to_zenodo.R'
@@ -205,6 +206,27 @@ jobs:
           fi
           Rscript scripts/updater/workflow_08_reuse_decisions.R "${ARGS[@]}"
 
+      - name: Publish pending W08 annotation records to Shiny
+        if: ${{ inputs.new_decisions_path == '' }}
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PENDING=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow08_reuse/workflow08_reuse_manifest.json");cat(as.integer(x$pending_issues))')
+          echo "Pending W08 issues: $PENDING"
+          if [ "$PENDING" -gt 0 ]; then
+            printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+            chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+            Rscript scripts/updater/workflow_08_publish_shiny_queue.R \
+              --queue outputs/workflow08_reuse/workflow08_pending_review_queue.jsonl \
+              --species-config user_input/workflow05_coding_config.json \
+              --ontology user_input/workflow07_topic_ontology.csv \
+              --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+              --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          fi
+
       - name: Stop if new human review is required
         env:
           NEW_DECISIONS_PATH: ${{ inputs.new_decisions_path }}
@@ -214,7 +236,7 @@ jobs:
           PENDING=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow08_reuse/workflow08_reuse_manifest.json");cat(as.integer(x$pending_issues))')
           echo "Pending W08 issues: $PENDING"
           if [ "$PENDING" -gt 0 ] && [ -z "$NEW_DECISIONS_PATH" ]; then
-            echo "Human review required. Download the workflow08-review-state artifact and rerun with new_decisions_path." >&2
+            echo "Human review required. Pending records have been published to Shiny." >&2
             exit 2
           fi
 
