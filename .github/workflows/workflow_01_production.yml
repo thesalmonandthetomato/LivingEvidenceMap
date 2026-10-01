@@ -17,6 +17,10 @@ on:
         required: false
         default: '0.95'
         type: string
+      max_llm_cases:
+        required: false
+        default: 5000
+        type: number
   workflow_dispatch:
     inputs:
       workflow00_pointer_path:
@@ -37,6 +41,11 @@ on:
         required: true
         default: '0.95'
         type: string
+      max_llm_cases:
+        description: 'Hard safety ceiling on pairwise LLM adjudications; workflow stops before API calls if exceeded'
+        required: true
+        default: 5000
+        type: number
 
 permissions:
   contents: write
@@ -331,6 +340,46 @@ jobs:
               --union-dir outputs/workflow01_union \
               --output outputs/adjudication/cases.jsonl
           fi
+
+      - name: Preflight LLM adjudication budget
+        env:
+          MAX_LLM_CASES: ${{ inputs.max_llm_cases }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          p <- 'outputs/adjudication/cases.jsonl'
+          lines <- if(file.exists(p)) readLines(p,warn=FALSE,encoding='UTF-8') else character()
+          lines <- lines[nzchar(trimws(lines))]
+          n <- length(lines)
+          max_n <- as.integer(Sys.getenv('MAX_LLM_CASES'))
+          if(is.na(max_n) || max_n < 0L) stop('max_llm_cases must be a non-negative integer')
+          rows <- if(n) lapply(lines,fromJSON,simplifyVector=FALSE) else list()
+          rule <- if(n) vapply(rows,function(z) {
+            x <- z$deterministic_evidence$classifier_rule
+            if(is.null(x)||!length(x)||!nzchar(as.character(x[[1L]]))) '<missing>' else as.character(x[[1L]])
+          },character(1)) else character()
+          recs <- if(n) unique(unlist(lapply(rows,function(z)c(
+            paste0(z$record_i$source$provider %||% '',':',z$record_i$sidecar_identity$source_record_id %||% ''),
+            paste0(z$record_j$source$provider %||% '',':',z$record_j$sidecar_identity$source_record_id %||% '')
+          )),use.names=FALSE)) else character()
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          s <- list(
+            schema='living-evidence-map-workflow01-llm-preflight-v1',
+            cases=n,
+            max_llm_cases=max_n,
+            unique_bibliographic_records=length(recs),
+            classifier_rule_counts=as.list(table(rule)),
+            status=if(n<=max_n)'within_budget_ceiling' else 'blocked_over_budget_ceiling'
+          )
+          writeLines(toJSON(s,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'outputs/adjudication/preflight_summary.json')
+          cat(sprintf('LLM PREFLIGHT: cases=%d hard_ceiling=%d status=%s\n',n,max_n,s$status))
+          if(length(rule)) {
+            print(sort(table(rule),decreasing=TRUE))
+          }
+          if(n > max_n) {
+            stop(sprintf('LLM safety ceiling exceeded: %d cases > %d. No LLM requests have been sent.',n,max_n),call.=FALSE)
+          }
 
       - name: Run LLM adjudication
         env:
@@ -665,8 +714,13 @@ jobs:
             outputs/workflow01_union/source_inputs.json
             outputs/workflow01_union/union_manifest.json
             outputs/workflow01_candidates/incremental_summary.json
+            outputs/workflow01_candidates/normalised_metadata.csv
             outputs/workflow01_incremental_rescore/summary.json
             outputs/workflow01_pre_adjudication/summary.json
+            outputs/workflow01_pre_adjudication/manual_review_pairs.csv
+            outputs/adjudication/cases.jsonl.manifest.json
+            outputs/adjudication/preflight_summary.json
+            outputs/adjudication/chunks/
             outputs/adjudication/merged/
             outputs/adjudication/human_review_package/
             outputs/pending_checkpoint/
