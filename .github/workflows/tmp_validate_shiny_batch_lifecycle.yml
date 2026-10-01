@@ -1,4 +1,4 @@
-name: TEMP validate Shiny batch lifecycle
+name: Validate Shiny batch lifecycle
 
 on:
   push:
@@ -6,6 +6,18 @@ on:
       - workflow01-final-architecture
     paths:
       - '.github/workflows/tmp_validate_shiny_batch_lifecycle.yml'
+      - 'scripts/updater/workflow_shiny_batch_status.R'
+      - 'scripts/updater/workflow_08_publish_shiny_queue.R'
+      - 'scripts/updater/workflow_08_export_shiny_decisions.R'
+      - 'scripts/updater/workflow_08_finalize_canonical_dynamic.R'
+      - '.github/workflows/shiny-adjudication-publish-w01-queue.yml'
+      - '.github/workflows/shiny-adjudication-publish-w02-queue.yml'
+      - '.github/workflows/shiny-adjudication-publish-w04-validation.yml'
+      - '.github/workflows/workflow_01_resume_after_human_review.yml'
+      - '.github/workflows/workflow_02_resume_after_human_review.yml'
+      - '.github/workflows/workflow_04_finalize_human_validation.yml'
+      - '.github/workflows/workflow_08_production.yml'
+      - '.github/workflows/workflow_08_resume_after_shiny.yml'
 
 permissions:
   contents: read
