@@ -1,0 +1,94 @@
+name: Deploy Shiny adjudication prototype
+
+on:
+  push:
+    branches:
+      - shiny-adjudication-interface
+    paths:
+      - 'shiny/adjudication/**'
+      - '.github/workflows/shiny-adjudication-deploy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SHINYAPPS_ACCOUNT: ${{ secrets.SHINYAPPS_ACCOUNT }}
+      SHINYAPPS_TOKEN: ${{ secrets.SHINYAPPS_TOKEN }}
+      SHINYAPPS_SECRET: ${{ secrets.SHINYAPPS_SECRET }}
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: shiny-adjudication-interface
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install deployment dependencies
+        shell: Rscript {0}
+        run: install.packages(c("rsconnect","shiny","bslib","jsonlite","digest","googlesheets4"))
+
+      - name: Validate deployment secrets
+        shell: Rscript {0}
+        run: |
+          vars <- c(
+            "SHINYAPPS_ACCOUNT",
+            "SHINYAPPS_TOKEN",
+            "SHINYAPPS_SECRET",
+            "LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          )
+          missing <- vars[!nzchar(Sys.getenv(vars))]
+          if (length(missing)) stop("Missing required secret(s): ", paste(missing, collapse=", "))
+          cat("PASS: deployment secrets present\n")
+
+      - name: Prepare ephemeral deployment bundle
+        shell: Rscript {0}
+        run: |
+          app_dir <- file.path("shiny","adjudication")
+          secret_dir <- file.path(app_dir,"secrets")
+          dir.create(secret_dir, recursive=TRUE, showWarnings=FALSE)
+
+          credential_path <- file.path(secret_dir,"google-service-account.json")
+          writeLines(Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"), credential_path, useBytes=TRUE)
+          Sys.chmod(credential_path, mode="0600")
+
+          app_path <- file.path(app_dir,"app.R")
+          original <- readLines(app_path, warn=FALSE, encoding="UTF-8")
+          prefix <- c(
+            'Sys.setenv(LEM_STORAGE_BACKEND="google_sheets")',
+            'Sys.setenv(LEM_GOOGLE_SHEET_ID="1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs")',
+            'Sys.setenv(LEM_GOOGLE_SERVICE_ACCOUNT_JSON="secrets/google-service-account.json")'
+          )
+          writeLines(c(prefix, original), app_path, useBytes=TRUE)
+
+          stopifnot(file.exists(credential_path))
+          stopifnot(any(grepl("LEM_STORAGE_BACKEND", readLines(app_path, warn=FALSE), fixed=TRUE)))
+          cat("PASS: ephemeral deployment bundle prepared\n")
+
+      - name: Deploy private prototype to shinyapps.io
+        shell: Rscript {0}
+        run: |
+          rsconnect::setAccountInfo(
+            name = Sys.getenv("SHINYAPPS_ACCOUNT"),
+            token = Sys.getenv("SHINYAPPS_TOKEN"),
+            secret = Sys.getenv("SHINYAPPS_SECRET")
+          )
+
+          rsconnect::deployApp(
+            appDir = file.path("shiny","adjudication"),
+            appName = "livingevidencemap-adjudication",
+            appTitle = "LivingEvidenceMap Adjudication",
+            appVisibility = "private",
+            launch.browser = FALSE,
+            forceUpdate = TRUE,
+            logLevel = "normal"
+          )
+          cat("PASS: Shiny adjudication prototype deployed\n")
