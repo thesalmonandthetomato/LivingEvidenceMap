@@ -2,6 +2,12 @@ name: Report - Workflow 09 publication package
 
 on:
   workflow_dispatch:
+    inputs:
+      search_update_date:
+        description: 'Actual latest database search date (YYYY-MM-DD); leave blank only when unknown'
+        required: false
+        default: ''
+        type: string
   push:
     branches:
       - workflow01-final-architecture
@@ -126,6 +132,7 @@ jobs:
           EXCLUSIONS_CSV: ${{ github.workspace }}/workflow08_reporting_state/workflow08_excluded_records.csv
           PRESCREEN_CANONICAL_JSONL: ${{ github.workspace }}/workflow01_state/canonical/records.jsonl
           WORKFLOW02_PATCH_JSONL: ${{ github.workspace }}/workflow02_cumulative_patch.jsonl
+          SEARCH_UPDATE_DATE: ${{ inputs.search_update_date || '' }}
         shell: bash
         run: |
           set -euo pipefail
