@@ -102,10 +102,10 @@ jobs:
           SCHEMA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(if(is.null(x$schema)) "" else x$schema)')"
           if [ "$SCHEMA" = "living-evidence-map-workflow00-state-v1" ]; then
             Rscript scripts/updater/workflow_00_validate_state.R --state "$POINTER"
-            SOURCES="lens,scopus,openalex,agricola,wos"
+            SOURCES="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);s<-names(x$sources);stopifnot(length(s)>0L,all(grepl("^[a-z0-9][a-z0-9_-]*$",s)));cat(paste(s,collapse=","))')"
           else
-            POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));s<-unlist(x$sources);stopifnot(x$status=="published",x$visibility=="restricted",length(s)>0L,all(s %in% c("lens","scopus","openalex","agricola","wos")))'
-            SOURCES="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(paste(unlist(x$sources),collapse=","))')"
+            POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));s<-as.character(unlist(x$sources));stopifnot(x$status=="published",x$visibility=="restricted",length(s)>0L,all(grepl("^[a-z0-9][a-z0-9_-]*$",s)),!anyDuplicated(s))'
+            SOURCES="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(paste(as.character(unlist(x$sources)),collapse=","))')"
           fi
           echo "W00_SOURCES=$SOURCES" >> "$GITHUB_ENV"
 
@@ -124,8 +124,10 @@ jobs:
           test -s previous_state/workflow01_full_five_source/manifestation_cluster_map.csv
           test -s previous_state/workflow01_full_five_source/summary.json
           test -s previous_state/canonical/records.jsonl
-          for source in lens scopus openalex agricola wos; do
-            test -s "previous_state/workflow01_seed/${source}_records_for_deduplication.jsonl"
+          seed_files=(previous_state/workflow01_seed/*_records_for_deduplication.jsonl)
+          [ -e "${seed_files[0]}" ] || { echo "No previous Workflow 01 seed files found" >&2; exit 1; }
+          for seed in "${seed_files[@]}"; do
+            test -s "$seed"
           done
 
       - name: Restore current Workflow 00 source subset
@@ -172,11 +174,11 @@ jobs:
             echo "PASS: restored authoritative Workflow 00 state from Zenodo"
           fi
 
-      - name: Prepare updated and preserved source inputs
+      - name: Prepare updated and preserved API source inputs
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p current_sources/{lens,scopus,openalex,agricola,wos}
+
           has_source(){ case ",$W00_SOURCES," in *",$1,"*) return 0;; *) return 1;; esac; }
 
           delta_root() {
@@ -195,66 +197,72 @@ jobs:
             fi
           }
 
-          if has_source lens; then
-            D="$(delta_root lens)"
-            if [ -n "$D" ]; then
-              cp "$D/records.jsonl" current_sources/lens/records.jsonl
-            else
-              P="$(find current_workflow00/lens -path '*/source_child/records.jsonl' -type f -print -quit)"
-              test -n "$P"; cp "$P" current_sources/lens/records.jsonl
+          find_handoff_jsonl() {
+            local root="$1"
+            local p=""
+            for candidate in "$root/records.jsonl" "$root/handoff/records.jsonl" "$root/source_child/records.jsonl"; do
+              if [ -f "$candidate" ]; then p="$candidate"; break; fi
+            done
+            if [ -z "$p" ]; then
+              p="$(find "$root" -type f -name 'records.jsonl' -print -quit 2>/dev/null || true)"
             fi
-          else
-            cp previous_state/workflow01_seed/lens_records_for_deduplication.jsonl current_sources/lens/records.jsonl
-          fi
+            printf '%s' "$p"
+          }
 
-          if has_source scopus; then
-            D="$(delta_root scopus)"; N="$(delta_n scopus)"
-            if [ -n "$D" ] && [ "$N" = "0" ]; then
-              : > current_sources/scopus/scopus_sidecar_records.jsonl
+          prepare_direct_source() {
+            local source="$1"
+            local out="current_sources/$source/records.jsonl"
+            mkdir -p "current_sources/$source"
+            local d n p
+            d="$(delta_root "$source")"
+            n="$(delta_n "$source")"
+            if [ -n "$d" ] && [ "$n" = "0" ]; then : > "$out"; return; fi
+            if [ -n "$d" ]; then p="$(find_handoff_jsonl "$d")"; else p="$(find_handoff_jsonl "current_workflow00/$source")"; fi
+            [ -n "$p" ] || { echo "No normalized records.jsonl handoff found for API source $source" >&2; exit 1; }
+            cp "$p" "$out"
+          }
+
+          # Existing five API sources retain their established, validated adapters.
+          for source in lens scopus openalex agricola wos; do
+            mkdir -p "current_sources/$source"
+            if has_source "$source"; then
+              D="$(delta_root "$source")"
+              N="$(delta_n "$source")"
+              case "$source" in
+                lens)
+                  if [ -n "$D" ]; then cp "$D/records.jsonl" current_sources/lens/records.jsonl; else P="$(find current_workflow00/lens -path '*/source_child/records.jsonl' -type f -print -quit)"; test -n "$P"; cp "$P" current_sources/lens/records.jsonl; fi
+                  ;;
+                scopus)
+                  if [ -n "$D" ] && [ "$N" = "0" ]; then : > current_sources/scopus/scopus_sidecar_records.jsonl; else if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/scopus -type d -name source_child -print -quit)"; fi; test -n "$P"; Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/scopus; fi
+                  ;;
+                openalex)
+                  if [ -n "$D" ] && [ "$N" = "0" ]; then : > current_sources/openalex/openalex_sidecar_records.jsonl; else if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/openalex -type d -name source_child -print -quit)"; fi; test -n "$P"; Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/openalex; fi
+                  ;;
+                agricola)
+                  if [ -n "$D" ] && [ "$N" = "0" ]; then : > current_sources/agricola/agricola_sidecar_records.jsonl; else if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/agricola -type d -name source_child -print -quit)"; fi; test -n "$P"; Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/agricola; fi
+                  ;;
+                wos)
+                  if [ -n "$D" ] && [ "$N" = "0" ]; then : > current_sources/wos/wos_starter_sidecar_records.jsonl; else if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/wos -type d -name source_child -print -quit)"; fi; test -n "$P"; Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/wos; fi
+                  ;;
+              esac
             else
-              if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/scopus -type d -name source_child -print -quit)"; fi
-              test -n "$P"; Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/scopus
+              case "$source" in
+                lens) dest="records.jsonl" ;;
+                scopus) dest="scopus_sidecar_records.jsonl" ;;
+                openalex) dest="openalex_sidecar_records.jsonl" ;;
+                agricola) dest="agricola_sidecar_records.jsonl" ;;
+                wos) dest="wos_starter_sidecar_records.jsonl" ;;
+              esac
+              cp "previous_state/workflow01_seed/${source}_records_for_deduplication.jsonl" "current_sources/$source/$dest"
             fi
-          else
-            cp previous_state/workflow01_seed/scopus_records_for_deduplication.jsonl current_sources/scopus/scopus_sidecar_records.jsonl
-          fi
+          done
 
-          if has_source openalex; then
-            D="$(delta_root openalex)"; N="$(delta_n openalex)"
-            if [ -n "$D" ] && [ "$N" = "0" ]; then
-              : > current_sources/openalex/openalex_sidecar_records.jsonl
-            else
-              if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/openalex -type d -name source_child -print -quit)"; fi
-              test -n "$P"; Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/openalex
-            fi
-          else
-            cp previous_state/workflow01_seed/openalex_records_for_deduplication.jsonl current_sources/openalex/openalex_sidecar_records.jsonl
-          fi
-
-          if has_source agricola; then
-            D="$(delta_root agricola)"; N="$(delta_n agricola)"
-            if [ -n "$D" ] && [ "$N" = "0" ]; then
-              : > current_sources/agricola/agricola_sidecar_records.jsonl
-            else
-              if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/agricola -type d -name source_child -print -quit)"; fi
-              test -n "$P"; Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/agricola
-            fi
-          else
-            cp previous_state/workflow01_seed/agricola_records_for_deduplication.jsonl current_sources/agricola/agricola_sidecar_records.jsonl
-          fi
-
-          if has_source wos; then
-            D="$(delta_root wos)"; N="$(delta_n wos)"
-            if [ -n "$D" ] && [ "$N" = "0" ]; then
-              : > current_sources/wos/wos_starter_sidecar_records.jsonl
-            else
-              if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/wos -type d -name source_child -print -quit)"; fi
-              test -n "$P"; Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/wos
-            fi
-          else
-            cp previous_state/workflow01_seed/wos_records_for_deduplication.jsonl current_sources/wos/wos_starter_sidecar_records.jsonl
-          fi
-
+          # Additional API sources pass through generically when W00 emits normalized records.jsonl.
+          IFS=',' read -ra API_SOURCES <<< "$W00_SOURCES"
+          for source in "${API_SOURCES[@]}"; do
+            case "$source" in lens|scopus|openalex|agricola|wos) continue;; esac
+            prepare_direct_source "$source"
+          done
       - name: Restore catalogue manual sources and validate source inputs
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
