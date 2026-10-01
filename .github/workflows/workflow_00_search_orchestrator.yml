@@ -264,58 +264,6 @@ jobs:
       search_version: ${{ steps.out.outputs.search_version }}
       fortnightly_from_date: ${{ steps.out.outputs.fortnightly_from_date }}
       fortnightly_to_date: ${{ steps.out.outputs.fortnightly_to_date }}
-      lens_query: ${{ steps.out.outputs.lens_query }}
-      scopus_query: ${{ steps.out.outputs.scopus_query }}
-      openalex_query: ${{ steps.out.outputs.openalex_query }}
-      agricola_query: ${{ steps.out.outputs.agricola_query }}
-      pubmed_query: ${{ steps.out.outputs.pubmed_query }}
-      ethos_query: ${{ steps.out.outputs.ethos_query }}
-      cba_query: ${{ steps.out.outputs.cba_query }}
-      epmc_preprints_query: ${{ steps.out.outputs.epmc_preprints_query }}
-      wos_query: ${{ steps.out.outputs.wos_query }}
-      ebsco_africa_wide_query: ${{ steps.out.outputs.ebsco_africa_wide_query }}
-      ebsco_amed_query: ${{ steps.out.outputs.ebsco_amed_query }}
-      ebsco_psycinfo_query: ${{ steps.out.outputs.ebsco_psycinfo_query }}
-      ebsco_atla_religion_query: ${{ steps.out.outputs.ebsco_atla_religion_query }}
-      ebsco_biological_agricultural_index_query: ${{ steps.out.outputs.ebsco_biological_agricultural_index_query }}
-      ebsco_cinahl_query: ${{ steps.out.outputs.ebsco_cinahl_query }}
-      ebsco_communication_mass_media_query: ${{ steps.out.outputs.ebsco_communication_mass_media_query }}
-      ebsco_econlit_query: ${{ steps.out.outputs.ebsco_econlit_query }}
-      ebsco_eric_query: ${{ steps.out.outputs.ebsco_eric_query }}
-      ebsco_family_society_query: ${{ steps.out.outputs.ebsco_family_society_query }}
-      ebsco_greenfile_query: ${{ steps.out.outputs.ebsco_greenfile_query }}
-      ebsco_hospitality_tourism_query: ${{ steps.out.outputs.ebsco_hospitality_tourism_query }}
-      ebsco_medline_query: ${{ steps.out.outputs.ebsco_medline_query }}
-      ebsco_mla_query: ${{ steps.out.outputs.ebsco_mla_query }}
-      ebsco_political_science_query: ${{ steps.out.outputs.ebsco_political_science_query }}
-      ebsco_sportdiscus_query: ${{ steps.out.outputs.ebsco_sportdiscus_query }}
-      ebsco_waters_oceans_query: ${{ steps.out.outputs.ebsco_waters_oceans_query }}
-      selected_lens: ${{ steps.selection.outputs.selected_lens }}
-      selected_scopus: ${{ steps.selection.outputs.selected_scopus }}
-      selected_openalex: ${{ steps.selection.outputs.selected_openalex }}
-      selected_agricola: ${{ steps.selection.outputs.selected_agricola }}
-      selected_pubmed: ${{ steps.selection.outputs.selected_pubmed }}
-      selected_ethos: ${{ steps.selection.outputs.selected_ethos }}
-      selected_cba: ${{ steps.selection.outputs.selected_cba }}
-      selected_epmc_preprints: ${{ steps.selection.outputs.selected_epmc_preprints }}
-      selected_wos: ${{ steps.selection.outputs.selected_wos }}
-      selected_ebsco_africa_wide: ${{ steps.selection.outputs.selected_ebsco_africa_wide }}
-      selected_ebsco_amed: ${{ steps.selection.outputs.selected_ebsco_amed }}
-      selected_ebsco_psycinfo: ${{ steps.selection.outputs.selected_ebsco_psycinfo }}
-      selected_ebsco_atla_religion: ${{ steps.selection.outputs.selected_ebsco_atla_religion }}
-      selected_ebsco_biological_agricultural_index: ${{ steps.selection.outputs.selected_ebsco_biological_agricultural_index }}
-      selected_ebsco_cinahl: ${{ steps.selection.outputs.selected_ebsco_cinahl }}
-      selected_ebsco_communication_mass_media: ${{ steps.selection.outputs.selected_ebsco_communication_mass_media }}
-      selected_ebsco_econlit: ${{ steps.selection.outputs.selected_ebsco_econlit }}
-      selected_ebsco_eric: ${{ steps.selection.outputs.selected_ebsco_eric }}
-      selected_ebsco_family_society: ${{ steps.selection.outputs.selected_ebsco_family_society }}
-      selected_ebsco_greenfile: ${{ steps.selection.outputs.selected_ebsco_greenfile }}
-      selected_ebsco_hospitality_tourism: ${{ steps.selection.outputs.selected_ebsco_hospitality_tourism }}
-      selected_ebsco_medline: ${{ steps.selection.outputs.selected_ebsco_medline }}
-      selected_ebsco_mla: ${{ steps.selection.outputs.selected_ebsco_mla }}
-      selected_ebsco_political_science: ${{ steps.selection.outputs.selected_ebsco_political_science }}
-      selected_ebsco_sportdiscus: ${{ steps.selection.outputs.selected_ebsco_sportdiscus }}
-      selected_ebsco_waters_oceans: ${{ steps.selection.outputs.selected_ebsco_waters_oceans }}
       selected_sources_csv: ${{ steps.selection.outputs.selected_sources_csv }}
       selected_sources_json: ${{ steps.selection.outputs.selected_sources_json }}
       source_matrix_json: ${{ steps.out.outputs.source_matrix_json }}
@@ -419,7 +367,6 @@ jobs:
           emit('search_version',p$search_version)
           emit('fortnightly_from_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$from)
           emit('fortnightly_to_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$to)
-          for (nm in names(q)) emit(paste0(nm,'_query'),q[[nm]])
           s <- fromJSON('outputs/updater/workflow00_plan/source_selection.json', simplifyVector=FALSE)
           sel <- unlist(s$selected_sources,use.names=FALSE)
           missing <- setdiff(sel,names(q))
