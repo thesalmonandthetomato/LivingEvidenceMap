@@ -1,0 +1,72 @@
+name: TEMP initialise live Shiny pipeline status
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/shiny_adjudication/.run_init_live_pipeline_status'
+
+permissions:
+  contents: read
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','googlesheets4','digest'))
+
+      - name: Prepare credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+
+      - name: Initialise current update metrics
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHECKPOINT='docs/deduplication/checkpoints/run-36866644366.json'
+          PREVIOUS='docs/deduplication/zenodo/run-36128255337.json'
+          W00='docs/search_record/state/current.json'
+          W08='docs/workflow08/zenodo/run-36442875006.json'
+
+          UPDATE_ID="update-$(Rscript -e 'x<-jsonlite::fromJSON("'$CHECKPOINT'");cat(x$github_run_id)')"
+          PREV_RESULTS="$(Rscript -e 'x<-jsonlite::fromJSON("'$PREVIOUS'");cat(as.integer(x$source_manifestations))')"
+          NEW_RESULTS="$(Rscript -e 'x<-jsonlite::fromJSON("'$CHECKPOINT'");cat(as.integer(x$new_source_manifestations))')"
+          TOTAL_RESULTS="$((PREV_RESULTS + NEW_RESULTS))"
+          CANONICAL_EXISTING="$(Rscript -e 'x<-jsonlite::fromJSON("'$W08'");cat(as.integer(x$canonical_records))')"
+          LAST_SEARCH_DATE="$(Rscript -e 'x<-jsonlite::fromJSON("'$W00'");m<-regexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}",x$state_id);stopifnot(m[[1]]>0);cat(regmatches(x$state_id,m))')"
+
+          Rscript scripts/updater/workflow_shiny_pipeline_status.R \
+            --update-id "$UPDATE_ID" \
+            --stage "workflow01_in_progress" \
+            --workflow-run-id "36924648797" \
+            --last-search-date "$LAST_SEARCH_DATE" \
+            --canonical-existing "$CANONICAL_EXISTING" \
+            --search-results-total "$TOTAL_RESULTS" \
+            --completed-through "0" \
+            --active-workflow "1" \
+            --status-label "Workflow 01 · deduplication in progress" \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+          echo "PASS: current update $UPDATE_ID search_results=$TOTAL_RESULTS canonical_existing=$CANONICAL_EXISTING last_search=$LAST_SEARCH_DATE"
