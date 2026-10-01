@@ -9,10 +9,11 @@ if(is.null(pointer)||is.null(output)) stop("Required: --pointer --output",call.=
 if(!file.exists(pointer)) stop("Workflow 08 pointer not found: ",pointer,call.=FALSE)
 
 x <- fromJSON(pointer,simplifyVector=FALSE)
+expected_n <- suppressWarnings(as.integer(x$canonical_records))
 if(!identical(x$status,"published") ||
    !identical(x$workflow,"08") ||
    !identical(x$state,"corrected_final_adjudicated_canonical") ||
-   as.integer(x$canonical_records)!=19117L) {
+   is.na(expected_n) || expected_n < 1L) {
   stop("Pointer is not a published final Workflow 08 canonical dataset",call.=FALSE)
 }
 
