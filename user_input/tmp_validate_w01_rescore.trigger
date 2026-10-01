@@ -1,1 +1,1 @@
-validate vectorised deterministic rescore
+validate vectorised deterministic rescore equivalence v2
