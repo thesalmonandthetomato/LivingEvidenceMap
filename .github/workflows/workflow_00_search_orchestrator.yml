@@ -714,6 +714,31 @@ jobs:
             test -f "$dest/source_delta/updated_native_ids.txt"
           done
 
+      - name: Download full-run native-ID seeds for new Europe PMC sources
+        if: ${{ inputs.run_type == 'full' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloaded_full_native
+          for source in pubmed ethos cba epmc_preprints; do
+            upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
+            selected="${!upper}"
+            [ "$selected" = "true" ] || continue
+            dest="downloaded_full_native/$source"
+            mkdir -p "$dest"
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-${source}-harvest-$GITHUB_RUN_ID" \
+              --dir "$dest"
+            test -s "$dest/source_delta/reconciliation_manifest.json"
+            test -s "$dest/source_delta/updated_native_ids.txt"
+          done
+
       - name: Archive search records and source-ID registries
         shell: bash
         run: |
@@ -726,6 +751,18 @@ jobs:
             mkdir -p data/workflow00/source_id_registry
             cp -R downloaded_expansion_reconciliation/expansion_archive/data/workflow00/source_id_registry/* \
               data/workflow00/source_id_registry/
+          fi
+
+          if [ '${{ inputs.run_type }}' = 'full' ]; then
+            mkdir -p data/workflow00/source_id_registry
+            for source in pubmed ethos cba epmc_preprints; do
+              src="downloaded_full_native/$source/source_delta"
+              [ -d "$src" ] || continue
+              cp "$src/updated_native_ids.txt" "data/workflow00/source_id_registry/${source}_native_ids.txt"
+              mkdir -p "docs/search_record/full/reconciliation/$GITHUB_RUN_ID"
+              cp "$src/reconciliation_manifest.json" \
+                "docs/search_record/full/reconciliation/$GITHUB_RUN_ID/${source}_reconciliation.json"
+            done
           fi
 
           if [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
@@ -743,7 +780,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/search_record
-          if [ '${{ inputs.run_type }}' = 'expansion' ] || [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
+          if [ '${{ inputs.run_type }}' = 'full' ] || [ '${{ inputs.run_type }}' = 'expansion' ] || [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
             git add data/workflow00/source_id_registry
           fi
 
