@@ -85,3 +85,30 @@ jobs:
           summarise(x[x$source=='cab',],'CAB')
           summarise(x[x$source=='proquest',],'PROQUEST')
           summarise(x,'COMBINED')
+
+          # Detailed anonymised audit of the largest CAB abstract group.
+          cab_lines<-readLines('/tmp/manual/cab.jsonl',warn=FALSE,encoding='UTF-8')
+          cab_lines<-cab_lines[nzchar(trimws(cab_lines))]
+          cab_rows<-lapply(cab_lines,fromJSON,simplifyVector=FALSE)
+          vals<-lapply(cab_rows,function(r){
+            mf<-r$mapped_fields %||% list()
+            a_raw<-scalar(mf$abstract)
+            a_norm<-norm_words(a_raw)
+            list(
+              hash=if(is.null(a_norm)) NA_character_ else digest(a_norm,algo='sha256',serialize=FALSE),
+              raw_hash=if(is.null(a_raw)) NA_character_ else digest(a_raw,algo='sha256',serialize=FALSE),
+              title=norm_words(mf$title),
+              doi=scalar(mf$doi),
+              year=scalar(mf$year),
+              author=scalar(mf$author_string %||% mf$authors),
+              sid=scalar((r$sidecar_identity %||% list())$sidecar_record_id)
+            )
+          })
+          hashes<-vapply(vals,function(z)z$hash,character(1))
+          top_hash<-names(sort(table(hashes[!is.na(hashes)]),decreasing=TRUE))[[1]]
+          g<-vals[hashes==top_hash]
+          uniq<-function(v){v<-v[!is.na(v)&nzchar(v)];length(unique(v))}
+          gv<-function(name)vapply(g,function(z){x<-z[[name]];if(is.null(x)||!length(x))NA_character_ else as.character(x[[1]])},character(1))
+          cat(sprintf('CAB_LARGEST_GROUP n=%d unique_raw_abstract_strings=%d unique_titles=%d nonmissing_dois=%d unique_dois=%d unique_years=%d unique_authors=%d unique_source_ids=%d\n',
+            length(g),uniq(gv('raw_hash')),uniq(gv('title')),sum(!is.na(gv('doi'))&nzchar(gv('doi'))),uniq(gv('doi')),uniq(gv('year')),uniq(gv('author')),uniq(gv('sid'))))
+
