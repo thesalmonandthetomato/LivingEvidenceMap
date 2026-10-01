@@ -149,33 +149,27 @@ count_wos <- function(query) {
   n
 }
 
-message("Counting Lens...")
-lens_n <- count_lens(as.character(q$lens))
-message(sprintf("Lens: %d", lens_n))
-message("Counting Scopus...")
-scopus_n <- count_scopus(as.character(q$scopus))
-message(sprintf("Scopus: %d", scopus_n))
-message("Counting OpenAlex...")
-openalex_n <- count_openalex(as.character(q$openalex))
-message(sprintf("OpenAlex: %d", openalex_n))
-message("Counting AGRICOLA...")
-agricola_n <- count_europe_pmc(as.character(q$agricola),"AGRICOLA/Europe PMC")
-message(sprintf("AGRICOLA: %d", agricola_n))
-message("Counting PubMed/MEDLINE...")
-pubmed_n <- count_europe_pmc(as.character(q$pubmed),"PubMed/MEDLINE via Europe PMC")
-message(sprintf("PubMed/MEDLINE: %d", pubmed_n))
-message("Counting EThOS...")
-ethos_n <- count_europe_pmc(as.character(q$ethos),"EThOS via Europe PMC")
-message(sprintf("EThOS: %d", ethos_n))
-message("Counting Chinese Biological Abstracts...")
-cba_n <- count_europe_pmc(as.character(q$cba),"Chinese Biological Abstracts via Europe PMC")
-message(sprintf("Chinese Biological Abstracts: %d", cba_n))
-message("Counting Europe PMC preprints...")
-preprints_n <- count_europe_pmc(as.character(q$epmc_preprints),"Europe PMC preprints")
-message(sprintf("Europe PMC preprints: %d", preprints_n))
-message("Counting Web of Science...")
-wos_n <- count_wos(as.character(q$wos))
-message(sprintf("Web of Science: %d", wos_n))
+safe_count <- function(label, fun) {
+  message(sprintf("Counting %s...", label))
+  tryCatch({
+    n <- as.integer(fun())
+    message(sprintf("%s: %d", label, n))
+    list(hits=n,status="counted live")
+  }, error=function(e) {
+    message(sprintf("%s FAILED: %s", label, conditionMessage(e)))
+    list(hits=NA_integer_,status=paste0("API count failed: ",conditionMessage(e)))
+  })
+}
+
+lens_r <- safe_count("Lens", function() count_lens(as.character(q$lens)))
+scopus_r <- safe_count("Scopus", function() count_scopus(as.character(q$scopus)))
+openalex_r <- safe_count("OpenAlex", function() count_openalex(as.character(q$openalex)))
+agricola_r <- safe_count("AGRICOLA", function() count_europe_pmc(as.character(q$agricola),"AGRICOLA/Europe PMC"))
+pubmed_r <- safe_count("PubMed/MEDLINE", function() count_europe_pmc(as.character(q$pubmed),"PubMed/MEDLINE via Europe PMC"))
+ethos_r <- safe_count("EThOS", function() count_europe_pmc(as.character(q$ethos),"EThOS via Europe PMC"))
+cba_r <- safe_count("Chinese Biological Abstracts", function() count_europe_pmc(as.character(q$cba),"Chinese Biological Abstracts via Europe PMC"))
+preprints_r <- safe_count("Europe PMC preprints", function() count_europe_pmc(as.character(q$epmc_preprints),"Europe PMC preprints"))
+wos_r <- safe_count("Web of Science", function() count_wos(as.character(q$wos)))
 
 read_manual_reported <- function(path) {
   if (!file.exists(path)) return(NA_integer_)
@@ -205,9 +199,10 @@ rows <- data.frame(
     "Manual W00 registry count"
   ),
   search_date = c(rep(search_date, 9), "2026-09-30", "2026-09-30"),
-  hits = c(lens_n, scopus_n, openalex_n, agricola_n, pubmed_n, ethos_n, cba_n, preprints_n, wos_n, cab_n, proquest_n),
+  hits = c(lens_r$hits, scopus_r$hits, openalex_r$hits, agricola_r$hits, pubmed_r$hits, ethos_r$hits, cba_r$hits, preprints_r$hits, wos_r$hits, cab_n, proquest_n),
   status = c(
-    rep("counted live", 9),
+    lens_r$status, scopus_r$status, openalex_r$status, agricola_r$status, pubmed_r$status,
+    ethos_r$status, cba_r$status, preprints_r$status, wos_r$status,
     "validated W00 manual-search reported count",
     "validated W00 manual-search reported count"
   ),
