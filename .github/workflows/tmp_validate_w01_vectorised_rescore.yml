@@ -99,5 +99,30 @@ jobs:
                   'rescored_classification','rescored_rule','promotion_reason',
                   'one_abstract_missing','first_author_match','journal_match',
                   'preprint_pair','review_route','manual_review_needed','decision_changed')
-          stopifnot(identical(a[,..cols],b[,..cols]))
-          cat(sprintf('PASS: old and vectorised W01 decisions are identical for %d synthetic pairs\n',nrow(a)))
+          stopifnot(nrow(a)==nrow(b))
+          mismatch <- list()
+          for(nm in cols){
+            av <- as.character(a[[nm]])
+            bv <- as.character(b[[nm]])
+            av[is.na(av)] <- '<NA>'
+            bv[is.na(bv)] <- '<NA>'
+            bad <- which(av != bv)
+            if(length(bad)){
+              mismatch[[nm]] <- data.table(
+                row=bad,
+                record_i=a$record_i[bad],
+                record_j=a$record_j[bad],
+                old=av[bad],
+                new=bv[bad]
+              )
+            }
+          }
+          if(length(mismatch)){
+            cat('FAIL: value differences found between old and vectorised decisions\n')
+            for(nm in names(mismatch)){
+              cat(sprintf('\nCOLUMN %s (%d differences)\n',nm,nrow(mismatch[[nm]])))
+              print(head(mismatch[[nm]],20))
+            }
+            stop('W01 rescore value equivalence failed')
+          }
+          cat(sprintf('PASS: old and vectorised W01 decision values are identical for %d synthetic pairs\n',nrow(a)))
