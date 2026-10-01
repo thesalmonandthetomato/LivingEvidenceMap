@@ -12,37 +12,92 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
+          fetch-depth: 0
       - uses: r-lib/actions/setup-r@v2
         with:
           r-version: release
           use-public-rspm: true
+      - name: Install minimal R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','stringi'))
       - name: Parse W01 rescore
         shell: Rscript {0}
         run: |
           parse(file='scripts/updater/workflow_01_deduplication_identifier_rescore.R')
           cat('PASS: W01 rescore parses\n')
-      - name: Static invariants
+      - name: Build deterministic synthetic scored state
         shell: Rscript {0}
         run: |
-          x <- readLines('scripts/updater/workflow_01_deduplication_identifier_rescore.R', warn=FALSE)
-          z <- paste(x, collapse='\n')
-          stopifnot(
-            grepl('long_title_containment_no_identifier_conflict', z, fixed=TRUE),
-            grepl('exact_title_missing_abstract_corroborated', z, fixed=TRUE),
-            grepl('exact_abstract_high_title_agreement', z, fixed=TRUE),
-            grepl('strong_abstract_high_title_agreement', z, fixed=TRUE),
-            grepl('preprint_exact_title_compatible_year', z, fixed=TRUE),
-            grepl('preprint_strong_content_manifestation', z, fixed=TRUE),
-            grepl('strong_content_first_author_title_agreement', z, fixed=TRUE),
-            grepl('exact_short_title_author_journal', z, fixed=TRUE),
-            grepl('exact_title_year_journal_containment_no_doi', z, fixed=TRUE),
-            grepl('near_exact_title_first_author', z, fixed=TRUE),
-            grepl('doi_family_high_title_agreement', z, fixed=TRUE),
-            grepl('identifier_conflict_single_doi_exact_author_year', z, fixed=TRUE),
-            grepl('identifier_conflict_strong_content_exact_author_year', z, fixed=TRUE)
+          library(data.table)
+          set.seed(20261001)
+          n <- 120L
+          ids <- seq_len(n*2L)
+          meta <- data.table(
+            idx=ids,
+            author_norm=sample(c('smith|jones','lee|kim','patel|chen','ng|evans',NA_character_),length(ids),TRUE),
+            journal_norm=sample(c('journalofaquaculture','aquacultureresearch','nature','science','',NA_character_),length(ids),TRUE),
+            year=sample(c(2018:2026,NA_integer_),length(ids),TRUE),
+            doi_norm=sample(c('',NA_character_,'10.1000/a','10.1000/b','10.1101/12345','10.21203/rs.3.99'),length(ids),TRUE),
+            abstract_hash=sample(c('',NA_character_,'aaa','bbb','ccc'),length(ids),TRUE)
           )
-          cat('PASS: all historical decision-rule identifiers retained\n')
+          x <- data.table(
+            record_i=seq(1L,n*2L,by=2L),
+            record_j=seq(2L,n*2L,by=2L),
+            title_i=sprintf('Study Part %d on cultured fish in %d',sample(1:8,n,TRUE),sample(2018:2026,n,TRUE)),
+            title_j=sprintf('Study Part %d on cultured fish in %d',sample(1:8,n,TRUE),sample(2018:2026,n,TRUE)),
+            classification=sample(c('duplicate','review','unresolved'),n,TRUE),
+            rule=sample(c('title_containment_strong_abstract','title_similarity_0.97_strong_abstract','title_similarity_0.95_exact_author_year','candidate_only'),n,TRUE),
+            title_containment=sample(c(TRUE,FALSE),n,TRUE),
+            exact_title=sample(c(TRUE,FALSE),n,TRUE),
+            exact_abstract=sample(c(TRUE,FALSE),n,TRUE),
+            strong_abstract=sample(c(TRUE,FALSE),n,TRUE),
+            same_doi_family=sample(c(TRUE,FALSE),n,TRUE),
+            title_similarity=runif(n,0.90,1),
+            ordered_coverage=runif(n,0.85,1),
+            shingle_containment=runif(n,0.60,1)
+          )
+          # Force representative high-confidence and conflict cases.
+          x[1:12, title_j := title_i]
+          x[1:12, exact_title := TRUE]
+          x[1:12, title_containment := TRUE]
+          x[1:12, title_similarity := 1]
+          x[1:12, ordered_coverage := 1]
+          x[1:12, shingle_containment := 1]
+          x[1:12, exact_abstract := TRUE]
+          dir.create('synthetic',showWarnings=FALSE)
+          fwrite(x,'synthetic/scored_sample.csv')
+          fwrite(meta,'synthetic/normalised_metadata.csv')
+          cat(sprintf('PASS: synthetic state contains %d scored pairs\n',n))
+      - name: Extract pre-optimisation implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show e48af5c400e9aea6b5b647bf897f984b46223ff9:scripts/updater/workflow_01_deduplication_identifier_rescore.R > /tmp/w01_rescore_old.R
+          Rscript -e "parse(file='/tmp/w01_rescore_old.R');cat('PASS: old implementation recovered and parses\n')"
+      - name: Run pre-optimisation implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript /tmp/w01_rescore_old.R --input-dir synthetic --output-dir old_out --source-run-id 0
+      - name: Run vectorised implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_deduplication_identifier_rescore.R --input-dir synthetic --output-dir new_out --source-run-id 0
+      - name: Require decision equivalence
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          a<-fread('old_out/rescored_sample.csv')
+          b<-fread('new_out/rescored_sample.csv')
+          cols<-c('record_i','record_j','identifier_conflict','identifier_conflict_reason',
+                  'rescored_classification','rescored_rule','promotion_reason',
+                  'one_abstract_missing','first_author_match','journal_match',
+                  'preprint_pair','review_route','manual_review_needed','decision_changed')
+          stopifnot(identical(a[,..cols],b[,..cols]))
+          cat(sprintf('PASS: old and vectorised W01 decisions are identical for %d synthetic pairs\n',nrow(a)))
