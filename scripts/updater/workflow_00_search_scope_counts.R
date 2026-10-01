@@ -3,6 +3,7 @@
 suppressPackageStartupMessages({
   library(httr2)
   library(jsonlite)
+  library(xml2)
 })
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -15,6 +16,7 @@ arg <- function(flag, default = NULL) {
 
 plan_path <- arg("--plan")
 lens_config_path <- arg("--lens-config", "config/lens_search.json")
+ebsco_config_path <- arg("--ebsco-config", "config/workflow00_ebsco_sources.json")
 output_csv <- arg("--output-csv")
 output_json <- arg("--output-json")
 if (any(vapply(list(plan_path, output_csv, output_json), is.null, logical(1)))) {
@@ -22,13 +24,16 @@ if (any(vapply(list(plan_path, output_csv, output_json), is.null, logical(1)))) 
 }
 if (!file.exists(plan_path)) stop("Search plan not found", call. = FALSE)
 if (!file.exists(lens_config_path)) stop("Lens config not found", call. = FALSE)
+if (!file.exists(ebsco_config_path)) stop("EBSCO config not found", call. = FALSE)
 
 now_utc <- function() format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
 search_date <- format(Sys.Date(), "%Y-%m-%d")
 plan <- fromJSON(plan_path, simplifyVector = FALSE)
 q <- plan$source_queries
 
-required_queries <- c("lens", "scopus", "openalex", "agricola", "pubmed", "ethos", "cba", "epmc_preprints", "wos")
+ebsco_cfg <- fromJSON(ebsco_config_path,simplifyVector=FALSE)
+ebsco_sources <- names(ebsco_cfg$sources)
+required_queries <- c("lens", "scopus", "openalex", "agricola", "pubmed", "ethos", "cba", "epmc_preprints", "wos", ebsco_sources)
 missing_queries <- required_queries[vapply(required_queries, function(x) is.null(q[[x]]) || !nzchar(trimws(as.character(q[[x]]))), logical(1))]
 if (length(missing_queries)) stop(sprintf("Search plan missing source queries: %s", paste(missing_queries, collapse = ", ")), call. = FALSE)
 
@@ -152,6 +157,33 @@ count_wos <- function(query) {
   n
 }
 
+count_ebsco <- function(source_slug, query) {
+  uid <- trimws(Sys.getenv("EBSCO_EHOST_UID",""))
+  pwd <- trimws(Sys.getenv("EBSCO_EHOST_PWD",""))
+  if (!nzchar(uid) || !nzchar(pwd)) stop("EBSCO_EHOST_UID and EBSCO_EHOST_PWD are required",call.=FALSE)
+  src <- ebsco_cfg$sources[[source_slug]]
+  if (is.null(src)) stop(sprintf("Unknown EBSCO source: %s",source_slug),call.=FALSE)
+  req <- request("https://eit.ebscohost.com/Services/SearchService.asmx/Search") |>
+    req_url_query(
+      prof=uid,
+      pwd=pwd,
+      authType="profile",
+      db=as.character(src$db_code),
+      query=query,
+      format="detailed",
+      startrec="1",
+      numrec="1"
+    ) |>
+    req_error(is_error=function(resp) FALSE)
+  resp <- retry_request(req,as.character(src$display_name))
+  doc <- read_xml(resp_body_raw(resp))
+  hit_nodes <- xml_find_all(doc,"//*[local-name()='Hits']")
+  vals <- suppressWarnings(as.integer(trimws(xml_text(hit_nodes))))
+  vals <- vals[!is.na(vals)]
+  if (!length(vals)) stop(sprintf("%s response did not contain Hits",as.character(src$display_name)),call.=FALSE)
+  vals[[1L]]
+}
+
 safe_count <- function(label, fun) {
   message(sprintf("Counting %s...", label))
   tryCatch({
@@ -174,6 +206,12 @@ cba_r <- safe_count("Chinese Biological Abstracts", function() count_europe_pmc(
 preprints_r <- safe_count("Europe PMC preprints", function() count_europe_pmc(as.character(q$epmc_preprints),"Europe PMC preprints"))
 wos_r <- safe_count("Web of Science", function() count_wos(as.character(q$wos)))
 
+ebsco_results <- lapply(ebsco_sources,function(src) {
+  label <- as.character(ebsco_cfg$sources[[src]]$display_name)
+  safe_count(label,function() count_ebsco(src,as.character(q[[src]])))
+})
+names(ebsco_results) <- ebsco_sources
+
 read_manual_reported <- function(path) {
   if (!file.exists(path)) return(NA_integer_)
   x <- fromJSON(path, simplifyVector=FALSE)
@@ -193,19 +231,26 @@ rows <- data.frame(
     "Chinese Biological Abstracts",
     "Europe PMC preprints",
     "Web of Science Core Collection",
+    vapply(ebsco_sources,function(src) as.character(ebsco_cfg$sources[[src]]$display_name),character(1)),
     "CAB Abstracts",
     "ProQuest Dissertations & Theses Global"
   ),
   access_mode = c(
-    rep("API count", 9),
+    rep("API count", 9 + length(ebsco_sources)),
     "Manual W00 registry count",
     "Manual W00 registry count"
   ),
-  search_date = c(rep(search_date, 9), "2026-09-30", "2026-09-30"),
-  hits = c(lens_r$hits, scopus_r$hits, openalex_r$hits, agricola_r$hits, pubmed_r$hits, ethos_r$hits, cba_r$hits, preprints_r$hits, wos_r$hits, cab_n, proquest_n),
+  search_date = c(rep(search_date, 9 + length(ebsco_sources)), "2026-09-30", "2026-09-30"),
+  hits = c(
+    lens_r$hits, scopus_r$hits, openalex_r$hits, agricola_r$hits, pubmed_r$hits,
+    ethos_r$hits, cba_r$hits, preprints_r$hits, wos_r$hits,
+    vapply(ebsco_results,function(x) if(is.null(x$hits)) NA_integer_ else as.integer(x$hits),integer(1)),
+    cab_n, proquest_n
+  ),
   status = c(
     lens_r$status, scopus_r$status, openalex_r$status, agricola_r$status, pubmed_r$status,
     ethos_r$status, cba_r$status, preprints_r$status, wos_r$status,
+    vapply(ebsco_results,function(x) as.character(x$status),character(1)),
     "validated W00 manual-search reported count",
     "validated W00 manual-search reported count"
   ),
