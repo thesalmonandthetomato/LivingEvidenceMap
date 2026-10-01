@@ -1,5 +1,8 @@
 name: Test EBSCO EHOST API
 on:
+  push:
+    branches:
+      - test-ebsco-eit-api
   workflow_dispatch:
 jobs:
   test:
