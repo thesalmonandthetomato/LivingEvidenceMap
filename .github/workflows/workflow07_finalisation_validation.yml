@@ -55,7 +55,7 @@ jobs:
           Rscript scripts/reporting/workflow07_apply_retention_and_review_rules.R \
             --scores inputs/handoff/workflow07_topic_final/workflow07_topic_pathway_scores.csv \
             --records inputs/handoff/workflow07_topic_final/workflow07_topic_record_summary.csv \
-            --ontology data/reference/topic_ontology_v3_6.csv \
+            --ontology user_input/workflow07_topic_ontology.csv \
             --zero-rescreen inputs/rescreen/workflow07_zero_topic_targeted_rescreen.jsonl \
             --output-dir outputs/workflow07_finalisation_validation
           Rscript -e '
