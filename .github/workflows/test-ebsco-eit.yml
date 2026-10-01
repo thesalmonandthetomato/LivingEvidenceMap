@@ -8,21 +8,33 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe EBSCO profile
+      - name: Probe one PsycInfo search result
         env:
           EBSCO_UID: ${{ secrets.EBSCO_EHOST_UID }}
           EBSCO_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
         run: |
           test -n "$EBSCO_UID"
           test -n "$EBSCO_PWD"
-          curl -sS --get "https://eit.ebscohost.com/Services/SearchService.asmx/Info"             --data-urlencode "prof=$EBSCO_UID"             --data-urlencode "pwd=$EBSCO_PWD"             --data-urlencode "authType=profile"             -o /tmp/ebsco.xml
+          curl -sS --get "https://eit.ebscohost.com/Services/SearchService.asmx/Search" \
+            --data-urlencode "prof=$EBSCO_UID" \
+            --data-urlencode "pwd=$EBSCO_PWD" \
+            --data-urlencode "authType=profile" \
+            --data-urlencode "db=psyh" \
+            --data-urlencode "query=TI salmon" \
+            --data-urlencode "format=detailed" \
+            --data-urlencode "startrec=1" \
+            --data-urlencode "numrec=1" \
+            -o /tmp/ebsco.xml
           python - <<'PY'
           import xml.etree.ElementTree as ET
-          p="/tmp/ebsco.xml"
-          root=ET.parse(p).getroot()
-          print("ROOT", root.tag)
+          root=ET.parse("/tmp/ebsco.xml").getroot()
+          def strip(tag): return tag.split("}")[-1]
+          print("ROOT", strip(root.tag))
           for el in root.iter():
-              attrs=el.attrib
-              if attrs:
-                  print(el.tag, {k:v for k,v in attrs.items() if "pwd" not in k.lower() and "pass" not in k.lower()})
+              t=strip(el.tag)
+              txt=(el.text or "").strip().replace("\n"," ")
+              attrs={k.split("}")[-1]:v for k,v in el.attrib.items()}
+              if txt or attrs:
+                  if len(txt)>220: txt=txt[:220]+"..."
+                  print(t, attrs, txt)
           PY
