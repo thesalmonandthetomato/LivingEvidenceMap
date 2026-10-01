@@ -15,7 +15,7 @@ It does **not** modify Workflow 01 and does **not** write to canonical data.
 - records the queue SHA-256 with each decision;
 - provides an exporter compatible with the existing W01 human-decision JSONL contract.
 
-The bundled fixture is synthetic but schema-faithful. It is intentionally labelled with `prototype` IDs and must never be treated as scientific data.
+The default bundled fixture contains two real W01 adjudication cases copied from the locked 730-case recovery artefact from run `36049567027`. Its provenance is recorded in `fixtures/w01_real_sample_2.provenance.json`. It is for UI/contract development only and must not be used to resume that historical run.
 
 ## Run locally
 
