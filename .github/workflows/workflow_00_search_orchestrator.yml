@@ -977,11 +977,22 @@ jobs:
               *) continue ;;
             esac
             out="outputs/updater/expansion_reconciliation/$source"
-            Rscript scripts/updater/workflow_00_expansion_native_id_reconcile.R \
-              --source "$source" \
-              --current-root "expansion_current/$source" \
-              --history-root "expansion_history/$source" \
-              --output-dir "$out"
+            if [[ "$source" == ebsco_* ]]; then
+              registry="expansion_history/$source/known_native_ids.txt"
+              test -f "$registry"
+              Rscript scripts/updater/workflow_00_ebsco_native_id_reconcile.R \
+                --source "$source" \
+                --run-type expansion \
+                --current-root "expansion_current/$source" \
+                --registry "$registry" \
+                --output-dir "$out"
+            else
+              Rscript scripts/updater/workflow_00_expansion_native_id_reconcile.R \
+                --source "$source" \
+                --current-root "expansion_current/$source" \
+                --history-root "expansion_history/$source" \
+                --output-dir "$out"
+            fi
 
             mkdir -p outputs/updater/expansion_archive/data/workflow00/source_id_registry
             cp "$out/updated_native_ids.txt" \
@@ -1037,9 +1048,11 @@ jobs:
           if-no-files-found: error
 
   archive-search-records:
-    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc_preprints, wos, reconcile-expansion]
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc_preprints, wos, ebsco_africa_wide, ebsco_amed, ebsco_psycinfo, ebsco_atla_religion, ebsco_biological_agricultural_index, ebsco_cinahl, ebsco_communication_mass_media, ebsco_econlit, ebsco_eric, ebsco_family_society, ebsco_greenfile, ebsco_hospitality_tourism, ebsco_medline, ebsco_mla, ebsco_political_science, ebsco_sportdiscus, ebsco_waters_oceans, reconcile-expansion]
     if: ${{ always() && needs.validate-and-plan.result == 'success' }}
     runs-on: ubuntu-latest
+    env:
+      SELECTED_SOURCES: ${{ needs.validate-and-plan.outputs.selected_sources_csv }}
     steps:
       - name: Ensure selected child searches and reconciliation succeeded
         env:
@@ -1072,6 +1085,12 @@ jobs:
         with:
           ref: ${{ env.WORKFLOW00_ORCHESTRATOR_BRANCH }}
           fetch-depth: 0
+
+      - name: Download Workflow 00 plan
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow00-search-plan-${{ github.run_id }}
+          path: downloaded_plan
 
       - name: Download child search records
         env:
@@ -1126,7 +1145,7 @@ jobs:
             test -f "$dest/source_delta/updated_native_ids.txt"
           done
 
-      - name: Download full-run native-ID seeds for new Europe PMC sources
+      - name: Download full-run native-ID seeds for sources requiring registries
         if: ${{ inputs.run_type == 'full' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1138,7 +1157,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p downloaded_full_native
-          for source in pubmed ethos cba epmc_preprints; do
+          for source in pubmed ethos cba epmc_preprints ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
@@ -1168,7 +1187,9 @@ jobs:
 
           if [ '${{ inputs.run_type }}' = 'full' ]; then
             mkdir -p data/workflow00/source_id_registry
-            for source in pubmed ethos cba epmc_preprints; do
+            test -s downloaded_plan/source_selection.json
+            cp downloaded_plan/source_selection.json data/workflow00/source_selection.json
+            for source in pubmed ethos cba epmc_preprints ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
               src="downloaded_full_native/$source/source_delta"
               [ -d "$src" ] || continue
               cp "$src/updated_native_ids.txt" "data/workflow00/source_id_registry/${source}_native_ids.txt"
@@ -1195,6 +1216,9 @@ jobs:
           git add docs/search_record
           if [ '${{ inputs.run_type }}' = 'full' ] || [ '${{ inputs.run_type }}' = 'expansion' ] || [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
             git add data/workflow00/source_id_registry
+          fi
+          if [ '${{ inputs.run_type }}' = 'full' ]; then
+            git add data/workflow00/source_selection.json
           fi
 
           if git diff --cached --quiet; then
