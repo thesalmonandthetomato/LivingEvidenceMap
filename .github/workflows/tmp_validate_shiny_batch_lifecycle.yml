@@ -1,0 +1,52 @@
+name: TEMP validate Shiny batch lifecycle
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_shiny_batch_lifecycle.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+
+      - name: Parse lifecycle R scripts
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_shiny_batch_status.R',
+            'scripts/updater/workflow_08_publish_shiny_queue.R',
+            'scripts/updater/workflow_08_export_shiny_decisions.R'
+          )
+          invisible(lapply(files,parse))
+          cat('PASS: lifecycle R scripts parse\n')
+
+      - name: Parse modified workflow YAML
+        shell: ruby {0}
+        run: |
+          require 'yaml'
+          files = [
+            '.github/workflows/shiny-adjudication-publish-w01-queue.yml',
+            '.github/workflows/shiny-adjudication-publish-w02-queue.yml',
+            '.github/workflows/shiny-adjudication-publish-w04-validation.yml',
+            '.github/workflows/workflow_01_resume_after_human_review.yml',
+            '.github/workflows/workflow_02_resume_after_human_review.yml',
+            '.github/workflows/workflow_04_finalize_human_validation.yml',
+            '.github/workflows/workflow_08_production.yml',
+            '.github/workflows/workflow_08_resume_after_shiny.yml'
+          ]
+          files.each { |f| YAML.load_file(f, aliases: true) }
+          puts 'PASS: lifecycle workflow YAML parses'
