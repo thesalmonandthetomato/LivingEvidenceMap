@@ -46,3 +46,14 @@ The permanent GitHub Actions entry point is `.github/workflows/workflow_00_manua
 - `publish`: reverify the archived raw files and exact file set, require restricted access, then publish that same record.
 
 Manual RIS processing is R-only. Raw RIS files are staged in Zenodo and must not be committed to the repository.
+
+
+## Workflow 05 deterministic coding
+
+Workflow 05 keeps topic-specific deterministic coding inputs in this directory:
+
+- `workflow05_coding_config.json` defines the coding dimension, code map, generic and NONE values, matcher-specific vocabulary classes, and the paths to the current vocabulary files.
+- `workflow05_deterministic_concepts.csv` is the authoritative three-column runtime vocabulary (`coding, entity, terms`).
+- `workflow05_species_dictionary_reference.csv` is the expanded reference dictionary retained for validation and legacy/reporting helpers.
+
+The permanent Workflow 05 production controller and coding script must obtain topic-specific coding semantics from these inputs rather than embedding salmon-specific codes, labels, genera or vocabulary in orchestration code. The current files preserve the validated salmon-farming configuration; a future topic-specific deployment should replace these user inputs while leaving the production control flow unchanged.
