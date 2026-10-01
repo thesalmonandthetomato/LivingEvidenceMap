@@ -1,0 +1,89 @@
+name: TEMP validate W06 deterministic input migration
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w06_deterministic_migration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('dplyr','stringr','jsonlite','testthat'))
+      - name: Parse and run existing geography regression tests
+        shell: Rscript {0}
+        run: |
+          parse(file='R/geography_primary_country.R')
+          parse(file='R/geography_detect.R')
+          testthat::test_file('tests/testthat/test-geography.R', reporter='summary')
+      - name: Compare pre-migration and configured deterministic behaviour
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show 64e1390d158fb292e9f4b7950ac542149722b74c:R/geography_primary_country.R > /tmp/geography_primary_country_old.R
+          Rscript - <<'RS'
+          library(dplyr)
+          library(stringr)
+          library(jsonlite)
+
+          old_env <- new.env(parent=.GlobalEnv)
+          new_env <- new.env(parent=.GlobalEnv)
+          sys.source('/tmp/geography_primary_country_old.R', envir=old_env)
+          sys.source('R/geography_primary_country.R', envir=new_env)
+
+          mentions <- data.frame(
+            record_sequence=c(1,2,3,4,5,6,7,8,8),
+            record_id=c('A','B','C','D','E','F','G','H','H'),
+            source=c('abstract','abstract','abstract','abstract','abstract','abstract','abstract','abstract','abstract'),
+            matched_text=c('Norwegian','Norway','Chile','Canada','Scotland','Australia','Spain','Norway','Chile'),
+            country_name=c('Norway','Norway','Chile','Canada','United Kingdom','Australia','Spain','Norway','Chile'),
+            iso3c=c('NOR','NOR','CHL','CAN','GBR','AUS','ESP','NOR','CHL'),
+            region_name=c('Europe','Europe','South America','North America','Europe','Oceania','Europe','Europe','South America'),
+            context=c(
+              'Norwegian salmon were compared for growth',
+              'samples were collected from fish farms in Norway',
+              'the study was conducted at aquaculture farms in Chile',
+              'fish were sampled from a hatchery in Canada',
+              'fieldwork was conducted in Scotland',
+              'previous studies in Australia reported similar results',
+              'equipment supplied by a company in Spain',
+              'fish industry in Norway',
+              'fish industry in Chile'
+            ),
+            stringsAsFactors=FALSE
+          )
+
+          old <- old_env$assign_primary_country(mentions)
+          new <- new_env$assign_primary_country(
+            mentions,
+            domain_config_path='user_input/workflow06_geography_domain_config.json'
+          )
+
+          normalise <- function(x) {
+            lapply(x, function(z) {
+              if(!is.data.frame(z)) return(z)
+              z[] <- lapply(z, function(v) if(is.factor(v)) as.character(v) else v)
+              rownames(z) <- NULL
+              z
+            })
+          }
+          a <- normalise(old)
+          b <- normalise(new)
+          stopifnot(identical(a,b))
+          cat('PASS: configured W06 deterministic geography is identical to pre-migration behaviour on targeted domain fixtures\n')
+          RS
