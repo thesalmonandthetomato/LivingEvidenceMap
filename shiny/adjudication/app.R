@@ -173,7 +173,7 @@ server <- function(input, output, session) {
     if (save_choice("uncertain") && idx() < length(cases)) idx(idx()+1L)
   })
   observeEvent(input$previous, if (idx()>1L) idx(idx()-1L))
-  observeEvent(input$next, if (idx()<length(cases)) idx(idx()+1L))
+  observeEvent(input[["next"]], if (idx()<length(cases)) idx(idx()+1L))
 
   output$save_status <- renderText(status())
 }
