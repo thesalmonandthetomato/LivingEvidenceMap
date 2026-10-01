@@ -1,0 +1,2 @@
+publish W04 validation sample: 500 records
+seed: w04-validation-2026-10-01-v1
