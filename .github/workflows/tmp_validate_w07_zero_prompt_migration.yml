@@ -1,0 +1,61 @@
+name: TEMP validate W07 zero-topic prompt migration
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w07_zero_prompt_migration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Validate zero-topic prompt equivalence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show 6324f6a4584fa1bf8df550ac9b7e803bda5003cc:scripts/reporting/workflow07_zero_topic_targeted_rescreen.R > /tmp/w07_zero_old.R
+          Rscript - <<'RS'
+          old_lines <- readLines('/tmp/w07_zero_old.R', warn=FALSE, encoding='UTF-8')
+          s <- grep('^SYSTEM_PROMPT <- paste\\($', old_lines)
+          e <- grep('^PROMPT_VERSION <- "workflow07-zero-topic-targeted-rescreen-v1"$', old_lines)
+          stopifnot(length(s)==1L, length(e)==1L, e>s)
+          expr <- paste(old_lines[s:(e-1L)], collapse='\n')
+          env <- new.env(parent=baseenv())
+          eval(parse(text=expr), envir=env)
+          old_prompt <- env$SYSTEM_PROMPT
+
+          new_prompt <- paste(readLines('user_input/workflow07_zero_topic_rescreen_prompt.txt',
+                                        warn=FALSE, encoding='UTF-8'), collapse='\n')
+          stopifnot(identical(old_prompt,new_prompt))
+
+          if(!requireNamespace('digest',quietly=TRUE)) install.packages('digest')
+          old_sha <- digest::digest(old_prompt,algo='sha256',serialize=FALSE)
+          new_sha <- digest::digest(new_prompt,algo='sha256',serialize=FALSE)
+          cat('old prompt sha=',old_sha,'\n',sep='')
+          cat('new prompt sha=',new_sha,'\n',sep='')
+          stopifnot(identical(old_sha,new_sha))
+          cat('PASS: W07 zero-topic prompt text and computed SHA are unchanged\n')
+          RS
+
+      - name: Validate current script wiring and parse
+        shell: Rscript {0}
+        run: |
+          x <- readLines('scripts/reporting/workflow07_zero_topic_targeted_rescreen.R',warn=FALSE)
+          stopifnot(any(grepl('user_input/workflow07_zero_topic_rescreen_prompt.txt',x,fixed=TRUE)))
+          stopifnot(!any(grepl('You are carrying out a targeted eligibility re-screen',x,fixed=TRUE)))
+          parse(file='scripts/reporting/workflow07_zero_topic_targeted_rescreen.R')
+          cat('PASS: current W07 zero-topic rescreen uses external prompt and parses\n')
