@@ -57,3 +57,13 @@ Workflow 05 keeps topic-specific deterministic coding inputs in this directory:
 - `workflow05_species_dictionary_reference.csv` is the expanded reference dictionary retained for validation and legacy/reporting helpers.
 
 The permanent Workflow 05 production controller and coding script must obtain topic-specific coding semantics from these inputs rather than embedding salmon-specific codes, labels, genera or vocabulary in orchestration code. The current files preserve the validated salmon-farming configuration; a future topic-specific deployment should replace these user inputs while leaving the production control flow unchanged.
+
+
+## Workflow 06 geography coding
+
+Workflow 06 keeps topic-specific geography inputs in this directory:
+
+- `workflow06_geography_semantic_prompt.txt` is the locked semantic geography prompt used by the Luna coding pass.
+- `workflow06_geography_domain_config.json` contains the small set of domain-specific lexical terms used by deterministic geography ranking and false-positive suppression.
+
+The global country gazetteer and generic geography decision rules remain implementation infrastructure rather than topic-specific user inputs. The migrated W06 inputs preserve the validated salmon-aquaculture behaviour exactly.
