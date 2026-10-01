@@ -1,0 +1,95 @@
+name: TEMP initialise Shiny decisions tab
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_init_shiny_decisions_tab.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  initialise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+      DECISIONS_TAB: 'decisions'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependency
+        shell: Rscript {0}
+        run: install.packages('googlesheets4')
+
+      - name: Initialise and verify decisions tab
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+
+          Rscript - <<'RSCRIPT'
+          suppressPackageStartupMessages(library(googlesheets4))
+
+          ss <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
+          tab <- Sys.getenv("DECISIONS_TAB")
+          cred <- file.path(Sys.getenv("RUNNER_TEMP"), "lem-google-service-account.json")
+          required <- c(
+            "decision_id",
+            "review_case_id",
+            "decision",
+            "rationale",
+            "reviewer",
+            "resolved_at_utc",
+            "queue_sha256",
+            "supersedes_decision_id"
+          )
+
+          gs4_auth(path = cred, cache = FALSE)
+          tabs <- sheet_names(ss)
+          if (!tab %in% tabs) {
+            sheet_add(ss, sheet = tab)
+          }
+
+          current <- tryCatch(
+            read_sheet(ss, sheet = tab, col_types = "c"),
+            error = function(e) data.frame()
+          )
+
+          if (nrow(current) == 0L && ncol(current) == 0L) {
+            header <- as.data.frame(
+              setNames(replicate(length(required), character(), simplify = FALSE), required),
+              stringsAsFactors = FALSE
+            )
+            sheet_write(header, ss = ss, sheet = tab)
+          }
+
+          verify_tabs <- sheet_names(ss)
+          if (!tab %in% verify_tabs) stop("Decisions tab was not created")
+
+          verify <- read_sheet(ss, sheet = tab, col_types = "c")
+          if (!identical(names(verify), required)) {
+            stop(sprintf(
+              "Decisions tab schema mismatch: %s",
+              paste(names(verify), collapse = ",")
+            ))
+          }
+
+          cat("PASS: Shiny decisions tab initialised and verified\n")
+          cat("Tab:", tab, "\n")
+          cat("Columns:", paste(required, collapse = ","), "\n")
+          cat("Existing decision rows:", nrow(verify), "\n")
+          RSCRIPT
