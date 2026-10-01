@@ -158,6 +158,24 @@ jobs:
           esac
 
 
+      - name: Seed native-ID registry for new Europe PMC source
+        if: ${{ inputs.run_type == 'full' && (inputs.source == 'pubmed' || inputs.source == 'ethos' || inputs.source == 'cba' || inputs.source == 'epmc_preprints') }}
+        env:
+          SOURCE: ${{ inputs.source }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/empty_native_ids.txt
+          Rscript scripts/updater/workflow_00_native_id_reconcile.R \
+            --source "$SOURCE" \
+            --run-type full \
+            --current-root outputs/updater/source_child \
+            --registry /tmp/empty_native_ids.txt \
+            --output-dir outputs/updater/source_delta
+          test -s outputs/updater/source_delta/reconciliation_manifest.json
+          test -s outputs/updater/source_delta/updated_native_ids.txt
+
+
       - name: Reconcile fortnightly harvest by native source ID
         if: ${{ inputs.run_type == 'fortnightly' }}
         env:
