@@ -1,6 +1,11 @@
 name: Publish W04 validation screening queue to Shiny
 
 on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/workflow04/.run_shiny_validation_publish'
   workflow_dispatch:
     inputs:
       lean_pointer_path:
