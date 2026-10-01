@@ -125,8 +125,8 @@ align_cols <- function(a,b){
 
 # 2. Replay pair-decision upserts.
 prev_pairs_path <- file.path(previous_root,"workflow01_full_five_source","final_pair_decisions.csv")
-prev_pairs <- fread(prev_pairs_path,na.strings=c("","NA"))
-up_pairs <- fread(file.path(delta_dir,"pair_decision_upserts.csv"),na.strings=c("","NA"))
+prev_pairs <- fread(prev_pairs_path,na.strings=c("","NA"),colClasses="character")
+up_pairs <- fread(file.path(delta_dir,"pair_decision_upserts.csv"),na.strings=c("","NA"),colClasses="character")
 pair_out <- file.path(output_root,"workflow01_full_five_source","final_pair_decisions.csv")
 if(nrow(up_pairs)){
   if(anyDuplicated(up_pairs$pair_key)) stop("Delta pair upserts contain duplicate pair_key",call.=FALSE)
@@ -138,15 +138,15 @@ if(nrow(up_pairs)){
 } else {
   file.copy(prev_pairs_path,pair_out,overwrite=TRUE)
 }
-pair_state_sha <- table_state_sha(fread(pair_out,na.strings=c("","NA")),"pair_key")
+pair_state_sha <- table_state_sha(fread(pair_out,na.strings=c("","NA"),colClasses="character"),"pair_key")
 if(!identical(tolower(pair_state_sha),tolower(as.character(m$target$pair_decisions_state_sha256)))) {
   stop("Replayed pair-decision semantic state hash does not match target",call.=FALSE)
 }
 
 # 3. Replay cluster-map upserts.
 prev_map_path <- file.path(previous_root,"workflow01_full_five_source","manifestation_cluster_map.csv")
-prev_map <- fread(prev_map_path,na.strings=c("","NA"))
-up_map <- fread(file.path(delta_dir,"cluster_map_upserts.csv"),na.strings=c("","NA"))
+prev_map <- fread(prev_map_path,na.strings=c("","NA"),colClasses="character")
+up_map <- fread(file.path(delta_dir,"cluster_map_upserts.csv"),na.strings=c("","NA"),colClasses="character")
 map_out <- file.path(output_root,"workflow01_full_five_source","manifestation_cluster_map.csv")
 if(nrow(up_map)){
   prev_map[,manifestation_key:=paste(source,source_record_id,sep="::")]
@@ -156,12 +156,14 @@ if(nrow(up_map)){
   prev_map <- prev_map[!(manifestation_key %in% up_map$manifestation_key)]
   cmap <- rbindlist(list(prev_map,up_map),use.names=TRUE,fill=TRUE)
   cmap[,manifestation_key:=NULL]
-  setorder(cmap,idx)
+  suppressWarnings(cmap[, idx_order__ := as.integer(idx)])
+  setorder(cmap,idx_order__,source,source_record_id,na.last=TRUE)
+  cmap[,idx_order__:=NULL]
   fwrite(cmap,map_out,na="")
 } else {
   file.copy(prev_map_path,map_out,overwrite=TRUE)
 }
-map_state_sha <- table_state_sha(fread(map_out,na.strings=c("","NA")),c("source","source_record_id"))
+map_state_sha <- table_state_sha(fread(map_out,na.strings=c("","NA"),colClasses="character"),c("source","source_record_id"))
 if(!identical(tolower(map_state_sha),tolower(as.character(m$target$cluster_map_state_sha256)))) {
   stop("Replayed cluster-map semantic state hash does not match target",call.=FALSE)
 }
