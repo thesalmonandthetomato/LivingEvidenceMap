@@ -1,0 +1,138 @@
+name: TEMP validate EBSCO W00 integration
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - ".github/workflows/tmp_validate_ebsco_w00.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+      EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install validation dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","httr2","xml2","digest","yaml"))
+
+      - name: Parse changed R scripts
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            "scripts/updater/workflow_00_search_orchestrator.R",
+            "scripts/updater/workflow_00_resolve_source_selection.R",
+            "scripts/updater/workflow_00g_ebsco_ingestion.R",
+            "scripts/updater/workflow_00_ebsco_native_id_reconcile.R"
+          )
+          for (f in files) {
+            parse(file=f)
+            cat("PASS parse:",f,"\n")
+          }
+
+      - name: Parse Workflow 00 YAML
+        shell: Rscript {0}
+        run: |
+          yaml::read_yaml(".github/workflows/workflow_00_search_orchestrator.yml")
+          yaml::read_yaml(".github/workflows/_workflow_00_orchestrated_source_child.yml")
+          cat("PASS: YAML parsed\n")
+
+      - name: Validate query generation and source catalogue
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/w00plan
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type full \
+            --config user_input/workflow00_search_strategy.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --output-dir /tmp/w00plan
+          Rscript - <<'RS'
+          library(jsonlite)
+          p <- fromJSON("/tmp/w00plan/search_plan.json",simplifyVector=FALSE)
+          cfg <- fromJSON("config/workflow00_ebsco_sources.json",simplifyVector=FALSE)
+          stopifnot(length(cfg$sources)==17L)
+          stopifnot(all(names(cfg$sources) %in% names(p$source_queries)))
+          stopifnot(length(p$source_queries)==26L)
+          q <- p$source_queries$ebsco_psycinfo
+          stopifnot(grepl("TI",q,fixed=TRUE),grepl("AB",q,fixed=TRUE),grepl("KW",q,fixed=TRUE))
+          cat("PASS: 26 source queries including 17 EBSCO databases\n")
+          RS
+
+      - name: Validate frozen source selection
+        env:
+          W00_SELECT_LENS: "true"
+          W00_SELECT_SCOPUS: "false"
+          W00_SELECT_OPENALEX: "false"
+          W00_SELECT_AGRICOLA: "false"
+          W00_SELECT_PUBMED: "false"
+          W00_SELECT_ETHOS: "false"
+          W00_SELECT_CBA: "false"
+          W00_SELECT_EPMC_PREPRINTS: "false"
+          W00_SELECT_WOS: "false"
+          W00_SELECT_EBSCO_PSYCINFO: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_resolve_source_selection.R \
+            --run-type full \
+            --output /tmp/w00plan/source_selection_test.json
+          Rscript - <<'RS'
+          library(jsonlite)
+          x <- fromJSON("/tmp/w00plan/source_selection_test.json")
+          stopifnot(setequal(x$selected_sources,c("lens","ebsco_psycinfo")))
+          cat("PASS: frozen selection resolver\n")
+          RS
+
+      - name: Smoke-test one EBSCO record
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/ebsco_smoke
+          Rscript scripts/updater/workflow_00g_ebsco_ingestion.R \
+            --source ebsco_psycinfo \
+            --query "TI salmon" \
+            --max-records 1 \
+            --page-size 1 \
+            --output-dir /tmp/ebsco_smoke
+          Rscript - <<'RS'
+          library(jsonlite)
+          m <- fromJSON("/tmp/ebsco_smoke/manifest.json")
+          stopifnot(m$source=="ebsco_psycinfo",m$records_retrieved==1L,m$reported_total>=1L)
+          line <- readLines("/tmp/ebsco_smoke/records.jsonl",n=1)
+          r <- fromJSON(line)
+          stopifnot(r$source$provider=="ebsco_psycinfo",nzchar(r$sidecar_identity$sidecar_record_id))
+          cat("PASS: EBSCO one-record smoke test\n")
+          RS
+
+      - name: Validate EBSCO reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/empty_ids.txt
+          rm -rf /tmp/ebsco_delta
+          Rscript scripts/updater/workflow_00_ebsco_native_id_reconcile.R \
+            --source ebsco_psycinfo \
+            --run-type full \
+            --current-root /tmp/ebsco_smoke \
+            --registry /tmp/empty_ids.txt \
+            --output-dir /tmp/ebsco_delta
+          test -s /tmp/ebsco_delta/updated_native_ids.txt
+          test -s /tmp/ebsco_delta/filtered_source/records.jsonl
+          echo "PASS: EBSCO reconciliation"
