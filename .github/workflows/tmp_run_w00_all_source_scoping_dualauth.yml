@@ -1,0 +1,67 @@
+name: TEMP W00 all-source scoping dual-auth
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w00_all_source_scoping_dualauth.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-pandoc@v2
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','rmarkdown','knitr'))
+      - name: Validate and plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow00_search_scope/plan
+          Rscript scripts/updater/workflow_00_validate_scoping_search.R             --input user_input/scoping_search_string.txt             --output outputs/workflow00_search_scope/plan/search_plan.json
+      - name: Run count-only searches
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+          WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_search_scope_counts.R             --plan outputs/workflow00_search_scope/plan/search_plan.json             --lens-config config/lens_search.json             --output-csv outputs/workflow00_search_scope/search_scope_counts.csv             --output-json outputs/workflow00_search_scope/search_scope_counts.json
+      - name: Render report
+        shell: Rscript {0}
+        run: |
+          rmarkdown::render(
+            'docs/reporting/workflow_00/search_scoping_report.Rmd',
+            output_file='search_scoping_report.html',
+            output_dir=normalizePath('outputs/workflow00_search_scope',mustWork=TRUE),
+            params=list(
+              counts_csv=file.path(Sys.getenv('GITHUB_WORKSPACE'),'outputs/workflow00_search_scope/search_scope_counts.csv'),
+              counts_json=file.path(Sys.getenv('GITHUB_WORKSPACE'),'outputs/workflow00_search_scope/search_scope_counts.json')
+            ),
+            quiet=TRUE
+          )
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-all-source-scoping-dualauth-${{ github.run_id }}
+          path: outputs/workflow00_search_scope/
+          retention-days: 90
+          if-no-files-found: error
