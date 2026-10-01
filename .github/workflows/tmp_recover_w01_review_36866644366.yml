@@ -52,7 +52,7 @@ jobs:
           lines <- lines[nzchar(trimws(lines))]
           stopifnot(length(lines)==74L)
           man <- fromJSON(m,simplifyVector=FALSE)
-          stopifnot(as.integer(man$cases)==74L)
+          stopifnot(length(man$pending_count)==1L, as.integer(man$pending_count)==74L)
           actual <- digest(file=q,algo='sha256',serialize=FALSE)
           stopifnot(identical(actual,as.character(man$queue_sha256)))
           cat('PASS: recovered immutable 74-case review package\n')
