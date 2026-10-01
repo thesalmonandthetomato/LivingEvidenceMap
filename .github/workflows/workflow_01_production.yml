@@ -86,7 +86,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest','httr2','stringdist','stringi','xml2'))
+        run: install.packages(c('data.table','jsonlite','digest','httr2','stringdist','stringi','xml2','googlesheets4'))
 
       - name: Validate input pointers and source subset
         env:
@@ -552,14 +552,22 @@ jobs:
       - name: Publish human-review queue to Shiny sidecar
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
         env:
-          GH_TOKEN: ${{ github.token }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+          QUEUE_TAB: 'queue_w01_active'
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow run shiny-adjudication-publish-w01-queue.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref "$WORKFLOW01_BRANCH" \
-            -f source_run_id="$GITHUB_RUN_ID"
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_01_publish_human_review_queue_to_shiny.R \
+            --queue outputs/adjudication/human_review_package/human_review_cases.jsonl \
+            --manifest outputs/adjudication/human_review_package/review_manifest.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --tab "$QUEUE_TAB" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
 
       - name: Build Workflow 01 review notification email
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
