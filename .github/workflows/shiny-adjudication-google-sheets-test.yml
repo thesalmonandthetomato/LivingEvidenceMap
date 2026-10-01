@@ -2,6 +2,11 @@ name: Shiny adjudication Google Sheets connection test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - shiny-adjudication-interface
+    paths:
+      - '.github/workflows/shiny-adjudication-google-sheets-test.yml'
 
 permissions:
   contents: read
