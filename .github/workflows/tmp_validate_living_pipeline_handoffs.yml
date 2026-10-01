@@ -94,7 +94,7 @@ jobs:
           stopifnot(grepl('--supersedes-record-id',x,fixed=TRUE))
           cat('PASS: W08 future publication registry contract validates\n')
 
-      - name: Validate W10 is corpus dynamic
+      - name: Validate W09-W10 dynamic handoff
         shell: Rscript {0}
         run: |
           files <- c('.github/workflows/workflow_10_dashboard.yml',
@@ -108,6 +108,12 @@ jobs:
           stopifnot(grepl('flow$counts$combined_search_results',txt,fixed=TRUE))
           stopifnot(grepl('flow$counts$deduplicated_records',txt,fixed=TRUE))
           stopifnot(grepl('flow$counts$title_abstract_screened',txt,fixed=TRUE))
+          w9 <- paste(readLines('.github/workflows/report_workflow09_figures.yml',warn=FALSE),collapse='\n')
+          flow <- paste(readLines('visualisations/07_flow_diagram.R',warn=FALSE),collapse='\n')
+          stopifnot(grepl('search_update_date:',w9,fixed=TRUE))
+          stopifnot(grepl('SEARCH_UPDATE_DATE',flow,fixed=TRUE))
+          stopifnot(grepl('search_update_date = if (nzchar(search_update_date)) search_update_date else NULL',flow,fixed=TRUE))
+          parse(file='visualisations/07_flow_diagram.R')
           parse(file='R/workflow_10_dashboard_from_canonical_jsonl.R')
           parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
-          cat('PASS: W10 is dynamically bound to current W08/W09 state\n')
+          cat('PASS: W09-W10 handoff is dynamically bound to current state\n')
