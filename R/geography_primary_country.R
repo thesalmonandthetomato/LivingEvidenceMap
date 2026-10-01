@@ -10,7 +10,25 @@
 #   3. Otherwise, abstract countries are ranked by evidence strength.
 #   4. Exact ties are sent to review rather than resolved arbitrarily.
 
-assign_primary_country <- function(mentions) {
+assign_primary_country <- function(
+  mentions,
+  domain_config_path = "user_input/workflow06_geography_domain_config.json"
+) {
+  if (is.null(domain_config_path) || !nzchar(trimws(domain_config_path)) || !file.exists(domain_config_path)) {
+    stop("Workflow 06 geography domain config not found", call. = FALSE)
+  }
+  domain_config <- jsonlite::fromJSON(domain_config_path, simplifyVector = FALSE)
+  cfg_terms <- function(x, field) {
+    vals <- trimws(as.character(unlist(x, use.names = FALSE)))
+    vals <- vals[!is.na(vals) & nzchar(vals)]
+    if (!length(vals)) stop(sprintf("Workflow 06 geography domain config lacks %s", field), call. = FALSE)
+    vals
+  }
+  species_adjective_heads <- cfg_terms(domain_config$species_adjective_heads, "species_adjective_heads")
+  domain_strong_location_phrases <- cfg_terms(domain_config$strong_location_phrases, "strong_location_phrases")
+  domain_substantive_entity_terms <- cfg_terms(domain_config$substantive_entity_terms, "substantive_entity_terms")
+  regex_escape <- function(x) stringr::str_replace_all(x, "([\\\\.^$|()\\[\\]{}*+?])", "\\\\\\1")
+
   required <- c("record_sequence", "record_id", "source", "matched_text",
                 "country_name", "iso3c", "region_name")
   missing <- setdiff(required, names(mentions))
@@ -49,7 +67,7 @@ assign_primary_country <- function(mentions) {
   species_adjective <- function(context, matched) {
     if (!nzchar(matched) || !nzchar(context)) return(FALSE)
     escaped <- stringr::str_replace_all(matched, "([\\\\.^$|()\\[\\]{}*+?])", "\\\\\\1")
-    pattern <- paste0("\\b", escaped, "\\s+(salmon|trout|char|grayling|fish)\\b")
+    head_pattern <- paste(vapply(species_adjective_heads, regex_escape, character(1L)), collapse = "|")\n    pattern <- paste0("\\b", escaped, "\\s+(", head_pattern, ")\\b")
     stringr::str_detect(context, stringr::regex(pattern, ignore_case = TRUE))
   }
 
@@ -81,17 +99,17 @@ assign_primary_country <- function(mentions) {
       "study site", "study sites", "sampled in", "sampled from",
       "samples were collected in", "samples were collected from", "collected in",
       "collected from", "obtained in", "obtained from", "farms in", "farm in",
-      "fish farms in", "aquaculture farms in", "sites in", "site in", "located in",
-      "reared in", "raised in", "cultured in", "produced in", "originating from",
-      "originated from", "surveyed in", "interviewed in", "fieldwork in",
-      "case study in"), collapse = "|"
+      "sites in", "site in", "located in", "reared in", "raised in", "cultured in",
+      "produced in", "originating from", "originated from", "surveyed in",
+      "interviewed in", "fieldwork in", "case study in",
+      domain_strong_location_phrases), collapse = "|"
   )
 
   substantive_entity_pattern <- paste(
     c("stakeholder", "stakeholders", "farmer", "farmers", "producer", "producers",
       "company", "companies", "industry", "industries", "farm", "farms",
-      "hatchery", "hatcheries", "population", "populations", "community",
-      "communities", "river", "rivers", "lake", "lakes", "site", "sites"),
+      "population", "populations", "community", "communities", "river", "rivers",
+      "lake", "lakes", "site", "sites", domain_substantive_entity_terms),
     collapse = "|"
   )
 
