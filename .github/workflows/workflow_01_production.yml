@@ -347,6 +347,7 @@ jobs:
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if(is.null(x)) y else x
           p <- 'outputs/adjudication/cases.jsonl'
           lines <- if(file.exists(p)) readLines(p,warn=FALSE,encoding='UTF-8') else character()
           lines <- lines[nzchar(trimws(lines))]
@@ -362,7 +363,6 @@ jobs:
             paste0(z$record_i$source$provider %||% '',':',z$record_i$sidecar_identity$source_record_id %||% ''),
             paste0(z$record_j$source$provider %||% '',':',z$record_j$sidecar_identity$source_record_id %||% '')
           )),use.names=FALSE)) else character()
-          `%||%` <- function(x,y) if(is.null(x)) y else x
           s <- list(
             schema='living-evidence-map-workflow01-llm-preflight-v1',
             cases=n,
