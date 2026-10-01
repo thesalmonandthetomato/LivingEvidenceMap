@@ -18,12 +18,21 @@ if (!file.exists(prior_path)||!file.exists(receipt_path)) stop("Prior state or r
 prior <- fromJSON(prior_path,simplifyVector=FALSE)
 receipt <- fromJSON(receipt_path,simplifyVector=FALSE)
 if (!identical(prior$schema,"living-evidence-map-workflow00-state-v1") || !identical(prior$status,"accepted")) stop("Prior state is not accepted v1 state",call.=FALSE)
-if (!identical(receipt$status,"published") || !identical(receipt$visibility,"restricted")) stop("Receipt is not a published restricted W00 archive",call.=FALSE)\nif (!identical(receipt$run_type,"full")) stop("Automatic rolling-state promotion is disabled for fortnightly/expansion deltas until source-native ID reconciliation is consistent across all five sources",call.=FALSE)
+if (!identical(receipt$status,"published") || !identical(receipt$visibility,"restricted")) stop("Receipt is not a published restricted W00 archive",call.=FALSE)
+if (!identical(receipt$run_type,"full")) stop("Automatic rolling-state promotion is disabled for fortnightly/expansion deltas until source-native ID reconciliation is consistent for all selected sources",call.=FALSE)
 
 sources <- trimws(as.character(unlist(receipt$sources,use.names=FALSE)))
 sources <- sources[nzchar(sources)]
-allowed <- c("lens","scopus","openalex","agricola","wos")
-if (!length(sources) || any(!sources %in% allowed)) stop("Receipt sources invalid",call.=FALSE)
+if (!length(sources)) stop("Receipt contains no sources",call.=FALSE)
+if (any(!grepl("^[a-z0-9][a-z0-9_-]*$",sources))) {
+  stop("Receipt contains an invalid source identifier",call.=FALSE)
+}
+if (anyDuplicated(sources)) {
+  stop("Receipt contains duplicate source identifiers",call.=FALSE)
+}
+if (is.null(prior$sources) || !is.list(prior$sources)) {
+  stop("Prior state lacks a valid sources object",call.=FALSE)
+}
 
 archive_files <- receipt$archive_files
 if (is.data.frame(archive_files)) archive_files <- lapply(seq_len(nrow(archive_files)),function(i)as.list(archive_files[i,,drop=FALSE]))
