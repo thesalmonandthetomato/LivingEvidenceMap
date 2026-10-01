@@ -7,6 +7,8 @@ suppressPackageStartupMessages({
 
 source("R/w01_contract.R", local = TRUE)
 source("R/storage_local.R", local = TRUE)
+source("R/storage_sheets.R", local = TRUE)
+source("R/storage_backend.R", local = TRUE)
 
 queue_path <- Sys.getenv("LEM_W01_QUEUE", unset = "fixtures/w01_real_sample_2.jsonl")
 decision_path <- Sys.getenv("LEM_W01_DECISIONS", unset = "local_state/w01_decisions.jsonl")
@@ -96,7 +98,7 @@ ui <- page_fillable(
 server <- function(input, output, session) {
   idx <- reactiveVal(1L)
   status <- reactiveVal("")
-  decisions <- reactiveVal(read_local_decisions(decision_path))
+  decisions <- reactiveVal(read_active_decisions(decision_path))
 
   current_case <- reactive(cases[[idx()]])
 
@@ -154,8 +156,8 @@ server <- function(input, output, session) {
       resolved_at_utc = format(Sys.time(), tz="UTC", format="%Y-%m-%dT%H:%M:%SZ"),
       queue_sha256 = queue_sha
     )
-    write_local_decision(decision_path, decision)
-    decisions(read_local_decisions(decision_path))
+    save_active_decision(decision, decision_path)
+    decisions(read_active_decisions(decision_path))
     status(sprintf("Saved %s at %s", choice, format(Sys.time(), "%H:%M:%S")))
     updateTextAreaInput(session, "rationale", value="")
     TRUE
