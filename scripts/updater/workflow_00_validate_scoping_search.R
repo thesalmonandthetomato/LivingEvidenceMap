@@ -182,6 +182,10 @@ source_queries <- list(
   scopus = sprintf("TITLE-ABS-KEY(%s)", normalised),
   openalex = sprintf("works where title/abstract has (%s)", openalex_expr),
   agricola = sprintf("SRC:AGR AND TITLE_ABS:(%s)", normalised),
+  pubmed = sprintf("SRC:MED AND TITLE_ABS:(%s)", normalised),
+  ethos = sprintf("SRC:ETH AND TITLE_ABS:(%s)", normalised),
+  cba = sprintf("SRC:CBA AND TITLE_ABS:(%s)", normalised),
+  epmc_preprints = sprintf("SRC:PPR AND TITLE_ABS:(%s)", normalised),
   wos = sprintf("(TI=(%s)) OR (AB=(%s)) OR (AK=(%s))", normalised, normalised, normalised)
 )
 
