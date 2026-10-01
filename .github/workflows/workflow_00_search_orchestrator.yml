@@ -84,7 +84,7 @@ on:
         default: false
         type: boolean
       group_environment_agriculture:
-        description: 'Environment & agriculture — AGRICOLA, BAI Plus, GreenFILE, Waters & Oceans'
+        description: 'Environment & agriculture — AGRICOLA, CBA, BAI Plus, GreenFILE, Waters & Oceans'
         required: true
         default: false
         type: boolean
