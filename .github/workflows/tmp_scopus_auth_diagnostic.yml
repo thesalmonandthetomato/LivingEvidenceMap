@@ -1,0 +1,66 @@
+name: TEMP Scopus auth diagnostic
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_scopus_auth_diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install httr2
+        shell: Rscript {0}
+        run: install.packages('httr2')
+      - name: Test Elsevier authentication forms
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INST_TOKEN: ${{ secrets.SCOPUS_INST_TOKEN }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(httr2))
+          raw <- Sys.getenv("SCOPUS_API_TOKEN","")
+          key <- trimws(raw)
+          inst <- trimws(Sys.getenv("SCOPUS_INST_TOKEN",""))
+          cat(sprintf("Secret present: %s\n",nzchar(raw)))
+          cat(sprintf("Secret length: %d; trimmed length: %d; trimming changed value: %s\n",
+                      nchar(raw),nchar(key),!identical(raw,key)))
+          if(!nzchar(key)) stop("SCOPUS_API_TOKEN is empty")
+
+          base <- "https://api.elsevier.com/content/search/scopus"
+          do_test <- function(label,req){
+            resp <- tryCatch(req_perform(req |> req_error(is_error=function(resp)FALSE)),error=identity)
+            if(inherits(resp,"error")){
+              cat(sprintf("%s: transport error: %s\n",label,conditionMessage(resp)))
+              return(invisible(NULL))
+            }
+            body <- tryCatch(resp_body_string(resp),error=function(e)"")
+            cat(sprintf("%s: HTTP %d; body-prefix=%s\n",label,resp_status(resp),substr(gsub("[\r\n]+"," ",body),1,240)))
+          }
+
+          common <- function(req) req |>
+            req_headers(Accept="application/json",`User-Agent`="LivingEvidenceMap Scopus auth diagnostic") |>
+            req_url_query(query="TITLE(test)",start=0L,count=1L,view="STANDARD")
+
+          do_test("header-api-key",
+            common(request(base) |> req_headers(`X-ELS-APIKey`=key)))
+          do_test("query-api-key",
+            common(request(base)) |> req_url_query(apiKey=key))
+          if(nzchar(inst)){
+            do_test("header-api-key-plus-insttoken",
+              common(request(base) |> req_headers(`X-ELS-APIKey`=key,`X-ELS-Insttoken`=inst)))
+          } else {
+            cat("SCOPUS_INST_TOKEN not configured; skipping insttoken test\n")
+          }
