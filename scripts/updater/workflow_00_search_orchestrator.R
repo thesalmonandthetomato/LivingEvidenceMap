@@ -66,11 +66,18 @@ openalex_query <- if (run_type=="expansion") {
   sprintf("works where title/abstract has ((%s) and (%s))",oa_species,oa_farm)
 }
 
-agricola_query <- if (run_type=="expansion") {
-  sprintf("SRC:AGR AND TITLE_ABS:((%s) AND (%s)) AND NOT TITLE_ABS:(%s)",species,farm,old_farm)
-} else {
-  sprintf("SRC:AGR AND TITLE_ABS:((%s) AND (%s))",species,farm)
+europe_pmc_query <- function(source_code) {
+  if (run_type=="expansion") {
+    sprintf("SRC:%s AND TITLE_ABS:((%s) AND (%s)) AND NOT TITLE_ABS:(%s)",source_code,species,farm,old_farm)
+  } else {
+    sprintf("SRC:%s AND TITLE_ABS:((%s) AND (%s))",source_code,species,farm)
+  }
 }
+agricola_query <- europe_pmc_query("AGR")
+pubmed_query <- europe_pmc_query("MED")
+ethos_query <- europe_pmc_query("ETH")
+cba_query <- europe_pmc_query("CBA")
+epmc_preprints_query <- europe_pmc_query("PPR")
 
 wos_component <- function(tag, farm_terms_string) {
   sprintf("%s=((%s) AND (%s))",tag,species,farm_terms_string)
@@ -106,6 +113,11 @@ if (run_type=="fortnightly") {
                             openalex_query,current_year,next_year)
   agricola_query <- sprintf("(%s) AND FIRST_PDATE:[%s TO %s]",
                             agricola_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
+  creation_window <- sprintf("CREATION_DATE:[%s TO %s]",format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
+  pubmed_query <- sprintf("(%s) AND %s",pubmed_query,creation_window)
+  ethos_query <- sprintf("(%s) AND %s",ethos_query,creation_window)
+  cba_query <- sprintf("(%s) AND %s",cba_query,creation_window)
+  epmc_preprints_query <- sprintf("(%s) AND %s",epmc_preprints_query,creation_window)
 }
 
 queries <- list(
@@ -113,6 +125,10 @@ queries <- list(
   scopus=scopus_query,
   openalex=openalex_query,
   agricola=agricola_query,
+  pubmed=pubmed_query,
+  ethos=ethos_query,
+  cba=cba_query,
+  epmc_preprints=epmc_preprints_query,
   wos=wos_query
 )
 
@@ -141,6 +157,30 @@ update_methods <- list(
     window_rule="first publication date from 14 days before run date through run date",
     limitation="Provider/API constraint: FIRST_PDATE is a publication-date filter rather than a true indexing-date filter. Exact AGR source+ID reconciliation removes already-known records."
   ),
+  pubmed=list(
+    retrieval_filter="Europe PMC CREATION_DATE restricted to MED source",
+    field_scope=c("title","abstract"),
+    window_rule="Europe PMC database-entry date from 14 days before run date through run date",
+    limitation="Exact MED source+ID reconciliation removes already-known records; bibliographic overlap with other databases is retained for Workflow 01 deduplication."
+  ),
+  ethos=list(
+    retrieval_filter="Europe PMC CREATION_DATE restricted to ETH source",
+    field_scope=c("title","abstract"),
+    window_rule="Europe PMC database-entry date from 14 days before run date through run date",
+    limitation="Exact ETH source+ID reconciliation removes already-known records; bibliographic overlap with other databases is retained for Workflow 01 deduplication."
+  ),
+  cba=list(
+    retrieval_filter="Europe PMC CREATION_DATE restricted to CBA source",
+    field_scope=c("title","abstract"),
+    window_rule="Europe PMC database-entry date from 14 days before run date through run date",
+    limitation="Exact CBA source+ID reconciliation removes already-known records; bibliographic overlap with other databases is retained for Workflow 01 deduplication."
+  ),
+  epmc_preprints=list(
+    retrieval_filter="Europe PMC CREATION_DATE restricted to PPR source",
+    field_scope=c("title","abstract"),
+    window_rule="Europe PMC database-entry date from 14 days before run date through run date",
+    limitation="Europe PMC preprint records only (SRC:PPR). Exact PPR source+ID reconciliation removes already-known records; published versions remain available independently for Workflow 01 deduplication."
+  ),
   wos=list(
     retrieval_filter="WoS Starter modifiedTimeSpan",
     field_scope=c("title","abstract","author_keywords"),
@@ -154,6 +194,10 @@ support <- list(
   scopus=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   openalex=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   agricola=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
+  pubmed=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
+  ethos=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
+  cba=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
+  epmc_preprints=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   wos=list(full=TRUE,fortnightly=TRUE,expansion=TRUE)
 )
 
