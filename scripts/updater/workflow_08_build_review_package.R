@@ -18,10 +18,25 @@ intake_run_id <- arg("--intake-run-id")
 notification_run_id <- arg("--notification-run-id",Sys.getenv("GITHUB_RUN_ID",""))
 repository <- arg("--repository",Sys.getenv("GITHUB_REPOSITORY","thesalmonandthetomato/LivingEvidenceMap"))
 branch <- arg("--branch","workflow01-final-architecture")
+review_config_path <- arg("--review-config","user_input/workflow08_human_review_config.json")
 if(any(vapply(list(queue_path,manifest_path,output_dir,intake_run_id),is.null,logical(1)))) {
   stop("Required: --queue --manifest --output-dir --intake-run-id",call.=FALSE)
 }
 if(!file.exists(queue_path)||!file.exists(manifest_path)) stop("Queue or manifest missing",call.=FALSE)
+if(!file.exists(review_config_path)) stop("Review config missing",call.=FALSE)
+review_config <- fromJSON(review_config_path,simplifyVector=FALSE)
+reviewer_full_name <- as.character(review_config$reviewer_full_name)
+reviewer_short_name <- as.character(review_config$reviewer_short_name)
+ontology_label <- as.character(review_config$ontology_label)
+species_config_path <- as.character(review_config$species_config_path)
+if(!file.exists(species_config_path)) stop("Species config missing",call.=FALSE)
+species_config <- fromJSON(species_config_path,simplifyVector=FALSE)
+code_map <- species_config$code_map
+if(is.null(code_map)||!length(code_map)||is.null(names(code_map))) stop("Species config lacks named code_map",call.=FALSE)
+generic_code <- as.character(species_config$generic_code)
+named_species_labels <- names(code_map)[unlist(code_map,use.names=FALSE)!=generic_code]
+unspecified_species_label <- names(code_map)[unlist(code_map,use.names=FALSE)==generic_code]
+if(!length(named_species_labels)||length(unspecified_species_label)!=1L) stop("Species config cannot define W08 review labels",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
 m <- fromJSON(manifest_path,simplifyVector=FALSE)
@@ -81,7 +96,7 @@ handoff <- c(
   "1. Show the title and abstract.",
   "2. Show every issues[] entry for that record, including the automated value and why it entered W08.",
   "3. Explain the evidence briefly and neutrally.",
-  "4. Ask Neal for the human decision. Do not silently decide on his behalf.",
+  sprintf("4. Ask %s for the human decision. Do not silently decide on his behalf.",reviewer_short_name),
   "5. When Neal decides, write one immutable JSONL decision line for each resolved issue.",
   "",
   "A single record can contain multiple issues. Resolve each issue separately, but present the record only once.",
@@ -96,15 +111,15 @@ handoff <- c(
   "- decision",
   "- final_value",
   "- rationale",
-  "- reviewer: Neal Haddaway",
+  sprintf("- reviewer: %s",reviewer_full_name),
   "- resolved_at_utc",
   sprintf("- queue_sha256: %s",sha),
   "",
   "Allowed decisions and final_value formats:",
   "",
   "### species_none",
-  "- assign_named_species -> final_value = {species_labels:[one or more of Atlantic salmon, Rainbow trout, Chinook salmon, Coho salmon, Sockeye salmon, Chum salmon, Pink salmon, Masu salmon]}",
-  "- assign_unspecified_species -> final_value = {species_labels:[Unspecified species]}",
+  sprintf("- assign_named_species -> final_value = {species_labels:[one or more of %s]}",paste(named_species_labels,collapse=", ")),
+  sprintf("- assign_unspecified_species -> final_value = {species_labels:[%s]}",unspecified_species_label),
   "- exclude_record -> final_value = {included:false}",
   "",
   "### geography_unresolved",
@@ -118,7 +133,7 @@ handoff <- c(
   "",
   "### topic_extreme_disagreement",
   "- accept_retained_topics -> final_value = {path_ids:[the currently retained path IDs]}",
-  "- replace_topic_set -> final_value = {path_ids:[valid v3.6 ontology path IDs]}",
+  sprintf("- replace_topic_set -> final_value = {path_ids:[valid %s ontology path IDs]}",ontology_label),
   "- exclude_record -> final_value = {included:false}",
   "",
   "### zero_topic_eligibility_uncertain",
@@ -131,7 +146,7 @@ handoff <- c(
   "",
   sprintf("Write decisions to: %s",decision_path),
   "",
-  "Preserve earlier decisions when adding new ones. review_key must be unique. Never overwrite a different prior decision silently; if Neal changes a decision, update that line explicitly and preserve the rationale for the change.",
+  sprintf("Preserve earlier decisions when adding new ones. review_key must be unique. Never overwrite a different prior decision silently; if %s changes a decision, update that line explicitly and preserve the rationale for the change.",reviewer_short_name),
   "",
   "The queue is complete only when every issues[] entry has exactly one non-pending human decision.",
   "",
@@ -139,7 +154,7 @@ handoff <- c(
   "",
   "The COMPLETE marker must contain the resolved issue count, unique record count, queue SHA-256 and SHA-256 of human_decisions.jsonl. Only then should the final W08 assembly/Zenodo workflow be run.",
   "",
-  "Existing geography decisions already recorded before this locked queue are not to be re-reviewed unless Neal explicitly asks to revisit them."
+  sprintf("Existing geography decisions already recorded before this locked queue are not to be re-reviewed unless %s explicitly asks to revisit them.",reviewer_short_name)
 )
 writeLines(handoff,file.path(output_dir,"CHATGPT_HANDOFF.md"))
 
