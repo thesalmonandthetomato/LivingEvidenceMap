@@ -63,6 +63,10 @@ if(identical(latest_status,status)){
   cat(sprintf("PASS: W%s batch %s already status=%s; no-op\n",stage,batch_id,status))
   quit(status=0)
 }
+if(status=="published" && identical(latest_status,"review_complete")) {
+  cat(sprintf("PASS: W%s batch %s already review_complete; preserving advanced status\n",stage,batch_id))
+  quit(status=0)
+}
 if(status=="published" && identical(latest_status,"consumed")) {
   stop("Refusing to reactivate an already consumed batch",call.=FALSE)
 }
