@@ -67,3 +67,14 @@ Workflow 06 keeps topic-specific geography inputs in this directory:
 - `workflow06_geography_domain_config.json` contains the small set of domain-specific lexical terms used by deterministic geography ranking and false-positive suppression.
 
 The global country gazetteer and generic geography decision rules remain implementation infrastructure rather than topic-specific user inputs. The migrated W06 inputs preserve the validated salmon-aquaculture behaviour exactly.
+
+
+## Workflow 07 topic coding
+
+Workflow 07 keeps its project-specific topic-coding inputs in this directory:
+
+- `workflow07_topic_ontology.csv` is the frozen three-level topic ontology used by the three-pass Luna topic coder and deterministic topic QC.
+- `workflow07_topic_system_prompt.txt` is the frozen system prompt used by the three-pass Luna topic coder.
+- `workflow07_zero_topic_rescreen_prompt.txt` is the targeted eligibility rescreen prompt for records receiving zero topic codes across all three topic-coding passes.
+
+The migration preserves the validated ontology and prompt contents. The ontology SHA lock in the current W07 workflows was corrected to match the actual frozen ontology bytes discovered during migration.
