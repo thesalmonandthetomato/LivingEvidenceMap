@@ -17,7 +17,7 @@ arg <- function(flag, default=NULL){
 
 records_path <- arg("--records")
 det_path <- arg("--deterministic")
-prompt_path <- arg("--prompt","config/workflow06_geography_semantic_prompt_v2.txt")
+prompt_path <- arg("--prompt","user_input/workflow06_geography_semantic_prompt.txt")
 out_dir <- arg("--output-dir")
 shard_id <- as.integer(arg("--shard-id"))
 shard_count <- as.integer(arg("--shard-count","20"))
