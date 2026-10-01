@@ -19,10 +19,13 @@ query <- arg("--query")
 config_path <- arg("--config","config/workflow00_ebsco_sources.json")
 output_dir <- arg("--output-dir","outputs/updater/source_child")
 page_size <- as.integer(arg("--page-size","100"))
+max_records_arg <- arg("--max-records","all")
+max_records <- if (identical(max_records_arg,"all")) Inf else suppressWarnings(as.integer(max_records_arg))
 
 if (is.null(source_slug) || is.null(query)) stop("--source and --query are required",call.=FALSE)
 if (!file.exists(config_path)) stop(sprintf("EBSCO source config not found: %s",config_path),call.=FALSE)
 if (is.na(page_size) || page_size < 1L || page_size > 200L) stop("--page-size must be 1..200",call.=FALSE)
+if (!is.infinite(max_records) && (is.na(max_records) || max_records < 1L)) stop("--max-records must be all or a positive integer",call.=FALSE)
 
 uid <- Sys.getenv("EBSCO_EHOST_UID")
 pwd <- Sys.getenv("EBSCO_EHOST_PWD")
@@ -136,6 +139,7 @@ repeat {
   if (!length(rec_nodes)) break
 
   for (rec in rec_nodes) {
+    if (length(records) >= max_records) break
     header <- xml_find_first(rec,".//*[local-name()='header']")
     accession <- if (!inherits(header,"xml_missing")) xml_attr(header,"uiTerm") else NA_character_
     if (is.na(accession) || !nzchar(trimws(accession))) {
@@ -216,6 +220,7 @@ repeat {
     )
   }
 
+  if (length(records) >= max_records) break
   if (!is.na(reported_total) && length(records) >= reported_total) break
   if (length(rec_nodes) < page_size) break
   startrec <- startrec + length(rec_nodes)
@@ -224,7 +229,7 @@ repeat {
 ids <- vapply(records,function(r) r$sidecar_identity$sidecar_record_id,character(1))
 if (anyDuplicated(ids)) stop("Duplicate EBSCO accession numbers returned within harvest",call.=FALSE)
 if (is.na(reported_total)) reported_total <- length(records)
-if (length(records) != reported_total) {
+if (is.infinite(max_records) && length(records) != reported_total) {
   stop(sprintf("EBSCO harvest count mismatch for %s: reported=%d retrieved=%d",
                source_slug,reported_total,length(records)),call.=FALSE)
 }
@@ -263,6 +268,7 @@ manifest <- list(
   live_database_name=live_name,
   reported_total=reported_total,
   records_retrieved=length(records),
+  max_records=if(is.infinite(max_records)) "all" else as.integer(max_records),
   page_size=page_size,
   pages_retrieved=page,
   native_id="EBSCO accession number",
