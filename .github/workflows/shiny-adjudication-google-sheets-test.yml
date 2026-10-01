@@ -1,0 +1,86 @@
+name: Shiny adjudication Google Sheets connection test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-google-sheets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: shiny/adjudication
+
+    env:
+      LEM_STORAGE_BACKEND: google_sheets
+      LEM_GOOGLE_SHEET_ID: ${{ vars.LEM_GOOGLE_SHEET_ID }}
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+      LEM_GOOGLE_DECISIONS_TAB: decisions
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: shiny-adjudication-interface
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install test dependencies
+        shell: Rscript {0}
+        run: install.packages(c("googlesheets4","jsonlite","digest"))
+
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SHEET_ID"
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          echo "PASS: required Google Sheets configuration is present"
+
+      - name: Prepare service-account credential file
+        shell: bash
+        run: |
+          set -euo pipefail
+          cred_file="$RUNNER_TEMP/lem-google-service-account.json"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$cred_file"
+          chmod 600 "$cred_file"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$cred_file" >> "$GITHUB_ENV"
+
+      - name: Initialise decisions tab
+        shell: Rscript {0}
+        run: source("scripts/init_google_sheet.R")
+
+      - name: Append and verify disposable test decision
+        shell: Rscript {0}
+        run: |
+          source("R/storage_sheets.R")
+          source("R/storage_backend.R")
+
+          marker <- paste0("connection-test-", Sys.getenv("GITHUB_RUN_ID"))
+          queue_sha <- digest::digest(marker, algo="sha256", serialize=FALSE)
+
+          d <- list(
+            review_case_id = marker,
+            decision = "uncertain",
+            rationale = "Disposable Google Sheets connection test.",
+            reviewer = "github-actions-connection-test",
+            resolved_at_utc = format(Sys.time(), tz="UTC", format="%Y-%m-%dT%H:%M:%SZ"),
+            queue_sha256 = queue_sha
+          )
+
+          saved <- append_sheet_decision(d)
+          stopifnot(
+            identical(saved$review_case_id, marker),
+            identical(saved$decision, "uncertain"),
+            identical(saved$queue_sha256, queue_sha)
+          )
+
+          active <- active_sheet_decisions()
+          stopifnot(marker %in% names(active))
+          stopifnot(identical(active[[marker]]$decision, "uncertain"))
+          cat("PASS: Google Sheets append/read/verify cycle succeeded\n")
