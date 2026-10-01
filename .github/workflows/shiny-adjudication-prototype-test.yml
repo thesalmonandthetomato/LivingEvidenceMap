@@ -30,7 +30,7 @@ jobs:
 
       - name: Install prototype dependencies
         shell: Rscript {0}
-        run: install.packages(c("shiny","bslib","jsonlite","digest"))
+        run: install.packages(c("shiny","bslib","jsonlite","digest","googlesheets4"))
 
       - name: Parse application files
         shell: Rscript {0}
@@ -38,6 +38,9 @@ jobs:
           parse(file="app.R")
           parse(file="R/w01_contract.R")
           parse(file="R/storage_local.R")
+          parse(file="R/storage_sheets.R")
+          parse(file="R/storage_backend.R")
+          parse(file="scripts/init_google_sheet.R")
           parse(file="scripts/export_w01_decisions.R")
           cat("PASS: prototype R files parse\n")
 
