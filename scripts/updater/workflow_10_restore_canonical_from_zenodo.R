@@ -64,6 +64,6 @@ if(!identical(actual_sha,expected_sha)) stop(sprintf("Canonical checksum mismatc
 con <- file(output,"rt",encoding="UTF-8");on.exit(close(con),add=TRUE)
 n <- 0L
 repeat { z<-readLines(con,n=1000L,warn=FALSE); if(!length(z))break; n<-n+sum(nzchar(trimws(z))) }
-if(n!=19117L) stop(sprintf("Canonical record-count mismatch: expected 19117; found %d",n),call.=FALSE)
+if(n!=expected_n) stop(sprintf("Canonical record-count mismatch: expected %d; found %d",expected_n,n),call.=FALSE)
 
 cat(sprintf("PASS: restored authoritative Workflow 08 canonical: %d records; SHA256=%s\n",n,actual_sha))
