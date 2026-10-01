@@ -8,7 +8,7 @@ current_path<-arg("--current")
 prior_records_path<-arg("--prior-records","")
 prior_scores_path<-arg("--prior-scores","")
 prior_manifest_path<-arg("--prior-manifest","")
-ontology_path<-arg("--ontology","data/reference/topic_ontology_v3_6.csv")
+ontology_path<-arg("--ontology","user_input/workflow07_topic_ontology.csv")
 prompt_path<-arg("--prompt","data/reference/topic_system_prompt_v3_6.txt")
 output_dir<-arg("--output-dir","outputs/workflow07_prepare")
 
