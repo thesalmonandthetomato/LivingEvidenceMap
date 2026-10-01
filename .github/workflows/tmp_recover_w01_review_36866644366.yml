@@ -6,6 +6,7 @@ on:
       - workflow01-final-architecture
     paths:
       - '.github/workflows/tmp_recover_w01_review_36866644366.yml'
+      - 'scripts/updater/workflow_01_publish_human_review_queue_to_shiny.R'
 
 permissions:
   contents: read
