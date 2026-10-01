@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 source("R/w01_contract.R", local = TRUE)
 source("R/storage_local.R", local = TRUE)
 
-queue_path <- Sys.getenv("LEM_W01_QUEUE", unset = "fixtures/w01_cases.jsonl")
+queue_path <- Sys.getenv("LEM_W01_QUEUE", unset = "fixtures/w01_real_sample_2.jsonl")
 decision_path <- Sys.getenv("LEM_W01_DECISIONS", unset = "local_state/w01_decisions.jsonl")
 reviewer <- Sys.getenv("LEM_REVIEWER", unset = "prototype-reviewer")
 
