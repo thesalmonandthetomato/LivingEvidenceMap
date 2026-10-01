@@ -37,3 +37,15 @@ Optional environment variables:
 The local storage module is temporary. It will be replaced by a Google Sheets storage adapter after the W01 UI and round-trip contract have been validated.
 
 No shinyapps.io or Google credentials are currently required.
+
+
+## Google Sheets backend
+
+The app now supports two storage modes:
+
+- `local` (default): development JSONL store.
+- `google_sheets`: append-only Google Sheets decision log.
+
+Set `LEM_STORAGE_BACKEND=google_sheets` plus the variables documented in `GOOGLE_SHEETS_SETUP.md`.
+
+The Sheets backend appends a new immutable row for each decision or revision and verifies that row before the UI treats the save as successful. Existing W01 workflow files remain unchanged.
