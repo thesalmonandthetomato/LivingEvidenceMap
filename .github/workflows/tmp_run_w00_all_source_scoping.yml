@@ -1,5 +1,5 @@
 name: TEMP run W00 all-source scoping
-# rerun after partial-failure handling
+# rerun after report-path fix
 
 on:
   push:
