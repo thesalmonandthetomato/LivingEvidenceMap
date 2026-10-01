@@ -13,22 +13,53 @@ run_type <- arg("--run-type")
 saved_path <- arg("--saved","data/workflow00/source_selection.json")
 output_path <- arg("--output","outputs/updater/workflow00_plan/source_selection.json")
 ebsco_config <- arg("--ebsco-config","config/workflow00_ebsco_sources.json")
+group_config <- arg("--group-config","config/workflow00_source_groups.json")
 
 if (!(run_type %in% c("full","fortnightly","expansion"))) stop("Invalid run type",call.=FALSE)
-cfg <- fromJSON(ebsco_config,simplifyVector=FALSE)
-ebsco_sources <- names(cfg$sources)
-base_sources <- c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos")
-supported <- c(base_sources,ebsco_sources)
 
-env_name <- function(src) paste0("W00_SELECT_",toupper(gsub("[^A-Za-z0-9]","_",src)))
-selected_from_env <- function() {
-  supported[vapply(supported,function(src) identical(tolower(Sys.getenv(env_name(src))),"true"),logical(1))]
+ebsco_cfg <- fromJSON(ebsco_config,simplifyVector=FALSE)
+group_cfg <- fromJSON(group_config,simplifyVector=FALSE)
+if (is.null(group_cfg$groups) || !length(group_cfg$groups)) stop("Workflow 00 source-group catalogue contains no groups",call.=FALSE)
+
+ebsco_sources <- names(ebsco_cfg$sources)
+base_sources <- c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos")
+supported <- unique(c(base_sources,ebsco_sources))
+
+all_group_sources <- unique(unlist(lapply(group_cfg$groups,function(z) unlist(z$sources,use.names=FALSE)),use.names=FALSE))
+unknown_group_sources <- setdiff(all_group_sources,supported)
+if (length(unknown_group_sources)) {
+  stop(sprintf("Source-group catalogue contains unsupported sources: %s",paste(unknown_group_sources,collapse=", ")),call.=FALSE)
+}
+
+env_group_name <- function(group) paste0("W00_GROUP_",toupper(gsub("[^A-Za-z0-9]","_",group)))
+selected_groups_from_env <- function() {
+  g <- names(group_cfg$groups)
+  g[vapply(g,function(x) identical(tolower(Sys.getenv(env_group_name(x))),"true"),logical(1))]
+}
+
+parse_source_list <- function(x) {
+  if (is.null(x) || !nzchar(trimws(x))) return(character())
+  z <- trimws(unlist(strsplit(x,",",fixed=TRUE),use.names=FALSE))
+  unique(z[nzchar(z)])
 }
 
 if (run_type=="full") {
-  selected <- selected_from_env()
-  if (!length(selected)) stop("Select at least one source for a full Workflow 00 run",call.=FALSE)
-  origin <- "full_run_inputs"
+  selected_groups <- selected_groups_from_env()
+  additional_sources <- parse_source_list(Sys.getenv("W00_ADDITIONAL_SOURCES"))
+  excluded_sources <- parse_source_list(Sys.getenv("W00_EXCLUDE_SOURCES"))
+
+  bad_add <- setdiff(additional_sources,supported)
+  bad_exclude <- setdiff(excluded_sources,supported)
+  if (length(bad_add)) stop(sprintf("Additional source(s) unsupported: %s",paste(bad_add,collapse=", ")),call.=FALSE)
+  if (length(bad_exclude)) stop(sprintf("Excluded source(s) unsupported: %s",paste(bad_exclude,collapse=", ")),call.=FALSE)
+
+  grouped_sources <- unique(unlist(lapply(selected_groups,function(g) unlist(group_cfg$groups[[g]]$sources,use.names=FALSE)),use.names=FALSE))
+  selected <- unique(c(grouped_sources,additional_sources))
+  selected <- selected[!(selected %in% excluded_sources)]
+  selected <- supported[supported %in% selected]
+
+  if (!length(selected)) stop("Select at least one database group or additional source for a full Workflow 00 run",call.=FALSE)
+  origin <- "full_run_group_inputs"
   baseline_run_id <- Sys.getenv("GITHUB_RUN_ID")
 } else {
   if (!file.exists(saved_path)) {
@@ -43,6 +74,10 @@ if (run_type=="full") {
   unknown <- setdiff(selected,supported)
   if (length(unknown)) stop(sprintf("Saved source selection contains unsupported sources: %s",paste(unknown,collapse=", ")),call.=FALSE)
   if (!length(selected)) stop("Saved source selection is empty",call.=FALSE)
+
+  selected_groups <- if (is.null(saved$selected_groups)) character() else as.character(unlist(saved$selected_groups,use.names=FALSE))
+  additional_sources <- if (is.null(saved$additional_sources)) character() else as.character(unlist(saved$additional_sources,use.names=FALSE))
+  excluded_sources <- if (is.null(saved$excluded_sources)) character() else as.character(unlist(saved$excluded_sources,use.names=FALSE))
   origin <- "saved_full_run"
   baseline_run_id <- as.character(saved$baseline_run_id)
 }
@@ -53,7 +88,10 @@ out <- list(
   run_type=run_type,
   selection_origin=origin,
   baseline_run_id=baseline_run_id,
-  selected_sources=selected,
+  selected_groups=unname(selected_groups),
+  additional_sources=unname(additional_sources),
+  excluded_sources=unname(excluded_sources),
+  selected_sources=unname(selected),
   selected_source_count=length(selected),
   generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
@@ -63,9 +101,6 @@ gh <- Sys.getenv("GITHUB_OUTPUT")
 if (nzchar(gh)) {
   con <- file(gh,"at")
   on.exit(close(con),add=TRUE)
-  for (src in supported) {
-    cat(sprintf("selected_%s=%s\n",src,if(src %in% selected)"true" else "false"),file=con)
-  }
   cat(sprintf("selected_sources_csv=%s\n",paste(selected,collapse=",")),file=con)
   cat("selected_sources_json<<EOF\n",file=con)
   cat(toJSON(unname(selected),auto_unbox=TRUE),file=con)
