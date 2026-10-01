@@ -385,7 +385,6 @@ jobs:
           done
 
       - name: Reconcile expansion by native source ID
-        env:
         shell: bash
         run: |
           set -euo pipefail
