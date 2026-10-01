@@ -518,7 +518,24 @@ jobs:
           git add docs/deduplication/checkpoints/
           if ! git diff --cached --quiet; then
             git commit -m "Record Workflow 01 human-review checkpoint $GITHUB_RUN_ID"
-            git push origin "HEAD:$WORKFLOW01_BRANCH"
+            pushed=false
+            for attempt in 1 2 3; do
+              git fetch origin "$WORKFLOW01_BRANCH"
+              if ! git rebase "origin/$WORKFLOW01_BRANCH"; then
+                git rebase --abort || true
+                echo "ERROR: checkpoint registration rebase failed" >&2
+                exit 1
+              fi
+              if git push origin "HEAD:$WORKFLOW01_BRANCH"; then
+                pushed=true
+                break
+              fi
+              echo "Checkpoint push raced with another branch update; retrying ($attempt/3)." >&2
+            done
+            if [ "$pushed" != true ]; then
+              echo "ERROR: unable to register checkpoint after 3 rebased push attempts" >&2
+              exit 1
+            fi
           fi
           echo "Human review required; final Workflow 01 delta publication is intentionally paused."
 
