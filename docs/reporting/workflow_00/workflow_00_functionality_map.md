@@ -11,7 +11,7 @@ This document is intended to serve two purposes:
 
 ## Functionality map
 
-Functionally, Workflow 00 has an independent scoping pathway and a production harvesting pathway. The scoping pathway is manually dispatched and never feeds Workflow 01. The production pathway comprises one parent orchestrator plus one reusable source handler; the parent launches the handler independently for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science, and the handler invokes the appropriate source-specific R ingestion code.
+Functionally, Workflow 00 has an independent scoping pathway and a production harvesting pathway. The scoping pathway is manually dispatched and never feeds Workflow 01. The production pathway comprises one parent orchestrator plus one reusable source handler; the parent launches the handler independently for Lens, Scopus, OpenAlex, AGRICOLA, PubMed/MEDLINE, EThOS, Chinese Biological Abstracts, Europe PMC preprints and Web of Science, and the handler invokes the appropriate source-specific R ingestion code.
 
 ```text
 INDEPENDENT SEARCH SCOPING
@@ -42,8 +42,12 @@ workflow_00_search_orchestrator.yml
   |-- Lens ------|
   |-- Scopus ----|
   |-- OpenAlex --|--> _workflow_00_orchestrated_source_child.yml
-  |-- AGRICOLA --|          |
-  |-- WoS -------|          '--> source-specific R ingestion
+  |-- AGRICOLA -----------|
+  |-- PubMed/MEDLINE ------|
+  |-- EThOS ---------------|
+  |-- Chinese Biol. Abs. --|--> _workflow_00_orchestrated_source_child.yml
+  |-- Europe PMC preprints-|          |
+  |-- WoS -----------------|          '--> source-specific R ingestion
   |
   |-- optional expansion reconciliation by native source ID
   |-- archive search documentation in repository
@@ -150,9 +154,9 @@ A complete search of the selected sources using the current version-controlled s
 
 A source-specific update search intended to identify newly indexed records while retaining the same underlying search concepts. Date or indexing filters are applied only where their semantics have been explicitly implemented for the source.
 
-Every fortnightly harvest is then reconciled against that source's persistent native-ID registry before Workflow 01. This is an exact source-level delta filter, not bibliographic deduplication. Lens uses Lens ID; Scopus uses EID; OpenAlex uses Work ID; AGRICOLA uses the Europe PMC AGR source plus ID; and Web of Science uses UID. Already-known native IDs remain preserved in the raw search archive but are not passed downstream. Only previously unseen native IDs are emitted in the filtered source-shaped harvest consumed by Workflow 01. The updated source-native ID registry is committed only after the selected source jobs have completed successfully.
+Every fortnightly harvest is then reconciled against that source's persistent native-ID registry before Workflow 01. This is an exact source-level delta filter, not bibliographic deduplication. Lens uses Lens ID; Scopus uses EID; OpenAlex uses Work ID; AGRICOLA uses the Europe PMC AGR source plus ID; PubMed/MEDLINE uses MED plus ID; EThOS uses ETH plus ID; Chinese Biological Abstracts uses CBA plus ID; Europe PMC preprints use PPR plus ID; and Web of Science uses UID. Already-known native IDs remain preserved in the raw search archive but are not passed downstream. Only previously unseen native IDs are emitted in the filtered source-shaped harvest consumed by Workflow 01. The updated source-native ID registry is committed only after the selected source jobs have completed successfully.
 
-The five sources do not expose equivalent update-date semantics, so Workflow 00 records the retrieval mechanism explicitly rather than presenting the searches as methodologically identical:
+The supported sources do not expose equivalent update-date semantics, so Workflow 00 records the retrieval mechanism explicitly rather than presenting the searches as methodologically identical:
 
 | Source | Fortnightly retrieval mechanism | Search fields | Important constraint |
 |---|---|---|---|
@@ -160,6 +164,10 @@ The five sources do not expose equivalent update-date semantics, so Workflow 00 
 | Scopus | `ORIG-LOAD-DATE` after the 14-day boundary | title, abstract, keywords | Uses Scopus load-date metadata. |
 | OpenAlex | current publication year plus following publication year | title and abstract only | Deliberate workaround: the workflow does not use the relevant paid date filtering, and title/abstract-only search prevents full-text searching. Previously harvested Work IDs are removed after retrieval. |
 | AGRICOLA | `FIRST_PDATE` 14-day window via Europe PMC, restricted to `SRC:AGR` | title and abstract | Provider/API constraint: this is a first-publication-date filter rather than a true indexing-date filter. Previously harvested AGR IDs are removed after retrieval. |
+| PubMed/MEDLINE | Europe PMC `CREATION_DATE` 14-day window, restricted to `SRC:MED` | title and abstract | `CREATION_DATE` is the date the record entered Europe PMC. Previously harvested MED IDs are removed after retrieval. |
+| EThOS | Europe PMC `CREATION_DATE` 14-day window, restricted to `SRC:ETH` | title and abstract | PhD thesis records only. Previously harvested ETH IDs are removed after retrieval. |
+| Chinese Biological Abstracts | Europe PMC `CREATION_DATE` 14-day window, restricted to `SRC:CBA` | title and abstract | CBA records only. Previously harvested CBA IDs are removed after retrieval. |
+| Europe PMC preprints | Europe PMC `CREATION_DATE` 14-day window, restricted to `SRC:PPR` | title and abstract | Preprint records only. Published versions remain independent manifestations for Workflow 01 deduplication. |
 | Web of Science | Starter API `modifiedTimeSpan`, 14-day window | title, abstract, author keywords | The update window is supplied as a separate API parameter rather than embedded in the query string. |
 
 These source-specific rules are written into each fortnightly `search_plan.json` under `source_update_methods`.
@@ -281,3 +289,15 @@ The scoping artefact contains:
 - `search_scoping_report.html`.
 
 The exact manually supplied Boolean string, run date, validation status, source, hit count and source status are therefore preserved without creating a bibliographic harvest.
+
+
+## Europe PMC API source expansion
+
+Four additional API-backed Workflow 00 sources are implemented but intentionally disabled by default pending completion of the current CAB Abstracts and ProQuest Dissertations & Theses end-to-end pipeline update:
+
+- PubMed/MEDLINE: Europe PMC `SRC:MED`;
+- EThOS theses: Europe PMC `SRC:ETH`;
+- Chinese Biological Abstracts: Europe PMC `SRC:CBA`;
+- Europe PMC preprints: Europe PMC `SRC:PPR`.
+
+All four use the same Europe PMC REST transport and pagination implementation but remain separate W00 database sources with separate source selection, search strings, manifests, raw archives, native-ID registries and Zenodo harvest files. Cross-database duplication is intentionally retained until Workflow 01.
