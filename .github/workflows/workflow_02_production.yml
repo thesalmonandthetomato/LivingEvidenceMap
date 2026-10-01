@@ -112,7 +112,7 @@ jobs:
 
       - name: Validate input pointers
         env:
-          W01_POINTER: ${{ inputs.workflow01_pointer_path || 'docs/deduplication/zenodo/run-36128255337.json' }}
+          W01_POINTER: ${{ inputs.workflow01_pointer_path }}
           PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path || '' }}
         shell: bash
         run: |
@@ -128,7 +128,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           GH_TOKEN: ${{ github.token }}
-          W01_POINTER: ${{ inputs.workflow01_pointer_path || 'docs/deduplication/zenodo/run-36128255337.json' }}
+          W01_POINTER: ${{ inputs.workflow01_pointer_path }}
         shell: bash
         run: |
           set -euo pipefail
@@ -334,7 +334,7 @@ jobs:
 
       - name: Build durable sparse state directory
         env:
-          W01_POINTER: ${{ inputs.workflow01_pointer_path || 'docs/deduplication/zenodo/run-36128255337.json' }}
+          W01_POINTER: ${{ inputs.workflow01_pointer_path }}
           PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path || '' }}
         shell: bash
         run: |
