@@ -22,6 +22,7 @@ ontology_path <- arg("--ontology")
 sheet_id <- arg("--sheet-id", Sys.getenv("LEM_GOOGLE_SHEET_ID"))
 credential_path <- arg("--credential", Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"))
 tab <- arg("--tab","queue_w08_active")
+source_run_id <- arg("--source-run-id","")
 
 req <- c(queue_path,species_config_path,ontology_path,sheet_id,credential_path)
 if (any(vapply(req,function(x)is.null(x)||!nzchar(x),logical(1)))) stop("Missing required W08 Shiny publisher argument",call.=FALSE)
@@ -50,7 +51,7 @@ all_issue_keys <- unlist(lapply(cases,function(z){
 if (anyDuplicated(all_issue_keys)) stop("W08 queue contains duplicate issue keys",call.=FALSE)
 
 queue_sha <- digest(file=queue_path,algo="sha256",serialize=FALSE)
-batch_id <- paste0("w08-annotation-",substr(queue_sha,1,12))
+batch_id <- if(nzchar(source_run_id)) paste0("w08-run-",source_run_id) else paste0("w08-annotation-",substr(queue_sha,1,12))
 
 species_config <- fromJSON(species_config_path,simplifyVector=FALSE)
 species_labels <- names(species_config$code_map %||% list())
@@ -69,6 +70,7 @@ payload <- data.frame(
   queue_sha256=rep(queue_sha,length(lines)),
   case_index=as.character(seq_along(lines)),
   record_id=record_ids,
+  source_run_id=rep(source_run_id,length(lines)),
   case_json=lines,
   species_options_json=c(toJSON(species_labels,auto_unbox=FALSE),rep("",max(0,length(lines)-1L))),
   topic_options_json=c(toJSON(topic_options,auto_unbox=TRUE),rep("",max(0,length(lines)-1L))),
