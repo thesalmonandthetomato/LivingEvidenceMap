@@ -1,0 +1,140 @@
+name: Publish W01 review queue to Shiny
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Completed Workflow 01 run ID containing workflow01-human-review-<run_id>'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+      QUEUE_TAB: 'queue_w01_active'
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.6.0'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("googlesheets4","jsonlite","digest"))
+
+      - name: Download immutable W01 human-review package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w01-shiny-publish"
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow01-human-review-$SOURCE_RUN_ID" \
+            --dir "$RUNNER_TEMP/w01-shiny-publish"
+          test -s "$RUNNER_TEMP/w01-shiny-publish/human_review_cases.jsonl"
+          test -s "$RUNNER_TEMP/w01-shiny-publish/review_manifest.json"
+
+      - name: Prepare Google credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Validate and publish active queue
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(googlesheets4)
+            library(jsonlite)
+            library(digest)
+          })
+
+          root <- file.path(Sys.getenv("RUNNER_TEMP"), "w01-shiny-publish")
+          queue_path <- file.path(root, "human_review_cases.jsonl")
+          manifest_path <- file.path(root, "review_manifest.json")
+          ss <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
+          tab <- Sys.getenv("QUEUE_TAB")
+          source_run_id <- Sys.getenv("SOURCE_RUN_ID")
+
+          lines <- readLines(queue_path, warn = FALSE, encoding = "UTF-8")
+          lines <- lines[nzchar(trimws(lines))]
+          if (!length(lines)) stop("Human-review queue is empty; refusing to publish")
+
+          parsed <- lapply(lines, fromJSON, simplifyVector = FALSE)
+          ids <- vapply(parsed, function(x) as.character(x$review_case_id), character(1))
+          schemas <- vapply(parsed, function(x) as.character(x$schema), character(1))
+          if (any(!nzchar(ids)) || anyDuplicated(ids)) stop("Invalid or duplicate review_case_id")
+          if (any(schemas != "living-evidence-map-workflow01-duplicate-adjudication-case-v1")) {
+            stop("Unsupported W01 adjudication case schema")
+          }
+
+          manifest <- fromJSON(manifest_path, simplifyVector = FALSE)
+          expected_sha <- as.character(manifest$queue_sha256)
+          if (!nzchar(expected_sha)) stop("review_manifest.json has no queue_sha256")
+
+          actual_sha <- digest(file = queue_path, algo = "sha256", serialize = FALSE)
+          if (!identical(actual_sha, expected_sha)) {
+            stop(sprintf("Queue SHA mismatch: manifest=%s actual=%s", expected_sha, actual_sha))
+          }
+
+          manifest_n <- suppressWarnings(as.integer(manifest$cases))
+          if (!is.na(manifest_n) && manifest_n != length(lines)) {
+            stop(sprintf("Queue count mismatch: manifest=%d JSONL=%d", manifest_n, length(lines)))
+          }
+
+          payload <- data.frame(
+            batch_id = rep(paste0("w01-run-", source_run_id), length(lines)),
+            queue_sha256 = rep(expected_sha, length(lines)),
+            case_index = as.character(seq_along(lines)),
+            review_case_id = ids,
+            case_json = lines,
+            stringsAsFactors = FALSE
+          )
+
+          gs4_auth(path = Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"), cache = FALSE)
+          tabs <- sheet_names(ss)
+          if (!tab %in% tabs) sheet_add(ss, sheet = tab)
+
+          # This tab is an active queue pointer, not an append-only decision log.
+          # Replace it only after the incoming package has passed all local validation.
+          sheet_write(payload, ss = ss, sheet = tab)
+
+          verify <- read_sheet(ss, sheet = tab, col_types = "c")
+          required <- c("batch_id","queue_sha256","case_index","review_case_id","case_json")
+          if (!all(required %in% names(verify))) stop("Published queue missing required columns")
+          verify <- verify[, required, drop = FALSE]
+          if (nrow(verify) != length(lines)) stop("Published queue row count mismatch")
+          if (!identical(as.character(verify$review_case_id), ids)) stop("Published review_case_id order mismatch")
+          if (length(unique(verify$queue_sha256)) != 1L ||
+              !identical(unique(verify$queue_sha256)[[1L]], expected_sha)) {
+            stop("Published queue SHA metadata mismatch")
+          }
+
+          reconstructed <- paste0(paste(verify$case_json, collapse = "\n"), "\n")
+          reconstructed_sha <- digest(reconstructed, algo = "sha256", serialize = FALSE)
+          if (!identical(reconstructed_sha, expected_sha)) {
+            stop("Published queue failed reconstruction SHA validation")
+          }
+
+          cat("PASS: published validated W01 human-review queue to Shiny\n")
+          cat("Source run:", source_run_id, "\n")
+          cat("Cases:", length(lines), "\n")
+          cat("Queue SHA-256:", expected_sha, "\n")
