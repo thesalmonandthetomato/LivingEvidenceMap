@@ -171,3 +171,19 @@ jobs:
           cat("Source run:", source_run_id, "\n")
           cat("Cases:", length(out), "\n")
           cat("Queue SHA-256:", queue_sha, "\n")
+
+      - name: Mark W02 Shiny batch published
+        shell: bash
+        run: |
+          set -euo pipefail
+          META="$(Rscript -e 'suppressPackageStartupMessages(library(googlesheets4));gs4_auth(path=Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"),cache=FALSE);x<-read_sheet(Sys.getenv("LEM_GOOGLE_SHEET_ID"),sheet="queue_w02_active",col_types="c");stopifnot(nrow(x)>0);cat(paste(x$batch_id[[1]],x$queue_sha256[[1]],sep="|"))')"
+          BATCH_ID="${META%%|*}"
+          QUEUE_SHA="${META#*|}"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "02" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status published \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --source-run-id "$SOURCE_RUN_ID"
