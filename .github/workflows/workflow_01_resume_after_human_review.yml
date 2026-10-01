@@ -16,6 +16,11 @@ on:
         required: false
         default: ''
         type: string
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_01_resume_after_human_review.yml'
 
 permissions:
   contents: write
@@ -27,6 +32,9 @@ concurrency:
 
 env:
   WORKFLOW01_BRANCH: workflow01-final-architecture
+  AUTO_RESUME_POINTER: docs/deduplication/checkpoints/run-36866644366.json
+  AUTO_DECISIONS_RUN_ID: '36924314103'
+  AUTO_DECISIONS_ARTIFACT: workflow01-human-decisions-36866644366-36924314103
 
 jobs:
   resume:
@@ -50,11 +58,34 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('data.table','jsonlite','digest','httr2','stringdist','stringi','xml2'))
 
-      - name: Validate resume inputs
+      - name: Resolve resume inputs
         env:
-          POINTER: ${{ inputs.preadjudication_pointer_path }}
-          DECISIONS: ${{ inputs.decisions_path }}
-          REPAIRS: ${{ inputs.repairs_path }}
+          GH_TOKEN: ${{ github.token }}
+          INPUT_POINTER: ${{ inputs.preadjudication_pointer_path }}
+          INPUT_DECISIONS: ${{ inputs.decisions_path }}
+          INPUT_REPAIRS: ${{ inputs.repairs_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            mkdir -p outputs/resume_inputs
+            gh run download "$AUTO_DECISIONS_RUN_ID" \
+              --repo thesalmonandthetomato/LivingEvidenceMap \
+              --name "$AUTO_DECISIONS_ARTIFACT" \
+              --dir outputs/resume_inputs
+            test -s outputs/resume_inputs/human_decisions.jsonl
+            test -s outputs/resume_inputs/human_decisions.manifest.json
+            echo "POINTER=$AUTO_RESUME_POINTER" >> "$GITHUB_ENV"
+            echo "DECISIONS=outputs/resume_inputs/human_decisions.jsonl" >> "$GITHUB_ENV"
+            echo "REPAIRS=" >> "$GITHUB_ENV"
+          else
+            echo "POINTER=$INPUT_POINTER" >> "$GITHUB_ENV"
+            echo "DECISIONS=$INPUT_DECISIONS" >> "$GITHUB_ENV"
+            echo "REPAIRS=$INPUT_REPAIRS" >> "$GITHUB_ENV"
+          fi
+
+
+      - name: Validate resume inputs
         shell: bash
         run: |
           set -euo pipefail
@@ -66,7 +97,6 @@ jobs:
       - name: Restore compact pre-adjudication checkpoint
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          POINTER: ${{ inputs.preadjudication_pointer_path }}
         shell: bash
         run: |
           set -euo pipefail
@@ -131,9 +161,6 @@ jobs:
           Rscript -e 'library(jsonlite);a<-fromJSON("outputs/workflow01_pre_adjudication/summary.json");b<-fromJSON(file.path(Sys.getenv("CHECKPOINT_DIR"),"pre_adjudication_summary.json"));stopifnot(a$source_manifestations==b$source_manifestations,a$incremental_pair_decisions==b$incremental_pair_decisions,a$manual_review_pairs==b$manual_review_pairs);cat("PASS: reconstructed pre-adjudication summary matches checkpoint\n")'
 
       - name: Normalise submitted human decisions and repairs
-        env:
-          DECISIONS: ${{ inputs.decisions_path }}
-          REPAIRS: ${{ inputs.repairs_path }}
         shell: bash
         run: |
           set -euo pipefail
@@ -241,7 +268,7 @@ jobs:
 
       - name: Register final delta and checkpoint resolution
         env:
-          CHECKPOINT_POINTER: ${{ inputs.preadjudication_pointer_path }}
+          CHECKPOINT_POINTER: ${{ env.POINTER }}
         shell: bash
         run: |
           set -euo pipefail
