@@ -1,0 +1,64 @@
+name: TEMP recover W01 review package 36866644366
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_recover_w01_review_36866644366.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Download saved production audit artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/recovery"
+          gh run download 36866644366             --repo "$GITHUB_REPOSITORY"             --name workflow01-production-36866644366             --dir "$RUNNER_TEMP/recovery"
+          test -s "$RUNNER_TEMP/recovery/adjudication/human_review_package/human_review_cases.jsonl"
+          test -s "$RUNNER_TEMP/recovery/adjudication/human_review_package/review_manifest.json"
+
+      - name: Validate recovered review package
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(digest)})
+          root <- file.path(Sys.getenv('RUNNER_TEMP'),'recovery','adjudication','human_review_package')
+          q <- file.path(root,'human_review_cases.jsonl')
+          m <- file.path(root,'review_manifest.json')
+          lines <- readLines(q,warn=FALSE,encoding='UTF-8')
+          lines <- lines[nzchar(trimws(lines))]
+          stopifnot(length(lines)==74L)
+          man <- fromJSON(m,simplifyVector=FALSE)
+          stopifnot(as.integer(man$cases)==74L)
+          actual <- digest(file=q,algo='sha256',serialize=FALSE)
+          stopifnot(identical(actual,as.character(man$queue_sha256)))
+          cat('PASS: recovered immutable 74-case review package\n')
+
+      - name: Upload expected Workflow 01 human-review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-human-review-36866644366
+          path: ${{ runner.temp }}/recovery/adjudication/human_review_package/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish recovered queue to Shiny
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run shiny-adjudication-publish-w01-queue.yml             --repo "$GITHUB_REPOSITORY"             --ref workflow01-final-architecture             -f source_run_id=36866644366
