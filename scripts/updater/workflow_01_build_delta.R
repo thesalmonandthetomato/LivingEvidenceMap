@@ -133,8 +133,8 @@ for(src in sort(current_sources)){
 # 2. Pair-decision upserts.
 prev_pairs_path <- file.path(previous_root,"workflow01_full_five_source","final_pair_decisions.csv")
 cur_pairs_path <- file.path(current_final_root,"final_pair_decisions.csv")
-prev_pairs <- fread(prev_pairs_path,na.strings=c("","NA"))
-cur_pairs <- fread(cur_pairs_path,na.strings=c("","NA"))
+prev_pairs <- fread(prev_pairs_path,na.strings=c("","NA"),colClasses="character")
+cur_pairs <- fread(cur_pairs_path,na.strings=c("","NA"),colClasses="character")
 if(anyDuplicated(prev_pairs$pair_key)||anyDuplicated(cur_pairs$pair_key)) stop("Pair keys must be unique",call.=FALSE)
 missing_pairs <- setdiff(prev_pairs$pair_key,cur_pairs$pair_key)
 if(length(missing_pairs)) stop(sprintf("%d previous pair decisions disappeared",length(missing_pairs)),call.=FALSE)
@@ -152,8 +152,8 @@ fwrite(pair_upserts,file.path(output_dir,"pair_decision_upserts.csv"),na="")
 # 3. Cluster-map upserts. Existing manifestations may change cluster IDs after a merge.
 prev_map_path <- file.path(previous_root,"workflow01_full_five_source","manifestation_cluster_map.csv")
 cur_map_path <- file.path(current_final_root,"manifestation_cluster_map.csv")
-prev_map <- fread(prev_map_path,na.strings=c("","NA"))
-cur_map <- fread(cur_map_path,na.strings=c("","NA"))
+prev_map <- fread(prev_map_path,na.strings=c("","NA"),colClasses="character")
+cur_map <- fread(cur_map_path,na.strings=c("","NA"),colClasses="character")
 prev_map[,manifestation_key:=paste(source,source_record_id,sep="::")]
 cur_map[,manifestation_key:=paste(source,source_record_id,sep="::")]
 if(anyDuplicated(prev_map$manifestation_key)||anyDuplicated(cur_map$manifestation_key)) stop("Manifestation keys must be unique",call.=FALSE)
@@ -267,8 +267,8 @@ manifest <- list(
     canonical_records=as.integer(current_manifest$records),
     canonical_jsonl_sha256=as.character(current_manifest$canonical_jsonl_sha256),
     canonical_jsonl_bytes=as.numeric(current_manifest$canonical_jsonl_bytes),
-    pair_decisions_state_sha256=table_state_sha(fread(cur_pairs_path,na.strings=c("","NA")),"pair_key"),
-    cluster_map_state_sha256=table_state_sha(fread(cur_map_path,na.strings=c("","NA")),c("source","source_record_id")),
+    pair_decisions_state_sha256=table_state_sha(fread(cur_pairs_path,na.strings=c("","NA"),colClasses="character"),"pair_key"),
+    cluster_map_state_sha256=table_state_sha(fread(cur_map_path,na.strings=c("","NA"),colClasses="character"),c("source","source_record_id")),
     source_files=source_target
   ),
   delta=list(
