@@ -42,6 +42,74 @@ on:
         required: false
         default: false
         type: boolean
+      ebsco_africa_wide:
+        required: false
+        default: false
+        type: boolean
+      ebsco_amed:
+        required: false
+        default: false
+        type: boolean
+      ebsco_psycinfo:
+        required: false
+        default: false
+        type: boolean
+      ebsco_atla_religion:
+        required: false
+        default: false
+        type: boolean
+      ebsco_biological_agricultural_index:
+        required: false
+        default: false
+        type: boolean
+      ebsco_cinahl:
+        required: false
+        default: false
+        type: boolean
+      ebsco_communication_mass_media:
+        required: false
+        default: false
+        type: boolean
+      ebsco_econlit:
+        required: false
+        default: false
+        type: boolean
+      ebsco_eric:
+        required: false
+        default: false
+        type: boolean
+      ebsco_family_society:
+        required: false
+        default: false
+        type: boolean
+      ebsco_greenfile:
+        required: false
+        default: false
+        type: boolean
+      ebsco_hospitality_tourism:
+        required: false
+        default: false
+        type: boolean
+      ebsco_medline:
+        required: false
+        default: false
+        type: boolean
+      ebsco_mla:
+        required: false
+        default: false
+        type: boolean
+      ebsco_political_science:
+        required: false
+        default: false
+        type: boolean
+      ebsco_sportdiscus:
+        required: false
+        default: false
+        type: boolean
+      ebsco_waters_oceans:
+        required: false
+        default: false
+        type: boolean
       additional_search_term:
         required: false
         default: ''
@@ -86,33 +154,98 @@ on:
         required: true
         default: false
         type: boolean
-      ethos:
-        description: 'Run EThOS theses via Europe PMC'
-        required: true
-        default: false
-        type: boolean
-      cba:
-        description: 'Run Chinese Biological Abstracts via Europe PMC'
-        required: true
-        default: false
-        type: boolean
-      epmc_preprints:
-        description: 'Run Europe PMC preprints'
-        required: true
-        default: false
-        type: boolean
       wos:
         description: 'Run Web of Science'
         required: true
         default: true
         type: boolean
+      ebsco_africa_wide:
+        description: 'Run EBSCO: Africa-Wide Information'
+        required: true
+        default: false
+        type: boolean
+      ebsco_amed:
+        description: 'Run EBSCO: AMED'
+        required: true
+        default: false
+        type: boolean
+      ebsco_psycinfo:
+        description: 'Run EBSCO: APA PsycInfo'
+        required: true
+        default: false
+        type: boolean
+      ebsco_atla_religion:
+        description: 'Run EBSCO: Atla Religion Database'
+        required: true
+        default: false
+        type: boolean
+      ebsco_biological_agricultural_index:
+        description: 'Run EBSCO: Biological & Agricultural Index Plus'
+        required: true
+        default: false
+        type: boolean
+      ebsco_cinahl:
+        description: 'Run EBSCO: CINAHL'
+        required: true
+        default: false
+        type: boolean
+      ebsco_communication_mass_media:
+        description: 'Run EBSCO: Communication & Mass Media Complete'
+        required: true
+        default: false
+        type: boolean
+      ebsco_econlit:
+        description: 'Run EBSCO: EconLit'
+        required: true
+        default: false
+        type: boolean
+      ebsco_eric:
+        description: 'Run EBSCO: ERIC'
+        required: true
+        default: false
+        type: boolean
+      ebsco_family_society:
+        description: 'Run EBSCO: Family & Society Studies Worldwide'
+        required: true
+        default: false
+        type: boolean
+      ebsco_greenfile:
+        description: 'Run EBSCO: GreenFILE'
+        required: true
+        default: false
+        type: boolean
+      ebsco_hospitality_tourism:
+        description: 'Run EBSCO: Hospitality & Tourism Complete'
+        required: true
+        default: false
+        type: boolean
+      ebsco_medline:
+        description: 'Run EBSCO: MEDLINE'
+        required: true
+        default: false
+        type: boolean
+      ebsco_mla:
+        description: 'Run EBSCO: MLA International Bibliography'
+        required: true
+        default: false
+        type: boolean
+      ebsco_political_science:
+        description: 'Run EBSCO: Political Science Complete'
+        required: true
+        default: false
+        type: boolean
+      ebsco_sportdiscus:
+        description: 'Run EBSCO: SPORTDiscus'
+        required: true
+        default: false
+        type: boolean
+      ebsco_waters_oceans:
+        description: 'Run EBSCO: Waters & Oceans Worldwide'
+        required: true
+        default: false
+        type: boolean
       additional_search_term:
         description: 'Expansion only: add one search term to the farm/aquaculture concept; species terms are immutable'
-        required: false
-        default: ''
-        type: string
-      resume_run_id:
-        description: 'Reserved for child artefact reuse'
         required: false
         default: ''
         type: string
@@ -140,15 +273,60 @@ jobs:
       cba_query: ${{ steps.out.outputs.cba_query }}
       epmc_preprints_query: ${{ steps.out.outputs.epmc_preprints_query }}
       wos_query: ${{ steps.out.outputs.wos_query }}
+      ebsco_africa_wide_query: ${{ steps.out.outputs.ebsco_africa_wide_query }}
+      ebsco_amed_query: ${{ steps.out.outputs.ebsco_amed_query }}
+      ebsco_psycinfo_query: ${{ steps.out.outputs.ebsco_psycinfo_query }}
+      ebsco_atla_religion_query: ${{ steps.out.outputs.ebsco_atla_religion_query }}
+      ebsco_biological_agricultural_index_query: ${{ steps.out.outputs.ebsco_biological_agricultural_index_query }}
+      ebsco_cinahl_query: ${{ steps.out.outputs.ebsco_cinahl_query }}
+      ebsco_communication_mass_media_query: ${{ steps.out.outputs.ebsco_communication_mass_media_query }}
+      ebsco_econlit_query: ${{ steps.out.outputs.ebsco_econlit_query }}
+      ebsco_eric_query: ${{ steps.out.outputs.ebsco_eric_query }}
+      ebsco_family_society_query: ${{ steps.out.outputs.ebsco_family_society_query }}
+      ebsco_greenfile_query: ${{ steps.out.outputs.ebsco_greenfile_query }}
+      ebsco_hospitality_tourism_query: ${{ steps.out.outputs.ebsco_hospitality_tourism_query }}
+      ebsco_medline_query: ${{ steps.out.outputs.ebsco_medline_query }}
+      ebsco_mla_query: ${{ steps.out.outputs.ebsco_mla_query }}
+      ebsco_political_science_query: ${{ steps.out.outputs.ebsco_political_science_query }}
+      ebsco_sportdiscus_query: ${{ steps.out.outputs.ebsco_sportdiscus_query }}
+      ebsco_waters_oceans_query: ${{ steps.out.outputs.ebsco_waters_oceans_query }}
+      selected_lens: ${{ steps.selection.outputs.selected_lens }}
+      selected_scopus: ${{ steps.selection.outputs.selected_scopus }}
+      selected_openalex: ${{ steps.selection.outputs.selected_openalex }}
+      selected_agricola: ${{ steps.selection.outputs.selected_agricola }}
+      selected_pubmed: ${{ steps.selection.outputs.selected_pubmed }}
+      selected_ethos: ${{ steps.selection.outputs.selected_ethos }}
+      selected_cba: ${{ steps.selection.outputs.selected_cba }}
+      selected_epmc_preprints: ${{ steps.selection.outputs.selected_epmc_preprints }}
+      selected_wos: ${{ steps.selection.outputs.selected_wos }}
+      selected_ebsco_africa_wide: ${{ steps.selection.outputs.selected_ebsco_africa_wide }}
+      selected_ebsco_amed: ${{ steps.selection.outputs.selected_ebsco_amed }}
+      selected_ebsco_psycinfo: ${{ steps.selection.outputs.selected_ebsco_psycinfo }}
+      selected_ebsco_atla_religion: ${{ steps.selection.outputs.selected_ebsco_atla_religion }}
+      selected_ebsco_biological_agricultural_index: ${{ steps.selection.outputs.selected_ebsco_biological_agricultural_index }}
+      selected_ebsco_cinahl: ${{ steps.selection.outputs.selected_ebsco_cinahl }}
+      selected_ebsco_communication_mass_media: ${{ steps.selection.outputs.selected_ebsco_communication_mass_media }}
+      selected_ebsco_econlit: ${{ steps.selection.outputs.selected_ebsco_econlit }}
+      selected_ebsco_eric: ${{ steps.selection.outputs.selected_ebsco_eric }}
+      selected_ebsco_family_society: ${{ steps.selection.outputs.selected_ebsco_family_society }}
+      selected_ebsco_greenfile: ${{ steps.selection.outputs.selected_ebsco_greenfile }}
+      selected_ebsco_hospitality_tourism: ${{ steps.selection.outputs.selected_ebsco_hospitality_tourism }}
+      selected_ebsco_medline: ${{ steps.selection.outputs.selected_ebsco_medline }}
+      selected_ebsco_mla: ${{ steps.selection.outputs.selected_ebsco_mla }}
+      selected_ebsco_political_science: ${{ steps.selection.outputs.selected_ebsco_political_science }}
+      selected_ebsco_sportdiscus: ${{ steps.selection.outputs.selected_ebsco_sportdiscus }}
+      selected_ebsco_waters_oceans: ${{ steps.selection.outputs.selected_ebsco_waters_oceans }}
+      selected_sources_csv: ${{ steps.selection.outputs.selected_sources_csv }}
+      selected_sources_json: ${{ steps.selection.outputs.selected_sources_json }}
     steps:
-      - name: Validate selected source support
+      - name: Validate run mode
         shell: bash
         run: |
           set -euo pipefail
-          if [ '${{ inputs.lens }}' != 'true' ] && [ '${{ inputs.scopus }}' != 'true' ] && [ '${{ inputs.openalex }}' != 'true' ] && [ '${{ inputs.agricola }}' != 'true' ] && [ '${{ inputs.pubmed }}' != 'true' ] && [ '${{ inputs.ethos }}' != 'true' ] && [ '${{ inputs.cba }}' != 'true' ] && [ '${{ inputs.epmc_preprints }}' != 'true' ] && [ '${{ inputs.wos }}' != 'true' ]; then
-            echo 'Select at least one implemented source.' >&2
-            exit 2
-          fi
+          case '${{ inputs.run_type }}' in
+            full|fortnightly|expansion) ;;
+            *) echo 'Unsupported Workflow 00 run type' >&2; exit 2 ;;
+          esac
 
       - name: Checkout Workflow 00 orchestration branch
         uses: actions/checkout@v4
@@ -166,6 +344,44 @@ jobs:
         shell: Rscript {0}
         run: install.packages('jsonlite')
 
+      - name: Resolve and freeze source selection
+        id: selection
+        env:
+          W00_SELECT_LENS: ${{ inputs.lens }}
+          W00_SELECT_SCOPUS: ${{ inputs.scopus }}
+          W00_SELECT_OPENALEX: ${{ inputs.openalex }}
+          W00_SELECT_AGRICOLA: ${{ inputs.agricola }}
+          W00_SELECT_PUBMED: ${{ inputs.pubmed }}
+          W00_SELECT_ETHOS: ${{ inputs.ethos }}
+          W00_SELECT_CBA: ${{ inputs.cba }}
+          W00_SELECT_EPMC_PREPRINTS: ${{ inputs.epmc_preprints }}
+          W00_SELECT_WOS: ${{ inputs.wos }}
+          W00_SELECT_EBSCO_AFRICA_WIDE: ${{ inputs.ebsco_africa_wide }}
+          W00_SELECT_EBSCO_AMED: ${{ inputs.ebsco_amed }}
+          W00_SELECT_EBSCO_PSYCINFO: ${{ inputs.ebsco_psycinfo }}
+          W00_SELECT_EBSCO_ATLA_RELIGION: ${{ inputs.ebsco_atla_religion }}
+          W00_SELECT_EBSCO_BIOLOGICAL_AGRICULTURAL_INDEX: ${{ inputs.ebsco_biological_agricultural_index }}
+          W00_SELECT_EBSCO_CINAHL: ${{ inputs.ebsco_cinahl }}
+          W00_SELECT_EBSCO_COMMUNICATION_MASS_MEDIA: ${{ inputs.ebsco_communication_mass_media }}
+          W00_SELECT_EBSCO_ECONLIT: ${{ inputs.ebsco_econlit }}
+          W00_SELECT_EBSCO_ERIC: ${{ inputs.ebsco_eric }}
+          W00_SELECT_EBSCO_FAMILY_SOCIETY: ${{ inputs.ebsco_family_society }}
+          W00_SELECT_EBSCO_GREENFILE: ${{ inputs.ebsco_greenfile }}
+          W00_SELECT_EBSCO_HOSPITALITY_TOURISM: ${{ inputs.ebsco_hospitality_tourism }}
+          W00_SELECT_EBSCO_MEDLINE: ${{ inputs.ebsco_medline }}
+          W00_SELECT_EBSCO_MLA: ${{ inputs.ebsco_mla }}
+          W00_SELECT_EBSCO_POLITICAL_SCIENCE: ${{ inputs.ebsco_political_science }}
+          W00_SELECT_EBSCO_SPORTDISCUS: ${{ inputs.ebsco_sportdiscus }}
+          W00_SELECT_EBSCO_WATERS_OCEANS: ${{ inputs.ebsco_waters_oceans }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_resolve_source_selection.R \
+            --run-type '${{ inputs.run_type }}' \
+            --saved data/workflow00/source_selection.json \
+            --output outputs/updater/workflow00_plan/source_selection.json \
+            --ebsco-config config/workflow00_ebsco_sources.json
+
       - name: Validate search controls and write source queries
         shell: bash
         run: |
@@ -178,31 +394,15 @@ jobs:
 
       - name: Record selected databases
         shell: Rscript {0}
-        env:
-          LENS: ${{ inputs.lens }}
-          SCOPUS: ${{ inputs.scopus }}
-          OPENALEX: ${{ inputs.openalex }}
-          AGRICOLA: ${{ inputs.agricola }}
-          PUBMED: ${{ inputs.pubmed }}
-          ETHOS: ${{ inputs.ethos }}
-          CBA: ${{ inputs.cba }}
-          EPMC_PREPRINTS: ${{ inputs.epmc_preprints }}
-          WOS: ${{ inputs.wos }}
         run: |
           library(jsonlite)
           p <- 'outputs/updater/workflow00_plan/search_plan.json'
+          s <- 'outputs/updater/workflow00_plan/source_selection.json'
           x <- fromJSON(p, simplifyVector=FALSE)
-          x$selected_databases <- list(
-            lens=identical(Sys.getenv('LENS'),'true'),
-            scopus=identical(Sys.getenv('SCOPUS'),'true'),
-            openalex=identical(Sys.getenv('OPENALEX'),'true'),
-            agricola=identical(Sys.getenv('AGRICOLA'),'true'),
-            pubmed=identical(Sys.getenv('PUBMED'),'true'),
-            ethos=identical(Sys.getenv('ETHOS'),'true'),
-            cba=identical(Sys.getenv('CBA'),'true'),
-            epmc_preprints=identical(Sys.getenv('EPMC_PREPRINTS'),'true'),
-            wos=identical(Sys.getenv('WOS'),'true')
-          )
+          sel <- unlist(fromJSON(s, simplifyVector=FALSE)$selected_sources,use.names=FALSE)
+          all_sources <- names(x$source_queries)
+          x$selected_databases <- setNames(as.list(all_sources %in% sel),all_sources)
+          x$source_selection <- fromJSON(s,simplifyVector=FALSE)
           writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),p)
 
       - name: Export source queries
@@ -218,15 +418,7 @@ jobs:
           emit('search_version',p$search_version)
           emit('fortnightly_from_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$from)
           emit('fortnightly_to_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$to)
-          emit('lens_query',q$lens)
-          emit('scopus_query',q$scopus)
-          emit('openalex_query',q$openalex)
-          emit('agricola_query',q$agricola)
-          emit('pubmed_query',q$pubmed)
-          emit('ethos_query',q$ethos)
-          emit('cba_query',q$cba)
-          emit('epmc_preprints_query',q$epmc_preprints)
-          emit('wos_query',q$wos)
+          for (nm in names(q)) emit(paste0(nm,'_query'),q[[nm]])
 
       - name: Upload Workflow 00 plan
         uses: actions/upload-artifact@v4
