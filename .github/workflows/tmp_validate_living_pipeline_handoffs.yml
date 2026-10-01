@@ -1,4 +1,5 @@
 name: TEMP validate living pipeline handoffs
+# rerun after W10 wrapper repair
 
 on:
   push:
