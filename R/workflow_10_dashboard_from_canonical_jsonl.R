@@ -7,7 +7,7 @@ out_csv <- if(length(args)>=2L) args[[2L]] else "docs/living_evidence_map.csv"
 out_js <- if(length(args)>=3L) args[[3L]] else "docs/dashboard-data.js"
 pointer_path <- if(length(args)>=4L) args[[4L]] else stop("Missing Workflow 08 pointer path",call.=FALSE)
 
-ontology_path <- Sys.getenv("TOPIC_ONTOLOGY_PATH","data/reference/topic_ontology_v3_6.csv")
+ontology_path <- Sys.getenv("TOPIC_ONTOLOGY_PATH","user_input/workflow07_topic_ontology.csv")
 iso_map_path <- Sys.getenv("ISO_NUMERIC_MAP_PATH","config/iso3_numeric_map.json")
 gazetteer_path <- Sys.getenv("COUNTRY_GAZETTEER_PATH","config/global_country_gazetteer_v3.csv")
 flow_counts_path <- Sys.getenv("WORKFLOW09_FLOW_COUNTS_PATH","docs/reporting/workflow_09/flow_counts.json")
@@ -25,10 +25,11 @@ safe_year <- function(x){z<-suppressWarnings(as.integer(substr(clean(x),1,4)));i
 for(p in c(source_jsonl,pointer_path,ontology_path,flow_counts_path)) if(!file.exists(p)) stopf("Required input not found: %s",p)
 
 pointer <- fromJSON(pointer_path,simplifyVector=FALSE)
+expected_records <- suppressWarnings(as.integer(pointer$canonical_records))
 if(!identical(pointer$status,"published") ||
    !identical(pointer$workflow,"08") ||
    !identical(pointer$state,"corrected_final_adjudicated_canonical") ||
-   as.integer(pointer$canonical_records)!=19117L) stopf("Workflow 08 pointer validation failed")
+   is.na(expected_records) || expected_records < 1L) stopf("Workflow 08 pointer validation failed")
 expected_sha <- tolower(as.character(pointer$final_canonical_jsonl_sha256))
 if(!grepl("^[0-9a-f]{64}$",expected_sha)) stopf("Workflow 08 pointer has invalid canonical SHA-256")
 if(!identical(tolower(digest(file=source_jsonl,algo="sha256",serialize=FALSE)),expected_sha)) stopf("Input canonical JSONL does not match Workflow 08 pointer SHA-256")
@@ -183,7 +184,7 @@ repeat{
   }
 }
 close(con);on.exit(NULL,add=FALSE)
-if(length(dash_records)!=19117L) stopf("Expected 19117 final included records; built %d",length(dash_records))
+if(length(dash_records)!=expected_records) stopf("Expected %d final included records from W08 pointer; built %d",expected_records,length(dash_records))
 
 flat<-do.call(rbind,flat_rows)
 dir.create(dirname(out_csv),recursive=TRUE,showWarnings=FALSE)
@@ -200,11 +201,14 @@ search_results_n<-as.integer(flow_c$combined_search_results%||%NA_integer_)
 unique_records_n<-as.integer(flow_c$deduplicated_records%||%NA_integer_)
 screened_n<-as.integer(flow_c$title_abstract_screened%||%NA_integer_)
 search_update_date<-clean(flow_counts$search_update_date)
-if(!identical(search_update_date,"2026-09-22")) stopf("Unexpected Workflow 09 search update date: %s",search_update_date)
+if(!nzchar(search_update_date)) stopf("Workflow 09 search update date is missing")
 if(database_n<1L || is.null(names(flow_c$sources)) || any(!nzchar(names(flow_c$sources)))) stopf("Workflow 09 source list is missing or invalid")
-if(is.na(search_results_n)||search_results_n!=90137L) stopf("Unexpected Workflow 09 search-results count: %s",as.character(search_results_n))
-if(is.na(unique_records_n)||unique_records_n!=32292L) stopf("Unexpected Workflow 09 deduplicated-record count: %s",as.character(unique_records_n))
-if(is.na(screened_n)||screened_n!=32283L) stopf("Unexpected Workflow 09 screened count: %s",as.character(screened_n))
+if(is.na(search_results_n)||search_results_n<1L) stopf("Workflow 09 search-results count is missing or invalid")
+if(is.na(unique_records_n)||unique_records_n<1L) stopf("Workflow 09 deduplicated-record count is missing or invalid")
+if(is.na(screened_n)||screened_n<0L) stopf("Workflow 09 screened count is missing or invalid")
+if(search_results_n < unique_records_n) stopf("Workflow 09 search results cannot be fewer than deduplicated records")
+if(screened_n > unique_records_n) stopf("Workflow 09 screened count cannot exceed deduplicated records")
+if(!is.null(flow_c$final_included) && as.integer(flow_c$final_included)!=expected_records) stopf("Workflow 09 final included count does not match Workflow 08 pointer")
 published_at<-clean(pointer$published_at_utc)
 payload<-list(
   generated_at=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
@@ -216,7 +220,7 @@ payload<-list(
     canonical_sha256=expected_sha,
     source_github_run_id=as.character(pointer$source_github_run_id),
     ontology=ontology_path,
-    ontology_version="3.6"
+    ontology_version=if("ontology_version"%in%names(ontology))clean(ontology$ontology_version[[1L]]) else ""
   ),
   metrics=list(
     total_records=length(dash_records),
