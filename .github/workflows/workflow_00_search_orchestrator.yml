@@ -6,110 +6,54 @@ on:
       run_type:
         required: true
         type: string
-      lens:
+      group_core_multidisciplinary:
+        required: false
+        default: true
+        type: boolean
+      group_health_medicine:
         required: false
         default: false
         type: boolean
-      scopus:
+      group_environment_agriculture:
         required: false
         default: false
         type: boolean
-      openalex:
+      group_social_sciences:
         required: false
         default: false
         type: boolean
-      agricola:
+      group_education:
         required: false
         default: false
         type: boolean
-      pubmed:
+      group_regional:
         required: false
         default: false
         type: boolean
-      ethos:
+      group_media_communication:
         required: false
         default: false
         type: boolean
-      cba:
+      group_humanities:
         required: false
         default: false
         type: boolean
-      epmc_preprints:
+      group_sport_tourism:
         required: false
         default: false
         type: boolean
-      wos:
+      group_grey_preprints:
         required: false
         default: false
         type: boolean
-      ebsco_africa_wide:
+      additional_sources:
         required: false
-        default: false
-        type: boolean
-      ebsco_amed:
+        default: ''
+        type: string
+      exclude_sources:
         required: false
-        default: false
-        type: boolean
-      ebsco_psycinfo:
-        required: false
-        default: false
-        type: boolean
-      ebsco_atla_religion:
-        required: false
-        default: false
-        type: boolean
-      ebsco_biological_agricultural_index:
-        required: false
-        default: false
-        type: boolean
-      ebsco_cinahl:
-        required: false
-        default: false
-        type: boolean
-      ebsco_communication_mass_media:
-        required: false
-        default: false
-        type: boolean
-      ebsco_econlit:
-        required: false
-        default: false
-        type: boolean
-      ebsco_eric:
-        required: false
-        default: false
-        type: boolean
-      ebsco_family_society:
-        required: false
-        default: false
-        type: boolean
-      ebsco_greenfile:
-        required: false
-        default: false
-        type: boolean
-      ebsco_hospitality_tourism:
-        required: false
-        default: false
-        type: boolean
-      ebsco_medline:
-        required: false
-        default: false
-        type: boolean
-      ebsco_mla:
-        required: false
-        default: false
-        type: boolean
-      ebsco_political_science:
-        required: false
-        default: false
-        type: boolean
-      ebsco_sportdiscus:
-        required: false
-        default: false
-        type: boolean
-      ebsco_waters_oceans:
-        required: false
-        default: false
-        type: boolean
+        default: ''
+        type: string
       additional_search_term:
         required: false
         default: ''
@@ -129,123 +73,68 @@ on:
           - full
           - fortnightly
           - expansion
-      lens:
-        description: 'Run Lens'
+      group_core_multidisciplinary:
+        description: 'Core multidisciplinary — Lens, Scopus, WoS, OpenAlex'
         required: true
         default: true
         type: boolean
-      scopus:
-        description: 'Run Scopus'
-        required: true
-        default: true
-        type: boolean
-      openalex:
-        description: 'Run OpenAlex'
-        required: true
-        default: true
-        type: boolean
-      agricola:
-        description: 'Run AGRICOLA'
-        required: true
-        default: true
-        type: boolean
-      pubmed:
-        description: 'Run PubMed/MEDLINE via Europe PMC'
+      group_health_medicine:
+        description: 'Health & medicine — PubMed, MEDLINE, CINAHL, AMED, PsycInfo'
         required: true
         default: false
         type: boolean
-      wos:
-        description: 'Run Web of Science'
-        required: true
-        default: true
-        type: boolean
-      ebsco_africa_wide:
-        description: 'Run EBSCO: Africa-Wide Information'
+      group_environment_agriculture:
+        description: 'Environment & agriculture — AGRICOLA, BAI Plus, GreenFILE, Waters & Oceans'
         required: true
         default: false
         type: boolean
-      ebsco_amed:
-        description: 'Run EBSCO: AMED'
+      group_social_sciences:
+        description: 'Social sciences — PsycInfo, EconLit, Political Science, Family & Society'
         required: true
         default: false
         type: boolean
-      ebsco_psycinfo:
-        description: 'Run EBSCO: APA PsycInfo'
+      group_education:
+        description: 'Education — ERIC, PsycInfo'
         required: true
         default: false
         type: boolean
-      ebsco_atla_religion:
-        description: 'Run EBSCO: Atla Religion Database'
+      group_regional:
+        description: 'Regional — Africa-Wide, Chinese Biological Abstracts'
         required: true
         default: false
         type: boolean
-      ebsco_biological_agricultural_index:
-        description: 'Run EBSCO: Biological & Agricultural Index Plus'
+      group_media_communication:
+        description: 'Media & communication — Communication & Mass Media'
         required: true
         default: false
         type: boolean
-      ebsco_cinahl:
-        description: 'Run EBSCO: CINAHL'
+      group_humanities:
+        description: 'Humanities — MLA, Atla Religion'
         required: true
         default: false
         type: boolean
-      ebsco_communication_mass_media:
-        description: 'Run EBSCO: Communication & Mass Media Complete'
+      group_sport_tourism:
+        description: 'Sport / tourism — SPORTDiscus, Hospitality & Tourism'
         required: true
         default: false
         type: boolean
-      ebsco_econlit:
-        description: 'Run EBSCO: EconLit'
+      group_grey_preprints:
+        description: 'Grey literature & preprints — EThOS, Europe PMC preprints'
         required: true
         default: false
         type: boolean
-      ebsco_eric:
-        description: 'Run EBSCO: ERIC'
-        required: true
-        default: false
-        type: boolean
-      ebsco_family_society:
-        description: 'Run EBSCO: Family & Society Studies Worldwide'
-        required: true
-        default: false
-        type: boolean
-      ebsco_greenfile:
-        description: 'Run EBSCO: GreenFILE'
-        required: true
-        default: false
-        type: boolean
-      ebsco_hospitality_tourism:
-        description: 'Run EBSCO: Hospitality & Tourism Complete'
-        required: true
-        default: false
-        type: boolean
-      ebsco_medline:
-        description: 'Run EBSCO: MEDLINE'
-        required: true
-        default: false
-        type: boolean
-      ebsco_mla:
-        description: 'Run EBSCO: MLA International Bibliography'
-        required: true
-        default: false
-        type: boolean
-      ebsco_political_science:
-        description: 'Run EBSCO: Political Science Complete'
-        required: true
-        default: false
-        type: boolean
-      ebsco_sportdiscus:
-        description: 'Run EBSCO: SPORTDiscus'
-        required: true
-        default: false
-        type: boolean
-      ebsco_waters_oceans:
-        description: 'Run EBSCO: Waters & Oceans Worldwide'
-        required: true
-        default: false
-        type: boolean
+      additional_sources:
+        description: 'Optional extra source slugs, comma-separated'
+        required: false
+        default: ''
+        type: string
+      exclude_sources:
+        description: 'Optional source slugs to exclude, comma-separated'
+        required: false
+        default: ''
+        type: string
       additional_search_term:
-        description: 'Expansion only: add one search term to the farm/aquaculture concept; species terms are immutable'
+        description: 'Expansion only: add one search term to the farm/aquaculture concept'
         required: false
         default: ''
         type: string
@@ -296,32 +185,18 @@ jobs:
       - name: Resolve and freeze source selection
         id: selection
         env:
-          W00_SELECT_LENS: ${{ inputs.lens }}
-          W00_SELECT_SCOPUS: ${{ inputs.scopus }}
-          W00_SELECT_OPENALEX: ${{ inputs.openalex }}
-          W00_SELECT_AGRICOLA: ${{ inputs.agricola }}
-          W00_SELECT_PUBMED: ${{ inputs.pubmed }}
-          W00_SELECT_ETHOS: ${{ inputs.ethos }}
-          W00_SELECT_CBA: ${{ inputs.cba }}
-          W00_SELECT_EPMC_PREPRINTS: ${{ inputs.epmc_preprints }}
-          W00_SELECT_WOS: ${{ inputs.wos }}
-          W00_SELECT_EBSCO_AFRICA_WIDE: ${{ inputs.ebsco_africa_wide }}
-          W00_SELECT_EBSCO_AMED: ${{ inputs.ebsco_amed }}
-          W00_SELECT_EBSCO_PSYCINFO: ${{ inputs.ebsco_psycinfo }}
-          W00_SELECT_EBSCO_ATLA_RELIGION: ${{ inputs.ebsco_atla_religion }}
-          W00_SELECT_EBSCO_BIOLOGICAL_AGRICULTURAL_INDEX: ${{ inputs.ebsco_biological_agricultural_index }}
-          W00_SELECT_EBSCO_CINAHL: ${{ inputs.ebsco_cinahl }}
-          W00_SELECT_EBSCO_COMMUNICATION_MASS_MEDIA: ${{ inputs.ebsco_communication_mass_media }}
-          W00_SELECT_EBSCO_ECONLIT: ${{ inputs.ebsco_econlit }}
-          W00_SELECT_EBSCO_ERIC: ${{ inputs.ebsco_eric }}
-          W00_SELECT_EBSCO_FAMILY_SOCIETY: ${{ inputs.ebsco_family_society }}
-          W00_SELECT_EBSCO_GREENFILE: ${{ inputs.ebsco_greenfile }}
-          W00_SELECT_EBSCO_HOSPITALITY_TOURISM: ${{ inputs.ebsco_hospitality_tourism }}
-          W00_SELECT_EBSCO_MEDLINE: ${{ inputs.ebsco_medline }}
-          W00_SELECT_EBSCO_MLA: ${{ inputs.ebsco_mla }}
-          W00_SELECT_EBSCO_POLITICAL_SCIENCE: ${{ inputs.ebsco_political_science }}
-          W00_SELECT_EBSCO_SPORTDISCUS: ${{ inputs.ebsco_sportdiscus }}
-          W00_SELECT_EBSCO_WATERS_OCEANS: ${{ inputs.ebsco_waters_oceans }}
+          W00_GROUP_CORE_MULTIDISCIPLINARY: ${{ inputs.group_core_multidisciplinary }}
+          W00_GROUP_HEALTH_MEDICINE: ${{ inputs.group_health_medicine }}
+          W00_GROUP_ENVIRONMENT_AGRICULTURE: ${{ inputs.group_environment_agriculture }}
+          W00_GROUP_SOCIAL_SCIENCES: ${{ inputs.group_social_sciences }}
+          W00_GROUP_EDUCATION: ${{ inputs.group_education }}
+          W00_GROUP_REGIONAL: ${{ inputs.group_regional }}
+          W00_GROUP_MEDIA_COMMUNICATION: ${{ inputs.group_media_communication }}
+          W00_GROUP_HUMANITIES: ${{ inputs.group_humanities }}
+          W00_GROUP_SPORT_TOURISM: ${{ inputs.group_sport_tourism }}
+          W00_GROUP_GREY_PREPRINTS: ${{ inputs.group_grey_preprints }}
+          W00_ADDITIONAL_SOURCES: ${{ inputs.additional_sources }}
+          W00_EXCLUDE_SOURCES: ${{ inputs.exclude_sources }}
         shell: bash
         run: |
           set -euo pipefail
@@ -329,7 +204,8 @@ jobs:
             --run-type '${{ inputs.run_type }}' \
             --saved data/workflow00/source_selection.json \
             --output outputs/updater/workflow00_plan/source_selection.json \
-            --ebsco-config config/workflow00_ebsco_sources.json
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --group-config config/workflow00_source_groups.json
 
       - name: Validate search controls and write source queries
         shell: bash
