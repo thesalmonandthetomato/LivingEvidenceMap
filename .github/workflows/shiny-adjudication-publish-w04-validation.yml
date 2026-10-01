@@ -143,12 +143,28 @@ jobs:
             substr(actual_sha,1,12)
           )
 
+          highlight <- read.csv(
+            'user_input/workflow04_screening_highlight_terms.csv',
+            stringsAsFactors=FALSE,
+            na.strings=''
+          )
+          if(!all(c('words_for_include','words_for_exclude') %in% names(highlight))) {
+            stop('W04 highlight CSV missing required columns')
+          }
+          include_terms <- unique(trimws(highlight$words_for_include[!is.na(highlight$words_for_include) & nzchar(trimws(highlight$words_for_include))]))
+          exclude_terms <- unique(trimws(highlight$words_for_exclude[!is.na(highlight$words_for_exclude) & nzchar(trimws(highlight$words_for_exclude))]))
+          if(!length(include_terms)) stop('W04 include highlight vocabulary is empty')
+          include_json <- toJSON(include_terms,auto_unbox=FALSE)
+          exclude_json <- toJSON(exclude_terms,auto_unbox=FALSE)
+
           payload <- data.frame(
             batch_id=rep(batch_id,length(lines)),
             queue_sha256=rep(actual_sha,length(lines)),
             case_index=as.character(seq_along(lines)),
             review_case_id=ids,
             case_json=lines,
+            highlight_include_json=c(include_json,rep('',max(0,length(lines)-1L))),
+            highlight_exclude_json=c(exclude_json,rep('',max(0,length(lines)-1L))),
             stringsAsFactors=FALSE
           )
 
@@ -158,11 +174,14 @@ jobs:
           sheet_write(payload,ss=ss,sheet=tab)
 
           verify <- read_sheet(ss,sheet=tab,col_types='c')
-          req <- c('batch_id','queue_sha256','case_index','review_case_id','case_json')
+          req <- c('batch_id','queue_sha256','case_index','review_case_id','case_json','highlight_include_json','highlight_exclude_json')
           if(!all(req %in% names(verify))) stop('Published W04 queue missing required columns')
           verify <- verify[,req,drop=FALSE]
           if(nrow(verify)!=length(lines)) stop('Published W04 queue row count mismatch')
           if(!identical(as.character(verify$review_case_id),ids)) stop('Published W04 case order mismatch')
+          inc <- fromJSON(verify$highlight_include_json[[1L]])
+          exc <- fromJSON(verify$highlight_exclude_json[[1L]])
+          if(!length(inc) || length(exc)!=15L) stop('Published W04 highlight vocabulary validation failed')
           reconstructed <- paste0(paste(verify$case_json,collapse='\n'),'\n')
           if(!identical(digest(reconstructed,algo='sha256',serialize=FALSE),actual_sha)) stop('Published W04 reconstruction SHA mismatch')
 
