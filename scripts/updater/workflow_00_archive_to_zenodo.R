@@ -23,6 +23,7 @@ sources <- strsplit(arg("--sources",""),",",fixed=TRUE)[[1L]]
 sources <- sources[nzchar(sources)]
 repository <- arg("--repository")
 output_dir <- arg("--output-dir")
+ebsco_config_path <- arg("--ebsco-config","config/workflow00_ebsco_sources.json")
 if (any(vapply(list(run_id,run_type,search_version,repository,output_dir),is.null,logical(1))) || !length(sources)) {
   stop("Required: --staging-root --run-id --run-type --search-version --sources --repository --output-dir",call.=FALSE)
 }
@@ -32,8 +33,11 @@ output_dir <- normalizePath(output_dir,mustWork=TRUE)
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN")
 if (!nzchar(token)) stop("ZENODO_ACCESS_TOKEN is not set",call.=FALSE)
 
-allowed_sources <- c("lens","scopus","openalex","agricola","wos")
-if (any(!sources %in% allowed_sources)) stop("Unexpected source in --sources",call.=FALSE)
+base_sources <- c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos")
+if (!file.exists(ebsco_config_path)) stop(sprintf("EBSCO source config not found: %s",ebsco_config_path),call.=FALSE)
+ebsco_cfg <- fromJSON(ebsco_config_path,simplifyVector=FALSE)
+allowed_sources <- c(base_sources,names(ebsco_cfg$sources))
+if (any(!sources %in% allowed_sources)) stop(sprintf("Unexpected source(s) in --sources: %s",paste(setdiff(sources,allowed_sources),collapse=", ")),call.=FALSE)
 
 api <- "https://zenodo.org/api/deposit/depositions"
 marker <- paste0("LivingEvidenceMap-workflow00-run-",run_id)
