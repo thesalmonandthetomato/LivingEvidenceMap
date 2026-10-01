@@ -59,6 +59,14 @@ if(nrow(x)){
 latest_status <- ""
 if(nrow(hits)) latest_status <- as.character(hits$status[[nrow(hits)]])
 
+if(identical(latest_status,status)){
+  cat(sprintf("PASS: W%s batch %s already status=%s; no-op\n",stage,batch_id,status))
+  quit(status=0)
+}
+if(status=="published" && identical(latest_status,"consumed")) {
+  stop("Refusing to reactivate an already consumed batch",call.=FALSE)
+}
+
 if(status=="review_complete" && nzchar(latest_status) && !latest_status %in% c("published","review_complete")) {
   stop(sprintf("Cannot mark review_complete from latest status %s",latest_status),call.=FALSE)
 }
