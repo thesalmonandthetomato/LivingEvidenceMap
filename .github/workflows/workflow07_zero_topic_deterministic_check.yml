@@ -46,7 +46,7 @@ jobs:
           Rscript scripts/reporting/workflow07_zero_topic_deterministic_check.R \
             --zero inputs/handoff/workflow07_topic_final/workflow07_zero_code_records.csv \
             --records inputs/recall/current_topic_recall_status.csv \
-            --ontology data/reference/topic_ontology_v3_6.csv \
+            --ontology user_input/workflow07_topic_ontology.csv \
             --output-dir outputs/workflow07_zero_topic_deterministic
           test -s outputs/workflow07_zero_topic_deterministic/PASS.ok
 
