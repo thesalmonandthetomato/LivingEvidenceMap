@@ -13,7 +13,6 @@ state_path <- arg("--state")
 if (is.null(state_path) || !file.exists(state_path)) stop("Required existing --state file",call.=FALSE)
 
 x <- fromJSON(state_path,simplifyVector=FALSE)
-expected_sources <- c("lens","scopus","openalex","agricola","wos")
 if (!identical(x$schema,"living-evidence-map-workflow00-state-v1")) stop("Unsupported Workflow 00 state schema",call.=FALSE)
 if (!identical(x$status,"accepted")) stop("Workflow 00 state is not accepted",call.=FALSE)
 if (is.null(x$state_id) || !nzchar(as.character(x$state_id))) stop("Workflow 00 state lacks state_id",call.=FALSE)
@@ -21,12 +20,18 @@ if (is.null(x$search_version) || !nzchar(as.character(x$search_version))) stop("
 if (is.null(x$sources) || !is.list(x$sources)) stop("Workflow 00 state lacks sources",call.=FALSE)
 
 actual <- names(x$sources)
-if (is.null(actual) || !setequal(actual,expected_sources) || length(actual)!=length(expected_sources)) {
-  stop(sprintf("Workflow 00 state must contain exactly: %s",paste(expected_sources,collapse=", ")),call.=FALSE)
+if (is.null(actual) || !length(actual)) {
+  stop("Workflow 00 state must contain at least one source",call.=FALSE)
+}
+if (any(!nzchar(actual)) || any(!grepl("^[a-z0-9][a-z0-9_-]*$",actual))) {
+  stop("Workflow 00 state contains an invalid source identifier",call.=FALSE)
+}
+if (anyDuplicated(actual)) {
+  stop("Workflow 00 state contains duplicate source identifiers",call.=FALSE)
 }
 
 hex64 <- "^[0-9a-fA-F]{64}$"
-for (src in expected_sources) {
+for (src in actual) {
   z <- x$sources[[src]]
   required <- c("archive_pointer","github_run_id","zenodo_record_id","doi","harvest_file","native_id_registry")
   missing <- required[vapply(required,function(nm)is.null(z[[nm]]),logical(1))]
@@ -64,4 +69,4 @@ for (src in expected_sources) {
   if (!identical(as.numeric(a$bytes),as.numeric(hf$bytes))) stop(sprintf("%s harvest byte-size mismatch",src),call.=FALSE)
   if (!identical(tolower(as.character(a$sha256)),tolower(as.character(hf$sha256)))) stop(sprintf("%s harvest SHA-256 mismatch",src),call.=FALSE)
 }
-cat(sprintf("PASS: Workflow 00 state %s validates with exactly five sources\n",x$state_id))
+cat(sprintf("PASS: Workflow 00 state %s validates with %d source(s): %s\n",x$state_id,length(actual),paste(actual,collapse=", ")))
