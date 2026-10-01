@@ -16,7 +16,7 @@ output_dir <- arg("--output-dir")
 if (is.null(source)||is.null(current_root)||is.null(history_root)||is.null(output_dir)) {
   stop("--source, --current-root, --history-root and --output-dir are required",call.=FALSE)
 }
-if (!(source %in% c("lens","scopus","openalex","agricola","wos"))) stop("Unsupported source",call.=FALSE)
+if (!(source %in% c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos"))) stop("Unsupported source",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
 `%||%` <- function(x,y) if (is.null(x)) y else x
@@ -136,6 +136,10 @@ manifest <- list(
     scopus="Scopus EID",
     openalex="OpenAlex Work ID",
     agricola="Europe PMC AGR source + ID",
+    pubmed="Europe PMC MED source + ID",
+    ethos="Europe PMC ETH source + ID",
+    cba="Europe PMC CBA source + ID",
+    epmc_preprints="Europe PMC PPR source + ID",
     wos="Web of Science UID"
   ),
   current_expansion_records=length(current_ids),
