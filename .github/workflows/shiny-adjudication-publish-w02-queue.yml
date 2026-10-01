@@ -67,6 +67,8 @@ jobs:
             library(digest)
           })
 
+          `%||%` <- function(x, y) if (is.null(x)) y else x
+
           root <- file.path(Sys.getenv("RUNNER_TEMP"), "w02-shiny-publish")
           input_path <- file.path(root, "workflow02_human_review.jsonl")
           manifest_path <- file.path(root, "workflow02_human_review_manifest.json")
