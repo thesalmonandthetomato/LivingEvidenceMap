@@ -318,7 +318,6 @@ jobs:
       selected_ebsco_waters_oceans: ${{ steps.selection.outputs.selected_ebsco_waters_oceans }}
       selected_sources_csv: ${{ steps.selection.outputs.selected_sources_csv }}
       selected_sources_json: ${{ steps.selection.outputs.selected_sources_json }}
-      source_matrix_json: ${{ steps.out.outputs.source_matrix_json }}
     steps:
       - name: Validate run mode
         shell: bash
@@ -420,12 +419,6 @@ jobs:
           emit('fortnightly_from_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$from)
           emit('fortnightly_to_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$to)
           for (nm in names(q)) emit(paste0(nm,'_query'),q[[nm]])
-          s <- fromJSON('outputs/updater/workflow00_plan/source_selection.json', simplifyVector=FALSE)
-          sel <- unlist(s$selected_sources,use.names=FALSE)
-          missing <- setdiff(sel,names(q))
-          if (length(missing)) stop(sprintf('Selected source(s) lack generated query: %s',paste(missing,collapse=', ')))
-          matrix <- lapply(sel,function(src) list(source=src,query=q[[src]]))
-          emit('source_matrix_json',toJSON(matrix,auto_unbox=TRUE,null='null'))
 
       - name: Upload Workflow 00 plan
         uses: actions/upload-artifact@v4
@@ -435,18 +428,389 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-
-  search-sources:
+  lens:
     needs: validate-and-plan
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.validate-and-plan.outputs.source_matrix_json) }}
+    if: ${{ needs.validate-and-plan.outputs.selected_lens == 'true' }}
     uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
     with:
-      source: ${{ matrix.source }}
+      source: lens
       run_type: ${{ inputs.run_type }}
-      query: ${{ matrix.query }}
+      query: ${{ needs.validate-and-plan.outputs.lens_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  scopus:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_scopus == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: scopus
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.scopus_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  openalex:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_openalex == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: openalex
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.openalex_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  agricola:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_agricola == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: agricola
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.agricola_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  pubmed:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_pubmed == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: pubmed
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.pubmed_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ethos:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ethos == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ethos
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ethos_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  cba:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_cba == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: cba
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.cba_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  epmc_preprints:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_epmc_preprints == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: epmc_preprints
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.epmc_preprints_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  wos:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_wos == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: wos
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.wos_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_africa_wide:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_africa_wide == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_africa_wide
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_africa_wide_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_amed:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_amed == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_amed
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_amed_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_psycinfo:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_psycinfo == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_psycinfo
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_psycinfo_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_atla_religion:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_atla_religion == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_atla_religion
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_atla_religion_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_biological_agricultural_index:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_biological_agricultural_index == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_biological_agricultural_index
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_biological_agricultural_index_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_cinahl:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_cinahl == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_cinahl
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_cinahl_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_communication_mass_media:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_communication_mass_media == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_communication_mass_media
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_communication_mass_media_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_econlit:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_econlit == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_econlit
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_econlit_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_eric:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_eric == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_eric
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_eric_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_family_society:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_family_society == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_family_society
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_family_society_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_greenfile:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_greenfile == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_greenfile
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_greenfile_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_hospitality_tourism:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_hospitality_tourism == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_hospitality_tourism
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_hospitality_tourism_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_medline:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_medline == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_medline
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_medline_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_mla:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_mla == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_mla
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_mla_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_political_science:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_political_science == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_political_science
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_political_science_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_sportdiscus:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_sportdiscus == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_sportdiscus
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_sportdiscus_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ebsco_waters_oceans:
+    needs: validate-and-plan
+    if: ${{ needs.validate-and-plan.outputs.selected_ebsco_waters_oceans == 'true' }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_waters_oceans
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ebsco_waters_oceans_query }}
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
@@ -455,7 +819,7 @@ jobs:
     secrets: inherit
 
   reconcile-expansion:
-    needs: [validate-and-plan, search-sources]
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc_preprints, wos, ebsco_africa_wide, ebsco_amed, ebsco_psycinfo, ebsco_atla_religion, ebsco_biological_agricultural_index, ebsco_cinahl, ebsco_communication_mass_media, ebsco_econlit, ebsco_eric, ebsco_family_society, ebsco_greenfile, ebsco_hospitality_tourism, ebsco_medline, ebsco_mla, ebsco_political_science, ebsco_sportdiscus, ebsco_waters_oceans]
     if: ${{ always() && inputs.run_type == 'expansion' && needs.validate-and-plan.result == 'success' }}
     runs-on: ubuntu-latest
     env:
@@ -467,12 +831,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
-          result="$(jq -r '."search-sources".result // "missing"' <<< "$NEEDS_JSON")"
-          if [ "$result" != "success" ]; then
-            echo "One or more selected source searches did not succeed: $result" >&2
-            exit 1
-          fi
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+            case ",$SELECTED_SOURCES," in
+              *",$source,"*) ;;
+              *) continue ;;
+            esac
+            result="$(jq -r --arg s "$source" '.[$s].result // "missing"' <<< "$NEEDS_JSON")"
+            if [ "$result" != "success" ]; then
+              echo "$source expansion child did not succeed: $result" >&2
+              exit 1
+            fi
+          done
 
       - name: Checkout Workflow 00 orchestration branch
         uses: actions/checkout@v4
@@ -507,12 +876,202 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p expansion_current
-          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
-          result="$(jq -r '."search-sources".result // "missing"' <<< "$NEEDS_JSON")"
-          if [ "$result" != "success" ]; then
-            echo "One or more selected child searches did not succeed: $result" >&2
-            exit 1
-          fi
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+            case ",$SELECTED_SOURCES," in
+              *",$source,"*) ;;
+              *) continue ;;
+            esac
+            mkdir -p "expansion_current/$source"
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-${source}-harvest-${GITHUB_RUN_ID}" \
+              --dir "expansion_current/$source"
+          done
+
+      - name: Build historical native-ID inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
+          WOS_SELECTED: ${{ inputs.wos }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p expansion_history
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.id,.name,.workflow_run.id] | @tsv' > /tmp/all_artifacts.tsv
+
+          matches_source() {
+            local source="$1" name="$2"
+            case "$source" in
+              lens) [[ "$name" == workflow00-lens-harvest-* ]] ;;
+              scopus) [[ "$name" == workflow00-scopus-harvest-* || "$name" == scopus-full-search-* ]] ;;
+              openalex) [[ "$name" == workflow00-openalex-harvest-* || "$name" == openalex-full-search-* ]] ;;
+              agricola) [[ "$name" == workflow00-agricola-harvest-* || "$name" == agricola-full-search-* ]] ;;
+              pubmed) [[ "$name" == workflow00-pubmed-harvest-* ]] ;;
+              ethos) [[ "$name" == workflow00-ethos-harvest-* ]] ;;
+              cba) [[ "$name" == workflow00-cba-harvest-* ]] ;;
+              epmc_preprints) [[ "$name" == workflow00-epmc_preprints-harvest-* ]] ;;
+              wos) [[ "$name" == workflow00-wos-harvest-* || "$name" == wos-starter-full-search-* ]] ;;
+              ebsco_*) [[ "$name" == workflow00-${source}-harvest-* ]] ;;
+              *) return 1 ;;
+            esac
+          }
+
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+            case ",$SELECTED_SOURCES," in
+              *",$source,"*) ;;
+              *) continue ;;
+            esac
+            mkdir -p "expansion_history/$source"
+
+            registry="data/workflow00/source_id_registry/${source}_native_ids.txt"
+            if [ -s "$registry" ]; then
+              cp "$registry" "expansion_history/$source/known_native_ids.txt"
+              echo "Using persistent registry for $source"
+              continue
+            fi
+
+            echo "Seeding first $source registry from preserved harvest artefacts"
+            while IFS="$(printf '\t')" read -r id name run_id; do
+              [ -n "$id" ] || continue
+              [ "$name" != "workflow00-${source}-harvest-${GITHUB_RUN_ID}" ] || continue
+              if matches_source "$source" "$name"; then
+                dest="expansion_history/$source/artifact-$id"
+                mkdir -p "$dest"
+                echo "Downloading historical $source artefact: $name"
+                gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$name" --dir "$dest"
+              fi
+            done < /tmp/all_artifacts.tsv
+
+            if [ "$source" = "lens" ] && ! find "expansion_history/lens" -type f -name 'records.jsonl' -print -quit | grep -q .; then
+              git fetch origin canonical-fresh-2026-09-08-v1
+              git show origin/canonical-fresh-2026-09-08-v1:data/canonical/current/repair/records.jsonl > expansion_history/lens/records.jsonl
+              echo "Seeded Lens IDs from canonical fresh full harvest"
+            fi
+          done
+
+      - name: Reconcile expansion by native source ID
+        env:
+          LENS_SELECTED: ${{ inputs.lens }}
+          SCOPUS_SELECTED: ${{ inputs.scopus }}
+          OPENALEX_SELECTED: ${{ inputs.openalex }}
+          AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
+          WOS_SELECTED: ${{ inputs.wos }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/updater/expansion_reconciliation
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+            case ",$SELECTED_SOURCES," in
+              *",$source,"*) ;;
+              *) continue ;;
+            esac
+            out="outputs/updater/expansion_reconciliation/$source"
+            if [[ "$source" == ebsco_* ]]; then
+              registry="expansion_history/$source/known_native_ids.txt"
+              test -f "$registry"
+              Rscript scripts/updater/workflow_00_ebsco_native_id_reconcile.R \
+                --source "$source" \
+                --run-type expansion \
+                --current-root "expansion_current/$source" \
+                --registry "$registry" \
+                --output-dir "$out"
+            else
+              Rscript scripts/updater/workflow_00_expansion_native_id_reconcile.R \
+                --source "$source" \
+                --current-root "expansion_current/$source" \
+                --history-root "expansion_history/$source" \
+                --output-dir "$out"
+            fi
+
+            mkdir -p outputs/updater/expansion_archive/data/workflow00/source_id_registry
+            cp "$out/updated_native_ids.txt" \
+              "outputs/updater/expansion_archive/data/workflow00/source_id_registry/${source}_native_ids.txt"
+
+            mkdir -p "outputs/updater/expansion_archive/docs/search_record/ad_hoc/reconciliation/${GITHUB_RUN_ID}"
+            cp "$out/reconciliation_manifest.json" \
+              "outputs/updater/expansion_archive/docs/search_record/ad_hoc/reconciliation/${GITHUB_RUN_ID}/${source}_reconciliation.json"
+          done
+
+      - name: Write consolidated expansion reconciliation summary
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          files <- list.files(
+            'outputs/updater/expansion_reconciliation',
+            pattern='reconciliation_manifest\\.json$',
+            recursive=TRUE,
+            full.names=TRUE
+          )
+          stopifnot(length(files) >= 1L)
+          x <- lapply(files,fromJSON,simplifyVector=FALSE)
+          summary <- list(
+            workflow='00_expansion_reconciliation',
+            status='success',
+            parent_run_id=Sys.getenv('GITHUB_RUN_ID'),
+            additional_search_term='${{ inputs.additional_search_term }}',
+            sources=x,
+            matching_policy='exact native source identifier only',
+            downstream_bibliographic_deduplication='Workflow 01'
+          )
+          dir.create(
+            'outputs/updater/expansion_archive/docs/search_record/ad_hoc/reconciliation',
+            recursive=TRUE,
+            showWarnings=FALSE
+          )
+          writeLines(
+            toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null='null'),
+            sprintf(
+              'outputs/updater/expansion_archive/docs/search_record/ad_hoc/reconciliation/%s_summary.json',
+              Sys.getenv('GITHUB_RUN_ID')
+            )
+          )
+
+      - name: Upload expansion reconciliation artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-expansion-reconciliation-${{ github.run_id }}
+          path: |
+            outputs/updater/expansion_reconciliation/
+            outputs/updater/expansion_archive/
+          retention-days: 7
+          if-no-files-found: error
+
+  archive-search-records:
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc_preprints, wos, ebsco_africa_wide, ebsco_amed, ebsco_psycinfo, ebsco_atla_religion, ebsco_biological_agricultural_index, ebsco_cinahl, ebsco_communication_mass_media, ebsco_econlit, ebsco_eric, ebsco_family_society, ebsco_greenfile, ebsco_hospitality_tourism, ebsco_medline, ebsco_mla, ebsco_political_science, ebsco_sportdiscus, ebsco_waters_oceans, reconcile-expansion]
+    if: ${{ always() && needs.validate-and-plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      SELECTED_SOURCES: ${{ needs.validate-and-plan.outputs.selected_sources_csv }}
+    steps:
+      - name: Ensure selected child searches and reconciliation succeeded
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          RUN_TYPE: ${{ inputs.run_type }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
+            case ",$SELECTED_SOURCES," in
+              *",$source,"*) ;;
+              *) continue ;;
+            esac
+            result="$(jq -r --arg s "$source" '.[$s].result // "missing"' <<< "$NEEDS_JSON")"
+            if [ "$result" != "success" ]; then
+              echo "$source child search did not succeed: $result" >&2
+              exit 1
+            fi
+          done
           if [ "$RUN_TYPE" = "expansion" ]; then
             result="$(jq -r '."reconcile-expansion".result // "missing"' <<< "$NEEDS_JSON")"
             if [ "$result" != "success" ]; then
@@ -572,8 +1131,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p downloaded_fortnightly
-          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
-          for source in "${SOURCES[@]}"; do
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
@@ -599,8 +1157,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p downloaded_full_native
-          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
-          for source in "${SOURCES[@]}"; do
+          for source in pubmed ethos cba epmc_preprints ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
@@ -632,8 +1189,7 @@ jobs:
             mkdir -p data/workflow00/source_id_registry
             test -s downloaded_plan/source_selection.json
             cp downloaded_plan/source_selection.json data/workflow00/source_selection.json
-            IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
-          for source in "${SOURCES[@]}"; do
+            for source in pubmed ethos cba epmc_preprints ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
               src="downloaded_full_native/$source/source_delta"
               [ -d "$src" ] || continue
               cp "$src/updated_native_ids.txt" "data/workflow00/source_id_registry/${source}_native_ids.txt"
@@ -646,8 +1202,7 @@ jobs:
           if [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
             mkdir -p data/workflow00/source_id_registry
             mkdir -p "docs/search_record/fortnightly_update/reconciliation/$GITHUB_RUN_ID"
-            IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
-          for source in "${SOURCES[@]}"; do
+            for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
               src="downloaded_fortnightly/$source/source_delta"
               [ -d "$src" ] || continue
               cp "$src/updated_native_ids.txt" "data/workflow00/source_id_registry/${source}_native_ids.txt"
@@ -730,8 +1285,7 @@ jobs:
             --dir zenodo_staging/plan
 
           sources=()
-          IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
-          for source in "${SOURCES[@]}"; do
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos ebsco_africa_wide ebsco_amed ebsco_psycinfo ebsco_atla_religion ebsco_biological_agricultural_index ebsco_cinahl ebsco_communication_mass_media ebsco_econlit ebsco_eric ebsco_family_society ebsco_greenfile ebsco_hospitality_tourism ebsco_medline ebsco_mla ebsco_political_science ebsco_sportdiscus ebsco_waters_oceans; do
             case ",$SELECTED_SOURCES," in
               *",$source,"*) ;;
               *) continue ;;
