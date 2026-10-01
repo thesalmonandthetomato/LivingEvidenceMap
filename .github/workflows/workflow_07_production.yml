@@ -25,7 +25,6 @@ on:
       workflow06_pointer_path:
         description: 'Current authoritative Workflow 06 pointer'
         required: true
-        default: 'docs/workflow06/zenodo/run-36265092530.json'
         type: string
       prior_workflow07_pointer_path:
         description: 'Prior authoritative W07 pointer; use none for a first run'
