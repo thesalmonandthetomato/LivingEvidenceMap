@@ -27,7 +27,7 @@ jobs:
 
       - name: Install validation dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest'))
+        run: install.packages(c('jsonlite','digest','googlesheets4'))
 
       - name: Download saved production audit artifact
         env:
@@ -66,8 +66,19 @@ jobs:
 
       - name: Publish recovered queue to Shiny
         env:
-          GH_TOKEN: ${{ github.token }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+          QUEUE_TAB: 'queue_w01_active'
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow run shiny-adjudication-publish-w01-queue.yml             --repo "$GITHUB_REPOSITORY"             --ref workflow01-final-architecture             -f source_run_id=36866644366
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_01_publish_human_review_queue_to_shiny.R \
+            --queue "$RUNNER_TEMP/recovery/adjudication/human_review_package/human_review_cases.jsonl" \
+            --manifest "$RUNNER_TEMP/recovery/adjudication/human_review_package/review_manifest.json" \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --tab "$QUEUE_TAB" \
+            --source-run-id 36866644366 \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
