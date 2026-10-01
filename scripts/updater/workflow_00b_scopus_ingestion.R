@@ -24,8 +24,10 @@ if (view == "STANDARD" && page_size > 200L) stop("--page-size cannot exceed 200 
 if (view != "STANDARD" && page_size > 25L) stop("--page-size cannot exceed 25 for COMPLETE/other restricted views")
 if (!(view %in% c("STANDARD","COMPLETE"))) stop("--view must be STANDARD or COMPLETE")
 
-api_key <- Sys.getenv("SCOPUS_API_TOKEN", unset="")
+api_key <- trimws(Sys.getenv("SCOPUS_API_TOKEN", unset=""))
+inst_token <- trimws(Sys.getenv("SCOPUS_INSTTOKEN", unset=""))
 if (!nzchar(api_key)) stop("SCOPUS_API_TOKEN is required")
+if (!nzchar(inst_token)) stop("SCOPUS_INSTTOKEN is required")
 
 `%||%` <- function(x,y) if (is.null(x)) y else x
 now_utc <- function() format(Sys.time(), tz="UTC", format="%Y-%m-%dT%H:%M:%SZ")
@@ -62,6 +64,7 @@ request_page <- function(query,start,count) {
       req_headers(
         Accept="application/json",
         `X-ELS-APIKey`=api_key,
+        `X-ELS-Insttoken`=inst_token,
         `User-Agent`="LivingEvidenceMap Scopus ingestion"
       ) |>
       req_url_query(
