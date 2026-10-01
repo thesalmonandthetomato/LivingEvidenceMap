@@ -86,7 +86,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: workflow02-batched
@@ -130,6 +130,7 @@ jobs:
           parse(file='scripts/updater/workflow_02_merge_patches.R')
           parse(file='scripts/updater/workflow_02_apply_patch.R')
           parse(file='scripts/updater/workflow_02_aggregate_batches.R')
+          parse(file='scripts/updater/workflow_02_build_human_review.R')
           parse(file='scripts/updater/workflow_02_resume_checkpoints.R')
           cat('PASS: batched Workflow 02 scripts parse\n')
 
@@ -447,6 +448,52 @@ jobs:
           Rscript scripts/updater/workflow_02_apply_patch.R             --input prepared/outputs/workflow02/input_with_previous_state.jsonl             --patch outputs/workflow02/current_patch.jsonl             --output outputs/workflow02/current_replayed.jsonl             --report outputs/workflow02/current_replay.json             --mode exact
 
           Rscript -e "library(digest);a<-digest(file='outputs/workflow02/current_replayed.jsonl',algo='sha256',serialize=FALSE);b<-digest(file='outputs/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE);stopifnot(a==b);cat('PASS: batched current patches and cumulative reconstruction are identical\n')"
+
+      - name: Build Workflow 02 human-review package
+        id: human_review
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02_human_review
+          Rscript scripts/updater/workflow_02_build_human_review.R \
+            --input prepared/outputs/workflow02/input_with_previous_state.jsonl \
+            --audit outputs/workflow02/enrichment_audit.jsonl \
+            --output-dir outputs/workflow02_human_review \
+            --status outputs/workflow02_human_review/status.json
+
+          REQUIRES="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow02_human_review/status.json");cat(tolower(as.character(x$requires_human_review)))')"
+          CASES="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow02_human_review/status.json");cat(as.integer(x$blocking_cases))')"
+          echo "requires_human_review=$REQUIRES" >> "$GITHUB_OUTPUT"
+          echo "blocking_cases=$CASES" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Workflow 02 human-review package
+        id: upload_review
+        if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-human-review-${{ github.run_id }}
+          path: outputs/workflow02_human_review/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish Workflow 02 review queue to Shiny
+        if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run shiny-adjudication-publish-w02-queue.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$WORKFLOW02_BRANCH" \
+            -f source_run_id="$GITHUB_RUN_ID"
+
+      - name: Stop for Workflow 02 human adjudication
+        if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
+        shell: bash
+        run: |
+          echo "::error::Workflow 02 requires human adjudication for ${{ steps.human_review.outputs.blocking_cases }} quarantined record(s). Review in the Shiny adjudication app."
+          exit 1
 
       - name: Inventory and build durable sparse state
         env:
