@@ -22,6 +22,22 @@ on:
         required: false
         default: false
         type: boolean
+      pubmed:
+        required: false
+        default: false
+        type: boolean
+      ethos:
+        required: false
+        default: false
+        type: boolean
+      cba:
+        required: false
+        default: false
+        type: boolean
+      epmc_preprints:
+        required: false
+        default: false
+        type: boolean
       wos:
         required: false
         default: false
@@ -65,6 +81,26 @@ on:
         required: true
         default: true
         type: boolean
+      pubmed:
+        description: 'Run PubMed/MEDLINE via Europe PMC'
+        required: true
+        default: false
+        type: boolean
+      ethos:
+        description: 'Run EThOS theses via Europe PMC'
+        required: true
+        default: false
+        type: boolean
+      cba:
+        description: 'Run Chinese Biological Abstracts via Europe PMC'
+        required: true
+        default: false
+        type: boolean
+      epmc_preprints:
+        description: 'Run Europe PMC preprints'
+        required: true
+        default: false
+        type: boolean
       wos:
         description: 'Run Web of Science'
         required: true
@@ -99,13 +135,17 @@ jobs:
       scopus_query: ${{ steps.out.outputs.scopus_query }}
       openalex_query: ${{ steps.out.outputs.openalex_query }}
       agricola_query: ${{ steps.out.outputs.agricola_query }}
+      pubmed_query: ${{ steps.out.outputs.pubmed_query }}
+      ethos_query: ${{ steps.out.outputs.ethos_query }}
+      cba_query: ${{ steps.out.outputs.cba_query }}
+      epmc_preprints_query: ${{ steps.out.outputs.epmc_preprints_query }}
       wos_query: ${{ steps.out.outputs.wos_query }}
     steps:
       - name: Validate selected source support
         shell: bash
         run: |
           set -euo pipefail
-          if [ '${{ inputs.lens }}' != 'true' ] && [ '${{ inputs.scopus }}' != 'true' ] && [ '${{ inputs.openalex }}' != 'true' ] && [ '${{ inputs.agricola }}' != 'true' ] && [ '${{ inputs.wos }}' != 'true' ]; then
+          if [ '${{ inputs.lens }}' != 'true' ] && [ '${{ inputs.scopus }}' != 'true' ] && [ '${{ inputs.openalex }}' != 'true' ] && [ '${{ inputs.agricola }}' != 'true' ] && [ '${{ inputs.pubmed }}' != 'true' ] && [ '${{ inputs.ethos }}' != 'true' ] && [ '${{ inputs.cba }}' != 'true' ] && [ '${{ inputs.epmc_preprints }}' != 'true' ] && [ '${{ inputs.wos }}' != 'true' ]; then
             echo 'Select at least one implemented source.' >&2
             exit 2
           fi
@@ -143,6 +183,10 @@ jobs:
           SCOPUS: ${{ inputs.scopus }}
           OPENALEX: ${{ inputs.openalex }}
           AGRICOLA: ${{ inputs.agricola }}
+          PUBMED: ${{ inputs.pubmed }}
+          ETHOS: ${{ inputs.ethos }}
+          CBA: ${{ inputs.cba }}
+          EPMC_PREPRINTS: ${{ inputs.epmc_preprints }}
           WOS: ${{ inputs.wos }}
         run: |
           library(jsonlite)
@@ -153,6 +197,10 @@ jobs:
             scopus=identical(Sys.getenv('SCOPUS'),'true'),
             openalex=identical(Sys.getenv('OPENALEX'),'true'),
             agricola=identical(Sys.getenv('AGRICOLA'),'true'),
+            pubmed=identical(Sys.getenv('PUBMED'),'true'),
+            ethos=identical(Sys.getenv('ETHOS'),'true'),
+            cba=identical(Sys.getenv('CBA'),'true'),
+            epmc_preprints=identical(Sys.getenv('EPMC_PREPRINTS'),'true'),
             wos=identical(Sys.getenv('WOS'),'true')
           )
           writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),p)
@@ -174,6 +222,10 @@ jobs:
           emit('scopus_query',q$scopus)
           emit('openalex_query',q$openalex)
           emit('agricola_query',q$agricola)
+          emit('pubmed_query',q$pubmed)
+          emit('ethos_query',q$ethos)
+          emit('cba_query',q$cba)
+          emit('epmc_preprints_query',q$epmc_preprints)
           emit('wos_query',q$wos)
 
       - name: Upload Workflow 00 plan
@@ -244,6 +296,66 @@ jobs:
       additional_search_term: ${{ inputs.additional_search_term }}
     secrets: inherit
 
+  pubmed:
+    needs: validate-and-plan
+    if: ${{ inputs.pubmed }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: pubmed
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.pubmed_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  ethos:
+    needs: validate-and-plan
+    if: ${{ inputs.ethos }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ethos
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.ethos_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  cba:
+    needs: validate-and-plan
+    if: ${{ inputs.cba }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: cba
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.cba_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
+  epmc-preprints:
+    needs: validate-and-plan
+    if: ${{ inputs.epmc_preprints }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: epmc_preprints
+      run_type: ${{ inputs.run_type }}
+      query: ${{ needs.validate-and-plan.outputs.epmc_preprints_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.validate-and-plan.outputs.search_version }}
+      fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
+      fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
+      additional_search_term: ${{ inputs.additional_search_term }}
+    secrets: inherit
+
   wos:
     needs: validate-and-plan
     if: ${{ inputs.wos }}
@@ -260,7 +372,7 @@ jobs:
     secrets: inherit
 
   reconcile-expansion:
-    needs: [validate-and-plan, lens, scopus, openalex, agricola, wos]
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc-preprints, wos]
     if: ${{ always() && inputs.run_type == 'expansion' && needs.validate-and-plan.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -270,11 +382,19 @@ jobs:
           SCOPUS_SELECTED: ${{ inputs.scopus }}
           OPENALEX_SELECTED: ${{ inputs.openalex }}
           AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
           WOS_SELECTED: ${{ inputs.wos }}
           LENS_RESULT: ${{ needs.lens.result }}
           SCOPUS_RESULT: ${{ needs.scopus.result }}
           OPENALEX_RESULT: ${{ needs.openalex.result }}
           AGRICOLA_RESULT: ${{ needs.agricola.result }}
+          PUBMED_RESULT: ${{ needs.pubmed.result }}
+          ETHOS_RESULT: ${{ needs.ethos.result }}
+          CBA_RESULT: ${{ needs.cba.result }}
+          EPMC_PREPRINTS_RESULT: ${{ needs.epmc-preprints.result }}
           WOS_RESULT: ${{ needs.wos.result }}
         shell: bash
         run: |
@@ -290,6 +410,10 @@ jobs:
           check "$SCOPUS_SELECTED" "$SCOPUS_RESULT" scopus
           check "$OPENALEX_SELECTED" "$OPENALEX_RESULT" openalex
           check "$AGRICOLA_SELECTED" "$AGRICOLA_RESULT" agricola
+          check "$PUBMED_SELECTED" "$PUBMED_RESULT" pubmed
+          check "$ETHOS_SELECTED" "$ETHOS_RESULT" ethos
+          check "$CBA_SELECTED" "$CBA_RESULT" cba
+          check "$EPMC_PREPRINTS_SELECTED" "$EPMC_PREPRINTS_RESULT" epmc_preprints
           check "$WOS_SELECTED" "$WOS_RESULT" wos
 
       - name: Checkout Workflow 00 orchestration branch
@@ -316,12 +440,16 @@ jobs:
           SCOPUS_SELECTED: ${{ inputs.scopus }}
           OPENALEX_SELECTED: ${{ inputs.openalex }}
           AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
           WOS_SELECTED: ${{ inputs.wos }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p expansion_current
-          for source in lens scopus openalex agricola wos; do
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos; do
             upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
             selected="${!upper}"
             [ "$selected" = "true" ] || continue
@@ -338,6 +466,10 @@ jobs:
           SCOPUS_SELECTED: ${{ inputs.scopus }}
           OPENALEX_SELECTED: ${{ inputs.openalex }}
           AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
           WOS_SELECTED: ${{ inputs.wos }}
         shell: bash
         run: |
@@ -353,12 +485,16 @@ jobs:
               scopus) [[ "$name" == workflow00-scopus-harvest-* || "$name" == scopus-full-search-* ]] ;;
               openalex) [[ "$name" == workflow00-openalex-harvest-* || "$name" == openalex-full-search-* ]] ;;
               agricola) [[ "$name" == workflow00-agricola-harvest-* || "$name" == agricola-full-search-* ]] ;;
+              pubmed) [[ "$name" == workflow00-pubmed-harvest-* ]] ;;
+              ethos) [[ "$name" == workflow00-ethos-harvest-* ]] ;;
+              cba) [[ "$name" == workflow00-cba-harvest-* ]] ;;
+              epmc_preprints) [[ "$name" == workflow00-epmc_preprints-harvest-* ]] ;;
               wos) [[ "$name" == workflow00-wos-harvest-* || "$name" == wos-starter-full-search-* ]] ;;
               *) return 1 ;;
             esac
           }
 
-          for source in lens scopus openalex agricola wos; do
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos; do
             upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
             selected="${!upper}"
             [ "$selected" = "true" ] || continue
@@ -396,12 +532,16 @@ jobs:
           SCOPUS_SELECTED: ${{ inputs.scopus }}
           OPENALEX_SELECTED: ${{ inputs.openalex }}
           AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
           WOS_SELECTED: ${{ inputs.wos }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p outputs/updater/expansion_reconciliation
-          for source in lens scopus openalex agricola wos; do
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos; do
             upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
             selected="${!upper}"
             [ "$selected" = "true" ] || continue
@@ -466,7 +606,7 @@ jobs:
           if-no-files-found: error
 
   archive-search-records:
-    needs: [validate-and-plan, lens, scopus, openalex, agricola, wos, reconcile-expansion]
+    needs: [validate-and-plan, lens, scopus, openalex, agricola, pubmed, ethos, cba, epmc-preprints, wos, reconcile-expansion]
     if: ${{ always() && needs.validate-and-plan.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -476,11 +616,19 @@ jobs:
           SCOPUS_SELECTED: ${{ inputs.scopus }}
           OPENALEX_SELECTED: ${{ inputs.openalex }}
           AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
           WOS_SELECTED: ${{ inputs.wos }}
           LENS_RESULT: ${{ needs.lens.result }}
           SCOPUS_RESULT: ${{ needs.scopus.result }}
           OPENALEX_RESULT: ${{ needs.openalex.result }}
           AGRICOLA_RESULT: ${{ needs.agricola.result }}
+          PUBMED_RESULT: ${{ needs.pubmed.result }}
+          ETHOS_RESULT: ${{ needs.ethos.result }}
+          CBA_RESULT: ${{ needs.cba.result }}
+          EPMC_PREPRINTS_RESULT: ${{ needs.epmc-preprints.result }}
           WOS_RESULT: ${{ needs.wos.result }}
           RECONCILE_RESULT: ${{ needs.reconcile-expansion.result }}
           RUN_TYPE: ${{ inputs.run_type }}
@@ -498,6 +646,10 @@ jobs:
           check "$SCOPUS_SELECTED" "$SCOPUS_RESULT" scopus
           check "$OPENALEX_SELECTED" "$OPENALEX_RESULT" openalex
           check "$AGRICOLA_SELECTED" "$AGRICOLA_RESULT" agricola
+          check "$PUBMED_SELECTED" "$PUBMED_RESULT" pubmed
+          check "$ETHOS_SELECTED" "$ETHOS_RESULT" ethos
+          check "$CBA_SELECTED" "$CBA_RESULT" cba
+          check "$EPMC_PREPRINTS_SELECTED" "$EPMC_PREPRINTS_RESULT" epmc_preprints
           check "$WOS_SELECTED" "$WOS_RESULT" wos
           if [ "$RUN_TYPE" = "expansion" ] && [ "$RECONCILE_RESULT" != "success" ]; then
             echo "Expansion reconciliation did not succeed: $RECONCILE_RESULT" >&2
@@ -540,12 +692,16 @@ jobs:
           SCOPUS_SELECTED: ${{ inputs.scopus }}
           OPENALEX_SELECTED: ${{ inputs.openalex }}
           AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
           WOS_SELECTED: ${{ inputs.wos }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p downloaded_fortnightly
-          for source in lens scopus openalex agricola wos; do
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos; do
             upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
             selected="${!upper}"
             [ "$selected" = "true" ] || continue
@@ -575,7 +731,7 @@ jobs:
           if [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
             mkdir -p data/workflow00/source_id_registry
             mkdir -p "docs/search_record/fortnightly_update/reconciliation/$GITHUB_RUN_ID"
-            for source in lens scopus openalex agricola wos; do
+            for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos; do
               src="downloaded_fortnightly/$source/source_delta"
               [ -d "$src" ] || continue
               cp "$src/updated_native_ids.txt" "data/workflow00/source_id_registry/${source}_native_ids.txt"
@@ -637,6 +793,10 @@ jobs:
           SCOPUS_SELECTED: ${{ inputs.scopus }}
           OPENALEX_SELECTED: ${{ inputs.openalex }}
           AGRICOLA_SELECTED: ${{ inputs.agricola }}
+          PUBMED_SELECTED: ${{ inputs.pubmed }}
+          ETHOS_SELECTED: ${{ inputs.ethos }}
+          CBA_SELECTED: ${{ inputs.cba }}
+          EPMC_PREPRINTS_SELECTED: ${{ inputs.epmc_preprints }}
           WOS_SELECTED: ${{ inputs.wos }}
           RUN_TYPE: ${{ inputs.run_type }}
         shell: bash
@@ -649,7 +809,7 @@ jobs:
             --dir zenodo_staging/plan
 
           sources=()
-          for source in lens scopus openalex agricola wos; do
+          for source in lens scopus openalex agricola pubmed ethos cba epmc_preprints wos; do
             upper="$(echo "$source" | tr '[:lower:]' '[:upper:]')_SELECTED"
             selected="${!upper}"
             [ "$selected" = "true" ] || continue
