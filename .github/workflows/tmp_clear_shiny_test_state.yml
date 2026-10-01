@@ -41,44 +41,51 @@ jobs:
           chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
           echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
 
-      - name: Clear Shiny test queues and decisions
+      - name: Initialise and verify Shiny decisions tab
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages(library(googlesheets4))
 
           ss <- Sys.getenv('LEM_GOOGLE_SHEET_ID')
-          gs4_auth(path=Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cache=FALSE)
-
-          targets <- c(
-            'queue_w01_active',
-            'queue_w01_legacy_730',
-            'decisions',
-            'queue_w02_active',
-            'decisions_w02',
-            'w02_resume_requests',
-            'queue_w04_validation_active',
-            'decisions_w04_validation'
+          tab <- 'decisions'
+          required <- c(
+            'decision_id',
+            'review_case_id',
+            'decision',
+            'rationale',
+            'reviewer',
+            'resolved_at_utc',
+            'queue_sha256',
+            'supersedes_decision_id'
           )
 
-          before <- sheet_names(ss)
-          cat('Sheets before cleanup:', paste(before,collapse=', '), '\n')
+          gs4_auth(path=Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cache=FALSE)
 
-          present <- intersect(targets,before)
-          non_targets <- setdiff(before,present)
-
-          if(!length(non_targets)) {
-            if(!'clean_state' %in% before) sheet_add(ss,sheet='clean_state')
+          tabs <- sheet_names(ss)
+          if(!tab %in% tabs) {
+            sheet_add(ss,sheet=tab)
           }
 
-          for(tab in present) {
-            cat('Deleting test tab:',tab,'\n')
-            sheet_delete(ss,sheet=tab)
+          x <- tryCatch(
+            read_sheet(ss,sheet=tab,col_types='c'),
+            error=function(e) data.frame()
+          )
+
+          if(nrow(x)==0L && ncol(x)==0L) {
+            header <- as.data.frame(
+              setNames(replicate(length(required),character(),simplify=FALSE),required),
+              stringsAsFactors=FALSE
+            )
+            sheet_write(header,ss=ss,sheet=tab)
           }
 
-          after <- sheet_names(ss)
-          remaining_targets <- intersect(targets,after)
-          if(length(remaining_targets)) {
-            stop('Cleanup failed; Shiny test tabs remain: ',paste(remaining_targets,collapse=', '))
+          verify_tabs <- sheet_names(ss)
+          if(!tab %in% verify_tabs) stop('Decisions tab was not created')
+
+          verify <- read_sheet(ss,sheet=tab,col_types='c')
+          if(!identical(names(verify),required)) {
+            stop('Decisions tab schema mismatch: ',paste(names(verify),collapse=','))
           }
 
-          cat('PASS: Shiny test queues/decisions cleared. Sheets after cleanup:',paste(after,collapse=', '),'\n')
+          cat('PASS: Shiny decisions tab initialised and verified\n')
+          cat('Existing decision rows:',nrow(verify),'\n')
