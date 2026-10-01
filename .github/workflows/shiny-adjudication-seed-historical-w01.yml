@@ -1,0 +1,128 @@
+name: Seed historical W01 Shiny batch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - shiny-adjudication-interface
+    paths:
+      - '.github/workflows/shiny-adjudication-seed-historical-w01.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+      BATCH_ID: 'w01-legacy-recovery-730-36049567027'
+      QUEUE_TAB: 'queue_w01_legacy_730'
+      EXPECTED_SHA256: 'de0d376b2b2a0aea9cc13942f4f72ac9d6e0263cbd488ca508e005271c8dc582'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: shiny-adjudication-interface
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.6.0'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("googlesheets4","jsonlite","digest"))
+
+      - name: Download frozen 730-case artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w01-batch"
+          gh run download 36049567027 \
+            --repo thesalmonandthetomato/LivingEvidenceMap \
+            --name workflow01-recovered-730-cases-36049567027 \
+            --dir "$RUNNER_TEMP/w01-batch"
+          test -s "$RUNNER_TEMP/w01-batch/cases.jsonl"
+          test -s "$RUNNER_TEMP/w01-batch/cases.jsonl.manifest.json"
+
+      - name: Prepare service-account credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Validate and seed private queue tab
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(googlesheets4)
+            library(jsonlite)
+            library(digest)
+          })
+
+          queue_path <- file.path(Sys.getenv("RUNNER_TEMP"), "w01-batch", "cases.jsonl")
+          manifest_path <- file.path(Sys.getenv("RUNNER_TEMP"), "w01-batch", "cases.jsonl.manifest.json")
+          expected_sha <- Sys.getenv("EXPECTED_SHA256")
+          batch_id <- Sys.getenv("BATCH_ID")
+          queue_tab <- Sys.getenv("QUEUE_TAB")
+          sheet_id <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
+
+          actual_sha <- digest(file = queue_path, algo = "sha256", serialize = FALSE)
+          stopifnot(identical(actual_sha, expected_sha))
+
+          lines <- readLines(queue_path, warn = FALSE, encoding = "UTF-8")
+          stopifnot(length(lines) == 730L)
+          parsed <- lapply(lines, fromJSON, simplifyVector = FALSE)
+          ids <- vapply(parsed, function(x) as.character(x$review_case_id), character(1))
+          stopifnot(length(unique(ids)) == 730L)
+
+          manifest <- fromJSON(manifest_path, simplifyVector = FALSE)
+          stopifnot(identical(as.character(manifest$output_sha256), expected_sha))
+          stopifnot(identical(as.integer(manifest$cases), 730L))
+
+          gs4_auth(path = Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"), cache = FALSE)
+
+          tabs <- sheet_names(sheet_id)
+          if (queue_tab %in% tabs) {
+            existing <- read_sheet(sheet_id, sheet = queue_tab, col_types = "c")
+            if (nrow(existing) == 730L &&
+                all(c("batch_id","queue_sha256","case_index","review_case_id","case_json") %in% names(existing)) &&
+                length(unique(existing$queue_sha256)) == 1L &&
+                identical(existing$queue_sha256[[1]], expected_sha)) {
+              cat("PASS: exact historical queue already seeded\n")
+              quit(save = "no", status = 0)
+            }
+            stop("Queue tab exists but does not match expected frozen batch; refusing to overwrite")
+          }
+
+          sheet_add(sheet_id, sheet = queue_tab)
+
+          payload <- data.frame(
+            batch_id = rep(batch_id, length(lines)),
+            queue_sha256 = rep(expected_sha, length(lines)),
+            case_index = as.character(seq_along(lines)),
+            review_case_id = ids,
+            case_json = lines,
+            stringsAsFactors = FALSE
+          )
+
+          sheet_write(payload, ss = sheet_id, sheet = queue_tab)
+
+          verify <- read_sheet(sheet_id, sheet = queue_tab, col_types = "c")
+          stopifnot(nrow(verify) == 730L)
+          stopifnot(identical(verify$review_case_id, ids))
+          stopifnot(all(verify$queue_sha256 == expected_sha))
+
+          reconstructed <- paste0(paste(verify$case_json, collapse = "\n"), "\n")
+          reconstructed_sha <- digest(reconstructed, algo = "sha256", serialize = FALSE)
+          stopifnot(identical(reconstructed_sha, expected_sha))
+
+          cat("PASS: seeded and verified 730-case frozen W01 batch\n")
