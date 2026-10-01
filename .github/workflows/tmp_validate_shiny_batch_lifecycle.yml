@@ -50,4 +50,4 @@ jobs:
             '.github/workflows/workflow_08_resume_after_shiny.yml'
           ]
           files.each { |f| YAML.load_file(f, aliases: true) }
-          puts 'PASS: lifecycle workflow YAML parses'
+          puts 'PASS: lifecycle workflow YAML parses (final)'
