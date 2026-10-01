@@ -265,7 +265,7 @@ if (identical(Sys.getenv("GITHUB_WORKFLOW"),"TEMP validate EBSCO W00 integration
       c(
         "scripts/updater/workflow_00h_ebsco_scope_count.R",
         "--source",src_name,
-        "--query",as.character(queries[[src_name]]),
+        "--query",shQuote(as.character(queries[[src_name]])),
         "--config","config/workflow00_ebsco_sources.json",
         "--output-dir",out
       )
