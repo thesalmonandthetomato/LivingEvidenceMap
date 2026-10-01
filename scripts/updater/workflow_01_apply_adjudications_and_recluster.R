@@ -20,6 +20,7 @@ llm_path <- arg("--llm-adjudications")
 human_path <- arg("--human-decisions",NULL)
 integrity_path <- arg("--human-integrity-manifest",NULL)
 data_quality_repairs_path <- arg("--data-quality-repairs",NULL)
+precomputed_strip_actions_path <- arg("--precomputed-strip-actions",NULL)
 previous_cluster_map_path <- arg("--previous-cluster-map",NULL)
 output_dir <- arg("--output-dir")
 if (any(vapply(list(combined_path,manifestation_map_path,llm_path,human_path,integrity_path,output_dir),is.null,logical(1)))) {
@@ -68,6 +69,18 @@ human_by_id <- setNames(human,human_ids)
 # for the downstream corpus materialisation step. Workflow 02 will then discover the
 # resulting missing abstracts through its normal corpus scan.
 strip_by_key <- list()
+if (!is.null(precomputed_strip_actions_path) && file.exists(precomputed_strip_actions_path)) {
+  precomputed_strips <- read_jsonl(precomputed_strip_actions_path)
+  for (z in precomputed_strips) {
+    if (is.null(z$source) || is.null(z$source_record_id) ||
+        is.null(z$action) || !identical(as.character(z$action),"strip_abstract")) {
+      stop("Invalid precomputed strip action",call.=FALSE)
+    }
+    key <- paste(as.character(z$source),as.character(z$source_record_id),sep=":")
+    if (!is.null(strip_by_key[[key]])) stop(sprintf("Duplicate precomputed strip action for %s",key),call.=FALSE)
+    strip_by_key[[key]] <- z
+  }
+}
 for (a in llm) {
   for (side in c("record_i","record_j")) {
     flag_name <- if (identical(side,"record_i")) "abstract_consistent_with_record_i" else "abstract_consistent_with_record_j"
