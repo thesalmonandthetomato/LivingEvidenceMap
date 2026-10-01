@@ -68,7 +68,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_08_build_review_package.R             --queue inputs/intake/workflow08_intake/workflow08_review_queue.jsonl             --manifest inputs/intake/workflow08_intake/workflow08_review_queue_manifest.json             --output-dir outputs/workflow08_review_package             --intake-run-id "$INTAKE_RUN_ID"             --notification-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --branch workflow01-final-architecture
+          Rscript scripts/updater/workflow_08_build_review_package.R             --queue inputs/intake/workflow08_intake/workflow08_review_queue.jsonl             --manifest inputs/intake/workflow08_intake/workflow08_review_queue_manifest.json             --output-dir outputs/workflow08_review_package             --intake-run-id "$INTAKE_RUN_ID"             --notification-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --branch workflow01-final-architecture             --review-config user_input/workflow08_human_review_config.json
 
           test -s outputs/workflow08_review_package/CHATGPT_HANDOFF.md
           test -s outputs/workflow08_review_package/workflow08_review_queue.jsonl
