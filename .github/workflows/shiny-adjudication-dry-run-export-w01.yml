@@ -1,4 +1,4 @@
-name: Dry-run export Shiny decisions to W01
+name: Export completed Shiny W01 decisions
 
 on:
   workflow_dispatch:
@@ -15,14 +15,17 @@ permissions:
 jobs:
   export:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
       LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
       LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
       DECISIONS_TAB: 'decisions'
-      BATCH_ID: 'w01-legacy-recovery-730-36049567027'
-      EXPECTED_QUEUE_SHA256: 'de0d376b2b2a0aea9cc13942f4f72ac9d6e0263cbd488ca508e005271c8dc582'
+      SOURCE_RUN_ID: '36866644366'
+      QUEUE_RECOVERY_RUN_ID: '36909431511'
+      QUEUE_ARTIFACT: 'workflow01-human-review-36866644366'
+      EXPECTED_CASES: '74'
+      EXPECTED_QUEUE_SHA256: 'ac5f0200aac3dbc2a7fbef20cbc25db4dd5709e13f5fed1b8af896a4330200db'
 
     steps:
       - uses: actions/checkout@v4
@@ -38,17 +41,26 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c("googlesheets4","jsonlite","digest"))
 
-      - name: Download frozen W01 queue
+      - name: Download locked 74-case W01 review package
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/w01-return-test"
-          gh run download 36049567027 \
+          ROOT="$RUNNER_TEMP/w01-return"
+          mkdir -p "$ROOT/package"
+          gh run download "$QUEUE_RECOVERY_RUN_ID" \
             --repo thesalmonandthetomato/LivingEvidenceMap \
-            --name workflow01-recovered-730-cases-36049567027 \
-            --dir "$RUNNER_TEMP/w01-return-test"
-          test -s "$RUNNER_TEMP/w01-return-test/cases.jsonl"
-          test -s "$RUNNER_TEMP/w01-return-test/cases.jsonl.manifest.json"
+            --name "$QUEUE_ARTIFACT" \
+            --dir "$ROOT/package"
+
+          QUEUE_PATH="$(find "$ROOT/package" -type f -name 'human_review_cases.jsonl' -print -quit)"
+          MANIFEST_PATH="$(find "$ROOT/package" -type f -name 'review_manifest.json' -print -quit)"
+          test -n "$QUEUE_PATH"
+          test -n "$MANIFEST_PATH"
+          test -s "$QUEUE_PATH"
+          test -s "$MANIFEST_PATH"
+          echo "QUEUE_PATH=$QUEUE_PATH" >> "$GITHUB_ENV"
+          echo "QUEUE_MANIFEST_PATH=$MANIFEST_PATH" >> "$GITHUB_ENV"
+          echo "RETURN_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Prepare Google credential
         shell: bash
@@ -59,7 +71,7 @@ jobs:
           chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
           echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
 
-      - name: Export and validate decisions
+      - name: Export and integrity-check completed W01 decisions
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages({
@@ -68,52 +80,66 @@ jobs:
             library(digest)
           })
 
-          root <- file.path(Sys.getenv("RUNNER_TEMP"), "w01-return-test")
-          queue_path <- file.path(root, "cases.jsonl")
-          queue_manifest_path <- file.path(root, "cases.jsonl.manifest.json")
-          output_path <- file.path(root, "w01_shiny_decisions.jsonl")
-          output_manifest_path <- file.path(root, "w01_shiny_decisions.manifest.json")
+          queue_path <- Sys.getenv("QUEUE_PATH")
+          queue_manifest_path <- Sys.getenv("QUEUE_MANIFEST_PATH")
+          root <- Sys.getenv("RETURN_ROOT")
+          output_path <- file.path(root, "human_decisions.jsonl")
+          output_manifest_path <- file.path(root, "human_decisions.manifest.json")
 
           expected_sha <- Sys.getenv("EXPECTED_QUEUE_SHA256")
+          expected_cases <- as.integer(Sys.getenv("EXPECTED_CASES"))
+
           queue_sha <- digest(file = queue_path, algo = "sha256", serialize = FALSE)
-          stopifnot(identical(queue_sha, expected_sha))
+          if (!identical(queue_sha, expected_sha)) {
+            stop("Locked W01 queue SHA-256 mismatch: ", queue_sha)
+          }
 
           queue_lines <- readLines(queue_path, warn = FALSE, encoding = "UTF-8")
           queue_lines <- queue_lines[nzchar(trimws(queue_lines))]
-          stopifnot(length(queue_lines) == 730L)
+          if (length(queue_lines) != expected_cases) {
+            stop("Locked W01 queue case count mismatch: ", length(queue_lines))
+          }
 
           queue_cases <- lapply(queue_lines, fromJSON, simplifyVector = FALSE)
           queue_ids <- vapply(queue_cases, function(x) as.character(x$review_case_id), character(1))
-          stopifnot(length(unique(queue_ids)) == length(queue_ids))
+          if (any(!nzchar(queue_ids)) || anyDuplicated(queue_ids)) {
+            stop("Locked W01 queue contains missing or duplicate review_case_id")
+          }
 
-          queue_manifest <- fromJSON(queue_manifest_path, simplifyVector = FALSE)
-          stopifnot(identical(as.character(queue_manifest$output_sha256), expected_sha))
-          stopifnot(identical(as.integer(queue_manifest$cases), 730L))
+          qm <- fromJSON(queue_manifest_path, simplifyVector = FALSE)
+          manifest_sha <- as.character(qm$queue_sha256 %||% qm$output_sha256 %||% "")
+          manifest_cases <- as.integer(qm$pending_count %||% qm$cases %||% NA_integer_)
+          if (!identical(manifest_sha, expected_sha)) {
+            stop("Review manifest queue SHA-256 does not match locked queue")
+          }
+          if (is.na(manifest_cases) || manifest_cases != expected_cases) {
+            stop("Review manifest case count does not equal ", expected_cases)
+          }
 
           gs4_auth(path = Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"), cache = FALSE)
           sheet_id <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
           tab <- Sys.getenv("DECISIONS_TAB")
-          d <- read_sheet(sheet_id, sheet = tab, col_types = "c")
+          tabs <- sheet_names(sheet_id)
+          if (!tab %in% tabs) stop("Google Sheet decisions tab is missing")
 
-          required_sheet <- c(
+          d <- read_sheet(sheet_id, sheet = tab, col_types = "c")
+          required <- c(
             "decision_id","review_case_id","decision","rationale","reviewer",
             "resolved_at_utc","queue_sha256","supersedes_decision_id"
           )
-          missing <- setdiff(required_sheet, names(d))
+          missing <- setdiff(required, names(d))
           if (length(missing)) stop("Decisions sheet missing field(s): ", paste(missing, collapse = ", "))
 
-          d <- d[d$queue_sha256 == expected_sha, required_sheet, drop = FALSE]
-          if (!nrow(d)) {
-            stop("No decisions found for the frozen 730-case queue; make at least one Shiny decision before rerunning this dry-run export")
-          }
+          d <- d[d$queue_sha256 == expected_sha, required, drop = FALSE]
+          if (!nrow(d)) stop("No decisions found for locked 74-case W01 queue")
 
           if (any(!d$review_case_id %in% queue_ids)) {
             bad <- unique(d$review_case_id[!d$review_case_id %in% queue_ids])
-            stop("Decision(s) reference case IDs outside frozen queue: ", paste(bad, collapse = ", "))
+            stop("Decision(s) reference IDs outside locked queue: ", paste(bad, collapse = ", "))
           }
 
           parsed_time <- as.POSIXct(d$resolved_at_utc, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
-          if (any(is.na(parsed_time))) stop("One or more decisions have invalid resolved_at_utc")
+          if (any(is.na(parsed_time))) stop("One or more W01 decisions have invalid resolved_at_utc")
 
           ord <- order(parsed_time, seq_len(nrow(d)), decreasing = TRUE)
           d <- d[ord, , drop = FALSE]
@@ -121,7 +147,7 @@ jobs:
 
           allowed <- c("duplicate","not_duplicate","uncertain")
           if (any(!active$decision %in% allowed)) {
-            stop("Invalid W01 decision value(s): ", paste(unique(active$decision[!active$decision %in% allowed]), collapse = ", "))
+            stop("Invalid active W01 decision value(s)")
           }
 
           required_nonempty <- c("review_case_id","decision","rationale","reviewer","resolved_at_utc","queue_sha256")
@@ -129,13 +155,19 @@ jobs:
             if (any(!nzchar(trimws(active[[nm]])))) stop("Active decision missing required field: ", nm)
           }
 
-          if (any(active$queue_sha256 != expected_sha)) stop("Queue SHA mismatch after filtering")
-          if (anyDuplicated(active$review_case_id)) stop("Duplicate active review_case_id after resolution")
+          missing_ids <- setdiff(queue_ids, active$review_case_id)
+          extra_ids <- setdiff(active$review_case_id, queue_ids)
+          uncertain_ids <- active$review_case_id[active$decision == "uncertain"]
 
-          active <- active[match(queue_ids[queue_ids %in% active$review_case_id], active$review_case_id), , drop = FALSE]
+          if (length(extra_ids)) stop("Active decisions contain IDs outside locked queue")
+          if (length(missing_ids)) stop(length(missing_ids), " W01 cases remain unresolved")
+          if (length(uncertain_ids)) stop(length(uncertain_ids), " W01 cases remain uncertain")
+          if (nrow(active) != expected_cases) stop("Active W01 decision count is not exactly ", expected_cases)
+
+          active <- active[match(queue_ids, active$review_case_id), , drop = FALSE]
+          if (any(is.na(active$review_case_id))) stop("Could not order all active decisions to locked queue")
 
           con <- file(output_path, "wt", encoding = "UTF-8")
-          on.exit(close(con), add = TRUE)
           for (i in seq_len(nrow(active))) {
             out <- list(
               review_case_id = active$review_case_id[[i]],
@@ -148,51 +180,49 @@ jobs:
             writeLines(toJSON(out, auto_unbox = TRUE, null = "null", na = "null"), con, useBytes = TRUE)
           }
           close(con)
-          on.exit(NULL)
 
           exported_lines <- readLines(output_path, warn = FALSE, encoding = "UTF-8")
-          stopifnot(length(exported_lines) == nrow(active))
+          if (length(exported_lines) != expected_cases) stop("Exported decision file does not contain exactly 74 rows")
           exported <- lapply(exported_lines, fromJSON, simplifyVector = FALSE)
+          exported_ids <- vapply(exported, function(x) as.character(x$review_case_id), character(1))
+          exported_decisions <- vapply(exported, function(x) as.character(x$decision), character(1))
+          exported_queue_sha <- vapply(exported, function(x) as.character(x$queue_sha256), character(1))
 
-          for (x in exported) {
-            stopifnot(
-              identical(names(x), c("review_case_id","decision","rationale","reviewer","resolved_at_utc","queue_sha256")),
-              x$decision %in% allowed,
-              x$review_case_id %in% queue_ids,
-              identical(as.character(x$queue_sha256), expected_sha)
-            )
-          }
+          if (!identical(exported_ids, queue_ids)) stop("Exported W01 decision order/IDs do not exactly match locked queue")
+          if (any(!exported_decisions %in% c("duplicate","not_duplicate"))) stop("Export contains non-final W01 decision")
+          if (any(exported_queue_sha != expected_sha)) stop("Exported decision queue SHA mismatch")
 
           export_sha <- digest(file = output_path, algo = "sha256", serialize = FALSE)
           manifest <- list(
-            schema = "living-evidence-map-workflow01-shiny-dry-run-export-manifest-v1",
-            dry_run = TRUE,
-            write_back_performed = FALSE,
-            workflow_resume_triggered = FALSE,
-            batch_id = Sys.getenv("BATCH_ID"),
-            source_workflow_run = 36049567027,
-            queue_cases = length(queue_ids),
+            schema = "living-evidence-map-workflow01-shiny-decision-export-manifest-v1",
+            source_workflow_run = as.character(Sys.getenv("SOURCE_RUN_ID")),
+            queue_recovery_run = as.character(Sys.getenv("QUEUE_RECOVERY_RUN_ID")),
+            queue_cases = expected_cases,
             queue_sha256 = expected_sha,
             decision_log_rows_for_batch = nrow(d),
             active_decisions_exported = nrow(active),
-            unresolved_cases = length(queue_ids) - nrow(active),
+            unresolved_cases = 0L,
+            uncertain_cases = 0L,
+            complete = TRUE,
             export_file = basename(output_path),
             export_sha256 = export_sha,
             generated_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
           )
           writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE), output_manifest_path, useBytes = TRUE)
 
-          cat("PASS: W01 Shiny return-path dry run validated\n")
+          cat("PASS: validated completed W01 Shiny decisions\n")
+          cat("Locked queue cases:", expected_cases, "\n")
           cat("Active decisions exported:", nrow(active), "\n")
-          cat("Unresolved cases:", length(queue_ids) - nrow(active), "\n")
+          cat("Unresolved cases: 0\n")
+          cat("Uncertain cases: 0\n")
           cat("Export SHA-256:", export_sha, "\n")
 
-      - name: Upload dry-run artefact
+      - name: Upload validated W01 human decisions
         uses: actions/upload-artifact@v4
         with:
-          name: w01-shiny-return-path-dry-run-${{ github.run_id }}
+          name: workflow01-human-decisions-36866644366-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/w01-return-test/w01_shiny_decisions.jsonl
-            ${{ runner.temp }}/w01-return-test/w01_shiny_decisions.manifest.json
+            ${{ runner.temp }}/w01-return/human_decisions.jsonl
+            ${{ runner.temp }}/w01-return/human_decisions.manifest.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
