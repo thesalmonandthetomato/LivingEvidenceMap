@@ -187,6 +187,22 @@ jobs:
 
           cat(sprintf('PASS: published W04 validation queue: %d records; batch=%s; sha=%s\n',length(lines),batch_id,actual_sha))
 
+      - name: Mark W04 Shiny batch published
+        shell: bash
+        run: |
+          set -euo pipefail
+          META="$(Rscript -e 'suppressPackageStartupMessages(library(googlesheets4));gs4_auth(path=Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"),cache=FALSE);x<-read_sheet(Sys.getenv("LEM_GOOGLE_SHEET_ID"),sheet="queue_w04_validation_active",col_types="c");stopifnot(nrow(x)>0);cat(paste(x$batch_id[[1]],x$queue_sha256[[1]],sep="|"))')"
+          BATCH_ID="${META%%|*}"
+          QUEUE_SHA="${META#*|}"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "04" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status published \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+
+
       - name: Upload W04 validation queue artefact
         uses: actions/upload-artifact@v4
         with:
