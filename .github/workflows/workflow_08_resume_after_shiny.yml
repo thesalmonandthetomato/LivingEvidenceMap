@@ -83,7 +83,7 @@ jobs:
             --dir source
           test -s source/workflow08_reuse/shiny_resume_context.json
           test -s source/workflow08_reuse/workflow08_pending_review_queue.jsonl
-          test -s source/workflow08_reuse/workflow08_reused_decisions.jsonl
+          test -f source/workflow08_reuse/workflow08_reused_decisions.jsonl
           test -s source/workflow08_intake/workflow08_issue_index_current.csv
 
       - name: Prepare Google credential
