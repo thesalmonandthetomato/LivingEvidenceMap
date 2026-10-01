@@ -13,7 +13,7 @@ on:
       - 'docs/workflow08/zenodo/*.json'
       - 'docs/workflow08/zenodo_registry.csv'
       - 'docs/reporting/workflow_09/flow_counts.json'
-      - 'data/reference/topic_ontology_v3_6.csv'
+      - 'user_input/workflow07_topic_ontology.csv'
       - 'config/iso3_numeric_map.json'
       - 'config/global_country_gazetteer_v3.csv'
 
@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 env:
-  TOPIC_ONTOLOGY_PATH: 'data/reference/topic_ontology_v3_6.csv'
+  TOPIC_ONTOLOGY_PATH: 'user_input/workflow07_topic_ontology.csv'
 
 jobs:
   build:
@@ -57,22 +57,25 @@ jobs:
         run: |
           suppressPackageStartupMessages(library(jsonlite))
           reg <- read.csv('docs/workflow08/zenodo_registry.csv',stringsAsFactors=FALSE)
+          required <- c('source_run_id','zenodo_record_id','doi','canonical_sha256','status')
+          if(!all(required %in% names(reg))) stop('Workflow 08 registry schema is incomplete',call.=FALSE)
           auth <- reg[reg$status=='authoritative',,drop=FALSE]
           if(nrow(auth)!=1L) stop(sprintf('Expected exactly one authoritative Workflow 08 registry row; found %d',nrow(auth)),call.=FALSE)
-          if(as.character(auth$zenodo_record_id[[1L]])!='23020526') {
-            stop(sprintf('Unexpected authoritative Workflow 08 Zenodo record: %s',auth$zenodo_record_id[[1L]]),call.=FALSE)
-          }
           run_id <- as.character(auth$source_run_id[[1L]])
           p <- sprintf('docs/workflow08/zenodo/run-%s.json',run_id)
           if(!file.exists(p)) stop(sprintf('Authoritative Workflow 08 pointer not found: %s',p),call.=FALSE)
           x <- fromJSON(p,simplifyVector=FALSE)
-          if(as.character(x$zenodo_record_id)!='23020526' ||
-             as.character(x$doi)!='10.5281/zenodo.23020526' ||
-             as.character(x$final_canonical_jsonl_sha256)!='8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c') {
-            stop('Authoritative Workflow 08 pointer does not match the registered lossless Zenodo archive',call.=FALSE)
+          if(!identical(as.character(x$status),'published') ||
+             !identical(as.character(x$workflow),'08') ||
+             !identical(as.character(x$state),'corrected_final_adjudicated_canonical') ||
+             as.character(x$zenodo_record_id)!=as.character(auth$zenodo_record_id[[1L]]) ||
+             as.character(x$doi)!=as.character(auth$doi[[1L]]) ||
+             tolower(as.character(x$final_canonical_jsonl_sha256))!=tolower(as.character(auth$canonical_sha256[[1L]])) ||
+             is.na(as.integer(x$canonical_records)) || as.integer(x$canonical_records)<1L) {
+            stop('Authoritative Workflow 08 pointer does not match the registry',call.=FALSE)
           }
           cat(sprintf('W08_POINTER=%s\n',p),file=Sys.getenv('GITHUB_ENV'),append=TRUE)
-          cat(sprintf('PASS: authoritative W08 pointer = %s / Zenodo %s\n',p,x$zenodo_record_id))
+          cat(sprintf('PASS: authoritative W08 pointer = %s / Zenodo %s / %d records\n',p,x$zenodo_record_id,as.integer(x$canonical_records)))
 
       - name: Restore authoritative Workflow 08 canonical from Zenodo
         env:
@@ -109,22 +112,48 @@ jobs:
         run: |
           suppressPackageStartupMessages({library(jsonlite);library(readr);library(digest)})
           pointer <- fromJSON(Sys.getenv('W08_POINTER'),simplifyVector=FALSE)
-          stopifnot(
-            as.character(pointer$zenodo_record_id)=='23020526',
-            as.character(pointer$final_canonical_jsonl_sha256)=='8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c'
-          )
+          expected_n <- as.integer(pointer$canonical_records)
+          expected_sha <- tolower(as.character(pointer$final_canonical_jsonl_sha256))
+          stopifnot(!is.na(expected_n),expected_n>0L,grepl('^[0-9a-f]{64}
+
+          stars <- unlist(lapply(payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
+          stopifnot(length(stars)>0L,all(nzchar(stars)),all(stars %in% c('★','★★','★★★')))
+
+          html <- paste(readLines('docs/dashboard-redesign-temp.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(grepl('Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).',html,fixed=TRUE))
+          stopifnot(file.exists('outputs/workflow10/dashboard-redesign-temp-standalone.html'))
+
+          cat(sprintf(
+            'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
+            pointer$zenodo_record_id,nrow(csv),length(stars)
+          ))
+
+      - name: Upload Workflow 10 dashboard artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow10-dashboard-${{ github.run_id }}
+          path: |
+            outputs/workflow10/
+          retention-days: 30
+          if-no-files-found: error
+,expected_sha))
 
           csv <- read_csv('outputs/workflow10/living_evidence_map.csv',show_col_types=FALSE,progress=FALSE)
-          stopifnot(nrow(csv)==19117L,!anyDuplicated(csv$record_id))
+          stopifnot(nrow(csv)==expected_n,!anyDuplicated(csv$record_id))
 
           js <- paste(readLines('outputs/workflow10/dashboard-data.js',warn=FALSE,encoding='UTF-8'),collapse='\n')
           prefix <- 'window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA='
           stopifnot(startsWith(js,prefix),endsWith(js,';'))
           payload <- fromJSON(substr(js,nchar(prefix)+1L,nchar(js)-1L),simplifyVector=FALSE)
-          stopifnot(length(payload$records)==19117L)
-          stopifnot(as.integer(payload$metrics$candidate_search_results_screened)==32283L)
-          stopifnot(as.character(payload$source$zenodo_record_id)=='23020526')
-          stopifnot(as.character(payload$source$canonical_sha256)=='8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c')
+          flow <- fromJSON('docs/reporting/workflow_09/flow_counts.json',simplifyVector=FALSE)
+          stopifnot(length(payload$records)==expected_n)
+          stopifnot(as.integer(payload$metrics$total_records)==expected_n)
+          stopifnot(as.integer(payload$metrics$search_results)==as.integer(flow$counts$combined_search_results))
+          stopifnot(as.integer(payload$metrics$unique_records_screened)==as.integer(flow$counts$deduplicated_records))
+          stopifnot(as.integer(payload$metrics$candidate_search_results_screened)==as.integer(flow$counts$title_abstract_screened))
+          stopifnot(as.integer(payload$metrics$databases_searched)==length(flow$counts$sources))
+          stopifnot(as.character(payload$source$zenodo_record_id)==as.character(pointer$zenodo_record_id))
+          stopifnot(tolower(as.character(payload$source$canonical_sha256))==expected_sha)
 
           stars <- unlist(lapply(payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
           stopifnot(length(stars)>0L,all(nzchar(stars)),all(stars %in% c('★','★★','★★★')))
