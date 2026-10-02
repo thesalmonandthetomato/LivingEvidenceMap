@@ -8,7 +8,7 @@ on:
       - '.github/workflows/tmp_validate_w02_batched_rate_limit.yml'
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 jobs:
