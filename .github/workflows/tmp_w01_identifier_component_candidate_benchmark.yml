@@ -59,10 +59,12 @@ jobs:
       - name: Run component-aware pre-candidate benchmark
         shell: bash
         run: |
-          set -euo pipefail
-          /usr/bin/time -v             Rscript scripts/updater/workflow_01_identifier_component_candidate_benchmark_test.R               --metadata /tmp/w01_component/prod/workflow01_candidates/normalised_metadata.csv               --safe-pairs /tmp/w01_component/safe/safe_identifier_preresolve_appended_pairs.csv               --prior-n 90137               --output-dir /tmp/w01_component/out             2> /tmp/w01_component/out/process_time.txt
-          cat /tmp/w01_component/out/component_aware_candidate_benchmark.json
+          set -uo pipefail
+          status=0
+          /usr/bin/time -v             Rscript scripts/updater/workflow_01_identifier_component_candidate_benchmark_test.R               --metadata /tmp/w01_component/prod/workflow01_candidates/normalised_metadata.csv               --safe-pairs /tmp/w01_component/safe/safe_identifier_preresolve_appended_pairs.csv               --prior-n 90137               --output-dir /tmp/w01_component/out             2> /tmp/w01_component/out/process_time.txt || status=$?
+          if [ -f /tmp/w01_component/out/component_aware_candidate_benchmark.json ]; then cat /tmp/w01_component/out/component_aware_candidate_benchmark.json; fi
           cat /tmp/w01_component/out/process_time.txt
+          exit "$status"
 
       - name: Assert safety invariants
         shell: Rscript {0}
