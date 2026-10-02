@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p frozen safe reduced previous test_input merged audit
+          mkdir -p frozen safe reduced test_input merged audit
 
           gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11171230024/zip" > frozen/w01.zip
           unzip -q frozen/w01.zip             workflow01_candidates/normalised_metadata.csv             workflow01_pre_adjudication/manifestation_cluster_map.csv             workflow01_pre_adjudication/summary.json             pending_checkpoint/previous_workflow01_pointer.json             -d frozen
