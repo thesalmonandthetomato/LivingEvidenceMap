@@ -1,6 +1,20 @@
 name: Workflow 02 - Resume after Shiny adjudication
 
 on:
+  workflow_call:
+    inputs:
+      source_run_id:
+        required: true
+        type: string
+      publish:
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: true
   workflow_dispatch:
     inputs:
       source_run_id:
