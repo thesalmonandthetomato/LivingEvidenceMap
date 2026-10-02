@@ -1,0 +1,71 @@
+name: TEMP W01 identifier disagreement triage
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_disagreement_triage.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('data.table')
+
+      - name: Download full-corpus benchmark artefact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_triage/input /tmp/w01_triage/out
+          gh api -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11219584507/zip" \
+            > /tmp/w01_triage/benchmark.zip
+          unzip -q /tmp/w01_triage/benchmark.zip -d /tmp/w01_triage/input
+
+      - name: Triage high-evidence disagreements
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_identifier_disagreement_triage.R \
+            --pairs /tmp/w01_triage/input/different_cluster_identifier_pairs.csv \
+            --output-dir /tmp/w01_triage/out
+          cat /tmp/w01_triage/out/triage_summary.csv
+
+      - name: Assert test-only scope
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          x <- fread('/tmp/w01_triage/out/high_evidence_disagreement_triage.csv')
+          stopifnot(nrow(x)==236L)
+          stopifnot(all(x$n_independent_families>=2L))
+          stopifnot(all(x$triage_class %in% c('likely_w01_miss','metadata_or_identifier_conflict','ambiguous_manual')))
+          cat('PASS: 236 high-evidence disagreements triaged; no production changes\n')
+
+      - name: Upload triage outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-identifier-disagreement-triage-${{ github.run_id }}
+          path: /tmp/w01_triage/out/
+          retention-days: 30
+          if-no-files-found: error
