@@ -100,6 +100,22 @@
     "OpenAlex IDs supplied by Lens are valid cross-source bridges: 3/3 exact Lens external OpenAlex IDs resolved to the same OpenAlex work, title and DOI.",
     "MAG IDs are abundant in both Lens and OpenAlex samples (16 and 20 respectively), but the random top-20 result sets did not overlap on those IDs; targeted MAG bridge validation remains separate if desired.",
     "CORE and PMCID are supported namespaces. CORE did not occur in this Lens top-20 sample; PMCID occurred only in the PubMed sample.",
-    "Production workflow01-final-architecture was not modified."
-  ]
+    "Production workflow01-final-architecture was not modified.",
+    "Targeted MAG validation found 16/16 exact Lens MAG ↔ OpenAlex ids.mag matches, including one record with no DOI resolved directly as OpenAlex W<MAG>. MAG and legacy OpenAlex W IDs should be treated as equivalent aliases, not independent evidence."
+  ],
+  "targeted_lens_mag_bridge": {
+    "run_id": 36989195861,
+    "successful_attempt": 2,
+    "conclusion": "success",
+    "lens_mag_records_tested": 16,
+    "mag_records_without_doi_resolved_via_openalex_w_prefix": 1,
+    "openalex_mag_present": 16,
+    "exact_mag_agreements": 16,
+    "exact_normalised_title_matches": 16,
+    "exact_doi_agreements": 15,
+    "mag_disagreements": 0,
+    "mag_missing_in_openalex": 0,
+    "automatic_merges_performed": 0,
+    "interpretation": "For these legacy works, Lens MAG n and OpenAlex work Wn are aliases from the same identifier lineage. MAG is therefore useful as a bridge, but should not be counted as independent corroborating evidence from OpenAlex ID."
+  }
 }
