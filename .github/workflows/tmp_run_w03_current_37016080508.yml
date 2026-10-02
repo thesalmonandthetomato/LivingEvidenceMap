@@ -1,0 +1,22 @@
+name: TEMP run current W03 from validated W02 handoff
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w03_current_37016080508.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  run-w03:
+    uses: ./.github/workflows/workflow_03_production.yml
+    with:
+      lean_pointer_path: 'docs/compaction/zenodo/run-37016080508.json'
+      limit: '0'
+      batch_size: '100'
+      publish: true
+    secrets: inherit
