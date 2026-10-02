@@ -1,0 +1,105 @@
+{
+  "schema": "living-evidence-map-w01-identifier-generic-registry-experiment-v1",
+  "status": "success",
+  "test_only": true,
+  "branch": "w01-identifier-assist-test",
+  "safety_validator": {
+    "run_id": 36987602380,
+    "conclusion": "success",
+    "automatic_merges_performed": 0
+  },
+  "sample_run": {
+    "run_id": 36973219824,
+    "successful_attempt": 6,
+    "manifestations": 442,
+    "configured_api_sources": 26
+  },
+  "supported_namespaces": [
+    "doi",
+    "pmid",
+    "pmcid",
+    "openalex",
+    "core",
+    "mag"
+  ],
+  "identifier_rows": {
+    "total": 425,
+    "doi": 294,
+    "pmid": 61,
+    "pmcid": 11,
+    "openalex": 23,
+    "mag": 36,
+    "core": 0
+  },
+  "source_examples": {
+    "lens": {
+      "records": 20,
+      "doi": 19,
+      "pmid": 5,
+      "openalex": 3,
+      "mag": 16,
+      "pmcid": 0,
+      "core": 0
+    },
+    "openalex": {
+      "records": 20,
+      "doi": 20,
+      "pmid": 8,
+      "openalex": 20,
+      "mag": 20,
+      "pmcid": 0,
+      "core": 0
+    },
+    "pubmed": {
+      "records": 20,
+      "doi": 20,
+      "pmid": 20,
+      "pmcid": 11
+    },
+    "ebsco_medline": {
+      "records": 20,
+      "doi": 20,
+      "pmid": 20
+    },
+    "scopus": {
+      "records": 20,
+      "doi": 20,
+      "pmid": 1
+    },
+    "wos": {
+      "records": 20,
+      "doi": 18,
+      "pmid": 2
+    }
+  },
+  "cross_source_matching": {
+    "shared_identifier_groups": 19,
+    "shared_groups_by_namespace": {
+      "doi": 17,
+      "pmid": 2,
+      "pmcid": 0,
+      "openalex": 0,
+      "core": 0,
+      "mag": 0
+    },
+    "candidate_pairs": 19,
+    "candidate_pairs_with_year_conflict": 0,
+    "note": "Top-20 result sets did not contain the Lens records with OpenAlex/MAG IDs in the corresponding OpenAlex top-20 set, so no additional random-sample edges were expected."
+  },
+  "targeted_lens_openalex_bridge": {
+    "run_id": 36988185476,
+    "conclusion": "success",
+    "records_tested": 3,
+    "exact_openalex_id_matches": 3,
+    "exact_normalised_title_matches": 3,
+    "doi_agreements": 3,
+    "automatic_merges_performed": 0
+  },
+  "interpretation": [
+    "The namespace-agnostic registry safely preserves reusable identifiers without altering W01 deduplication decisions.",
+    "OpenAlex IDs supplied by Lens are valid cross-source bridges: 3/3 exact Lens external OpenAlex IDs resolved to the same OpenAlex work, title and DOI.",
+    "MAG IDs are abundant in both Lens and OpenAlex samples (16 and 20 respectively), but the random top-20 result sets did not overlap on those IDs; targeted MAG bridge validation remains separate if desired.",
+    "CORE and PMCID are supported namespaces. CORE did not occur in this Lens top-20 sample; PMCID occurred only in the PubMed sample.",
+    "Production workflow01-final-architecture was not modified."
+  ]
+}
