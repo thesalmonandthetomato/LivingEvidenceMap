@@ -53,6 +53,6 @@ cmd <- c(
   "--sheet-id",sheet_id,
   "--credential",credential
 )
-st <- system2("Rscript",cmd)
+st <- system2("Rscript", vapply(cmd, shQuote, character(1)))
 if(st!=0L) stop("Failed syncing current-run status to Shiny backing sheet",call.=FALSE)
 cat(sprintf("PASS: synced current-run status %s to Shiny\n",val(s$update_id)))
