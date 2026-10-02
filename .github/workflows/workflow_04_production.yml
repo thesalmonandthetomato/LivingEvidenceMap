@@ -38,6 +38,8 @@ on:
         required: true
       OPENAI_API_KEY:
         required: true
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: false
 
   workflow_dispatch:
     inputs:
