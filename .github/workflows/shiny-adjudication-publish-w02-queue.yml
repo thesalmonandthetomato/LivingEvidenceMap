@@ -22,6 +22,7 @@ jobs:
       LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
       QUEUE_TAB: 'queue_w02_active'
       SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      ADJUDICATION_APP_URL: https://01a0f774-a1a3-dab9-3d3f-f86402fc6d81.share.connect.posit.cloud
 
     steps:
       - uses: actions/checkout@v4
@@ -171,6 +172,34 @@ jobs:
           cat("Source run:", source_run_id, "\n")
           cat("Cases:", length(out), "\n")
           cat("Queue SHA-256:", queue_sha, "\n")
+
+      - name: Build W02 review notification email
+        env:
+          REVIEW_EMAIL: ${{ secrets.REVIEW_EMAIL }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/$SOURCE_RUN_ID"
+          Rscript scripts/updater/workflow_build_review_email_payload.R \
+            --workflow 02 \
+            --manifest "$RUNNER_TEMP/w02-shiny-publish/workflow02_human_review_manifest.json" \
+            --artifact-url "$RUN_URL#artifacts" \
+            --workflow-url "$RUN_URL" \
+            --app-url "$ADJUDICATION_APP_URL" \
+            --output "$RUNNER_TEMP/w02-shiny-publish/email_payload.json"
+
+      - name: Email W02 review notification
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_send_review_email.R \
+            --payload "$RUNNER_TEMP/w02-shiny-publish/email_payload.json"
 
       - name: Mark W02 Shiny batch published
         shell: bash
