@@ -42,12 +42,12 @@ write_lines <- function(x,path){
   if(length(x)) writeLines(x,path,useBytes=TRUE) else file.create(path)
 }
 sha <- function(path) digest(file=path,algo="sha256",serialize=FALSE)
-table_state_sha <- function(dt,key_cols){
+table_state_sha <- function(dt,key_cols,exclude_cols=character()){
   x <- copy(dt)
   missing <- setdiff(key_cols,names(x))
   if(length(missing)) stop(sprintf("State-hash key columns missing: %s",paste(missing,collapse=", ")),call.=FALSE)
   setorderv(x,key_cols)
-  cols <- sort(names(x))
+  cols <- sort(setdiff(names(x),exclude_cols))
   vals <- lapply(x[,..cols],function(v){
     if(inherits(v,"integer64")) v <- as.character(v)
     z <- as.character(v)
@@ -267,8 +267,13 @@ manifest <- list(
     canonical_records=as.integer(current_manifest$records),
     canonical_jsonl_sha256=as.character(current_manifest$canonical_jsonl_sha256),
     canonical_jsonl_bytes=as.numeric(current_manifest$canonical_jsonl_bytes),
-    pair_decisions_state_sha256=table_state_sha(fread(cur_pairs_path,na.strings=c("","NA"),colClasses="character"),"pair_key"),
+    pair_decisions_state_sha256=table_state_sha(
+      fread(cur_pairs_path,na.strings=c("","NA"),colClasses="character"),
+      "pair_key",
+      exclude_cols=c("title_i","title_j")
+    ),
     cluster_map_state_sha256=table_state_sha(fread(cur_map_path,na.strings=c("","NA"),colClasses="character"),c("source","source_record_id")),
+    pair_decisions_hash_excluded_descriptive_columns=c("title_i","title_j"),
     source_files=source_target
   ),
   delta=list(
