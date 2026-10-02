@@ -10,6 +10,10 @@ on:
         required: false
         default: true
         type: boolean
+      validation_only:
+        required: false
+        default: false
+        type: boolean
     secrets:
       ZENODO_ACCESS_TOKEN:
         required: true
@@ -24,6 +28,11 @@ on:
       publish:
         description: 'Publish validated resumed W02 state to restricted Zenodo'
         required: true
+        default: false
+        type: boolean
+      validation_only:
+        description: 'Validate listener/reusable-workflow chain without touching W02 state'
+        required: false
         default: false
         type: boolean
 
@@ -43,7 +52,15 @@ env:
   W02_DECISIONS_TAB: 'decisions_w02'
 
 jobs:
+  validate-only:
+    if: ${{ inputs.validation_only == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm safe automatic-resume validation
+        run: echo "PASS: reusable W02 resume workflow invoked safely for source run ${{ inputs.source_run_id }}"
+
   resume:
+    if: ${{ inputs.validation_only != true }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
