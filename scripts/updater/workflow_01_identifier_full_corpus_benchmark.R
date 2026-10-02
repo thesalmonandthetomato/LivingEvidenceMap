@@ -204,8 +204,7 @@ for (k in seq_len(nrow(shared))) {
   tmp <- data.table(record_i=cmb[1,],record_j=cmb[2,],
                     identifier_type=shared$identifier_type[[k]],
                     identifier_value=shared$identifier_value[[k]])
-  tmp <- tmp[tstrsplit(record_i,"::",fixed=TRUE,keep=1L) !=
-             tstrsplit(record_j,"::",fixed=TRUE,keep=1L)]
+  tmp <- tmp[sub("::.*$","",record_i) != sub("::.*$","",record_j)]
   if (nrow(tmp)) pair_chunks[[length(pair_chunks)+1L]] <- tmp
 }
 raw_pairs <- if(length(pair_chunks)) unique(rbindlist(pair_chunks)) else
