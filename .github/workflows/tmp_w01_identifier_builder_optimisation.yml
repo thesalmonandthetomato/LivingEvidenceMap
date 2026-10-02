@@ -1,0 +1,105 @@
+name: TEMP W01 identifier builder optimisation
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_builder_optimisation.yml'
+      - 'scripts/updater/workflow_01_identifier_assist_build.R'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite'))
+
+      - name: Download frozen inputs and validated safe-edge reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p frozen reference out
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11171230024/zip" > frozen/w01.zip
+          unzip -q frozen/w01.zip \
+            workflow01_candidates/normalised_metadata.csv \
+            pending_checkpoint/source_manifestations/lens_new.jsonl \
+            pending_checkpoint/source_manifestations/scopus_new.jsonl \
+            pending_checkpoint/source_manifestations/openalex_new.jsonl \
+            pending_checkpoint/source_manifestations/agricola_new.jsonl \
+            pending_checkpoint/source_manifestations/wos_new.jsonl \
+            pending_checkpoint/source_manifestations/cab_new.jsonl \
+            pending_checkpoint/source_manifestations/proquest_new.jsonl \
+            -d frozen
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11226773698/zip" > reference/safe.zip
+          unzip -q reference/safe.zip safe_identifier_preresolve_appended_pairs.csv -d reference
+          cat > frozen/source_inputs.json <<'EOF'
+          {
+            "schema": "living-evidence-map-workflow01-source-inputs-v1",
+            "sources": {
+              "lens": "frozen/pending_checkpoint/source_manifestations/lens_new.jsonl",
+              "scopus": "frozen/pending_checkpoint/source_manifestations/scopus_new.jsonl",
+              "openalex": "frozen/pending_checkpoint/source_manifestations/openalex_new.jsonl",
+              "agricola": "frozen/pending_checkpoint/source_manifestations/agricola_new.jsonl",
+              "wos": "frozen/pending_checkpoint/source_manifestations/wos_new.jsonl",
+              "cab": "frozen/pending_checkpoint/source_manifestations/cab_new.jsonl",
+              "proquest": "frozen/pending_checkpoint/source_manifestations/proquest_new.jsonl"
+            }
+          }
+          EOF
+
+      - name: Run optimised identifier builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v \
+            Rscript scripts/updater/workflow_01_identifier_assist_build.R \
+              --input-manifest frozen/source_inputs.json \
+              --metadata frozen/workflow01_candidates/normalised_metadata.csv \
+              --guard-file config/workflow01_identifier_never_auto_resolve.csv \
+              --prior-manifestations 90137 \
+              --output-dir out \
+            2> out/process_time.txt
+          cat out/process_time.txt
+          cat out/identifier_assist_summary.json
+
+      - name: Require exact safe-edge equivalence
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          cur <- fread('out/safe_identifier_edges.csv')
+          ref <- fread('reference/safe_identifier_preresolve_appended_pairs.csv')
+          ck <- unique(paste(pmin(cur$idx_i,cur$idx_j),pmax(cur$idx_i,cur$idx_j),sep='::'))
+          rk <- unique(as.character(ref$idx_pair_key))
+          stopifnot(length(ck)==41268L,length(rk)==41268L,setequal(ck,rk))
+          cat('PASS: optimised builder reproduces all 41268 validated safe edges exactly\n')
+
+      - name: Upload optimisation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-identifier-builder-optimisation-${{ github.run_id }}
+          path: |
+            out/identifier_assist_summary.json
+            out/process_time.txt
+            out/safe_identifier_edges.csv
+          retention-days: 30
+          if-no-files-found: error
