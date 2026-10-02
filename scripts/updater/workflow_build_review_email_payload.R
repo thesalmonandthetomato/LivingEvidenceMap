@@ -15,6 +15,10 @@ manifest_path <- arg("--manifest")
 artifact_url <- arg("--artifact-url")
 workflow_url <- arg("--workflow-url")
 output_path <- arg("--output")
+app_url <- arg("--app-url", Sys.getenv(
+  "ADJUDICATION_APP_URL",
+  "https://01a0f774-a1a3-dab9-3d3f-f86402fc6d81.share.connect.posit.cloud"
+))
 if (any(vapply(list(workflow, manifest_path, artifact_url, workflow_url, output_path), is.null, logical(1)))) {
   stop("Required: --workflow --manifest --artifact-url --workflow-url --output", call. = FALSE)
 }
@@ -36,10 +40,11 @@ if (workflow == "01") {
     sprintf("Pending duplicate cases: %d", pending),
     sprintf("Locked queue SHA-256: %s", as.character(m$queue_sha256)),
     "",
-    "Download the human-review package:",
-    artifact_url,
+    "Open the Shiny adjudication app:",
+    app_url,
     "",
-    "The package contains CHATGPT_HANDOFF.md, human_review_cases.jsonl and the immutable review manifest.",
+    "Audit/recovery package:",
+    artifact_url,
     "",
     "Workflow run:",
     workflow_url,
@@ -59,10 +64,11 @@ if (workflow == "01") {
     sprintf("Quarantined conflicts: %d", conflicts),
     if (!is.null(m$manifest_sha256)) sprintf("Review manifest SHA-256: %s", as.character(m$manifest_sha256)) else NULL,
     "",
-    "Download the human-review package:",
-    artifact_url,
+    "Open the Shiny adjudication app:",
+    app_url,
     "",
-    "The package contains workflow02_human_review.csv, detailed JSONL evidence, and a checksum-locked manifest.",
+    "Audit/recovery package:",
+    artifact_url,
     "",
     "Workflow run:",
     workflow_url,
