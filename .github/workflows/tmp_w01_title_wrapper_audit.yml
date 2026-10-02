@@ -1,0 +1,77 @@
+name: TEMP W01 title wrapper audit
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_title_wrapper_audit.yml'
+      - 'scripts/updater/workflow_01_title_wrapper_audit.R'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install audit dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','stringdist','stringi'))
+
+      - name: Download frozen manual-review and metadata evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p input out
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11240285447/zip" > input/replay.zip
+          unzip -q input/replay.zip merged/manual_review_pairs.csv -d input
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11171230024/zip" > input/frozen.zip
+          unzip -q input/frozen.zip workflow01_candidates/normalised_metadata.csv -d input
+
+      - name: Run read-only title wrapper audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_title_wrapper_audit.R \
+            --manual-review input/merged/manual_review_pairs.csv \
+            --metadata input/workflow01_candidates/normalised_metadata.csv \
+            --output-dir out
+          cat out/summary.json
+
+      - name: Require no mutation and expected audit scope
+        shell: Rscript {0}
+        run: |
+          x <- jsonlite::fromJSON('out/summary.json')
+          stopifnot(x$manual_review_pairs==285L)
+          stopifnot(x$full_corpus_manifestations==118527L)
+          stopifnot(x$deterministic_duplicate_candidates>=1L)
+          cat('PASS: wrapper audit completed read-only over 285 manual-review pairs\n')
+
+      - name: Upload wrapper audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-title-wrapper-audit-${{ github.run_id }}
+          path: |
+            out/summary.json
+            out/full_corpus_wrapper_counts.csv
+            out/full_corpus_generic_attachment_counts.csv
+            out/manual_review_wrapper_audit.csv
+            out/manual_review_proposed_deterministic_duplicates.csv
+          retention-days: 30
+          if-no-files-found: error
