@@ -134,7 +134,7 @@ jobs:
           Rscript - <<'RS' > /tmp/ebsco_sources.txt
           library(jsonlite)
           x <- fromJSON('config/workflow00_ebsco_sources.json',simplifyVector=FALSE)
-          cat(paste(names(x$sources),collapse='\n'))
+          writeLines(names(x$sources))
           RS
           while IFS= read -r source; do
             [ -n "$source" ] || continue
