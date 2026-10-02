@@ -1,0 +1,38 @@
+{
+  "schema": "living-evidence-map-w01-identifier-assist-real-corpus-benchmark-v1",
+  "status": "test_only",
+  "source_artifact": {
+    "workflow_run_id": 36866644366,
+    "artifact_name": "workflow01-production-36866644366",
+    "artifact_id": 11171230024
+  },
+  "corpus": {
+    "manifestations": 118527,
+    "prior_manifestations": 90137,
+    "appended_manifestations": 28390,
+    "existing_incremental_candidate_pairs": 503245
+  },
+  "doi": {
+    "manifestations_with_doi": 95311,
+    "coverage_percent": 80.41,
+    "cross_source_shared_doi_groups": 20631,
+    "cross_source_shared_doi_pairs": 139123,
+    "pairs_in_same_existing_w01_cluster": 137743,
+    "pairs_in_different_existing_w01_clusters": 1380,
+    "same_cluster_percent": 99.008,
+    "exact_title_pairs": 134986,
+    "year_difference_gt_1_pairs": 639
+  },
+  "incremental_subset": {
+    "cross_source_shared_doi_pairs_involving_appended_manifestation": 41713,
+    "pairs_in_same_existing_w01_cluster": 41449,
+    "pairs_in_different_existing_w01_clusters": 264,
+    "percent_of_existing_incremental_candidate_pair_count": 8.29
+  },
+  "interpretation": [
+    "Shared DOI is highly informative but not infallible and must remain evidence rather than an unconditional merge key.",
+    "Some same-DOI pairs remain in different W01 clusters; inspection includes near-identical titles with minor source-specific transcription differences, suggesting possible recall gains as well as efficiency gains.",
+    "Year disagreement alone is not a safe contradiction rule because many same-DOI pairs with year differences greater than one are already correctly clustered by W01.",
+    "No production W01 decisions were changed by this benchmark."
+  ]
+}
