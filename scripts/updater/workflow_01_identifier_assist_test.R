@@ -16,19 +16,24 @@ arg_one <- function(flag,default=NULL) {
   args[[i+1L]]
 }
 input_manifest <- arg_one("--input-manifest")
+metadata_path <- arg_one("--metadata")
 output_dir <- arg_one("--output-dir")
-if (is.null(input_manifest) || is.null(output_dir)) {
-  stop("Required: --input-manifest --output-dir",call.=FALSE)
+if (is.null(output_dir) || (is.null(input_manifest) && is.null(metadata_path)) || (!is.null(input_manifest) && !is.null(metadata_path))) {
+  stop("Required: --output-dir and exactly one of --input-manifest or --metadata",call.=FALSE)
 }
-if (!file.exists(input_manifest)) stop("Input manifest not found",call.=FALSE)
+if (!is.null(input_manifest) && !file.exists(input_manifest)) stop("Input manifest not found",call.=FALSE)
+if (!is.null(metadata_path) && !file.exists(metadata_path)) stop("Metadata file not found",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
-manifest <- fromJSON(input_manifest,simplifyVector=FALSE)
-if (!identical(manifest$schema,"living-evidence-map-workflow01-source-inputs-v1")) {
-  stop("Unsupported W01 source-input manifest schema",call.=FALSE)
-}
-if (is.null(manifest$sources) || !length(manifest$sources) || is.null(names(manifest$sources))) {
-  stop("Source-input manifest contains no named sources",call.=FALSE)
+manifest <- NULL
+if (!is.null(input_manifest)) {
+  manifest <- fromJSON(input_manifest,simplifyVector=FALSE)
+  if (!identical(manifest$schema,"living-evidence-map-workflow01-source-inputs-v1")) {
+    stop("Unsupported W01 source-input manifest schema",call.=FALSE)
+  }
+  if (is.null(manifest$sources) || !length(manifest$sources) || is.null(names(manifest$sources))) {
+    stop("Source-input manifest contains no named sources",call.=FALSE)
+  }
 }
 
 scalar <- function(x) {
@@ -144,43 +149,56 @@ read_jsonl <- function(path,source,fun) {
   n
 }
 
-source_paths <- vapply(manifest$sources,function(z) as.character(z$path %||% z),character(1))
 manifestations <- list()
 identifiers <- list()
 source_counts <- integer()
 
-for (src in names(source_paths)) {
-  source_counts[[src]] <- read_jsonl(source_paths[[src]],src,function(r,expected,i) {
-    actual <- source_kind(r,expected)
-    rid <- source_record_id(r)
-    if (!nzchar(rid)) stop(sprintf("%s record %d lacks source_record_id",expected,i),call.=FALSE)
-    key <- paste(expected,rid,sep="::")
-    ttl <- scalar((r$mapped_fields %||% list())$title %||% (r$canonical %||% list())$title)
-    manifestations[[length(manifestations)+1L]] <<- data.table(
-      manifestation_key=key,
-      source=expected,
-      source_record_id=rid,
-      title_norm=norm_title(ttl) %||% NA_character_,
-      year=record_year(r)
-    )
-    ids <- extract_ids(r,expected)
-    if (length(ids)) {
-      for (id in ids) identifiers[[length(identifiers)+1L]] <<- data.table(
+if (!is.null(metadata_path)) {
+  meta <- fread(metadata_path,na.strings=c("","NA"))
+  required <- c("idx","source","source_record_id","doi_norm","title_norm","year")
+  miss <- setdiff(required,names(meta))
+  if (length(miss)) stop(sprintf("Metadata missing required columns: %s",paste(miss,collapse=", ")),call.=FALSE)
+  m <- meta[,.(manifestation_key=paste(source,source_record_id,sep="::"),
+               source,source_record_id,title_norm,year)]
+  if (anyDuplicated(m$manifestation_key)) stop("Duplicate manifestation keys in metadata",call.=FALSE)
+  source_counts <- table(meta$source)
+  id <- meta[!is.na(doi_norm) & nzchar(doi_norm),
+             .(manifestation_key=paste(source,source_record_id,sep="::"),
+               source,identifier_type="doi",identifier_value=doi_norm)]
+  id <- unique(id)
+} else {
+  source_paths <- vapply(manifest$sources,function(z) as.character(z$path %||% z),character(1))
+  for (src in names(source_paths)) {
+    source_counts[[src]] <- read_jsonl(source_paths[[src]],src,function(r,expected,i) {
+      actual <- source_kind(r,expected)
+      rid <- source_record_id(r)
+      if (!nzchar(rid)) stop(sprintf("%s record %d lacks source_record_id",expected,i),call.=FALSE)
+      key <- paste(expected,rid,sep="::")
+      ttl <- scalar((r$mapped_fields %||% list())$title %||% (r$canonical %||% list())$title)
+      manifestations[[length(manifestations)+1L]] <<- data.table(
         manifestation_key=key,
         source=expected,
-        identifier_type=id$type,
-        identifier_value=id$value
+        source_record_id=rid,
+        title_norm=norm_title(ttl) %||% NA_character_,
+        year=record_year(r)
       )
-    }
-  })
+      ids <- extract_ids(r,expected)
+      if (length(ids)) {
+        for (id0 in ids) identifiers[[length(identifiers)+1L]] <<- data.table(
+          manifestation_key=key,
+          source=expected,
+          identifier_type=id0$type,
+          identifier_value=id0$value
+        )
+      }
+    })
+  }
+  m <- if (length(manifestations)) rbindlist(manifestations,use.names=TRUE,fill=TRUE) else data.table()
+  id <- if (length(identifiers)) rbindlist(identifiers,use.names=TRUE,fill=TRUE) else
+    data.table(manifestation_key=character(),source=character(),identifier_type=character(),identifier_value=character())
+  if (nrow(m) && anyDuplicated(m$manifestation_key)) stop("Duplicate manifestation keys in inputs",call.=FALSE)
+  if (nrow(id)) id <- unique(id)
 }
-
-m <- if (length(manifestations)) rbindlist(manifestations,use.names=TRUE,fill=TRUE) else data.table()
-id <- if (length(identifiers)) rbindlist(identifiers,use.names=TRUE,fill=TRUE) else
-  data.table(manifestation_key=character(),source=character(),identifier_type=character(),identifier_value=character())
-
-if (nrow(m) && anyDuplicated(m$manifestation_key)) stop("Duplicate manifestation keys in inputs",call.=FALSE)
-if (nrow(id)) id <- unique(id)
 
 fwrite(id,file.path(output_dir,"cross_source_identifiers.csv"))
 
@@ -236,6 +254,7 @@ summary <- list(
   automatic_merges_performed=0L,
   existing_w01_files_modified=FALSE,
   input_manifest=input_manifest,
+  metadata_path=metadata_path,
   manifestations=nrow(m),
   sources=as.list(source_counts),
   identifier_rows=nrow(id),
