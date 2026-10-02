@@ -171,7 +171,7 @@ jobs:
           stopifnot(length(lines)==as.integer(x$records_scanned))
           ids<-vapply(lines,function(z)as.character(fromJSON(z,simplifyVector=FALSE)$record_id),character(1))
           stopifnot(all(nzchar(ids)),!anyDuplicated(ids))
-          if(expected==0L) stopifnot(as.integer(x$evidence_conflicts)==0L)
+          if(requested==0L) stopifnot(as.integer(x$evidence_conflicts)==0L)
           cat('PASS: Workflow 03 output schema/count/record_id validation complete\n')
 
       - name: Publish authoritative full Workflow 03 layer
