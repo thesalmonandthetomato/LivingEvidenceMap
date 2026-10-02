@@ -127,7 +127,12 @@ jobs:
           new[,pair_key:=key(record_i,record_j)]
           old[,pair_key:=key(record_i,record_j)]
           if('source_row_index' %in% names(old)) setorder(old,pair_key,source_row_index)
+          if('source_row_index' %in% names(new)) setorder(new,pair_key,source_row_index)
+          old_rows <- nrow(old)
+          new_rows <- nrow(new)
           old <- unique(old,by='pair_key')
+          new <- unique(new,by='pair_key')
+          stopifnot(nrow(new)==272169L)
           setkey(old,pair_key)
           setkey(new,pair_key)
           cmp <- old[new,on='pair_key']
@@ -141,6 +146,9 @@ jobs:
             schema='living-evidence-map-w01-reduced-actual-scoring-equivalence-v1',
             status=if(all(class_match)) 'success' else 'failure',
             selected_pairs=nrow(cmp),
+            frozen_rows_before_pair_key_dedup=old_rows,
+            replay_rows_before_pair_key_dedup=new_rows,
+            replay_duplicate_rows_removed=new_rows-nrow(new),
             classification_matches=sum(class_match),
             classification_mismatches=sum(!class_match),
             rule_matches=sum(rule_match),
