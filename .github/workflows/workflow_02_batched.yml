@@ -338,7 +338,7 @@ jobs:
           BATCH_INPUT="prepared-plan/batch-$BATCH.jsonl"
           test -s "$BATCH_INPUT"
           echo "Starting Workflow 02 batch $BATCH with $(wc -l < "$BATCH_INPUT") records"
-          Rscript scripts/updater/workflow_02_metadata_enrichment.R             --input "$BATCH_INPUT"             --output outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --report outputs/batch/enrichment_report.json             --progress-every 50             --delay 0.2             --recheck-after-days "$RECHECK"
+          Rscript scripts/updater/workflow_02_metadata_enrichment.R             --input "$BATCH_INPUT"             --output outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --report outputs/batch/enrichment_report.json             --progress-every 50             --delay 0.5             --max-rate-limit-wait 60             --scopus-rate-limit-trip 3             --recheck-after-days "$RECHECK"
 
           Rscript scripts/updater/workflow_02_build_patch.R             --input "$BATCH_INPUT"             --enriched outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --enrichment-report outputs/batch/enrichment_report.json             --patch outputs/batch/current_patch.jsonl             --retry-queue outputs/batch/retry_queue.jsonl             --report outputs/batch/current_patch_report.json
 
