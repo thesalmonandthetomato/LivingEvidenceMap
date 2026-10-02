@@ -1,0 +1,68 @@
+name: TEMP W01 identifier upstream audit
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_upstream_audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+      OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+      SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+      SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+      EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+      EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','xml2','data.table'))
+
+      - name: Build current query plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_idaudit/plan
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type full \
+            --config user_input/workflow00_search_strategy.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --output-dir /tmp/w01_idaudit/plan
+
+      - name: Audit upstream identifier fields
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_idaudit/out
+          Rscript scripts/updater/workflow_01_identifier_upstream_audit.R \
+            --plan /tmp/w01_idaudit/plan/search_plan.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --output /tmp/w01_idaudit/out/upstream_identifier_values.csv
+          cat /tmp/w01_idaudit/out/upstream_identifier_values_summary.csv
+
+      - name: Upload identifier audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-identifier-upstream-audit-${{ github.run_id }}
+          path: /tmp/w01_idaudit/out/
+          retention-days: 30
+          if-no-files-found: error
