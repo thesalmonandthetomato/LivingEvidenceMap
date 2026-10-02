@@ -1,24 +1,11 @@
 name: Workflow 02 - Resume after Shiny adjudication
 
 on:
-  workflow_call:
-    inputs:
-      source_run_id:
-        required: true
-        type: string
-      publish:
-        required: false
-        default: true
-        type: boolean
-      validation_only:
-        required: false
-        default: false
-        type: boolean
-    secrets:
-      ZENODO_ACCESS_TOKEN:
-        required: true
-      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
-        required: true
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/shiny_adjudication/w02_resume_requests/*.json'
   workflow_dispatch:
     inputs:
       source_run_id:
@@ -31,7 +18,7 @@ on:
         default: false
         type: boolean
       validation_only:
-        description: 'Validate listener/reusable-workflow chain without touching W02 state'
+        description: 'Validate automatic trigger/request parsing without touching W02 state'
         required: false
         default: false
         type: boolean
@@ -46,25 +33,66 @@ concurrency:
 
 env:
   WORKFLOW02_BRANCH: workflow01-final-architecture
-  SOURCE_RUN_ID: ${{ inputs.source_run_id }}
   LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
   W02_QUEUE_TAB: 'queue_w02_active'
   W02_DECISIONS_TAB: 'decisions_w02'
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      source_run_id: ${{ steps.resolve.outputs.source_run_id }}
+      publish: ${{ steps.resolve.outputs.publish }}
+      validation_only: ${{ steps.resolve.outputs.validation_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 2
+      - id: resolve
+        name: Resolve W02 resume request
+        shell: bash
+        env:
+          DISPATCH_SOURCE_RUN_ID: ${{ inputs.source_run_id || '' }}
+          DISPATCH_PUBLISH: ${{ inputs.publish || false }}
+          DISPATCH_VALIDATION_ONLY: ${{ inputs.validation_only || false }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            mapfile -t FILES < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/shiny_adjudication/w02_resume_requests/.*\.json$' || true)
+            test "${#FILES[@]}" -eq 1
+            FILE="${FILES[0]}"
+            readarray -t META < <(python3 -c 'import json,re,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); rid=str(x.get("source_run_id","")); assert re.fullmatch(r"[0-9]+",rid), "invalid source_run_id"; print(rid); print("true" if x.get("publish",True) else "false"); print("true" if x.get("validation_only") is True else "false")' "$FILE")
+            RUN_ID="${META[0]}"
+            PUB="${META[1]}"
+            VAL="${META[2]}"
+          else
+            RUN_ID="$DISPATCH_SOURCE_RUN_ID"
+            PUB="$DISPATCH_PUBLISH"
+            VAL="$DISPATCH_VALIDATION_ONLY"
+          fi
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          echo "source_run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "publish=$PUB" >> "$GITHUB_OUTPUT"
+          echo "validation_only=$VAL" >> "$GITHUB_OUTPUT"
+          echo "PASS: resolved W02 resume request source_run_id=$RUN_ID publish=$PUB validation_only=$VAL"
+
   validate-only:
-    if: ${{ inputs.validation_only == true }}
+    needs: prepare
+    if: ${{ needs.prepare.outputs.validation_only == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Confirm safe automatic-resume validation
-        run: echo "PASS: reusable W02 resume workflow invoked safely for source run ${{ inputs.source_run_id }}"
+        run: echo "PASS: automatic W02 resume trigger and request parsing validated safely for source run ${{ needs.prepare.outputs.source_run_id }}"
 
   resume:
-    if: ${{ inputs.validation_only != true }}
+    needs: prepare
+    if: ${{ needs.prepare.outputs.validation_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      SOURCE_RUN_ID: ${{ needs.prepare.outputs.source_run_id }}
 
-    steps:
       - name: Checkout integration branch
         uses: actions/checkout@v4
         with:
@@ -310,7 +338,7 @@ jobs:
           W01_SHA="$W01_SHA" Rscript -e "library(jsonlite);library(digest);x<-list(schema='living-evidence-map-workflow02-state-manifest-v1',workflow='02',execution='deterministic_batched_human_resumed',repairable_fields=c('title','abstract','author_keywords'),source_github_run_id=Sys.getenv('SOURCE_RUN_ID'),resume_github_run_id=Sys.getenv('GITHUB_RUN_ID'),workflow01_canonical_sha256=Sys.getenv('W01_SHA'),final_enriched_sha256=digest(file='outputs/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE),human_adjudication_manifest_sha256=digest(file='outputs/w02_resume/human_application_manifest.json',algo='sha256',serialize=FALSE),created_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'));writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/workflow02_state/state_manifest.json')"
 
       - name: Publish resumed sparse Workflow 02 state to restricted Zenodo
-        if: ${{ inputs.publish == true }}
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
@@ -326,7 +354,7 @@ jobs:
             --workflow01-canonical-sha256 "$W01_SHA"
 
       - name: Register published resumed Workflow 02 state
-        if: ${{ inputs.publish == true }}
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -344,7 +372,7 @@ jobs:
           fi
 
       - name: Acknowledge consumed W02 Shiny batch
-        if: ${{ inputs.publish == true }}
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
           LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
@@ -368,7 +396,7 @@ jobs:
             --message "Workflow 02 human decisions applied; resumed sparse state archived and registered."
 
       - name: Upload validated resumed W02 handoff
-        if: ${{ inputs.publish == true }}
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: workflow02-handoff-${{ github.run_id }}
