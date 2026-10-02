@@ -124,7 +124,6 @@ if (!identical(as.integer(meta$idx),seq_len(nrow(meta)))) stop("metadata idx is 
 if (prior_n<0L || prior_n>nrow(meta)) stop("Invalid prior manifestation count",call.=FALSE)
 meta[,manifestation_key:=paste(source,source_record_id,sep="::")]
 meta_key <- setNames(meta$idx,meta$manifestation_key)
-meta_keys <- meta$manifestation_key
 
 guards <- fread(guard_path,na.strings=c("","NA"))
 if (!all(c("identifier_type","identifier_value") %in% names(guards))) stop("Guard file schema invalid",call.=FALSE)
@@ -133,7 +132,7 @@ guard_keys <- paste(guards$identifier_type,guards$identifier_value,sep="::")
 
 registry <- list()
 add_id <- function(key,source,ns,value,provenance) {
-  if (!(key %chin% meta_keys)) return(invisible(NULL))
+  if (!(key %in% names(meta_key))) return(invisible(NULL))
   z <- normalise(ns,value)
   if (is.null(z)) return(invisible(NULL))
   registry[[length(registry)+1L]] <<- data.table(
@@ -158,7 +157,7 @@ for (src in names(paths)) {
     rid <- source_record_id(r)
     if (!nzchar(rid)) stop(sprintf("%s record %d lacks source record ID",src,i),call.=FALSE)
     key <- paste(src,rid,sep="::")
-    if (!(key %chin% meta_keys)) stop(sprintf("%s record missing from W01 metadata: %s",src,rid),call.=FALSE)
+    if (!(key %in% names(meta_key))) stop(sprintf("%s record missing from W01 metadata: %s",src,rid),call.=FALSE)
 
     if (identical(src,"lens")) {
       ext <- ((r$lens %||% list())$raw_payload %||% list())$external_ids %||% list()
