@@ -124,6 +124,7 @@ if (!identical(as.integer(meta$idx),seq_len(nrow(meta)))) stop("metadata idx is 
 if (prior_n<0L || prior_n>nrow(meta)) stop("Invalid prior manifestation count",call.=FALSE)
 meta[,manifestation_key:=paste(source,source_record_id,sep="::")]
 meta_key <- setNames(meta$idx,meta$manifestation_key)
+meta_keys <- meta$manifestation_key
 
 guards <- fread(guard_path,na.strings=c("","NA"))
 if (!all(c("identifier_type","identifier_value") %in% names(guards))) stop("Guard file schema invalid",call.=FALSE)
@@ -132,7 +133,7 @@ guard_keys <- paste(guards$identifier_type,guards$identifier_value,sep="::")
 
 registry <- list()
 add_id <- function(key,source,ns,value,provenance) {
-  if (!(key %in% names(meta_key))) return(invisible(NULL))
+  if (!(key %chin% meta_keys)) return(invisible(NULL))
   z <- normalise(ns,value)
   if (is.null(z)) return(invisible(NULL))
   registry[[length(registry)+1L]] <<- data.table(
@@ -157,7 +158,7 @@ for (src in names(paths)) {
     rid <- source_record_id(r)
     if (!nzchar(rid)) stop(sprintf("%s record %d lacks source record ID",src,i),call.=FALSE)
     key <- paste(src,rid,sep="::")
-    if (!(key %in% names(meta_key))) stop(sprintf("%s record missing from W01 metadata: %s",src,rid),call.=FALSE)
+    if (!(key %chin% meta_keys)) stop(sprintf("%s record missing from W01 metadata: %s",src,rid),call.=FALSE)
 
     if (identical(src,"lens")) {
       ext <- ((r$lens %||% list())$raw_payload %||% list())$external_ids %||% list()
@@ -205,28 +206,27 @@ shared <- groups[n_manifestations>1L & n_sources>1L]
 fwrite(shared,file.path(output_dir,"shared_identifier_groups.csv"))
 
 reg_unique <- unique(reg[,.(manifestation_key,source,identifier_type,identifier_value)])
-setkey(reg_unique,identifier_type,identifier_value)
-pair_parts <- list()
-for (k in seq_len(nrow(shared))) {
-  z <- reg_unique[.(shared$identifier_type[[k]],shared$identifier_value[[k]])]
-  if (nrow(z)<2L) next
-  cmb <- combn(seq_len(nrow(z)),2L)
-  a <- z[cmb[1L,]]; b <- z[cmb[2L,]]
-  keep <- a$source != b$source
-  if (!any(keep)) next
-  pair_parts[[length(pair_parts)+1L]] <- data.table(
-    record_i=a$manifestation_key[keep],record_j=b$manifestation_key[keep],
-    identifier_type=shared$identifier_type[[k]],identifier_value=shared$identifier_value[[k]]
+shared_reg <- reg_unique[shared,on=.(identifier_type,identifier_value),nomatch=0L]
+if (nrow(shared_reg)) {
+  left <- shared_reg[,.(identifier_type,identifier_value,
+                       record_i=manifestation_key,source_i=source)]
+  right <- shared_reg[,.(identifier_type,identifier_value,
+                        record_j=manifestation_key,source_j=source)]
+  raw_pairs <- merge(
+    left,right,
+    by=c("identifier_type","identifier_value"),
+    allow.cartesian=TRUE,
+    sort=FALSE
+  )
+  raw_pairs <- raw_pairs[source_i != source_j & record_i < record_j,
+                         .(record_i,record_j,identifier_type,identifier_value)]
+  raw_pairs <- unique(raw_pairs)
+} else {
+  raw_pairs <- data.table(
+    record_i=character(),record_j=character(),
+    identifier_type=character(),identifier_value=character()
   )
 }
-raw_pairs <- if(length(pair_parts)) unique(rbindlist(pair_parts)) else
-  data.table(record_i=character(),record_j=character(),identifier_type=character(),identifier_value=character())
-raw_pairs[, `:=`(
-  lo=pmin(record_i,record_j),
-  hi=pmax(record_i,record_j)
-)]
-raw_pairs[, `:=`(record_i=lo,record_j=hi)]
-raw_pairs[,c("lo","hi"):=NULL]
 
 pair_ev <- raw_pairs[, .(
   namespaces=paste(sort(unique(identifier_type)),collapse="|"),
