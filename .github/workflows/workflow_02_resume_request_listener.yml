@@ -38,19 +38,11 @@ jobs:
           echo "validation_only=$VALIDATION_ONLY" >> "$GITHUB_OUTPUT"
           echo "PASS: resolved automatic W02 resume request for source run $RUN_ID (validation_only=$VALIDATION_ONLY)"
 
-  validate-only:
-    needs: prepare
-    if: ${{ needs.prepare.outputs.validation_only == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Confirm listener validation path
-        run: echo "PASS: automatic W02 resume listener trigger and request parsing validated safely for source run ${{ needs.prepare.outputs.source_run_id }}"
-
   resume:
     needs: prepare
-    if: ${{ needs.prepare.outputs.validation_only != 'true' }}
     uses: ./.github/workflows/workflow_02_resume_after_human_review.yml
     with:
       source_run_id: ${{ needs.prepare.outputs.source_run_id }}
-      publish: true
+      publish: ${{ needs.prepare.outputs.validation_only != 'true' }}
+      validation_only: ${{ needs.prepare.outputs.validation_only == 'true' }}
     secrets: inherit
