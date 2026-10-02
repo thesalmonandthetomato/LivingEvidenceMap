@@ -1,0 +1,72 @@
+name: TEMP W01 identifier single-family triage
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_single_family_triage.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages('data.table')
+
+      - name: Download full-corpus benchmark artefact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_single/input /tmp/w01_single/out
+          gh api -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11220721964/zip"             > /tmp/w01_single/benchmark.zip
+          unzip -q /tmp/w01_single/benchmark.zip -d /tmp/w01_single/input
+
+      - name: Triage single-family disagreements
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_identifier_single_family_triage.R             --pairs /tmp/w01_single/input/different_cluster_identifier_pairs.csv             --output-dir /tmp/w01_single/out
+          cat /tmp/w01_single/out/single_family_triage_summary.csv
+
+      - name: Assert read-only scope
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          x <- fread('/tmp/w01_single/out/single_family_disagreement_triage.csv')
+          stopifnot(nrow(x)==1219L)
+          stopifnot(all(x$family %in% c('doi','pmid','mag')))
+          stopifnot(all(x$triage_class %in% c(
+            'strong_same_work_candidate',
+            'metadata_conflict_review',
+            'container_or_identifier_risk',
+            'external_validation_needed'
+          )))
+          cat('PASS: 1219 single-family disagreements triaged; no production changes\n')
+
+      - name: Upload triage outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-identifier-single-family-triage-${{ github.run_id }}
+          path: /tmp/w01_single/out/
+          retention-days: 30
+          if-no-files-found: error
