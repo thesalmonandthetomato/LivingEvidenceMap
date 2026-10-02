@@ -1,11 +1,7 @@
-name: Workflow 02 - Resume request listener
+name: Workflow 02 - Legacy resume request listener (manual only)
 
 on:
-  push:
-    branches:
-      - workflow01-final-architecture
-    paths:
-      - 'docs/shiny_adjudication/w02_resume_requests/*.json'
+  workflow_dispatch:
 
 permissions:
   contents: write
