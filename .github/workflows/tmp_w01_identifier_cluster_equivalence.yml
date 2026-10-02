@@ -1,0 +1,153 @@
+name: TEMP W01 identifier-assisted cluster equivalence
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_cluster_equivalence.yml'
+      - 'scripts/updater/workflow_01_identifier_cluster_input_test.R'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  cluster:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest'))
+
+      - name: Download frozen W01, safe identifiers, and actual reduced rescore
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p frozen safe reduced previous test_input merged audit
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11171230024/zip" > frozen/w01.zip
+          unzip -q frozen/w01.zip             workflow01_candidates/normalised_metadata.csv             workflow01_pre_adjudication/manifestation_cluster_map.csv             workflow01_pre_adjudication/summary.json             pending_checkpoint/previous_workflow01_pointer.json             -d frozen
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11226773698/zip" > safe/safe.zip
+          unzip -q safe/safe.zip safe_identifier_preresolve_appended_pairs.csv -d safe
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11233828243/zip" > reduced/reduced.zip
+          unzip -q reduced/reduced.zip rescore_output/rescored_sample.csv -d reduced
+
+      - name: Restore prior W01 decisions read-only
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R             --pointer frozen/pending_checkpoint/previous_workflow01_pointer.json             --pointer-dir docs/deduplication/zenodo             --output-root previous
+          test -s previous/workflow01_full_five_source/final_pair_decisions.csv
+
+      - name: Build test-only identifier-assisted incremental decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_identifier_cluster_input_test.R             --metadata frozen/workflow01_candidates/normalised_metadata.csv             --selected-rescore reduced/rescore_output/rescored_sample.csv             --safe-pairs safe/safe_identifier_preresolve_appended_pairs.csv             --baseline-map frozen/workflow01_pre_adjudication/manifestation_cluster_map.csv             --output test_input/identifier_assisted_incremental_decisions.csv             --audit audit/cluster_input_audit.json
+
+      - name: Run unchanged W01 cluster merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R             --old-decisions previous/workflow01_full_five_source/final_pair_decisions.csv             --new-decisions test_input/identifier_assisted_incremental_decisions.csv             --metadata frozen/workflow01_candidates/normalised_metadata.csv             --output-dir merged
+          cat merged/summary.json
+
+      - name: Validate clustering as a safe coarsening of frozen W01
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          library(jsonlite)
+
+          base <- fread('frozen/workflow01_pre_adjudication/manifestation_cluster_map.csv')
+          cur <- fread('merged/manifestation_cluster_map.csv')
+          trace <- fread('audit/cluster_input_audit_safe_edge_trace.csv')
+          bs <- fromJSON('frozen/workflow01_pre_adjudication/summary.json')
+          cs <- fromJSON('merged/summary.json')
+
+          stopifnot(nrow(base)==nrow(cur), all(base$idx==cur$idx))
+          z <- data.table(idx=base$idx, baseline_cluster=base$cluster_id, current_cluster=cur$cluster_id)
+          split_check <- z[,.(current_n=uniqueN(current_cluster)),by=baseline_cluster]
+          baseline_splits <- sum(split_check$current_n>1L)
+
+          merge_groups <- z[,.(baseline_clusters=uniqueN(baseline_cluster), manifestations=.N),by=current_cluster]
+          merged_current_clusters <- merge_groups[baseline_clusters>1L]
+
+          # Every new cross-baseline merge must be supported by at least one
+          # identifier-safe edge. Build graph of baseline clusters connected by
+          # cross-cluster safe edges and require each merged current cluster to
+          # consist of one connected safe-edge component.
+          cross <- trace[cross_baseline_cluster==TRUE]
+          parent <- setNames(unique(c(z$baseline_cluster)),unique(c(z$baseline_cluster)))
+          find <- function(x){
+            while(parent[[x]]!=x){ parent[[x]] <<- parent[[parent[[x]]]]; x<-parent[[x]] }
+            x
+          }
+          unite <- function(a,b){
+            ra<-find(a); rb<-find(b)
+            if(ra!=rb) parent[[rb]] <<- ra
+          }
+          if(nrow(cross)) for(i in seq_len(nrow(cross))) unite(cross$baseline_cluster_i[[i]],cross$baseline_cluster_j[[i]])
+          root <- vapply(names(parent),find,character(1))
+          root_map <- setNames(root,names(parent))
+          z[,safe_root:=root_map[baseline_cluster]]
+          support_check <- z[,.(safe_roots=uniqueN(safe_root),baseline_clusters=uniqueN(baseline_cluster)),by=current_cluster]
+          unsupported_merged_clusters <- support_check[baseline_clusters>1L & safe_roots!=1L,.N]
+
+          # Manual-review relations must not increase. A reduction is acceptable
+          # because multiple manifestation relations can collapse within one
+          # identifier-safe component relation.
+          audit <- list(
+            schema='living-evidence-map-w01-identifier-assisted-cluster-equivalence-v1',
+            status=if(baseline_splits==0L && unsupported_merged_clusters==0L) 'success' else 'failure',
+            baseline_clusters=as.integer(bs$clusters),
+            identifier_assisted_clusters=as.integer(cs$clusters),
+            cluster_reduction=as.integer(bs$clusters-cs$clusters),
+            baseline_duplicate_clusters=as.integer(bs$duplicate_clusters),
+            identifier_assisted_duplicate_clusters=as.integer(cs$duplicate_clusters),
+            baseline_singletons=as.integer(bs$singleton_clusters),
+            identifier_assisted_singletons=as.integer(cs$singleton_clusters),
+            baseline_manual_review_pairs=as.integer(bs$manual_review_pairs),
+            identifier_assisted_manual_review_pairs=as.integer(cs$manual_review_pairs),
+            baseline_cluster_splits=as.integer(baseline_splits),
+            identifier_merged_current_clusters=nrow(merged_current_clusters),
+            unsupported_merged_current_clusters=as.integer(unsupported_merged_clusters),
+            safe_cross_cluster_edges=nrow(cross),
+            production_w01_modified=FALSE
+          )
+          writeLines(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null='null'),'audit/cluster_equivalence_audit.json')
+          cat(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
+          stopifnot(baseline_splits==0L)
+          stopifnot(unsupported_merged_clusters==0L)
+          stopifnot(cs$manual_review_pairs <= bs$manual_review_pairs)
+
+      - name: Upload cluster equivalence outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-identifier-cluster-equivalence-${{ github.run_id }}
+          path: |
+            audit/
+            merged/summary.json
+            merged/manifestation_cluster_map.csv
+            merged/manual_review_pairs.csv
+          retention-days: 30
+          if-no-files-found: warn
