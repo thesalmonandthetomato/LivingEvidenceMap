@@ -6,16 +6,19 @@ on:
     branches:
       - workflow01-final-architecture
     paths:
-      - 'docs/deduplication/.run_workflow02_handoff_validation'
+      - '.github/workflows/workflow_02_validate_handoff.yml'
 
 permissions:
   contents: read
   actions: read
 
+env:
+  WORKFLOW01_POINTER: docs/deduplication/zenodo/run-36971418284.json
+
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout integration branch
@@ -37,55 +40,86 @@ jobs:
       - name: Parse Workflow 02 handoff and enrichment scripts
         shell: Rscript {0}
         run: |
+          parse(file='scripts/updater/workflow_01_restore_current_state.R')
           parse(file='scripts/updater/workflow_02_validate_canonical_handoff.R')
           parse(file='scripts/updater/workflow_02_metadata_enrichment.R')
-          cat('PASS: Workflow 02 R parse validation\n')
+          cat('PASS: Workflow 02 handoff validation scripts parse\n')
 
-      - name: Restore published Workflow 01 baseline
+      - name: Validate authoritative Workflow 01 pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$WORKFLOW01_POINTER"
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(jsonlite))
+          p <- fromJSON(Sys.getenv("WORKFLOW01_POINTER"),simplifyVector=FALSE)
+          stopifnot(
+            identical(as.character(p$status),"published"),
+            identical(as.character(p$workflow),"01"),
+            as.character(p$state) %in% c("final","delta"),
+            identical(as.character(p$visibility),"restricted"),
+            grepl("^[0-9a-f]{64}$",tolower(as.character(p$canonical_jsonl_sha256))),
+            as.integer(p$canonical_records) > 0L,
+            as.integer(p$source_manifestations) > 0L
+          )
+          cat(sprintf(
+            "PASS: authoritative W01 pointer run=%s canonical=%d manifestations=%d sha=%s\n",
+            p$github_run_id,as.integer(p$canonical_records),as.integer(p$source_manifestations),
+            p$canonical_jsonl_sha256
+          ))
+          RS
+
+      - name: Restore authoritative Workflow 01 canonical state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_01_restore_state_from_zenodo.R \
-            --pointer docs/deduplication/zenodo/run-36103542054.json \
-            --output-root baseline
+          rm -rf workflow01_state
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$WORKFLOW01_POINTER" \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root workflow01_state
+          test -s workflow01_state/canonical/records.jsonl
 
-      - name: Download validated Workflow 01 repair delta
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p repair_validation
-          gh run download 36128255337 --repo "$GITHUB_REPOSITORY" \
-            --name workflow01-repair-validation-36128255337 \
-            --dir repair_validation
-          test -s repair_validation/delta/delta_manifest.json
-          test -s repair_validation/canonical/canonical_manifest.json
-
-      - name: Reconstruct exact repaired Workflow 01 canonical state
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_01_replay_delta.R \
-            --previous-root baseline \
-            --delta-dir repair_validation/delta \
-            --output-root workflow01_repaired
-          Rscript -e "library(jsonlite);library(digest);m<-fromJSON('repair_validation/canonical/canonical_manifest.json');p<-'workflow01_repaired/canonical/records.jsonl';stopifnot(digest(file=p,algo='sha256',serialize=FALSE)==m\$canonical_jsonl_sha256);cat('PASS: reconstructed repaired Workflow 01 canonical checksum exactly\n')"
+          EXPECTED_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("WORKFLOW01_POINTER"));cat(x$canonical_jsonl_sha256)')"
+          ACTUAL_SHA="$(Rscript -e "cat(digest::digest(file='workflow01_state/canonical/records.jsonl',algo='sha256',serialize=FALSE))")"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          echo "PASS: restored W01 canonical SHA-256 exactly: $ACTUAL_SHA"
 
       - name: Validate full Workflow 01 to 02 canonical interface
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow02_handoff
+
+          EXPECTED_RECORDS="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("WORKFLOW01_POINTER"));cat(as.integer(x$canonical_records))')"
+          EXPECTED_MANIFESTATIONS="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("WORKFLOW01_POINTER"));cat(as.integer(x$source_manifestations))')"
+
           Rscript scripts/updater/workflow_02_validate_canonical_handoff.R \
-            --input workflow01_repaired/canonical/records.jsonl \
+            --input workflow01_state/canonical/records.jsonl \
             --sample outputs/workflow02_handoff/real_sample_10.jsonl \
             --report outputs/workflow02_handoff/handoff_report.json \
             --sample-n 10 \
-            --expected-records 32292 \
-            --expected-manifestations 90137
+            --expected-records "$EXPECTED_RECORDS" \
+            --expected-manifestations "$EXPECTED_MANIFESTATIONS"
+
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(jsonlite))
+          p <- fromJSON(Sys.getenv("WORKFLOW01_POINTER"))
+          h <- fromJSON("outputs/workflow02_handoff/handoff_report.json")
+          stopifnot(
+            identical(as.integer(h$canonical_records),as.integer(p$canonical_records)),
+            identical(as.integer(h$source_manifestations),as.integer(p$source_manifestations))
+          )
+          sc <- unlist(h$source_counts,use.names=TRUE)
+          required_sources <- c("agricola","cab","lens","openalex","proquest","scopus","wos")
+          missing <- setdiff(required_sources,names(sc))
+          if(length(missing)) stop("W01 -> W02 handoff missing source namespace(s): ",paste(missing,collapse=", "))
+          stopifnot(as.integer(sc[["cab"]])==26816L)
+          stopifnot(as.integer(sc[["proquest"]])==1574L)
+          cat("PASS: W01 -> W02 handoff contains CAB Abstracts and ProQuest/PQD&T manifestations\n")
+          RS
 
       - name: Run Workflow 02 enrichment on real canonical records
         env:
@@ -129,10 +163,12 @@ jobs:
           stopifnot(identical(e$input_sha256,h$sample_sha256))
           stopifnot(e$counts$total_records==10L)
           stopifnot(e$counts$eligible_doi_missing_metadata==10L)
-          cat(sprintf('PASS: Workflow 02 preserved identity/provenance for 10 real canonical records; filled title=%d abstract=%d; quarantined=%d; still missing=%d\n',
-                      e$counts$europepmc_title_filled+e$counts$scopus_title_filled,
-                      e$counts$europepmc_abstract_filled+e$counts$scopus_abstract_filled,
-                      e$counts$conflicts_quarantined,e$counts$still_missing_after))
+          cat(sprintf(
+            'PASS: Workflow 02 preserved identity/provenance for 10 real canonical records; filled title=%d abstract=%d; quarantined=%d; still missing=%d\n',
+            e$counts$europepmc_title_filled+e$counts$scopus_title_filled,
+            e$counts$europepmc_abstract_filled+e$counts$scopus_abstract_filled,
+            e$counts$conflicts_quarantined,e$counts$still_missing_after
+          ))
 
       - name: Upload Workflow 02 handoff validation
         if: always()
