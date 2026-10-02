@@ -1,0 +1,129 @@
+name: TEMP preserve cancelled W04 37035551129 checkpoints
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_preserve_cancelled_w04_37035551129.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preserve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Download cancelled-run prepared state and shard checkpoints
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovery/prepared recovery/shards
+          gh run download 37035551129 --repo "$GITHUB_REPOSITORY" \
+            --name "workflow04-prepared-37035551129" \
+            --dir recovery/prepared
+          gh run download 37035551129 --repo "$GITHUB_REPOSITORY" \
+            --pattern "workflow04-incremental-shard-*-37035551129" \
+            --dir recovery/shards
+          test "$(find recovery/shards -type f -name pass1.jsonl | wc -l)" -eq 8
+
+      - name: Validate and extract reusable checkpoint decisions
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(digest)})
+          read_jsonl <- function(path){
+            x<-readLines(path,warn=FALSE,encoding='UTF-8');x<-x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          scalar <- function(x){if(is.null(x)||!length(x))return('');z<-as.character(x[[1L]]);if(is.na(z))'' else trimws(z)}
+          manifest_path <- list.files('recovery/prepared',pattern='screen_queue_manifest\\.csv$',recursive=TRUE,full.names=TRUE)
+          stopifnot(length(manifest_path)==1L)
+          q <- read.csv(manifest_path,stringsAsFactors=FALSE,check.names=FALSE)
+          stopifnot(all(c('record_id','queue_reason') %in% names(q)),!anyDuplicated(q$record_id))
+          new_ids <- as.character(q$record_id[q$queue_reason=='new_record_id'])
+          changed_ids <- as.character(q$record_id[q$queue_reason=='changed_screening_input'])
+          pass_paths <- sort(list.files('recovery/shards',pattern='^pass1\\.jsonl$',recursive=TRUE,full.names=TRUE))
+          stopifnot(length(pass_paths)==8L)
+          rows <- unlist(lapply(pass_paths,read_jsonl),recursive=FALSE)
+          ids <- vapply(rows,function(z)scalar(z$record_id),character(1))
+          stopifnot(all(nzchar(ids)),!anyDuplicated(ids),all(ids %in% q$record_id))
+          passes <- vapply(rows,function(z)as.integer(z$pass),integer(1))
+          stopifnot(all(passes==1L))
+          prompt_sha <- unique(vapply(rows,function(z)scalar(z$prompt_sha256),character(1)))
+          model <- unique(vapply(rows,function(z)scalar(z$model_requested),character(1)))
+          stopifnot(length(prompt_sha)==1L,grepl('^[0-9a-f]{64}$',prompt_sha),length(model)==1L,nzchar(model))
+          keep <- ids %in% new_ids
+          salvaged <- rows[keep]
+          redundant <- rows[!keep]
+          dir.create('outputs/w04_recovery',recursive=TRUE,showWarnings=FALSE)
+          con<-file('outputs/w04_recovery/salvaged_new_pass1.jsonl','wt',encoding='UTF-8')
+          if(length(salvaged))for(z in salvaged)writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con,useBytes=TRUE)
+          close(con)
+          con<-file('outputs/w04_recovery/redundant_existing_pass1.jsonl','wt',encoding='UTF-8')
+          if(length(redundant))for(z in redundant)writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con,useBytes=TRUE)
+          close(con)
+          dir.create('outputs/w04_recovery/raw',recursive=TRUE,showWarnings=FALSE)
+          file.copy(pass_paths,file.path('outputs/w04_recovery/raw',paste0('shard-',seq_along(pass_paths),'-pass1.jsonl')),overwrite=TRUE)
+          file.copy(manifest_path,'outputs/w04_recovery/screen_queue_manifest.csv',overwrite=TRUE)
+          report <- list(
+            schema='living-evidence-map-workflow04-cancelled-run-recovery-v1',
+            status='PASS',
+            source_github_run_id='37035551129',
+            original_queue_records=nrow(q),
+            original_new_record_ids=length(new_ids),
+            original_changed_existing_record_ids=length(changed_ids),
+            checkpoint_rows=length(rows),
+            salvaged_new_record_pass1_rows=length(salvaged),
+            redundant_existing_record_pass1_rows=length(redundant),
+            checkpoint_record_ids_unique=TRUE,
+            prompt_sha256=prompt_sha[[1L]],
+            model=model[[1L]],
+            salvage_sha256=digest(file='outputs/w04_recovery/salvaged_new_pass1.jsonl',algo='sha256',serialize=FALSE),
+            created_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ')
+          )
+          writeLines(toJSON(report,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/w04_recovery/recovery_report.json')
+          cat(sprintf('PASS: preserved %d pass-1 rows; %d are genuinely new and reusable; %d were unnecessary existing-record re-screens\\n',
+                      length(rows),length(salvaged),length(redundant)))
+
+      - name: Publish durable restricted recovery checkpoint
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/w04_recovery_zenodo
+          Rscript scripts/updater/workflow_04_archive_recovery_checkpoint_to_zenodo.R \
+            --state-dir outputs/w04_recovery \
+            --source-run-id 37035551129 \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/w04_recovery_zenodo
+
+      - name: Upload recovery package and receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-cancelled-run-recovery-37035551129
+          path: |
+            outputs/w04_recovery/
+            outputs/w04_recovery_zenodo/
+          retention-days: 90
+          if-no-files-found: error
