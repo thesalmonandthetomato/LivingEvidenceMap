@@ -6,6 +6,8 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
+`%||%` <- function(x,y) if (is.null(x)) y else x
+
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag,default=NULL) {
   i <- match(flag,args)
@@ -31,11 +33,12 @@ rows <- list()
 # OpenAlex: inspect raw work ids object from a capped request.
 oa_query <- as.character(plan$source_queries$openalex)
 oa_key <- Sys.getenv("OPENALEX_API_KEY","")
-req <- request("https://api.openalex.org/works") |>
+req <- request("https://api.openalex.org/") |>
+  req_headers(Authorization=paste("Bearer",oa_key)) |>
   req_url_query(
-    search=oa_query,
-    per_page=20,
-    api_key=if(nzchar(oa_key)) oa_key else NULL
+    oql=oa_query,
+    `per-page`=20,
+    cursor="*"
   ) |>
   req_error(is_error=function(resp) FALSE)
 resp <- req_perform(req)
