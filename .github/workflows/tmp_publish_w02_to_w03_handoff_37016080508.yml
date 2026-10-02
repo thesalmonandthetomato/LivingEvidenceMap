@@ -1,0 +1,142 @@
+name: TEMP publish W02 to W03 handoff for run 37016080508
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_publish_w02_to_w03_handoff_37016080508.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SOURCE_RUN_ID: '37016080508'
+      W02_POINTER: docs/enrichment/zenodo/run-37016080508.json
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Parse handoff scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_02_compact_post_w02_canonical.R')
+          parse(file='scripts/updater/workflow_02_archive_lean_checkpoint_to_zenodo.R')
+          parse(file='scripts/updater/workflow_02_update_lean_checkpoint_registry.R')
+          parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
+          cat('PASS: W02->W03 handoff scripts parse\n')
+
+      - name: Download immutable finalized W02 handoff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source_w02
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-handoff-$SOURCE_RUN_ID" \
+            --dir source_w02
+          test -s source_w02/workflow02/enriched.jsonl
+          test -s source_w02/workflow02_state/state_manifest.json
+
+          EXPECTED_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W02_POINTER"));cat(x$final_enriched_sha256)')"
+          ACTUAL_SHA="$(Rscript -e "cat(digest::digest(file='source_w02/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE))")"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          echo "INPUT_SHA=$ACTUAL_SHA" >> "$GITHUB_ENV"
+          echo "PASS: finalized W02 handoff SHA verified"
+
+      - name: Compact finalized W02 canonical to lean W03 input
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p lean_state
+          Rscript scripts/updater/workflow_02_compact_post_w02_canonical.R \
+            --input source_w02/workflow02/enriched.jsonl \
+            --output lean_state/canonical_lean.jsonl \
+            --report lean_state/compaction_report.json \
+            --expected-input-sha256 "$INPUT_SHA"
+          LEAN_SHA="$(Rscript -e "cat(digest::digest(file='lean_state/canonical_lean.jsonl',algo='sha256',serialize=FALSE))")"
+          RECORDS="$(Rscript -e 'x<-jsonlite::fromJSON("lean_state/compaction_report.json");cat(as.integer(x$canonical_records))')"
+          test "$RECORDS" -gt 0
+          echo "LEAN_SHA=$LEAN_SHA" >> "$GITHUB_ENV"
+          echo "CANONICAL_RECORDS=$RECORDS" >> "$GITHUB_ENV"
+          echo "PASS: lean W03 input built for $RECORDS canonical records"
+
+      - name: Publish restricted lean handoff checkpoint
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/lean_checkpoint_zenodo
+          Rscript scripts/updater/workflow_02_archive_lean_checkpoint_to_zenodo.R \
+            --state-dir lean_state \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/lean_checkpoint_zenodo \
+            --input-canonical-sha256 "$INPUT_SHA" \
+            --lean-canonical-sha256 "$LEAN_SHA"
+
+      - name: Register W02 to W03 handoff pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_02_update_lean_checkpoint_registry.R \
+            --receipt outputs/lean_checkpoint_zenodo/zenodo_receipt.json \
+            --registry docs/compaction/zenodo_registry.csv \
+            --pointer-dir docs/compaction/zenodo
+          POINTER="docs/compaction/zenodo/run-$SOURCE_RUN_ID.json"
+          test -s "$POINTER"
+          git add docs/compaction/zenodo_registry.csv "$POINTER"
+          git commit -m "Register W02 to W03 lean handoff for run $SOURCE_RUN_ID"
+          git push origin HEAD:workflow01-final-architecture
+
+      - name: Validate W03 can restore the published handoff
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          POINTER="docs/compaction/zenodo/run-$SOURCE_RUN_ID.json"
+          rm -rf restored_w03
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer "$POINTER" \
+            --output-dir restored_w03
+          test -s restored_w03/canonical_lean.jsonl
+          RESTORED_SHA="$(Rscript -e "cat(digest::digest(file='restored_w03/canonical_lean.jsonl',algo='sha256',serialize=FALSE))")"
+          test "$RESTORED_SHA" = "$LEAN_SHA"
+          RESTORED_N="$(Rscript -e 'x<-readLines("restored_w03/canonical_lean.jsonl",warn=FALSE);cat(sum(nzchar(trimws(x))))')"
+          test "$RESTORED_N" = "$CANONICAL_RECORDS"
+          echo "PASS: W02->W03 handoff restored exactly; $RESTORED_N canonical records"
+
+      - name: Upload validated W03 input cache
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-w02-lean-canonical-${{ env.SOURCE_RUN_ID }}
+          path: |
+            lean_state/canonical_lean.jsonl
+            lean_state/compaction_report.json
+          retention-days: 7
+          if-no-files-found: error
