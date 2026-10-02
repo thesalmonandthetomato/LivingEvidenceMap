@@ -3,7 +3,7 @@
   "update_id": "w01-run-36971418284",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-02T06:30:47Z",
-  "last_updated_at_utc": "2026-10-02T14:40:24Z",
+  "last_updated_at_utc": "2026-10-02T16:39:07Z",
   "baseline": {
     "workflow08_pointer": "docs/workflow08/zenodo/run-36442875006.json",
     "workflow08_source_run_id": "36442875006",
@@ -24,7 +24,7 @@
     "search_results": 118527,
     "deduplicated_records": 47094,
     "enriched_records": 2218,
-    "retraction_exclusions": null,
+    "retraction_exclusions": 12,
     "screened_include": null,
     "screened_exclude": null,
     "geography": {
@@ -47,10 +47,10 @@
       "status": "complete"
     },
     "W03": {
-      "status": "active"
+      "status": "complete"
     },
     "W04": {
-      "status": "pending"
+      "status": "active"
     },
     "W05": {
       "status": "pending"
@@ -67,13 +67,14 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W02",
-    "completed_through": 3,
-    "active_position": 4,
-    "status_label": "Enrichment complete; awaiting retraction screening"
+    "current_stage": "W03",
+    "completed_through": 4,
+    "active_position": 5,
+    "status_label": "Retraction screening complete; awaiting relevance screening"
   },
   "workflow_runs": {
     "W01": "36971418284",
-    "W02": "37016080508"
+    "W02": "37016080508",
+    "W03": "37024164176"
   }
 }
