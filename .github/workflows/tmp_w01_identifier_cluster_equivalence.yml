@@ -32,7 +32,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest'))
+        run: install.packages(c('data.table','jsonlite','digest','httr2'))
 
       - name: Download frozen W01, safe identifiers, and actual reduced rescore
         shell: bash
