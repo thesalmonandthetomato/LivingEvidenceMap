@@ -1,0 +1,36 @@
+{
+  "schema": "living-evidence-map-workflow01-run-report-v1",
+  "workflow": "01",
+  "github_run_id": "36971418284",
+  "github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/36971418284",
+  "generated_at_utc": "2026-10-02T06:30:47Z",
+  "status": "final",
+  "source_manifestations": 118527,
+  "canonical_records": 47094,
+  "duplicate_clusters": 23786,
+  "singleton_clusters": 23308,
+  "adjudicated_cases": 288,
+  "llm_final_decisions": 214,
+  "human_final_decisions": 74,
+  "abstract_strip_actions": 53,
+  "manifestations_missing_abstract": 31516,
+  "canonical_jsonl_sha256": "fb6e35b0bceb15629af20f006310aaae75416fc3aa985b906cf82b0df7b6e142",
+  "canonical_jsonl_bytes": 568385699,
+  "source_counts": {
+    "agricola": 2744,
+    "cab": 26816,
+    "lens": 24135,
+    "openalex": 28134,
+    "proquest": 1574,
+    "scopus": 19948,
+    "wos": 15176
+  },
+  "validation": null,
+  "zenodo": {
+    "record_id": "23096518",
+    "doi": "10.5281/zenodo.23096518",
+    "record_url": "https://zenodo.org/records/23096518",
+    "manifest_sha256": "41f21dc9109c8afdefe22d2076e197fe2f23ed3f569650969bd71024106c9d6a",
+    "visibility": "restricted"
+  }
+}
