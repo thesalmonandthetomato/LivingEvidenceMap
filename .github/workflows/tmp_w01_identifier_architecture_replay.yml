@@ -1,4 +1,4 @@
-name: TEMP W01 identifier architecture end-to-end replay
+name: TEMP W01 identifier architecture final validation
 
 on:
   push:
@@ -86,6 +86,12 @@ jobs:
 
           gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11226773698/zip" > reference/safe.zip
           unzip -q reference/safe.zip safe_identifier_preresolve_appended_pairs.csv -d reference
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11221329288/zip" > reference/risky-single.zip
+          unzip -q reference/risky-single.zip risky_pairs_with_group_stats.csv -d reference
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11220516034/zip" > reference/risky-high.zip
+          unzip -q reference/risky-high.zip high_evidence_disagreement_triage.csv -d reference
 
       - name: Restore frozen prior Workflow 01 state
         env:
@@ -273,6 +279,40 @@ jobs:
           unsupported <- support[baseline_clusters>1L & safe_roots!=1L,.N]
           stopifnot(unsupported==0L)
 
+          risky_single <- fread('reference/risky_pairs_with_group_stats.csv')
+          stopifnot(nrow(risky_single)==363L)
+          risky_single <- unique(risky_single[,.(pair_id=paste0('S-RISK-',.I),
+                                                record_i=as.character(record_i),
+                                                record_j=as.character(record_j))])
+
+          risky_high_all <- fread('reference/high_evidence_disagreement_triage.csv')
+          risky_high <- risky_high_all[pair_id=='H0173',
+            .(pair_id,
+              record_i=as.character(`i.manifestation_key`),
+              record_j=as.character(manifestation_key))]
+          stopifnot(nrow(risky_high)==1L)
+
+          risky <- rbindlist(list(risky_single,risky_high),use.names=TRUE,fill=TRUE)
+          stopifnot(nrow(risky)==364L)
+
+          cur_key <- data.table(
+            manifestation_key=paste(cur$source,cur$source_record_id,sep='::'),
+            current_cluster=cur$cluster_id
+          )
+          setkey(cur_key,manifestation_key)
+          ri <- cur_key[risky,on=.(manifestation_key=record_i)]
+          setnames(ri,'current_cluster','cluster_i')
+          rj <- cur_key[ri,on=.(manifestation_key=record_j)]
+          setnames(rj,'current_cluster','cluster_j')
+          risky_eval <- rj
+          if(anyNA(risky_eval$cluster_i)||anyNA(risky_eval$cluster_j)) {
+            stop('One or more validated risky-pair manifestations are absent from final cluster map')
+          }
+          risky_eval[,same_final_cluster:=cluster_i==cluster_j]
+          risky_collisions <- risky_eval[same_final_cluster==TRUE]
+          fwrite(risky_eval,'audit/risky_pair_transitive_closure.csv')
+          stopifnot(nrow(risky_collisions)==0L)
+
           audit <- list(
             schema='living-evidence-map-w01-identifier-architecture-replay-v1',
             status='success',
@@ -281,6 +321,8 @@ jobs:
             cluster_reduction=as.integer(bs$clusters-cs$clusters),
             baseline_cluster_splits=as.integer(split_n),
             unsupported_new_merged_clusters=as.integer(unsupported),
+            validated_risky_pairs=364L,
+            risky_pairs_merged_after_transitive_closure=nrow(risky_collisions),
             safe_cross_cluster_edges=nrow(cross),
             baseline_manual_review_pairs=as.integer(bs$manual_review_pairs),
             identifier_manual_review_pairs=as.integer(cs$manual_review_pairs),
@@ -314,5 +356,6 @@ jobs:
             merged/manifestation_cluster_map.csv
             merged/manual_review_pairs.csv
             audit/architecture_replay.json
+            audit/risky_pair_transitive_closure.csv
           retention-days: 30
           if-no-files-found: warn
