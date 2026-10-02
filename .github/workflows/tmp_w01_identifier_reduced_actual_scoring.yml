@@ -1,0 +1,155 @@
+name: TEMP W01 reduced actual scoring equivalence
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_reduced_actual_scoring.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install production W01 R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2','httr2'))
+
+      - name: Download frozen W01 state and reduced pair selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p frozen reduced reconstructed/current reconstructed/union score_input score_output rescore_output
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11171230024/zip" > frozen/w01.zip
+          unzip -q frozen/w01.zip             workflow01_candidates/normalised_metadata.csv             workflow01_incremental_rescore/rescored_sample.csv             workflow01_pre_adjudication/manifestation_cluster_map.csv             workflow01_pre_adjudication/summary.json             pending_checkpoint/previous_workflow01_pointer.json             pending_checkpoint/source_manifestations/lens_new.jsonl             pending_checkpoint/source_manifestations/scopus_new.jsonl             pending_checkpoint/source_manifestations/openalex_new.jsonl             pending_checkpoint/source_manifestations/agricola_new.jsonl             pending_checkpoint/source_manifestations/wos_new.jsonl             pending_checkpoint/source_manifestations/cab_new.jsonl             pending_checkpoint/source_manifestations/proquest_new.jsonl             -d frozen
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11227772812/zip" > reduced/prescore.zip
+          unzip -q reduced/prescore.zip selected_component_pairs_for_scoring.csv -d reduced
+
+          cp frozen/workflow01_candidates/normalised_metadata.csv score_input/normalised_metadata.csv
+          Rscript -e "library(data.table);x<-fread('reduced/selected_component_pairs_for_scoring.csv');fwrite(x[,.(record_i,record_j,blocks)],'score_input/all_candidate_pairs.csv')"
+
+      - name: Restore prior Workflow 01 seed read-only
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R             --pointer frozen/pending_checkpoint/previous_workflow01_pointer.json             --pointer-dir docs/deduplication/zenodo             --output-root reconstructed/previous
+          test -d reconstructed/previous/workflow01_seed
+          test -s reconstructed/previous/workflow01_full_five_source/final_pair_decisions.csv
+
+      - name: Reconstruct the exact seven-source union
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > reconstructed/current/source_inputs.json <<'EOF'
+          {
+            "schema": "living-evidence-map-workflow01-source-inputs-v1",
+            "sources": {
+              "lens": "frozen/pending_checkpoint/source_manifestations/lens_new.jsonl",
+              "scopus": "frozen/pending_checkpoint/source_manifestations/scopus_new.jsonl",
+              "openalex": "frozen/pending_checkpoint/source_manifestations/openalex_new.jsonl",
+              "agricola": "frozen/pending_checkpoint/source_manifestations/agricola_new.jsonl",
+              "wos": "frozen/pending_checkpoint/source_manifestations/wos_new.jsonl",
+              "cab": "frozen/pending_checkpoint/source_manifestations/cab_new.jsonl",
+              "proquest": "frozen/pending_checkpoint/source_manifestations/proquest_new.jsonl"
+            }
+          }
+          EOF
+
+          Rscript scripts/updater/workflow_01_deduplication_build_union.R             --old-dir reconstructed/previous/workflow01_seed             --input-manifest reconstructed/current/source_inputs.json             --expected-prior-manifestations 90137             --output-dir reconstructed/union
+
+          Rscript -e "x<-jsonlite::fromJSON('reconstructed/union/union_manifest.json');stopifnot(x$preserved_prior_manifestations==90137L,x$appended_new_manifestations==28390L,x$union_manifestations==118527L);cat('PASS: exact frozen union cardinality reconstructed\n')"
+
+      - name: Run unchanged production W01 scorer on 272169 selected pairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          N="$(Rscript -e "cat(nrow(data.table::fread('score_input/all_candidate_pairs.csv')))")"
+          test "$N" -eq 272169
+          /usr/bin/time -v             Rscript scripts/updater/workflow_01_deduplication_incremental_score.R               --input-dir score_input               --upstream-dir reconstructed/union               --output-dir score_output               --target-n "$N"               --sample-key "w01-identifier-component-prescore-test"             2> score_output/process_time.txt
+          cat score_output/expanded_summary.json
+          cat score_output/process_time.txt
+
+      - name: Run unchanged production deterministic rescorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v             Rscript scripts/updater/workflow_01_deduplication_identifier_rescore.R               --input-dir score_output               --output-dir rescore_output               --source-run-id 36866644366             2> rescore_output/process_time.txt
+          cat rescore_output/summary.json
+          cat rescore_output/process_time.txt
+
+      - name: Compare selected-pair classifications with frozen W01
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          library(jsonlite)
+          new <- fread('rescore_output/rescored_sample.csv',na.strings=c('','NA'))
+          old <- fread('frozen/workflow01_incremental_rescore/rescored_sample.csv',na.strings=c('','NA'))
+          key <- function(a,b) paste(pmin(a,b),pmax(a,b),sep='::')
+          new[,pair_key:=key(record_i,record_j)]
+          old[,pair_key:=key(record_i,record_j)]
+          if('source_row_index' %in% names(old)) setorder(old,pair_key,source_row_index)
+          old <- unique(old,by='pair_key')
+          setkey(old,pair_key)
+          setkey(new,pair_key)
+          cmp <- old[new,on='pair_key']
+          stopifnot(nrow(cmp)==272169L)
+          class_match <- cmp$rescored_classification == cmp$i.rescored_classification
+          rule_match <- cmp$rescored_rule == cmp$i.rescored_rule
+          class_match[is.na(class_match)] <- FALSE
+          rule_match[is.na(rule_match)] <- FALSE
+          fwrite(cmp[!class_match], 'rescore_output/classification_mismatches.csv')
+          audit <- list(
+            schema='living-evidence-map-w01-reduced-actual-scoring-equivalence-v1',
+            status=if(all(class_match)) 'success' else 'failure',
+            selected_pairs=nrow(cmp),
+            classification_matches=sum(class_match),
+            classification_mismatches=sum(!class_match),
+            rule_matches=sum(rule_match),
+            rule_mismatches=sum(!rule_match),
+            classification_agreement_percent=100*mean(class_match),
+            rule_agreement_percent=100*mean(rule_match),
+            automatic_merges_performed=0L,
+            production_w01_modified=FALSE
+          )
+          writeLines(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'rescore_output/equivalence_audit.json')
+          cat(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null='null'), '\n')
+          stopifnot(all(class_match))
+
+      - name: Upload reduced actual-scoring test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-reduced-actual-scoring-${{ github.run_id }}
+          path: |
+            score_output/expanded_summary.json
+            score_output/process_time.txt
+            rescore_output/summary.json
+            rescore_output/process_time.txt
+            rescore_output/equivalence_audit.json
+            rescore_output/classification_mismatches.csv
+            rescore_output/rescored_sample.csv
+          retention-days: 30
+          if-no-files-found: warn
