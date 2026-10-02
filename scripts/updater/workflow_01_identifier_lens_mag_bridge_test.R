@@ -59,18 +59,19 @@ for (line in lines[nzchar(trimws(lines))]) {
   lens_mag <- norm_mag(ids$mag %||% r$identity$mag_id)
   if (is.null(lens_mag)) next
   lens_doi <- norm_doi(ids$doi %||% r$canonical$doi)
-  if (is.null(lens_doi)) {
+  lookup_key <- if (!is.null(lens_doi)) {
+    URLencode(paste0("https://doi.org/",lens_doi),reserved=TRUE)
+  } else {
     skipped_mag_without_doi <- skipped_mag_without_doi + 1L
-    next
+    paste0("W",lens_mag)
   }
 
-  doi_url <- paste0("https://doi.org/",lens_doi)
-  req <- request(paste0("https://api.openalex.org/works/",URLencode(doi_url,reserved=TRUE))) |>
+  req <- request(paste0("https://api.openalex.org/works/",lookup_key)) |>
     req_headers(Authorization=paste("Bearer",key),Accept="application/json") |>
     req_error(is_error=function(resp) FALSE)
   resp <- req_perform(req)
   st <- resp_status(resp)
-  if (st!=200L) stop(sprintf("OpenAlex DOI lookup %s returned HTTP %d",lens_doi,st),call.=FALSE)
+  if (st!=200L) stop(sprintf("OpenAlex lookup for MAG %s returned HTTP %d",lens_mag,st),call.=FALSE)
   w <- fromJSON(resp_body_string(resp),simplifyVector=FALSE)
   wids <- w$ids %||% list()
   oa_mag <- norm_mag(wids$mag)
@@ -81,7 +82,7 @@ for (line in lines[nzchar(trimws(lines))]) {
     lens_mag=lens_mag,
     openalex_mag=oa_mag %||% NA_character_,
     mag_agrees=!is.null(oa_mag) && identical(lens_mag,oa_mag),
-    lens_doi=lens_doi,
+    lens_doi=lens_doi %||% NA_character_,
     openalex_doi=oa_doi %||% NA_character_,
     doi_agrees=!is.null(oa_doi) && identical(lens_doi,oa_doi),
     title_exact=identical(norm_title(r$canonical$title),norm_title(w$title)),
@@ -98,8 +99,8 @@ print(out)
 summary <- list(
   schema="living-evidence-map-w01-lens-mag-bridge-test-v1",
   status="success",
-  lens_mag_records_with_doi_tested=nrow(out),
-  lens_mag_records_without_doi_skipped=skipped_mag_without_doi,
+  lens_mag_records_tested=nrow(out),
+  lens_mag_records_without_doi_tested_by_w_prefix=skipped_mag_without_doi,
   openalex_mag_present=sum(!is.na(out$openalex_mag)),
   exact_mag_agreements=sum(out$mag_agrees),
   exact_doi_agreements=sum(out$doi_agrees),
