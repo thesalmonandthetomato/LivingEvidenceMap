@@ -43,7 +43,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2','googlesheets4'))
+        run: install.packages(c('jsonlite','digest','httr2','googlesheets4','data.table'))
 
       - name: Parse finalisation scripts
         shell: Rscript {0}
