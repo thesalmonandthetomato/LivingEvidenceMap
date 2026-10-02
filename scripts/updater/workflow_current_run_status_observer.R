@@ -171,41 +171,20 @@ if(stage=="W01"){
   run_id<-as.character(row$github_run_id[[1L]])
   ptr<-sprintf("docs/deduplication/zenodo/run-%s.json",run_id)
   p<-fromJSON(ptr,simplifyVector=FALSE)
-  if(!identical(as.character(p$state),"delta")) stop("Live cohort derivation currently requires a W01 delta",call.=FALSE)
-  ex<-download_archive(ptr,tempfile("w01_delta_"))
-  dm<-list.files(ex,pattern="^delta_manifest\\.json$",recursive=TRUE,full.names=TRUE)
-  cm<-list.files(ex,pattern="^cluster_map_upserts\\.csv$",recursive=TRUE,full.names=TRUE)
-  nf<-list.files(ex,pattern="_new\\.jsonl$",recursive=TRUE,full.names=TRUE)
-  if(length(dm)!=1L||length(cm)!=1L||!length(nf)) stop("W01 delta lacks cohort derivation inputs",call.=FALSE)
-  m<-fromJSON(dm[[1L]],simplifyVector=FALSE)
-  keys<-character()
-  for(f in nf){
-    src<-sub("_new\\.jsonl$","",basename(f))
-    rows<-read_jsonl(f)
-    ids<-vapply(rows,function(r){
-      if(identical(src,"lens")) clean((r$identity%||%list())$lens_id %||% (r$identity%||%list())$record_id)
-      else clean((r$sidecar_identity%||%list())$sidecar_record_id)
-    },character(1))
-    if(any(!nzchar(ids))) stop("New W01 manifestation lacks source ID for ",src,call.=FALSE)
-    keys<-c(keys,paste(src,ids,sep="::"))
-  }
-  map<-read.csv(cm[[1L]],stringsAsFactors=FALSE,check.names=FALSE)
-  map$key<-paste(map$source,map$source_record_id,sep="::")
-  hit<-map[map$key%in%keys,,drop=FALSE]
-  if(nrow(hit)!=length(unique(keys))) stop(sprintf("Mapped %d/%d new manifestation keys to final clusters",nrow(hit),length(unique(keys))),call.=FALSE)
-  ids<-sort(unique(as.character(hit$cluster_id)))
-  dir.create(dirname(ids_path),recursive=TRUE,showWarnings=FALSE);writeLines(ids,ids_path,useBytes=TRUE)
-  s$cohort$record_ids_sha256<-digest(file=ids_path,algo="sha256",serialize=FALSE)
-  s$cohort$deduplicated_records<-length(ids)
+
+  # KPI semantics are totals for the current update state, not only the newly
+  # added manifestation cohort. This avoids coupling reporting to delta-key
+  # reconstruction and matches the dashboard labels shown to the user.
+  s$cohort$record_ids_sha256<-NULL
+  s$cohort$deduplicated_records<-as.integer(p$canonical_records)
+  s$counts$search_results<-as.integer(p$source_manifestations)
   s$counts$deduplicated_records<-as.integer(p$canonical_records)
   s<-set_run(s,"W01",run_id,2L,3L,"Deduplication complete; Workflow 02 enrichment in progress")
   save_status(s)
-  cat(sprintf("PASS: W01 current-run cohort = %d canonical record IDs from %d new manifestations\n",length(ids),length(unique(keys))))
+  cat(sprintf("PASS: W01 total current state = %d manifestations -> %d canonical records\n",
+              as.integer(p$source_manifestations),as.integer(p$canonical_records)))
   quit(status=0)
 }
-
-ids<-cohort_ids()
-if(!length(ids)) stop("Current-run cohort is empty or missing before ",stage,call.=FALSE)
 
 if(stage=="W02"){
   row<-latest_row("docs/enrichment/zenodo_registry.csv");run_id<-as.character(row$github_run_id[[1L]])
@@ -217,7 +196,7 @@ if(stage=="W02"){
   if(length(p)!=1L) stop("Restored W02 state lacks cumulative_patch.jsonl",call.=FALSE)
   rr<-read_jsonl(p[[1L]])
   enriched<-sum(vapply(rr,function(z){
-    rid<-clean(z$record_id); rid%in%ids && (!is.null(z$title)||!is.null(z$abstract)||!is.null(z$author_keywords))
+    !is.null(z$title)||!is.null(z$abstract)||!is.null(z$author_keywords)
   },logical(1)))
   s$counts$enriched_records<-as.integer(enriched)
   s<-set_run(s,"W02",run_id,3L,4L,"Enrichment complete; awaiting retraction screening")
@@ -231,7 +210,7 @@ if(stage=="W03"){
   st<-system2("Rscript",c("scripts/updater/workflow_03_restore_state_from_zenodo.R","--pointer",ptr,"--output-dir",out))
   if(st!=0L) stop("Failed restoring W03 state",call.=FALSE)
   rr<-read_jsonl(file.path(out,"publication_status.jsonl"))
-  n<-sum(vapply(rr,function(z)clean(z$record_id)%in%ids && isTRUE(z$publication_status$exclude_from_workflow04),logical(1)))
+  n<-sum(vapply(rr,function(z)isTRUE(z$publication_status$exclude_from_workflow04),logical(1)))
   s$counts$retraction_exclusions<-as.integer(n)
   s<-set_run(s,"W03",run_id,4L,5L,"Retraction screening complete; awaiting relevance screening")
   save_status(s);cat(sprintf("PASS: W03 current-run retraction/withdrawal exclusions = %d\n",n));quit(status=0)
@@ -246,8 +225,7 @@ if(stage=="W04"){
   p<-list.files(out,pattern="^workflow04_final_screening_layer\\.jsonl$",recursive=TRUE,full.names=TRUE)
   if(length(p)!=1L) stop("Restored W04 state lacks final screening layer",call.=FALSE)
   rr<-read_jsonl(p[[1L]])
-  keep<-Filter(function(z)clean(z$record_id)%in%ids,rr)
-  dec<-vapply(keep,function(z)clean(z$decision),character(1))
+  dec<-vapply(rr,function(z)clean(z$decision),character(1))
   s$counts$screened_include<-sum(dec=="retain");s$counts$screened_exclude<-sum(dec=="exclude")
   s<-set_run(s,"W04",run_id,5L,6L,"Screening complete; awaiting species coding")
   save_status(s);cat(sprintf("PASS: W04 current-run screening include=%d exclude=%d\n",s$counts$screened_include,s$counts$screened_exclude));quit(status=0)
@@ -266,7 +244,7 @@ if(stage=="W06"){
   st<-system2("Rscript",c("scripts/updater/workflow_06_restore_state_from_zenodo.R","--pointer",ptr,"--output-dir",out))
   if(st!=0L) stop("Failed restoring W06 state",call.=FALSE)
   p<-list.files(out,pattern="^workflow06_geography_layer\\.csv$",recursive=TRUE,full.names=TRUE)
-  g<-read.csv(p[[1L]],stringsAsFactors=FALSE,check.names=FALSE);g<-g[as.character(g$record_id)%in%ids,,drop=FALSE]
+  g<-read.csv(p[[1L]],stringsAsFactors=FALSE,check.names=FALSE)
   with<-sum(as.character(g$geography_status)=="RESOLVED");without<-nrow(g)-with
   s$counts$geography<-list(with=as.integer(with),without=as.integer(without))
   s<-set_run(s,"W06",run_id,7L,8L,"Geography coding complete; awaiting topic coding")
@@ -280,7 +258,7 @@ if(stage=="W07"){
   st<-system2("Rscript",c("scripts/updater/workflow_07_restore_state_from_zenodo.R","--pointer",ptr,"--output-dir",out))
   if(st!=0L) stop("Failed restoring W07 state",call.=FALSE)
   p<-list.files(out,pattern="^workflow07_topic_record_qc\\.csv$",recursive=TRUE,full.names=TRUE)
-  q<-read.csv(p[[1L]],stringsAsFactors=FALSE,check.names=FALSE);q<-q[as.character(q$record_id)%in%ids,,drop=FALSE]
+  q<-read.csv(p[[1L]],stringsAsFactors=FALSE,check.names=FALSE)
   tc<-suppressWarnings(as.integer(q$topic_count_retained));tc[is.na(tc)]<-0L
   with<-sum(tc>0L);without<-sum(tc==0L)
   s$counts$topics<-list(with=as.integer(with),without=as.integer(without))
@@ -298,7 +276,7 @@ if(stage=="W08"){
   canon<-file.path(out,"canonical.jsonl")
   st<-system2("Rscript",c("scripts/updater/workflow_10_restore_canonical_from_zenodo.R","--pointer",ptr,"--output",canon))
   if(st!=0L) stop("Failed restoring W08 canonical",call.=FALSE)
-  rr<-read_jsonl(canon);rr<-Filter(function(z)clean((z$identity%||%list())$record_id)%in%ids,rr)
+  rr<-read_jsonl(canon)
   gw<-sum(vapply(rr,function(z)identical(clean((z$geography%||%list())$status),"RESOLVED"),logical(1)))
   tw<-sum(vapply(rr,function(z)length((z$topics%||%list())$path_ids%||%character())>0L,logical(1)))
   s$counts$geography<-list(with=as.integer(gw),without=as.integer(length(rr)-gw))
