@@ -1,0 +1,43 @@
+name: Workflow 02 - Resume request listener
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/shiny_adjudication/w02_resume_requests/*.json'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      source_run_id: ${{ steps.request.outputs.source_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 2
+
+      - id: request
+        name: Resolve exactly one W02 resume request
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/shiny_adjudication/w02_resume_requests/.*\.json$' || true)
+          test "${#FILES[@]}" -eq 1
+          FILE="${FILES[0]}"
+          RUN_ID="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);id<-as.character(x$source_run_id);stopifnot(grepl("^[0-9]+$",id));cat(id)' "$FILE")"
+          echo "source_run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "PASS: resolved automatic W02 resume request for source run $RUN_ID"
+
+  resume:
+    needs: prepare
+    uses: ./.github/workflows/workflow_02_resume_after_human_review.yml
+    with:
+      source_run_id: ${{ needs.prepare.outputs.source_run_id }}
+      publish: true
+    secrets: inherit
