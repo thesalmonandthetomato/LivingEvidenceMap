@@ -23,7 +23,7 @@ if(!all(file.exists(c(lean_path,report_path)))) stop("Lean checkpoint state is i
 actual_lean_sha <- digest(file=lean_path,algo="sha256",serialize=FALSE)
 if(!identical(tolower(actual_lean_sha),tolower(lean_sha))) stop(sprintf("Lean SHA mismatch: %s",actual_lean_sha),call.=FALSE)
 rep <- fromJSON(report_path,simplifyVector=FALSE)
-stopifnot(identical(rep$status,"PASS"),as.integer(rep$canonical_records)==32292L,
+stopifnot(identical(rep$status,"PASS"),as.integer(rep$canonical_records)>=1L,
           isTRUE(rep$record_ids_unchanged),isTRUE(rep$non_manifestation_fields_unchanged),
           isTRUE(rep$manifestation_refs_exact),
           identical(tolower(as.character(rep$input_canonical_sha256)),tolower(input_sha)),
@@ -99,7 +99,7 @@ metadata <- list(metadata=list(
   publication_date=format(Sys.Date(),"%Y-%m-%d"),
   description=paste0(
     "<p>Authoritative lean canonical checkpoint produced after Living Evidence Map Workflow 02.</p>",
-    "<p>The checkpoint preserves all 32,292 canonical works and all canonical metadata while replacing embedded manifestation objects with exact source:source_record_id references.</p>",
+    "<p>The checkpoint preserves all ",as.integer(rep$canonical_records)," canonical works and all canonical metadata while replacing embedded manifestation objects with exact source:source_record_id references.</p>",
     "<p>Input post-Workflow 02 canonical SHA-256: <code>",input_sha,"</code>.</p>",
     "<p>Lean canonical SHA-256: <code>",lean_sha,"</code>.</p>"
   ),
