@@ -30,7 +30,7 @@ x[, family:=families]
 x[, triage_class:=fcase(
   family=="pmid" & year_compatible & !is.na(title_similarity) & title_similarity>=0.65,
     "strong_same_work_candidate",
-  family=="mag" & year_compatible & !is.na(title_similarity) & title_similarity>=0.65,
+  family=="openalex_mag" & year_compatible & !is.na(title_similarity) & title_similarity>=0.65,
     "strong_same_work_candidate",
   family=="doi" & year_compatible & !is.na(title_similarity) & title_similarity>=0.90,
     "strong_same_work_candidate",
