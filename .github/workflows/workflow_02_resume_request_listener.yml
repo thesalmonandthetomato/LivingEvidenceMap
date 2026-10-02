@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       source_run_id: ${{ steps.request.outputs.source_run_id }}
+      validation_only: ${{ steps.request.outputs.validation_only }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,12 +31,24 @@ jobs:
           mapfile -t FILES < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/shiny_adjudication/w02_resume_requests/.*\.json$' || true)
           test "${#FILES[@]}" -eq 1
           FILE="${FILES[0]}"
-          RUN_ID="$(python3 -c 'import json,re,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); rid=str(x.get("source_run_id","")); assert re.fullmatch(r"[0-9]+",rid), "invalid source_run_id"; print(rid,end="")' "$FILE")"
+          readarray -t META < <(python3 -c 'import json,re,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); rid=str(x.get("source_run_id","")); assert re.fullmatch(r"[0-9]+",rid), "invalid source_run_id"; v="true" if x.get("validation_only") is True else "false"; print(rid); print(v)' "$FILE")
+          RUN_ID="${META[0]}"
+          VALIDATION_ONLY="${META[1]}"
           echo "source_run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "PASS: resolved automatic W02 resume request for source run $RUN_ID"
+          echo "validation_only=$VALIDATION_ONLY" >> "$GITHUB_OUTPUT"
+          echo "PASS: resolved automatic W02 resume request for source run $RUN_ID (validation_only=$VALIDATION_ONLY)"
+
+  validate-only:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.validation_only == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm listener validation path
+        run: echo "PASS: automatic W02 resume listener trigger and request parsing validated safely for source run ${{ needs.prepare.outputs.source_run_id }}"
 
   resume:
     needs: prepare
+    if: ${{ needs.prepare.outputs.validation_only != 'true' }}
     uses: ./.github/workflows/workflow_02_resume_after_human_review.yml
     with:
       source_run_id: ${{ needs.prepare.outputs.source_run_id }}
