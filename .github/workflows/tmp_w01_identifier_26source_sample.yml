@@ -150,6 +150,7 @@ jobs:
         run: |
           library(jsonlite)
           roots <- list.dirs('/tmp/w01_idsample/sources',recursive=FALSE,full.names=TRUE)
+          roots <- roots[normalizePath(roots,mustWork=TRUE) != normalizePath('/tmp/w01_idsample/sources',mustWork=TRUE)]
           src <- basename(roots)
           paths <- file.path(roots,'records.jsonl')
           stopifnot(length(src)==26L,all(file.exists(paths)))
@@ -172,6 +173,7 @@ jobs:
         run: |
           library(data.table)
           roots <- list.dirs('/tmp/w01_idsample/sources',recursive=FALSE,full.names=TRUE)
+          roots <- roots[normalizePath(roots,mustWork=TRUE) != normalizePath('/tmp/w01_idsample/sources',mustWork=TRUE)]
           rows <- lapply(roots,function(root) {
             p <- file.path(root,'records.jsonl')
             n <- length(readLines(p,warn=FALSE))
