@@ -21,6 +21,14 @@ on:
         required: false
         default: ''
         type: string
+      manual_repair_zenodo_record_id:
+        required: false
+        default: ''
+        type: string
+      recovery_pass1_zenodo_record_id:
+        required: false
+        default: ''
+        type: string
       publish:
         required: false
         default: true
@@ -53,6 +61,16 @@ on:
         type: string
       manual_decisions_path:
         description: 'Optional repo JSONL resolving residual W04 uncertain records'
+        required: false
+        default: ''
+        type: string
+      manual_repair_zenodo_record_id:
+        description: 'Optional restricted Zenodo record containing strict missing title/abstract repair overlay plus force-rescreen IDs'
+        required: false
+        default: ''
+        type: string
+      recovery_pass1_zenodo_record_id:
+        description: 'Optional restricted Zenodo W04 recovery checkpoint containing reusable pass-1 decisions'
         required: false
         default: ''
         type: string
@@ -96,6 +114,10 @@ jobs:
           parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
           parse(file='scripts/updater/workflow_03_restore_state_from_zenodo.R')
           parse(file='scripts/updater/workflow_04_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_04_restore_manual_repair_bundle.R')
+          parse(file='scripts/updater/workflow_04_apply_manual_metadata_repairs.R')
+          parse(file='scripts/updater/workflow_04_restore_recovery_pass1.R')
+          parse(file='scripts/updater/workflow_04_seed_recovered_pass1.R')
           parse(file='scripts/updater/workflow_04_prepare_incremental.R')
           parse(file='scripts/updater/workflow_04_luna_consensus.R')
           parse(file='scripts/updater/workflow_04_merge_consensus.R')
@@ -120,6 +142,25 @@ jobs:
           test -n "$CAN"; test -n "$STA"
           cp "$CAN" inputs/current/canonical_lean.jsonl
           cp "$STA" inputs/current/publication_status.jsonl
+
+      - name: Apply optional strict manual metadata repair
+        if: ${{ inputs.manual_repair_zenodo_record_id != '' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          REPAIR_RECORD: ${{ inputs.manual_repair_zenodo_record_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/manual_repair
+          Rscript scripts/updater/workflow_04_restore_manual_repair_bundle.R \
+            --zenodo-record-id "$REPAIR_RECORD" \
+            --output-dir inputs/manual_repair
+          Rscript scripts/updater/workflow_04_apply_manual_metadata_repairs.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --repair-overlay inputs/manual_repair/repair_overlay.jsonl \
+            --output inputs/current/canonical_lean.repaired.jsonl \
+            --audit inputs/current/manual_repair_application.json
+          mv inputs/current/canonical_lean.repaired.jsonl inputs/current/canonical_lean.jsonl
 
       - name: Restore prior W04 state
         if: ${{ inputs.prior_workflow04_pointer_path != 'none' && inputs.prior_workflow04_pointer_path != '' }}
@@ -155,6 +196,7 @@ jobs:
         id: queue
         env:
           PRIOR_W04_INPUT: ${{ inputs.prior_workflow04_pointer_path }}
+          MANUAL_REPAIR_RECORD: ${{ inputs.manual_repair_zenodo_record_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -169,11 +211,32 @@ jobs:
               ARGS+=(--prior-canonical inputs/prior_canonical_lean.jsonl)
             fi
           fi
+          if [ -n "$MANUAL_REPAIR_RECORD" ]; then
+            ARGS+=(--force-rescreen-record-ids inputs/manual_repair/force_rescreen_record_ids.txt)
+          fi
           Rscript scripts/updater/workflow_04_prepare_incremental.R "${ARGS[@]}"
           QUEUE_N=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_prepare/prepare_manifest.json");cat(as.integer(x$screen_queue_records))')
           MODE=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_prepare/prepare_manifest.json");cat(as.character(x$mode))')
           echo "queue_n=$QUEUE_N" >> "$GITHUB_OUTPUT"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - name: Restore and seed optional recovered pass-1 decisions
+        if: ${{ inputs.recovery_pass1_zenodo_record_id != '' && steps.queue.outputs.queue_n != '0' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          RECOVERY_RECORD: ${{ inputs.recovery_pass1_zenodo_record_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/recovery outputs/workflow04_recovery_seed
+          Rscript scripts/updater/workflow_04_restore_recovery_pass1.R \
+            --zenodo-record-id "$RECOVERY_RECORD" \
+            --output-dir inputs/recovery
+          Rscript scripts/updater/workflow_04_seed_recovered_pass1.R \
+            --canonical outputs/workflow04_prepare/screen_queue_canonical.jsonl \
+            --recovered-pass1 inputs/recovery/salvaged_new_pass1.jsonl \
+            --output-root outputs/workflow04_recovery_seed \
+            --shard-count 8
 
       - name: Upload immutable W04 prepared state
         uses: actions/upload-artifact@v4
@@ -183,6 +246,8 @@ jobs:
             inputs/current/canonical_lean.jsonl
             inputs/current/publication_status.jsonl
             outputs/workflow04_prepare/
+            outputs/workflow04_recovery_seed/
+            inputs/current/manual_repair_application.json
           retention-days: 7
           if-no-files-found: error
 
@@ -217,6 +282,210 @@ jobs:
         with:
           name: workflow04-prepared-${{ github.run_id }}
           path: prepared
+
+      - name: Seed recovered pass-1 checkpoint for this shard
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/shard-${{ matrix.shard }}
+          SEED="prepared/outputs/workflow04_recovery_seed/shard-${{ matrix.shard }}/pass1.jsonl"
+          if [ -f "$SEED" ]; then
+            cp "$SEED" outputs/shard-${{ matrix.shard }}/pass1.jsonl
+            echo "Seeded $(grep -cve '^[[:space:]]*
+          OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_luna_consensus.R             --canonical prepared/outputs/workflow04_prepare/screen_queue_canonical.jsonl             --workflow03-status prepared/outputs/workflow04_prepare/screen_queue_workflow03.jsonl             --screening-config user_input/workflow04_screening_config.json             --output-dir outputs/shard-${{ matrix.shard }}             --model gpt-5.6-luna             --shard-index ${{ matrix.shard }}             --shard-count 8             --checkpoint-every 25
+
+      - name: Upload shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-incremental-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: outputs/shard-${{ matrix.shard }}/
+          retention-days: 90
+          if-no-files-found: warn
+
+  merge-new:
+    needs: [prepare,screen]
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.screen.result == 'success' || needs.screen.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download shard outputs
+        if: ${{ needs.prepare.outputs.queue_n != '0' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow04-incremental-shard-*-${{ github.run_id }}
+          path: shards
+          merge-multiple: false
+
+      - name: Merge new screening decisions
+        if: ${{ needs.prepare.outputs.queue_n != '0' }}
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_04_merge_consensus.R             --input-root shards             --output-dir outputs/workflow04_new_consensus             --expected-shards 8
+
+      - name: Create empty new layer when nothing requires screening
+        if: ${{ needs.prepare.outputs.queue_n == '0' }}
+        shell: bash
+        run: |
+          mkdir -p outputs/workflow04_new_consensus
+          : > outputs/workflow04_new_consensus/workflow04_consensus_layer.jsonl
+          Rscript -e 'jsonlite::write_json(list(schema="living-evidence-map-workflow04-luna-consensus-merged-v1",status="PASS",workflow03_eligible=0L,consensus_records=0L,final_retain=0L,final_exclude=0L,final_unresolved=0L), "outputs/workflow04_new_consensus/summary.json",auto_unbox=TRUE,pretty=TRUE)'
+
+      - name: Upload merged new layer
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-new-consensus-${{ github.run_id }}
+          path: outputs/workflow04_new_consensus/
+          retention-days: 90
+          if-no-files-found: error
+
+  finalise:
+    needs: [prepare,merge-new]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.merge-new.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','readr','googlesheets4'))
+
+      - name: Download prepared state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-prepared-${{ github.run_id }}
+          path: prepared
+
+      - name: Download merged new layer
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-new-consensus-${{ github.run_id }}
+          path: new_consensus
+
+      - name: Build complete current W04 state
+        env:
+          MANUAL_PATH: ${{ inputs.manual_decisions_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --canonical prepared/inputs/current/canonical_lean.jsonl
+            --workflow03-status prepared/inputs/current/publication_status.jsonl
+            --reused-layer prepared/outputs/workflow04_prepare/reused_workflow04_layer.jsonl
+            --new-consensus new_consensus/workflow04_consensus_layer.jsonl
+            --prepare-manifest prepared/outputs/workflow04_prepare/prepare_manifest.json
+            --output-dir outputs/workflow04_final
+          )
+          if [ -n "$MANUAL_PATH" ]; then ARGS+=(--manual-decisions "$MANUAL_PATH"); fi
+          Rscript scripts/updater/workflow_04_merge_incremental.R "${ARGS[@]}"
+
+      - name: Inspect final status
+        id: status
+        shell: bash
+        run: |
+          STATUS=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(x$status)')
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "Workflow 04 status: $STATUS"
+
+      - name: Publish resolved W04 state
+        if: ${{ steps.status.outputs.status == 'PASS' && inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path }}
+          W03_POINTER: ${{ inputs.workflow03_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LEAN_SHA=$(Rscript -e 'cat(digest::digest(file="prepared/inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')
+          W03_SHA=$(P="$W03_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$publication_status_sha256)')
+          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("user_input/workflow04_screening_config.json",simplifyVector=FALSE);p<-paste(readLines(x$prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\\n");h<-digest::digest(p,algo="sha256",serialize=FALSE);stopifnot(identical(h,x$expected_prompt_sha256));cat(h)')"
+          mkdir -p outputs/workflow04_zenodo
+          Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R             --state-dir outputs/workflow04_final             --source-run-id "$GITHUB_RUN_ID"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow04_zenodo             --upstream-lean-sha256 "$LEAN_SHA"             --upstream-workflow03-sha256 "$W03_SHA"             --prompt-sha256 "$PROMPT_SHA"
+
+      - name: Register resolved W04 state
+        if: ${{ steps.status.outputs.status == 'PASS' && inputs.publish == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_04_update_zenodo_registry.R             --receipt outputs/workflow04_zenodo/zenodo_receipt.json             --registry docs/workflow04/zenodo_registry.csv             --pointer-dir docs/workflow04/zenodo
+          git add docs/workflow04/zenodo_registry.csv docs/workflow04/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register Workflow 04 screening state $GITHUB_RUN_ID"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Update live Shiny progress after published W04
+        if: ${{ steps.status.outputs.status == 'PASS' && inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Registry commits made by GITHUB_TOKEN do not trigger a second
+          # workflow, so update the live status explicitly in this job.
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W04
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W04 [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload W04 handoff/review state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-production-${{ github.run_id }}
+          path: |
+            outputs/workflow04_final/
+            outputs/workflow04_zenodo/
+          retention-days: 90
+          if-no-files-found: error
+ "$SEED") recovered pass-1 decisions for shard ${{ matrix.shard }}"
+          fi
 
       - name: Screen incremental queue shard
         env:
