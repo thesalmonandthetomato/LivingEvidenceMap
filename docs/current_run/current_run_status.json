@@ -3,7 +3,7 @@
   "update_id": "w01-run-36971418284",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-02T06:30:47Z",
-  "last_updated_at_utc": "2026-10-02T14:35:28Z",
+  "last_updated_at_utc": "2026-10-02T14:40:24Z",
   "baseline": {
     "workflow08_pointer": "docs/workflow08/zenodo/run-36442875006.json",
     "workflow08_source_run_id": "36442875006",
@@ -23,7 +23,7 @@
   "counts": {
     "search_results": 118527,
     "deduplicated_records": 47094,
-    "enriched_records": null,
+    "enriched_records": 2218,
     "retraction_exclusions": null,
     "screened_include": null,
     "screened_exclude": null,
@@ -44,10 +44,10 @@
       "status": "complete"
     },
     "W02": {
-      "status": "active"
+      "status": "complete"
     },
     "W03": {
-      "status": "pending"
+      "status": "active"
     },
     "W04": {
       "status": "pending"
@@ -67,12 +67,13 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W01",
-    "completed_through": 2,
-    "active_position": 3,
-    "status_label": "Deduplication complete; Workflow 02 enrichment in progress"
+    "current_stage": "W02",
+    "completed_through": 3,
+    "active_position": 4,
+    "status_label": "Enrichment complete; awaiting retraction screening"
   },
   "workflow_runs": {
-    "W01": "36971418284"
+    "W01": "36971418284",
+    "W02": "37016080508"
   }
 }
