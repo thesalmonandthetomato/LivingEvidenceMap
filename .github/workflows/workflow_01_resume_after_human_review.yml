@@ -1,6 +1,6 @@
 name: Workflow 01 - Resume after human duplicate adjudication
 
-# Trigger note: character-preserved delta replay
+# Trigger note: real-state semantic replay validation passed
 
 on:
   workflow_dispatch:
