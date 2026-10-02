@@ -6,6 +6,7 @@ on:
       - w01-identifier-assist-test
     paths:
       - '.github/workflows/tmp_w01_identifier_component_candidate_benchmark.yml'
+      - 'scripts/updater/workflow_01_identifier_component_candidate_benchmark_test.R'
 
 permissions:
   contents: read
