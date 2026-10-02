@@ -10,12 +10,14 @@ arg <- function(flag,default=NULL) {
 }
 pairs_path <- arg("--pairs")
 guards_path <- arg("--guards")
+registry_path <- arg("--registry")
 output_dir <- arg("--output-dir")
-if (is.null(pairs_path)||is.null(guards_path)||is.null(output_dir)) stop("--pairs --guards --output-dir required",call.=FALSE)
+if (is.null(pairs_path)||is.null(guards_path)||is.null(registry_path)||is.null(output_dir)) stop("--pairs --guards --registry --output-dir required",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
 x <- fread(pairs_path,na.strings=c("","NA"))
 g <- fread(guards_path,na.strings=c("","NA"))
+reg <- fread(registry_path,na.strings=c("","NA"))
 
 if (!all(c("record_i","record_j","families","namespaces","n_independent_families",
            "same_cluster","title_exact","year_diff") %in% names(x))) {
@@ -25,12 +27,22 @@ if (!all(c("identifier_type","identifier_value") %in% names(g))) {
   stop("Guard input missing identifier_type/identifier_value",call.=FALSE)
 }
 
-# A pair is guard-hit if any namespace/value contributing to it is on the guard list.
-# Reconstruct contributing identifier tokens from namespaces/families is insufficient,
-# so guard conservatively by namespace family for pairs known to be in disagreement
-# plus exact guard-list joins where identifier values are represented in raw pair evidence.
-# Here we only fast-track if the pair is NOT among historically risky disagreement pairs.
-x[, guarded := FALSE]
+# A pair is guard-hit if any exact shared namespace/value is on the empirically
+# derived reused/container guard list.
+reg_i <- reg[,.(record_i=manifestation_key,identifier_type,identifier_value)]
+reg_j <- reg[,.(record_j=manifestation_key,identifier_type,identifier_value)]
+shared <- merge(reg_i,reg_j,by=c("identifier_type","identifier_value"),allow.cartesian=TRUE)
+shared <- shared[record_i < record_j]
+guarded_pairs <- merge(
+  shared,
+  unique(g[,.(identifier_type,identifier_value)]),
+  by=c("identifier_type","identifier_value"),
+  all=FALSE
+)[,.(guarded=TRUE),by=.(record_i,record_j)]
+setkey(x,record_i,record_j)
+setkey(guarded_pairs,record_i,record_j)
+x <- guarded_pairs[x]
+x[is.na(guarded),guarded:=FALSE]
 
 # Evidence classes derived from empirical benchmark.
 x[, year_compatible := is.na(year_diff) | year_diff<=1]
