@@ -102,7 +102,8 @@ canonical_namespace <- function(x) {
     core="core", coreid="core", core_id="core",
     mag="mag", magid="mag", mag_id="mag"
   )
-  unname(aliases[[x]] %||% NA_character_)
+  if (!(x %in% names(aliases))) return(NA_character_)
+  unname(aliases[[x]])
 }
 normalise_identifier <- function(namespace,value) {
   ns <- canonical_namespace(namespace)
