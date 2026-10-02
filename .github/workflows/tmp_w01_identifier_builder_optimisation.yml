@@ -32,7 +32,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','httr2'))
+        run: install.packages(c('data.table','jsonlite','httr2','digest'))
 
       - name: Download frozen inputs and validated safe-edge reference
         shell: bash
