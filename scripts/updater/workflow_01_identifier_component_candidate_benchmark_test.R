@@ -204,12 +204,12 @@ generate_component <- function() {
   cand <- csig[csig,allow.cartesian=TRUE,nomatch=0L][component < i.component,
     .(shared_rare_qgrams=.N),by=.(component_i=component,component_j=i.component)]
   cand <- cand[shared_rare_qgrams>=2L]
-  cand <- comp[cand,on=.(component=component_i)]
-  setnames(cand,c("has_appended","min_title_len","max_title_len"),
-           c("a_app","a_min","a_max"),skip_absent=TRUE)
-  # Join component B metadata explicitly.
-  bmeta <- comp[,.(component_j=component,b_app=has_appended,b_min=min_title_len,b_max=max_title_len)]
-  cand <- bmeta[cand,on="component_j"]
+  cand[, a_app := comp$has_appended[match(component_i,comp$component)]]
+  cand[, a_min := comp$min_title_len[match(component_i,comp$component)]]
+  cand[, a_max := comp$max_title_len[match(component_i,comp$component)]]
+  cand[, b_app := comp$has_appended[match(component_j,comp$component)]]
+  cand[, b_min := comp$min_title_len[match(component_j,comp$component)]]
+  cand[, b_max := comp$max_title_len[match(component_j,comp$component)]]
   cand[, max_possible_len_ratio := fifelse(
     is.na(a_min)|is.na(a_max)|is.na(b_min)|is.na(b_max), NA_real_,
     fifelse(a_max < b_min, a_max/b_min,
