@@ -1,5 +1,7 @@
 name: Workflow 02 - Validate canonical handoff and enrichment
 
+# Trigger note: align validation sample with production enrichment eligibility
+
 on:
   workflow_dispatch:
   push:
