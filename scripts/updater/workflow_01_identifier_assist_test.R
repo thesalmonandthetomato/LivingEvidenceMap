@@ -112,7 +112,12 @@ extract_ids <- function(r,source) {
   )
   add("doi",doi)
 
-  pmid <- norm_pmid((r$mapped_fields %||% list())$pmid)
+  pmid <- norm_pmid(
+    (r$mapped_fields %||% list())$pmid %||%
+    (r$sidecar_identity %||% list())$pmid %||%
+    (r$identity %||% list())$pmid %||%
+    (r$canonical %||% list())$pmid
+  )
   if (is.null(pmid) && identical(source,"pubmed")) {
     epmc_source <- scalar((r$sidecar_identity %||% list())$europe_pmc_source)
     epmc_id <- scalar((r$sidecar_identity %||% list())$europe_pmc_id)
@@ -123,8 +128,12 @@ extract_ids <- function(r,source) {
   }
   add("pmid",pmid)
 
-  pmcid <- NULL
-  if (is.list(r$europe_pmc$raw_payload)) {
+  pmcid <- norm_pmcid(
+    (r$mapped_fields %||% list())$pmcid %||%
+    (r$sidecar_identity %||% list())$pmcid %||%
+    (r$canonical %||% list())$pmcid
+  )
+  if (is.null(pmcid) && is.list(r$europe_pmc$raw_payload)) {
     pmcid <- norm_pmcid(r$europe_pmc$raw_payload$pmcid)
   }
   add("pmcid",pmcid)
