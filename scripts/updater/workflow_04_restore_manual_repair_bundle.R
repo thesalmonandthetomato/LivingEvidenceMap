@@ -7,6 +7,7 @@ record_id<-arg("--zenodo-record-id"); out<-arg("--output-dir")
 if(is.null(record_id)||is.null(out))stop("Required: --zenodo-record-id --output-dir",call.=FALSE)
 token<-Sys.getenv("ZENODO_ACCESS_TOKEN");if(!nzchar(token))stop("ZENODO_ACCESS_TOKEN required",call.=FALSE)
 dir.create(out,recursive=TRUE,showWarnings=FALSE)
+`%||%`<-function(x,y)if(is.null(x))y else x
 
 auth<-function(req) req|>req_headers(Authorization=paste("Bearer",token))
 api<-paste0("https://zenodo.org/api/deposit/depositions/",record_id)
@@ -17,7 +18,6 @@ if(!isTRUE(d$submitted))stop("Manual repair Zenodo record is not published",call
 access<-as.character((d$metadata%||%list())$access_right%||%"")
 if(!identical(access,"restricted"))stop(sprintf("Manual repair record must be restricted; got %s",access),call.=FALSE)
 bucket<-as.character(d$links$bucket)
-`%||%`<-function(x,y)if(is.null(x))y else x
 
 required<-c("manifest.json","repair_overlay.jsonl","force_rescreen_record_ids.txt")
 for(fn in required){
