@@ -74,6 +74,7 @@ generic_attachment_type <- function(x){
   if(is.na(x)) return(NA_character_)
   pats <- c(
     supplementary_file="(?i)^\\s*supplement(?:ary)?\\s+file\\s*[0-9]+[a-z]?\\.(?:xlsx?|docx?|csv|pdf|txt|zip)\\s*$",
+    data_sheet="(?i)^\\s*data\\s*sheet\\s*[0-9]+[a-z]?\\.(?:xlsx?|docx?|csv|pdf|txt|zip)\\s*$",
     table="(?i)^\\s*table\\s*[0-9]+[a-z]?\\.(?:xlsx?|docx?|csv|pdf|txt)\\s*$",
     image="(?i)^\\s*image\\s*[0-9]+[a-z]?\\.(?:jpe?g|png|tiff?|gif)\\s*$"
   )
