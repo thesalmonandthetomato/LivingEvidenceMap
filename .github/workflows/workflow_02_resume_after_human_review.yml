@@ -92,7 +92,7 @@ jobs:
     timeout-minutes: 60
     env:
       SOURCE_RUN_ID: ${{ needs.prepare.outputs.source_run_id }}
-
+    steps:
       - name: Checkout integration branch
         uses: actions/checkout@v4
         with:
