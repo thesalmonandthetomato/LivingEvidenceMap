@@ -1,0 +1,189 @@
+name: Publish W02 review queue to Shiny
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_publish_w02_36989928117_direct.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+      QUEUE_TAB: 'queue_w02_active'
+      SOURCE_RUN_ID: '36989928117'
+      ADJUDICATION_APP_URL: https://01a0f774-a1a3-dab9-3d3f-f86402fc6d81.share.connect.posit.cloud
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.6.0'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("googlesheets4","jsonlite","digest"))
+
+      - name: Download immutable W02 human-review package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w02-shiny-publish"
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow02-human-review-$SOURCE_RUN_ID" \
+            --dir "$RUNNER_TEMP/w02-shiny-publish"
+          test -s "$RUNNER_TEMP/w02-shiny-publish/workflow02_human_review.jsonl"
+          test -s "$RUNNER_TEMP/w02-shiny-publish/workflow02_human_review_manifest.json"
+
+      - name: Prepare Google credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Build, validate and publish active W02 queue
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(googlesheets4)
+            library(jsonlite)
+            library(digest)
+          })
+
+          `%||%` <- function(x, y) if (is.null(x)) y else x
+
+          root <- file.path(Sys.getenv("RUNNER_TEMP"), "w02-shiny-publish")
+          input_path <- file.path(root, "workflow02_human_review.jsonl")
+          manifest_path <- file.path(root, "workflow02_human_review_manifest.json")
+          queue_path <- file.path(root, "w02_shiny_queue.jsonl")
+          ss <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
+          tab <- Sys.getenv("QUEUE_TAB")
+          source_run_id <- Sys.getenv("SOURCE_RUN_ID")
+
+          source_lines <- readLines(input_path, warn=FALSE, encoding="UTF-8")
+          source_lines <- source_lines[nzchar(trimws(source_lines))]
+          if (!length(source_lines)) stop("W02 human-review package is empty")
+
+          manifest <- fromJSON(manifest_path, simplifyVector=FALSE)
+          expected_source_sha <- as.character(manifest$review_jsonl$sha256 %||% "")
+          actual_source_sha <- digest(file=input_path, algo="sha256", serialize=FALSE)
+          if (!nzchar(expected_source_sha) || !identical(actual_source_sha, expected_source_sha)) {
+            stop("W02 source review JSONL SHA mismatch")
+          }
+
+          source_cases <- lapply(source_lines, fromJSON, simplifyVector=FALSE)
+          allowed_reasons <- c("title_mismatch","title_guard_failed","returned_doi_mismatch")
+          out <- vector("list", length(source_cases))
+
+          for (i in seq_along(source_cases)) {
+            z <- source_cases[[i]]
+            rid <- as.character(z$record_id %||% "")
+            conflict <- z$conflict %||% list()
+            provider <- as.character(conflict$provider %||% "")
+            field <- as.character(conflict$field %||% "")
+            reason <- as.character(conflict$reason %||% "")
+            returned_doi <- as.character(conflict$returned_doi %||% "")
+            eid <- as.character(conflict$eid %||% "")
+
+            if (!nzchar(rid) || !nzchar(provider) || !nzchar(reason)) {
+              stop(sprintf("Invalid W02 review case at source row %d", i))
+            }
+            if (!reason %in% allowed_reasons) {
+              stop(sprintf("Unsupported W02 conflict reason at row %d: %s", i, reason))
+            }
+
+            case_id <- paste0("w02-", digest(
+              paste(rid, provider, field, reason, returned_doi, eid, i, sep="|"),
+              algo="sha256", serialize=FALSE
+            ))
+
+            out[[i]] <- list(
+              schema="living-evidence-map-workflow02-shiny-case-v1",
+              review_case_id=case_id,
+              source_index=i,
+              record_id=rid,
+              doi=as.character(z$doi %||% ""),
+              provider=provider,
+              field=field,
+              reason=reason,
+              returned_doi=returned_doi,
+              canonical=z$canonical %||% list(),
+              conflict=conflict,
+              provider_response=z$provider_response %||% list()
+            )
+          }
+
+          ids <- vapply(out, function(z) z$review_case_id, character(1))
+          if (anyDuplicated(ids)) stop("Generated W02 review_case_id collision")
+
+          con <- file(queue_path, "wt", encoding="UTF-8")
+          for (z in out) writeLines(toJSON(z, auto_unbox=TRUE, null="null", na="null"), con, useBytes=TRUE)
+          close(con)
+
+          queue_sha <- digest(file=queue_path, algo="sha256", serialize=FALSE)
+          queue_lines <- readLines(queue_path, warn=FALSE, encoding="UTF-8")
+          queue_lines <- queue_lines[nzchar(trimws(queue_lines))]
+          if (length(queue_lines) != length(out)) stop("Generated W02 queue count mismatch")
+
+          batch_id <- paste0("w02-run-", source_run_id)
+          payload <- data.frame(
+            batch_id=rep(batch_id, length(out)),
+            queue_sha256=rep(queue_sha, length(out)),
+            case_index=as.character(seq_along(out)),
+            review_case_id=ids,
+            case_json=queue_lines,
+            stringsAsFactors=FALSE
+          )
+
+          gs4_auth(path=Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"), cache=FALSE)
+          tabs <- sheet_names(ss)
+          if (!tab %in% tabs) sheet_add(ss, sheet=tab)
+          sheet_write(payload, ss=ss, sheet=tab)
+
+          verify <- read_sheet(ss, sheet=tab, col_types="c")
+          required <- c("batch_id","queue_sha256","case_index","review_case_id","case_json")
+          if (!all(required %in% names(verify))) stop("Published W02 queue missing required columns")
+          verify <- verify[, required, drop=FALSE]
+          if (nrow(verify) != length(out)) stop("Published W02 queue row count mismatch")
+          if (!identical(as.character(verify$review_case_id), ids)) stop("Published W02 case order mismatch")
+          reconstructed <- paste0(paste(verify$case_json, collapse="\n"), "\n")
+          reconstructed_sha <- digest(reconstructed, algo="sha256", serialize=FALSE)
+          if (!identical(reconstructed_sha, queue_sha)) stop("Published W02 queue reconstruction SHA mismatch")
+
+          cat("PASS: published validated W02 human-review queue to Shiny\n")
+          cat("Source run:", source_run_id, "\n")
+          cat("Cases:", length(out), "\n")
+          cat("Queue SHA-256:", queue_sha, "\n")
+
+      - name: Mark W02 Shiny batch published
+        shell: bash
+        run: |
+          set -euo pipefail
+          META="$(Rscript -e 'suppressPackageStartupMessages(library(googlesheets4));gs4_auth(path=Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"),cache=FALSE);x<-read_sheet(Sys.getenv("LEM_GOOGLE_SHEET_ID"),sheet="queue_w02_active",col_types="c");stopifnot(nrow(x)>0);cat(paste(x$batch_id[[1]],x$queue_sha256[[1]],sep="|"))')"
+          BATCH_ID="${META%%|*}"
+          QUEUE_SHA="${META#*|}"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "02" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status published \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --source-run-id "$SOURCE_RUN_ID"
