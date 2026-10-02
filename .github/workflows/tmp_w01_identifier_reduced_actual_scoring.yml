@@ -33,6 +33,17 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('data.table','digest','stringdist','stringi','jsonlite','xml2','httr2'))
 
+      - name: Assert current W01 implementation matches production
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin workflow01-final-architecture:refs/remotes/origin/workflow01-final-architecture
+          for p in config/workflow01_source_catalogue.json scripts/updater/workflow_01_prepare_source_catalogue.R scripts/updater/workflow_01_deduplication_build_union.R scripts/updater/workflow_01_deduplication_incremental_candidates.R scripts/updater/workflow_01_deduplication_incremental_score.R scripts/updater/workflow_01_deduplication_identifier_rescore.R scripts/updater/workflow_01_deduplication_merge_clusters.R; do
+            git show "refs/remotes/origin/workflow01-final-architecture:$p" > /tmp/production_file
+            cmp -s "$p" /tmp/production_file || { echo "W01 implementation differs from current production: $p" >&2; exit 1; }
+          done
+          echo "PASS: safe branch uses current production W01 implementation including optional source handling"
+
       - name: Download frozen W01 state and reduced pair selection
         shell: bash
         run: |
@@ -58,25 +69,31 @@ jobs:
           test -d reconstructed/previous/workflow01_seed
           test -s reconstructed/previous/workflow01_full_five_source/final_pair_decisions.csv
 
-      - name: Reconstruct the exact seven-source union
+      - name: Reconstruct exact frozen union using current optional-source logic
         shell: bash
         run: |
           set -euo pipefail
-          cat > reconstructed/current/source_inputs.json <<'EOF'
-          {
-            "schema": "living-evidence-map-workflow01-source-inputs-v1",
-            "sources": {
-              "lens": "frozen/pending_checkpoint/source_manifestations/lens_new.jsonl",
-              "scopus": "frozen/pending_checkpoint/source_manifestations/scopus_new.jsonl",
-              "openalex": "frozen/pending_checkpoint/source_manifestations/openalex_new.jsonl",
-              "agricola": "frozen/pending_checkpoint/source_manifestations/agricola_new.jsonl",
-              "wos": "frozen/pending_checkpoint/source_manifestations/wos_new.jsonl",
-              "cab": "frozen/pending_checkpoint/source_manifestations/cab_new.jsonl",
-              "proquest": "frozen/pending_checkpoint/source_manifestations/proquest_new.jsonl"
-            }
-          }
-          EOF
-
+          SCOPUS_INPUT="frozen/pending_checkpoint/source_manifestations/scopus_new.jsonl"
+          if [ ! -s "$SCOPUS_INPUT" ]; then
+            SCOPUS_INPUT="reconstructed/previous/workflow01_seed/scopus_records_for_deduplication.jsonl"
+          fi
+          SCOPUS_INPUT="$SCOPUS_INPUT" Rscript -e '
+            library(jsonlite)
+            x <- list(
+              schema="living-evidence-map-workflow01-source-inputs-v1",
+              sources=list(
+                lens="frozen/pending_checkpoint/source_manifestations/lens_new.jsonl",
+                scopus=Sys.getenv("SCOPUS_INPUT"),
+                openalex="frozen/pending_checkpoint/source_manifestations/openalex_new.jsonl",
+                agricola="frozen/pending_checkpoint/source_manifestations/agricola_new.jsonl",
+                wos="frozen/pending_checkpoint/source_manifestations/wos_new.jsonl",
+                cab="frozen/pending_checkpoint/source_manifestations/cab_new.jsonl",
+                proquest="frozen/pending_checkpoint/source_manifestations/proquest_new.jsonl"
+              )
+            )
+            writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE),
+                       "reconstructed/current/source_inputs.json")
+          '
           Rscript scripts/updater/workflow_01_deduplication_build_union.R             --old-dir reconstructed/previous/workflow01_seed             --input-manifest reconstructed/current/source_inputs.json             --expected-prior-manifestations 90137             --output-dir reconstructed/union
 
           Rscript -e 'x<-jsonlite::fromJSON("reconstructed/union/union_manifest.json");stopifnot(x$preserved_prior_manifestations==90137L,x$appended_new_manifestations==28390L,x$union_manifestations==118527L);cat("PASS: exact frozen union cardinality reconstructed\\n")'
