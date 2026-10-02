@@ -2,442 +2,374 @@
 
 ## Purpose
 
-Workflow 02 enriches the canonical work records produced by Workflow 01 when bibliographic metadata remain incomplete. It operates on canonical records with a DOI and a missing title, abstract and/or genuine author keywords, queries Europe PMC first, retains the established Scopus fallback for title/abstract repair, and uses Scopus author keywords only through an EID already preserved in a Workflow 01 Scopus manifestation. It applies only verified missing-field fills, quarantines conflicting provider metadata, and preserves Workflow 01 work identity, source manifestations and existing populated metadata.
+Workflow 02 enriches the authoritative canonical records produced by Workflow 01 when a DOI is present but the canonical title and/or abstract remains missing. It preserves Workflow 01 identity and existing populated metadata, accepts only provider metadata that pass deterministic identity and title-consistency checks, quarantines conflicting provider metadata for human review, and stores enrichment as a sparse patch rather than duplicating the full canonical corpus.
 
-Workflow 02 is implemented as a sparse enrichment layer over the immutable Workflow 01 canonical corpus. It does not republish the complete canonical JSONL on every run. Instead, the automated production process stores a cumulative enrichment patch keyed by stable Workflow 01 `record_id`, plus provider audit, retry state and corpus-quality reports. The enriched canonical JSONL is reconstructed deterministically by applying that patch to the exact upstream Workflow 01 canonical checksum.
+Workflow 02 is now designed for incremental living updates. The current production architecture is batched, checkpointed and resumable. Human-review decisions are made in the Shiny adjudication application and, after the final decision is saved, the workflow can resume automatically from the preserved pre-adjudication state.
 
+This document describes the **current operational architecture on branch `workflow01-final-architecture`**. Historical Workflow 02 files remain in the repository for provenance and will be dealt with during the later repository-cleanup stage; they must not be inferred to be current merely from their filenames.
 
-This document serves two purposes:
+## Current workflow entry points
 
-1. as a methodological guide to the repository implementation; and
-2. as source text for reporting Workflow 02 in a research paper.
+### Workflows currently used
 
-## Functionality map
+| Role | Workflow | Current status |
+|---|---|---|
+| Operator-facing production entry point | `.github/workflows/workflow_02_batched_production.yml` | **Current production route for subsequent W02 updates.** It calls the reusable batched engine in incremental mode, batch size 250, publication enabled and Scopus currently disabled. Its GitHub Actions display name still contains “candidate”; that label is a naming artefact pending repository cleanup. |
+| Reusable production engine | `.github/workflows/workflow_02_batched.yml` | **Current W02 engine.** Restores W01 and prior W02 state, plans deterministic batches, writes durable batch checkpoints, aggregates them, builds human-review state, validates replay and publishes accepted sparse W02 state. |
+| Automatic post-human-review resume | `.github/workflows/workflow_02_resume_after_human_review.yml` | **Current automatic resume route.** A Shiny completion request under `docs/shiny_adjudication/w02_resume_requests/` triggers this workflow directly. It validates the matching queue and decisions, reconstructs the preserved source-run patch, applies human decisions, replay-validates, publishes/registers W02 and acknowledges the consumed Shiny batch. Controlled validation passed in run `37022918123`. |
+| Production architecture validation | `.github/workflows/workflow_02_validate_production_architecture.yml` | Current structural validation workflow for W02 production behaviour. |
+| W02-to-W03 handoff for the 2 October 2026 update | `.github/workflows/tmp_publish_w02_to_w03_handoff_37016080508.yml` | **One-off only, not canonical.** Used because this update originated from the older serial W02 run. It successfully created and restored the lean W03 checkpoint. |
+
+### Workflows that are not the current production route
+
+The following files remain for provenance or historical baselines and should **not** be used for a new W02 update:
+
+| Workflow | Status |
+|---|---|
+| `.github/workflows/workflow_02_production.yml` | Legacy serial production route. The 2 October 2026 update originated here before the batched architecture was designated for future production. |
+| `.github/workflows/workflow_02_post_w02_lean_compaction.yml` | Historical baseline-specific compaction workflow. It still contains old fixed pointers/counts from the 32,292-record baseline and is not suitable for a current update. |
+| `.github/workflows/workflow_02_publish_post_w02_lean_checkpoint.yml` | Historical baseline-specific publisher, likewise tied to old run IDs/counts. Do not use for a current update. |
+| `.github/workflows/workflow_02_resume_request_listener.yml` | Superseded listener. It is manual-only; automatic resume is handled directly by `workflow_02_resume_after_human_review.yml`. |
+| `tmp_*workflow02*` and other temporary W02 launchers | Validation/recovery provenance only. They are not production entry points. |
+
+A generic, count-agnostic W02-to-W03 handoff workflow still needs to be canonicalised during the planned workflow audit. For the current update, the handoff itself has already been validated successfully, but the one-off handoff launcher is not to be reused as the general production entry point.
+
+## Current architecture
 
 ```text
-authoritative Workflow 01 canonical JSONL
-          |
-          v
-restore + verify Workflow 01 state
-          |
-          v
-apply previous Workflow 02 cumulative patch, if any
-          |
-          v
-scan canonical records
-          |
-          |-- DOI absent --------------------------> unchanged
-          |
-          |-- title + abstract already present ---> unchanged
-          |
-          '-- DOI present + title/abstract missing
-                         |
-                         v
-                   Europe PMC lookup
-                         |
-              exact normalised DOI required
-                         |
-              +----------+-----------+
-              |                      |
-        metadata filled         metadata still missing
-              |                      |
-              |                      v
-              |                 Scopus lookup
-              |                      |
-              |          direct DOI retrieval, then
-              |          DOI search + EID fallback
-              |                      |
-              +----------+-----------+
-                         |
-                title-consistency guard
-                         |
-              +----------+-----------+
-              |                      |
-         verified fill        conflict/quarantine
+authoritative Workflow 01 canonical state
               |
               v
-        enriched canonical state
+workflow_02_batched_production.yml
               |
               v
-        build sparse current patch
+workflow_02_batched.yml
+              |
+              |-- restore and checksum W01
+              |-- restore previous W02 sparse state
+              |-- apply previous sparse patch
+              |-- select DOI + missing title/abstract records
+              |-- deterministic batch plan
+              |-- durable batch checkpoints
               |
               v
-        exact current-patch replay
+          Europe PMC
+              |
+              |-- exact DOI required
+              |-- title-consistency guard where applicable
               |
               v
-        merge cumulative patch state
+   optional Scopus fallback
+   (currently disabled in production)
               |
               v
- apply cumulative patch to pristine Workflow 01
- and require exact enriched-state reconstruction
+      build sparse current patch
               |
-              v
-       post-enrichment inventory
+              |-- exact batch replay
+              |-- merge cumulative patch
+              |-- cumulative reconstruction check
               |
-              v
-  restricted Zenodo automated enrichment state
-              |
-              v
- authoritative post-Workflow-02 canonical state
-              |
-              v
-           Workflow 03
+              +------------------------------+
+              |                              |
+       no conflicts                    quarantined conflicts
+              |                              |
+              |                              v
+              |                    checksum-locked Shiny queue
+              |                              |
+              |                         human decisions
+              |                              |
+              |                              v
+              |          workflow_02_resume_after_human_review.yml
+              |                              |
+              +---------------+--------------+
+                              |
+                              v
+                   final replay validation
+                              |
+                              v
+                 restricted Zenodo W02 state
+                              |
+                              v
+                    registered W02 pointer
+                              |
+                              v
+                 validated lean W03 handoff
 ```
 
-## Components
+## Authoritative inputs
 
-| Component | Function |
-|---|---|
-| `.github/workflows/workflow_02_production.yml` | Reusable production controller for restoration, enrichment, patch construction, replay validation, inventory and optional publication. |
-| `.github/workflows/workflow_02_validate_handoff.yml` | Validates the Workflow 01 canonical JSONL interface against the actual enrichment implementation. |
-| `.github/workflows/workflow_02_validate_patch_fast.yml` | Validates sparse patch construction and exact replay using a real-record fixture without new provider calls. |
-| `.github/workflows/workflow_02_validate_production_architecture.yml` | Validates first-run and immediate second-run state behaviour, including no-op retry deferral. |
-| `scripts/updater/workflow_02_metadata_enrichment.R` | Performs DOI-based metadata enrichment using Europe PMC followed by Scopus. |
-| `scripts/updater/workflow_02_validate_canonical_handoff.R` | Scans the complete Workflow 01 canonical corpus for schema, identity and eligibility compatibility. |
-| `scripts/updater/workflow_02_build_patch.R` | Converts newly applied enrichment into an auditable sparse patch and technical retry queue. |
-| `scripts/updater/workflow_02_apply_patch.R` | Applies a Workflow 02 patch to canonical JSONL in exact or fill-missing mode. |
-| `scripts/updater/workflow_02_merge_patches.R` | Merges prior and current enrichment patches into the cumulative Workflow 02 state. |
-| `scripts/updater/workflow_02_inventory_state.R` | Produces corpus-wide counts of remaining missing titles and abstracts after enrichment. |
-| `scripts/updater/workflow_02_restore_state_from_zenodo.R` | Restores and checksum-verifies a previous Workflow 02 sparse state from restricted Zenodo. |
-| `scripts/updater/workflow_02_archive_state_to_zenodo.R` | Archives the cumulative sparse enrichment state and lineage to restricted Zenodo. |
-| `scripts/updater/workflow_02_update_zenodo_registry.R` | Registers published Workflow 02 states and writes lightweight repository pointers. |
+Workflow 02 consumes:
 
-## Inputs and methodological rules
+1. the exact published Workflow 01 pointer supplied for the update; and
+2. the latest accepted published Workflow 02 pointer, where one exists.
 
-### Authoritative upstream input
+The W01 canonical checksum is verified before processing. A previous W02 cumulative patch is restored from restricted Zenodo and applied in fill-missing mode so that newer authoritative W01 metadata take precedence over older enrichment.
 
-Workflow 02 consumes the authoritative Workflow 01 canonical JSONL reconstructed from the registered Workflow 01 baseline-plus-delta state.
+For the current update, the accepted W01 state contains **47,094 canonical records** and **118,527 source manifestations**.
 
-The initial validated Workflow 02 baseline used Workflow 01 canonical SHA-256:
+## Eligibility
 
-`f0772fb92cca9fcc676a0f77bf8b2eae0becebf60b07cb23db989d22b7cabe80`
-
-Workflow 02 records this checksum in its durable state so enrichment provenance is bound to an exact upstream corpus.
-
-### Eligibility
-
-A canonical record is eligible for provider lookup only when:
+The current batched planner selects a record for W02 provider lookup only when:
 
 - a DOI is present; and
-- the canonical title, canonical abstract and/or canonical author-keyword field is missing.
+- the canonical title or canonical abstract is missing.
 
-Workflow 02 does not query records that already contain both fields.
+Author keywords may be retained or opportunistically enriched when a provider response already required for title/abstract repair contains them, but **missing keywords alone do not make a record eligible for W02 lookup**.
 
-### Existing-field protection
+This is the current production eligibility contract implemented by `scripts/updater/workflow_02_plan_batches.R`.
 
-Workflow 02 never overwrites an already populated canonical title, abstract or author-keyword field.
+## Existing-field protection
 
-The patch builder validates that any changed title or abstract was previously missing and that no Workflow 01 identity, manifestation, DOI or unrelated record field changed.
+Workflow 02 does not overwrite populated authoritative title or abstract fields during automated enrichment.
 
-### Provider order
-
-Provider order is fixed:
-
-1. Europe PMC;
-2. Scopus only when metadata remain missing after Europe PMC.
-
-This order reduces unnecessary Scopus calls while retaining Scopus as the broader fallback.
-
-### Europe PMC matching
-
-Europe PMC metadata are accepted only where the provider returns the exact normalised DOI requested. For abstract and author-keyword fills, an existing canonical title must also agree with the provider title at Jaro-Winkler similarity ≥0.90. Where the canonical title itself is missing, exact DOI identity may fill that title first; subsequent Europe PMC fields are then accepted only under the resulting title-consistency guard.
-
-### Scopus matching
-
-Scopus title/abstract retrieval retains the previously validated route:
-
-1. direct Abstract Retrieval by DOI using `view=META_ABS`;
-2. if direct retrieval does not return usable metadata, Scopus Search by DOI;
-3. if the search yields one compatible candidate, retrieval by EID using `META_ABS`.
-
-EID fallback is accepted only when the resulting full Scopus record returns the exact requested DOI.
-
-For `author_keywords`, W02 uses Scopus `FULL` retrieval because `META_ABS` does not expose the required author-keyword field reliably. If a Scopus EID is already retained in the W01 manifestation, W02 retrieves that EID with `view=FULL`. If no retained EID is available, W02 attempts direct Abstract Retrieval by DOI with `view=FULL`. In both cases, keywords are accepted only when the returned DOI exactly matches and the provider title has Jaro-Winkler similarity ≥0.90 to the canonical title. If direct DOI retrieval returns no record or HTTP 404, W02 stops; it does not perform a further DOI-search → EID fallback for author keywords.
-
-### Author-keyword route validation
-
-The keyword route was benchmarked on 100 deterministic post-Europe-PMC records with DOI + canonical title + missing author keywords + no retained Scopus EID. Direct Scopus DOI `FULL` retrieval returned 20 records, of which 8 contained author keywords and 7 passed the DOI + title guard, giving a 7% accepted yield. A follow-up benchmark applied Scopus Search → EID → `FULL` retrieval to 50 of the direct-DOI HTTP 404 records and recovered 0 additional records. Production W02 therefore uses direct DOI `FULL` retrieval as the final Scopus keyword fallback and does not search for an EID after a direct DOI miss.
-
-### Title-consistency guard
-
-When an abstract is returned and both the canonical record and provider response contain titles, Jaro-Winkler title similarity must be at least 0.90.
-
-Provider metadata below that threshold are not applied. They are recorded as quarantined conflicts.
-
-### Retry policy
-
-Workflow 02 records provider outcomes within each attempted record.
-
-Successful or no-result attempts are deferred for 90 days by default before being eligible for another provider lookup. Records with a technical provider failure remain eligible for retry on the next run.
-
-This prevents fortnightly updater runs from repeatedly querying unchanged unresolved records.
-
-## Processing stages
-
-### 1. Restore Workflow 01
-
-The registered Workflow 01 pointer is restored through its full baseline and delta chain. The resulting canonical JSONL checksum is calculated and retained as Workflow 02 lineage.
-
-### 2. Restore prior Workflow 02 state
-
-If a previous Workflow 02 pointer is supplied, its cumulative patch is restored from restricted Zenodo and checksum-verified.
-
-The previous patch is applied in fill-missing mode to the current Workflow 01 corpus. This means improved upstream Workflow 01 metadata take precedence over older enrichment patches.
-
-### 3. Discover due enrichment candidates
-
-Workflow 02 scans the canonical corpus and selects records with a DOI and a missing title, abstract and/or author-keyword field.
-
-Records with recent non-technical enrichment attempts are deferred according to the configured recheck period.
-
-### 4. Query Europe PMC
-
-Europe PMC is queried first. Exact DOI equality is required before any field can be applied.
-
-### 5. Query Scopus
-
-For residual missing title/abstract fields, the established Scopus DOI retrieval route is retained. For residual missing author keywords, W02 first uses a retained Scopus EID with `view=FULL` where available; otherwise it tries direct DOI `FULL` retrieval. No further Scopus Search → EID fallback is used for keywords after a direct DOI miss.
-
-### 6. Apply verified fills and quarantine conflicts
-
-Only missing canonical fields can be populated.
-
-Returned abstracts are guarded by title similarity. DOI mismatch, title inconsistency or ambiguous Scopus resolution results in quarantine rather than automatic repair.
-
-### 7. Human-review gate for quarantined conflicts
-
-After enrichment, any quarantined provider conflicts are extracted into a checksum-locked human-review package containing a CSV review sheet, detailed JSONL evidence and a manifest bound to the exact input canonical JSONL and enrichment audit. If at least one quarantined record is present, the package is uploaded as a GitHub Actions artefact and the production workflow deliberately fails before cumulative patch merge, Zenodo publication or downstream handoff. The failed run therefore acts as the explicit attention/notification signal that human adjudication is required. Runs with zero quarantined conflicts continue automatically.
-
-### 8. Build sparse patch
-
-The current enrichment run is converted into one patch record per attempted canonical work.
-
-Each patch records:
+Sparse-patch construction and replay checks protect:
 
 - stable `record_id`;
-- input DOI;
-- newly filled title, abstract and/or author keywords where applicable;
-- provider responsible for each applied field;
-- provider outcome metadata;
-- enrichment completion date;
-- missing-field state after enrichment; and
-- the corresponding provider audit object.
+- DOI;
+- source manifestations;
+- existing populated canonical fields; and
+- unrelated canonical metadata.
 
-Technical provider failures are written separately to a retry queue.
+Conflicting candidate metadata are quarantined rather than silently applied.
 
-### 9. Validate exact current-patch replay
+## Provider behaviour
 
-The current patch is applied back to the pre-run canonical state.
+### Europe PMC
 
-The reconstructed JSONL must match the direct enrichment output exactly by SHA-256.
+Europe PMC is the first provider.
 
-### 10. Merge cumulative Workflow 02 state
+Provider metadata are accepted only when the returned DOI exactly matches the requested normalised DOI. Where both canonical and provider titles exist, guarded fields require title consistency using the established Jaro-Winkler threshold of at least 0.90.
 
-The newly generated patch is merged with the prior cumulative patch by stable `record_id`.
+### Scopus
 
-New verified field fills update that record’s sparse enrichment state without duplicating the full canonical corpus.
+Scopus remains implemented as an optional fallback after Europe PMC for residual missing title/abstract metadata.
 
-### 11. Validate cumulative reconstruction
+The underlying enrichment script retains:
 
-The cumulative patch is applied to the pristine authoritative Workflow 01 canonical JSONL.
+- direct Abstract Retrieval by DOI;
+- DOI search followed by EID retrieval where required;
+- exact returned-DOI validation;
+- title-consistency guarding;
+- rate-limit response handling;
+- `Retry-After` / `X-RateLimit-Reset` interpretation;
+- a circuit breaker for repeated rate-limit failures; and
+- technical retry provenance.
 
-The result must reproduce the final enriched canonical JSONL exactly by SHA-256.
-
-This is the principal integrity gate before publication.
-
-### 12. Inventory residual missing metadata
-
-Workflow 02 inventories the final enriched corpus and records:
-
-- total canonical works;
-- records with DOI;
-- records missing title;
-- records missing abstract;
-- records missing author keywords;
-- records missing both title and abstract.
-
-A separate queue is written for records missing both fields.
-
-### 13. Publish durable automated enrichment state
-
-When publication is enabled, only the sparse automated Workflow 02 enrichment state is archived to restricted Zenodo.
-
-The enriched canonical JSONL can therefore be reconstructed from:
+However, **Scopus is currently disabled in the operator-facing production wrapper**:
 
 ```text
-authoritative Workflow 01 canonical JSONL
-    +
-Workflow 02 cumulative enrichment patch
-    =
-automatically enriched canonical JSONL
+workflow_02_batched_production.yml
+use_scopus: false
 ```
 
-## Provenance and documentation
+When Scopus is disabled, unresolved metadata after Europe PMC are retained unchanged and are not classified as Scopus technical failures.
 
-Workflow 02 records, where applicable:
+This avoids consuming or repeatedly probing an exhausted Scopus weekly quota while preserving the option to re-enable Scopus later.
 
-- exact upstream Workflow 01 canonical SHA-256;
-- previous Workflow 02 lineage;
-- stable canonical `record_id`;
-- normalised DOI;
-- missing title/abstract state before and after enrichment;
-- Europe PMC response outcome;
-- Scopus response outcome;
-- Scopus EID where used;
-- provider attempts;
-- provider responsible for each applied field;
-- title similarity for guarded abstract fills;
-- quarantined conflict reason;
-- technical-error state;
-- configured recheck period;
-- current patch SHA-256;
-- cumulative patch record count;
-- enriched canonical JSONL SHA-256;
-- retry queue SHA-256;
-- final inventory;
-- GitHub Actions run ID;
-- Zenodo record identifier and DOI;
-- archive size and SHA-256;
-- archive manifest SHA-256;
+## Batching and checkpoints
 
-## Storage and archival model
+The current production wrapper uses batches of up to **250 records**. The reusable engine supports different batch sizes, but production should use the wrapper unless a deliberately controlled validation or repair run requires otherwise.
 
-### Permanent repository records
+The batched engine:
 
-The repository stores lightweight Workflow 02 lineage and methodology:
+- plans the due set deterministically;
+- writes immutable batch inputs;
+- retains durable batch checkpoints;
+- supports checkpoint reuse after interruption;
+- aggregates current patches across batches;
+- validates exact batch replay; and
+- retains a prepared finalisation state that can be used after human adjudication.
 
-- production and validation workflows;
-- enrichment, patch, replay, inventory and archival scripts;
-- this reporting document;
-- `docs/enrichment/zenodo_registry.csv`; and
-- one small pointer under `docs/enrichment/zenodo/` for each published Workflow 02 state.
+The current matrix remains conservative at `max-parallel: 1`; concurrency should not be increased without a separate provider-rate-limit validation.
 
-The fully enriched canonical corpus is not committed to Git.
+## Human-review gate and automatic resume
 
-### Short-lived GitHub Actions artefacts
+Provider conflicts are converted to a checksum-locked W02 review queue and published to the Shiny adjudication application.
 
-Operational state is retained temporarily for validation and debugging, including:
+For a normal batched production run:
 
-- current patch;
-- cumulative patch;
+1. W02 preserves the immutable prepared state and batch checkpoints.
+2. The Shiny app displays the W02 conflict cases.
+3. Decisions are written to the W02 decisions store.
+4. When all active cases have a non-`uncertain` decision, the Shiny app creates a completion request under:
+   `docs/shiny_adjudication/w02_resume_requests/`.
+5. That push directly triggers:
+   `.github/workflows/workflow_02_resume_after_human_review.yml`.
+6. The workflow verifies that the active queue belongs to the requested source run and that its reconstructed SHA matches the locked queue SHA.
+7. The latest active decision for every review case is required.
+8. Human decisions are applied to the preserved current W02 patch.
+9. The current and cumulative states are replayed and checksum-verified.
+10. The resumed W02 state is published and registered.
+11. The Shiny batch is marked consumed.
+12. A validated W02 handoff artefact is emitted.
+
+A non-destructive controlled validation of this trigger/request path passed in GitHub Actions run **`37022918123`**. In that validation, the request was parsed successfully, the validation-only job passed and the real resume job was skipped, so no W02 state was modified.
+
+## Sparse state and retry behaviour
+
+W02 is a sparse enrichment layer over W01. The durable state consists primarily of:
+
+- cumulative enrichment patch;
 - enrichment audit;
-- retry queue;
-- inventory;
-- replay reports;
-- Zenodo receipt.
+- provider/retry state;
+- final inventory;
+- replay/provenance reports; and
+- state manifest.
 
-These artefacts are not the durable source of truth.
+Technical provider failures are separately identifiable and can be revisited in a controlled repair mode.
 
-### Durable external archive
+Successful/no-result attempts can be deferred by the configured recheck interval, currently 90 days by default.
 
-Each accepted Workflow 02 state is deposited as a restricted Zenodo record.
+When Scopus is disabled, a skipped Scopus fallback is not treated as a technical failure.
 
-The automated enrichment archive contains the cumulative sparse enrichment patch, enrichment audit, retry state, inventory and replay/provenance reports. It does not duplicate the complete Workflow 01 canonical corpus.
+## Publication
 
+Accepted W02 state is archived as a restricted Zenodo record and registered in:
 
-Each durable state is represented in `docs/enrichment/zenodo_registry.csv` and by a lightweight JSON pointer under `docs/enrichment/zenodo/`.
+- `docs/enrichment/zenodo_registry.csv`; and
+- `docs/enrichment/zenodo/run-<run_id>.json`.
 
-## Validated baseline
+The fully enriched canonical JSONL does not need to be committed to Git. It is reproducible from the exact W01 state plus the registered cumulative W02 sparse patch.
 
-The first full production Workflow 02 enrichment baseline is GitHub Actions run `36137804187`.
+## Current accepted W02 state: 2 October 2026
 
-Upstream Workflow 01:
+The current update originated from an older serial W02 production run and therefore required a one-off finalisation path after the batched architecture had already been selected for future production. This exception does **not** define the future W02 production route.
 
-- canonical records: 32,292;
-- canonical SHA-256: `f0772fb92cca9fcc676a0f77bf8b2eae0becebf60b07cb23db989d22b7cabe80`.
+Accepted W02 state:
 
-Workflow 02 eligibility and enrichment:
+- finalisation run: **`37016080508`**;
+- canonical records: **47,094**;
+- source manifestations: **118,527**;
+- cumulative sparse patch records: **3,434**;
+- current Shiny KPI count with enrichment data: **2,218**;
+- final enriched canonical SHA-256:  
+  `5b38fcd72b19119d7c8b435b7cd9a2a24f262537300985cdcc7086b93380b091`;
+- restricted Zenodo record: **23104611**;
+- DOI: **10.5281/zenodo.23104611**;
+- repository pointer: `docs/enrichment/zenodo/run-37016080508.json`.
 
-- DOI-bearing records with missing title and/or abstract: 3,434;
-- Europe PMC abstracts filled: 175;
-- Europe PMC titles filled: 0;
-- Scopus records attempted after Europe PMC: 3,259;
-- Scopus titles filled: 25;
-- Scopus abstracts filled: 1,990;
-- Scopus HTTP 404 responses: 739;
-- provider conflicts quarantined: 199;
-- technical-error records: 0;
-- attempted records still missing one or more targeted fields after lookup: 1,244.
+The source run had encountered Scopus weekly quota exhaustion. Those Scopus technical outcomes were retained as provenance/retry state; no new Scopus requests were required to finalise the accepted W02 state.
 
-Total verified additions:
+## Current validated W02-to-W03 handoff
 
-- title fills: 25;
-- abstract fills: 2,165.
+For this update, the W02-to-W03 handoff was validated by one-off run **`37019284428`**.
 
-Replay validation:
+That run:
 
-- current patch records: 3,434;
-- current patch field conflicts: 0;
-- current patch reproduced the direct enrichment output exactly;
-- cumulative patch reproduced the final enriched canonical JSONL exactly.
+- verified the final W02 canonical SHA;
+- compacted the 47,094-record canonical state to the lean downstream representation;
+- preserved all stable record identities and manifestation references;
+- published a restricted lean checkpoint;
+- registered the checkpoint; and
+- restored the published checkpoint through the W03 restore script and verified the restored SHA and record count.
 
-Final corpus inventory:
+Accepted lean handoff state:
 
-- canonical records: 32,292;
-- missing titles: 16;
-- missing abstracts: 2,689;
-- missing both title and abstract: 0.
+- source W02 run: **`37016080508`**;
+- publication/validation run: **`37019284428`**;
+- canonical records: **47,094**;
+- manifestations/references: **118,527**;
+- lean canonical SHA-256:  
+  `2f55621c09af9074051cf9ae969be414541ac5eeab3266a9a86b8f984f7183f2`;
+- restricted Zenodo record: **23104805**;
+- DOI: **10.5281/zenodo.23104805**;
+- pointer: `docs/compaction/zenodo/run-37016080508.json`.
 
-The enriched canonical JSONL SHA-256 is:
+The older `workflow_02_post_w02_lean_compaction.yml` and `workflow_02_publish_post_w02_lean_checkpoint.yml` remain tied to the historical 32,292-record baseline and must not be used for a new update. A generic count-agnostic handoff entry point should be selected or built during the forthcoming W03/W02 audit before it is treated as canonical for future cycles.
 
-`c88d36631512b5b30853fb3ae271db2e456b2a8b5b94925ccf0840e8f8d9156b`
+## Historical baseline
 
-The durable Workflow 02 state is stored as restricted Zenodo record `22960664`, DOI `10.5281/zenodo.22960664`.
+The earlier validated full baseline remains useful provenance but is no longer the current operational state.
 
-Repository pointer:
+Historical baseline:
 
-`docs/enrichment/zenodo/run-36137804187.json`
+- production run: `36137804187`;
+- W01 canonical records: 32,292;
+- W02 cumulative patch records: 3,434;
+- enriched canonical SHA-256:  
+  `c88d36631512b5b30853fb3ae271db2e456b2a8b5b94925ccf0840e8f8d9156b`;
+- restricted Zenodo record: 22960664;
+- DOI: 10.5281/zenodo.22960664.
 
-The archived sparse state contains 3,434 cumulative patch records. The state archive SHA-256 is:
+Finite correction work performed while establishing that historical baseline is documented separately in `AD_HOC_ACTIONS.md`. It must not be interpreted as part of the current automated production path.
 
-`038d62233546037b8af4c6277a07b633dfae83e62a3596c9ff6dc3026ada324a`
+## Provenance recorded by W02
 
-The archive manifest SHA-256 is:
+Where applicable, Workflow 02 records:
 
-`405d54e01a4578ca6477820ea836f1142a3ca1a57647cf3028bed04da8ed20e2`
+- upstream W01 pointer and canonical SHA-256;
+- previous W02 lineage;
+- stable `record_id`;
+- normalised DOI;
+- missing-field state before and after enrichment;
+- Europe PMC outcome;
+- Scopus outcome where Scopus is enabled;
+- provider attempts and rate-limit state;
+- accepted field provenance;
+- title similarity for guarded fills;
+- quarantined conflict reason;
+- technical-error/retry state;
+- configured recheck period;
+- batch input/checkpoint checksums;
+- current and cumulative patch checksums;
+- final enriched canonical SHA-256;
+- final inventory;
+- human-review queue SHA;
+- human-decision application manifest;
+- GitHub Actions run IDs;
+- Zenodo record identifier/DOI;
+- archive and manifest checksums.
 
-## Validated-state handoff
+## Storage model
 
-Validated Workflow 02 materialisations are retained for seven days as downstream handoff caches. The durable sparse enrichment state remains authoritative. A downstream workflow may use a live materialised cache only when its checksum matches the checksum registered for the accepted Workflow 02 state; otherwise the state is reconstructed from the exact upstream Workflow 01 corpus plus the registered Workflow 02 sparse layer.
+### GitHub
 
-The post-Workflow-02 lean canonical checkpoint follows the same rule: a seven-day materialised lean artefact may be used directly, while the registered restricted Zenodo checkpoint provides the durable fallback.
+Permanent lightweight records include:
 
-## Downstream handoff
+- current W02 workflow definitions and scripts;
+- methodology/documentation;
+- Zenodo registry;
+- small Zenodo pointers;
+- current-run reporting metadata.
 
-The Workflow 02 handoff is the automatically enriched canonical state reconstructed from:
+### GitHub Actions artefacts
 
-1. the exact registered Workflow 01 canonical state; and
-2. the registered Workflow 02 cumulative enrichment patch.
+Short-lived operational artefacts include:
 
-Any finite one-off canonical corrections applied while establishing a particular baseline are documented separately in `docs/reporting/workflow_02/AD_HOC_ACTIONS.md` and are not part of the automated enrichment methodology.
+- immutable batch inputs;
+- batch checkpoints;
+- prepared finalisation state;
+- human-review package;
+- resumed human-review state;
+- materialised W02 handoff JSONL.
 
+These are operational caches, not the durable source of truth.
 
-Downstream workflows must preserve the stable Workflow 01 `record_id` and source manifestations. Workflow 03 should reconstruct this exact state from the registered sparse layers and verify the resulting checksum before performing retraction surveillance. It must not rebuild bibliographic enrichment independently.
+### Zenodo
+
+Restricted Zenodo records provide the durable sparse W02 state and the accepted lean downstream checkpoint.
 
 ## Methods text for research reporting
 
-> **Workflow 02: bibliographic metadata enrichment.** Canonical records with a DOI but a missing title, abstract and/or author-keyword field were subjected to deterministic metadata enrichment. Europe PMC was queried first, with metadata accepted only where the returned DOI exactly matched the requested normalised DOI; abstract and author-keyword fills additionally required title agreement at a Jaro-Winkler similarity of at least 0.90. Records remaining incomplete for title or abstract were queried against Scopus using direct DOI-based abstract retrieval and, where necessary, DOI search followed by EID retrieval. Missing author keywords were queried in Scopus using `FULL` retrieval, first through an EID already retained in the Workflow 01 manifestation and, where no EID was available, through direct DOI retrieval. Author keywords were accepted only after exact DOI and title-consistency checks; direct DOI misses were left unresolved rather than escalated to an additional Scopus search step. Existing populated canonical fields were never overwritten by the automated process. Returned abstracts were accepted only when provider and canonical titles were consistent, using a Jaro-Winkler similarity threshold of 0.90 where both titles were available; conflicting metadata were quarantined rather than applied. Automated enrichment was stored as a sparse patch keyed to stable canonical work identifiers rather than as a duplicate full corpus, and both current and cumulative patch states were replayed against the authoritative upstream corpus before archival. Provider outcomes, accepted fills, quarantined conflicts, checksums and lineage were retained for provenance, and the cumulative sparse enrichment state was replayed against the exact upstream canonical corpus before archival.
+> **Workflow 02: bibliographic metadata enrichment.** Canonical records with a DOI but a missing title or abstract were subjected to deterministic metadata enrichment. Europe PMC was queried first, with metadata accepted only where the returned DOI exactly matched the requested normalised DOI and title-consistency requirements were met where applicable. Scopus was available as a configurable fallback for residual title/abstract gaps but could be disabled operationally, for example when provider quota was unavailable; disabling the provider left unresolved metadata unchanged rather than treating the absence of a Scopus call as a technical failure. Existing populated canonical metadata were not overwritten automatically. Conflicting provider metadata were quarantined for human adjudication in a checksum-locked review queue. Enrichment was stored as a sparse patch keyed to stable canonical work identifiers, and batch, current and cumulative patch states were replayed against their authoritative inputs before archival. After human review, completed decisions were validated against the locked queue and applied before final replay, publication and downstream handoff.
 
-## Reporting status
+## Completion criteria
 
-Workflow 02 is considered validated when:
+Workflow 02 is complete for an update when:
 
-- the Workflow 01 canonical JSONL is consumed without a schema adapter;
-- stable work identities and source manifestations remain unchanged;
-- existing title, abstract, author-keyword and DOI values are not overwritten;
-- only DOI-bearing records with missing target fields are queried;
-- provider matches satisfy exact DOI and title-consistency rules;
-- conflicting provider metadata are quarantined;
-- quarantined conflicts trigger a checksum-locked human-review artefact and block publication/downstream handoff until adjudicated;
-- technical failures are separately identifiable and retryable;
-- the current sparse patch exactly reproduces the direct enrichment output;
-- the cumulative patch applied to authoritative Workflow 01 exactly reproduces the final enriched canonical JSONL;
-- residual missing metadata are inventoried;
-- the automated sparse Workflow 02 enrichment state is deposited to restricted Zenodo;
-- the final post-Workflow-02 canonical checksum is recorded;
-- all Zenodo pointers and lineage are registered in the repository; and
-- Workflow 03 can reconstruct the authoritative post-Workflow-02 state without another complete canonical JSONL archive.
+- authoritative W01 state is checksum-verified;
+- prior W02 sparse state is restored where applicable;
+- the deterministic due set is processed or explicitly deferred;
+- existing populated authoritative metadata are preserved;
+- every automated accepted fill satisfies provider identity/consistency rules;
+- any conflicts are quarantined;
+- any required Shiny adjudication is complete;
+- human decisions are bound to the correct queue SHA;
+- current and cumulative sparse states replay exactly;
+- final W02 state is deposited to restricted Zenodo and registered;
+- the final W02 canonical checksum is recorded; and
+- the downstream W03 handoff can be restored and checksum-verified.
 
-The automated enrichment conditions were satisfied by production run `36137804187`. Baseline-specific manual correction work is documented separately in `docs/reporting/workflow_02/AD_HOC_ACTIONS.md`.
+For the 2 October 2026 update, these conditions were satisfied by W02 finalisation run `37016080508` plus W02-to-W03 handoff validation run `37019284428`.
 
-**Workflow 02 status: complete and ready for downstream Workflow 03 consumption.**
+**Current W02 status: complete for this update; W03 handoff validated. Future W02 production should use the batched production route documented at the top of this file.**
