@@ -1,0 +1,134 @@
+name: Workflow 01 - Validate generic Shiny handoff
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'scripts/updater/workflow_01_select_pending_checkpoint.R'
+      - 'scripts/updater/workflow_01_select_ready_handoff.R'
+      - '.github/workflows/shiny-adjudication-dry-run-export-w01.yml'
+      - '.github/workflows/workflow_01_resume_after_human_review.yml'
+      - '.github/workflows/workflow_01_validate_shiny_handoff_generic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.6.0'
+          use-public-rspm: true
+
+      - name: Install minimal dependencies
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+
+      - name: Validate checkpoint selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/checkpoints"
+          RES="$ROOT/resolutions"
+          mkdir -p "$RES"
+          cat > "$ROOT/run-1001.json" <<'JSON'
+          {
+            "status":"published",
+            "state":"pre_adjudication",
+            "visibility":"restricted",
+            "github_run_id":"1001",
+            "queue_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "pending_human_cases":3,
+            "zenodo_record_id":"2001"
+          }
+          JSON
+
+          Rscript scripts/updater/workflow_01_select_pending_checkpoint.R \
+            --checkpoint-dir "$ROOT" --resolution-dir "$RES" --output "$RUNNER_TEMP/pending.json"
+          Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);stopifnot(isTRUE(x$found),x$checkpoint_run_id=="1001",x$pending_human_cases==3)' "$RUNNER_TEMP/pending.json"
+
+          echo '{"checkpoint_run_id":"1001","resolved_by_run_id":"3001","status":"resolved"}' > "$RES/run-1001.json"
+          Rscript scripts/updater/workflow_01_select_pending_checkpoint.R \
+            --checkpoint-dir "$ROOT" --resolution-dir "$RES" --output "$RUNNER_TEMP/none.json"
+          Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);stopifnot(identical(x$found,FALSE))' "$RUNNER_TEMP/none.json"
+
+          rm "$RES/run-1001.json"
+          cp "$ROOT/run-1001.json" "$ROOT/run-1002.json"
+          Rscript -e 'library(jsonlite);p<-commandArgs(TRUE)[1];x<-fromJSON(p);x$github_run_id<-"1002";x$queue_sha256<-paste(rep("b",64),collapse="");writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE),p)' "$ROOT/run-1002.json"
+          if Rscript scripts/updater/workflow_01_select_pending_checkpoint.R \
+              --checkpoint-dir "$ROOT" --resolution-dir "$RES" --output "$RUNNER_TEMP/ambiguous.json"; then
+            echo "Selector incorrectly accepted multiple unresolved checkpoints" >&2
+            exit 1
+          fi
+          echo "PASS: unresolved checkpoint selector is deterministic and fail-closed"
+
+      - name: Validate handoff selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          HAND="$RUNNER_TEMP/handoffs"
+          RES="$RUNNER_TEMP/handoff_resolutions"
+          mkdir -p "$HAND" "$RES"
+          cat > "$HAND/run-1001.json" <<'JSON'
+          {
+            "schema":"living-evidence-map-workflow01-shiny-handoff-v1",
+            "status":"ready",
+            "checkpoint_pointer_path":"docs/deduplication/checkpoints/run-1001.json",
+            "checkpoint_run_id":"1001",
+            "checkpoint_zenodo_record_id":"2001",
+            "queue_cases":3,
+            "queue_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "export_run_id":"4001",
+            "decisions_artifact":"workflow01-human-decisions-1001-4001",
+            "decisions_export_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "created_at_utc":"2026-10-02T00:00:00Z"
+          }
+          JSON
+
+          Rscript scripts/updater/workflow_01_select_ready_handoff.R \
+            --handoff-dir "$HAND" --resolution-dir "$RES" --output "$RUNNER_TEMP/ready.json"
+          Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);stopifnot(isTRUE(x$found),x$checkpoint_run_id=="1001",x$export_run_id=="4001")' "$RUNNER_TEMP/ready.json"
+
+          echo '{"checkpoint_run_id":"1001","resolved_by_run_id":"5001","status":"resolved"}' > "$RES/run-1001.json"
+          Rscript scripts/updater/workflow_01_select_ready_handoff.R \
+            --handoff-dir "$HAND" --resolution-dir "$RES" --output "$RUNNER_TEMP/no-ready.json"
+          Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);stopifnot(identical(x$found,FALSE))' "$RUNNER_TEMP/no-ready.json"
+
+          rm "$RES/run-1001.json"
+          cp "$HAND/run-1001.json" "$HAND/run-1002.json"
+          Rscript -e 'library(jsonlite);p<-commandArgs(TRUE)[1];x<-fromJSON(p);x$checkpoint_run_id<-"1002";x$checkpoint_pointer_path<-"docs/deduplication/checkpoints/run-1002.json";writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE),p)' "$HAND/run-1002.json"
+          if Rscript scripts/updater/workflow_01_select_ready_handoff.R \
+              --handoff-dir "$HAND" --resolution-dir "$RES" --output "$RUNNER_TEMP/ambiguous-ready.json"; then
+            echo "Selector incorrectly accepted multiple ready handoffs" >&2
+            exit 1
+          fi
+          echo "PASS: ready handoff selector is deterministic and fail-closed"
+
+      - name: Assert recovery pins are absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILES=".github/workflows/shiny-adjudication-dry-run-export-w01.yml .github/workflows/workflow_01_resume_after_human_review.yml"
+          for needle in \
+            "36866644366" \
+            "36924314103" \
+            "36909431511" \
+            "ac5f0200aac3dbc2a7fbef20cbc25db4dd5709e13f5fed1b8af896a4330200db" \
+            "EXPECTED_CASES: '74'"; do
+            if grep -Fq "$needle" $FILES; then
+              echo "Recovery-specific pin still present: $needle" >&2
+              exit 1
+            fi
+          done
+          grep -Fq "workflow_01_select_pending_checkpoint.R" .github/workflows/shiny-adjudication-dry-run-export-w01.yml
+          grep -Fq "workflow_01_select_ready_handoff.R" .github/workflows/workflow_01_resume_after_human_review.yml
+          echo "PASS: W01 Shiny return path is manifest-driven and contains no recovery pins"
