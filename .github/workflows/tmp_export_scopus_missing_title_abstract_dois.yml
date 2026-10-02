@@ -1,0 +1,96 @@
+name: TEMP export Scopus DOI query for missing title/abstract
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_export_scopus_missing_title_abstract_dois.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2'))
+
+      - name: Restore current post-W02 lean canonical state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer docs/compaction/zenodo/run-37016080508.json \
+            --output-dir current
+
+      - name: Build Scopus-ready DOI query
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          scalar <- function(x){
+            if(is.null(x)||!length(x)) return("")
+            z <- as.character(x[[1L]])
+            if(is.na(z)) "" else trimws(z)
+          }
+          norm_doi <- function(x){
+            x <- scalar(x)
+            x <- sub("^https?://(dx\\.)?doi\\.org/","",x,ignore.case=TRUE)
+            x <- sub("^doi[: ]*","",x,ignore.case=TRUE)
+            trimws(x)
+          }
+          lines <- readLines("current/canonical_lean.jsonl",warn=FALSE,encoding="UTF-8")
+          lines <- lines[nzchar(trimws(lines))]
+          recs <- lapply(lines,function(z) fromJSON(z,simplifyVector=FALSE))
+          rows <- lapply(recs,function(r){
+            c <- r$canonical %||% list()
+            title <- scalar(c$title %||% r$title)
+            abstract <- scalar(c$abstract %||% r$abstract)
+            doi <- norm_doi(c$doi %||% r$doi)
+            rid <- scalar((r$identity %||% list())$record_id)
+            data.frame(record_id=rid,doi=doi,title_missing=!nzchar(title),abstract_missing=!nzchar(abstract),stringsAsFactors=FALSE)
+          })
+          d <- do.call(rbind,rows)
+          d <- d[(d$title_missing | d$abstract_missing) & nzchar(d$doi),,drop=FALSE]
+          d <- d[!duplicated(tolower(d$doi)),,drop=FALSE]
+          d <- d[order(tolower(d$doi)),,drop=FALSE]
+          dir.create("outputs",showWarnings=FALSE)
+          write.csv(d,"outputs/missing_title_or_abstract_with_doi.csv",row.names=FALSE,na="")
+          q <- paste(sprintf("DOI(%s)",d$doi),collapse=" OR ")
+          writeLines(q,"outputs/scopus_doi_query.txt",useBytes=TRUE)
+          summary <- list(
+            records=nrow(d),
+            title_missing=sum(d$title_missing),
+            abstract_missing=sum(d$abstract_missing),
+            both_missing=sum(d$title_missing & d$abstract_missing),
+            query_characters=nchar(q)
+          )
+          writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),"outputs/summary.json")
+          cat("SUMMARY_START\n")
+          cat(toJSON(summary,auto_unbox=TRUE,pretty=TRUE), "\n")
+          cat("SUMMARY_END\n")
+          cat("QUERY_START\n")
+          cat(q, "\n")
+          cat("QUERY_END\n")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scopus-missing-title-abstract-doi-query
+          path: outputs/
+          retention-days: 30
