@@ -1,0 +1,23 @@
+name: TEMP run W02 for CAB and ProQuest addition
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w02_cab_proquest_update.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  run_w02:
+    uses: ./.github/workflows/workflow_02_production.yml
+    with:
+      workflow01_pointer_path: docs/deduplication/zenodo/run-36971418284.json
+      previous_workflow02_pointer_path: docs/enrichment/zenodo/run-36725200424.json
+      limit: '0'
+      recheck_after_days: '90'
+      publish: true
+    secrets: inherit
