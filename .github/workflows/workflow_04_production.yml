@@ -161,7 +161,8 @@ jobs:
             --canonical inputs/current/canonical_lean.jsonl \
             --repair-overlay inputs/manual_repair/repair_overlay.jsonl \
             --output inputs/current/canonical_lean.repaired.jsonl \
-            --audit inputs/current/manual_repair_application.json
+            --audit inputs/current/manual_repair_application.json \
+            --force-rescreen-output inputs/current/manual_repair_force_rescreen_record_ids.txt
           mv inputs/current/canonical_lean.repaired.jsonl inputs/current/canonical_lean.jsonl
 
       - name: Restore prior W04 state
@@ -214,7 +215,7 @@ jobs:
             fi
           fi
           if [ -n "$MANUAL_REPAIR_RECORD" ]; then
-            ARGS+=(--force-rescreen-record-ids inputs/manual_repair/force_rescreen_record_ids.txt)
+            ARGS+=(--force-rescreen-record-ids inputs/current/manual_repair_force_rescreen_record_ids.txt)
           fi
           Rscript scripts/updater/workflow_04_prepare_incremental.R "${ARGS[@]}"
           QUEUE_N=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_prepare/prepare_manifest.json");cat(as.integer(x$screen_queue_records))')
@@ -250,6 +251,7 @@ jobs:
             outputs/workflow04_prepare/
             outputs/workflow04_recovery_seed/
             inputs/current/manual_repair_application.json
+            inputs/current/manual_repair_force_rescreen_record_ids.txt
           retention-days: 7
           if-no-files-found: error
 
