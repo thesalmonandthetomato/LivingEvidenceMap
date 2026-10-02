@@ -1,0 +1,36 @@
+{
+  "schema": "living-evidence-map-w01-high-evidence-disagreement-triage-v1",
+  "status": "success",
+  "test_only": true,
+  "workflow_run_id": 36992814943,
+  "artifact_id": 11220516034,
+  "source_full_benchmark_run_id": 36990537714,
+  "high_evidence_pairs": 236,
+  "triage": {
+    "likely_w01_miss": {
+      "pairs": 182,
+      "cluster_pair_components": 76,
+      "median_title_similarity": 0.9821428571
+    },
+    "ambiguous_manual": {
+      "pairs": 27,
+      "cluster_pair_components": 22,
+      "median_title_similarity": 0.4553571429
+    },
+    "metadata_or_identifier_conflict": {
+      "pairs": 27,
+      "cluster_pair_components": 24,
+      "median_title_similarity": 0.2368421053
+    }
+  },
+  "rules": {
+    "likely_w01_miss": "At least two independent identifier families, year difference <=1 or missing, and normalised-title similarity >=0.65.",
+    "metadata_or_identifier_conflict": "At least two independent identifier families plus either year difference >=3 or normalised-title similarity <0.35.",
+    "ambiguous_manual": "High-evidence disagreement not meeting either conservative rule."
+  },
+  "caution": "These are triage labels, not duplicate decisions. Low title similarity includes translations, chapter/book-title variants and source corruption, so the conflict bucket requires external metadata validation.",
+  "invariants": {
+    "automatic_merges_performed": 0,
+    "production_w01_modified": false
+  }
+}
