@@ -100,7 +100,10 @@ repeat {
   if(mt) n_missing_title <- n_missing_title + 1L
   if(ma) n_missing_abstract <- n_missing_abstract + 1L
   if(mk) n_missing_author_keywords <- n_missing_author_keywords + 1L
-  eligible <- !is.null(d) && (mt || ma || mk)
+  # Production Workflow 02 enrichment is eligible only when DOI is present
+  # and title or abstract is missing. Missing author keywords alone do not
+  # trigger a provider lookup; they are filled only opportunistically.
+  eligible <- !is.null(d) && (mt || ma)
   if(eligible){
     n_eligible <- n_eligible + 1L
     if(length(sample_lines) < sample_n) sample_lines <- c(sample_lines,line)
