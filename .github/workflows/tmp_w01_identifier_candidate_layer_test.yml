@@ -1,0 +1,72 @@
+name: TEMP W01 identifier candidate layer test
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_candidate_layer_test.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite'))
+
+      - name: Download benchmark and guard artefacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_candidate/benchmark /tmp/w01_candidate/guards /tmp/w01_candidate/out
+
+          gh api -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11220721964/zip"             > /tmp/w01_candidate/benchmark.zip
+          unzip -q /tmp/w01_candidate/benchmark.zip -d /tmp/w01_candidate/benchmark
+
+          gh api -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11221329288/zip"             > /tmp/w01_candidate/guards.zip
+          unzip -q /tmp/w01_candidate/guards.zip -d /tmp/w01_candidate/guards
+
+      - name: Run guarded identifier-assisted candidate layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_identifier_candidate_layer_test.R             --pairs /tmp/w01_candidate/benchmark/identifier_candidate_pairs.csv             --registry /tmp/w01_candidate/benchmark/identifier_registry.csv             --guards /tmp/w01_candidate/guards/future_never_auto_resolve_guard_candidates.csv             --output-dir /tmp/w01_candidate/out
+          cat /tmp/w01_candidate/out/identifier_candidate_layer_audit.json
+          cat /tmp/w01_candidate/out/identifier_candidate_layer_summary.csv
+
+      - name: Assert safety invariants
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          a <- fromJSON('/tmp/w01_candidate/out/identifier_candidate_layer_audit.json')
+          stopifnot(a$automatic_merges_performed == 0L)
+          stopifnot(a$production_w01_modified == FALSE)
+          stopifnot(a$fast_track_pairs_different_cluster == 0L)
+          cat('PASS: guarded candidate layer proposes no fast-track pair that disagrees with saved W01 clustering\n')
+
+      - name: Upload candidate-layer outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-identifier-candidate-layer-${{ github.run_id }}
+          path: /tmp/w01_candidate/out/
+          retention-days: 30
+          if-no-files-found: error
