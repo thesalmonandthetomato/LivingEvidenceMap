@@ -84,8 +84,10 @@ generic_attachment_type <- function(x){
 supplement_doi_relation <- function(a,b){
   if(is.na(a)||is.na(b)||!nzchar(a)||!nzchar(b)) return(FALSE)
   a<-tolower(trimws(a)); b<-tolower(trimws(b))
-  stri_detect_regex(a,paste0("^",stri_escape_regex(b),"\\.s[0-9]+$")) ||
-    stri_detect_regex(b,paste0("^",stri_escape_regex(a),"\\.s[0-9]+$"))
+  ab <- paste0(b,".s")
+  ba <- paste0(a,".s")
+  (startsWith(a,ab) && stri_detect_regex(substr(a,nchar(ab)+1L,nchar(a)),"^[0-9]+$")) ||
+    (startsWith(b,ba) && stri_detect_regex(substr(b,nchar(ba)+1L,nchar(b)),"^[0-9]+$"))
 }
 
 # Full-corpus wrapper census.
@@ -111,9 +113,11 @@ for(i in seq_len(nrow(manual))){
 
   stripped_side <- NA_character_; wrapper_type <- NA_character_
   stripped_title <- NA_character_; other_title <- NA_character_
-  if(!is.na(wi$type) && !is.na(wi$stripped) && nchar(norm(wi$stripped)%||%"")>=20L){
+  ni <- if(!is.na(wi$stripped)) norm(wi$stripped) else NA_character_
+  nj <- if(!is.na(wj$stripped)) norm(wj$stripped) else NA_character_
+  if(!is.na(wi$type) && !is.na(ni) && nchar(ni)>=20L){
     stripped_side<-"i"; wrapper_type<-wi$type; stripped_title<-wi$stripped; other_title<-r$title_j
-  } else if(!is.na(wj$type) && !is.na(wj$stripped) && nchar(norm(wj$stripped)%||%"")>=20L){
+  } else if(!is.na(wj$type) && !is.na(nj) && nchar(nj)>=20L){
     stripped_side<-"j"; wrapper_type<-wj$type; stripped_title<-wj$stripped; other_title<-r$title_i
   }
 
