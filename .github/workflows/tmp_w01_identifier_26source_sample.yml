@@ -1,0 +1,199 @@
+name: TEMP W01 identifier 26-source sample
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_26source_sample.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+      SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+      SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+      OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+      OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+      WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+      EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+      EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','data.table','stringi','xml2','digest'))
+
+      - name: Build 26-source W00 query plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_idsample/plan
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type full \
+            --config user_input/workflow00_search_strategy.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --output-dir /tmp/w01_idsample/plan
+          Rscript - <<'RS'
+          library(jsonlite)
+          p <- fromJSON('/tmp/w01_idsample/plan/search_plan.json',simplifyVector=FALSE)
+          stopifnot(length(p$source_queries)==26L)
+          dir.create('/tmp/w01_idsample/queries',recursive=TRUE,showWarnings=FALSE)
+          for(nm in names(p$source_queries)) writeLines(as.character(p$source_queries[[nm]]),file.path('/tmp/w01_idsample/queries',paste0(nm,'.txt')))
+          RS
+
+      - name: Sample Lens and Scopus
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_idsample/sources/lens /tmp/w01_idsample/sources/scopus
+          Rscript scripts/updater/workflow_01_identifier_sample_lens_scopus.R \
+            --source lens --query "$(cat /tmp/w01_idsample/queries/lens.txt)" --n 20 \
+            --output /tmp/w01_idsample/sources/lens/records.jsonl
+          Rscript scripts/updater/workflow_01_identifier_sample_lens_scopus.R \
+            --source scopus --query "$(cat /tmp/w01_idsample/queries/scopus.txt)" --n 20 \
+            --output /tmp/w01_idsample/sources/scopus/records.jsonl
+
+      - name: Sample OpenAlex
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_idsample/raw/openalex /tmp/w01_idsample/sources/openalex
+          Rscript scripts/updater/workflow_00c_openalex_ingestion.R \
+            --query "$(cat /tmp/w01_idsample/queries/openalex.txt)" --max-records 20 --page-size 20 \
+            --output-dir /tmp/w01_idsample/raw/openalex
+          Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R \
+            --input-dir /tmp/w01_idsample/raw/openalex --output-dir /tmp/w01_idsample/sources/openalex
+          cp /tmp/w01_idsample/sources/openalex/openalex_sidecar_records.jsonl /tmp/w01_idsample/sources/openalex/records.jsonl
+
+      - name: Sample AGRICOLA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_idsample/raw/agricola /tmp/w01_idsample/sources/agricola
+          Rscript scripts/updater/workflow_00d_agricola_ingestion.R \
+            --query "$(cat /tmp/w01_idsample/queries/agricola.txt)" --max-records 20 --page-size 20 \
+            --output-dir /tmp/w01_idsample/raw/agricola
+          Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R \
+            --input-dir /tmp/w01_idsample/raw/agricola --output-dir /tmp/w01_idsample/sources/agricola
+          cp /tmp/w01_idsample/sources/agricola/agricola_sidecar_records.jsonl /tmp/w01_idsample/sources/agricola/records.jsonl
+
+      - name: Sample Europe PMC-backed sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in pubmed ethos cba epmc_preprints; do
+            case "$source" in
+              pubmed) code=MED; collection="PubMed/MEDLINE" ;;
+              ethos) code=ETH; collection="EThOS theses" ;;
+              cba) code=CBA; collection="Chinese Biological Abstracts" ;;
+              epmc_preprints) code=PPR; collection="Europe PMC preprints" ;;
+            esac
+            mkdir -p "/tmp/w01_idsample/raw/$source" "/tmp/w01_idsample/sources/$source"
+            Rscript scripts/updater/workflow_00f_europe_pmc_source_ingestion.R \
+              --query "$(cat /tmp/w01_idsample/queries/$source.txt)" \
+              --source-code "$code" --source-slug "$source" --source-collection "$collection" \
+              --max-records 20 --page-size 20 --output-dir "/tmp/w01_idsample/raw/$source"
+            Rscript scripts/updater/workflow_01x_europe_pmc_sidecar_adapter.R \
+              --input-dir "/tmp/w01_idsample/raw/$source" --output-dir "/tmp/w01_idsample/sources/$source" \
+              --source-code "$code" --source-slug "$source" --source-collection "$collection"
+            cp "/tmp/w01_idsample/sources/$source/"*"_sidecar_records.jsonl" "/tmp/w01_idsample/sources/$source/records.jsonl"
+          done
+
+      - name: Sample Web of Science
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_idsample/raw/wos /tmp/w01_idsample/sources/wos
+          Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R \
+            --query "$(cat /tmp/w01_idsample/queries/wos.txt)" --page-size 20 --start-page 1 --end-page 1 \
+            --output-dir /tmp/w01_idsample/raw/wos
+          Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R \
+            --input-dir /tmp/w01_idsample/raw/wos --output-dir /tmp/w01_idsample/sources/wos
+          cp /tmp/w01_idsample/sources/wos/wos_starter_sidecar_records.jsonl /tmp/w01_idsample/sources/wos/records.jsonl
+
+      - name: Sample all configured EBSCO databases
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS' > /tmp/ebsco_sources.txt
+          library(jsonlite)
+          x <- fromJSON('config/workflow00_ebsco_sources.json',simplifyVector=FALSE)
+          cat(paste(names(x$sources),collapse='\n'))
+          RS
+          while IFS= read -r source; do
+            [ -n "$source" ] || continue
+            mkdir -p "/tmp/w01_idsample/sources/$source"
+            Rscript scripts/updater/workflow_00g_ebsco_ingestion.R \
+              --source "$source" --query "$(cat /tmp/w01_idsample/queries/$source.txt)" \
+              --config config/workflow00_ebsco_sources.json --page-size 20 --max-records 20 \
+              --output-dir "/tmp/w01_idsample/sources/$source"
+          done < /tmp/ebsco_sources.txt
+
+      - name: Build sample input manifest
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          roots <- list.dirs('/tmp/w01_idsample/sources',recursive=FALSE,full.names=TRUE)
+          src <- basename(roots)
+          paths <- file.path(roots,'records.jsonl')
+          stopifnot(length(src)==26L,all(file.exists(paths)))
+          sources <- setNames(lapply(paths,function(p) list(path=p)),src)
+          x <- list(schema='living-evidence-map-workflow01-source-inputs-v1',status='test_sample',sources=sources)
+          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE),'/tmp/w01_idsample/source_inputs.json')
+
+      - name: Run identifier-assist prototype
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_idsample/identifier_assist
+          Rscript scripts/updater/workflow_01_identifier_assist_test.R \
+            --input-manifest /tmp/w01_idsample/source_inputs.json \
+            --output-dir /tmp/w01_idsample/identifier_assist
+          cat /tmp/w01_idsample/identifier_assist/summary.json
+
+      - name: Audit sample sizes and ID coverage
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          roots <- list.dirs('/tmp/w01_idsample/sources',recursive=FALSE,full.names=TRUE)
+          rows <- lapply(roots,function(root) {
+            p <- file.path(root,'records.jsonl')
+            n <- length(readLines(p,warn=FALSE))
+            data.frame(source=basename(root),sample_records=n,stringsAsFactors=FALSE)
+          })
+          sizes <- rbindlist(rows)
+          ids <- fread('/tmp/w01_idsample/identifier_assist/cross_source_identifiers.csv')
+          cov <- ids[,.(identifier_rows=.N,identifier_types=paste(sort(unique(identifier_type)),collapse='|')),by=source]
+          out <- merge(sizes,cov,by='source',all.x=TRUE)
+          out[is.na(identifier_rows),identifier_rows:=0L]
+          out[is.na(identifier_types),identifier_types:='']
+          fwrite(out,'/tmp/w01_idsample/sample_coverage.csv')
+          print(out)
+
+      - name: Upload 26-source identifier sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-identifier-26source-sample-${{ github.run_id }}
+          path: |
+            /tmp/w01_idsample/source_inputs.json
+            /tmp/w01_idsample/sample_coverage.csv
+            /tmp/w01_idsample/sources/*/records.jsonl
+            /tmp/w01_idsample/identifier_assist/
+          retention-days: 30
+          if-no-files-found: error
