@@ -173,6 +173,13 @@ for (f in raw_files) {
         pmcid = pmcid,
         mag_id = mag_id
       ),
+      identifiers = list(
+        doi = doi,
+        pmid = pmid,
+        pmcid = pmcid,
+        openalex = oid,
+        mag = mag_id
+      ),
       source = list(
         provider = 'openalex',
         source_format = 'openalex_works_api_oql_json',
