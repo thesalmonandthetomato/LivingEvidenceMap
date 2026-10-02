@@ -30,16 +30,7 @@ jobs:
           mapfile -t FILES < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/shiny_adjudication/w02_resume_requests/.*\.json$' || true)
           test "${#FILES[@]}" -eq 1
           FILE="${FILES[0]}"
-          RUN_ID="$(python3 - "$FILE" <<'PY'
-import json, re, sys
-with open(sys.argv[1], encoding="utf-8") as fh:
-    x = json.load(fh)
-rid = str(x.get("source_run_id", ""))
-if not re.fullmatch(r"[0-9]+", rid):
-    raise SystemExit("Invalid source_run_id in W02 resume request")
-print(rid, end="")
-PY
-          )"
+          RUN_ID="$(python3 -c 'import json,re,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); rid=str(x.get("source_run_id","")); assert re.fullmatch(r"[0-9]+",rid), "invalid source_run_id"; print(rid,end="")' "$FILE")"
           echo "source_run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
           echo "PASS: resolved automatic W02 resume request for source run $RUN_ID"
 
