@@ -1,0 +1,78 @@
+{
+  "schema": "living-evidence-map-current-run-status-v1",
+  "update_id": "w01-run-36971418284",
+  "branch": "workflow01-final-architecture",
+  "started_at_utc": "2026-10-02T06:30:47Z",
+  "last_updated_at_utc": "2026-10-02T14:35:28Z",
+  "baseline": {
+    "workflow08_pointer": "docs/workflow08/zenodo/run-36442875006.json",
+    "workflow08_source_run_id": "36442875006",
+    "canonical_records": 19117,
+    "canonical_sha256": "8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c"
+  },
+  "search": {
+    "workflow00_run_id": "",
+    "search_date": "2026-09-23",
+    "search_results": 118527,
+    "sources": []
+  },
+  "cohort": {
+    "record_ids_path": "docs/current_run/current_run_record_ids.txt",
+    "deduplicated_records": 47094
+  },
+  "counts": {
+    "search_results": 118527,
+    "deduplicated_records": 47094,
+    "enriched_records": null,
+    "retraction_exclusions": null,
+    "screened_include": null,
+    "screened_exclude": null,
+    "geography": {
+      "with": null,
+      "without": null
+    },
+    "topics": {
+      "with": null,
+      "without": null
+    }
+  },
+  "progress": {
+    "W00": {
+      "status": "complete"
+    },
+    "W01": {
+      "status": "complete"
+    },
+    "W02": {
+      "status": "active"
+    },
+    "W03": {
+      "status": "pending"
+    },
+    "W04": {
+      "status": "pending"
+    },
+    "W05": {
+      "status": "pending"
+    },
+    "W06": {
+      "status": "pending"
+    },
+    "W07": {
+      "status": "pending"
+    },
+    "W08": {
+      "status": "pending"
+    },
+    "W10": {
+      "status": "pending"
+    },
+    "current_stage": "W01",
+    "completed_through": 2,
+    "active_position": 3,
+    "status_label": "Deduplication complete; Workflow 02 enrichment in progress"
+  },
+  "workflow_runs": {
+    "W01": "36971418284"
+  }
+}
