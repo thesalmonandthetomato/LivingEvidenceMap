@@ -1,0 +1,52 @@
+{
+  "schema": "living-evidence-map-w01-nonclear-external-validation-v1",
+  "status": "success",
+  "test_only": true,
+  "workflow_run_id": 36994467013,
+  "artifact_id": 11221271076,
+  "pairs_validated": 54,
+  "automated_external_validation": {
+    "externally_corroborated_same_work": 51,
+    "external_metadata_support_no_direct_crosswalk": 1,
+    "still_ambiguous": 2,
+    "externally_confirmed_identifier_conflict": 0
+  },
+  "final_manual_resolution_of_remaining_three": [
+    {
+      "pair_id": "H0036",
+      "resolution": "same_work_likely_w01_miss",
+      "shared_identifiers": [
+        "doi:10.4194/1303-2712-v11_3_08",
+        "openalex:W4247612071"
+      ],
+      "reason": "Both W01 titles were missing. The DOI resolves to the 2011 rainbow-trout photoperiod article matching the OpenAlex canonical title and year."
+    },
+    {
+      "pair_id": "H0224",
+      "resolution": "same_work_likely_w01_miss",
+      "shared_identifiers": [
+        "doi:10.4194/1303-2712-v16_3_25",
+        "openalex:W4237283589"
+      ],
+      "reason": "Both W01 titles were missing. The DOI resolves to the 2016 Italian/Turkish farmed rainbow-trout haematology article matching the OpenAlex canonical title and year."
+    },
+    {
+      "pair_id": "H0173",
+      "resolution": "do_not_merge_container_identifier",
+      "shared_identifiers": [
+        "doi:10.1016/j.cbpa.2006.01.039",
+        "openalex:W4302353396"
+      ],
+      "reason": "The DOI represents a conference-supplement/container item ('A4—General Animal Biology') and is cited for multiple distinct individual abstracts. Shared container DOI/OpenAlex identity is therefore not sufficient work-level evidence."
+    }
+  ],
+  "high_evidence_overall_interpretation": {
+    "initial_high_evidence_pairs": 236,
+    "strongly_supported_same_work_after_external_validation": 235,
+    "unsafe_container_identifier_case": 1
+  },
+  "invariants": {
+    "automatic_merges_performed": 0,
+    "production_w01_modified": false
+  }
+}
