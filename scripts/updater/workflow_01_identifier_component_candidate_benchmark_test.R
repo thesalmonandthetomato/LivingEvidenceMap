@@ -60,15 +60,17 @@ union_pair <- function(a,b) {
 for (i in seq_len(nrow(safe))) union_pair(safe$idx_i[[i]],safe$idx_j[[i]])
 component <- vapply(seq_len(nrow(meta)),find_root,integer(1))
 meta[, component := component]
-comp <- meta[, .(
-  members=.N,
-  has_appended=any(appended),
-  has_prior=any(!appended),
-  min_title_len=suppressWarnings(min(nchar(title_norm)[!is.na(title_norm)],na.rm=TRUE)),
-  max_title_len=suppressWarnings(max(nchar(title_norm)[!is.na(title_norm)],na.rm=TRUE))
-),by=component]
-comp[!is.finite(min_title_len),min_title_len:=NA_real_]
-comp[!is.finite(max_title_len),max_title_len:=NA_real_]
+comp <- meta[, {
+  lens <- nchar(title_norm,type="chars")
+  lens <- lens[!is.na(lens)]
+  .(
+    members=.N,
+    has_appended=any(appended),
+    has_prior=any(!appended),
+    min_title_len=if (length(lens)) as.numeric(min(lens)) else NA_real_,
+    max_title_len=if (length(lens)) as.numeric(max(lens)) else NA_real_
+  )
+},by=component]
 setkey(comp,component)
 
 key_complete <- function(...) {
