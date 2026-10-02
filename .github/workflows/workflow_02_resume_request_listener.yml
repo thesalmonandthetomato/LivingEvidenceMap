@@ -8,7 +8,7 @@ on:
       - 'docs/shiny_adjudication/w02_resume_requests/*.json'
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
