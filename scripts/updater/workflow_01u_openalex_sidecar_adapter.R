@@ -140,7 +140,17 @@ for (f in raw_files) {
     if (!is.null(doi)) doi <- sub('^https://doi.org/', '', doi)
     ids <- w$ids %||% list()
     pmid <- trim_null(ids$pmid)
-    if (!is.null(pmid)) pmid <- sub('^https://pubmed.ncbi.nlm.nih.gov/', '', sub('/    title <- trim_null(w$title)
+    if (!is.null(pmid)) {
+      pmid <- sub('/$','',pmid)
+      pmid <- sub('^https://pubmed.ncbi.nlm.nih.gov/','',pmid)
+    }
+    pmcid <- trim_null(ids$pmcid)
+    if (!is.null(pmcid)) {
+      pmcid <- sub('/$','',pmcid)
+      pmcid <- sub('^https://www.ncbi.nlm.nih.gov/pmc/articles/','',pmcid)
+    }
+    mag_id <- trim_null(ids$mag)
+    title <- trim_null(w$title)
     year <- trim_null(w$publication_year)
     pub_date <- trim_null(w$publication_date)
     work_type <- trim_null(w$type)
