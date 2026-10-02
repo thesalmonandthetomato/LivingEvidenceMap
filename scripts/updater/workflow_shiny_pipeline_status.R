@@ -59,9 +59,17 @@ if(!tab %in% tabs){
   sheet_write(empty,ss=sheet_id,sheet=tab)
 }
 x <- read_sheet(sheet_id,sheet=tab,col_types="c")
+miss <- setdiff(cols,names(x))
+if(length(miss)){
+  # Backward-compatible schema migration: preserve all existing status rows,
+  # add newly introduced KPI columns, and rewrite the tab once.
+  for(nm in miss) x[[nm]] <- ""
+  extra <- setdiff(names(x),cols)
+  x <- x[,c(cols,extra),drop=FALSE]
+  sheet_write(x,ss=sheet_id,sheet=tab)
+  cat(sprintf("PASS: migrated pipeline_run_status schema; added columns: %s\n",paste(miss,collapse=", ")))
+}
 if(nrow(x)){
-  miss <- setdiff(cols,names(x))
-  if(length(miss)) stop("pipeline_run_status missing columns: ",paste(miss,collapse=", "),call.=FALSE)
   prev <- x[as.character(x$update_id)==update_id,,drop=FALSE]
   latest <- if(nrow(prev)) prev[nrow(prev),,drop=FALSE] else NULL
 } else latest <- NULL
