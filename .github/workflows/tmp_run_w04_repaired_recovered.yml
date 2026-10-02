@@ -1,0 +1,26 @@
+name: TEMP run W04 repaired metadata with recovered pass1
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w04_repaired_recovered.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  run-w04:
+    uses: ./.github/workflows/workflow_04_production.yml
+    with:
+      lean_pointer_path: docs/compaction/zenodo/run-37016080508.json
+      workflow03_pointer_path: docs/publication_status/zenodo/run-37024164176.json
+      prior_workflow04_pointer_path: docs/workflow04/zenodo/run-36227737500.json
+      prior_lean_pointer_path: docs/compaction/zenodo/run-36166883249.json
+      manual_decisions_path: ''
+      manual_repair_zenodo_record_id: '23108430'
+      recovery_pass1_zenodo_record_id: '23107508'
+      publish: true
+    secrets: inherit
