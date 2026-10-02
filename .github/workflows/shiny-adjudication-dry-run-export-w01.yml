@@ -9,28 +9,29 @@ on:
       - '.github/workflows/shiny-adjudication-dry-run-export-w01.yml'
 
 permissions:
-  contents: read
+  contents: write
   actions: read
+
+concurrency:
+  group: workflow01-shiny-export
+  cancel-in-progress: false
 
 jobs:
   export:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
       LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
       LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
       DECISIONS_TAB: 'decisions'
-      SOURCE_RUN_ID: '36866644366'
-      QUEUE_RECOVERY_RUN_ID: '36909431511'
-      QUEUE_ARTIFACT: 'workflow01-human-review-36866644366'
-      EXPECTED_CASES: '74'
-      EXPECTED_QUEUE_SHA256: 'ac5f0200aac3dbc2a7fbef20cbc25db4dd5709e13f5fed1b8af896a4330200db'
+      WORKFLOW01_BRANCH: workflow01-final-architecture
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
+          fetch-depth: 0
 
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -39,30 +40,47 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c("googlesheets4","jsonlite","digest"))
+        run: install.packages(c("googlesheets4","jsonlite","digest","httr2"))
 
-      - name: Download locked 74-case W01 review package
+      - name: Select unresolved W01 checkpoint
         shell: bash
         run: |
           set -euo pipefail
-          ROOT="$RUNNER_TEMP/w01-return"
-          mkdir -p "$ROOT/package"
-          gh run download "$QUEUE_RECOVERY_RUN_ID" \
-            --repo thesalmonandthetomato/LivingEvidenceMap \
-            --name "$QUEUE_ARTIFACT" \
-            --dir "$ROOT/package"
+          mkdir -p "$RUNNER_TEMP/w01-return"
+          Rscript scripts/updater/workflow_01_select_pending_checkpoint.R \
+            --output "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json"
+          FOUND="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(tolower(as.character(isTRUE(x$found))))' "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json")"
+          echo "HAS_PENDING=$FOUND" >> "$GITHUB_ENV"
+          if [ "$FOUND" != "true" ]; then
+            echo "PASS: no unresolved W01 checkpoint; nothing to export"
+            exit 0
+          fi
+          POINTER="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$pointer_path)' "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json")"
+          CHECKPOINT_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$checkpoint_run_id)' "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json")"
+          echo "POINTER=$POINTER" >> "$GITHUB_ENV"
+          echo "CHECKPOINT_RUN=$CHECKPOINT_RUN" >> "$GITHUB_ENV"
+          echo "RETURN_ROOT=$RUNNER_TEMP/w01-return" >> "$GITHUB_ENV"
+          echo "DECISIONS_ARTIFACT=workflow01-human-decisions-$CHECKPOINT_RUN-$GITHUB_RUN_ID" >> "$GITHUB_ENV"
 
-          QUEUE_PATH="$(find "$ROOT/package" -type f -name 'human_review_cases.jsonl' -print -quit)"
-          MANIFEST_PATH="$(find "$ROOT/package" -type f -name 'review_manifest.json' -print -quit)"
-          test -n "$QUEUE_PATH"
-          test -n "$MANIFEST_PATH"
-          test -s "$QUEUE_PATH"
-          test -s "$MANIFEST_PATH"
-          echo "QUEUE_PATH=$QUEUE_PATH" >> "$GITHUB_ENV"
-          echo "QUEUE_MANIFEST_PATH=$MANIFEST_PATH" >> "$GITHUB_ENV"
-          echo "RETURN_ROOT=$ROOT" >> "$GITHUB_ENV"
+      - name: Restore locked W01 checkpoint
+        if: env.HAS_PENDING == 'true'
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_pending_checkpoint.R \
+            --pointer "$POINTER" \
+            --output-root "$RETURN_ROOT/checkpoint" > "$RETURN_ROOT/checkpoint_dir.txt"
+          CHECKPOINT_DIR="$(tail -n 1 "$RETURN_ROOT/checkpoint_dir.txt")"
+          test -s "$CHECKPOINT_DIR/human_review_package/human_review_cases.jsonl"
+          test -s "$CHECKPOINT_DIR/human_review_package/review_manifest.json"
+          echo "CHECKPOINT_DIR=$CHECKPOINT_DIR" >> "$GITHUB_ENV"
+          echo "QUEUE_PATH=$CHECKPOINT_DIR/human_review_package/human_review_cases.jsonl" >> "$GITHUB_ENV"
+          echo "QUEUE_MANIFEST_PATH=$CHECKPOINT_DIR/human_review_package/review_manifest.json" >> "$GITHUB_ENV"
 
       - name: Prepare Google credential
+        if: env.HAS_PENDING == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -72,6 +90,7 @@ jobs:
           echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
 
       - name: Export and integrity-check completed W01 decisions
+        if: env.HAS_PENDING == 'true'
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages({
@@ -79,93 +98,72 @@ jobs:
             library(jsonlite)
             library(digest)
           })
+          `%||%` <- function(x,y) if(is.null(x)) y else x
 
+          pointer <- fromJSON(Sys.getenv("POINTER"), simplifyVector = FALSE)
+          qm <- fromJSON(Sys.getenv("QUEUE_MANIFEST_PATH"), simplifyVector = FALSE)
           queue_path <- Sys.getenv("QUEUE_PATH")
-          queue_manifest_path <- Sys.getenv("QUEUE_MANIFEST_PATH")
           root <- Sys.getenv("RETURN_ROOT")
           output_path <- file.path(root, "human_decisions.jsonl")
           output_manifest_path <- file.path(root, "human_decisions.manifest.json")
 
-          expected_sha <- Sys.getenv("EXPECTED_QUEUE_SHA256")
-          expected_cases <- as.integer(Sys.getenv("EXPECTED_CASES"))
+          expected_sha <- tolower(as.character(pointer$queue_sha256))
+          manifest_sha <- tolower(as.character(qm$queue_sha256 %||% qm$output_sha256 %||% ""))
+          expected_cases <- as.integer(qm$pending_count %||% qm$cases %||% NA_integer_)
+          pointer_cases <- as.integer(pointer$pending_human_cases %||% NA_integer_)
+
+          if (!grepl("^[0-9a-f]{64}$", expected_sha)) stop("Checkpoint pointer has invalid queue SHA-256")
+          if (!identical(manifest_sha, expected_sha)) stop("Review manifest queue SHA does not match checkpoint pointer")
+          if (is.na(expected_cases) || expected_cases < 1L) stop("Review manifest has invalid pending case count")
+          if (!is.na(pointer_cases) && pointer_cases != expected_cases) stop("Checkpoint pointer case count does not match review manifest")
 
           queue_sha <- digest(file = queue_path, algo = "sha256", serialize = FALSE)
-          if (!identical(queue_sha, expected_sha)) {
-            stop("Locked W01 queue SHA-256 mismatch: ", queue_sha)
-          }
+          if (!identical(tolower(queue_sha), expected_sha)) stop("Locked W01 queue SHA-256 mismatch")
 
           queue_lines <- readLines(queue_path, warn = FALSE, encoding = "UTF-8")
           queue_lines <- queue_lines[nzchar(trimws(queue_lines))]
-          if (length(queue_lines) != expected_cases) {
-            stop("Locked W01 queue case count mismatch: ", length(queue_lines))
-          }
+          if (length(queue_lines) != expected_cases) stop("Locked W01 queue case count mismatch")
 
           queue_cases <- lapply(queue_lines, fromJSON, simplifyVector = FALSE)
           queue_ids <- vapply(queue_cases, function(x) as.character(x$review_case_id), character(1))
-          if (any(!nzchar(queue_ids)) || anyDuplicated(queue_ids)) {
-            stop("Locked W01 queue contains missing or duplicate review_case_id")
-          }
-
-          qm <- fromJSON(queue_manifest_path, simplifyVector = FALSE)
-          manifest_sha <- as.character(qm$queue_sha256 %||% qm$output_sha256 %||% "")
-          manifest_cases <- as.integer(qm$pending_count %||% qm$cases %||% NA_integer_)
-          if (!identical(manifest_sha, expected_sha)) {
-            stop("Review manifest queue SHA-256 does not match locked queue")
-          }
-          if (is.na(manifest_cases) || manifest_cases != expected_cases) {
-            stop("Review manifest case count does not equal ", expected_cases)
-          }
+          if (any(!nzchar(queue_ids)) || anyDuplicated(queue_ids)) stop("Locked W01 queue contains missing or duplicate review_case_id")
 
           gs4_auth(path = Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"), cache = FALSE)
           sheet_id <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
           tab <- Sys.getenv("DECISIONS_TAB")
-          tabs <- sheet_names(sheet_id)
-          if (!tab %in% tabs) stop("Google Sheet decisions tab is missing")
+          if (!tab %in% sheet_names(sheet_id)) stop("Google Sheet decisions tab is missing")
 
           d <- read_sheet(sheet_id, sheet = tab, col_types = "c")
-          required <- c(
-            "decision_id","review_case_id","decision","rationale","reviewer",
-            "resolved_at_utc","queue_sha256","supersedes_decision_id"
-          )
+          required <- c("decision_id","review_case_id","decision","rationale","reviewer",
+                        "resolved_at_utc","queue_sha256","supersedes_decision_id")
           missing <- setdiff(required, names(d))
           if (length(missing)) stop("Decisions sheet missing field(s): ", paste(missing, collapse = ", "))
 
-          d <- d[d$queue_sha256 == expected_sha, required, drop = FALSE]
-          if (!nrow(d)) stop("No decisions found for locked 74-case W01 queue")
-
-          if (any(!d$review_case_id %in% queue_ids)) {
-            bad <- unique(d$review_case_id[!d$review_case_id %in% queue_ids])
-            stop("Decision(s) reference IDs outside locked queue: ", paste(bad, collapse = ", "))
-          }
+          d <- d[tolower(d$queue_sha256) == expected_sha, required, drop = FALSE]
+          if (!nrow(d)) stop("No decisions found for current locked W01 queue")
+          if (any(!d$review_case_id %in% queue_ids)) stop("Decision(s) reference case IDs outside current locked queue")
 
           parsed_time <- as.POSIXct(d$resolved_at_utc, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
           if (any(is.na(parsed_time))) stop("One or more W01 decisions have invalid resolved_at_utc")
-
           ord <- order(parsed_time, seq_len(nrow(d)), decreasing = TRUE)
-          d <- d[ord, , drop = FALSE]
-          active <- d[!duplicated(d$review_case_id), , drop = FALSE]
+          active <- d[ord, , drop = FALSE]
+          active <- active[!duplicated(active$review_case_id), , drop = FALSE]
 
           allowed <- c("duplicate","not_duplicate","uncertain")
-          if (any(!active$decision %in% allowed)) {
-            stop("Invalid active W01 decision value(s)")
-          }
-
+          if (any(!active$decision %in% allowed)) stop("Invalid active W01 decision value(s)")
           required_nonempty <- c("review_case_id","decision","rationale","reviewer","resolved_at_utc","queue_sha256")
-          for (nm in required_nonempty) {
-            if (any(!nzchar(trimws(active[[nm]])))) stop("Active decision missing required field: ", nm)
-          }
+          for (nm in required_nonempty) if (any(!nzchar(trimws(active[[nm]])))) stop("Active decision missing required field: ", nm)
 
           missing_ids <- setdiff(queue_ids, active$review_case_id)
           extra_ids <- setdiff(active$review_case_id, queue_ids)
           uncertain_ids <- active$review_case_id[active$decision == "uncertain"]
-
           if (length(extra_ids)) stop("Active decisions contain IDs outside locked queue")
           if (length(missing_ids)) stop(length(missing_ids), " W01 cases remain unresolved")
           if (length(uncertain_ids)) stop(length(uncertain_ids), " W01 cases remain uncertain")
-          if (nrow(active) != expected_cases) stop("Active W01 decision count is not exactly ", expected_cases)
+          if (nrow(active) != expected_cases) stop("Active W01 decision count does not equal locked queue count")
 
           active <- active[match(queue_ids, active$review_case_id), , drop = FALSE]
-          if (any(is.na(active$review_case_id))) stop("Could not order all active decisions to locked queue")
+          if (any(is.na(active$review_case_id))) stop("Could not order active decisions to locked queue")
 
           con <- file(output_path, "wt", encoding = "UTF-8")
           for (i in seq_len(nrow(active))) {
@@ -175,28 +173,28 @@ jobs:
               rationale = active$rationale[[i]],
               reviewer = active$reviewer[[i]],
               resolved_at_utc = active$resolved_at_utc[[i]],
-              queue_sha256 = active$queue_sha256[[i]]
+              queue_sha256 = tolower(active$queue_sha256[[i]])
             )
             writeLines(toJSON(out, auto_unbox = TRUE, null = "null", na = "null"), con, useBytes = TRUE)
           }
           close(con)
 
           exported_lines <- readLines(output_path, warn = FALSE, encoding = "UTF-8")
-          if (length(exported_lines) != expected_cases) stop("Exported decision file does not contain exactly 74 rows")
+          if (length(exported_lines) != expected_cases) stop("Exported decision row count mismatch")
           exported <- lapply(exported_lines, fromJSON, simplifyVector = FALSE)
           exported_ids <- vapply(exported, function(x) as.character(x$review_case_id), character(1))
           exported_decisions <- vapply(exported, function(x) as.character(x$decision), character(1))
-          exported_queue_sha <- vapply(exported, function(x) as.character(x$queue_sha256), character(1))
-
-          if (!identical(exported_ids, queue_ids)) stop("Exported W01 decision order/IDs do not exactly match locked queue")
+          exported_queue_sha <- vapply(exported, function(x) tolower(as.character(x$queue_sha256)), character(1))
+          if (!identical(exported_ids, queue_ids)) stop("Exported W01 decision IDs/order do not exactly match locked queue")
           if (any(!exported_decisions %in% c("duplicate","not_duplicate"))) stop("Export contains non-final W01 decision")
           if (any(exported_queue_sha != expected_sha)) stop("Exported decision queue SHA mismatch")
 
           export_sha <- digest(file = output_path, algo = "sha256", serialize = FALSE)
           manifest <- list(
-            schema = "living-evidence-map-workflow01-shiny-decision-export-manifest-v1",
-            source_workflow_run = as.character(Sys.getenv("SOURCE_RUN_ID")),
-            queue_recovery_run = as.character(Sys.getenv("QUEUE_RECOVERY_RUN_ID")),
+            schema = "living-evidence-map-workflow01-shiny-decision-export-manifest-v2",
+            checkpoint_pointer_path = Sys.getenv("POINTER"),
+            checkpoint_run_id = as.character(pointer$github_run_id),
+            checkpoint_zenodo_record_id = as.character(pointer$zenodo_record_id),
             queue_cases = expected_cases,
             queue_sha256 = expected_sha,
             decision_log_rows_for_batch = nrow(d),
@@ -204,6 +202,7 @@ jobs:
             unresolved_cases = 0L,
             uncertain_cases = 0L,
             complete = TRUE,
+            export_run_id = Sys.getenv("GITHUB_RUN_ID"),
             export_file = basename(output_path),
             export_sha256 = export_sha,
             generated_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
@@ -211,18 +210,62 @@ jobs:
           writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE), output_manifest_path, useBytes = TRUE)
 
           cat("PASS: validated completed W01 Shiny decisions\n")
+          cat("Checkpoint run:", pointer$github_run_id, "\n")
           cat("Locked queue cases:", expected_cases, "\n")
-          cat("Active decisions exported:", nrow(active), "\n")
           cat("Unresolved cases: 0\n")
           cat("Uncertain cases: 0\n")
           cat("Export SHA-256:", export_sha, "\n")
 
       - name: Upload validated W01 human decisions
+        if: env.HAS_PENDING == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: workflow01-human-decisions-36866644366-${{ github.run_id }}
+          name: ${{ env.DECISIONS_ARTIFACT }}
           path: |
-            ${{ runner.temp }}/w01-return/human_decisions.jsonl
-            ${{ runner.temp }}/w01-return/human_decisions.manifest.json
+            ${{ env.RETURN_ROOT }}/human_decisions.jsonl
+            ${{ env.RETURN_ROOT }}/human_decisions.manifest.json
           if-no-files-found: error
           retention-days: 90
+
+      - name: Publish W01 handoff manifest
+        if: env.HAS_PENDING == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/deduplication/handoffs/w01
+          HANDOFF="docs/deduplication/handoffs/w01/run-$CHECKPOINT_RUN.json"
+          POINTER="$POINTER" DECISIONS_ARTIFACT="$DECISIONS_ARTIFACT" HANDOFF="$HANDOFF" Rscript - <<'RS'
+          suppressPackageStartupMessages(library(jsonlite))
+          em <- fromJSON(file.path(Sys.getenv("RETURN_ROOT"),"human_decisions.manifest.json"),simplifyVector=FALSE)
+          out <- list(
+            schema="living-evidence-map-workflow01-shiny-handoff-v1",
+            status="ready",
+            checkpoint_pointer_path=Sys.getenv("POINTER"),
+            checkpoint_run_id=as.character(em$checkpoint_run_id),
+            checkpoint_zenodo_record_id=as.character(em$checkpoint_zenodo_record_id),
+            queue_cases=as.integer(em$queue_cases),
+            queue_sha256=tolower(as.character(em$queue_sha256)),
+            export_run_id=as.character(em$export_run_id),
+            decisions_artifact=Sys.getenv("DECISIONS_ARTIFACT"),
+            decisions_export_sha256=tolower(as.character(em$export_sha256)),
+            created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
+          )
+          writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null="null"),Sys.getenv("HANDOFF"),useBytes=TRUE)
+          RS
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$HANDOFF"
+          git commit -m "W01 handoff ready for checkpoint $CHECKPOINT_RUN"
+
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:$WORKFLOW01_BRANCH"; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Failed to publish W01 handoff after 3 attempts" >&2
+              exit 1
+            fi
+            git fetch origin "$WORKFLOW01_BRANCH"
+            git rebase "origin/$WORKFLOW01_BRANCH"
+          done
