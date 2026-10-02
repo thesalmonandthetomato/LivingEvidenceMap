@@ -1,0 +1,111 @@
+name: TEMP W01 full identifier benchmark
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_full_identifier_benchmark.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','data.table'))
+
+      - name: Download exact historical W01 and W00 artefacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_fullbench/zips /tmp/w01_fullbench/input /tmp/w01_fullbench/out
+          download_artifact () {
+            local id="$1"
+            local out="$2"
+            gh api -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$out"
+          }
+
+          download_artifact 11171230024 /tmp/w01_fullbench/zips/w01.zip
+          download_artifact 10694749854 /tmp/w01_fullbench/zips/lens.zip
+          download_artifact 10695109039 /tmp/w01_fullbench/zips/openalex.zip
+          download_artifact 10696417436 /tmp/w01_fullbench/zips/scopus.zip
+          download_artifact 10695665661 /tmp/w01_fullbench/zips/wos.zip
+          download_artifact 10698185531 /tmp/w01_fullbench/zips/agricola.zip
+
+      - name: Extract read-only benchmark inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/w01_fullbench/input
+          unzip -q ../zips/w01.zip \
+            workflow01_candidates/normalised_metadata.csv \
+            workflow01_pre_adjudication/manifestation_cluster_map.csv
+
+          mkdir -p lens openalex scopus wos agricola
+          unzip -q ../zips/lens.zip -d lens
+          unzip -q ../zips/openalex.zip -d openalex
+          unzip -q ../zips/scopus.zip -d scopus
+          unzip -q ../zips/wos.zip -d wos
+          unzip -q ../zips/agricola.zip -d agricola
+
+      - name: Run full-corpus identifier benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_identifier_full_corpus_benchmark.R \
+            --metadata /tmp/w01_fullbench/input/workflow01_candidates/normalised_metadata.csv \
+            --cluster-map /tmp/w01_fullbench/input/workflow01_pre_adjudication/manifestation_cluster_map.csv \
+            --lens-jsonl /tmp/w01_fullbench/input/lens/source_child/records.jsonl \
+            --openalex-raw-dir /tmp/w01_fullbench/input/openalex/source_child/raw \
+            --scopus-raw-dir /tmp/w01_fullbench/input/scopus/source_child/raw \
+            --wos-raw-dir /tmp/w01_fullbench/input/wos/source_child/raw \
+            --agricola-raw-dir /tmp/w01_fullbench/input/agricola/source_child/raw \
+            --prior-manifestations 90137 \
+            --output-dir /tmp/w01_fullbench/out
+          cat /tmp/w01_fullbench/out/summary.json
+
+      - name: Assert benchmark is read-only and internally consistent
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('/tmp/w01_fullbench/out/summary.json')
+          stopifnot(s$status == 'success')
+          stopifnot(s$test_only == TRUE)
+          stopifnot(s$automatic_merges_performed == 0L)
+          stopifnot(s$production_w01_modified == FALSE)
+          stopifnot(s$manifestations == 118527L)
+          stopifnot(s$candidate_pairs > 0L)
+          cat('PASS: full-corpus benchmark is read-only and internally consistent\n')
+
+      - name: Upload benchmark outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-full-identifier-benchmark-${{ github.run_id }}
+          path: |
+            /tmp/w01_fullbench/out/summary.json
+            /tmp/w01_fullbench/out/identifier_coverage_by_source.csv
+            /tmp/w01_fullbench/out/shared_identifier_groups.csv
+            /tmp/w01_fullbench/out/identifier_candidate_pairs.csv
+            /tmp/w01_fullbench/out/different_cluster_identifier_pairs.csv
+          retention-days: 30
+          if-no-files-found: error
