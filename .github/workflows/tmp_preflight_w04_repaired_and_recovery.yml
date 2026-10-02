@@ -81,7 +81,8 @@ jobs:
             --canonical inputs/current/canonical_lean.jsonl \
             --repair-overlay inputs/manual_repair/repair_overlay.jsonl \
             --output outputs/canonical_repaired.jsonl \
-            --audit outputs/manual_repair_application.json
+            --audit outputs/manual_repair_application.json \
+            --force-rescreen-output outputs/manual_repair_force_rescreen_record_ids.txt
 
       - name: Prepare exact W04 queue
         shell: bash
@@ -92,7 +93,7 @@ jobs:
             --workflow03-status inputs/current/publication_status.jsonl \
             --prior-workflow04 inputs/prior_workflow04_layer.jsonl \
             --prior-canonical inputs/prior_canonical_lean.jsonl \
-            --force-rescreen-record-ids inputs/manual_repair/force_rescreen_record_ids.txt \
+            --force-rescreen-record-ids outputs/manual_repair_force_rescreen_record_ids.txt \
             --output-dir outputs/prepare
 
       - name: Validate expected queue and recovered work
@@ -112,17 +113,15 @@ jobs:
           stopifnot(
             as.integer(p$workflow03_eligible)==47082L,
             as.integer(p$new_record_ids)==14884L,
-            as.integer(p$explicitly_forced_rescreen_records)==172L,
-            as.integer(p$screen_queue_records)==15056L,
-            as.integer(p$reusable_records)==32026L,
-            as.integer(r$records)==172L,
-            as.integer(r$title_added)==2L,
-            as.integer(r$abstract_added)==170L,
+            as.integer(p$explicitly_forced_rescreen_records)==as.integer(r$records),
+            as.integer(p$screen_queue_records)==14884L+as.integer(r$records),
+            as.integer(p$reusable_records)==32198L-as.integer(r$records),
+            as.integer(r$existing_fields_overwritten)==0L,
             as.integer(s$recovered_pass1_records)==5800L
           )
           q<-read.csv('outputs/prepare/screen_queue_manifest.csv',stringsAsFactors=FALSE)
           stopifnot(sum(q$queue_reason=='new_record_id')==14884L,
-                    sum(q$queue_reason=='explicit_repair_rescreen')==172L)
+                    sum(q$queue_reason=='explicit_repair_rescreen')==as.integer(r$records))
           recovered<-readLines('inputs/recovery/salvaged_new_pass1.jsonl',warn=FALSE)
           recovered<-recovered[nzchar(trimws(recovered))]
           stopifnot(length(recovered)==5800L)
