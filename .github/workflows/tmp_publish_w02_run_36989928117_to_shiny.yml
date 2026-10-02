@@ -1,0 +1,25 @@
+name: TEMP publish W02 run 36989928117 to Shiny
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_publish_w02_run_36989928117_to_shiny.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch W02 Shiny queue publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run shiny-adjudication-publish-w02-queue.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref workflow01-final-architecture \
+            -f source_run_id=36989928117
