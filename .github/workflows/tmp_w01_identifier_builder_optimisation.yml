@@ -32,16 +32,17 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite'))
+        run: install.packages(c('data.table','jsonlite','httr2'))
 
       - name: Download frozen inputs and validated safe-edge reference
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p frozen reference out
+          mkdir -p frozen reference out reconstructed/current reconstructed/union
           gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11171230024/zip" > frozen/w01.zip
           unzip -q frozen/w01.zip \
             workflow01_candidates/normalised_metadata.csv \
+            pending_checkpoint/previous_workflow01_pointer.json \
             pending_checkpoint/source_manifestations/lens_new.jsonl \
             pending_checkpoint/source_manifestations/scopus_new.jsonl \
             pending_checkpoint/source_manifestations/openalex_new.jsonl \
@@ -52,7 +53,22 @@ jobs:
             -d frozen
           gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11226773698/zip" > reference/safe.zip
           unzip -q reference/safe.zip safe_identifier_preresolve_appended_pairs.csv -d reference
-          cat > frozen/source_inputs.json <<'EOF'
+      - name: Restore frozen prior W01 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer frozen/pending_checkpoint/previous_workflow01_pointer.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root reconstructed/previous
+
+      - name: Reconstruct exact full W01 union
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > reconstructed/current/source_inputs.json <<'EOF'
           {
             "schema": "living-evidence-map-workflow01-source-inputs-v1",
             "sources": {
@@ -66,6 +82,12 @@ jobs:
             }
           }
           EOF
+          Rscript scripts/updater/workflow_01_deduplication_build_union.R \
+            --old-dir reconstructed/previous/workflow01_seed \
+            --input-manifest reconstructed/current/source_inputs.json \
+            --expected-prior-manifestations 90137 \
+            --output-dir reconstructed/union
+          Rscript -e 'x<-jsonlite::fromJSON("reconstructed/union/union_manifest.json");stopifnot(x$union_manifestations==118527L,x$appended_new_manifestations==28390L)'
 
       - name: Run optimised identifier builder
         shell: bash
@@ -73,7 +95,7 @@ jobs:
           set -euo pipefail
           /usr/bin/time -v \
             Rscript scripts/updater/workflow_01_identifier_assist_build.R \
-              --input-manifest frozen/source_inputs.json \
+              --input-manifest reconstructed/union/source_inputs.json \
               --metadata frozen/workflow01_candidates/normalised_metadata.csv \
               --guard-file config/workflow01_identifier_never_auto_resolve.csv \
               --prior-manifestations 90137 \
