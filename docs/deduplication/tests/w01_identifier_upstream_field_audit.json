@@ -1,0 +1,115 @@
+{
+  "schema": "living-evidence-map-w01-identifier-upstream-field-audit-v1",
+  "status": "success",
+  "test_only": true,
+  "workflow_run_id": 36974458941,
+  "sample_basis": "20 current-query records per audited source/database where available",
+  "findings": {
+    "lens": {
+      "sampled_records": 20,
+      "upstream": {
+        "doi": 19,
+        "pmid": 5,
+        "openalex_id": 3,
+        "magid": 16
+      },
+      "current_w01_use": "DOI only for identifier-assisted matching; raw Lens payload still contains the other IDs.",
+      "high_value_loss": [
+        "pmid",
+        "openalex_id"
+      ]
+    },
+    "openalex": {
+      "sampled_records": 20,
+      "upstream": {
+        "doi": 20,
+        "pmid": 8,
+        "openalex_id": 20,
+        "mag": 20
+      },
+      "current_w01_use": "DOI plus OpenAlex source-local identity; PMID is not mapped into the W01 sidecar.",
+      "high_value_loss": [
+        "pmid"
+      ]
+    },
+    "scopus": {
+      "sampled_records": 20,
+      "upstream": {
+        "doi": 20,
+        "pmid": 1,
+        "eid": 20,
+        "scopus_id": 20
+      },
+      "current_w01_use": "DOI plus Scopus-local IDs; pubmed-id is not mapped.",
+      "high_value_loss": [
+        "pmid"
+      ]
+    },
+    "wos": {
+      "sampled_records": 20,
+      "upstream": {
+        "doi": 18,
+        "pmid": 2
+      },
+      "current_w01_use": "PMID is already retained sidecar-only and is available to the test identifier extractor.",
+      "high_value_loss": []
+    },
+    "pubmed": {
+      "sampled_records": 20,
+      "upstream": {
+        "doi": 20,
+        "pmid": 20,
+        "pmcid": 11
+      },
+      "current_w01_use": "DOI, PMID and PMCID are available to the test identifier extractor.",
+      "high_value_loss": []
+    },
+    "ebsco_medline": {
+      "sampled_records": 20,
+      "upstream": {
+        "doi": 20,
+        "pmid": 20,
+        "other_identifier": 4
+      },
+      "current_w01_use": "Current EBSCO harvester maps DOI and accession number but drops PMID.",
+      "high_value_loss": [
+        "pmid"
+      ]
+    },
+    "ebsco_psycinfo": {
+      "sampled_records": 20,
+      "upstream": {
+        "doi": 18,
+        "pmid": 4,
+        "umi": 1
+      },
+      "current_w01_use": "Current EBSCO harvester maps DOI and accession number but drops PMID and UMI.",
+      "high_value_loss": [
+        "pmid"
+      ],
+      "potentially_useful": [
+        "umi"
+      ]
+    },
+    "ebsco_cinahl": {
+      "sampled_records": 20,
+      "upstream": {
+        "doi": 17,
+        "pmid": 1,
+        "cinahl_ids": 41,
+        "mfs": 20
+      },
+      "current_w01_use": "Current EBSCO harvester maps DOI and accession number but drops PMID and database-specific identifier fields.",
+      "high_value_loss": [
+        "pmid"
+      ]
+    }
+  },
+  "conclusion": [
+    "PMID preservation is the highest-value immediate improvement.",
+    "EBSCO MEDLINE is the clearest case: all 20 sampled records exposed PMID upstream, but none reached the current W01 identifier representation.",
+    "OpenAlex, Lens, Scopus, EBSCO PsycInfo and EBSCO CINAHL also exposed PMIDs that are currently unused or dropped.",
+    "Source-local IDs should continue to be retained for provenance/identity but should not be treated as cross-source duplicate evidence unless a second provider exposes the same namespace.",
+    "No production W01 files or decisions were modified."
+  ]
+}
