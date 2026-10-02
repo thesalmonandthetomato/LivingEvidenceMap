@@ -1,0 +1,25 @@
+name: TEMP validate W02 batched rate-limit handling
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w02_batched_rate_limit.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  validate:
+    uses: ./.github/workflows/workflow_02_batched.yml
+    with:
+      workflow01_pointer_path: docs/deduplication/zenodo/run-36971418284.json
+      previous_workflow02_pointer_path: docs/enrichment/zenodo/run-36725200424.json
+      mode: incremental
+      batch_size: '5'
+      max_records: '10'
+      recheck_after_days: '90'
+      publish: false
+    secrets: inherit
