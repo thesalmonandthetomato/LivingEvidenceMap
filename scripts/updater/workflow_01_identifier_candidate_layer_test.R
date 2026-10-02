@@ -19,6 +19,14 @@ x <- fread(pairs_path,na.strings=c("","NA"))
 g <- fread(guards_path,na.strings=c("","NA"))
 reg <- fread(registry_path,na.strings=c("","NA"))
 
+# Full-corpus benchmark uses data.table join-generated manifestation-key names.
+if (!("record_i" %in% names(x)) && "i.manifestation_key" %in% names(x)) {
+  setnames(x,"i.manifestation_key","record_i")
+}
+if (!("record_j" %in% names(x)) && "manifestation_key" %in% names(x)) {
+  setnames(x,"manifestation_key","record_j")
+}
+
 if (!all(c("record_i","record_j","families","namespaces","n_independent_families",
            "same_cluster","title_exact","year_diff") %in% names(x))) {
   stop("Candidate-pair input missing required fields",call.=FALSE)
