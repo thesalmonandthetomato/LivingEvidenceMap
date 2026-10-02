@@ -1,7 +1,5 @@
 name: Workflow 01 - Resume after human duplicate adjudication
 
-# Trigger note: real-state semantic replay validation passed
-
 on:
   workflow_dispatch:
     inputs:
@@ -22,7 +20,7 @@ on:
     branches:
       - workflow01-final-architecture
     paths:
-      - '.github/workflows/workflow_01_resume_after_human_review.yml'
+      - 'docs/deduplication/handoffs/w01/**'
 
 permissions:
   contents: write
@@ -34,9 +32,6 @@ concurrency:
 
 env:
   WORKFLOW01_BRANCH: workflow01-final-architecture
-  AUTO_RESUME_POINTER: docs/deduplication/checkpoints/run-36866644366.json
-  AUTO_DECISIONS_RUN_ID: '36924314103'
-  AUTO_DECISIONS_ARTIFACT: workflow01-human-decisions-36866644366-36924314103
 
 jobs:
   resume:
@@ -69,15 +64,58 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p outputs/resume_inputs
+
           if [ "${{ github.event_name }}" = "push" ]; then
-            mkdir -p outputs/resume_inputs
-            gh run download "$AUTO_DECISIONS_RUN_ID" \
+            Rscript scripts/updater/workflow_01_select_ready_handoff.R \
+              --output outputs/resume_inputs/handoff_selection.json
+
+            FOUND="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(tolower(as.character(isTRUE(x$found))))' outputs/resume_inputs/handoff_selection.json)"
+            if [ "$FOUND" != "true" ]; then
+              echo "No unresolved ready W01 handoff found" >&2
+              exit 1
+            fi
+
+            POINTER="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$checkpoint_pointer_path)' outputs/resume_inputs/handoff_selection.json)"
+            EXPORT_RUN_ID="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$export_run_id)' outputs/resume_inputs/handoff_selection.json)"
+            DECISIONS_ARTIFACT="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$decisions_artifact)' outputs/resume_inputs/handoff_selection.json)"
+
+            gh run download "$EXPORT_RUN_ID" \
               --repo thesalmonandthetomato/LivingEvidenceMap \
-              --name "$AUTO_DECISIONS_ARTIFACT" \
+              --name "$DECISIONS_ARTIFACT" \
               --dir outputs/resume_inputs
+
             test -s outputs/resume_inputs/human_decisions.jsonl
             test -s outputs/resume_inputs/human_decisions.manifest.json
-            echo "POINTER=$AUTO_RESUME_POINTER" >> "$GITHUB_ENV"
+
+            Rscript - <<'RS'
+            suppressPackageStartupMessages({
+              library(jsonlite)
+              library(digest)
+            })
+            h <- fromJSON("outputs/resume_inputs/handoff_selection.json",simplifyVector=FALSE)
+            d <- fromJSON("outputs/resume_inputs/human_decisions.manifest.json",simplifyVector=FALSE)
+            stopifnot(
+              isTRUE(h$found),
+              identical(as.character(d$schema),"living-evidence-map-workflow01-shiny-decision-export-manifest-v2"),
+              identical(as.character(d$checkpoint_pointer_path),as.character(h$checkpoint_pointer_path)),
+              identical(as.character(d$checkpoint_run_id),as.character(h$checkpoint_run_id)),
+              identical(tolower(as.character(d$queue_sha256)),tolower(as.character(h$queue_sha256))),
+              identical(as.integer(d$queue_cases),as.integer(h$queue_cases)),
+              identical(as.character(d$export_run_id),as.character(h$export_run_id)),
+              identical(tolower(as.character(d$export_sha256)),tolower(as.character(h$decisions_export_sha256))),
+              isTRUE(d$complete),
+              as.integer(d$unresolved_cases)==0L,
+              as.integer(d$uncertain_cases)==0L
+            )
+            actual <- digest(file="outputs/resume_inputs/human_decisions.jsonl",algo="sha256",serialize=FALSE)
+            if(!identical(tolower(actual),tolower(as.character(h$decisions_export_sha256)))) {
+              stop("Downloaded W01 decisions SHA-256 does not match handoff manifest",call.=FALSE)
+            }
+            cat("PASS: W01 handoff and downloaded decision artefact agree\n")
+            RS
+
+            echo "POINTER=$POINTER" >> "$GITHUB_ENV"
             echo "DECISIONS=outputs/resume_inputs/human_decisions.jsonl" >> "$GITHUB_ENV"
             echo "REPAIRS=" >> "$GITHUB_ENV"
           else
@@ -85,7 +123,6 @@ jobs:
             echo "DECISIONS=$INPUT_DECISIONS" >> "$GITHUB_ENV"
             echo "REPAIRS=$INPUT_REPAIRS" >> "$GITHUB_ENV"
           fi
-
 
       - name: Validate resume inputs
         shell: bash
