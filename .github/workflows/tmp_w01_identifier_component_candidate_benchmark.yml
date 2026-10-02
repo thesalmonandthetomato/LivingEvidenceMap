@@ -1,0 +1,86 @@
+name: TEMP W01 component-aware candidate benchmark
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_component_candidate_benchmark.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite'))
+
+      - name: Download frozen replay inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_component/{prod,safe,out}
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11171230024/zip" > /tmp/w01_component/prod.zip
+          unzip -q /tmp/w01_component/prod.zip             workflow01_candidates/normalised_metadata.csv             workflow01_candidates/incremental_summary.json             -d /tmp/w01_component/prod
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11226773698/zip" > /tmp/w01_component/safe.zip
+          unzip -q /tmp/w01_component/safe.zip             safe_identifier_preresolve_appended_pairs.csv             -d /tmp/w01_component/safe
+
+      - name: Confirm frozen W01 baseline
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('/tmp/w01_component/prod/workflow01_candidates/incremental_summary.json')
+          stopifnot(s$prior_manifestations == 90137L)
+          stopifnot(s$appended_manifestations == 28390L)
+          stopifnot(s$union_manifestations == 118527L)
+          stopifnot(s$incremental_candidate_pairs == 503245L)
+          cat('PASS: frozen W01 candidate baseline confirmed\n')
+
+      - name: Run component-aware pre-candidate benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v             Rscript scripts/updater/workflow_01_identifier_component_candidate_benchmark_test.R               --metadata /tmp/w01_component/prod/workflow01_candidates/normalised_metadata.csv               --safe-pairs /tmp/w01_component/safe/safe_identifier_preresolve_appended_pairs.csv               --prior-n 90137               --output-dir /tmp/w01_component/out             2> /tmp/w01_component/out/process_time.txt
+          cat /tmp/w01_component/out/component_aware_candidate_benchmark.json
+          cat /tmp/w01_component/out/process_time.txt
+
+      - name: Assert safety invariants
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          a <- fromJSON('/tmp/w01_component/out/component_aware_candidate_benchmark.json')
+          stopifnot(a$status == 'success')
+          stopifnot(a$baseline$manifestation_candidate_pairs == 503245L)
+          stopifnot(a$component_aware$missing_baseline_component_pairs == 0L)
+          stopifnot(a$safety$baseline_component_candidate_recall == 1)
+          stopifnot(a$safety$automatic_merges_performed == 0L)
+          stopifnot(a$safety$production_w01_modified == FALSE)
+          cat('PASS: component-aware candidate generation preserved all baseline component candidates\n')
+
+      - name: Upload benchmark outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-component-aware-candidate-benchmark-${{ github.run_id }}
+          path: /tmp/w01_component/out/
+          retention-days: 30
+          if-no-files-found: error
