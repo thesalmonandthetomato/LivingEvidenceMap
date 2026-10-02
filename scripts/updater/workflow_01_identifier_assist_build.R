@@ -218,9 +218,12 @@ if (nrow(shared_reg)) {
     allow.cartesian=TRUE,
     sort=FALSE
   )
-  raw_pairs <- raw_pairs[source_i != source_j & record_i < record_j,
-                         .(record_i,record_j,identifier_type,identifier_value)]
-  raw_pairs <- unique(raw_pairs)
+  raw_pairs <- raw_pairs[source_i != source_j & record_i != record_j]
+  raw_pairs[, `:=`(
+    lo=pmin(record_i,record_j),
+    hi=pmax(record_i,record_j)
+  )]
+  raw_pairs <- unique(raw_pairs[,.(record_i=lo,record_j=hi,identifier_type,identifier_value)])
 } else {
   raw_pairs <- data.table(
     record_i=character(),record_j=character(),
@@ -238,6 +241,9 @@ pair_ev[,families:=vapply(strsplit(namespaces,"\\|"),function(z) {
   paste(sort(unique(z)),collapse="|")
 },character(1))]
 pair_ev[,n_independent_families:=lengths(strsplit(families,"\\|"))]
+if (nrow(raw_pairs) && anyDuplicated(paste(raw_pairs$record_i,raw_pairs$record_j,raw_pairs$identifier_type,raw_pairs$identifier_value,sep="::"))) {
+  stop("Raw identifier pair evidence is unexpectedly duplicated",call.=FALSE)
+}
 
 lookup <- meta[,.(manifestation_key,idx,source,title_norm,year)]
 setkey(lookup,manifestation_key)
