@@ -83,7 +83,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Confirm safe automatic-resume validation
-        run: echo "PASS: automatic W02 resume trigger and request parsing validated safely for source run ${{ needs.prepare.outputs.source_run_id }}"
+        run: |
+          echo "PASS: automatic W02 resume trigger and request parsing validated safely for source run ${{ needs.prepare.outputs.source_run_id }}"
 
   resume:
     needs: prepare
