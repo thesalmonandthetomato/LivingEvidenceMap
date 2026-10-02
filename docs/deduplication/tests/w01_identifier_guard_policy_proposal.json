@@ -1,0 +1,45 @@
+{
+  "schema": "living-evidence-map-w01-identifier-guard-policy-proposal-v1",
+  "status": "test_only_proposal",
+  "source_run_id": 36996370465,
+  "source_artifact_id": 11221329288,
+  "risky_pairs_examined": 363,
+  "risky_identifier_groups": 177,
+  "proposed_never_auto_resolve_groups": 46,
+  "group_breakdown": {
+    "doi": {
+      "isolated_pair_anomaly_groups": 53,
+      "small_multi_record_groups": 63,
+      "reused_or_container_groups": 43,
+      "reused_or_container_risky_pairs": 159
+    },
+    "pmid": {
+      "isolated_pair_anomaly_groups": 2,
+      "small_multi_record_groups": 6,
+      "reused_or_container_groups": 3,
+      "reused_or_container_risky_pairs": 11
+    },
+    "mag": {
+      "isolated_pair_anomaly_groups": 7,
+      "reused_or_container_groups": 0
+    }
+  },
+  "proposed_guard_logic": {
+    "never_auto_resolve_if_any": [
+      "same identifier occurs in at least 5 manifestations",
+      "same identifier generates at least 3 risky disagreement pairs",
+      "same identifier links at least 4 unique risky manifestations"
+    ],
+    "always_candidate_only_if": [
+      "identifier is reused/container-like",
+      "single-family identifier has incompatible bibliographic metadata",
+      "external canonical metadata does not support both manifestations"
+    ],
+    "eligible_for_future_fast_track_only_if": [
+      "identifier is not guard-listed",
+      "at least two independent identifier families agree, OR one identifier family plus strong compatible bibliographic metadata",
+      "no container/reuse signal is present"
+    ]
+  },
+  "safety_note": "This file proposes guard logic only. It is not wired into W01 and performs no merges, exclusions, reclustering or production changes."
+}
