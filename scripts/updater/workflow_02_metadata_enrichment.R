@@ -22,8 +22,13 @@ report_path <- arg("--report")
 limit_arg <- arg("--limit",NULL)
 record_ids_path <- arg("--record-ids",NULL)
 progress_every <- as.integer(arg("--progress-every","100"))
-delay <- as.numeric(arg("--delay","0.2"))
+delay <- as.numeric(arg("--delay","0.5"))
+max_rate_limit_wait <- as.numeric(arg("--max-rate-limit-wait","60"))
+scopus_rate_limit_trip <- as.integer(arg("--scopus-rate-limit-trip","3"))
 recheck_after_days <- as.numeric(arg("--recheck-after-days","90"))
+if(is.na(delay) || delay < 0) stop("--delay must be >= 0",call.=FALSE)
+if(is.na(max_rate_limit_wait) || max_rate_limit_wait < 0) stop("--max-rate-limit-wait must be >= 0",call.=FALSE)
+if(is.na(scopus_rate_limit_trip) || scopus_rate_limit_trip < 1L) stop("--scopus-rate-limit-trip must be >= 1",call.=FALSE)
 if(is.na(recheck_after_days) || recheck_after_days < 0) stop("--recheck-after-days must be >= 0",call.=FALSE)
 if(any(vapply(list(input_path,output_path,audit_path,report_path),is.null,logical(1)))) {
   stop("Required: --input --output --audit --report",call.=FALSE)
@@ -147,6 +152,23 @@ retained_scopus_eid <- function(r){
 }
 
 retryable <- function(status) identical(status,429L) || status>=500L
+
+rate_limit_wait_seconds <- function(resp,fallback){
+  retry_after <- clean_text(resp_header(resp,"retry-after"))
+  if(!is.null(retry_after)){
+    sec <- suppressWarnings(as.numeric(retry_after))
+    if(!is.na(sec) && sec>=0) return(sec)
+    dt <- suppressWarnings(as.POSIXct(retry_after,tz="GMT",format="%a, %d %b %Y %H:%M:%S %Z"))
+    if(!is.na(dt)) return(max(0,as.numeric(difftime(dt,Sys.time(),units="secs"))))
+  }
+  reset <- clean_text(resp_header(resp,"x-ratelimit-reset"))
+  if(!is.null(reset)){
+    epoch <- suppressWarnings(as.numeric(reset))
+    if(!is.na(epoch)) return(max(0,epoch-as.numeric(Sys.time())))
+  }
+  fallback
+}
+
 perform_retry <- function(req,max_attempts=4L){
   errors <- character()
   for(attempt in seq_len(max_attempts)){
@@ -155,8 +177,21 @@ perform_retry <- function(req,max_attempts=4L){
       st <- resp_status(resp)
       if(st<400L || !retryable(st)) return(list(resp=resp,attempts=attempt,errors=errors))
       errors <- c(errors,sprintf("HTTP %d",st))
-    } else errors <- c(errors,conditionMessage(resp))
-    if(attempt<max_attempts) Sys.sleep(c(1,2,4)[min(attempt,3L)])
+      if(attempt<max_attempts){
+        fallback <- c(1,2,4)[min(attempt,3L)]
+        wait <- if(identical(st,429L)) rate_limit_wait_seconds(resp,fallback) else fallback
+        if(identical(st,429L) && wait>max_rate_limit_wait){
+          stop(sprintf(
+            "RATE_LIMIT_EXHAUSTED: HTTP 429 requested %.1f s wait, exceeding configured cap %.1f s",
+            wait,max_rate_limit_wait
+          ),call.=FALSE)
+        }
+        Sys.sleep(max(fallback,wait))
+      }
+    } else {
+      errors <- c(errors,conditionMessage(resp))
+      if(attempt<max_attempts) Sys.sleep(c(1,2,4)[min(attempt,3L)])
+    }
   }
   stop(sprintf("Provider failed after %d attempts: %s",max_attempts,paste(errors,collapse=" | ")),call.=FALSE)
 }
@@ -436,9 +471,13 @@ counts <- list(
   conflicts_quarantined=0L,
   still_missing_after=0L,
   deferred_recent_attempts=0L,
-  technical_error_records=0L
+  technical_error_records=0L,
+  scopus_rate_limit_events=0L,
+  scopus_rate_limit_circuit_skips=0L
 )
 processed_eligible <- 0L
+consecutive_scopus_rate_limits <- 0L
+scopus_rate_limit_circuit_open <- FALSE
 
 previous_attempt_due <- function(meta){
   if(is.null(meta) || !is.list(meta)) return(TRUE)
@@ -541,7 +580,31 @@ for(i in seq_along(rows)){
 
   if(still_missing_title || still_missing_abstract){
     counts$scopus_attempted <- counts$scopus_attempted + 1L
-    sc <- tryCatch(scopus_lookup(d),error=function(e)list(outcome="technical_error",error=conditionMessage(e),title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,status=NULL,attempts=NULL))
+    if(scopus_rate_limit_circuit_open){
+      sc <- list(
+        outcome="technical_error",
+        error="SCOPUS_RATE_LIMIT_CIRCUIT_OPEN: request deferred after repeated HTTP 429 responses",
+        title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,status=429L,attempts=0L,
+        rate_limit_deferred=TRUE
+      )
+      counts$scopus_rate_limit_circuit_skips <- counts$scopus_rate_limit_circuit_skips + 1L
+    } else {
+      sc <- tryCatch(
+        scopus_lookup(d),
+        error=function(e)list(outcome="technical_error",error=conditionMessage(e),title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,status=NULL,attempts=NULL)
+      )
+      rate_limited <- identical(clean_text(sc$outcome),"technical_error") &&
+        grepl("429|RATE_LIMIT",clean_text(sc$error) %||% "",ignore.case=TRUE)
+      if(rate_limited){
+        consecutive_scopus_rate_limits <- consecutive_scopus_rate_limits + 1L
+        counts$scopus_rate_limit_events <- counts$scopus_rate_limit_events + 1L
+        if(consecutive_scopus_rate_limits >= scopus_rate_limit_trip){
+          scopus_rate_limit_circuit_open <- TRUE
+        }
+      } else {
+        consecutive_scopus_rate_limits <- 0L
+      }
+    }
     rec_audit$scopus <- sc
     if(identical(sc$status,404L)) counts$scopus_http_404 <- counts$scopus_http_404 + 1L
 
@@ -638,7 +701,8 @@ report <- list(
     scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
     abstract_title_guard="if a title is present on both sides, Jaro-Winkler similarity must be >= 0.90; otherwise quarantine",
     provider_fallback="existing Scopus DOI/EID path retained for missing title/abstract; author keywords are retained only when returned opportunistically by an already-required Europe PMC or Scopus lookup; no dedicated keyword-only Scopus FULL request",
-    repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days)
+    repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days),
+    rate_limit_policy=sprintf("honour Retry-After/X-RateLimit-Reset up to %.0f seconds; open Scopus circuit after %d consecutive rate-limit failures",max_rate_limit_wait,scopus_rate_limit_trip)
   ),
   trial_limit=if(is.infinite(limit)) NULL else limit,
   selected_record_ids_file=if(is.null(record_ids_path)) NULL else record_ids_path,
