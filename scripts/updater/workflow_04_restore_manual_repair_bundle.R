@@ -14,7 +14,7 @@ api<-paste0("https://zenodo.org/api/deposit/depositions/",record_id)
 dep<-request(api)|>auth()|>req_timeout(120)|>req_error(is_error=function(resp)FALSE)|>req_perform()
 if(resp_status(dep)!=200L)stop(sprintf("Zenodo deposition lookup HTTP %d",resp_status(dep)),call.=FALSE)
 d<-resp_body_json(dep,simplifyVector=FALSE)
-if(!isTRUE(d$submitted))stop("Manual repair Zenodo record is not published",call.=FALSE)
+record_state<-if(isTRUE(d$submitted))"published" else "draft"
 access<-as.character((d$metadata%||%list())$access_right%||%"")
 if(!identical(access,"restricted"))stop(sprintf("Manual repair record must be restricted; got %s",access),call.=FALSE)
 bucket<-as.character(d$links$bucket)
@@ -31,5 +31,5 @@ overlay_sha<-digest(file=file.path(out,"repair_overlay.jsonl"),algo="sha256",ser
 force_sha<-digest(file=file.path(out,"force_rescreen_record_ids.txt"),algo="sha256",serialize=FALSE)
 if(!identical(tolower(overlay_sha),tolower(as.character(m$overlay_sha256))))stop("Repair overlay SHA mismatch",call.=FALSE)
 if(!identical(tolower(force_sha),tolower(as.character(m$force_rescreen_ids_sha256))))stop("Force-rescreen ID SHA mismatch",call.=FALSE)
-cat(sprintf("PASS: restored restricted W04 manual repair bundle %s; records=%d title=%d abstract=%d\n",
-            record_id,as.integer(m$records_with_repairs),as.integer(m$title_repairs),as.integer(m$abstract_repairs)))
+cat(sprintf("PASS: restored restricted W04 manual repair bundle %s (%s); records=%d title=%d abstract=%d\n",
+            record_id,record_state,as.integer(m$records_with_repairs),as.integer(m$title_repairs),as.integer(m$abstract_repairs)))
