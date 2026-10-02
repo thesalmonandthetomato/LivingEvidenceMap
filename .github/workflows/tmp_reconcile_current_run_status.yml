@@ -1,4 +1,5 @@
 name: TEMP reconcile current-run KPI status
+# rerun after total-state KPI correction
 
 on:
   push:
