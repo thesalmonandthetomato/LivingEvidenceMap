@@ -2,6 +2,7 @@ name: TEMP reconcile current-run KPI status
 # rerun after total-state KPI correction
 # rerun after quoted status sync arguments
 # rerun after KPI sheet schema migration
+# rerun through published W02 state
 
 on:
   push:
@@ -43,6 +44,7 @@ jobs:
           set -euo pipefail
           Rscript scripts/updater/workflow_current_run_status_bootstrap.R
           Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W01
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W02
 
       - name: Sync reconciled status to Shiny
         shell: bash
