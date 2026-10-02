@@ -43,7 +43,7 @@ jobs:
 
       - name: Install reporting dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','readr','httr2'))
+        run: install.packages(c('jsonlite','digest','readr','httr2','googlesheets4'))
 
       - name: Resolve changed provenance files
         shell: Rscript {0}
@@ -71,6 +71,24 @@ jobs:
             "--changed-files","changed_files.txt"
           ))
           if(status != 0L) stop("Current-run status observer failed",call.=FALSE)
+
+      - name: Sync current-run status to Shiny
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s docs/current_run/current_run_status.json ]; then
+            echo "No current-run status file to sync."
+            exit 0
+          fi
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
 
       - name: Commit reporting metadata
         shell: bash
