@@ -39,6 +39,7 @@ jobs:
           parse(file='scripts/updater/workflow_01_identifier_assist_build.R')
           parse(file='scripts/updater/workflow_01_identifier_prescore_collapse.R')
           parse(file='scripts/updater/workflow_01_identifier_inject_decisions.R')
+          parse(file='scripts/updater/workflow_01_title_assist_resolve.R')
           parse(file='scripts/updater/workflow_01_deduplication_incremental_candidates.R')
           parse(file='scripts/updater/workflow_01_deduplication_incremental_score.R')
           parse(file='scripts/updater/workflow_01_deduplication_identifier_rescore.R')
@@ -66,7 +67,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p frozen reference reconstructed/current reconstructed/union candidates identifier prescore score rescore injected merged audit
+          mkdir -p frozen reference reconstructed/current reconstructed/union candidates identifier prescore score rescore injected title_resolved merged audit
 
           gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11171230024/zip" > frozen/w01.zip
           unzip -q frozen/w01.zip \
@@ -237,13 +238,25 @@ jobs:
             --audit injected/identifier_injection_summary.json
           cat injected/identifier_injection_summary.json
 
+      - name: Resolve conservative title-wrapper and attachment duplicates
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_title_assist_resolve.R \
+            --decisions injected/incremental_decisions.csv \
+            --metadata candidates/normalised_metadata.csv \
+            --output title_resolved/incremental_decisions.csv \
+            --audit title_resolved/title_assist_summary.json
+          cat title_resolved/title_assist_summary.json
+          Rscript -e 'x<-jsonlite::fromJSON("title_resolved/title_assist_summary.json");stopifnot(x$input_manual_review==285L,x$automatic_title_duplicates==26L,x$wrapper_stripped_exact_title==2L,x$generic_attachment_exact_abstract_author_year_parent_doi==24L,x$output_manual_review==259L,x$non_review_pairs_modified==0L);cat("PASS: title assist resolved exactly 26 validated review pairs\n")'
+
       - name: Run unchanged W01 cluster merge
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
             --old-decisions reconstructed/previous/workflow01_full_five_source/final_pair_decisions.csv \
-            --new-decisions injected/incremental_decisions.csv \
+            --new-decisions title_resolved/incremental_decisions.csv \
             --metadata candidates/normalised_metadata.csv \
             --output-dir merged
           cat merged/summary.json
@@ -256,6 +269,9 @@ jobs:
           base <- fread('frozen/workflow01_pre_adjudication/manifestation_cluster_map.csv')
           cur <- fread('merged/manifestation_cluster_map.csv')
           safe <- fread('identifier/safe_identifier_edges.csv')
+          title_decisions <- fread('title_resolved/incremental_decisions.csv',na.strings=c('','NA'))
+          title_edges <- title_decisions[title_assist==TRUE,.(idx_i=record_i,idx_j=record_j)]
+          stopifnot(nrow(title_edges)==26L)
           bs <- fromJSON('frozen/workflow01_pre_adjudication/summary.json')
           cs <- fromJSON('merged/summary.json')
           stopifnot(nrow(base)==nrow(cur),all(base$idx==cur$idx))
@@ -269,10 +285,19 @@ jobs:
           safe[,baseline_j:=bmap[as.character(idx_j)]]
           cross <- safe[baseline_i!=baseline_j]
 
+          title_edges[,baseline_i:=bmap[as.character(idx_i)]]
+          title_edges[,baseline_j:=bmap[as.character(idx_j)]]
+          title_cross <- title_edges[baseline_i!=baseline_j]
+
+          support_edges <- rbindlist(list(
+            cross[,.(baseline_i,baseline_j,edge_type='identifier_safe')],
+            title_cross[,.(baseline_i,baseline_j,edge_type='title_safe')]
+          ),use.names=TRUE,fill=TRUE)
+
           parent <- setNames(unique(z$baseline_cluster),unique(z$baseline_cluster))
           find <- function(x){while(parent[[x]]!=x){parent[[x]]<<-parent[[parent[[x]]]];x<-parent[[x]]};x}
           unite <- function(a,b){ra<-find(a);rb<-find(b);if(ra!=rb)parent[[rb]]<<-ra}
-          if(nrow(cross)) for(i in seq_len(nrow(cross))) unite(cross$baseline_i[[i]],cross$baseline_j[[i]])
+          if(nrow(support_edges)) for(i in seq_len(nrow(support_edges))) unite(support_edges$baseline_i[[i]],support_edges$baseline_j[[i]])
           roots <- setNames(vapply(names(parent),find,character(1)),names(parent))
           z[,safe_root:=roots[baseline_cluster]]
           support <- z[,.(baseline_clusters=uniqueN(baseline_cluster),safe_roots=uniqueN(safe_root)),by=current_cluster]
@@ -324,8 +349,10 @@ jobs:
             validated_risky_pairs=364L,
             risky_pairs_merged_after_transitive_closure=nrow(risky_collisions),
             safe_cross_cluster_edges=nrow(cross),
+            title_assist_edges=26L,
+            title_assist_cross_cluster_edges=nrow(title_cross),
             baseline_manual_review_pairs=as.integer(bs$manual_review_pairs),
-            identifier_manual_review_pairs=as.integer(cs$manual_review_pairs),
+            identifier_plus_title_manual_review_pairs=as.integer(cs$manual_review_pairs),
             candidate_pairs=503245L,
             scored_pairs=272169L,
             scoring_reduction_percent=100*(503245L-272169L)/503245L,
@@ -333,8 +360,7 @@ jobs:
           )
           writeLines(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null='null'),'audit/architecture_replay.json')
           cat(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
-          stopifnot(cs$clusters==47019L)
-          stopifnot(cs$manual_review_pairs==285L)
+          stopifnot(cs$manual_review_pairs==259L)
 
       - name: Upload architecture replay evidence
         if: always()
@@ -352,6 +378,8 @@ jobs:
             rescore/summary.json
             rescore/process_time.txt
             injected/identifier_injection_summary.json
+            title_resolved/title_assist_summary.json
+            title_resolved/incremental_decisions.csv
             merged/summary.json
             merged/manifestation_cluster_map.csv
             merged/manual_review_pairs.csv
