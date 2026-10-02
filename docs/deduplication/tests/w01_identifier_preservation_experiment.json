@@ -1,0 +1,63 @@
+{
+  "schema": "living-evidence-map-w01-identifier-preservation-experiment-v1",
+  "status": "success",
+  "test_only": true,
+  "workflow_run_id": 36973219824,
+  "successful_attempt": 4,
+  "sample_policy": "same 26 API sources, up to 20 records per source, current W00 queries",
+  "manifestations": 442,
+  "before": {
+    "identifier_rows": 327,
+    "identifier_counts": {
+      "doi": 294,
+      "pmid": 22,
+      "pmcid": 11
+    },
+    "cross_source_shared_identifier_groups": 17,
+    "identifier_candidate_pairs": 19
+  },
+  "after": {
+    "identifier_rows": 366,
+    "identifier_counts": {
+      "doi": 294,
+      "pmid": 61,
+      "pmcid": 11
+    },
+    "cross_source_shared_identifier_groups": 19,
+    "shared_group_counts": {
+      "doi": 17,
+      "pmid": 2
+    },
+    "identifier_candidate_pairs": 19,
+    "candidate_pairs_with_year_conflict": 0
+  },
+  "delta": {
+    "identifier_rows": 39,
+    "pmid_rows": 39,
+    "pmid_percent_increase": 177.27,
+    "shared_identifier_groups": 2,
+    "new_candidate_pairs": 0,
+    "lost_candidate_pairs": 0
+  },
+  "newly_preserved_pmid_rows_by_source": {
+    "ebsco_medline": 20,
+    "openalex": 8,
+    "lens": 5,
+    "ebsco_psycinfo": 4,
+    "ebsco_cinahl": 1,
+    "scopus": 1
+  },
+  "pair_comparison": {
+    "same_candidate_pairs_before_and_after": 19,
+    "newly_linked_pairs": 0,
+    "lost_pairs": 0,
+    "pairs_gaining_doi_plus_pmid_corroboration": 2,
+    "corroborated_source_pair": "EBSCO MEDLINE ↔ PubMed/MEDLINE"
+  },
+  "interpretation": [
+    "Identifier preservation increased evidence density without changing candidate recall in this small top-20-per-source sample.",
+    "The lack of new candidate pairs does not imply PMID is unhelpful: the sample is small and source result ordering differs, so records sharing PMID may not both occur in the first 20 results.",
+    "The two overlapping EBSCO MEDLINE/PubMed records gained independent PMID corroboration in addition to DOI.",
+    "No automatic merges were performed and production W01 was not modified."
+  ]
+}
