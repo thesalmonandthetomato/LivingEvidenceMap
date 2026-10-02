@@ -8,12 +8,14 @@ canonical_path <- arg("--canonical")
 w03_path <- arg("--workflow03-status")
 prior_w04_path <- arg("--prior-workflow04","")
 prior_canonical_path <- arg("--prior-canonical","")
+force_rescreen_path <- arg("--force-rescreen-record-ids","")
 output_dir <- arg("--output-dir","outputs/workflow04_prepare")
 
 if(is.null(canonical_path)||is.null(w03_path)) stop("Required: --canonical --workflow03-status",call.=FALSE)
 if(!file.exists(canonical_path)||!file.exists(w03_path)) stop("Current canonical/W03 input missing",call.=FALSE)
 if(nzchar(prior_w04_path)&&!file.exists(prior_w04_path)) stop("Prior Workflow 04 layer not found",call.=FALSE)
 if(nzchar(prior_canonical_path)&&!file.exists(prior_canonical_path)) stop("Prior canonical input not found",call.=FALSE)
+if(nzchar(force_rescreen_path)&&!file.exists(force_rescreen_path)) stop("Forced rescreen record-id file not found",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
 `%||%` <- function(x,y) if(is.null(x)) y else x
@@ -98,10 +100,20 @@ new_ids <- setdiff(eligible_ids,prior_ids)
 
 # A substantive W04 decision is durable for a stable canonical record_id.
 # Metadata enrichment or canonical field-selection changes MUST NOT trigger
-# paid re-screening of a record that already has a final W04 decision.
+# paid re-screening unless the caller supplies an explicit, auditable override
+# for records whose scientific screening inputs have genuinely been repaired.
 changed_ids <- known[current_fp[known] != prior_fp[known]]
-reuse_ids <- sort(known)
-queue_ids <- sort(new_ids)
+force_ids <- character()
+if(nzchar(force_rescreen_path)){
+  force_ids <- trimws(readLines(force_rescreen_path,warn=FALSE,encoding="UTF-8"))
+  force_ids <- unique(force_ids[nzchar(force_ids)])
+  missing_force <- setdiff(force_ids,eligible_ids)
+  if(length(missing_force)) stop(sprintf("Forced rescreen list contains %d IDs not currently W04-eligible",length(missing_force)),call.=FALSE)
+  force_without_prior <- setdiff(force_ids,prior_ids)
+  if(length(force_without_prior)) stop(sprintf("Forced rescreen list contains %d IDs without a prior W04 decision; new records must not be force-listed",length(force_without_prior)),call.=FALSE)
+}
+reuse_ids <- sort(setdiff(known,force_ids))
+queue_ids <- sort(unique(c(new_ids,force_ids)))
 
 queue_canonical <- unname(cmap[queue_ids])
 queue_w03 <- unname(w03map[queue_ids])
@@ -131,7 +143,7 @@ writeLines(reuse_ids,file.path(output_dir,"reused_record_ids.txt"),useBytes=TRUE
 
 reason_rows <- data.frame(
   record_id=queue_ids,
-  queue_reason=rep("new_record_id",length(queue_ids)),
+  queue_reason=ifelse(queue_ids %in% force_ids,"explicit_repair_rescreen","new_record_id"),
   screening_input_sha256=unname(current_fp[queue_ids]),
   stringsAsFactors=FALSE
 )
@@ -148,9 +160,11 @@ manifest <- list(
   reusable_records=length(reuse_ids),
   screen_queue_records=length(queue_ids),
   new_record_ids=length(new_ids),
+  explicitly_forced_rescreen_records=length(force_ids),
   changed_screening_input=length(changed_ids),
   changed_screening_input_reused=length(changed_ids),
-  rescreen_existing_decisions=FALSE,
+  rescreen_existing_decisions=length(force_ids)>0L,
+  forced_rescreen_record_ids_sha256=if(nzchar(force_rescreen_path))digest(file=force_rescreen_path,algo="sha256",serialize=FALSE)else NULL,
   prior_records_not_currently_w03_eligible=length(setdiff(prior_ids,eligible_ids)),
   screening_fingerprint_fields=c("title","abstract","keywords","journal_source_title","affiliations","funding"),
   canonical_sha256=digest(file=canonical_path,algo="sha256",serialize=FALSE),
@@ -159,5 +173,5 @@ manifest <- list(
   generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(output_dir,"prepare_manifest.json"),useBytes=TRUE)
-cat(sprintf("PASS: W04 %s preparation: eligible=%d reuse=%d screen=%d (new=%d metadata-changed-but-reused=%d)\n",
-            mode,length(eligible_ids),length(reuse_ids),length(queue_ids),length(new_ids),length(changed_ids)))
+cat(sprintf("PASS: W04 %s preparation: eligible=%d reuse=%d screen=%d (new=%d explicit-repair-rescreen=%d metadata-changed=%d)\n",
+            mode,length(eligible_ids),length(reuse_ids),length(queue_ids),length(new_ids),length(force_ids),length(changed_ids)))
