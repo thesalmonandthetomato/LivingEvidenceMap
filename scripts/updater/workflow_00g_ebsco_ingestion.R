@@ -160,6 +160,23 @@ repeat {
     au <- texts(rec,".//*[local-name()='au']")
     doi_nodes <- xml_find_all(rec,".//*[local-name()='ui' and translate(@type,'DOI','doi')='doi']")
     doi <- norm_doi(scalar_text(doi_nodes))
+    ui_nodes <- xml_find_all(rec,".//*[local-name()='ui' and @type]")
+    typed_ids <- list()
+    if (length(ui_nodes)) {
+      for (node in ui_nodes) {
+        typ <- tolower(trimws(xml_attr(node,"type")))
+        val <- trimws(xml_text(node))
+        if (!nzchar(typ) || !nzchar(val)) next
+        typed_ids[[typ]] <- unique(c(typed_ids[[typ]],val))
+      }
+    }
+    first_id <- function(type) {
+      z <- typed_ids[[tolower(type)]]
+      if (is.null(z) || !length(z)) NULL else z[[1L]]
+    }
+    pmid <- first_id("pmid")
+    pmcid <- first_id("pmcid")
+    umi <- first_id("umi")
     dt <- xml_find_first(rec,".//*[local-name()='dt']")
     year <- if (!inherits(dt,"xml_missing")) suppressWarnings(as.integer(xml_attr(dt,"year"))) else NA_integer_
     if (is.na(year)) year <- NULL
@@ -178,7 +195,10 @@ repeat {
       sidecar_identity=list(
         sidecar_record_id=sidecar_id,
         ebsco_accession_number=accession,
-        doi=doi
+        doi=doi,
+        pmid=pmid,
+        pmcid=pmcid,
+        umi=umi
       ),
       source=list(
         provider=source_slug,
@@ -192,7 +212,8 @@ repeat {
         database_name=if(!is.na(long_db)&&nzchar(long_db)) long_db else db_name,
         permalink=plink,
         subject_terms=if(length(subjects)) subjects else NULL,
-        publication_types=if(length(pubtypes)) pubtypes else NULL
+        publication_types=if(length(pubtypes)) pubtypes else NULL,
+        identifiers=if(length(typed_ids)) typed_ids else NULL
       ),
       mapped_fields=list(
         title=title,
@@ -203,6 +224,9 @@ repeat {
         publication_date=pub_date,
         source=journal,
         doi=doi,
+        pmid=pmid,
+        pmcid=pmcid,
+        umi=umi,
         keywords=if(length(kw)) kw else NULL,
         author_keywords=if(length(kw)) kw else NULL,
         publication_type=if(length(pubtypes)) pubtypes[[1L]] else NULL,
