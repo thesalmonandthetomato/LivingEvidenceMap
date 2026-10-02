@@ -1,0 +1,29 @@
+{
+  "schema": "living-evidence-map-w01-identifier-candidate-layer-test-v1",
+  "status": "success",
+  "test_only": true,
+  "workflow_run_id": 36998134707,
+  "successful_attempt": 2,
+  "artifact_id": 11222752004,
+  "total_identifier_candidate_pairs": 143445,
+  "routing": {
+    "fast_track_candidate": 139163,
+    "review_or_existing_w01": 1586,
+    "existing_w01_candidate_logic": 2696
+  },
+  "fast_track_evidence": {
+    "multi_family_strong": 43532,
+    "single_family_exact_title": 95631
+  },
+  "safety": {
+    "fast_track_pairs_already_same_cluster": 139163,
+    "fast_track_pairs_different_cluster": 0,
+    "automatic_merges_performed": 0,
+    "production_w01_modified": false
+  },
+  "interpretation": [
+    "The guarded sidecar can identify a large high-confidence subset of identifier-linked candidate pairs without contradicting the saved W01 clustering.",
+    "Historically risky disagreement pairs and exact reused/container identifier guards remain outside fast-track routing.",
+    "This is still candidate routing only; it does not replace W01 scoring, clustering, or adjudication."
+  ]
+}
