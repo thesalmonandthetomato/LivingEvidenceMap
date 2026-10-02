@@ -68,6 +68,55 @@ norm_pmcid <- function(x) {
   if (!grepl("^PMC[0-9]+$",x)) return(NULL)
   x
 }
+norm_openalex <- function(x) {
+  x <- scalar(x)
+  if (is.null(x)) return(NULL)
+  x <- toupper(trimws(x))
+  x <- sub("^HTTPS?://OPENALEX\\.ORG/","",x)
+  if (!grepl("^W[0-9]+$",x)) return(NULL)
+  x
+}
+norm_core <- function(x) {
+  x <- scalar(x)
+  if (is.null(x)) return(NULL)
+  x <- trimws(x)
+  x <- sub("^HTTPS?://CORE\\.AC\\.UK/WORKS/","",x,ignore.case=TRUE)
+  x <- sub("^CORE[: ]*","",x,ignore.case=TRUE)
+  if (!nzchar(x)) return(NULL)
+  x
+}
+norm_mag <- function(x) {
+  x <- scalar(x)
+  if (is.null(x)) return(NULL)
+  x <- gsub("[^0-9]","",x)
+  if (!nzchar(x)) return(NULL)
+  x
+}
+canonical_namespace <- function(x) {
+  x <- tolower(trimws(as.character(x)))
+  aliases <- c(
+    doi="doi",
+    pmid="pmid", pubmed="pmid", pubmed_id="pmid", `pubmed-id`="pmid",
+    pmcid="pmcid", pmc="pmcid",
+    openalex="openalex", openalex_id="openalex",
+    core="core", coreid="core", core_id="core",
+    mag="mag", magid="mag", mag_id="mag"
+  )
+  unname(aliases[[x]] %||% NA_character_)
+}
+normalise_identifier <- function(namespace,value) {
+  ns <- canonical_namespace(namespace)
+  if (is.na(ns)) return(NULL)
+  switch(ns,
+    doi=norm_doi(value),
+    pmid=norm_pmid(value),
+    pmcid=norm_pmcid(value),
+    openalex=norm_openalex(value),
+    core=norm_core(value),
+    mag=norm_mag(value),
+    NULL
+  )
+}
 norm_title <- function(x) {
   x <- scalar(x)
   if (is.null(x)) return(NULL)
@@ -100,45 +149,53 @@ source_kind <- function(r,expected) {
 
 extract_ids <- function(r,source) {
   out <- list()
-  add <- function(type,value) {
-    if (is.null(value) || !nzchar(value)) return()
-    out[[length(out)+1L]] <<- list(type=type,value=value)
+  add <- function(namespace,value) {
+    ns <- canonical_namespace(namespace)
+    if (is.na(ns)) return()
+    v <- normalise_identifier(ns,value)
+    if (is.null(v) || !nzchar(v)) return()
+    out[[length(out)+1L]] <<- list(type=ns,value=v)
+  }
+  add_named_list <- function(x) {
+    if (is.null(x) || !is.list(x) || !length(x) || is.null(names(x))) return()
+    for (nm in names(x)) {
+      z <- x[[nm]]
+      if (is.null(z)) next
+      vals <- if (is.list(z) && is.null(names(z))) unlist(z,use.names=FALSE) else z
+      for (v in vals) add(nm,v)
+    }
   }
 
-  doi <- norm_doi(
-    (r$mapped_fields %||% list())$doi %||%
-    (r$sidecar_identity %||% list())$doi %||%
-    (r$canonical %||% list())$doi
-  )
-  add("doi",doi)
+  for (container in list(
+    r$mapped_fields %||% list(),
+    r$sidecar_identity %||% list(),
+    r$identity %||% list(),
+    r$canonical %||% list(),
+    r$identifiers %||% list()
+  )) add_named_list(container)
 
-  pmid <- norm_pmid(
-    (r$mapped_fields %||% list())$pmid %||%
-    (r$sidecar_identity %||% list())$pmid %||%
-    (r$identity %||% list())$pmid %||%
-    (r$canonical %||% list())$pmid
-  )
-  if (is.null(pmid) && identical(source,"pubmed")) {
+  if (is.list(r$ebsco$identifiers)) add_named_list(r$ebsco$identifiers)
+
+  if (is.list(r$lens$raw_payload$external_ids)) {
+    for (z in r$lens$raw_payload$external_ids) {
+      if (!is.list(z)) next
+      add(z$type %||% "",z$value)
+    }
+  }
+
+  if (identical(source,"pubmed")) {
     epmc_source <- scalar((r$sidecar_identity %||% list())$europe_pmc_source)
     epmc_id <- scalar((r$sidecar_identity %||% list())$europe_pmc_id)
-    if (identical(epmc_source,"MED")) pmid <- norm_pmid(epmc_id)
+    if (identical(epmc_source,"MED")) add("pmid",epmc_id)
   }
-  if (is.null(pmid) && is.list(r$europe_pmc$raw_payload)) {
-    pmid <- norm_pmid(r$europe_pmc$raw_payload$pmid)
+  if (is.list(r$europe_pmc$raw_payload)) {
+    add("pmid",r$europe_pmc$raw_payload$pmid)
+    add("pmcid",r$europe_pmc$raw_payload$pmcid)
   }
-  add("pmid",pmid)
 
-  pmcid <- norm_pmcid(
-    (r$mapped_fields %||% list())$pmcid %||%
-    (r$sidecar_identity %||% list())$pmcid %||%
-    (r$canonical %||% list())$pmcid
-  )
-  if (is.null(pmcid) && is.list(r$europe_pmc$raw_payload)) {
-    pmcid <- norm_pmcid(r$europe_pmc$raw_payload$pmcid)
-  }
-  add("pmcid",pmcid)
-
-  out
+  if (!length(out)) return(out)
+  keys <- vapply(out,function(z) paste(z$type,z$value,sep="::"),character(1))
+  out[!duplicated(keys)]
 }
 
 read_jsonl <- function(path,source,fun) {
@@ -257,7 +314,7 @@ if (nrow(p)) {
 }
 
 summary <- list(
-  schema="living-evidence-map-workflow01-identifier-assist-test-v1",
+  schema="living-evidence-map-workflow01-identifier-assist-test-v2",
   status="success",
   test_only=TRUE,
   automatic_merges_performed=0L,
@@ -271,7 +328,8 @@ summary <- list(
   cross_source_shared_identifier_groups=nrow(shared),
   identifier_candidate_pairs=nrow(evidence),
   candidate_pairs_with_year_conflict=if(nrow(evidence)) sum(evidence$metadata_conflict) else 0L,
-  note="This test emits candidate evidence only. It does not merge, remove, recluster, or alter W01 records."
+  supported_identifier_namespaces=c("doi","pmid","pmcid","openalex","core","mag"),
+  note="Namespace-agnostic identifier registry. This test emits candidate evidence only; it does not merge, remove, recluster, or alter W01 records."
 )
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
            file.path(output_dir,"summary.json"))
