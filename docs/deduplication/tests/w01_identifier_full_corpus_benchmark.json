@@ -1,0 +1,78 @@
+{
+  "schema": "living-evidence-map-w01-full-identifier-benchmark-record-v1",
+  "status": "success",
+  "test_only": true,
+  "workflow_run_id": 36990537714,
+  "successful_attempt": 2,
+  "artifact_id": 11219584507,
+  "source_w01_artifact_id": 11171230024,
+  "source_w00_artifact_ids": {
+    "lens": 10694749854,
+    "openalex": 10695109039,
+    "scopus": 10696417436,
+    "wos": 10695665661,
+    "agricola": 10698185531
+  },
+  "corpus": {
+    "manifestations": 118527,
+    "manifestations_with_any_identifier": 105264,
+    "identifier_rows": 197798
+  },
+  "identifier_rows_by_namespace": {
+    "doi": 95361,
+    "mag": 36012,
+    "pmid": 25613,
+    "pmcid": 2730,
+    "core": 3622,
+    "openalex": 34460
+  },
+  "manifestations_by_namespace": {
+    "doi": 95314,
+    "mag": 35995,
+    "pmid": 25607,
+    "pmcid": 2728,
+    "core": 3294,
+    "openalex": 34455
+  },
+  "cross_source": {
+    "shared_identifier_groups": 49086,
+    "shared_groups_by_namespace": {
+      "doi": 20634,
+      "mag": 15618,
+      "pmid": 6857,
+      "openalex": 5977
+    },
+    "candidate_pairs": 143445,
+    "pairs_same_existing_cluster": 141990,
+    "pairs_different_existing_cluster": 1455,
+    "pairs_same_cluster_percent": 98.9857,
+    "pairs_with_multiple_independent_families": 43904
+  },
+  "incremental": {
+    "pairs_involving_appended_manifestations": 41722,
+    "pairs_same_existing_cluster": 41458,
+    "pairs_different_existing_cluster": 264
+  },
+  "disagreement_audit": {
+    "pairs_with_exact_normalised_title": 2,
+    "pairs_with_multiple_independent_identifier_families": 236,
+    "pairs_with_year_difference_gt_1": 18,
+    "namespace_patterns": {
+      "doi": 1146,
+      "doi|pmid": 171,
+      "pmid": 60,
+      "doi|mag": 44,
+      "mag": 13,
+      "doi|openalex": 11,
+      "doi|mag|pmid": 8,
+      "mag|pmid": 2
+    },
+    "note": "Manual spot checks include clear likely missed duplicates caused by source-specific title corruption or book/chapter prefixes, but these remain benchmark findings only and were not written back to W01."
+  },
+  "invariants": {
+    "automatic_merges_performed": 0,
+    "production_w01_modified": false,
+    "production_branch": "workflow01-final-architecture",
+    "production_branch_head_before_and_after": "0cff1d6bd0d5dc0d64337e666da294a2c1c0a6ec"
+  }
+}
