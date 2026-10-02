@@ -1,0 +1,318 @@
+name: TEMP W01 identifier architecture end-to-end replay
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_identifier_architecture_replay.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install current W01 dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','stringdist','stringi','xml2','httr2'))
+
+      - name: Parse identifier-assisted architecture
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_01_identifier_assist_build.R')
+          parse(file='scripts/updater/workflow_01_identifier_prescore_collapse.R')
+          parse(file='scripts/updater/workflow_01_identifier_inject_decisions.R')
+          parse(file='scripts/updater/workflow_01_deduplication_incremental_candidates.R')
+          parse(file='scripts/updater/workflow_01_deduplication_incremental_score.R')
+          parse(file='scripts/updater/workflow_01_deduplication_identifier_rescore.R')
+          parse(file='scripts/updater/workflow_01_deduplication_merge_clusters.R')
+          cat('PASS: identifier-assisted W01 architecture parses\n')
+
+      - name: Require unchanged core W01 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin workflow01-final-architecture:refs/remotes/origin/workflow01-final-architecture
+          for p in \
+            scripts/updater/workflow_01_deduplication_build_union.R \
+            scripts/updater/workflow_01_deduplication_incremental_candidates.R \
+            scripts/updater/workflow_01_deduplication_incremental_score.R \
+            scripts/updater/workflow_01_deduplication_identifier_rescore.R \
+            scripts/updater/workflow_01_deduplication_merge_clusters.R
+          do
+            git show "refs/remotes/origin/workflow01-final-architecture:$p" > /tmp/prod
+            cmp -s "$p" /tmp/prod || { echo "Core W01 differs from current production: $p" >&2; exit 1; }
+          done
+          echo 'PASS: scorer/rescorer/candidate/cluster core remains current production code'
+
+      - name: Download frozen W01 benchmark state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p frozen reference reconstructed/current reconstructed/union candidates identifier prescore score rescore injected merged audit
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11171230024/zip" > frozen/w01.zip
+          unzip -q frozen/w01.zip \
+            workflow01_candidates/normalised_metadata.csv \
+            workflow01_incremental_rescore/rescored_sample.csv \
+            workflow01_pre_adjudication/manifestation_cluster_map.csv \
+            workflow01_pre_adjudication/summary.json \
+            pending_checkpoint/previous_workflow01_pointer.json \
+            pending_checkpoint/source_manifestations/lens_new.jsonl \
+            pending_checkpoint/source_manifestations/scopus_new.jsonl \
+            pending_checkpoint/source_manifestations/openalex_new.jsonl \
+            pending_checkpoint/source_manifestations/agricola_new.jsonl \
+            pending_checkpoint/source_manifestations/wos_new.jsonl \
+            pending_checkpoint/source_manifestations/cab_new.jsonl \
+            pending_checkpoint/source_manifestations/proquest_new.jsonl \
+            -d frozen
+
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/11226773698/zip" > reference/safe.zip
+          unzip -q reference/safe.zip safe_identifier_preresolve_appended_pairs.csv -d reference
+
+      - name: Restore frozen prior Workflow 01 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer frozen/pending_checkpoint/previous_workflow01_pointer.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root reconstructed/previous
+          test -s reconstructed/previous/workflow01_full_five_source/final_pair_decisions.csv
+          test -s reconstructed/previous/workflow01_full_five_source/manifestation_cluster_map.csv
+
+      - name: Reconstruct exact 118527-manifestation union
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > reconstructed/current/source_inputs.json <<'EOF'
+          {
+            "schema": "living-evidence-map-workflow01-source-inputs-v1",
+            "sources": {
+              "lens": "frozen/pending_checkpoint/source_manifestations/lens_new.jsonl",
+              "scopus": "frozen/pending_checkpoint/source_manifestations/scopus_new.jsonl",
+              "openalex": "frozen/pending_checkpoint/source_manifestations/openalex_new.jsonl",
+              "agricola": "frozen/pending_checkpoint/source_manifestations/agricola_new.jsonl",
+              "wos": "frozen/pending_checkpoint/source_manifestations/wos_new.jsonl",
+              "cab": "frozen/pending_checkpoint/source_manifestations/cab_new.jsonl",
+              "proquest": "frozen/pending_checkpoint/source_manifestations/proquest_new.jsonl"
+            }
+          }
+          EOF
+          Rscript scripts/updater/workflow_01_deduplication_build_union.R \
+            --old-dir reconstructed/previous/workflow01_seed \
+            --input-manifest reconstructed/current/source_inputs.json \
+            --expected-prior-manifestations 90137 \
+            --output-dir reconstructed/union
+          Rscript -e 'x<-jsonlite::fromJSON("reconstructed/union/union_manifest.json");stopifnot(x$union_manifestations==118527L,x$appended_new_manifestations==28390L)'
+
+      - name: Generate ordinary current W01 candidates unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v \
+            Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
+              --input-manifest reconstructed/union/source_inputs.json \
+              --old-manifestation-map reconstructed/previous/workflow01_full_five_source/manifestation_cluster_map.csv \
+              --output-dir candidates \
+              --score-n 1 \
+              --workflow01-run-id "$GITHUB_RUN_ID" \
+            2> candidates/process_time.txt
+          Rscript -e 'x<-jsonlite::fromJSON("candidates/incremental_summary.json");stopifnot(x$incremental_candidate_pairs==503245L,x$prior_manifestations==90137L,x$appended_manifestations==28390L);cat("PASS: reproduced frozen 503245-pair W01 candidate workload\n")'
+
+      - name: Build identifier assist from live W01 union inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_identifier_assist_build.R \
+            --input-manifest reconstructed/union/source_inputs.json \
+            --metadata candidates/normalised_metadata.csv \
+            --guard-file config/workflow01_identifier_never_auto_resolve.csv \
+            --prior-manifestations 90137 \
+            --output-dir identifier
+          cat identifier/identifier_assist_summary.json
+
+      - name: Require operational safe edges to reproduce validated benchmark
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          cur <- fread('identifier/safe_identifier_edges.csv')
+          ref <- fread('reference/safe_identifier_preresolve_appended_pairs.csv')
+          cur_key <- unique(paste(pmin(cur$idx_i,cur$idx_j),pmax(cur$idx_i,cur$idx_j),sep='::'))
+          ref_key <- unique(as.character(ref$idx_pair_key))
+          stopifnot(length(cur_key)==41268L,length(ref_key)==41268L)
+          stopifnot(setequal(cur_key,ref_key))
+          cat('PASS: live-union identifier builder exactly reproduces all 41268 validated safe incremental edges\n')
+
+      - name: Collapse candidates to one representative per external identifier component relation
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v \
+            Rscript scripts/updater/workflow_01_identifier_prescore_collapse.R \
+              --candidates candidates/all_candidate_pairs.csv \
+              --metadata candidates/normalised_metadata.csv \
+              --safe-edges identifier/safe_identifier_edges.csv \
+              --output-dir prescore \
+            2> prescore/process_time.txt
+          cat prescore/identifier_prescore_summary.json
+          Rscript -e 'x<-jsonlite::fromJSON("prescore/identifier_prescore_summary.json");stopifnot(x$manifestation_candidate_pairs==503245L,x$pairs_selected_for_expensive_scoring==272169L);cat("PASS: pre-score collapse reproduced 272169 selected pairs\n")'
+
+      - name: Run unchanged W01 expensive scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v \
+            Rscript scripts/updater/workflow_01_deduplication_incremental_score.R \
+              --input-dir prescore \
+              --upstream-dir reconstructed/union \
+              --output-dir score \
+              --target-n 272169 \
+              --sample-key "w01-identifier-architecture-replay" \
+            2> score/process_time.txt
+
+      - name: Run unchanged W01 deterministic rescorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v \
+            Rscript scripts/updater/workflow_01_deduplication_identifier_rescore.R \
+              --input-dir score \
+              --output-dir rescore \
+              --source-run-id 36866644366 \
+            2> rescore/process_time.txt
+
+      - name: Require selected-pair decisions to equal frozen W01
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          old <- fread('frozen/workflow01_incremental_rescore/rescored_sample.csv',na.strings=c('','NA'))
+          new <- fread('rescore/rescored_sample.csv',na.strings=c('','NA'))
+          key <- function(a,b) paste(pmin(a,b),pmax(a,b),sep='::')
+          old[,pair_key:=key(record_i,record_j)]; new[,pair_key:=key(record_i,record_j)]
+          if('source_row_index' %in% names(old)) setorder(old,pair_key,source_row_index)
+          if('source_row_index' %in% names(new)) setorder(new,pair_key,source_row_index)
+          old <- unique(old,by='pair_key'); new <- unique(new,by='pair_key')
+          stopifnot(nrow(new)==272169L)
+          setkey(old,pair_key); setkey(new,pair_key)
+          z <- old[new,on='pair_key']
+          stopifnot(nrow(z)==272169L)
+          stopifnot(all(z$rescored_classification==z$i.rescored_classification))
+          stopifnot(all(z$rescored_rule==z$i.rescored_rule))
+          cat('PASS: all 272169 selected pairs reproduce frozen W01 classification and rule exactly\n')
+
+      - name: Inject safe identifier duplicate edges
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_identifier_inject_decisions.R \
+            --rescored rescore/rescored_sample.csv \
+            --safe-edges identifier/safe_identifier_edges.csv \
+            --output injected/incremental_decisions.csv \
+            --audit injected/identifier_injection_summary.json
+          cat injected/identifier_injection_summary.json
+
+      - name: Run unchanged W01 cluster merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
+            --old-decisions reconstructed/previous/workflow01_full_five_source/final_pair_decisions.csv \
+            --new-decisions injected/incremental_decisions.csv \
+            --metadata candidates/normalised_metadata.csv \
+            --output-dir merged
+          cat merged/summary.json
+
+      - name: Validate final cluster safety and expected improvement
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          library(jsonlite)
+          base <- fread('frozen/workflow01_pre_adjudication/manifestation_cluster_map.csv')
+          cur <- fread('merged/manifestation_cluster_map.csv')
+          safe <- fread('identifier/safe_identifier_edges.csv')
+          bs <- fromJSON('frozen/workflow01_pre_adjudication/summary.json')
+          cs <- fromJSON('merged/summary.json')
+          stopifnot(nrow(base)==nrow(cur),all(base$idx==cur$idx))
+
+          z <- data.table(idx=base$idx,baseline_cluster=base$cluster_id,current_cluster=cur$cluster_id)
+          split_n <- z[,uniqueN(current_cluster),by=baseline_cluster][V1>1L,.N]
+          stopifnot(split_n==0L)
+
+          bmap <- setNames(base$cluster_id,base$idx)
+          safe[,baseline_i:=bmap[as.character(idx_i)]]
+          safe[,baseline_j:=bmap[as.character(idx_j)]]
+          cross <- safe[baseline_i!=baseline_j]
+
+          parent <- setNames(unique(z$baseline_cluster),unique(z$baseline_cluster))
+          find <- function(x){while(parent[[x]]!=x){parent[[x]]<<-parent[[parent[[x]]]];x<-parent[[x]]};x}
+          unite <- function(a,b){ra<-find(a);rb<-find(b);if(ra!=rb)parent[[rb]]<<-ra}
+          if(nrow(cross)) for(i in seq_len(nrow(cross))) unite(cross$baseline_i[[i]],cross$baseline_j[[i]])
+          roots <- setNames(vapply(names(parent),find,character(1)),names(parent))
+          z[,safe_root:=roots[baseline_cluster]]
+          support <- z[,.(baseline_clusters=uniqueN(baseline_cluster),safe_roots=uniqueN(safe_root)),by=current_cluster]
+          unsupported <- support[baseline_clusters>1L & safe_roots!=1L,.N]
+          stopifnot(unsupported==0L)
+
+          audit <- list(
+            schema='living-evidence-map-w01-identifier-architecture-replay-v1',
+            status='success',
+            baseline_clusters=as.integer(bs$clusters),
+            identifier_assisted_clusters=as.integer(cs$clusters),
+            cluster_reduction=as.integer(bs$clusters-cs$clusters),
+            baseline_cluster_splits=as.integer(split_n),
+            unsupported_new_merged_clusters=as.integer(unsupported),
+            safe_cross_cluster_edges=nrow(cross),
+            baseline_manual_review_pairs=as.integer(bs$manual_review_pairs),
+            identifier_manual_review_pairs=as.integer(cs$manual_review_pairs),
+            candidate_pairs=503245L,
+            scored_pairs=272169L,
+            scoring_reduction_percent=100*(503245L-272169L)/503245L,
+            production_w01_modified=FALSE
+          )
+          writeLines(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null='null'),'audit/architecture_replay.json')
+          cat(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null='null'),'\n')
+          stopifnot(cs$clusters==47019L)
+          stopifnot(cs$manual_review_pairs==285L)
+
+      - name: Upload architecture replay evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-identifier-architecture-replay-${{ github.run_id }}
+          path: |
+            candidates/incremental_summary.json
+            candidates/process_time.txt
+            identifier/
+            prescore/identifier_prescore_summary.json
+            prescore/process_time.txt
+            score/expanded_summary.json
+            score/process_time.txt
+            rescore/summary.json
+            rescore/process_time.txt
+            injected/identifier_injection_summary.json
+            merged/summary.json
+            merged/manifestation_cluster_map.csv
+            merged/manual_review_pairs.csv
+            audit/architecture_replay.json
+          retention-days: 30
+          if-no-files-found: warn
