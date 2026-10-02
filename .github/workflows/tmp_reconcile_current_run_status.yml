@@ -1,6 +1,7 @@
 name: TEMP reconcile current-run KPI status
 # rerun after total-state KPI correction
 # rerun after quoted status sync arguments
+# rerun after KPI sheet schema migration
 
 on:
   push:
