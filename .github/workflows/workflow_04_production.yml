@@ -293,12 +293,26 @@ jobs:
           SEED="prepared/outputs/workflow04_recovery_seed/shard-${{ matrix.shard }}/pass1.jsonl"
           if [ -f "$SEED" ]; then
             cp "$SEED" outputs/shard-${{ matrix.shard }}/pass1.jsonl
-            echo "Seeded $(grep -cve '^[[:space:]]*
+            N=$(wc -l < "$SEED")
+            echo "Seeded $N recovered pass-1 decisions for shard ${{ matrix.shard }}"
+          fi
+
+      - name: Screen incremental queue shard
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_04_luna_consensus.R             --canonical prepared/outputs/workflow04_prepare/screen_queue_canonical.jsonl             --workflow03-status prepared/outputs/workflow04_prepare/screen_queue_workflow03.jsonl             --screening-config user_input/workflow04_screening_config.json             --output-dir outputs/shard-${{ matrix.shard }}             --model gpt-5.6-luna             --shard-index ${{ matrix.shard }}             --shard-count 8             --checkpoint-every 25
+          Rscript scripts/updater/workflow_04_luna_consensus.R \
+            --canonical prepared/outputs/workflow04_prepare/screen_queue_canonical.jsonl \
+            --workflow03-status prepared/outputs/workflow04_prepare/screen_queue_workflow03.jsonl \
+            --screening-config user_input/workflow04_screening_config.json \
+            --output-dir outputs/shard-${{ matrix.shard }} \
+            --model gpt-5.6-luna \
+            --shard-index ${{ matrix.shard }} \
+            --shard-count 8 \
+            --checkpoint-every 25
 
       - name: Upload shard
         if: always()
