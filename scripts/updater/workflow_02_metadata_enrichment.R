@@ -25,6 +25,7 @@ progress_every <- as.integer(arg("--progress-every","100"))
 delay <- as.numeric(arg("--delay","0.5"))
 max_rate_limit_wait <- as.numeric(arg("--max-rate-limit-wait","60"))
 scopus_rate_limit_trip <- as.integer(arg("--scopus-rate-limit-trip","3"))
+skip_scopus <- tolower(arg("--skip-scopus","false")) %in% c("true","1","yes")
 recheck_after_days <- as.numeric(arg("--recheck-after-days","90"))
 if(is.na(delay) || delay < 0) stop("--delay must be >= 0",call.=FALSE)
 if(is.na(max_rate_limit_wait) || max_rate_limit_wait < 0) stop("--max-rate-limit-wait must be >= 0",call.=FALSE)
@@ -46,8 +47,8 @@ if(!is.null(record_ids_path)){
 
 scopus_key <- Sys.getenv("SCOPUS_API_TOKEN")
 scopus_insttoken <- Sys.getenv("SCOPUS_INSTTOKEN")
-if(!nzchar(scopus_key)) stop("SCOPUS_API_TOKEN is required",call.=FALSE)
-if(!nzchar(scopus_insttoken)) stop("SCOPUS_INSTTOKEN is required",call.=FALSE)
+if(!skip_scopus && !nzchar(scopus_key)) stop("SCOPUS_API_TOKEN is required unless --skip-scopus true",call.=FALSE)
+if(!skip_scopus && !nzchar(scopus_insttoken)) stop("SCOPUS_INSTTOKEN is required unless --skip-scopus true",call.=FALSE)
 
 `%||%` <- function(x,y) if(is.null(x)) y else x
 now_utc <- function() format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
@@ -579,8 +580,15 @@ for(i in seq_along(rows)){
   still_missing_abstract <- is_missing(r$canonical$abstract)
 
   if(still_missing_title || still_missing_abstract){
-    counts$scopus_attempted <- counts$scopus_attempted + 1L
-    if(scopus_rate_limit_circuit_open){
+    if(skip_scopus){
+      rec_audit$scopus <- list(
+        outcome="skipped_disabled",
+        reason="Scopus temporarily disabled for this Workflow 02 run",
+        title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,status=NULL,attempts=0L
+      )
+    } else {
+      counts$scopus_attempted <- counts$scopus_attempted + 1L
+      if(scopus_rate_limit_circuit_open){
       sc <- list(
         outcome="technical_error",
         error="SCOPUS_RATE_LIMIT_CIRCUIT_OPEN: request deferred after repeated HTTP 429 responses",
@@ -629,7 +637,8 @@ for(i in seq_along(rows)){
       counts$conflicts_quarantined <- counts$conflicts_quarantined + 1L
       rec_audit$quarantined <- c(rec_audit$quarantined,list(list(provider="scopus",reason="returned_doi_mismatch",returned_doi=sc$returned_doi)))
     }
-    Sys.sleep(delay)
+      Sys.sleep(delay)
+    }
   }
 
   # Author keywords are optional enrichment only. Never issue a dedicated
@@ -693,14 +702,14 @@ report <- list(
   schema="living-evidence-map-workflow02-metadata-enrichment-v1",
   workflow="02_metadata_enrichment",
   implementation_language="R",
-  provider_order=c("europe_pmc","scopus"),
+  provider_order=if(skip_scopus)c("europe_pmc") else c("europe_pmc","scopus"),
   policy=list(
     eligibility="DOI present and title or abstract missing; author keywords alone do not make a record eligible",
     overwrite_existing_fields=FALSE,
     europe_pmc_match="exact normalised DOI plus canonical/provider title similarity >= 0.90 for abstract/author-keyword fills; exact DOI may fill a missing title",
     scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
     abstract_title_guard="if a title is present on both sides, Jaro-Winkler similarity must be >= 0.90; otherwise quarantine",
-    provider_fallback="existing Scopus DOI/EID path retained for missing title/abstract; author keywords are retained only when returned opportunistically by an already-required Europe PMC or Scopus lookup; no dedicated keyword-only Scopus FULL request",
+    provider_fallback=if(skip_scopus)"Scopus disabled for this run; unresolved metadata is retained unchanged and is not classified as a technical failure." else "existing Scopus DOI/EID path retained for missing title/abstract; author keywords are retained only when returned opportunistically by an already-required Europe PMC or Scopus lookup; no dedicated keyword-only Scopus FULL request",
     repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days),
     rate_limit_policy=sprintf("honour Retry-After/X-RateLimit-Reset up to %.0f seconds; open Scopus circuit after %d consecutive rate-limit failures",max_rate_limit_wait,scopus_rate_limit_trip)
   ),
