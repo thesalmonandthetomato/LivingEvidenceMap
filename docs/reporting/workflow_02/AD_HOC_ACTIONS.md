@@ -1,8 +1,10 @@
-# Workflow 02: ad hoc actions and baseline-establishment log
+# Workflow 02: historical ad hoc actions and baseline-establishment log
 
 ## Purpose
 
-This document records finite manual and corrective actions used while establishing the current Workflow 02 baseline. These actions are not part of the automated metadata-enrichment methodology described in `workflow_02_functionality_map.md`.
+This document records finite manual and corrective actions used while establishing the **historical 32,292-record Workflow 02 baseline**. These actions are retained for provenance only. They are not part of the current batched production architecture and are not the current Workflow 02 state.
+
+For the current operational architecture, current entry points, 2 October 2026 accepted W02 state and validated W02-to-W03 handoff, see `workflow_02_functionality_map.md`.
 
 ## One-off canonical correction review
 
@@ -34,6 +36,6 @@ The correction state was archived as restricted Zenodo record `22963024`, DOI `1
 
 ## Reporting rule
 
-For Workflow 09 and manuscript methods, describe only the automated DOI-based Europe PMC/Scopus enrichment process from `workflow_02_functionality_map.md`.
+For Workflow 09 and manuscript methods, use the current methodological description in `workflow_02_functionality_map.md` and distinguish historical baseline-establishment actions from the current production architecture.
 
-Use this file only to document the provenance of the current baseline and the finite manual corrections used to establish it.
+Use this file only to document provenance for the historical 32,292-record baseline and its finite manual corrections.
