@@ -6,6 +6,10 @@ on:
       - w01-identifier-assist-test
     paths:
       - '.github/workflows/tmp_w01_identifier_architecture_replay.yml'
+      - 'scripts/updater/workflow_01_identifier_assist_build.R'
+      - 'scripts/updater/workflow_01_identifier_prescore_collapse.R'
+      - 'scripts/updater/workflow_01_identifier_inject_decisions.R'
+      - 'scripts/updater/workflow_01_title_assist_resolve.R'
 
 permissions:
   contents: read
