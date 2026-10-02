@@ -79,7 +79,7 @@ jobs:
 
           Rscript scripts/updater/workflow_01_deduplication_build_union.R             --old-dir reconstructed/previous/workflow01_seed             --input-manifest reconstructed/current/source_inputs.json             --expected-prior-manifestations 90137             --output-dir reconstructed/union
 
-          Rscript -e "x<-jsonlite::fromJSON('reconstructed/union/union_manifest.json');stopifnot(x$preserved_prior_manifestations==90137L,x$appended_new_manifestations==28390L,x$union_manifestations==118527L);cat('PASS: exact frozen union cardinality reconstructed\n')"
+          Rscript -e 'x<-jsonlite::fromJSON("reconstructed/union/union_manifest.json");stopifnot(x$preserved_prior_manifestations==90137L,x$appended_new_manifestations==28390L,x$union_manifestations==118527L);cat("PASS: exact frozen union cardinality reconstructed\\n")'
 
       - name: Run unchanged production W01 scorer on 272169 selected pairs
         shell: bash
