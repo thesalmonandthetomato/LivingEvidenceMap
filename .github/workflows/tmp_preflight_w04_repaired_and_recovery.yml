@@ -1,0 +1,155 @@
+name: TEMP preflight W04 repaired metadata and recovered pass1
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_preflight_w04_repaired_and_recovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','stringi'))
+
+      - name: Parse helpers
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
+          parse(file='scripts/updater/workflow_03_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_04_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_04_restore_manual_repair_bundle.R')
+          parse(file='scripts/updater/workflow_04_apply_manual_metadata_repairs.R')
+          parse(file='scripts/updater/workflow_04_restore_recovery_pass1.R')
+          parse(file='scripts/updater/workflow_04_seed_recovered_pass1.R')
+          parse(file='scripts/updater/workflow_04_prepare_incremental.R')
+          cat('PASS: all W04 repair/recovery helpers parse\n')
+
+      - name: Restore current/prior states
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer docs/compaction/zenodo/run-37016080508.json --output-dir inputs/current/canonical
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
+            --pointer docs/publication_status/zenodo/run-37024164176.json --output-dir inputs/current/w03
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
+            --pointer docs/workflow04/zenodo/run-36227737500.json --output-dir inputs/prior_w04
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer docs/compaction/zenodo/run-36166883249.json --output-dir inputs/prior_canonical
+          cp "$(find inputs/current/canonical -type f -name canonical_lean.jsonl -print -quit)" inputs/current/canonical_lean.jsonl
+          cp "$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)" inputs/current/publication_status.jsonl
+          cp "$(find inputs/prior_w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)" inputs/prior_workflow04_layer.jsonl
+          cp "$(find inputs/prior_canonical -type f -name canonical_lean.jsonl -print -quit)" inputs/prior_canonical_lean.jsonl
+
+      - name: Restore restricted manual repairs and recovered pass1
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_restore_manual_repair_bundle.R \
+            --zenodo-record-id 23108430 --output-dir inputs/manual_repair
+          Rscript scripts/updater/workflow_04_restore_recovery_pass1.R \
+            --zenodo-record-id 23107508 --output-dir inputs/recovery
+
+      - name: Apply strict missing-field repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs
+          Rscript scripts/updater/workflow_04_apply_manual_metadata_repairs.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --repair-overlay inputs/manual_repair/repair_overlay.jsonl \
+            --output outputs/canonical_repaired.jsonl \
+            --audit outputs/manual_repair_application.json
+
+      - name: Prepare exact W04 queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_prepare_incremental.R \
+            --canonical outputs/canonical_repaired.jsonl \
+            --workflow03-status inputs/current/publication_status.jsonl \
+            --prior-workflow04 inputs/prior_workflow04_layer.jsonl \
+            --prior-canonical inputs/prior_canonical_lean.jsonl \
+            --force-rescreen-record-ids inputs/manual_repair/force_rescreen_record_ids.txt \
+            --output-dir outputs/prepare
+
+      - name: Validate expected queue and recovered work
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_seed_recovered_pass1.R \
+            --canonical outputs/prepare/screen_queue_canonical.jsonl \
+            --recovered-pass1 inputs/recovery/salvaged_new_pass1.jsonl \
+            --output-root outputs/seed \
+            --shard-count 8
+          Rscript - <<'RS'
+          library(jsonlite)
+          p<-fromJSON('outputs/prepare/prepare_manifest.json',simplifyVector=FALSE)
+          r<-fromJSON('outputs/manual_repair_application.json',simplifyVector=FALSE)
+          s<-fromJSON('outputs/seed/seed_report.json',simplifyVector=FALSE)
+          stopifnot(
+            as.integer(p$workflow03_eligible)==47082L,
+            as.integer(p$new_record_ids)==14884L,
+            as.integer(p$explicitly_forced_rescreen_records)==172L,
+            as.integer(p$screen_queue_records)==15056L,
+            as.integer(p$reusable_records)==32026L,
+            as.integer(r$records)==172L,
+            as.integer(r$title_added)==2L,
+            as.integer(r$abstract_added)==170L,
+            as.integer(s$recovered_pass1_records)==5800L
+          )
+          q<-read.csv('outputs/prepare/screen_queue_manifest.csv',stringsAsFactors=FALSE)
+          stopifnot(sum(q$queue_reason=='new_record_id')==14884L,
+                    sum(q$queue_reason=='explicit_repair_rescreen')==172L)
+          recovered<-readLines('inputs/recovery/salvaged_new_pass1.jsonl',warn=FALSE)
+          recovered<-recovered[nzchar(trimws(recovered))]
+          stopifnot(length(recovered)==5800L)
+          summary<-list(
+            status='PASS',
+            workflow03_eligible=as.integer(p$workflow03_eligible),
+            prior_decisions_reused=as.integer(p$reusable_records),
+            new_records=as.integer(p$new_record_ids),
+            repaired_existing_rescreen=as.integer(p$explicitly_forced_rescreen_records),
+            total_screen_queue=as.integer(p$screen_queue_records),
+            recovered_pass1=as.integer(s$recovered_pass1_records),
+            fresh_pass1_calls_required=as.integer(p$screen_queue_records)-as.integer(s$recovered_pass1_records),
+            title_repairs=as.integer(r$title_added),
+            abstract_repairs=as.integer(r$abstract_added),
+            existing_metadata_changes_auto_rescreened=0L
+          )
+          writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),'outputs/preflight_summary.json')
+          cat(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),'\n')
+          RS
+
+      - name: Upload non-licensed preflight reports only
+        uses: actions/upload-artifact@v4
+        with:
+          name: w04-repair-recovery-preflight
+          path: |
+            outputs/preflight_summary.json
+            outputs/manual_repair_application.json
+            outputs/prepare/prepare_manifest.json
+            outputs/seed/seed_report.json
+          retention-days: 30
