@@ -54,7 +54,7 @@ jobs:
           library(data.table)
           x <- fread('/tmp/w01_single/out/single_family_disagreement_triage.csv')
           stopifnot(nrow(x)==1219L)
-          stopifnot(all(x$family %in% c('doi','pmid','mag')))
+          stopifnot(all(x$family %in% c('doi','pmid','openalex_mag')))
           stopifnot(all(x$triage_class %in% c(
             'strong_same_work_candidate',
             'metadata_conflict_review',
