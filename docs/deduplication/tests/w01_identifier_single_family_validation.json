@@ -1,0 +1,69 @@
+{
+  "schema": "living-evidence-map-w01-single-family-identifier-validation-v1",
+  "status": "success",
+  "test_only": true,
+  "triage_run_id": 36995453997,
+  "triage_artifact_id": 11221720613,
+  "external_validation_run_id": 36995632096,
+  "external_validation_artifact_id": 11221144798,
+  "single_family_disagreement_pairs": 1219,
+  "by_family": {
+    "doi": 1146,
+    "pmid": 60,
+    "openalex_mag": 13
+  },
+  "triage": {
+    "strong_same_work_candidate": 717,
+    "sent_for_external_validation": 502
+  },
+  "triage_detail": {
+    "doi": {
+      "strong_same_work_candidate": 675,
+      "external_validation_needed": 371,
+      "container_or_identifier_risk": 96,
+      "metadata_conflict_review": 4
+    },
+    "pmid": {
+      "strong_same_work_candidate": 36,
+      "external_validation_needed": 20,
+      "container_or_identifier_risk": 3,
+      "metadata_conflict_review": 1
+    },
+    "openalex_mag": {
+      "strong_same_work_candidate": 6,
+      "external_validation_needed": 2,
+      "container_or_identifier_risk": 2,
+      "metadata_conflict_review": 3
+    }
+  },
+  "external_validation_of_502": {
+    "doi": {
+      "externally_corroborated_same_work": 132,
+      "pair_supported_but_canonical_title_variant": 7,
+      "possible_identifier_or_container_misassignment": 263,
+      "still_ambiguous_or_conflicting": 68,
+      "external_lookup_unresolved": 1
+    },
+    "pmid": {
+      "possible_identifier_or_container_misassignment": 22,
+      "still_ambiguous_or_conflicting": 2
+    },
+    "openalex_mag": {
+      "possible_identifier_or_container_misassignment": 7
+    }
+  },
+  "derived": {
+    "single_family_pairs_with_strong_or_external_same_work_support": 856,
+    "remaining_risky_or_unresolved": 363
+  },
+  "interpretation": [
+    "Single-family identifiers are substantially less safe than multi-family identifier support.",
+    "DOI-only disagreements frequently reflect translations, alternate titles, corrigenda, chapter/container relationships or source transcription differences; title divergence alone cannot distinguish these from an erroneous or reused DOI.",
+    "A single identifier should therefore remain candidate evidence unless accompanied by strong compatible bibliographic metadata or a second independent identifier family.",
+    "Container/reused identifiers must be explicitly protected against before any deterministic merge shortcut is considered."
+  ],
+  "invariants": {
+    "automatic_merges_performed": 0,
+    "production_w01_modified": false
+  }
+}
