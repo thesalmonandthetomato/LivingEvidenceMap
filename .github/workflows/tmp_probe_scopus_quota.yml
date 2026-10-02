@@ -1,0 +1,37 @@
+name: TEMP probe Scopus quota status
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_probe_scopus_quota.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe one Scopus Abstract Retrieval request
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOI='10.1016/j.fsi.2025.110659'
+          curl -sS \
+            -D headers.txt \
+            -o body.txt \
+            -w '%{http_code}\n' \
+            -H "X-ELS-APIKey: $SCOPUS_API_TOKEN" \
+            -H "X-ELS-Insttoken: $SCOPUS_INSTTOKEN" \
+            -H 'Accept: application/json' \
+            "https://api.elsevier.com/content/abstract/doi/$DOI?view=META_ABS" \
+            > status.txt
+          echo "HTTP $(cat status.txt)"
+          grep -iE '^(x-els-status|x-ratelimit-limit|x-ratelimit-remaining|x-ratelimit-reset|retry-after):' headers.txt || true
+          test "$(cat status.txt)" = "429"
