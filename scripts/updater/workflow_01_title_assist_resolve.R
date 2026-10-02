@@ -23,7 +23,7 @@ if (any(vapply(list(decisions_path,metadata_path,output_path,audit_path),is.null
 
 x <- fread(decisions_path,na.strings=c("","NA"))
 meta <- fread(metadata_path,na.strings=c("","NA"))
-need_x <- c("record_i","record_j","rescored_classification","rescored_rule")
+need_x <- c("record_i","record_j","rescored_classification","rescored_rule","first_author_match")
 need_m <- c("idx","title","title_norm","abstract_hash","author_norm","year","doi_norm")
 if (length(setdiff(need_x,names(x)))) stop("Decision input missing required fields",call.=FALSE)
 if (length(setdiff(need_m,names(meta)))) stop("Metadata input missing required fields",call.=FALSE)
@@ -132,8 +132,7 @@ for (ii in review_idx) {
   exactly_one_generic <- xor(generic_i,generic_j)
   exact_abs <- !is.na(z$abstract_hash_i[[ii]]) && !is.na(z$abstract_hash_j[[ii]]) &&
     identical(z$abstract_hash_i[[ii]],z$abstract_hash_j[[ii]])
-  author_match <- !is.na(z$author_norm_i[[ii]]) && !is.na(z$author_norm_j[[ii]]) &&
-    identical(z$author_norm_i[[ii]],z$author_norm_j[[ii]])
+  author_match <- isTRUE(z$first_author_match[[ii]])
   yi <- z$year_i[[ii]]; yj <- z$year_j[[ii]]
   year_ok <- is.na(yi) || is.na(yj) || abs(yi-yj)<=1L
   doi_parent <- supplement_doi_relation(z$doi_norm_i[[ii]],z$doi_norm_j[[ii]])
