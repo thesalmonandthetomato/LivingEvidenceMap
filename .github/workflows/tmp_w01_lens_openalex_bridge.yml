@@ -1,0 +1,77 @@
+name: TEMP W01 Lens OpenAlex bridge test
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/tmp_w01_lens_openalex_bridge.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+      OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+      OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','data.table','stringi'))
+
+      - name: Build current Lens query
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w01_bridge/plan /tmp/w01_bridge/lens /tmp/w01_bridge/out
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type full \
+            --config user_input/workflow00_search_strategy.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --output-dir /tmp/w01_bridge/plan
+          Rscript - <<'RS'
+          library(jsonlite)
+          p <- fromJSON('/tmp/w01_bridge/plan/search_plan.json',simplifyVector=FALSE)
+          writeLines(as.character(p$source_queries$lens),'/tmp/w01_bridge/lens_query.txt')
+          RS
+
+      - name: Sample Lens records
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_identifier_sample_lens_scopus.R \
+            --source lens \
+            --query "$(cat /tmp/w01_bridge/lens_query.txt)" \
+            --n 20 \
+            --output /tmp/w01_bridge/lens/records.jsonl
+
+      - name: Validate Lens OpenAlex bridges
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_identifier_lens_openalex_bridge_test.R \
+            --lens-records /tmp/w01_bridge/lens/records.jsonl \
+            --output /tmp/w01_bridge/out/lens_openalex_bridge.csv
+          cat /tmp/w01_bridge/out/lens_openalex_bridge_summary.json
+
+      - name: Upload bridge audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-lens-openalex-bridge-${{ github.run_id }}
+          path: /tmp/w01_bridge/out/
+          retention-days: 30
+          if-no-files-found: error
