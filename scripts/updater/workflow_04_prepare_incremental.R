@@ -95,10 +95,13 @@ if(nzchar(prior_w04_path)){
 
 known <- intersect(eligible_ids,prior_ids)
 new_ids <- setdiff(eligible_ids,prior_ids)
+
+# A substantive W04 decision is durable for a stable canonical record_id.
+# Metadata enrichment or canonical field-selection changes MUST NOT trigger
+# paid re-screening of a record that already has a final W04 decision.
 changed_ids <- known[current_fp[known] != prior_fp[known]]
-reuse_ids <- setdiff(known,changed_ids)
-queue_ids <- sort(c(new_ids,changed_ids))
-reuse_ids <- sort(reuse_ids)
+reuse_ids <- sort(known)
+queue_ids <- sort(new_ids)
 
 queue_canonical <- unname(cmap[queue_ids])
 queue_w03 <- unname(w03map[queue_ids])
@@ -108,11 +111,14 @@ reuse_rows <- lapply(reuse_ids,function(id){
   if(is.null(z$screening)||!is.list(z$screening)) stop(sprintf("Prior W04 row lacks screening object: %s",id),call.=FALSE)
   d <- scalar(z$screening$decision)
   if(!d %in% c("retain","exclude")) stop(sprintf("Prior W04 reusable decision is not substantive for %s",id),call.=FALSE)
-  z$screening$screening_input_sha256 <- unname(current_fp[[id]])
+  old_fp <- scalar(z$screening$screening_input_sha256)
   z$screening$reuse <- list(
     reused=TRUE,
-    basis="stable_record_id_and_unchanged_screening_input_sha256",
-    prior_workflow04_record=TRUE
+    basis="stable_record_id_with_existing_substantive_decision",
+    prior_workflow04_record=TRUE,
+    prior_screening_input_sha256=if(nzchar(old_fp)) old_fp else NULL,
+    current_screening_input_sha256=unname(current_fp[[id]]),
+    screening_input_changed=!identical(old_fp,unname(current_fp[[id]]))
   )
   z
 })
@@ -125,7 +131,7 @@ writeLines(reuse_ids,file.path(output_dir,"reused_record_ids.txt"),useBytes=TRUE
 
 reason_rows <- data.frame(
   record_id=queue_ids,
-  queue_reason=ifelse(queue_ids%in%new_ids,"new_record_id","changed_screening_input"),
+  queue_reason=rep("new_record_id",length(queue_ids)),
   screening_input_sha256=unname(current_fp[queue_ids]),
   stringsAsFactors=FALSE
 )
@@ -143,6 +149,8 @@ manifest <- list(
   screen_queue_records=length(queue_ids),
   new_record_ids=length(new_ids),
   changed_screening_input=length(changed_ids),
+  changed_screening_input_reused=length(changed_ids),
+  rescreen_existing_decisions=FALSE,
   prior_records_not_currently_w03_eligible=length(setdiff(prior_ids,eligible_ids)),
   screening_fingerprint_fields=c("title","abstract","keywords","journal_source_title","affiliations","funding"),
   canonical_sha256=digest(file=canonical_path,algo="sha256",serialize=FALSE),
@@ -151,5 +159,5 @@ manifest <- list(
   generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(output_dir,"prepare_manifest.json"),useBytes=TRUE)
-cat(sprintf("PASS: W04 %s preparation: eligible=%d reuse=%d screen=%d (new=%d changed=%d)\n",
+cat(sprintf("PASS: W04 %s preparation: eligible=%d reuse=%d screen=%d (new=%d metadata-changed-but-reused=%d)\n",
             mode,length(eligible_ids),length(reuse_ids),length(queue_ids),length(new_ids),length(changed_ids)))
