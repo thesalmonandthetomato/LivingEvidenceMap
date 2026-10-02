@@ -51,7 +51,9 @@ if (source=="lens") {
     ids<-raw$external_ids %||% list()
     doi<-NULL
     pmid<-NULL
+    pmcid<-NULL
     openalex_id<-NULL
+    core_id<-NULL
     mag_id<-NULL
     for(z in ids) if(is.list(z)) {
       typ<-tolower(as.character(z$type %||% ""))
@@ -59,16 +61,19 @@ if (source=="lens") {
       if(is.null(val)) next
       if(identical(typ,"doi")) doi<-val
       if(typ %in% c("pmid","pubmed","pubmed_id")) pmid<-val
+      if(typ %in% c("pmcid","pmc")) pmcid<-val
       if(typ %in% c("openalex","openalex_id")) openalex_id<-val
+      if(typ %in% c("core","coreid","core_id")) core_id<-val
       if(typ %in% c("magid","mag","microsoft academic")) mag_id<-val
     }
     list(
-      identity=list(lens_id=lid,record_id=lid,pmid=pmid,openalex_id=openalex_id,mag_id=mag_id),
+      identity=list(lens_id=lid,record_id=lid,pmid=pmid,pmcid=pmcid,openalex_id=openalex_id,core_id=core_id,mag_id=mag_id),
+      identifiers=list(doi=doi,pmid=pmid,pmcid=pmcid,openalex=openalex_id,core=core_id,mag=mag_id),
       source=list(provider="lens"),
       lens=list(raw_payload=raw),
       canonical=list(
         title=scalar(raw$title),year=scalar(raw$year_published %||% raw$date_published),
-        doi=doi,pmid=pmid,openalex_id=openalex_id,abstract=scalar(raw$abstract),authors=raw$authors %||% NULL
+        doi=doi,pmid=pmid,pmcid=pmcid,openalex_id=openalex_id,core_id=core_id,mag_id=mag_id,abstract=scalar(raw$abstract),authors=raw$authors %||% NULL
       )
     )
   })
@@ -95,6 +100,7 @@ if (source=="scopus") {
     pmid<-scalar(e[["pubmed-id"]])
     list(
       sidecar_identity=list(sidecar_record_id=paste0("scopus:",eid %||% rid),scopus_id=rid,eid=eid,doi=doi,pmid=pmid),
+      identifiers=list(doi=doi,pmid=pmid),
       source=list(provider="scopus"),
       mapped_fields=list(
         title=scalar(e[["dc:title"]]),
