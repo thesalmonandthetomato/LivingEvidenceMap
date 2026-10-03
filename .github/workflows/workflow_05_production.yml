@@ -59,7 +59,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('digest','dplyr','jsonlite','readr','tibble','testthat','httr2'))
+        run: install.packages(c('digest','dplyr','jsonlite','readr','tibble','testthat','httr2','googlesheets4'))
 
       - name: Validate implementation and vocabulary
         shell: Rscript {0}
