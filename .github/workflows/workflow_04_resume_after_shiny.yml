@@ -1,6 +1,11 @@
 name: Workflow 04 - Resume after Shiny resolution
 
 on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/shiny_adjudication/w04_resolution_resume_requests/*.json'
   workflow_dispatch:
     inputs:
       source_run_id:
@@ -26,9 +31,9 @@ concurrency:
 
 env:
   WORKFLOW04_BRANCH: workflow01-final-architecture
-  SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-  BATCH_ID: ${{ inputs.batch_id }}
-  QUEUE_SHA256: ${{ inputs.queue_sha256 }}
+  SOURCE_RUN_ID: ${{ inputs.source_run_id || '' }}
+  BATCH_ID: ${{ inputs.batch_id || '' }}
+  QUEUE_SHA256: ${{ inputs.queue_sha256 || '' }}
   LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
 
 jobs:
@@ -40,7 +45,191 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
-          fetch-depth: 0
+          fetch-depth: 2
+
+      - name: Resolve W04 resume request
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            mapfile -t FILES < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/shiny_adjudication/w04_resolution_resume_requests/.*\.json        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','googlesheets4','readr'))
+
+      - name: Parse W04 resume implementation
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_04_export_shiny_resolution_decisions.R',
+            'scripts/updater/workflow_04_apply_human_resolution.R',
+            'scripts/updater/workflow_04_archive_state_to_zenodo.R',
+            'scripts/updater/workflow_04_update_zenodo_registry.R',
+            'scripts/updater/workflow_shiny_batch_status.R',
+            'scripts/updater/workflow_current_run_status_observer.R',
+            'scripts/updater/workflow_current_run_status_to_shiny.R'
+          )
+          invisible(lapply(files,parse))
+          cat('PASS: W04 Shiny resolution resume implementation parses\n')
+
+      - name: Download immutable stopped W04 state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/final source/prepared
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow04-production-$SOURCE_RUN_ID" \
+            --dir source/final
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow04-prepared-$SOURCE_RUN_ID" \
+            --dir source/prepared
+          test -s source/final/workflow04_final/workflow04_final_screening_layer.jsonl
+          test -s source/final/workflow04_final/workflow04_human_review_queue.jsonl
+          test -s source/final/workflow04_final/summary.json
+          test -s source/prepared/inputs/current/canonical_lean.jsonl
+          test -s source/prepared/inputs/current/publication_status.jsonl
+
+      - name: Prepare Google credential
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Export exact completed W04 resolution decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/w04_resume
+          Rscript scripts/updater/workflow_04_export_shiny_resolution_decisions.R \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA256" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --output outputs/w04_resume/human_resolution_decisions.jsonl \
+            --manifest outputs/w04_resume/export_manifest.json
+
+      - name: Apply human resolutions without rerunning screening
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow04_final
+          Rscript scripts/updater/workflow_04_apply_human_resolution.R \
+            --source-layer source/final/workflow04_final/workflow04_final_screening_layer.jsonl \
+            --canonical source/prepared/inputs/current/canonical_lean.jsonl \
+            --decisions outputs/w04_resume/human_resolution_decisions.jsonl \
+            --source-summary source/final/workflow04_final/summary.json \
+            --output-dir outputs/workflow04_final
+          STATUS="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(x$status)')"
+          test "$STATUS" = "PASS"
+
+      - name: Publish resolved W04 state to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CAN_SHA="$(Rscript -e 'cat(digest::digest(file="source/prepared/inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
+          W03_SHA="$(Rscript -e 'cat(digest::digest(file="source/prepared/inputs/current/publication_status.jsonl",algo="sha256",serialize=FALSE))')"
+          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("user_input/workflow04_screening_config.json",simplifyVector=FALSE);p<-paste(readLines(x$prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n");h<-digest::digest(p,algo="sha256",serialize=FALSE);stopifnot(identical(h,x$expected_prompt_sha256));cat(h)')"
+          mkdir -p outputs/workflow04_zenodo
+          Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R \
+            --state-dir outputs/workflow04_final \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow04_zenodo \
+            --upstream-lean-sha256 "$CAN_SHA" \
+            --upstream-workflow03-sha256 "$W03_SHA" \
+            --prompt-sha256 "$PROMPT_SHA"
+
+      - name: Register resolved W04 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "$WORKFLOW04_BRANCH"
+          Rscript scripts/updater/workflow_04_update_zenodo_registry.R \
+            --receipt outputs/workflow04_zenodo/zenodo_receipt.json \
+            --registry docs/workflow04/zenodo_registry.csv \
+            --pointer-dir docs/workflow04/zenodo
+          git add docs/workflow04/zenodo_registry.csv docs/workflow04/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register resumed Workflow 04 state $SOURCE_RUN_ID"
+            git push origin HEAD:"$WORKFLOW04_BRANCH"
+          fi
+
+      - name: Update live Shiny progress after resolved W04
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --rebase origin "$WORKFLOW04_BRANCH"
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W04
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W04 [skip ci]"
+            git pull --rebase origin "$WORKFLOW04_BRANCH"
+            git push origin HEAD:"$WORKFLOW04_BRANCH"
+          fi
+
+      - name: Acknowledge consumed W04 resolution batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/workflow04_final/workflow04_final_screening_layer.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "04" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA256" \
+            --status consumed \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --output-sha256 "$OUTPUT_SHA" \
+            --message "Workflow 04 Shiny resolution decisions applied; final W04 state archived and registered."
+
+      - name: Upload resumed W04 handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-shiny-resume-${{ github.run_id }}
+          path: |
+            outputs/w04_resume/
+            outputs/workflow04_final/
+            outputs/workflow04_zenodo/
+          retention-days: 90
+          if-no-files-found: error
+ || true)
+            test "${#FILES[@]}" -eq 1
+            FILE="${FILES[0]}"
+            readarray -t META < <(python3 -c 'import json,re,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); s=str(x.get("source_run_id","")); b=str(x.get("batch_id","")); q=str(x.get("queue_sha256","")).lower(); assert re.fullmatch(r"[0-9]+",s), "invalid source_run_id"; assert b, "invalid batch_id"; assert re.fullmatch(r"[0-9a-f]{64}",q), "invalid queue_sha256"; print(s); print(b); print(q)' "$FILE")
+            echo "SOURCE_RUN_ID=${META[0]}" >> "$GITHUB_ENV"
+            echo "BATCH_ID=${META[1]}" >> "$GITHUB_ENV"
+            echo "QUEUE_SHA256=${META[2]}" >> "$GITHUB_ENV"
+          fi
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          test -n "$BATCH_ID"
+          [[ "$QUEUE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          echo "PASS: resolved W04 resume request source_run_id=$SOURCE_RUN_ID batch_id=$BATCH_ID queue_sha256=$QUEUE_SHA256"
 
       - uses: r-lib/actions/setup-r@v2
         with:
