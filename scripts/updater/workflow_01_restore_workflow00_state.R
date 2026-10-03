@@ -23,7 +23,12 @@ status <- system2(rscript,c(validator,"--state",state_path))
 if (status != 0L) stop("Workflow 00 state validation failed",call.=FALSE)
 
 x <- fromJSON(state_path,simplifyVector=FALSE)
-expected_sources <- c("lens","scopus","openalex","agricola","wos")
+expected_sources <- names(x$sources)
+if (is.null(expected_sources) || !length(expected_sources)) stop("Workflow 00 state contains no sources",call.=FALSE)
+if (any(!nzchar(expected_sources)) || any(!grepl("^[a-z0-9][a-z0-9_-]*$",expected_sources))) {
+  stop("Workflow 00 state contains an invalid source identifier",call.=FALSE)
+}
+if (anyDuplicated(expected_sources)) stop("Workflow 00 state contains duplicate source identifiers",call.=FALSE)
 dir.create(output_root,recursive=TRUE,showWarnings=FALSE)
 
 pointers <- vapply(expected_sources,function(src)as.character(x$sources[[src]]$archive_pointer),character(1))
@@ -52,4 +57,5 @@ audit <- list(
 )
 writeLines(toJSON(audit,auto_unbox=TRUE,pretty=TRUE,null="null"),
            file.path(output_root,"workflow00_state_restore_audit.json"))
-cat(sprintf("PASS: restored complete Workflow 00 state %s\n",x$state_id))
+cat(sprintf("PASS: restored complete Workflow 00 state %s with %d source(s): %s\n",
+            x$state_id,length(expected_sources),paste(expected_sources,collapse=", ")))
