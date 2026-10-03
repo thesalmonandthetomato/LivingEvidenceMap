@@ -315,14 +315,38 @@ jobs:
             --score-n 1 \
             --workflow01-run-id "$GITHUB_RUN_ID"
 
-      - name: Score all incremental candidate pairs
+      - name: Build guarded identifier-assisted duplicate edges
         shell: bash
         run: |
           set -euo pipefail
-          N="$(Rscript -e "x<-data.table::fread('outputs/workflow01_candidates/all_candidate_pairs.csv');cat(max(2000L,nrow(x)))")"
+          PRIOR_N="$(Rscript -e 'x<-jsonlite::fromJSON("previous_state/workflow01_full_five_source/summary.json");cat(x$source_manifestations)')"
+          mkdir -p outputs/workflow01_identifier_assist
+          Rscript scripts/updater/workflow_01_identifier_assist_build.R \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --guard-file config/workflow01_identifier_never_auto_resolve.csv \
+            --prior-manifestations "$PRIOR_N" \
+            --output-dir outputs/workflow01_identifier_assist
+
+      - name: Collapse scoring workload by safe identifier components
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow01_prescore
+          Rscript scripts/updater/workflow_01_identifier_prescore_collapse.R \
+            --candidates outputs/workflow01_candidates/all_candidate_pairs.csv \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --safe-edges outputs/workflow01_identifier_assist/safe_identifier_edges.csv \
+            --output-dir outputs/workflow01_prescore
+
+      - name: Score retained incremental candidate representatives
+        shell: bash
+        run: |
+          set -euo pipefail
+          N="$(Rscript -e "x<-data.table::fread('outputs/workflow01_prescore/all_candidate_pairs.csv');cat(max(2000L,nrow(x)))")"
           mkdir -p outputs/workflow01_incremental_score
           Rscript scripts/updater/workflow_01_deduplication_incremental_score.R \
-            --input-dir outputs/workflow01_candidates \
+            --input-dir outputs/workflow01_prescore \
             --upstream-dir outputs/workflow01_union \
             --output-dir outputs/workflow01_incremental_score \
             --target-n "$N" \
@@ -339,14 +363,35 @@ jobs:
             --output-dir outputs/workflow01_incremental_rescore \
             --source-run-id "$PREV_RUN"
 
-      - name: Merge previous and incremental pair decisions
+      - name: Inject safe identifier duplicate edges
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow01_incremental_assisted
+          Rscript scripts/updater/workflow_01_identifier_inject_decisions.R \
+            --rescored outputs/workflow01_incremental_rescore/rescored_sample.csv \
+            --safe-edges outputs/workflow01_identifier_assist/safe_identifier_edges.csv \
+            --output outputs/workflow01_incremental_assisted/identifier_assisted_decisions.csv \
+            --audit outputs/workflow01_incremental_assisted/identifier_injection_summary.json
+
+      - name: Resolve conservative title-wrapper and attachment duplicates
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_title_assist_resolve.R \
+            --decisions outputs/workflow01_incremental_assisted/identifier_assisted_decisions.csv \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --output outputs/workflow01_incremental_assisted/final_incremental_decisions.csv \
+            --audit outputs/workflow01_incremental_assisted/title_assist_summary.json
+
+      - name: Merge previous and assisted incremental pair decisions
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow01_pre_adjudication
           Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
             --old-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
-            --new-decisions outputs/workflow01_incremental_rescore/rescored_sample.csv \
+            --new-decisions outputs/workflow01_incremental_assisted/final_incremental_decisions.csv \
             --metadata outputs/workflow01_candidates/normalised_metadata.csv \
             --output-dir outputs/workflow01_pre_adjudication
 
@@ -508,7 +553,7 @@ jobs:
           Rscript scripts/updater/workflow_01_build_pending_checkpoint.R \
             --previous-root previous_state \
             --current-seed-root outputs/workflow01_union \
-            --incremental-rescore outputs/workflow01_incremental_rescore/rescored_sample.csv \
+            --incremental-rescore outputs/workflow01_incremental_assisted/final_incremental_decisions.csv \
             --adjudications outputs/adjudication/merged/all_adjudications.jsonl \
             --review-package outputs/adjudication/human_review_package \
             --pre-summary outputs/workflow01_pre_adjudication/summary.json \
@@ -787,6 +832,9 @@ jobs:
             outputs/workflow01_candidates/pathological_abstract_strip_actions.jsonl
             outputs/workflow01_incremental_rescore/summary.json
             outputs/workflow01_incremental_rescore/rescored_sample.csv
+            outputs/workflow01_identifier_assist/
+            outputs/workflow01_prescore/identifier_prescore_summary.json
+            outputs/workflow01_incremental_assisted/
             outputs/workflow01_pre_adjudication/summary.json
             outputs/workflow01_pre_adjudication/combined_pair_decisions.csv
             outputs/workflow01_pre_adjudication/manifestation_cluster_map.csv
