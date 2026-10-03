@@ -25,6 +25,10 @@ on:
         required: false
         default: 'docs/compaction/zenodo/run-36166883249.json'
         type: string
+      prior_workflow07_pointer_path:
+        required: false
+        default: 'docs/workflow07/zenodo/run-36772700615.json'
+        type: string
       publish:
         required: false
         default: true
@@ -65,6 +69,11 @@ on:
         description: 'Prior lean pointer used only if prior W04 archive lacks retained canonical JSONL'
         required: false
         default: 'docs/compaction/zenodo/run-36166883249.json'
+        type: string
+      prior_workflow07_pointer_path:
+        description: 'Prior authoritative W07 topic state; existing record IDs will be reused and never reclassified'
+        required: false
+        default: 'docs/workflow07/zenodo/run-36772700615.json'
         type: string
       publish:
         description: 'Publish resolved automated W06 state to restricted Zenodo'
@@ -424,3 +433,13 @@ jobs:
             outputs/workflow06_zenodo/
           retention-days: 90
           if-no-files-found: error
+
+  handoff-w07:
+    needs: finalise
+    if: ${{ needs.finalise.result == 'success' && inputs.publish == true }}
+    uses: ./.github/workflows/workflow_07_production.yml
+    with:
+      workflow06_pointer_path: ${{ format('docs/workflow06/zenodo/run-{0}.json', github.run_id) }}
+      prior_workflow07_pointer_path: ${{ inputs.prior_workflow07_pointer_path }}
+      publish: true
+    secrets: inherit
