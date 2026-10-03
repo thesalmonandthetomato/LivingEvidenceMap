@@ -137,6 +137,10 @@ jobs:
           r-version: release
           use-public-rspm: true
 
+      - name: Install verify dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
       - name: Download and validate all five database-specific harvests
         env:
           GH_TOKEN: ${{ github.token }}
