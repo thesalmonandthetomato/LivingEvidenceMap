@@ -1,0 +1,67 @@
+name: TEMP validate EBSCO cluster registry
+
+on:
+  push:
+    branches:
+      - test-ebsco-eit-api
+    paths:
+      - '.github/workflows/tmp_validate_ebsco_cluster_registry.yml'
+      - 'config/workflow00_ebsco_clusters.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test-ebsco-eit-api
+          persist-credentials: false
+
+      - name: Validate recovered 17-database registry and clusters
+        shell: python
+        run: |
+          import json
+          p='config/workflow00_ebsco_clusters.json'
+          x=json.load(open(p,encoding='utf-8'))
+          db=x['databases']
+          clusters=x['clusters']
+
+          expected_codes={
+            'awn','amed','psyh','rfh','bai','c8h','ufh','ecn','eric',
+            'flh','8gh','hjh','cmedm','mzh','poh','s3h','wrw'
+          }
+          expected_clusters={
+            'core_multidisciplinary','health_medicine','environment_agriculture',
+            'social_sciences','education','regional','media_communication',
+            'humanities','sport_tourism','grey_literature_preprints'
+          }
+
+          assert set(db)==expected_codes, (set(db),expected_codes)
+          assert len(db)==17
+          assert sum(int(v['scoping_count']) for v in db.values())==17423
+          assert int(x['selected_ebsco_database_count'])==17
+          assert int(x['selected_ebsco_scoping_total'])==17423
+          assert set(clusters)==expected_clusters
+
+          refs=[]
+          for name,c in clusters.items():
+            codes=c.get('database_codes',[])
+            assert len(codes)==len(set(codes)), f'duplicate code inside cluster {name}'
+            assert set(codes)<=expected_codes, f'unknown code in {name}'
+            refs.extend(codes)
+          assert set(refs)==expected_codes, f'not all 17 databases assigned to at least one cluster: {expected_codes-set(refs)}'
+
+          assert clusters['health_medicine']['database_codes']==['cmedm','c8h','amed','psyh']
+          assert clusters['environment_agriculture']['database_codes']==['bai','8gh','wrw']
+          assert clusters['social_sciences']['database_codes']==['psyh','ecn','poh','flh']
+          assert clusters['education']['database_codes']==['eric','psyh']
+          assert clusters['regional']['database_codes']==['awn']
+          assert clusters['media_communication']['database_codes']==['ufh']
+          assert clusters['humanities']['database_codes']==['mzh','rfh']
+          assert clusters['sport_tourism']['database_codes']==['s3h','hjh']
+
+          print('PASS: recovered 17 verified EBSCO databases total 17,423 scoping records and map cleanly to the ten agreed clusters')
