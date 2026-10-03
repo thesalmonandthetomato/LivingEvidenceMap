@@ -7,7 +7,8 @@ on:
         required: true
         type: string
       lean_pointer_path:
-        required: true
+        required: false
+        default: ''
         type: string
       publish:
         required: false
@@ -16,6 +17,8 @@ on:
     secrets:
       ZENODO_ACCESS_TOKEN:
         required: true
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: false
 
   workflow_dispatch:
     inputs:
@@ -108,6 +111,7 @@ jobs:
             cp "$CAN" inputs/workflow05/retained_canonical.jsonl
             echo "PASS: using complete retained canonical JSONL from current W04 archive"
           else
+            test -n "$LEAN_POINTER"
             rm -rf inputs/lean
             Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R               --pointer "$LEAN_POINTER"               --output-dir inputs/lean
             Rscript scripts/updater/workflow_05_materialise_retained.R               --canonical inputs/lean/canonical_lean.jsonl               --included-ids inputs/workflow05/workflow04_included_record_ids.txt               --output inputs/workflow05/retained_canonical.jsonl               --expected-records "$EXPECTED_RECORDS"
@@ -190,6 +194,32 @@ jobs:
           git add docs/workflow05/zenodo_registry.csv docs/workflow05/zenodo/
           if ! git diff --cached --quiet; then
             git commit -m "Register Workflow 05 species state $GITHUB_RUN_ID"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Update live Shiny progress after published W05
+        if: ${{ inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W05
+          if [ -n "${LEM_GOOGLE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+            chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+            Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+              --status docs/current_run/current_run_status.json \
+              --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+              --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          fi
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W05 [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
             git push origin HEAD:workflow01-final-architecture
           fi
 
