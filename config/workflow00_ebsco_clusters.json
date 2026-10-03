@@ -1,54 +1,132 @@
 {
   "schema": "living-evidence-map-workflow00-ebsco-clusters-v1",
-  "status": "test_scaffold",
+  "status": "verified_from_2026-10-01_scoping",
   "catalogue_complete": false,
-  "note": "Cluster labels are agreed. Membership is populated only with database codes verified directly against the current EBSCO EIT profile; additional memberships must be added from verified catalogue/profile evidence rather than guessed.",
+  "selected_ebsco_database_count": 17,
+  "selected_ebsco_scoping_total": 17423,
+  "note": "These 17 EBSCO databases and codes were verified through the working EHOST/EIT profile and used in the 2026-10-01 W00 scoping run. Cluster membership is the previously agreed UI grouping. A database may intentionally appear in more than one topic cluster; its database-specific source identity is unchanged.",
+  "databases": {
+    "awn": {
+      "title": "Africa-Wide Information",
+      "scoping_count": 431
+    },
+    "amed": {
+      "title": "AMED",
+      "scoping_count": 3
+    },
+    "psyh": {
+      "title": "APA PsycInfo",
+      "scoping_count": 97
+    },
+    "rfh": {
+      "title": "Atla Religion Database",
+      "scoping_count": 0
+    },
+    "bai": {
+      "title": "Biological & Agricultural Index Plus",
+      "scoping_count": 2913
+    },
+    "c8h": {
+      "title": "CINAHL with Full Text",
+      "scoping_count": 102
+    },
+    "ufh": {
+      "title": "Communication & Mass Media Complete",
+      "scoping_count": 9
+    },
+    "ecn": {
+      "title": "EconLit",
+      "scoping_count": 311
+    },
+    "eric": {
+      "title": "ERIC",
+      "scoping_count": 20
+    },
+    "flh": {
+      "title": "Family & Society Studies Worldwide",
+      "scoping_count": 121
+    },
+    "8gh": {
+      "title": "GreenFILE",
+      "scoping_count": 916
+    },
+    "hjh": {
+      "title": "Hospitality & Tourism Complete",
+      "scoping_count": 266
+    },
+    "cmedm": {
+      "title": "MEDLINE",
+      "scoping_count": 6854
+    },
+    "mzh": {
+      "title": "MLA International Bibliography",
+      "scoping_count": 5
+    },
+    "poh": {
+      "title": "Political Science Complete",
+      "scoping_count": 30
+    },
+    "s3h": {
+      "title": "SPORTDiscus",
+      "scoping_count": 89
+    },
+    "wrw": {
+      "title": "Waters & Oceans Worldwide",
+      "scoping_count": 5256
+    }
+  },
   "clusters": {
     "core_multidisciplinary": {
       "label": "Core multidisciplinary",
-      "databases": []
+      "database_codes": []
     },
     "health_medicine": {
       "label": "Health & medicine",
-      "databases": []
+      "database_codes": ["cmedm", "c8h", "amed", "psyh"]
     },
     "environment_agriculture": {
       "label": "Environment & agriculture",
-      "databases": []
+      "database_codes": ["bai", "8gh", "wrw"]
     },
     "social_sciences": {
       "label": "Social sciences",
-      "databases": [
-        {
-          "code": "psyh",
-          "title": "APA PsycInfo",
-          "verification": "successful EIT SearchService response"
-        }
-      ]
+      "database_codes": ["psyh", "ecn", "poh", "flh"]
     },
     "education": {
       "label": "Education",
-      "databases": []
+      "database_codes": ["eric", "psyh"]
     },
     "regional": {
       "label": "Regional",
-      "databases": []
+      "database_codes": ["awn"]
     },
     "media_communication": {
       "label": "Media & communication",
-      "databases": []
+      "database_codes": ["ufh"]
     },
     "humanities": {
       "label": "Humanities",
-      "databases": []
+      "database_codes": ["mzh", "rfh"]
     },
     "sport_tourism": {
       "label": "Sport/tourism",
-      "databases": []
+      "database_codes": ["s3h", "hjh"]
     },
     "grey_literature_preprints": {
       "label": "Grey literature & preprints",
-      "databases": []
+      "database_codes": []
     }
+  },
+  "non_ebsco_cluster_members": {
+    "core_multidisciplinary": ["lens", "scopus", "wos", "openalex"],
+    "health_medicine": ["pubmed"],
+    "environment_agriculture": ["agricola", "cba"],
+    "social_sciences": [],
+    "education": [],
+    "regional": ["cba"],
+    "media_communication": [],
+    "humanities": [],
+    "sport_tourism": [],
+    "grey_literature_preprints": ["ethos", "epmc_preprints"]
   }
 }
