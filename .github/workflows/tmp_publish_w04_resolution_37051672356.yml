@@ -1,0 +1,117 @@
+name: TEMP publish W04 resolution 37051672356 to Shiny
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_publish_w04_resolution_37051672356.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SOURCE_RUN_ID: '37051672356'
+      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','googlesheets4'))
+
+      - name: Parse W04 resolution publisher
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_04_build_resolution_queue.R')
+          parse(file='scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R')
+          parse(file='scripts/updater/workflow_shiny_batch_status.R')
+          cat('PASS: W04 resolution publisher parses\n')
+
+      - name: Download immutable W04 state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/final source/prepared
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow04-production-$SOURCE_RUN_ID" \
+            --dir source/final
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow04-prepared-$SOURCE_RUN_ID" \
+            --dir source/prepared
+          test -s source/final/workflow04_final/workflow04_human_review_queue.jsonl
+          test -s source/prepared/inputs/current/canonical_lean.jsonl
+
+      - name: Build exact 53-record W04 resolution queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow04_resolution
+          Rscript scripts/updater/workflow_04_build_resolution_queue.R \
+            --canonical source/prepared/inputs/current/canonical_lean.jsonl \
+            --human-review source/final/workflow04_final/workflow04_human_review_queue.jsonl \
+            --output-dir outputs/workflow04_resolution \
+            --source-run-id "$SOURCE_RUN_ID"
+          N="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/workflow04_resolution_queue_manifest.json");cat(x$records)')"
+          test "$N" = "53"
+
+      - name: Prepare Google credential
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Publish resolution queue to Shiny
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R \
+            --queue outputs/workflow04_resolution/workflow04_resolution_queue.jsonl \
+            --manifest outputs/workflow04_resolution/workflow04_resolution_queue_manifest.json \
+            --highlight-terms user_input/workflow04_screening_highlight_terms.csv \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --receipt outputs/workflow04_resolution/shiny_publish_receipt.json
+          BATCH_ID="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$batch_id)')"
+          QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$queue_sha256)')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "04" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status published \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --message "Workflow 04 model screening paused for human conflict resolution."
+
+      - name: Upload queue receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-resolution-publish-37051672356
+          path: outputs/workflow04_resolution/
+          retention-days: 90
+          if-no-files-found: error
