@@ -3,7 +3,7 @@
   "update_id": "w01-run-36971418284",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-02T06:30:47Z",
-  "last_updated_at_utc": "2026-10-03T08:25:18Z",
+  "last_updated_at_utc": "2026-10-03T08:25:25Z",
   "baseline": {
     "workflow08_pointer": "docs/workflow08/zenodo/run-36442875006.json",
     "workflow08_source_run_id": "36442875006",
@@ -25,8 +25,8 @@
     "deduplicated_records": 47094,
     "enriched_records": 2218,
     "retraction_exclusions": 12,
-    "screened_include": 0,
-    "screened_exclude": 0,
+    "screened_include": 21819,
+    "screened_exclude": 25263,
     "geography": {
       "with": null,
       "without": null
