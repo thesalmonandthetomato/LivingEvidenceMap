@@ -30,10 +30,6 @@ on:
         required: false
         default: ""
         type: string
-      max_records:
-        required: false
-        default: "all"
-        type: string
 
 permissions:
   contents: read
@@ -52,19 +48,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "${{ inputs.source }}" in
-            lens) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            scopus) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            openalex) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            agricola) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            pubmed) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            ethos) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            cba) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            epmc_preprints) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            wos) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
-            ebsco_*) echo "branch=test-ebsco-eit-api" >> "$GITHUB_OUTPUT" ;;
-            *) echo "Unsupported source: ${{ inputs.source }}" >&2; exit 2 ;;
-          esac
+          echo "branch=$WORKFLOW00_ORCHESTRATOR_BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Checkout source implementation
         uses: actions/checkout@v4
@@ -87,7 +71,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c("httr2","jsonlite","digest","xml2"))
+        run: install.packages(c("httr2","jsonlite","digest"))
 
       - name: Run source search
         env:
@@ -104,7 +88,6 @@ jobs:
           WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
           EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
           EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
-          MAX_RECORDS: ${{ inputs.max_records }}
         shell: bash
         run: |
           set -euo pipefail
@@ -165,20 +148,18 @@ jobs:
               Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
               ;;
             ebsco_*)
-              db_code="${SOURCE#ebsco_}"
               Rscript scripts/updater/workflow_00g_ebsco_ingestion.R \
-                --database-code "$db_code" \
+                --source "$SOURCE" \
                 --query "$SEARCH_QUERY" \
-                --config config/workflow00_ebsco_clusters.json \
-                --max-records "$MAX_RECORDS" \
+                --config config/workflow00_ebsco_sources.json \
                 --page-size 100 \
                 --output-dir outputs/updater/source_child
               ;;
           esac
 
 
-      - name: Seed native-ID registry for new source
-        if: ${{ inputs.run_type == 'full' && (inputs.source == 'pubmed' || inputs.source == 'ethos' || inputs.source == 'cba' || inputs.source == 'epmc_preprints' || startsWith(inputs.source, 'ebsco_')) }}
+      - name: Seed native-ID registry for new Europe PMC source
+        if: ${{ inputs.run_type == 'full' && (inputs.source == 'pubmed' || inputs.source == 'ethos' || inputs.source == 'cba' || inputs.source == 'epmc_preprints') }}
         env:
           SOURCE: ${{ inputs.source }}
         shell: bash
@@ -195,6 +176,23 @@ jobs:
           test -s outputs/updater/source_delta/updated_native_ids.txt
 
 
+      - name: Seed native-ID registry for EBSCO source
+        if: ${{ inputs.run_type == 'full' && startsWith(inputs.source, 'ebsco_') }}
+        env:
+          SOURCE: ${{ inputs.source }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/empty_native_ids.txt
+          Rscript scripts/updater/workflow_00_ebsco_native_id_reconcile.R \
+            --source "$SOURCE" \
+            --run-type full \
+            --current-root outputs/updater/source_child \
+            --registry /tmp/empty_native_ids.txt \
+            --output-dir outputs/updater/source_delta
+          test -s outputs/updater/source_delta/reconciliation_manifest.json
+          test -f outputs/updater/source_delta/updated_native_ids.txt
+
       - name: Reconcile fortnightly harvest by native source ID
         if: ${{ inputs.run_type == 'fortnightly' }}
         env:
@@ -204,12 +202,21 @@ jobs:
           set -euo pipefail
           registry="data/workflow00/source_id_registry/${SOURCE}_native_ids.txt"
           test -s "$registry"
-          Rscript scripts/updater/workflow_00_native_id_reconcile.R \
-            --source "$SOURCE" \
-            --run-type fortnightly \
-            --current-root outputs/updater/source_child \
-            --registry "$registry" \
-            --output-dir outputs/updater/source_delta
+          if [[ "$SOURCE" == ebsco_* ]]; then
+            Rscript scripts/updater/workflow_00_ebsco_native_id_reconcile.R \
+              --source "$SOURCE" \
+              --run-type fortnightly \
+              --current-root outputs/updater/source_child \
+              --registry "$registry" \
+              --output-dir outputs/updater/source_delta
+          else
+            Rscript scripts/updater/workflow_00_native_id_reconcile.R \
+              --source "$SOURCE" \
+              --run-type fortnightly \
+              --current-root outputs/updater/source_child \
+              --registry "$registry" \
+              --output-dir outputs/updater/source_delta
+          fi
           test -s outputs/updater/source_delta/reconciliation_manifest.json
           test -f outputs/updater/source_delta/updated_native_ids.txt
 
