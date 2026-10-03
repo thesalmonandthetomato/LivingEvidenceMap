@@ -1,0 +1,145 @@
+name: TEMP W00 OpenAlex plus EBSCO cluster integration
+
+on:
+  push:
+    branches:
+      - test-ebsco-eit-api
+    paths:
+      - '.github/workflows/tmp_w00_openalex_ebsco_cluster_test.yml'
+      - 'scripts/updater/workflow_00g_ebsco_ingestion.R'
+      - 'config/workflow00_ebsco_clusters.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  controlled-w00-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout side branch
+        uses: actions/checkout@v4
+        with:
+          ref: test-ebsco-eit-api
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','xml2'))
+
+      - name: Generate established W00 search plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type full \
+            --config user_input/workflow00_search_strategy.json \
+            --output-dir outputs/test_plan
+          test -s outputs/test_plan/search_plan.json
+
+      - name: Harvest five OpenAlex records
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          QUERY="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/test_plan/search_plan.json");cat(x$source_queries$openalex)')"
+          Rscript scripts/updater/workflow_00c_openalex_ingestion.R \
+            --query "$QUERY" \
+            --max-records 5 \
+            --page-size 5 \
+            --output-dir outputs/openalex
+          test -s outputs/openalex/manifest.json
+
+      - name: Harvest Social sciences EBSCO cluster fixture
+        env:
+          EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+          EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00g_ebsco_ingestion.R \
+            --cluster social_sciences \
+            --query "TI salmon" \
+            --config config/workflow00_ebsco_clusters.json \
+            --max-records 5 \
+            --page-size 5 \
+            --output-dir outputs/ebsco_social_sciences
+          test -s outputs/ebsco_social_sciences/records.jsonl
+          test -s outputs/ebsco_social_sciences/manifest.json
+
+      - name: Validate source separation and EBSCO provenance
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+
+          oa <- fromJSON('outputs/openalex/manifest.json', simplifyVector=FALSE)
+          eb <- fromJSON('outputs/ebsco_social_sciences/manifest.json', simplifyVector=FALSE)
+
+          stopifnot(identical(eb$status,'success'))
+          stopifnot(identical(eb$cluster,'social_sciences'))
+          stopifnot(as.integer(eb$database_count)==1L)
+          stopifnot(as.integer(eb$records_retrieved)==5L)
+          stopifnot(!is.null(eb$databases$psyh))
+          stopifnot(identical(eb$databases$psyh$database_code,'psyh'))
+          stopifnot(identical(eb$databases$psyh$observed_title,'APA PsycInfo'))
+
+          lines <- readLines('outputs/ebsco_social_sciences/records.jsonl',warn=FALSE,encoding='UTF-8')
+          lines <- lines[nzchar(trimws(lines))]
+          stopifnot(length(lines)==5L)
+          recs <- lapply(lines,fromJSON,simplifyVector=FALSE)
+          stopifnot(all(vapply(recs,function(z) identical(z$source,'ebsco_psyh'),logical(1))))
+          stopifnot(all(vapply(recs,function(z) identical(z$ebsco$cluster,'social_sciences'),logical(1))))
+          stopifnot(all(vapply(recs,function(z) identical(z$ebsco$database_code,'psyh'),logical(1))))
+          stopifnot(all(vapply(recs,function(z) identical(z$ebsco$database_name,'APA PsycInfo'),logical(1))))
+          stopifnot(all(vapply(recs,function(z) nzchar(as.character(z$source_record_id)),logical(1))))
+
+          # OpenAlex and EBSCO remain separate W00 source states.
+          dir.create('outputs/controlled_state',recursive=TRUE,showWarnings=FALSE)
+          state <- list(
+            schema='living-evidence-map-workflow00-controlled-multisource-test-v1',
+            status='success',
+            source_selection=list(
+              established_api='openalex',
+              ebsco_cluster='social_sciences'
+            ),
+            sources=list(
+              openalex=list(
+                manifest='outputs/openalex/manifest.json'
+              ),
+              ebsco_psyh=list(
+                manifest='outputs/ebsco_social_sciences/manifest.json',
+                cluster='social_sciences',
+                database_code='psyh',
+                database_name='APA PsycInfo',
+                records=length(lines)
+              )
+            ),
+            provenance_assertions=list(
+              ebsco_cluster_expands_to_database_specific_source=TRUE,
+              individual_database_identity_preserved=TRUE,
+              openalex_and_ebsco_outputs_separate=TRUE
+            )
+          )
+          writeLines(toJSON(state,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'outputs/controlled_state/state.json')
+          cat('PASS: OpenAlex and EBSCO/PsycInfo remained separate with database-level provenance preserved\n')
+
+      - name: Upload controlled W00 test
+        uses: actions/upload-artifact@v4
+        with:
+          name: w00-openalex-ebsco-cluster-${{ github.run_id }}
+          path: |
+            outputs/test_plan/
+            outputs/openalex/
+            outputs/ebsco_social_sciences/
+            outputs/controlled_state/
+          retention-days: 7
+          if-no-files-found: error
