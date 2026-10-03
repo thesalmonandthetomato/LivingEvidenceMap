@@ -85,20 +85,22 @@ jobs:
 
           stopifnot(identical(eb$status,'success'))
           stopifnot(identical(eb$cluster,'social_sciences'))
-          stopifnot(as.integer(eb$database_count)==1L)
-          stopifnot(as.integer(eb$records_retrieved)==5L)
-          stopifnot(!is.null(eb$databases$psyh))
+          stopifnot(as.integer(eb$database_count)==4L)
+          stopifnot(as.integer(eb$records_retrieved)==20L)
+          expected_codes <- c('psyh','ecn','poh','flh')
+          stopifnot(all(expected_codes %in% names(eb$databases)))
           stopifnot(identical(eb$databases$psyh$database_code,'psyh'))
           stopifnot(identical(eb$databases$psyh$observed_title,'APA PsycInfo'))
 
           lines <- readLines('outputs/ebsco_social_sciences/records.jsonl',warn=FALSE,encoding='UTF-8')
           lines <- lines[nzchar(trimws(lines))]
-          stopifnot(length(lines)==5L)
+          stopifnot(length(lines)==20L)
           recs <- lapply(lines,fromJSON,simplifyVector=FALSE)
-          stopifnot(all(vapply(recs,function(z) identical(z$source,'ebsco_psyh'),logical(1))))
           stopifnot(all(vapply(recs,function(z) identical(z$ebsco$cluster,'social_sciences'),logical(1))))
-          stopifnot(all(vapply(recs,function(z) identical(z$ebsco$database_code,'psyh'),logical(1))))
-          stopifnot(all(vapply(recs,function(z) identical(z$ebsco$database_name,'APA PsycInfo'),logical(1))))
+          rec_codes <- vapply(recs,function(z) z$ebsco$database_code,character(1))
+          stopifnot(setequal(unique(rec_codes),expected_codes))
+          stopifnot(all(vapply(recs,function(z) identical(z$source,paste0('ebsco_',z$ebsco$database_code)),logical(1))))
+          stopifnot(all(vapply(recs,function(z) nzchar(as.character(z$ebsco$database_name)),logical(1))))
           stopifnot(all(vapply(recs,function(z) nzchar(as.character(z$source_record_id)),logical(1))))
 
           # OpenAlex and EBSCO remain separate W00 source states.
@@ -117,8 +119,7 @@ jobs:
               ebsco_psyh=list(
                 manifest='outputs/ebsco_social_sciences/manifest.json',
                 cluster='social_sciences',
-                database_code='psyh',
-                database_name='APA PsycInfo',
+                database_codes=expected_codes,
                 records=length(lines)
               )
             ),
@@ -130,7 +131,7 @@ jobs:
           )
           writeLines(toJSON(state,auto_unbox=TRUE,pretty=TRUE,null='null'),
                      'outputs/controlled_state/state.json')
-          cat('PASS: OpenAlex and EBSCO/PsycInfo remained separate with database-level provenance preserved\n')
+          cat('PASS: OpenAlex and clustered EBSCO sources remained separate with database-level provenance preserved\n')
 
       - name: Upload controlled W00 test
         uses: actions/upload-artifact@v4
