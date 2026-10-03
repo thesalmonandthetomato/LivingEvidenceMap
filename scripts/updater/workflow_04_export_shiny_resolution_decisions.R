@@ -4,7 +4,7 @@ args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 batch_id<-arg("--batch-id");queue_sha<-tolower(arg("--queue-sha256",""));source_run_id<-arg("--source-run-id")
 sheet_id<-arg("--sheet-id");credential<-arg("--credential");output<-arg("--output");manifest_out<-arg("--manifest")
-queue_tab<-arg("--queue-tab","queue_w04_validation_active");decision_tab<-arg("--decision-tab","decisions_w04_validation")
+queue_tab<-arg("--queue-tab","queue_w04_resolution_active");decision_tab<-arg("--decision-tab","decisions_w04_resolution")
 if(any(vapply(list(batch_id,queue_sha,source_run_id,sheet_id,credential,output,manifest_out),is.null,logical(1))))stop("Required W04 resolution export argument missing",call.=FALSE)
 if(!grepl("^[0-9a-f]{64}$",queue_sha))stop("Invalid queue SHA",call.=FALSE)
 gs4_auth(path=credential,cache=FALSE)
