@@ -72,9 +72,26 @@ for(i in seq_len(nrow(w05_none))){
   ))
 }
 
-# W06 unresolved geography.
-req6<-c("geography_status","luna_iso3c","luna_country_names","luna_evidence","geography_reason")
+# W06 unresolved geography and terminal model failures.
+req6<-c("geography_status","luna_iso3c","luna_country_names","luna_evidence","geography_reason",
+        "llm_failed","llm_error","deterministic_primary_countries","deterministic_primary_iso3c")
 if(length(setdiff(req6,names(w06))))stop("W06 layer lacks required geography columns",call.=FALSE)
+
+w06_failures<-w06 |> filter(llm_failed %in% TRUE)
+for(i in seq_len(nrow(w06_failures))){
+  z<-w06_failures[i,,drop=FALSE]
+  add_issue(z$record_id,list(
+    source_workflow="06",issue_type="geography_model_failure",
+    automated_value=list(
+      geography_status=clean_chr(z$geography_status),
+      llm_error=clean_chr(z$llm_error),
+      deterministic_primary_countries=clean_chr(z$deterministic_primary_countries),
+      deterministic_primary_iso3c=clean_chr(z$deterministic_primary_iso3c)
+    ),
+    allowed_human_outcomes=c("assign_country_set","assign_none")
+  ))
+}
+
 w06_unresolved<-w06 |> filter(geography_status=="UNRESOLVED")
 for(i in seq_len(nrow(w06_unresolved))){
   z<-w06_unresolved[i,,drop=FALSE]
@@ -176,6 +193,7 @@ manifest<-list(
   input_population=nrow(context),
   w05_species_none=nrow(w05_none),
   w06_unresolved=nrow(w06_unresolved),
+  w06_model_failures=nrow(w06_failures),
   w06_grounding_residual=length(resid_ids),
   w07_human_review=nrow(w07q),
   w07_late_automatic_exclusions=nrow(w07x),
