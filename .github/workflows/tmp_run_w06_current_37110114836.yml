@@ -23,4 +23,5 @@ jobs:
       prior_lean_pointer_path: 'docs/compaction/zenodo/run-36166883249.json'
       publish: true
       # retry after completing W06 prepare dependencies
+      # retry after legacy W06 archive restore fix
     secrets: inherit
