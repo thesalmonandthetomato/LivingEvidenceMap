@@ -234,3 +234,15 @@ jobs:
             outputs/workflow05_zenodo/
           retention-days: 90
           if-no-files-found: error
+
+
+  handoff-w06:
+    needs: species
+    if: ${{ needs.species.result == 'success' && inputs.publish == true }}
+    uses: ./.github/workflows/workflow_06_production.yml
+    with:
+      workflow04_pointer_path: ${{ inputs.workflow04_pointer_path }}
+      workflow05_pointer_path: ${{ format('docs/workflow05/zenodo/run-{0}.json', github.run_id) }}
+      lean_pointer_path: ${{ inputs.lean_pointer_path }}
+      publish: true
+    secrets: inherit
