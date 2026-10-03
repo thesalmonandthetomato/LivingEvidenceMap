@@ -66,7 +66,24 @@ jobs:
                   seen.add(k); unique.append(r)
           unique=sorted(unique,key=lambda r:(r["database_title"].lower(),r["database_code"].lower()))
           if not unique:
-              raise SystemExit("No EBSCO databases parsed from InfoService response")
+              print("PARSE_FALLBACK: database elements not recognised; showing provider XML structure")
+              counts={}
+              for el in root.iter():
+                  tag=local(el.tag)
+                  counts[tag]=counts.get(tag,0)+1
+              print("TAG_COUNTS",json.dumps(counts,sort_keys=True))
+              shown=0
+              for el in root.iter():
+                  txt=(el.text or "").strip().replace("\n"," ")
+                  attrs={local(k):v for k,v in el.attrib.items()}
+                  if txt or attrs:
+                      if len(txt)>240: txt=txt[:240]+"..."
+                      print("NODE",local(el.tag),attrs,txt)
+                      shown+=1
+                      if shown>=250: break
+              with open("outputs/ebsco_catalogue/databases.json","w",encoding="utf-8") as fh:
+                  json.dump({"database_count":0,"databases":[],"parse_status":"unrecognised_provider_shape"},fh,indent=2)
+              raise SystemExit(0)
           with open("outputs/ebsco_catalogue/databases.csv","w",newline="",encoding="utf-8") as fh:
               w=csv.DictWriter(fh,fieldnames=["database_code","database_title"])
               w.writeheader(); w.writerows(unique)
