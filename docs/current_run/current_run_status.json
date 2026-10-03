@@ -3,7 +3,7 @@
   "update_id": "w01-run-36971418284",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-02T06:30:47Z",
-  "last_updated_at_utc": "2026-10-03T08:25:25Z",
+  "last_updated_at_utc": "2026-10-03T08:56:50Z",
   "baseline": {
     "workflow08_pointer": "docs/workflow08/zenodo/run-36442875006.json",
     "workflow08_source_run_id": "36442875006",
@@ -53,10 +53,10 @@
       "status": "complete"
     },
     "W05": {
-      "status": "active"
+      "status": "complete"
     },
     "W06": {
-      "status": "pending"
+      "status": "active"
     },
     "W07": {
       "status": "pending"
@@ -67,15 +67,16 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W04",
-    "completed_through": 5,
-    "active_position": 6,
-    "status_label": "Screening complete; awaiting species coding"
+    "current_stage": "W05",
+    "completed_through": 6,
+    "active_position": 7,
+    "status_label": "Species coding complete; awaiting geography coding"
   },
   "workflow_runs": {
     "W01": "36971418284",
     "W02": "37016080508",
     "W03": "37024164176",
-    "W04": "37051672356"
+    "W04": "37051672356",
+    "W05": "37110114836"
   }
 }
