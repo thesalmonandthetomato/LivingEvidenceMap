@@ -382,6 +382,8 @@ jobs:
   finalise:
     needs: [prepare,merge-new]
     if: ${{ always() && needs.prepare.result == 'success' && needs.merge-new.result == 'success' }}
+    outputs:
+      status: ${{ steps.status.outputs.status }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -549,3 +551,14 @@ jobs:
             outputs/workflow04_zenodo/
           retention-days: 90
           if-no-files-found: error
+
+  handoff-w05:
+    needs: finalise
+    if: ${{ needs.finalise.result == 'success' && needs.finalise.outputs.status == 'PASS' && inputs.publish == true }}
+    uses: ./.github/workflows/workflow_05_production.yml
+    with:
+      workflow04_pointer_path: ${{ format('docs/workflow04/zenodo/run-{0}.json', github.run_id) }}
+      lean_pointer_path: ${{ inputs.lean_pointer_path }}
+      publish: true
+    secrets: inherit
+
