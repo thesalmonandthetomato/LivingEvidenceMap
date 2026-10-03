@@ -501,10 +501,10 @@ Each catalogue entry declares:
 
 Two restoration classes are currently supported:
 
-1. `workflow00_state`: the established W00 composite state used for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science;
+1. `workflow00_state`: any API source declared by the supplied accepted W00 state or published W00 archive pointer. The current accepted baseline state contains Lens, Scopus, OpenAlex, AGRICOLA and Web of Science, but the production restore path is source-generic and no longer assumes exactly five sources;
 2. `manual_ris`: a published restricted W00 RIS archive restored from Zenodo using its committed W00 registry.
 
-The catalogue is converted into a validated W01 source-input manifest. Union construction emits a corresponding manifest for the complete prior-plus-new manifestation union. Candidate generation, scoring and canonicalisation consume this manifest rather than a hard-coded source list.
+The static catalogue is augmented at runtime with any additional API source slugs declared by the supplied W00 pointer, then converted into a validated W01 source-input manifest. Union construction emits a corresponding manifest for the complete prior-plus-new manifestation union. Candidate generation, scoring and canonicalisation consume this manifest rather than a hard-coded source list.
 
 New source providers therefore use their stable lower-case W00 `database.short_name` directly as the W01 `source` namespace, except for the retained legacy aliases:
 
@@ -516,6 +516,36 @@ The manifestation identity remains:
 `source + source_record_id`
 
 No additional search-event identifier is introduced into the canonical JSONL.
+
+### EBSCO API sources
+
+Workflow 00 currently defines 17 validated EBSCO databases. Each database is a separate W00/W01 source namespace rather than a pooled `ebsco` source.
+
+Examples include:
+
+- `ebsco_psycinfo` for APA PsycInfo (`psyh`);
+- `ebsco_econlit` for EconLit (`ecn`);
+- `ebsco_cinahl` for CINAHL with Full Text (`c8h`);
+- `ebsco_medline` for MEDLINE (`cmedm`);
+- `ebsco_waters_oceans` for Waters & Oceans Worldwide (`wrw`).
+
+For each EBSCO manifestation, W00 preserves:
+
+- stable source slug;
+- EBSCO database code and database name;
+- EBSCO accession number;
+- DOI where supplied;
+- PMID, PMCID, UMI and other typed EBSCO identifiers where supplied;
+- title, abstract, authors, year, publication date, journal/source, subject/index terms and publication type where supplied;
+- the raw XML source record in the W00 archive.
+
+The W01 manifestation identity is:
+
+`source + source_record_id`
+
+where the EBSCO source record ID is derived from the database-specific source slug plus EBSCO accession number. EBSCO native-ID reconciliation therefore occurs within each database namespace before W01. Cross-database duplicate detection remains a W01 bibliographic-deduplication responsibility.
+
+The generic W01 production path accepts these normalized EBSCO `records.jsonl` files directly. No EBSCO-specific duplicate-scoring rule is introduced by this handoff.
 
 ### Manual-RIS validation
 
@@ -552,7 +582,7 @@ Source files are discovered from the current W01 seed/source manifest and persis
 
 ## Remaining downstream work
 
-Workflow 02 may fill missing title, abstract and author keywords using separately validated Europe PMC and Scopus enrichment. Future database additions should be registered through the W01 source catalogue and must preserve the established W01 identity and deduplication semantics.
+Workflow 02 may fill missing title, abstract and author keywords using separately validated Europe PMC and Scopus enrichment. Future API database additions must be declared by W00 with a stable source slug and normalized handoff, after which the W01 runtime catalogue incorporates them from the supplied W00 pointer. Manual-RIS additions remain registered explicitly in the static W01 source catalogue. All additions must preserve the established W01 identity and deduplication semantics.
 
 
 ### Additional Europe PMC API sources
