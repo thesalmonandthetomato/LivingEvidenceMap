@@ -13,16 +13,23 @@ arg <- function(flag,default=NULL) {
   args[[i+1L]]
 }
 
-cluster <- arg("--cluster")
+cluster <- arg("--cluster","")
+database_code <- arg("--database-code","")
 query <- arg("--query")
 config_path <- arg("--config","config/workflow00_ebsco_clusters.json")
-max_records <- as.integer(arg("--max-records","10"))
-page_size <- as.integer(arg("--page-size","10"))
-output_dir <- arg("--output-dir","outputs/updater/ebsco_cluster_test")
-if (is.null(cluster)||!nzchar(cluster)||is.null(query)||!nzchar(query)) {
-  stop("Required: --cluster --query",call.=FALSE)
+max_records_arg <- arg("--max-records","all")
+page_size <- as.integer(arg("--page-size","100"))
+output_dir <- arg("--output-dir","outputs/updater/ebsco_ingestion")
+if (is.null(query)||!nzchar(query)) stop("--query is required",call.=FALSE)
+if (!nzchar(cluster) && !nzchar(database_code)) stop("Provide --cluster or --database-code",call.=FALSE)
+if (nzchar(cluster) && nzchar(database_code)) stop("Use only one of --cluster or --database-code",call.=FALSE)
+full_harvest <- identical(tolower(max_records_arg),"all")
+if (full_harvest) {
+  max_records <- .Machine$integer.max
+} else {
+  max_records <- suppressWarnings(as.integer(max_records_arg))
+  if (is.na(max_records)||max_records<1L) stop("--max-records must be >=1 or 'all'",call.=FALSE)
 }
-if (is.na(max_records)||max_records<1L) stop("--max-records must be >=1",call.=FALSE)
 if (is.na(page_size)||page_size<1L||page_size>100L) stop("--page-size must be 1..100",call.=FALSE)
 
 uid <- Sys.getenv("EBSCO_EHOST_UID",unset="")
@@ -30,16 +37,24 @@ pwd <- Sys.getenv("EBSCO_EHOST_PWD",unset="")
 if (!nzchar(uid)||!nzchar(pwd)) stop("EBSCO_EHOST_UID and EBSCO_EHOST_PWD are required",call.=FALSE)
 
 cfg <- fromJSON(config_path,simplifyVector=FALSE)
-cl <- cfg$clusters[[cluster]]
-if (is.null(cl)) stop(sprintf("Unknown EBSCO cluster: %s",cluster),call.=FALSE)
-codes <- unname(unlist(cl$database_codes))
-if (!length(codes)) stop(sprintf("EBSCO cluster %s has no verified database members",cluster),call.=FALSE)
-missing_codes <- setdiff(codes,names(cfg$databases))
-if (length(missing_codes)) stop(sprintf("EBSCO cluster %s references unknown database code(s): %s",cluster,paste(missing_codes,collapse=", ")),call.=FALSE)
-dbs <- lapply(codes,function(code) {
-  z <- cfg$databases[[code]]
-  list(code=code,title=z$title)
-})
+if (nzchar(database_code)) {
+  if (!(database_code %in% names(cfg$databases))) stop(sprintf("Unknown verified EBSCO database code: %s",database_code),call.=FALSE)
+  z <- cfg$databases[[database_code]]
+  cl <- list(label=NULL)
+  codes <- database_code
+  dbs <- list(list(code=database_code,title=z$title))
+} else {
+  cl <- cfg$clusters[[cluster]]
+  if (is.null(cl)) stop(sprintf("Unknown EBSCO cluster: %s",cluster),call.=FALSE)
+  codes <- unname(unlist(cl$database_codes))
+  if (!length(codes)) stop(sprintf("EBSCO cluster %s has no verified database members",cluster),call.=FALSE)
+  missing_codes <- setdiff(codes,names(cfg$databases))
+  if (length(missing_codes)) stop(sprintf("EBSCO cluster %s references unknown database code(s): %s",cluster,paste(missing_codes,collapse=", ")),call.=FALSE)
+  dbs <- lapply(codes,function(code) {
+    z <- cfg$databases[[code]]
+    list(code=code,title=z$title)
+  })
+}
 
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 dir.create(file.path(output_dir,"raw"),recursive=TRUE,showWarnings=FALSE)
@@ -150,7 +165,7 @@ for (db in dbs) {
         doi=doi_from_rec(rec),
         journal=text1(rec,".//*[local-name()='jtl'][1]"),
         ebsco=list(
-          cluster=cluster,
+          cluster=if(nzchar(cluster)) cluster else NULL,
           database_code=db_code,
           database_name=db_title,
           accession_number=accession,
@@ -180,19 +195,28 @@ for (db in dbs) {
   )
 }
 
+reported_values <- vapply(manifest_dbs,function(z) if(is.null(z$reported_hits)) NA_integer_ else as.integer(z$reported_hits),integer(1))
+reported_total <- if(all(is.na(reported_values))) NA_integer_ else sum(reported_values,na.rm=TRUE)
 manifest <- list(
-  schema="living-evidence-map-workflow00-ebsco-cluster-harvest-v1",
+  schema="living-evidence-map-workflow00-ebsco-harvest-v1",
+  workflow="00g_ebsco_ingestion",
+  source=if(length(dbs)==1L) paste0("ebsco_",tolower(dbs[[1L]]$code)) else "ebsco_cluster",
   status="success",
   created_at=now_utc(),
-  cluster=cluster,
-  cluster_label=cl$label,
+  cluster=if(nzchar(cluster)) cluster else NULL,
+  cluster_label=if(nzchar(cluster)) cl$label else NULL,
+  database_code=if(length(dbs)==1L) dbs[[1L]]$code else NULL,
+  database_name=if(length(dbs)==1L) dbs[[1L]]$title else NULL,
   query=query,
   database_count=length(dbs),
+  reported_total=if(is.na(reported_total)) NULL else reported_total,
   records_retrieved=total_written,
+  max_records=if(full_harvest) "all" else max_records,
   databases=manifest_dbs,
-  provenance_rule="Cluster selection expands to database-specific EBSCO searches; database code/name/accession remain on every manifestation."
+  provenance_rule="Cluster selection is resolved to database-specific EBSCO searches; database code/name/accession remain on every manifestation."
 )
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
            file.path(output_dir,"manifest.json"),useBytes=TRUE)
-cat(sprintf("PASS: EBSCO cluster %s harvested %d records across %d verified database(s)\n",
-            cluster,total_written,length(dbs)))
+label <- if(nzchar(cluster)) paste0("cluster ",cluster) else paste0("database ",database_code)
+cat(sprintf("PASS: EBSCO %s harvested %d records across %d verified database(s)\n",
+            label,total_written,length(dbs)))
