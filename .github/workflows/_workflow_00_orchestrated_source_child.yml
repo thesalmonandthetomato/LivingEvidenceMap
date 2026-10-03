@@ -30,13 +30,17 @@ on:
         required: false
         default: ""
         type: string
+      max_records:
+        required: false
+        default: "all"
+        type: string
 
 permissions:
   contents: read
   actions: read
 
 env:
-  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow01-final-architecture
+  WORKFLOW00_ORCHESTRATOR_BRANCH: test-ebsco-eit-api
 
 jobs:
   search:
@@ -58,6 +62,7 @@ jobs:
             cba) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             epmc_preprints) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
             wos) echo "branch=workflow01-final-architecture" >> "$GITHUB_OUTPUT" ;;
+            ebsco_*) echo "branch=test-ebsco-eit-api" >> "$GITHUB_OUTPUT" ;;
             *) echo "Unsupported source: ${{ inputs.source }}" >&2; exit 2 ;;
           esac
 
@@ -82,7 +87,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c("httr2","jsonlite","digest"))
+        run: install.packages(c("httr2","jsonlite","digest","xml2"))
 
       - name: Run source search
         env:
@@ -97,6 +102,9 @@ jobs:
           FORTNIGHTLY_FROM_DATE: ${{ inputs.fortnightly_from_date }}
           FORTNIGHTLY_TO_DATE: ${{ inputs.fortnightly_to_date }}
           WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+          EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+          EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+          MAX_RECORDS: ${{ inputs.max_records }}
         shell: bash
         run: |
           set -euo pipefail
@@ -156,11 +164,21 @@ jobs:
               fi
               Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir outputs/updater/source_child --output-dir outputs/updater/source_child_sidecar
               ;;
+            ebsco_*)
+              db_code="${SOURCE#ebsco_}"
+              Rscript scripts/updater/workflow_00g_ebsco_ingestion.R \
+                --database-code "$db_code" \
+                --query "$SEARCH_QUERY" \
+                --config config/workflow00_ebsco_clusters.json \
+                --max-records "$MAX_RECORDS" \
+                --page-size 100 \
+                --output-dir outputs/updater/source_child
+              ;;
           esac
 
 
-      - name: Seed native-ID registry for new Europe PMC source
-        if: ${{ inputs.run_type == 'full' && (inputs.source == 'pubmed' || inputs.source == 'ethos' || inputs.source == 'cba' || inputs.source == 'epmc_preprints') }}
+      - name: Seed native-ID registry for new source
+        if: ${{ inputs.run_type == 'full' && (inputs.source == 'pubmed' || inputs.source == 'ethos' || inputs.source == 'cba' || inputs.source == 'epmc_preprints' || startsWith(inputs.source, 'ebsco_')) }}
         env:
           SOURCE: ${{ inputs.source }}
         shell: bash
