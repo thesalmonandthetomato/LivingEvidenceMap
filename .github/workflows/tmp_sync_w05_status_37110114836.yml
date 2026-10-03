@@ -27,7 +27,7 @@ jobs:
 
       - name: Install status-sync dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','googlesheets4'))
+        run: install.packages(c('jsonlite','digest','readr','httr2','googlesheets4'))
 
       - name: Sync completed W05 status to repository and Shiny
         env:
