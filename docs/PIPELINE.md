@@ -24,6 +24,16 @@ The canonical workflow numbering is:
 
 Dataset construction and publication occur from validated accepted workflow states. The authoritative registered Zenodo checkpoint remains the durable source of truth between major stages.
 
+### Workflow 00 source architecture
+
+Workflow 00 separates operator-facing coverage groups from database-level provenance. Ten selectable coverage groups are resolved deterministically to a de-duplicated set of individual API sources before searching. When all ten groups are selected, the current configuration resolves to 26 unique API sources: nine non-EBSCO sources and 17 independently identified EBSCO databases.
+
+Overlapping group membership does not duplicate execution. For example, APA PsycInfo may belong to more than one coverage group but is searched once as `ebsco_psycinfo`. EBSCO database code, name and accession number remain attached to every manifestation.
+
+A full W00 run freezes its resolved individual source list for subsequent updates. EBSCO updates currently rerun the complete database-specific query because a reliable indexing-date filter has not been validated for the EHOST/EIT profile; exact database-specific accession-number reconciliation removes already-known manifestations before W01.
+
+The current accepted `docs/search_record/state/current.json` remains the historical five-source baseline. The state schema, validator, updater and W01 restoration path are source-generic, so a future validated full-run promotion can extend the accepted state without changing W01 deduplication semantics.
+
 ### Workflow 01 deduplication architecture
 
 Workflow 01 is a persistent multi-source deduplication and canonicalisation state machine. It preserves source-native manifestations and prior pair decisions, generates only the incremental comparisons required by newly appended manifestations, and retains stable work identifiers across accepted updates.
