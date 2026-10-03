@@ -239,7 +239,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p docs/shiny_adjudication/w04_resolution_resume_runs
-          RECEIPT="docs/shiny_adjudication/w04_resolution_resume_runs/${GITHUB_RUN_ID}-started.json"
+          RECEIPT="docs/shiny_adjudication/w04_resolution_resume_runs/${BATCH_ID}-started.json"
           python3 - <<'PY'
           import json, os
           out = {
@@ -250,7 +250,7 @@ jobs:
               "queue_sha256": os.environ["QUEUE_SHA256"],
               "status": "started",
           }
-          path = f"docs/shiny_adjudication/w04_resolution_resume_runs/{os.environ['GITHUB_RUN_ID']}-started.json"
+          path = f"docs/shiny_adjudication/w04_resolution_resume_runs/{os.environ['BATCH_ID']}-started.json"
           with open(path, "w", encoding="utf-8") as f:
               json.dump(out, f, indent=2)
               f.write("\n")
