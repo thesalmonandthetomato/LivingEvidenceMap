@@ -467,6 +467,7 @@ jobs:
             --highlight-terms user_input/workflow04_screening_highlight_terms.csv \
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
             --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --queue-tab queue_w04_resolution_active \
             --receipt outputs/workflow04_resolution/shiny_publish_receipt.json
           BATCH_ID="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$batch_id)')"
           QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$queue_sha256)')"
