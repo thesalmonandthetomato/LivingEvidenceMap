@@ -222,9 +222,12 @@ jobs:
             test "${#FILES[@]}" -eq 1
             FILE="${FILES[0]}"
             readarray -t META < <(python3 -c 'import json,re,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); s=str(x.get("source_run_id","")); b=str(x.get("batch_id","")); q=str(x.get("queue_sha256","")).lower(); assert re.fullmatch(r"[0-9]+",s), "invalid source_run_id"; assert b, "invalid batch_id"; assert re.fullmatch(r"[0-9a-f]{64}",q), "invalid queue_sha256"; print(s); print(b); print(q)' "$FILE")
-            echo "SOURCE_RUN_ID=${META[0]}" >> "$GITHUB_ENV"
-            echo "BATCH_ID=${META[1]}" >> "$GITHUB_ENV"
-            echo "QUEUE_SHA256=${META[2]}" >> "$GITHUB_ENV"
+            SOURCE_RUN_ID="${META[0]}"
+            BATCH_ID="${META[1]}"
+            QUEUE_SHA256="${META[2]}"
+            echo "SOURCE_RUN_ID=$SOURCE_RUN_ID" >> "$GITHUB_ENV"
+            echo "BATCH_ID=$BATCH_ID" >> "$GITHUB_ENV"
+            echo "QUEUE_SHA256=$QUEUE_SHA256" >> "$GITHUB_ENV"
           fi
           [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
           test -n "$BATCH_ID"
