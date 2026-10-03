@@ -1,0 +1,86 @@
+name: TEMP EBSCO catalogue inventory
+
+on:
+  push:
+    branches:
+      - test-ebsco-eit-api
+    paths:
+      - '.github/workflows/tmp_ebsco_catalogue_inventory.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query EBSCO EIT database catalogue
+        env:
+          EBSCO_UID: ${{ secrets.EBSCO_EHOST_UID }}
+          EBSCO_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EBSCO_UID"
+          test -n "$EBSCO_PWD"
+          mkdir -p outputs/ebsco_catalogue
+          curl -fsS --get "https://eit.ebscohost.com/Services/InfoService.asmx/GetInfo" \
+            --data-urlencode "prof=$EBSCO_UID" \
+            --data-urlencode "pwd=$EBSCO_PWD" \
+            --data-urlencode "authType=profile" \
+            -o outputs/ebsco_catalogue/info.xml
+          python - <<'PY'
+          import csv, json, re
+          import xml.etree.ElementTree as ET
+
+          path="outputs/ebsco_catalogue/info.xml"
+          root=ET.parse(path).getroot()
+          def local(tag): return tag.split("}")[-1]
+          rows=[]
+          for el in root.iter():
+              if local(el.tag).lower() not in {"database","db"}:
+                  continue
+              vals={}
+              for ch in list(el):
+                  vals[local(ch.tag).lower()] = (ch.text or "").strip()
+              attrs={local(k).lower():v for k,v in el.attrib.items()}
+              code=(vals.get("shortname") or vals.get("name") or vals.get("db") or vals.get("database") or
+                    attrs.get("shortname") or attrs.get("name") or attrs.get("db") or attrs.get("database") or "").strip()
+              title=(vals.get("description") or vals.get("label") or vals.get("title") or
+                     attrs.get("description") or attrs.get("label") or attrs.get("title") or "").strip()
+              if code:
+                  rows.append({"database_code":code,"database_title":title})
+          # Fallback: inspect text/attributes for database-like nodes if provider shape differs.
+          if not rows:
+              for el in root.iter():
+                  vals={local(ch.tag).lower():(ch.text or "").strip() for ch in list(el)}
+                  code=(vals.get("shortname") or vals.get("databasecode") or vals.get("dbcode") or "").strip()
+                  title=(vals.get("description") or vals.get("databasename") or vals.get("title") or "").strip()
+                  if code:
+                      rows.append({"database_code":code,"database_title":title})
+          seen=set(); unique=[]
+          for r in rows:
+              k=(r["database_code"],r["database_title"])
+              if k not in seen:
+                  seen.add(k); unique.append(r)
+          unique=sorted(unique,key=lambda r:(r["database_title"].lower(),r["database_code"].lower()))
+          if not unique:
+              raise SystemExit("No EBSCO databases parsed from InfoService response")
+          with open("outputs/ebsco_catalogue/databases.csv","w",newline="",encoding="utf-8") as fh:
+              w=csv.DictWriter(fh,fieldnames=["database_code","database_title"])
+              w.writeheader(); w.writerows(unique)
+          with open("outputs/ebsco_catalogue/databases.json","w",encoding="utf-8") as fh:
+              json.dump({"database_count":len(unique),"databases":unique},fh,indent=2,ensure_ascii=False)
+          print("DATABASE_COUNT",len(unique))
+          for r in unique:
+              print(r["database_code"],"\t",r["database_title"])
+          PY
+
+      - name: Upload catalogue
+        uses: actions/upload-artifact@v4
+        with:
+          name: ebsco-catalogue-${{ github.run_id }}
+          path: outputs/ebsco_catalogue/
+          retention-days: 7
+          if-no-files-found: error
