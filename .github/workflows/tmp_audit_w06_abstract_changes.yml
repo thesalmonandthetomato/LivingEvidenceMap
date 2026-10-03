@@ -37,6 +37,18 @@ jobs:
           Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
             --pointer docs/workflow04/zenodo/run-36227737500.json \
             --output-dir inputs/prior_w04
+          PRIOR_CAN=$(find inputs/prior_w04 -type f -name workflow04_included_canonical.jsonl -print -quit)
+          PRIOR_INC=$(find inputs/prior_w04 -type f -name workflow04_included_record_ids.txt -print -quit)
+          test -n "$PRIOR_INC"
+          if [ -z "$PRIOR_CAN" ]; then
+            Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+              --pointer docs/compaction/zenodo/run-36166883249.json \
+              --output-dir inputs/prior_lean
+            Rscript scripts/updater/workflow_05_materialise_retained.R \
+              --canonical inputs/prior_lean/canonical_lean.jsonl \
+              --included-ids "$PRIOR_INC" \
+              --output inputs/prior_w04/workflow04_included_canonical.jsonl
+          fi
           Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
             --pointer docs/workflow04/zenodo/run-37051672356.json \
             --output-dir inputs/current_w04
