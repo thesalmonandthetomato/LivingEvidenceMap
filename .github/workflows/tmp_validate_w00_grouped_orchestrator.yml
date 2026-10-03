@@ -1,0 +1,166 @@
+name: TEMP validate grouped W00 orchestrator path
+
+on:
+  push:
+    branches:
+      - test-ebsco-eit-api
+    paths:
+      - '.github/workflows/tmp_validate_w00_grouped_orchestrator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      source_matrix_json: ${{ steps.matrix.outputs.source_matrix_json }}
+      selected_sources_csv: ${{ steps.selection.outputs.selected_sources_csv }}
+      search_version: ${{ steps.matrix.outputs.search_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test-ebsco-eit-api
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install planning dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Resolve overlapping topic groups
+        id: selection
+        env:
+          W00_GROUP_CORE_MULTIDISCIPLINARY: 'false'
+          W00_GROUP_HEALTH_MEDICINE: 'false'
+          W00_GROUP_ENVIRONMENT_AGRICULTURE: 'false'
+          W00_GROUP_SOCIAL_SCIENCES: 'true'
+          W00_GROUP_EDUCATION: 'true'
+          W00_GROUP_REGIONAL: 'false'
+          W00_GROUP_MEDIA_COMMUNICATION: 'false'
+          W00_GROUP_HUMANITIES: 'false'
+          W00_GROUP_SPORT_TOURISM: 'false'
+          W00_GROUP_GREY_PREPRINTS: 'false'
+          W00_ADDITIONAL_SOURCES: ''
+          W00_EXCLUDE_SOURCES: ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_resolve_source_selection.R \
+            --run-type full \
+            --saved data/workflow00/source_selection.json \
+            --output outputs/plan/source_selection.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --group-config config/workflow00_source_groups.json
+
+      - name: Generate real W00 source queries
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type full \
+            --config user_input/workflow00_search_strategy.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --output-dir outputs/plan
+
+      - name: Validate resolution and export matrix
+        id: matrix
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/plan/source_selection.json', simplifyVector=FALSE)
+          selected <- unlist(s$selected_sources,use.names=FALSE)
+          expected <- c(
+            'ebsco_psycinfo',
+            'ebsco_econlit',
+            'ebsco_political_science',
+            'ebsco_family_society',
+            'ebsco_eric'
+          )
+          stopifnot(length(selected)==5L)
+          stopifnot(setequal(selected,expected))
+          stopifnot(sum(selected=='ebsco_psycinfo')==1L)
+
+          p <- fromJSON('outputs/plan/search_plan.json', simplifyVector=FALSE)
+          q <- p$source_queries
+          stopifnot(all(expected %in% names(q)))
+          stopifnot(all(vapply(expected,function(src) nzchar(q[[src]]),logical(1))))
+
+          matrix <- lapply(selected,function(src) list(source=src,query=q[[src]]))
+          out <- Sys.getenv('GITHUB_OUTPUT')
+          cat('source_matrix_json<<EOF\n',file=out,append=TRUE)
+          cat(toJSON(matrix,auto_unbox=TRUE,null='null'),file=out,append=TRUE)
+          cat('\nEOF\n',file=out,append=TRUE)
+          cat(sprintf('search_version=%s\n',p$search_version),file=out,append=TRUE)
+          cat('PASS: overlapping Social sciences + Education groups resolved to five unique EBSCO sources; PsycInfo appears once\n')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w00-grouped-plan-${{ github.run_id }}
+          path: outputs/plan/
+          retention-days: 7
+          if-no-files-found: error
+
+  search-sources:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.source_matrix_json) }}
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ${{ matrix.source }}
+      run_type: full
+      query: ${{ matrix.query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.plan.outputs.search_version }}
+      max_records: '2'
+    secrets: inherit
+
+  verify:
+    needs: [plan, search-sources]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test-ebsco-eit-api
+          persist-credentials: false
+
+      - name: Download and validate all five database-specific harvests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=(ebsco_psycinfo ebsco_econlit ebsco_political_science ebsco_family_society ebsco_eric)
+          mkdir -p /tmp/w00_grouped
+          for source in "${expected[@]}"; do
+            dest="/tmp/w00_grouped/$source"
+            mkdir -p "$dest"
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow00-${source}-harvest-$GITHUB_RUN_ID" \
+              --dir "$dest"
+            test -s "$dest/source_child/manifest.json"
+            test -s "$dest/source_child/records.jsonl"
+            Rscript -e 'args<-commandArgs(TRUE); x<-jsonlite::fromJSON(args[1],simplifyVector=FALSE); src<-args[2]; stopifnot(identical(x$status,"success")); stopifnot(identical(x$source,src)); stopifnot(as.integer(x$records_retrieved)<=2L); stopifnot(as.integer(x$records_retrieved)>=0L)' "$dest/source_child/manifest.json" "$source"
+          done
+          echo "PASS: five database-specific child harvests completed with separate provenance and capped test retrieval"
+
+      - name: Confirm actual orchestrator wiring uses grouped matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          P=.github/workflows/workflow_00_search_orchestrator.yml
+          grep -Fq "workflow_00_resolve_source_selection.R" "$P"
+          grep -Fq "group_social_sciences" "$P"
+          grep -Fq "group_education" "$P"
+          grep -Fq "source_matrix_json" "$P"
+          grep -Fq 'matrix:' "$P"
+          grep -Fq 'source: ${{ matrix.source }}' "$P"
+          echo "PASS: production W00 orchestrator is wired through grouped source resolution and dynamic source matrix"
