@@ -1,0 +1,88 @@
+name: TEMP validate W07 incremental reuse
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w07_incremental_reuse.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('digest','dplyr','jsonlite','readr','httr2'))
+
+      - name: Restore current W06 and prior W07
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R \
+            --pointer docs/workflow06/zenodo/run-37114864202.json \
+            --output-dir inputs/current_w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R \
+            --pointer docs/workflow07/zenodo/run-36772700615.json \
+            --output-dir inputs/prior_w07
+
+          GEO=$(find inputs/current_w06 -type f -name geography_semantic_final.csv -print -quit)
+          REC=$(find inputs/prior_w07 -type f -name workflow07_records.csv -print -quit)
+          SCO=$(find inputs/prior_w07 -type f -name workflow07_topic_pathway_scores.csv -print -quit)
+          MAN=$(find inputs/prior_w07 -type f -name workflow07_topic_complete_manifest.json -print -quit)
+          for x in "$GEO" "$REC" "$SCO" "$MAN"; do test -n "$x"; done
+
+          mkdir -p inputs/current inputs/prior
+          GEO="$GEO" Rscript -e '
+            library(readr)
+            x<-read_csv(Sys.getenv("GEO"),show_col_types=FALSE)
+            write_csv(x[,c("record_id","title","abstract")],"inputs/current/workflow07_current.csv",na="")
+          '
+          cp "$REC" inputs/prior/workflow07_records.csv
+          cp "$SCO" inputs/prior/workflow07_topic_pathway_scores.csv
+          cp "$MAN" inputs/prior/workflow07_topic_complete_manifest.json
+
+      - name: Validate only new IDs are queued
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_07_prepare_incremental.R \
+            --current inputs/current/workflow07_current.csv \
+            --prior-records inputs/prior/workflow07_records.csv \
+            --prior-scores inputs/prior/workflow07_topic_pathway_scores.csv \
+            --prior-manifest inputs/prior/workflow07_topic_complete_manifest.json \
+            --ontology user_input/workflow07_topic_ontology.csv \
+            --prompt user_input/workflow07_topic_system_prompt.txt \
+            --output-dir outputs/w07_prepare
+
+          Rscript -e '
+            library(readr); library(jsonlite)
+            q<-read_csv("outputs/w07_prepare/topic_screen_queue.csv",show_col_types=FALSE)
+            p<-read_csv("inputs/prior/workflow07_records.csv",show_col_types=FALSE)
+            m<-fromJSON("outputs/w07_prepare/prepare_manifest.json")
+            stopifnot(length(intersect(q$record_id,p$record_id))==0L)
+            stopifnot(nrow(q)==as.integer(m$new_record_ids))
+            stopifnot(isTRUE(m$previously_assessed_records_never_requeued))
+            cat(sprintf("PASS: W07 queue contains only %d genuinely new record IDs; %d prior records reused; %d changed prior title/abstract records still reused\n",
+                        nrow(q),as.integer(m$reusable_records),as.integer(m$changed_title_abstract_reused)))
+          '
+
+      - name: Parse W08 failure routing
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_08_build_review_queue_dynamic.R')
+          cat('PASS: W08 model-failure routing script parses\n')
