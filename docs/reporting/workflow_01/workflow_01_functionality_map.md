@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Workflow 01 converts the bibliographic manifestations retrieved by Workflow 00 into a source-agnostic canonical corpus of scholarly works. It preserves every source manifestation from Lens, Scopus, OpenAlex, AGRICOLA and Web of Science, carries forward previously resolved duplicate decisions, evaluates only the new or changed deduplication state, applies deterministic and model-assisted duplicate adjudication, supports cryptographically locked human review, applies approved metadata repairs, preserves stable work identifiers, and materialises the canonical JSONL consumed by Workflow 02.
+Workflow 01 converts the bibliographic manifestations retrieved by Workflow 00 into a source-agnostic canonical corpus of scholarly works. It preserves every source manifestation, carries forward previously resolved duplicate decisions, evaluates only the new or changed deduplication state, uses guarded cross-source identifiers to reduce avoidable pair scoring, applies deterministic and model-assisted duplicate adjudication, resolves a narrow validated set of title-wrapper/attachment cases, supports cryptographically locked human review, applies approved metadata repairs, preserves stable work identifiers, and materialises the canonical JSONL consumed by Workflow 02.
 
 The workflow is designed as a persistent state machine rather than a succession of independent full rebuilds. A validated full baseline is retained once; subsequent accepted changes are stored as immutable deltas that can be replayed exactly to reconstruct the current Workflow 01 state.
 
@@ -27,13 +27,28 @@ restore previous Workflow 01 state
 preserve untouched sources + append newly observed manifestations
           |
           v
-provenance-safe five-source union
+provenance-safe multi-source union
           |
           v
 incremental duplicate-candidate generation
           |
           v
+guarded generic-identifier registry
+          |
+          v
+safe identifier components + pre-score collapse
+          |
+          v
+expensive scoring of retained representatives
+          |
+          v
 deterministic duplicate classification
+          |
+          v
+inject validated identifier duplicate edges
+          |
+          v
+conservative title-wrapper/attachment resolution
           |
           v
 residual ambiguous pairs
@@ -91,10 +106,14 @@ no human review required            human review required
 | `.github/workflows/workflow_01_resume_after_human_review.yml` | Resumes a paused Workflow 01 run from a compact pre-adjudication checkpoint after locked human decisions and repairs have been supplied. |
 | `scripts/updater/workflow_01_restore_current_state.R` | Reconstructs the latest authoritative Workflow 01 state by restoring the full baseline and replaying the registered delta chain. |
 | `scripts/updater/workflow_01_restore_workflow00_from_zenodo.R` | Restores selected Workflow 00 source outputs from restricted Zenodo storage and verifies the archived inputs. |
-| `scripts/updater/workflow_01_deduplication_build_union.R` | Builds the prior-plus-new five-source manifestation union while preserving prior source state and manifestation identity. |
+| `scripts/updater/workflow_01_deduplication_build_union.R` | Builds the prior-plus-new multi-source manifestation union while preserving prior source state and manifestation identity. |
 | `scripts/updater/workflow_01_deduplication_incremental_candidates.R` | Constructs the normalised comparison representation and generates candidate pairs involving new or changed manifestations. |
-| `scripts/updater/workflow_01_deduplication_incremental_score.R` | Scores the incremental candidate set. |
-| `scripts/updater/workflow_01_deduplication_identifier_rescore.R` | Applies the deterministic duplicate-classification rules to incremental candidates. |
+| `scripts/updater/workflow_01_identifier_assist_build.R` | Extracts and normalises generic cross-source identifiers, applies the empirical never-auto-resolve guard, and emits only validated safe identifier edges involving appended manifestations. |
+| `scripts/updater/workflow_01_identifier_prescore_collapse.R` | Builds provisional components from safe identifier edges and selects one representative pair per external component relation for expensive scoring. |
+| `scripts/updater/workflow_01_deduplication_incremental_score.R` | Scores the retained representative candidate set. |
+| `scripts/updater/workflow_01_deduplication_identifier_rescore.R` | Applies the existing deterministic duplicate-classification rules to scored representatives. |
+| `scripts/updater/workflow_01_identifier_inject_decisions.R` | Re-injects validated safe identifier duplicate edges after deterministic rescore while retaining explicit identifier-assist provenance. |
+| `scripts/updater/workflow_01_title_assist_resolve.R` | Resolves a narrow validated subset of residual review cases using conservative wrapper-title and generic-attachment rules without altering original titles. |
 | `scripts/updater/workflow_01_llm_adjudicate_duplicates.R` | Adjudicates residual ambiguous duplicate candidates using the configured language model and confidence threshold. |
 | `scripts/updater/workflow_01_render_human_review_batch.R` | Renders human-review cases mechanically from the locked queue. |
 | `scripts/updater/workflow_01_validate_human_review_state.R` | Enforces exact queue membership, queue checksum and decision/repair integrity before human decisions can affect clustering. |
@@ -120,7 +139,7 @@ Workflow 01 has two authoritative inputs for an update:
 1. the selected Workflow 00 restricted Zenodo pointer, identifying the exact source harvests to be incorporated; and
 2. the latest Workflow 01 pointer, identifying the previously accepted baseline-plus-delta state.
 
-The production workflow validates both pointers before processing. Workflow 00 source subsets may contain Lens, Scopus, OpenAlex, AGRICOLA and/or Web of Science. Sources not present in the new Workflow 00 run are preserved from the previous Workflow 01 state rather than silently dropped.
+The production workflow validates both pointers before processing. The established baseline contains Lens, Scopus, OpenAlex, AGRICOLA and Web of Science manifestations, while the runtime source catalogue can also accept additional normalised Workflow 00 API sources. Sources not present in the new Workflow 00 run are preserved from the previous Workflow 01 state rather than silently dropped.
 
 ### Manifestation identity and source preservation
 
@@ -134,11 +153,21 @@ Workflow 01 does not repeat an all-pairs comparison of the complete historical c
 
 Bibliographic comparison uses identifiers and bibliographic evidence including titles, authorship, publication year, journal, pagination and abstract information. Shared DOI is evidence but is not treated as sufficient evidence of duplication in isolation.
 
+After ordinary candidate generation, Workflow 01 builds a generic identifier registry using DOI, PMID, PMCID, OpenAlex, Microsoft Academic Graph and CORE identifiers where available. Source-local database record IDs remain provenance identifiers and are not treated as cross-source work identifiers. An empirical never-auto-resolve registry excludes identifier values that showed unsafe reuse or conflicting metadata during validation.
+
+Safe identifier edges require year compatibility plus title similarity thresholds that vary by identifier evidence: at least two independent identifier families require title similarity >= 0.65; DOI-only evidence requires >= 0.90; and PMID-only or OpenAlex/MAG-family evidence requires >= 0.65. These thresholds were developed and validated retrospectively on the frozen corpus and therefore represent observed validation performance rather than guaranteed future precision.
+
+For routine updates, automatic identifier edges are emitted only when at least one manifestation is newly appended. Historical old-old clusters are not silently rewritten. A separate historical repair is intentionally deferred until a future controlled database-expansion migration.
+
+Validated safe identifier edges form provisional components before expensive scoring. Candidate pairs internal to those components are removed, and one representative pair is selected per remaining external component relation using only inexpensive pre-score evidence. The existing expensive scorer and deterministic rescorer then operate unchanged on the reduced representative set. Safe identifier duplicate edges are re-injected afterwards with explicit provenance.
+
 ### Deterministic classification and model adjudication
 
 Deterministic rules resolve cases where the bibliographic evidence is sufficiently strong. Residual ambiguous pairs are passed to the configured language model using the Workflow 01 duplicate-adjudication prompt.
 
 The production controller exposes the model and automatic-promotion confidence threshold as explicit inputs. The default threshold is 0.95. Model-assisted adjudication distinguishes different manifestations of the same publication from distinct outputs arising from the same study.
+
+After identifier injection, a conservative title-assist layer acts only on pairs still classified for manual review. It may resolve exact parent-title matches after stripping validated wrappers such as peer-review, decision-letter, author-response, supplementary-material and additional-file prefixes. Generic file-only attachments such as supplementary files, data sheets, tables and images are resolved automatically only when exact abstract agreement, existing first-author agreement, year compatibility and a direct parent/supplement DOI relation are all present. Original titles are preserved unchanged; stripped titles are derived deduplication evidence only.
 
 Substantive uncertainty and technical failure are not silently coerced into duplicate or non-duplicate states.
 
@@ -150,7 +179,7 @@ This is a blocking identity-resolution gate local to Workflow 01. Unresolved dup
 
 If deduplication adjudication is required, the production run stops downstream promotion and stores a compact pre-adjudication checkpoint. The checkpoint contains only the new source manifestations and the incremental state needed to resume, together with the locked review queue and lineage pointers. The resume workflow restores the previous authoritative state plus this checkpoint, validates the submitted decisions and repairs, and continues from the adjudication boundary without rerunning the completed search or model stages.
 
-This queue is deliberately separate from Workflow 07. Workflow 07 handles downstream content and annotation uncertainties arising after canonicalisation, including relevance-screening, species/geography annotation and topic-coding uncertainties from Workflows 04–06. Workflow 01 duplicate uncertainties are resolved here before canonicalisation and are not forwarded to Workflow 07.
+This queue is deliberately separate from Workflow 08. Workflow 08 handles downstream content and annotation uncertainties arising after canonicalisation, including relevance-screening, species/geography annotation and topic-coding uncertainties from Workflows 04–07. Workflow 01 duplicate uncertainties are resolved here before canonicalisation and are not forwarded to Workflow 08.
 
 ### Metadata-repair actions
 
@@ -194,31 +223,39 @@ The new Workflow 00 archive is restored from restricted Zenodo storage. Only sou
 
 ### 3. Build the provenance-safe source union
 
-The restored historical source state and new Workflow 00 source material are combined into the current five-source manifestation state.
+The restored historical source state and new Workflow 00 source material are combined into the current multi-source manifestation state.
 
-### 4. Generate and score incremental duplicate candidates
+### 4. Generate incremental duplicate candidates and identifier evidence
 
-Candidate generation identifies comparisons required for newly introduced manifestations. Candidate rows are scored and passed through the deterministic duplicate classifier. Previously final pair decisions are preserved.
+Candidate generation identifies comparisons required for newly introduced manifestations. In parallel with the ordinary candidate representation, the identifier-assist layer constructs the generic identifier registry, applies the empirical guard and emits only safe identifier edges involving appended manifestations.
 
-### 5. Adjudicate residual candidate pairs
+### 5. Collapse the expensive scoring workload
+
+Safe identifier edges define provisional components. Candidate pairs internal to those components are removed, and a deterministic cheap-feature selector retains one representative per remaining external component relation. Only those representatives enter the unchanged expensive scorer and deterministic rescorer.
+
+### 6. Re-inject safe identifier edges and apply title assistance
+
+After deterministic rescore, the validated safe identifier edges are re-injected as duplicate decisions with explicit provenance. The title-assist resolver then acts only on remaining manual-review pairs and may resolve validated wrapper-title or strongly corroborated generic-attachment cases. The resulting assisted incremental decision table is the state used for cluster reconstruction and, if human review is required, is the state persisted in the compact checkpoint.
+
+### 7. Adjudicate residual candidate pairs
 
 Residual ambiguous cases are submitted to the configured LLM. Cases eligible for automatic promotion are incorporated at the configured confidence threshold. Remaining cases are routed to the Workflow 01 deduplication-adjudication queue.
 
-### 6. Pause and resume for deduplication adjudication when necessary
+### 8. Pause and resume for deduplication adjudication when necessary
 
 When the Workflow 01 deduplication-adjudication queue is non-empty, Workflow 01 writes a compact checkpoint and restricted Zenodo pointer and stops before final publication.
 
 The resume workflow validates the completed duplicate-identity decisions and repair ledger against the locked queue checksum, reconstructs the exact pre-adjudication state, and continues without repeating completed upstream work. No unresolved duplicate case is deferred to Workflow 07.
 
-### 7. Reconstruct stable work clusters
+### 9. Reconstruct stable work clusters
 
 Final duplicate edges are applied and work clusters are reconstructed. Existing IDs are retained where possible, new IDs are assigned deterministically, mergers generate aliases, and prohibited historical splits fail validation.
 
-### 8. Apply cumulative metadata repairs and materialise canonical JSONL
+### 10. Apply cumulative metadata repairs and materialise canonical JSONL
 
 Approved repair and abstract-strip state is merged cumulatively with the previous state. The canonical builder then writes one JSON object per work and retains the constituent source manifestations inside each work record.
 
-### 9. Build an immutable delta
+### 11. Build an immutable delta
 
 After canonical materialisation, Workflow 01 compares the target state against the previous reconstructed state and writes only differences:
 
@@ -232,7 +269,7 @@ After canonical materialisation, Workflow 01 compares the target state against t
 - abstract-strip-action upserts; and
 - target manifests and lineage metadata.
 
-### 10. Replay the delta before publication
+### 12. Replay the delta before publication
 
 A delta is not accepted merely because it can be constructed. Workflow 01 immediately replays it onto the previous state and requires the replayed result to match the target.
 
@@ -254,7 +291,10 @@ Workflow 01 records, where applicable:
 - source namespace and source-native identifiers;
 - source-manifestation counts by source;
 - candidate-generation state;
+- generic identifier registry/coverage and guard hits;
+- safe identifier edges and pre-score component-collapse audit;
 - deterministic rule classifications;
+- identifier-injection and title-assist provenance;
 - LLM model, confidence and decision state;
 - human review-case IDs;
 - locked queue SHA-256;
@@ -337,13 +377,14 @@ The Workflow 01 → Workflow 02 interface is considered valid only when Workflow
 
 ## Methods text for research reporting
 
-> **Workflow 01: multi-source deduplication and canonicalisation.** Search results from Lens, Scopus, OpenAlex, AGRICOLA and Web of Science were reconciled using an R-based persistent deduplication workflow. Source-native record identities and previously resolved duplicate decisions were preserved across updates, so newly retrieved manifestations were compared incrementally rather than rebuilding historical deduplication state. Bibliographic candidate pairs were assessed using identifiers and publication metadata, with deterministic rules resolving well-supported cases and residual ambiguity subjected to language-model adjudication and, where required, a checksum-locked Workflow 01 deduplication-adjudication gate. Human adjudication could also specify auditable manifestation-level metadata repairs. Final duplicate decisions were converted into stable work clusters that retained all constituent database manifestations and preserved existing work identifiers across updates. The source-agnostic canonical JSONL was then materialised deterministically. After the initial complete state was archived, subsequent accepted changes were stored as immutable deltas. Every delta was replayed against the previous authoritative state before publication and was required to reproduce the target pair state, cluster state and canonical JSONL checksum exactly. Full states, deltas and human-review checkpoints were retained as restricted Zenodo records with repository-held lineage pointers and checksums.
+> **Workflow 01: multi-source deduplication and canonicalisation.** Search results from multiple bibliographic sources were reconciled using an R-based persistent deduplication workflow. Source-native record identities and previously resolved duplicate decisions were preserved across updates, so newly retrieved manifestations were compared incrementally rather than rebuilding historical deduplication state. After ordinary candidate generation, generic cross-source identifiers (DOI, PMID, PMCID, OpenAlex, MAG and CORE) were normalised and screened through an empirical never-auto-resolve guard. Conservatively validated identifier edges were used to collapse the expensive scoring workload to representative component relations before the unchanged pair scorer and deterministic classifier were applied. Safe identifier edges were then re-injected, and a narrow title-assist layer resolved only validated wrapper-title or strongly corroborated generic-attachment cases. Residual ambiguity was subjected to language-model adjudication and, where required, a checksum-locked Workflow 01 deduplication-adjudication gate. Human adjudication could also specify auditable manifestation-level metadata repairs. Final duplicate decisions were converted into stable work clusters that retained all constituent database manifestations and preserved existing work identifiers across updates. The source-agnostic canonical JSONL was then materialised deterministically. After the initial complete state was archived, subsequent accepted changes were stored as immutable deltas. Every delta was replayed against the previous authoritative state before publication and was required to reproduce the target pair state, cluster state and canonical JSONL checksum exactly. Full states, deltas and human-review checkpoints were retained as restricted Zenodo records with repository-held lineage pointers and checksums.
 
 ## Reporting status
 
 Workflow 01 can be considered validated at the baseline/canonicalisation level when:
 
 - the full five-source baseline is checksum-verified;
+- the identifier-assist guard, thresholds, pre-score collapse and title-assist rules have passed their frozen-corpus safety/equivalence validations;
 - no unresolved pair decisions remain;
 - stable work-ID behaviour has passed preservation, merge and split-integrity tests;
 - all approved metadata repairs are uniquely mapped and applied;
@@ -354,6 +395,6 @@ Workflow 01 can be considered validated at the baseline/canonicalisation level w
 - durable Zenodo lineage and repository pointers are available; and
 - the canonical JSONL is available for the Workflow 02 handoff.
 
-As of full validation run `36128255337`, those baseline/canonicalisation conditions are satisfied for the 90,137-manifestation state and its approved metadata repairs.
+As of full validation run `36128255337`, the original baseline/canonicalisation conditions are satisfied for the 90,137-manifestation state and its approved metadata repairs. The later identifier/title-assist architecture was validated separately on the frozen 118,527-manifestation update corpus: expensive scoring decisions were reduced from 503,245 to 272,169 (45.9172%), all retained scored representatives reproduced the frozen classification/rule state exactly, 26 of 285 residual manual-review pairs were resolved by the conservative title-assist rules, no baseline clusters split, no unsupported new clusters merged, and 0/364 known unsafe/risky pairs merged after transitive closure. These are retrospective frozen-corpus validation results, not a guarantee of future precision. Detailed evidence and limitations are recorded in `docs/deduplication/workflow01-identifier-title-assist.md`.
 
-End-to-end validation of future Workflow 00 update modes is intentionally deferred and should be performed independently across the complete pipeline once downstream workflows have been finalised.
+Historical old-old repair remains deliberately deferred until the planned EBSCO database expansion, when it can be performed as a separately audited migration rather than silently during routine updates.
