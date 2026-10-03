@@ -1,0 +1,63 @@
+name: TEMP validate W00 W01 generic handoff docs
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w00_w01_generic_handoff.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Parse generic restore and validate current accepted state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e "parse(file='scripts/updater/workflow_01_restore_workflow00_state.R')"
+          Rscript scripts/updater/workflow_00_validate_state.R --state docs/search_record/state/current.json
+          grep -Fq 'expected_sources <- names(x$sources)' scripts/updater/workflow_01_restore_workflow00_state.R
+          ! grep -Fq 'expected_sources <- c("lens","scopus","openalex","agricola","wos")' scripts/updater/workflow_01_restore_workflow00_state.R
+          echo "PASS: current accepted W00 state still validates and W01 state restoration is source-generic"
+
+      - name: Validate production runtime source-catalogue path
+        shell: bash
+        run: |
+          set -euo pipefail
+          P=.github/workflows/workflow_01_production.yml
+          grep -Fq '# Additional API sources pass through generically when W00 emits normalized records.jsonl.' "$P"
+          grep -Fq 'p$sources[[s]] <- list(' "$P"
+          grep -Fq 'kind="workflow00_state"' "$P"
+          grep -Fq 'prepared_path=file.path("current_sources",s,"records.jsonl")' "$P"
+          echo "PASS: W01 production dynamically registers additional normalized W00 API sources"
+
+      - name: Validate documentation reflects current architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '26 unique API sources' docs/reporting/workflow_00/workflow_00_functionality_map.md
+          grep -Fq '17 independently identified EBSCO databases' docs/reporting/workflow_00/workflow_00_functionality_map.md
+          grep -Fq 'current accepted baseline still contains the original five API sources' docs/reporting/workflow_00/workflow_00_functionality_map.md
+          grep -Fq '### EBSCO API sources' docs/deduplication/workflow00-workflow01-handoff-contract.md
+          grep -Fq 'runtime catalogue' docs/deduplication/workflow00-workflow01-handoff-contract.md
+          grep -Fq 'Fortnightly updating' README.md
+          echo "PASS: W00 and W00-to-W01 documentation matches grouped EBSCO architecture and current baseline status"
