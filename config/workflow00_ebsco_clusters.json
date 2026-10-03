@@ -1,0 +1,54 @@
+{
+  "schema": "living-evidence-map-workflow00-ebsco-clusters-v1",
+  "status": "test_scaffold",
+  "catalogue_complete": false,
+  "note": "Cluster labels are agreed. Membership is populated only with database codes verified directly against the current EBSCO EIT profile; additional memberships must be added from verified catalogue/profile evidence rather than guessed.",
+  "clusters": {
+    "core_multidisciplinary": {
+      "label": "Core multidisciplinary",
+      "databases": []
+    },
+    "health_medicine": {
+      "label": "Health & medicine",
+      "databases": []
+    },
+    "environment_agriculture": {
+      "label": "Environment & agriculture",
+      "databases": []
+    },
+    "social_sciences": {
+      "label": "Social sciences",
+      "databases": [
+        {
+          "code": "psyh",
+          "title": "APA PsycInfo",
+          "verification": "successful EIT SearchService response"
+        }
+      ]
+    },
+    "education": {
+      "label": "Education",
+      "databases": []
+    },
+    "regional": {
+      "label": "Regional",
+      "databases": []
+    },
+    "media_communication": {
+      "label": "Media & communication",
+      "databases": []
+    },
+    "humanities": {
+      "label": "Humanities",
+      "databases": []
+    },
+    "sport_tourism": {
+      "label": "Sport/tourism",
+      "databases": []
+    },
+    "grey_literature_preprints": {
+      "label": "Grey literature & preprints",
+      "databases": []
+    }
+  }
+}
