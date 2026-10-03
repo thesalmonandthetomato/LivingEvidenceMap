@@ -46,9 +46,9 @@ The current update is stored under `data/updates/2026-08-13_lens/`. It reproduce
 
 For this refresh, established validated decisions and methods are preserved where full-corpus regeneration is unnecessary. LLM-dependent stages retain small API integration/smoke tests to verify that the configured interfaces remain operational. Update-specific inputs, outputs, review queues and validation artefacts are retained for provenance.
 
-## Weekly updating
+## Fortnightly updating
 
-The map is designed for weekly incremental updating. Each scheduled update retrieves the new Lens increment with a seven-day overlap to reduce the risk of records being missed because of indexing or retrieval delays. New records pass through the same deduplication, relevance-screening, species, geography, adjudication, human-review, validation and topic-classification stages. Automated validation is performed before promotion. Where unresolved screening, annotation, topic or technical review items remain, the candidate update is held until the relevant exceptions have been resolved. Validated updates are then incorporated into the master dataset and update-specific provenance and audit outputs are archived.
+The map is designed for fortnightly incremental updating. Workflow 00 resolves the source set from the accepted full-run selection and applies source-specific update mechanisms. Where a reliable indexing/update-date filter has been validated it is used; EBSCO databases currently rerun the complete database-specific query and rely on exact accession-number reconciliation to retain only unseen manifestations downstream. New records pass through the same deduplication, relevance-screening, species, geography, adjudication, human-review, validation and topic-classification stages. Automated validation is performed before promotion. Where unresolved screening, annotation, topic or technical review items remain, the candidate update is held until the relevant exceptions have been resolved. Validated updates are then incorporated into the master dataset and update-specific provenance and audit outputs are archived.
 
 ## Repository structure
 
