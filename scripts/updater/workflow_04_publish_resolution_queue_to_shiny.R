@@ -4,7 +4,7 @@ args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 queue_path<-arg("--queue");manifest_path<-arg("--manifest");highlight_path<-arg("--highlight-terms")
 sheet_id<-arg("--sheet-id",Sys.getenv("LEM_GOOGLE_SHEET_ID"));credential<-arg("--credential",Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"))
-tab<-arg("--queue-tab","queue_w04_validation_active");receipt_path<-arg("--receipt","")
+tab<-arg("--queue-tab","queue_w04_resolution_active");receipt_path<-arg("--receipt","")
 if(any(vapply(list(queue_path,manifest_path,highlight_path,sheet_id,credential),is.null,logical(1))))stop("Required W04 resolution publisher argument missing",call.=FALSE)
 if(!file.exists(credential))stop("Google credential file missing",call.=FALSE)
 
