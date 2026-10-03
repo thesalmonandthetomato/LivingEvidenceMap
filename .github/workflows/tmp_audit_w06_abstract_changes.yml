@@ -1,0 +1,89 @@
+name: TEMP audit W06 abstract-change queue
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_audit_w06_abstract_changes.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Restore prior and current W04 retained corpora
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
+            --pointer docs/workflow04/zenodo/run-36227737500.json \
+            --output-dir inputs/prior_w04
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
+            --pointer docs/workflow04/zenodo/run-37051672356.json \
+            --output-dir inputs/current_w04
+
+      - name: Count title/abstract transitions relevant to W06
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          scalar <- function(x) {
+            if(is.null(x) || !length(x)) return("")
+            z <- as.character(x[[1L]])
+            if(is.na(z)) "" else trimws(z)
+          }
+          read_can <- function(root) {
+            p <- list.files(root, pattern="^workflow04_included_canonical\\.jsonl$", recursive=TRUE, full.names=TRUE)
+            stopifnot(length(p)==1L)
+            x <- readLines(p, warn=FALSE, encoding="UTF-8")
+            x <- x[nzchar(trimws(x))]
+            rr <- lapply(x, fromJSON, simplifyVector=FALSE)
+            data.frame(
+              record_id=vapply(rr,function(r)scalar((r$identity%||%list())$record_id),character(1)),
+              title=vapply(rr,function(r)scalar((r$canonical%||%list())$title),character(1)),
+              abstract=vapply(rr,function(r)scalar((r$canonical%||%list())$abstract),character(1)),
+              stringsAsFactors=FALSE
+            )
+          }
+          old <- read_can("inputs/prior_w04")
+          cur <- read_can("inputs/current_w04")
+          stopifnot(!anyDuplicated(old$record_id), !anyDuplicated(cur$record_id))
+          common <- intersect(old$record_id,cur$record_id)
+          oi <- match(common,old$record_id); ci <- match(common,cur$record_id)
+          old_abs <- old$abstract[oi]; cur_abs <- cur$abstract[ci]
+          old_title <- old$title[oi]; cur_title <- cur$title[ci]
+          gained_abs <- !nzchar(old_abs) & nzchar(cur_abs)
+          lost_abs <- nzchar(old_abs) & !nzchar(cur_abs)
+          changed_abs <- old_abs != cur_abs
+          changed_title <- old_title != cur_title
+          changed_either <- changed_abs | changed_title
+          cat(sprintf("CURRENT_RETAINED=%d\n",nrow(cur)))
+          cat(sprintf("PRIOR_RETAINED=%d\n",nrow(old)))
+          cat(sprintf("OVERLAP_RETAINED=%d\n",length(common)))
+          cat(sprintf("NEW_RETAINED_IDS=%d\n",length(setdiff(cur$record_id,old$record_id))))
+          cat(sprintf("PRIOR_RETAINED_NO_LONGER_CURRENT=%d\n",length(setdiff(old$record_id,cur$record_id))))
+          cat(sprintf("GAINED_ABSTRACT=%d\n",sum(gained_abs)))
+          cat(sprintf("LOST_ABSTRACT=%d\n",sum(lost_abs)))
+          cat(sprintf("ABSTRACT_CHANGED_ANY=%d\n",sum(changed_abs)))
+          cat(sprintf("TITLE_CHANGED_ANY=%d\n",sum(changed_title)))
+          cat(sprintf("TITLE_OR_ABSTRACT_CHANGED=%d\n",sum(changed_either)))
+          cat(sprintf("EXPECTED_W06_QUEUE=%d\n",length(setdiff(cur$record_id,old$record_id))+sum(changed_either)))
