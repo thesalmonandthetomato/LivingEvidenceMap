@@ -4,7 +4,7 @@ args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 queue_path<-arg("--queue");manifest_path<-arg("--manifest");highlight_path<-arg("--highlight-terms")
 sheet_id<-arg("--sheet-id",Sys.getenv("LEM_GOOGLE_SHEET_ID"));credential<-arg("--credential",Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"))
-tab<-arg("--queue-tab","queue_w04_validation_active")
+tab<-arg("--queue-tab","queue_w04_validation_active");receipt_path<-arg("--receipt","")
 if(any(vapply(list(queue_path,manifest_path,highlight_path,sheet_id,credential),is.null,logical(1))))stop("Required W04 resolution publisher argument missing",call.=FALSE)
 if(!file.exists(credential))stop("Google credential file missing",call.=FALSE)
 
@@ -49,5 +49,12 @@ verify<-verify[,req,drop=FALSE]
 if(!identical(as.character(verify$review_case_id),ids))stop("Published W04 resolution case order mismatch",call.=FALSE)
 reconstructed<-paste0(paste(verify$case_json,collapse="\n"),"\n")
 if(!identical(digest(reconstructed,algo="sha256",serialize=FALSE),sha))stop("Published W04 resolution queue reconstruction SHA mismatch",call.=FALSE)
+if(nzchar(receipt_path)){
+  dir.create(dirname(receipt_path),recursive=TRUE,showWarnings=FALSE)
+  writeLines(toJSON(list(schema="living-evidence-map-workflow04-resolution-publish-v1",status="PASS",
+    source_run_id=source_run_id,batch_id=batch_id,queue_sha256=sha,records=length(lines),
+    queue_tab=tab,published_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")),
+    auto_unbox=TRUE,pretty=TRUE),receipt_path,useBytes=TRUE)
+}
 cat(sprintf("PASS: published W04 resolution queue: records=%d batch=%s sha=%s\n",length(lines),batch_id,sha))
 cat(sprintf("BATCH_ID=%s\nQUEUE_SHA256=%s\n",batch_id,sha))
