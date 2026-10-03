@@ -1,0 +1,17 @@
+name: TEMP run current W07 from validated W06 handoff
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w07_current_37114864202.yml'
+
+jobs:
+  run-w07:
+    uses: ./.github/workflows/workflow_07_production.yml
+    with:
+      workflow06_pointer_path: docs/workflow06/zenodo/run-37114864202.json
+      prior_workflow07_pointer_path: docs/workflow07/zenodo/run-36772700615.json
+      publish: true
+    secrets: inherit
