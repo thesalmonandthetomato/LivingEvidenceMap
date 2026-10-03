@@ -30,6 +30,10 @@ on:
         required: false
         default: ""
         type: string
+      max_records:
+        required: false
+        default: "all"
+        type: string
 
 permissions:
   contents: read
@@ -71,7 +75,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c("httr2","jsonlite","digest"))
+        run: install.packages(c("httr2","jsonlite","digest","xml2"))
 
       - name: Run source search
         env:
@@ -88,6 +92,7 @@ jobs:
           WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
           EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
           EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+          MAX_RECORDS: ${{ inputs.max_records }}
         shell: bash
         run: |
           set -euo pipefail
@@ -153,6 +158,7 @@ jobs:
                 --query "$SEARCH_QUERY" \
                 --config config/workflow00_ebsco_sources.json \
                 --page-size 100 \
+                --max-records "$MAX_RECORDS" \
                 --output-dir outputs/updater/source_child
               ;;
           esac
