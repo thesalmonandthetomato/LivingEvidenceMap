@@ -54,9 +54,23 @@ queue_sha <- digest(file=queue_path,algo="sha256",serialize=FALSE)
 batch_id <- if(nzchar(source_run_id)) paste0("w08-run-",source_run_id) else paste0("w08-annotation-",substr(queue_sha,1,12))
 
 species_config <- fromJSON(species_config_path,simplifyVector=FALSE)
-species_labels <- names(species_config$code_map %||% list())
+reference_dictionary_path <- as.character(species_config$reference_dictionary_path %||% "")
+if (!nzchar(reference_dictionary_path) || !file.exists(reference_dictionary_path)) {
+  stop("Species config reference_dictionary_path is missing or unavailable",call.=FALSE)
+}
+species_reference <- read_csv(reference_dictionary_path,show_col_types=FALSE,progress=FALSE)
+required_species_cols <- c("preferred_name","is_farmed_candidate")
+if (!all(required_species_cols %in% names(species_reference))) {
+  stop("Species reference dictionary lacks preferred_name/is_farmed_candidate",call.=FALSE)
+}
+candidate_flag <- toupper(trimws(as.character(species_reference$is_farmed_candidate)))
+species_labels <- unique(trimws(as.character(
+  species_reference$preferred_name[candidate_flag == "TRUE"]
+)))
 species_labels <- species_labels[nzchar(species_labels)]
-if (!length(species_labels)) stop("Species config contains no code-map labels",call.=FALSE)
+if (!length(species_labels)) {
+  stop("Species reference dictionary contains no accepted farmed-species preferred names",call.=FALSE)
+}
 
 ontology <- read_csv(ontology_path,show_col_types=FALSE,progress=FALSE)
 if (!all(c("path_id","hierarchy_path") %in% names(ontology))) stop("Topic ontology lacks path_id/hierarchy_path",call.=FALSE)
