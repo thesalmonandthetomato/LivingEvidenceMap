@@ -24,6 +24,16 @@ The canonical workflow numbering is:
 
 Dataset construction and publication occur from validated accepted workflow states. The authoritative registered Zenodo checkpoint remains the durable source of truth between major stages.
 
+### Workflow 01 deduplication architecture
+
+Workflow 01 is a persistent multi-source deduplication and canonicalisation state machine. It preserves source-native manifestations and prior pair decisions, generates only the incremental comparisons required by newly appended manifestations, and retains stable work identifiers across accepted updates.
+
+After ordinary candidate generation, generic cross-source identifiers (DOI, PMID, PMCID, OpenAlex, MAG and CORE) are normalised and passed through an empirical never-auto-resolve guard. Conservatively validated identifier edges are used to collapse the expensive scoring workload before the existing scorer and deterministic rescorer run. The validated identifier edges are then re-injected, followed by a narrow title-assist layer for well-supported wrapper-title and generic-attachment cases. Remaining ambiguous publication-identity cases proceed to model adjudication and, if still unresolved, the blocking Workflow 01 human-review gate.
+
+Routine updates do not automatically rewrite historical old-old clusters. Historical repair is deferred to a separately audited migration, currently planned alongside the addition of further EBSCO databases.
+
+The detailed architecture, thresholds, validation results and limitations are documented in `docs/reporting/workflow_01/workflow_01_functionality_map.md` and `docs/deduplication/workflow01-identifier-title-assist.md`.
+
 
 ## Current Lens refresh
 
