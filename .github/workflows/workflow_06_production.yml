@@ -96,7 +96,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('dplyr','readr','jsonlite','digest','httr2','tibble','stringi','fs','here'))
+        run: install.packages(c('dplyr','readr','jsonlite','digest','httr2','tibble','stringi','fs','here','glmnet','purrr','quanteda','stringdist','stringr','tidyr','yaml'))
 
       - name: Parse W06 implementation
         shell: Rscript {0}
