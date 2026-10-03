@@ -48,20 +48,17 @@ current_fp<-setNames(current$topic_input_sha256,current$record_id)
 prior_fp<-if(nrow(prior_records))setNames(as.character(prior_records$topic_input_sha256),prior_records$record_id)else character()
 
 if(mode=="update"&&!reuse_allowed){
-  reuse_ids<-character()
-  queue_ids<-current$record_id
-  changed_ids<-intersect(current$record_id,prior_ids)
-  new_ids<-setdiff(current$record_id,prior_ids)
-  reuse_reason<-"ontology_or_prompt_changed"
+  stop("Prior W07 state uses a different ontology or prompt; existing topic assessments must not be silently reclassified",call.=FALSE)
 }else{
   known<-intersect(current$record_id,prior_ids)
   changed_ids<-known[current_fp[known]!=prior_fp[known]]
-  reuse_ids<-setdiff(known,changed_ids)
+  reuse_ids<-known
   new_ids<-setdiff(current$record_id,prior_ids)
-  queue_ids<-c(new_ids,changed_ids)
-  reuse_reason<-"stable_record_id_title_abstract_and_model_contract"
+  queue_ids<-new_ids
+  reuse_reason<-"existing_record_id_has_prior_topic_assessment"
 }
 
+if(length(intersect(queue_ids,prior_ids)))stop("W07 invariant failed: previously assessed record queued for fresh topic coding",call.=FALSE)
 queue<-current |> filter(record_id%in%queue_ids)
 reused_records<-current |> filter(record_id%in%reuse_ids)
 reused_scores<-if(length(reuse_ids))prior_scores |> filter(record_id%in%reuse_ids) else prior_scores[0,,drop=FALSE]
@@ -71,8 +68,7 @@ write_csv(reused_records,file.path(output_dir,"reused_topic_records.csv"),na="")
 write_csv(reused_scores,file.path(output_dir,"reused_topic_pathway_scores.csv"),na="")
 write_csv(current,file.path(output_dir,"current_topic_records.csv"),na="")
 write_csv(tibble(record_id=queue$record_id,
-                 queue_reason=ifelse(queue$record_id%in%new_ids,"new_record_id",
-                               ifelse(reuse_allowed,"changed_title_abstract","ontology_or_prompt_changed")),
+                 queue_reason=rep("new_record_id",nrow(queue)),
                  topic_input_sha256=queue$topic_input_sha256),
           file.path(output_dir,"topic_screen_queue_manifest.csv"),na="")
 
@@ -83,6 +79,8 @@ manifest<-list(
   new_record_ids=length(new_ids),changed_title_abstract=length(changed_ids),
   prior_records_no_longer_current=length(setdiff(prior_ids,current$record_id)),
   reuse_allowed=reuse_allowed,reuse_basis=reuse_reason,
+  previously_assessed_records_never_requeued=TRUE,
+  changed_title_abstract_reused=length(changed_ids),
   fingerprint_fields=c("title","abstract"),
   ontology_sha256=ontology_sha,prompt_sha256=prompt_sha,
   current_input_sha256=digest(file=current_path,algo="sha256",serialize=FALSE),
