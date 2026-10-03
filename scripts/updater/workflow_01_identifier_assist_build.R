@@ -209,36 +209,22 @@ fwrite(shared,file.path(output_dir,"shared_identifier_groups.csv"))
 reg_unique <- unique(reg[,.(manifestation_key,source,identifier_type,identifier_value)])
 shared_reg <- reg_unique[shared,on=.(identifier_type,identifier_value),nomatch=0L]
 if (nrow(shared_reg)) {
-  shared_reg[,group_key:=paste(identifier_type,identifier_value,sep="::")]
-  group_keys <- unique(shared_reg$group_key)
-  chunk_size <- 2500L
-  pair_chunks <- vector("list",ceiling(length(group_keys)/chunk_size))
-  for (ci in seq_along(pair_chunks)) {
-    lo_i <- (ci-1L)*chunk_size+1L
-    hi_i <- min(ci*chunk_size,length(group_keys))
-    sub <- shared_reg[group_key %in% group_keys[lo_i:hi_i]]
-    left <- sub[,.(identifier_type,identifier_value,
-                   record_i=manifestation_key,source_i=source)]
-    right <- sub[,.(identifier_type,identifier_value,
-                    record_j=manifestation_key,source_j=source)]
-    z <- merge(
-      left,right,
-      by=c("identifier_type","identifier_value"),
-      allow.cartesian=TRUE,
-      sort=FALSE
-    )
-    z <- z[source_i != source_j & record_i != record_j]
-    z[, `:=`(
-      lo=pmin(record_i,record_j),
-      hi=pmax(record_i,record_j)
-    )]
-    pair_chunks[[ci]] <- unique(z[,.(record_i=lo,record_j=hi,identifier_type,identifier_value)])
-    rm(sub,left,right,z)
-    gc(verbose=FALSE)
-  }
-  raw_pairs <- unique(rbindlist(pair_chunks,use.names=TRUE,fill=TRUE))
-  rm(pair_chunks)
-  gc(verbose=FALSE)
+  left <- shared_reg[,.(identifier_type,identifier_value,
+                       record_i=manifestation_key,source_i=source)]
+  right <- shared_reg[,.(identifier_type,identifier_value,
+                        record_j=manifestation_key,source_j=source)]
+  raw_pairs <- merge(
+    left,right,
+    by=c("identifier_type","identifier_value"),
+    allow.cartesian=TRUE,
+    sort=FALSE
+  )
+  raw_pairs <- raw_pairs[source_i != source_j & record_i != record_j]
+  raw_pairs[, `:=`(
+    lo=pmin(record_i,record_j),
+    hi=pmax(record_i,record_j)
+  )]
+  raw_pairs <- unique(raw_pairs[,.(record_i=lo,record_j=hi,identifier_type,identifier_value)])
 } else {
   raw_pairs <- data.table(
     record_i=character(),record_j=character(),
