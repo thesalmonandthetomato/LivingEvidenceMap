@@ -98,6 +98,19 @@ wos_query <- if (run_type=="expansion") {
   wos_new_block
 }
 
+ebsco_field_block <- function(terms) {
+  paste0(
+    "((TI (",terms,")) OR ",
+    "(AB (",terms,")) OR ",
+    "(SU (",terms,")))"
+  )
+}
+ebsco_query <- if (run_type=="expansion") {
+  paste0("(",ebsco_field_block(species)," AND ",ebsco_field_block(farm),") NOT ",ebsco_field_block(old_farm))
+} else {
+  paste0(ebsco_field_block(species)," AND ",ebsco_field_block(farm))
+}
+
 # Fortnightly date windows are source-specific. Only fields whose day-level semantics
 # have been explicitly verified are encoded here.
 today <- Sys.Date()
@@ -129,7 +142,8 @@ queries <- list(
   ethos=ethos_query,
   cba=cba_query,
   epmc_preprints=epmc_preprints_query,
-  wos=wos_query
+  wos=wos_query,
+  ebsco=ebsco_query
 )
 
 update_methods <- list(
@@ -186,6 +200,12 @@ update_methods <- list(
     field_scope=c("title","abstract","author_keywords"),
     window_rule="modifiedTimeSpan from 14 days before run date through run date",
     limitation="Date window is passed as an API parameter rather than embedded in the query string; exact WoS UID reconciliation removes already-known records."
+  ),
+  ebsco=list(
+    retrieval_filter="full query rerun with accession-number reconciliation",
+    field_scope=c("title","abstract","subject_terms"),
+    window_rule="no date restriction; exact EBSCO accession reconciliation determines newly observed manifestations",
+    limitation="EBSCO EIT date/indexing semantics are not used until separately validated; routine updates therefore trade additional retrieval for reproducible accession-level delta detection."
   )
 )
 
@@ -198,7 +218,8 @@ support <- list(
   ethos=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   cba=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
   epmc_preprints=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
-  wos=list(full=TRUE,fortnightly=TRUE,expansion=TRUE)
+  wos=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
+  ebsco=list(full=TRUE,fortnightly=TRUE,expansion=TRUE)
 )
 
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
