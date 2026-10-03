@@ -7,6 +7,10 @@ on:
     paths:
       - '.github/workflows/tmp_run_w07_current_37114864202.yml'
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   run-w07:
     uses: ./.github/workflows/workflow_07_production.yml
