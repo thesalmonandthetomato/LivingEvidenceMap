@@ -1,0 +1,21 @@
+name: TEMP run current W05 from validated W04 handoff
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w05_current_37051672356.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  run-w05:
+    uses: ./.github/workflows/workflow_05_production.yml
+    with:
+      workflow04_pointer_path: 'docs/workflow04/zenodo/run-37051672356.json'
+      lean_pointer_path: 'docs/compaction/zenodo/run-37016080508.json'
+      publish: true
+    secrets: inherit
