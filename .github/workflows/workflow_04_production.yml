@@ -124,6 +124,8 @@ jobs:
           parse(file='scripts/updater/workflow_04_luna_consensus.R')
           parse(file='scripts/updater/workflow_04_merge_consensus.R')
           parse(file='scripts/updater/workflow_04_merge_incremental.R')
+          parse(file='scripts/updater/workflow_04_build_resolution_queue.R')
+          parse(file='scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R')
           parse(file='scripts/updater/workflow_04_archive_state_to_zenodo.R')
           cat('PASS: W04 production scripts parse\n')
 
@@ -436,6 +438,49 @@ jobs:
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"
           echo "Workflow 04 status: $STATUS"
 
+      - name: Build Shiny resolution queue when human review is required
+        if: ${{ steps.status.outputs.status == 'HUMAN_REVIEW_REQUIRED' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow04_resolution
+          Rscript scripts/updater/workflow_04_build_resolution_queue.R \
+            --canonical prepared/inputs/current/canonical_lean.jsonl \
+            --human-review outputs/workflow04_final/workflow04_human_review_queue.jsonl \
+            --output-dir outputs/workflow04_resolution \
+            --source-run-id "$GITHUB_RUN_ID"
+
+      - name: Publish W04 resolution queue to Shiny
+        if: ${{ steps.status.outputs.status == 'HUMAN_REVIEW_REQUIRED' }}
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R \
+            --queue outputs/workflow04_resolution/workflow04_resolution_queue.jsonl \
+            --manifest outputs/workflow04_resolution/workflow04_resolution_queue_manifest.json \
+            --highlight-terms user_input/workflow04_screening_highlight_terms.csv \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --receipt outputs/workflow04_resolution/shiny_publish_receipt.json
+          BATCH_ID="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$batch_id)')"
+          QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$queue_sha256)')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "04" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status published \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --message "Workflow 04 model screening paused for human conflict resolution."
+
       - name: Publish resolved W04 state
         if: ${{ steps.status.outputs.status == 'PASS' && inputs.publish == true }}
         env:
@@ -499,6 +544,7 @@ jobs:
           name: workflow04-production-${{ github.run_id }}
           path: |
             outputs/workflow04_final/
+            outputs/workflow04_resolution/
             outputs/workflow04_zenodo/
           retention-days: 90
           if-no-files-found: error
