@@ -11,7 +11,7 @@ This document is intended to serve two purposes:
 
 ## Functionality map
 
-Functionally, Workflow 00 has an independent scoping pathway and a production harvesting pathway. The scoping pathway is manually dispatched and never feeds Workflow 01. The production pathway comprises one parent orchestrator plus one reusable source handler; the parent launches the handler independently for Lens, Scopus, OpenAlex, AGRICOLA, PubMed/MEDLINE, EThOS, Chinese Biological Abstracts, Europe PMC preprints and Web of Science, and the handler invokes the appropriate source-specific R ingestion code.
+Functionally, Workflow 00 has an independent scoping pathway and a production harvesting pathway. The scoping pathway is manually dispatched and never feeds Workflow 01. The production pathway comprises one parent orchestrator plus one reusable source handler. Operators select one or more coverage groups; the resolver expands those groups to a de-duplicated set of individual sources, and the parent launches the handler once for each resolved source. The validated catalogue currently resolves all ten groups to 26 unique API sources: nine non-EBSCO sources plus 17 individually identified EBSCO databases. Each EBSCO database remains a separate provenance source.
 
 ```text
 INDEPENDENT SEARCH SCOPING
@@ -39,15 +39,15 @@ workflow_00_search_orchestrator.yml
   |
   |-- validate strategy + construct database-specific search strings
   |
-  |-- Lens ------|
-  |-- Scopus ----|
-  |-- OpenAlex --|--> _workflow_00_orchestrated_source_child.yml
-  |-- AGRICOLA -----------|
-  |-- PubMed/MEDLINE ------|
-  |-- EThOS ---------------|
-  |-- Chinese Biol. Abs. --|--> _workflow_00_orchestrated_source_child.yml
-  |-- Europe PMC preprints-|          |
-  |-- WoS -----------------|          '--> source-specific R ingestion
+  |-- resolve selected coverage groups
+  |       |
+  |       '--> 26 unique source slugs when all groups are selected
+  |             |-- 9 non-EBSCO API sources
+  |             '-- 17 database-specific EBSCO sources
+  |
+  |-- dynamic source matrix --> _workflow_00_orchestrated_source_child.yml
+  |                                  |
+  |                                  '--> source-specific R ingestion
   |
   |-- optional expansion reconciliation by native source ID
   |-- archive search documentation in repository
@@ -67,9 +67,14 @@ workflow_00_search_orchestrator.yml
 | `.github/workflows/workflow_00_search_scoping.yml` | Standalone manually dispatched scoping controller. It validates, counts, renders the report and uploads only count/report artefacts. |
 | `docs/reporting/workflow_00/search_scoping_report.Rmd` | Short R Markdown template for the scoping search string, date, source status and reported hit counts. |
 | `user_input/workflow00_search_strategy.json` | Authoritative search concept definition. Stores the search version, immutable species terms and farm/aquaculture terms. |
-| `scripts/updater/workflow_00_search_orchestrator.R` | Translates the common strategy into syntax appropriate for each source and defines full, fortnightly and expansion searches. |
+| `scripts/updater/workflow_00_resolve_source_selection.R` | Resolves selected coverage groups, optional additions and exclusions to one de-duplicated list of individual source slugs; the full-run selection is persisted for subsequent updates. |
+| `config/workflow00_source_groups.json` | Defines the ten operator-facing coverage groups and their individual source members. |
+| `config/workflow00_ebsco_sources.json` | Defines the 17 validated EBSCO databases, database codes, display names and supported search fields. |
+| `scripts/updater/workflow_00_search_orchestrator.R` | Translates the common strategy into syntax appropriate for each resolved source and defines full, fortnightly and expansion searches. |
 | `.github/workflows/workflow_00_search_orchestrator.yml` | Parent controller. Selects sources, creates the search plan, launches source jobs, checks completion, archives documentation and deposits the completed run on Zenodo. |
-| `.github/workflows/_workflow_00_orchestrated_source_child.yml` | Reusable source handler called once for each selected database. |
+| `.github/workflows/_workflow_00_orchestrated_source_child.yml` | Reusable source handler called once for each resolved source. EBSCO databases are executed independently rather than as a pooled EBSCO source. |
+| `scripts/updater/workflow_00g_ebsco_ingestion.R` | Harvests one configured EBSCO database through EHOST/EIT, preserving its database code/name, accession number, DOI and other typed identifiers where supplied. |
+| `scripts/updater/workflow_00_ebsco_native_id_reconcile.R` | Reconciles EBSCO updates by database-specific source slug plus EBSCO accession number before W01. |
 | Source-specific R ingestion scripts | Execute the individual API/database searches and produce source-native harvests and manifests. |
 | `scripts/updater/write_workflow00_search_record.R` | Produces machine-readable JSON and human-readable Markdown records for every source search. |
 | Workflow 00 Zenodo archiver | Packages the complete parent search run and creates one restricted Zenodo record per Workflow 00 run. |
@@ -169,6 +174,7 @@ The supported sources do not expose equivalent update-date semantics, so Workflo
 | Chinese Biological Abstracts | Europe PMC `CREATION_DATE` 14-day window, restricted to `SRC:CBA` | title and abstract | CBA records only. Previously harvested CBA IDs are removed after retrieval. |
 | Europe PMC preprints | Europe PMC `CREATION_DATE` 14-day window, restricted to `SRC:PPR` | title and abstract | Preprint records only. Published versions remain independent manifestations for Workflow 01 deduplication. |
 | Web of Science | Starter API `modifiedTimeSpan`, 14-day window | title, abstract, author keywords | The update window is supplied as a separate API parameter rather than embedded in the query string. |
+| EBSCO databases | complete query rerun followed by accession-number reconciliation | database-specific configured title/abstract/keyword fields | No reliable EBSCO indexing-date filter has yet been validated for this profile; complete re-harvest prioritises recall and reproducibility, while exact accession reconciliation retains only unseen manifestations downstream. |
 
 These source-specific rules are written into each fortnightly `search_plan.json` under `source_update_methods`.
 
@@ -208,7 +214,7 @@ The GitHub repository stores lightweight, inspectable methodological and provena
 - persistent native source-ID registries used for expansion reconciliation;
 - `docs/search_record/zenodo_registry.csv`;
 - one small JSON pointer for each archived Workflow 00 run containing the corresponding Zenodo record, DOI and checksums;
-- `docs/search_record/state/current.json`, the authoritative logical five-source Workflow 00 state consumed by Workflow 01; and
+- `docs/search_record/state/current.json`, the authoritative accepted Workflow 00 state consumed by Workflow 01. The current accepted baseline still contains the original five API sources; the state schema, validator and W01 restore path are source-generic and can accept additional sources after a validated full-run promotion; and
 - immutable historical state snapshots such as `docs/search_record/state/baseline-v1.json`.
 
 ### GitHub Actions artefacts
@@ -240,13 +246,13 @@ The cache and Zenodo routes are delivery mechanisms for the same accepted state,
 
 ## Downstream handoff
 
-Workflow 01 consumes one authoritative Workflow 00 state pointer. The state identifies the accepted Lens, Scopus, OpenAlex, AGRICOLA and Web of Science source archives and their source-specific checksums. Downloads are authenticated and verified against the stored byte sizes and SHA-256 checksums before extraction. The initial five-source baseline is a composite state referencing three immutable restricted Zenodo records; no archived search data are duplicated merely to create the logical state. This removes any dependency on long-lived GitHub Actions artefacts.
+Workflow 01 consumes one authoritative Workflow 00 state or published full-run archive pointer. The current accepted baseline state identifies Lens, Scopus, OpenAlex, AGRICOLA and Web of Science, but the production W01 handoff now enumerates the sources declared by the supplied W00 pointer rather than assuming five sources. Downloads are authenticated and verified against the stored byte sizes and SHA-256 checksums before extraction. The initial five-source baseline is a composite state referencing three immutable restricted Zenodo records; no archived search data are duplicated merely to create the logical state. This removes any dependency on long-lived GitHub Actions artefacts.
 
 Workflow 00 remains the authoritative raw-source layer. Raw API/source payloads are preserved in the restricted W00 archives rather than copied wholesale into W01. The W00→W01 adapter layer exposes validated mapped metadata needed for reconciliation and bibliographic preservation. W01 now retains this information additively in source manifestations and promotes validated bibliographic fields such as genuine author keywords, publication type/date, language and supported identifiers to the canonical work object with explicit provenance. These additional fields do not participate in W01 deduplication.
 
 ## Methods text for research reporting
 
-> **Workflow 00: literature searching and provenance.** Searches were managed by a reproducible R-based orchestration workflow. A version-controlled configuration defined a common species concept and aquaculture/farming concept, from which database-specific queries were generated for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science. The parent workflow executed each selected source independently through a reusable source handler and source-specific ingestion script. For every search, the exact query, execution date, database-reported result count, successfully downloaded record count and workflow provenance were recorded in machine-readable JSON and human-readable Markdown files. Full searches, fortnightly updates and controlled search-term expansions used the same strategy definition. Search outputs were retained as short-lived GitHub Actions artefacts for seven days and deposited durably as restricted, checksum-verified Zenodo records, with persistent DOI and provenance pointers maintained in the repository.
+> **Workflow 00: literature searching and provenance.** Searches were managed by a reproducible R-based orchestration workflow. A version-controlled configuration defined a common species concept and aquaculture/farming concept, from which source-specific queries were generated. Operator-facing coverage groups were expanded to a de-duplicated list of individual sources before execution. The validated configuration contains ten coverage groups resolving, when all are selected, to 26 unique API sources: nine non-EBSCO sources and 17 independently identified EBSCO databases. The parent workflow executed each resolved source independently through a reusable source handler and source-specific ingestion script. For every search, the exact query, execution date, database-reported result count, successfully downloaded record count and workflow provenance were recorded in machine-readable JSON and human-readable Markdown files. Full searches, fortnightly updates and controlled search-term expansions used the same strategy definition. Search outputs were retained as short-lived GitHub Actions artefacts for seven days and deposited durably as restricted, checksum-verified Zenodo records, with persistent DOI and provenance pointers maintained in the repository.
 
 ### Search-scoping methods text
 
@@ -254,7 +260,7 @@ Workflow 00 remains the authoritative raw-source layer. Raw API/source payloads 
 
 ## Reporting status
 
-Workflow 00 state integrity is validated by `scripts/updater/workflow_00_validate_state.R`, which requires exactly the five expected sources, valid archive references and harvest checksums, and non-empty duplicate-free source-native ID registries. Source-native ID reconciliation is now consistently enforced for fortnightly updates across all five sources. Automatic replacement of a complete source entry in `current.json` by a fortnightly archive nevertheless remains disabled because a fortnightly archive is a delta, not a complete source snapshot. The logical state model must therefore preserve the baseline plus accepted source-level deltas rather than treating the newest delta archive as the whole source.
+Workflow 00 state integrity is validated by `scripts/updater/workflow_00_validate_state.R`, which accepts one or more valid source identifiers and requires valid archive references, harvest checksums and non-empty duplicate-free source-native ID registries for every source present. Source-native ID reconciliation is now consistently enforced for fortnightly updates across all five sources. Automatic replacement of a complete source entry in `current.json` by a fortnightly archive nevertheless remains disabled because a fortnightly archive is a delta, not a complete source snapshot. The logical state model must therefore preserve the baseline plus accepted source-level deltas rather than treating the newest delta archive as the whole source.
 
 Workflow 00 is considered complete when:
 
