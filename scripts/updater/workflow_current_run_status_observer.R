@@ -225,7 +225,7 @@ if(stage=="W04"){
   p<-list.files(out,pattern="^workflow04_final_screening_layer\\.jsonl$",recursive=TRUE,full.names=TRUE)
   if(length(p)!=1L) stop("Restored W04 state lacks final screening layer",call.=FALSE)
   rr<-read_jsonl(p[[1L]])
-  dec<-vapply(rr,function(z)clean(z$decision),character(1))
+  dec<-vapply(rr,function(z)clean((z$screening%||%list())$decision),character(1))
   s$counts$screened_include<-sum(dec=="retain");s$counts$screened_exclude<-sum(dec=="exclude")
   s<-set_run(s,"W04",run_id,5L,6L,"Screening complete; awaiting species coding")
   save_status(s);cat(sprintf("PASS: W04 current-run screening include=%d exclude=%d\n",s$counts$screened_include,s$counts$screened_exclude));quit(status=0)
