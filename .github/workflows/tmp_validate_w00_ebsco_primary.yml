@@ -1,0 +1,148 @@
+name: TEMP validate W00 EBSCO integration
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w00_ebsco_primary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      psycinfo_query: ${{ steps.out.outputs.psycinfo_query }}
+      search_version: ${{ steps.out.outputs.search_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Resolve all ten source groups
+        env:
+          W00_GROUP_CORE_MULTIDISCIPLINARY: 'true'
+          W00_GROUP_HEALTH_MEDICINE: 'true'
+          W00_GROUP_ENVIRONMENT_AGRICULTURE: 'true'
+          W00_GROUP_SOCIAL_SCIENCES: 'true'
+          W00_GROUP_EDUCATION: 'true'
+          W00_GROUP_REGIONAL: 'true'
+          W00_GROUP_MEDIA_COMMUNICATION: 'true'
+          W00_GROUP_HUMANITIES: 'true'
+          W00_GROUP_SPORT_TOURISM: 'true'
+          W00_GROUP_GREY_PREPRINTS: 'true'
+          W00_ADDITIONAL_SOURCES: ''
+          W00_EXCLUDE_SOURCES: ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_resolve_source_selection.R \
+            --run-type full \
+            --saved data/workflow00/source_selection.json \
+            --output outputs/test/source_selection.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --group-config config/workflow00_source_groups.json
+
+      - name: Generate source queries
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type full \
+            --config user_input/workflow00_search_strategy.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --output-dir outputs/test
+
+      - name: Validate full resolution and export PsycInfo query
+        id: out
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          s <- fromJSON('outputs/test/source_selection.json',simplifyVector=FALSE)
+          selected <- unlist(s$selected_sources,use.names=FALSE)
+          ebsco <- selected[grepl('^ebsco_',selected)]
+          non <- selected[!grepl('^ebsco_',selected)]
+          stopifnot(length(selected)==26L)
+          stopifnot(length(unique(selected))==26L)
+          stopifnot(length(ebsco)==17L)
+          stopifnot(length(non)==9L)
+          stopifnot(sum(selected=='ebsco_psycinfo')==1L)
+          p <- fromJSON('outputs/test/search_plan.json',simplifyVector=FALSE)
+          q <- p$source_queries$ebsco_psycinfo
+          stopifnot(!is.null(q),nzchar(q))
+          out <- Sys.getenv('GITHUB_OUTPUT')
+          cat('psycinfo_query<<EOF\n',file=out,append=TRUE)
+          cat(q,file=out,append=TRUE)
+          cat('\nEOF\n',file=out,append=TRUE)
+          cat(sprintf('search_version=%s\n',p$search_version),file=out,append=TRUE)
+          cat('PASS: production branch resolves all ten groups to 26 unique sources = 17 EBSCO + 9 non-EBSCO\n')
+
+  psycinfo:
+    needs: plan
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_psycinfo
+      run_type: full
+      query: ${{ needs.plan.outputs.psycinfo_query }}
+      parent_run_id: ${{ github.run_id }}
+      search_version: ${{ needs.plan.outputs.search_version }}
+      max_records: '2'
+    secrets: inherit
+
+  verify:
+    needs: [plan, psycinfo]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download and validate production-branch PsycInfo harvest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w00_primary
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "workflow00-ebsco_psycinfo-harvest-$GITHUB_RUN_ID" \
+            --dir /tmp/w00_primary
+          test -s /tmp/w00_primary/source_child/manifest.json
+          test -s /tmp/w00_primary/source_child/records.jsonl
+          Rscript -e '
+            library(jsonlite)
+            x<-fromJSON("/tmp/w00_primary/source_child/manifest.json",simplifyVector=FALSE)
+            stopifnot(identical(x$status,"success"))
+            stopifnot(identical(x$source,"ebsco_psycinfo"))
+            stopifnot(identical(x$database_code,"psyh"))
+            stopifnot(as.integer(x$records_retrieved)==2L)
+            rec<-fromJSON(readLines("/tmp/w00_primary/source_child/records.jsonl",n=1),simplifyVector=FALSE)
+            stopifnot(identical(rec$source$provider,"ebsco_psycinfo"))
+            stopifnot(identical(rec$ebsco$database_code,"psyh"))
+            stopifnot(!is.null(rec$sidecar_identity$ebsco_accession_number))
+          '
+          echo "PASS: production-branch EBSCO child harvested PsycInfo with database-specific provenance and native-ID reconciliation"
