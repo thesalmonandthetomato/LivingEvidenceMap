@@ -1,0 +1,73 @@
+name: TEMP validate W01 assist production wiring
+
+on:
+  push:
+    branches:
+      - w01-identifier-assist-test
+    paths:
+      - '.github/workflows/workflow_01_production.yml'
+      - '.github/workflows/tmp_validate_w01_assist_production_wiring.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-identifier-assist-test
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Parse assist scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_01_identifier_assist_build.R')
+          parse(file='scripts/updater/workflow_01_identifier_prescore_collapse.R')
+          parse(file='scripts/updater/workflow_01_identifier_inject_decisions.R')
+          parse(file='scripts/updater/workflow_01_title_assist_resolve.R')
+          cat('PASS: assist scripts parse\n')
+
+      - name: Validate production workflow wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          P=.github/workflows/workflow_01_production.yml
+
+          grep -Fq -- "workflow_01_identifier_assist_build.R" "$P"
+          grep -Fq -- "--guard-file config/workflow01_identifier_never_auto_resolve.csv" "$P"
+          grep -Fq -- "workflow_01_identifier_prescore_collapse.R" "$P"
+          grep -Fq -- "--input-dir outputs/workflow01_prescore" "$P"
+          grep -Fq -- "workflow_01_identifier_inject_decisions.R" "$P"
+          grep -Fq -- "workflow_01_title_assist_resolve.R" "$P"
+          grep -Fq -- "--new-decisions outputs/workflow01_incremental_assisted/final_incremental_decisions.csv" "$P"
+          grep -Fq -- "--incremental-rescore outputs/workflow01_incremental_assisted/final_incremental_decisions.csv" "$P"
+
+          if grep -Fq -- "--new-decisions outputs/workflow01_incremental_rescore/rescored_sample.csv" "$P"; then
+            echo "ERROR: production merge still bypasses assist layers" >&2
+            exit 1
+          fi
+          if grep -Fq -- "--incremental-rescore outputs/workflow01_incremental_rescore/rescored_sample.csv" "$P"; then
+            echo "ERROR: checkpoint still stores pre-assist rescore decisions" >&2
+            exit 1
+          fi
+
+          git fetch --depth=1 origin workflow01-final-architecture:refs/remotes/origin/workflow01-final-architecture
+          for p in \
+            scripts/updater/workflow_01_deduplication_build_union.R \
+            scripts/updater/workflow_01_deduplication_incremental_candidates.R \
+            scripts/updater/workflow_01_deduplication_incremental_score.R \
+            scripts/updater/workflow_01_deduplication_identifier_rescore.R \
+            scripts/updater/workflow_01_deduplication_merge_clusters.R
+          do
+            git show "refs/remotes/origin/workflow01-final-architecture:$p" > /tmp/prod
+            cmp -s "$p" /tmp/prod || { echo "ERROR: core W01 differs from production: $p" >&2; exit 1; }
+          done
+
+          echo "PASS: production W01 wiring uses validated assist layers and core deduplication code remains unchanged"
