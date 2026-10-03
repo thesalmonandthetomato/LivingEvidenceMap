@@ -31,9 +31,9 @@ concurrency:
 
 env:
   WORKFLOW04_BRANCH: workflow01-final-architecture
-  SOURCE_RUN_ID: ${{ inputs.source_run_id || '' }}
-  BATCH_ID: ${{ inputs.batch_id || '' }}
-  QUEUE_SHA256: ${{ inputs.queue_sha256 || '' }}
+  SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+  BATCH_ID: ${{ inputs.batch_id }}
+  QUEUE_SHA256: ${{ inputs.queue_sha256 }}
   LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
 
 jobs:
@@ -47,12 +47,13 @@ jobs:
           ref: workflow01-final-architecture
           fetch-depth: 2
 
-      - name: Resolve W04 resume request
+      - name: Resolve push-based W04 resume request
+        if: ${{ github.event_name == 'push' }}
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            mapfile -t FILES < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/shiny_adjudication/w04_resolution_resume_requests/.*\.json        with:
+          mapfile -t FILES < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/shiny_adjudication/w04_resolution_resume_requests/.*\.json
+        with:
           r-version: release
           use-public-rspm: true
 
@@ -218,49 +219,19 @@ jobs:
             outputs/workflow04_zenodo/
           retention-days: 90
           if-no-files-found: error
- || true)
-            test "${#FILES[@]}" -eq 1
-            FILE="${FILES[0]}"
-            readarray -t META < <(python3 -c 'import json,re,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); s=str(x.get("source_run_id","")); b=str(x.get("batch_id","")); q=str(x.get("queue_sha256","")).lower(); assert re.fullmatch(r"[0-9]+",s), "invalid source_run_id"; assert b, "invalid batch_id"; assert re.fullmatch(r"[0-9a-f]{64}",q), "invalid queue_sha256"; print(s); print(b); print(q)' "$FILE")
-            SOURCE_RUN_ID="${META[0]}"
-            BATCH_ID="${META[1]}"
-            QUEUE_SHA256="${META[2]}"
-            echo "SOURCE_RUN_ID=$SOURCE_RUN_ID" >> "$GITHUB_ENV"
-            echo "BATCH_ID=$BATCH_ID" >> "$GITHUB_ENV"
-            echo "QUEUE_SHA256=$QUEUE_SHA256" >> "$GITHUB_ENV"
-          fi
+)
+          test "${#FILES[@]}" -eq 1
+          FILE="${FILES[0]}"
+          SOURCE_RUN_ID="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$source_run_id)' "$FILE")"
+          BATCH_ID="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$batch_id)' "$FILE")"
+          QUEUE_SHA256="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(tolower(x$queue_sha256))' "$FILE")"
           [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
           test -n "$BATCH_ID"
           [[ "$QUEUE_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          echo "PASS: resolved W04 resume request source_run_id=$SOURCE_RUN_ID batch_id=$BATCH_ID queue_sha256=$QUEUE_SHA256"
-
-      - name: Record W04 resume start receipt
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p docs/shiny_adjudication/w04_resolution_resume_runs
-          RECEIPT="docs/shiny_adjudication/w04_resolution_resume_runs/${BATCH_ID}-started.json"
-          python3 - <<'PY'
-          import json, os
-          out = {
-              "schema": "living-evidence-map-w04-resume-start-v1",
-              "workflow_run_id": os.environ["GITHUB_RUN_ID"],
-              "source_run_id": os.environ["SOURCE_RUN_ID"],
-              "batch_id": os.environ["BATCH_ID"],
-              "queue_sha256": os.environ["QUEUE_SHA256"],
-              "status": "started",
-          }
-          path = f"docs/shiny_adjudication/w04_resolution_resume_runs/{os.environ['BATCH_ID']}-started.json"
-          with open(path, "w", encoding="utf-8") as f:
-              json.dump(out, f, indent=2)
-              f.write("\n")
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$RECEIPT"
-          git commit -m "Record W04 resume start ${GITHUB_RUN_ID} [skip ci]"
-          git pull --rebase origin "$WORKFLOW04_BRANCH"
-          git push origin HEAD:"$WORKFLOW04_BRANCH"
+          echo "SOURCE_RUN_ID=$SOURCE_RUN_ID" >> "$GITHUB_ENV"
+          echo "BATCH_ID=$BATCH_ID" >> "$GITHUB_ENV"
+          echo "QUEUE_SHA256=$QUEUE_SHA256" >> "$GITHUB_ENV"
+          echo "PASS: resolved push request source_run_id=$SOURCE_RUN_ID batch_id=$BATCH_ID queue_sha256=$QUEUE_SHA256"
 
       - uses: r-lib/actions/setup-r@v2
         with:
