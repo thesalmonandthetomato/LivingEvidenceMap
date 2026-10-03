@@ -1,0 +1,6 @@
+{
+  "source_run_id": "37051672356",
+  "batch_id": "w04-resolution-37051672356-0e943bf7b14c",
+  "queue_sha256": "0e943bf7b14c4c24419f0bbc5d020e7109bbf94263d7f20d3ef6ec0fc808627c",
+  "requested_reason": "Low-level ref-update retry for checksum-locked W04 resume; do not start W05."
+}
