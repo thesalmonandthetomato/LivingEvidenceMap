@@ -10,7 +10,8 @@ on:
         required: true
         type: string
       lean_pointer_path:
-        required: true
+        required: false
+        default: ''
         type: string
       prior_workflow06_pointer_path:
         required: false
@@ -33,6 +34,8 @@ on:
         required: true
       OPENAI_API_KEY:
         required: true
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: false
 
   workflow_dispatch:
     inputs:
@@ -128,6 +131,7 @@ jobs:
           if [ -n "$CAN" ]; then
             cp "$CAN" inputs/current/retained_canonical.jsonl
           else
+            test -n "$LEAN_POINTER"
             Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R               --pointer "$LEAN_POINTER" --output-dir inputs/current_lean
             Rscript scripts/updater/workflow_05_materialise_retained.R               --canonical inputs/current_lean/canonical_lean.jsonl               --included-ids inputs/current/included_ids.txt               --output inputs/current/retained_canonical.jsonl
           fi
@@ -337,7 +341,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('dplyr','readr','jsonlite','digest','httr2'))
+        run: install.packages(c('dplyr','readr','jsonlite','digest','httr2','googlesheets4'))
 
       - name: Download prepared state
         uses: actions/download-artifact@v4
@@ -381,6 +385,32 @@ jobs:
           git add docs/workflow06/zenodo_registry.csv docs/workflow06/zenodo/
           if ! git diff --cached --quiet; then
             git commit -m "Register Workflow 06 geography state $GITHUB_RUN_ID"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Update live Shiny progress after published W06
+        if: ${{ inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W06
+          if [ -n "${LEM_GOOGLE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+            chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+            Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+              --status docs/current_run/current_run_status.json \
+              --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+              --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          fi
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W06 [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
             git push origin HEAD:workflow01-final-architecture
           fi
 
