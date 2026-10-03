@@ -32,8 +32,14 @@ if (!nzchar(uid)||!nzchar(pwd)) stop("EBSCO_EHOST_UID and EBSCO_EHOST_PWD are re
 cfg <- fromJSON(config_path,simplifyVector=FALSE)
 cl <- cfg$clusters[[cluster]]
 if (is.null(cl)) stop(sprintf("Unknown EBSCO cluster: %s",cluster),call.=FALSE)
-dbs <- cl$databases
-if (!length(dbs)) stop(sprintf("EBSCO cluster %s has no verified database members",cluster),call.=FALSE)
+codes <- unname(unlist(cl$database_codes))
+if (!length(codes)) stop(sprintf("EBSCO cluster %s has no verified database members",cluster),call.=FALSE)
+missing_codes <- setdiff(codes,names(cfg$databases))
+if (length(missing_codes)) stop(sprintf("EBSCO cluster %s references unknown database code(s): %s",cluster,paste(missing_codes,collapse=", ")),call.=FALSE)
+dbs <- lapply(codes,function(code) {
+  z <- cfg$databases[[code]]
+  list(code=code,title=z$title)
+})
 
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 dir.create(file.path(output_dir,"raw"),recursive=TRUE,showWarnings=FALSE)
