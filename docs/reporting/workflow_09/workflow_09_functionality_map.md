@@ -42,13 +42,17 @@ The authoritative analytical data remain the Workflow 08 canonical JSONL. Workfl
               [version-controlled Workflow 09 package]
 ```
 
-Workflow 09 additionally restores the authoritative Workflow 01 and Workflow 02 states where they are required for source-contribution and review-flow reporting. Final inclusion IDs and exclusions come from Workflow 08, so database-contribution reporting reflects the definitive included corpus rather than an intermediate screening state.
+Workflow 09 no longer reconstructs the full Workflow 01 state or restores the Workflow 02 cumulative patch merely for reporting. Instead, each accepted Workflow 00-08 stage writes a compact, version-controlled reporting summary to `docs/reporting/workflow_09_inputs/current/`. Workflow 01 and Workflow 08 additionally write small database-source/intersection snapshots. Workflow 09 validates those snapshots against the current registered run IDs and canonical checksums, then restores only the authoritative Workflow 08 final canonical state for analyses that genuinely require record-level final data.
 
 ## Components
 
 | Component | Function |
 |---|---|
-| `.github/workflows/report_workflow09_figures.yml` | Production controller for restoration, RIS export, figure generation, manuscript rendering, validation and publication to the branch. |
+| `.github/workflows/report_workflow09_figures.yml` | Production controller for compact-input validation, W08 restoration, RIS export, figure generation, manuscript rendering, validation and publication to the branch. |
+| `docs/reporting/workflow_09_inputs/current/` | Clear current handoff directory containing one compact summary for each W00-W08 stage plus W01/W08 database-source snapshots and a checksum manifest. |
+| `scripts/reporting/write_workflow09_stage_summary.R` | Writes the stage-owned compact W00-W08 reporting summary after an accepted workflow state. |
+| `scripts/reporting/write_workflow09_source_snapshot.R` | Writes compact W01/W08 database source and exact-intersection snapshots from the canonical state while that large state is already present in the owning workflow. |
+| `scripts/reporting/refresh_workflow09_input_manifest.R` | Rebuilds the manifest of current compact reporting inputs and their SHA-256 values. |
 | `scripts/reporting/export_canonical_ris.R` | Converts every included canonical JSONL record to a portable RIS representation. |
 | `visualisations/canonical_figure_data.R` | Loads and flattens the final canonical JSONL for reporting figures. |
 | `visualisations/01_records_by_publication_year.R` | Publication year × species figure. |
@@ -73,16 +77,25 @@ Workflow 09 restores the latest registered authoritative Workflow 08 Zenodo poin
 
 The final Workflow 08 JSONL remains the authoritative representation because it preserves nested workflow provenance, screening state, species coding, geography coding, topic assignments and manifestation references.
 
-### Upstream reporting states
+### Compact upstream reporting handoff
 
-Some figures require information that is intentionally not duplicated into the included-only final JSONL. Workflow 09 therefore restores:
+Cross-workflow reporting inputs are maintained under:
 
-- Workflow 01 canonical/source-provenance state for database-contribution analysis;
-- Workflow 02 cumulative enrichment state for record-repair counts;
-- Workflow 08 final included record IDs for after-screening source contribution; and
-- Workflow 08 exclusions for final flow accounting.
+`docs/reporting/workflow_09_inputs/current/`
 
-Stable `record_id` values are used to reconcile these reporting layers.
+The directory contains:
+
+- `w00_summary.json` through `w08_summary.json`, one stage-owned compact summary per workflow;
+- `w01_source_summary.csv` and `w01_source_intersections.csv`, describing source contribution and exact database intersections for the deduplicated W01 corpus;
+- `w08_source_summary.csv` and `w08_source_intersections.csv`, describing the same source provenance for the definitive included W08 corpus;
+- source-snapshot manifests carrying the corresponding canonical SHA-256 values; and
+- `manifest.json`, which records the source run IDs, file sizes and SHA-256 values for the complete current handoff.
+
+Each accepted workflow updates only its own summary after its authoritative state has been registered. W01 and W08 compute their source snapshots while their canonical JSONL is already available in that workflow, so W09 does not pay the cost of reconstructing those large states later.
+
+Before rendering, W09 requires the W01-W08 summary run IDs to match `docs/current_run/current_run_status.json`, requires the W01 source snapshot checksum to match the registered W01 canonical checksum, and requires the W08 source snapshot checksum to match the authoritative final W08 canonical checksum. A stale or mixed reporting handoff therefore fails closed.
+
+The compact inputs are also copied into each permanent W09 publication package under `docs/reporting/workflow_09/data/workflow_inputs/`, preserving the exact reporting handoff used for that publication snapshot.
 
 ## RIS export
 
@@ -150,7 +163,7 @@ The Workflow 09 production run renders both Methods and Results to:
 - Word (`.docx`); and
 - PDF (`.pdf`).
 
-Results values are calculated during rendering from the restored authoritative data rather than copied from a static table. This includes evidence-base size, publication-year counts, species frequencies, geography coverage, topic frequencies and flow counts.
+Results values are calculated during rendering from the authoritative final W08 corpus and the checksum-validated compact workflow handoff rather than copied from a static table. Record-level final statistics use W08; cross-workflow flow/source counts use the compact W00-W08 summaries.
 
 The generated files are committed back to the same feature branch with `[skip ci]` so the repository itself contains the final publication snapshot rather than relying on expiring Actions artefacts.
 
@@ -161,11 +174,14 @@ A publication package is accepted only when all of the following hold:
 1. the restored Workflow 08 JSONL SHA-256 matches the registered authoritative pointer;
 2. the RIS source checksum matches that same JSONL;
 3. the RIS record count exactly matches the current Workflow 08 pointer;
-4. the review-flow data reconcile exactly to the final included population and upstream exclusion counts;
-5. all 16 PNG figures exist;
-6. the corresponding 16 PDF figures exist;
-7. Methods and Results each exist in Rmd source plus Markdown, HTML, Word and PDF forms; and
-8. all permanent outputs are staged under `docs/reporting/workflow_09/`.
+4. the compact W00-W08 stage summaries match the current-run workflow IDs;
+5. the compact W01 and W08 source snapshots match their registered canonical SHA-256 values and record counts;
+6. the review-flow data reconcile exactly to the final included population and upstream exclusion counts;
+7. all 16 PNG figures exist;
+8. the corresponding 16 PDF figures exist;
+9. Methods and Results each exist in Rmd source plus Markdown, HTML, Word and PDF forms;
+10. the exact compact workflow-input snapshot is staged with the publication package; and
+11. all permanent outputs are staged under `docs/reporting/workflow_09/`.
 
 No model calls, screening decisions or annotation decisions are performed in Workflow 09.
 
@@ -174,6 +190,7 @@ No model calls, screening decisions or annotation decisions are performed in Wor
 The Workflow 09 package preserves:
 
 - the exact Workflow 08 pointer used;
+- the W00-W08 compact reporting-input manifest and stage/source snapshots;
 - source JSONL SHA-256;
 - RIS SHA-256 and record count;
 - flow-count JSON;
@@ -196,6 +213,7 @@ GitHub stores:
 - Methods and Results Rmd sources;
 - rendered Methods and Results in Markdown, HTML, Word and PDF;
 - the complete-record RIS export and manifest;
+- a snapshot of the exact compact W00-W08 reporting inputs used;
 - final flow counts; and
 - this Workflow 09 methodological record.
 
@@ -215,7 +233,7 @@ Future living updates should rerun Workflow 09 after a new validated Workflow 08
 
 ## Methods text for research reporting
 
-> **Workflow 09: reporting and publication outputs.** The final included canonical evidence base was restored from the checksum-registered Workflow 08 archive and combined with preserved upstream provenance where required for reporting. All manuscript counts and figures were regenerated programmatically in R from these authoritative inputs. A complete-record RIS library was produced as a lightweight bibliographic representation of the canonical corpus, while the nested JSONL remained the authoritative provenance-preserving data structure. The Methods and Results manuscripts were maintained as version-controlled R Markdown sources and rendered reproducibly to Markdown, HTML, Word and PDF. Final figures, plotting code, manuscript outputs, the RIS library and machine-readable flow counts were committed as a versioned publication package.
+> **Workflow 09: reporting and publication outputs.** Each accepted Workflow 00-08 state emitted a compact version-controlled reporting summary, with Workflow 01 and Workflow 08 additionally emitting source-provenance/intersection snapshots linked to their canonical checksums. Workflow 09 validated those small handoff files against the current registered workflow lineage and restored only the final Workflow 08 canonical evidence base for record-level analyses. All manuscript counts and figures were regenerated programmatically in R from these authoritative inputs. A complete-record RIS library was produced as a lightweight bibliographic representation of the canonical corpus, while the nested JSONL remained the authoritative provenance-preserving data structure. The Methods and Results manuscripts were maintained as version-controlled R Markdown sources and rendered reproducibly to Markdown, HTML, Word and PDF. Final figures, plotting code, manuscript outputs, the RIS library, compact workflow-input snapshot and machine-readable flow counts were committed as a versioned publication package.
 
 ## Reporting status
 
