@@ -191,6 +191,29 @@ for(i in seq_len(nrow(w07q))){
     if(is.null(idx)||!length(idx))stop("Topic disagreement lacks pathway scores: ",rid,call.=FALSE)
     w07_extreme_autoaccepted<-w07_extreme_autoaccepted+1L
     next
+  }else if(reason=="ontology_pathology"){
+    idx<-score_index[[rid]]
+    if(is.null(idx)||!length(idx))stop("Ontology pathology lacks pathway scores: ",rid,call.=FALSE)
+    s<-w07s[idx,,drop=FALSE]
+    if(!"retained_for_analysis"%in%names(s))stop("W07 scores lack retained_for_analysis for ontology pathology",call.=FALSE)
+    s<-s[s$retained_for_analysis%in%TRUE,,drop=FALSE]
+    if(!nrow(s))stop("Ontology pathology has no retained pathways: ",rid,call.=FALSE)
+    pathways<-lapply(seq_len(nrow(s)),function(k)list(
+      path_id=as.character(s$path_id[[k]]),
+      hierarchy_path=if("hierarchy_path"%in%names(s))as.character(s$hierarchy_path[[k]])else as.character(s$path_id[[k]]),
+      confidence_n=if("confidence_n"%in%names(s))as.integer(s$confidence_n[[k]])else NA_integer_,
+      stars=if("confidence_n"%in%names(s))paste(rep("★",as.integer(s$confidence_n[[k]])),collapse="")else "",
+      retained_for_analysis=TRUE
+    ))
+    add_issue(rid,list(
+      source_workflow="07",issue_type="ontology_pathology",
+      automated_value=list(
+        ontology_pathology=TRUE,
+        mean_pairwise_jaccard=if("mean_pairwise_jaccard"%in%names(q))as.numeric(q$mean_pairwise_jaccard)else NULL,
+        pathways=pathways
+      ),
+      allowed_human_outcomes=c("accept_retained_topics","replace_topic_set","no_code","exclude_record")
+    ))
   }else if(reason=="zero_topic_eligibility_uncertain"){
     add_issue(rid,list(
       source_workflow="07",issue_type="zero_topic_eligibility_uncertain",
