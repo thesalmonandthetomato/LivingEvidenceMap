@@ -112,25 +112,26 @@ A JSON manifest beside the RIS records the source JSONL SHA-256, RIS SHA-256, re
 
 ## Figure set
 
-Workflow 09 publishes 15 final manuscript figures in both PNG and PDF formats.
+Workflow 09 publishes 16 final manuscript figures in both PNG and PDF formats.
 
 | Figure | Content | Authoritative implementation |
 |---:|---|---|
 | 1 | Review/process flow | `visualisations/07_flow_diagram.R` |
-| 2 | Database contribution and overlap for the deduplicated and definitive final included corpora | `scripts/reporting/plot_citesource_database_contribution.R` |
-| 3 | Publication year × focal species | `visualisations/01_records_by_publication_year.R` |
-| 4 | Publication year × high-level topic | `visualisations/05_records_by_publication_year_high_level_topic.R` |
-| 5 | Global country choropleth | `visualisations/03_choropleth_records_by_country.R` |
-| 6 | Top countries × focal species | `visualisations/02_records_by_country.R` |
-| 7 | High-level topic frequency × focal species | `visualisations/04_topic_hierarchy.R` |
-| 8 | Production topic hierarchy | `visualisations/04_topic_hierarchy.R` |
-| 9 | Environment topic hierarchy | `visualisations/04_topic_hierarchy.R` |
-| 10 | Methods topic hierarchy | `visualisations/04_topic_hierarchy.R` |
-| 11 | Industry and governance topic hierarchy | `visualisations/04_topic_hierarchy.R` |
-| 12 | Product topic hierarchy | `visualisations/04_topic_hierarchy.R` |
-| 13 | People and society topic hierarchy | `visualisations/04_topic_hierarchy.R` |
-| 14 | Inputs and resources topic hierarchy | `visualisations/04_topic_hierarchy.R` |
-| 15 | Topic coverage in the supplied umbrella review | `visualisations/08_umbrella_review_figure.R` |
+| 2 | Unique single-database contribution before and after final screening | `scripts/reporting/plot_citesource_database_contribution.R` |
+| 3 | Exact multi-database overlap, excluding singleton contributions | `scripts/reporting/plot_citesource_database_contribution.R` |
+| 4 | Publication year × focal species | `visualisations/01_records_by_publication_year.R` |
+| 5 | Publication year × high-level topic | `visualisations/05_records_by_publication_year_high_level_topic.R` |
+| 6 | Global country choropleth | `visualisations/03_choropleth_records_by_country.R` |
+| 7 | Top countries × focal species | `visualisations/02_records_by_country.R` |
+| 8 | High-level topic frequency × focal species | `visualisations/04_topic_hierarchy.R` |
+| 9 | Production topic hierarchy | `visualisations/04_topic_hierarchy.R` |
+| 10 | Environment topic hierarchy | `visualisations/04_topic_hierarchy.R` |
+| 11 | Methods topic hierarchy | `visualisations/04_topic_hierarchy.R` |
+| 12 | Industry and governance topic hierarchy | `visualisations/04_topic_hierarchy.R` |
+| 13 | Product topic hierarchy | `visualisations/04_topic_hierarchy.R` |
+| 14 | People and society topic hierarchy | `visualisations/04_topic_hierarchy.R` |
+| 15 | Inputs and resources topic hierarchy | `visualisations/04_topic_hierarchy.R` |
+| 16 | Topic coverage in the supplied umbrella review | `visualisations/08_umbrella_review_figure.R` |
 
 The previously explored rapidly-emerging-topics figure is not part of the final Workflow 09 manuscript package because its analytical definition was not retained.
 
@@ -161,8 +162,8 @@ A publication package is accepted only when all of the following hold:
 2. the RIS source checksum matches that same JSONL;
 3. the RIS record count exactly matches the current Workflow 08 pointer;
 4. the review-flow data reconcile exactly to the final included population and upstream exclusion counts;
-5. all 15 PNG figures exist;
-6. the corresponding PDF figures exist;
+5. all 16 PNG figures exist;
+6. the corresponding 16 PDF figures exist;
 7. Methods and Results each exist in Rmd source plus Markdown, HTML, Word and PDF forms; and
 8. all permanent outputs are staged under `docs/reporting/workflow_09/`.
 
