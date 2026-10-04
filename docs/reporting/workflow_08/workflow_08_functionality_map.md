@@ -2,188 +2,292 @@
 
 ## Purpose
 
-Workflow 08 resolves all records escalated for human review after Workflows 05–07, applies late Workflow 07 eligibility exclusions, and produces the definitive post-adjudication evidence base. Human decisions are retained as a separate, auditable overlay: archived automated outputs from Workflows 04–07 are not rewritten.
+Workflow 08 is the final decision and assembly stage before reporting. It combines the validated automated states from Workflows 03-07, applies deterministic final-routing rules, reuses compatible prior adjudications, sends only genuinely unresolved current issues to human review, and produces the definitive included-only canonical evidence base plus a separate exclusions register.
 
-The definitive canonical JSONL contains **included records only**. Excluded records are retained separately as bibliographic metadata plus their final exclusion stage and reason.
+Human decisions are retained as an auditable overlay. Workflow 08 does not rewrite the archived automated W04-W07 layers.
 
-This document is intended to serve two purposes:
+## Current production state (4 October 2026)
 
-1. as a methodological guide to the repository implementation; and
-2. as source text for reporting the workflow in a research paper.
+The current authoritative W08 state is finalisation run **37211675882**, published as restricted Zenodo record **23138991** (DOI `10.5281/zenodo.23138991`). It supersedes Zenodo record **23020526**.
 
-## Functionality map
+The current release partitions the **47,094-record** W01 canonical population exactly into:
+
+- **21,493 included records** in `living_evidence_map_canonical_final.jsonl`;
+- **25,601 excluded records** in `workflow08_excluded_records.csv`; and
+- **137 current W08 decision issues** in the complete adjudication ledger.
+
+The final canonical SHA-256 is:
+
+`cb1f28a2adb3edbc368d9d10de1517d51cd43d024e449bf1f7149eb87ab77ffb`
+
+The exclusions CSV SHA-256 is:
+
+`0333e94685f51b979ef2ad7782ff3f7ca2791f5954cfd1be97bab843da68c2de`
+
+The complete adjudication-ledger SHA-256 is:
+
+`bf1ad246638ddc8d4a0362bbbf40aa5a8228cbf8e9cf75be00090314d60610dc`
+
+The current Shiny batch was `w08-run-37207870620`. Finalisation required an exact-current-state decision for every one of the 137 issue keys before assembly could proceed. The batch was marked `consumed` only after the final state had been archived and registered.
+
+## Current functionality map
 
 ```text
-[32,292-work source canonical + validated W03-W07 states]
-                         |
-                         v
-            [locked W08 review queue]
-              811 issues / 797 records
-                         |
-             +-----------+-----------+
-             |                       |
-             v                       v
- [57 prior decisions]      [754 offline workbook decisions]
-             |                       |
-             +-----------+-----------+
-                         |
-                         v
-       [validate complete decision ledger]
-                         |
-                         v
- [apply human decisions + W07 late exclusions]
-                         |
-                         v
-        [temporary full disposition state]
-                         |
-             +-----------+-----------+
-             |                       |
-             v                       v
- [19,117 included JSONL]      [13,175 exclusions CSV]
-             |                       |
-             +-----------+-----------+
-                         |
-                         v
-       [restricted Zenodo record 23020526]
-                         |
-                         v
-                   [Workflow 09]
+[current W01 canonical population: 47,094]
+                  +
+        validated W03-W07 states
+                  |
+                  v
+       build current W08 issue index
+                  |
+                  +--> W05 species NONE
+                  |       deterministic exclusion
+                  |       no human review
+                  |
+                  +--> W06 geography
+                  |       deterministic auto-NONE where allowed
+                  |       remaining eligible cases -> review
+                  |
+                  +--> W07 topic QC
+                          Jaccard descriptive only
+                          residual coding/eligibility cases -> review
+                  |
+                  v
+       exact issue-state fingerprints
+                  |
+          +-------+--------+
+          |                |
+          v                v
+ compatible prior     new/changed current
+ decisions reused     issues sent to Shiny
+          |                |
+          +-------+--------+
+                  |
+                  v
+      complete current decision ledger
+          (must cover every issue)
+                  |
+                  v
+       deterministic final assembly
+                  |
+          +-------+--------+
+          |                |
+          v                v
+   included canonical    exclusions register
+       21,493              25,601
+          |                |
+          +-------+--------+
+                  |
+                  v
+       restricted Zenodo archive
+           + repository pointer
+                  |
+                  v
+               W09
 ```
 
-## Components
+## Inputs
 
-| Component | Function |
-|---|---|
-| `scripts/updater/workflow_08_build_review_queue.R` | Builds and locks the human-review queue from validated W05–W07 outputs. |
-| `data/adjudication/workflow08/offline_adjudication_spec_2026-09-27.json` | Compact, checksum-bound representation of the completed offline review workbook. |
-| `scripts/updater/workflow_08_expand_offline_decisions.R` | Expands the workbook specification, merges prior decisions and verifies exactly one decision for each locked issue. |
-| `scripts/updater/workflow_08_finalize_canonical.R` | Applies W03–W08 state to the source canonical population and creates the temporary full disposition state. |
-| `scripts/updater/workflow_08_partition_final_outputs.R` | Partitions the full disposition state into the included-only canonical JSONL and separate bibliographic exclusions file. |
-| `scripts/updater/workflow_08_archive_to_zenodo.R` | Publishes the included canonical JSONL, exclusions file, adjudication ledger and manifest to restricted Zenodo. |
-| `scripts/updater/workflow_08_write_report.R` | Produces the run-specific Workflow 08 methodological report. |
-| `.github/workflows/workflow_08_finalize.yml` | Restores validated inputs, validates decisions, assembles and partitions final outputs, archives them and registers the final state. |
+Workflow 08 restores and checksum-verifies the exact states selected for the current release:
 
-## Inputs and methodological rules
+- the post-W02 lean canonical population;
+- W03 publication-status layer;
+- W04 final screening layer;
+- W05 deterministic species layer and match provenance;
+- W06 semantic geography layer;
+- W07 retained topic scores, topic-QC state and late exclusions;
+- the current W08 issue index;
+- compatible prior W08 decisions where their issue-state fingerprints still match; and
+- newly completed human decisions from the Shiny adjudication store.
 
-The authoritative source population was the **32,292-work** post-deduplication canonical JSONL with SHA-256 `1d3977537c1498a728c9fe04ff958874f4a7727ad344a02ba3ef00adb2f755c7`. Workflow 03 publication-status state, Workflow 04 final screening, Workflow 05 species coding, Workflow 06 geography coding and recoveries, Workflow 07 retained topic assignments and Workflow 07 late exclusions were restored from their validated states.
+The finaliser fails closed if input identity, cardinality or decision coverage is inconsistent.
 
-The locked W08 review queue contained **811 issues across 797 unique records** and had SHA-256 `a8f3203c7cfc252dc53d08cd850cbbb5c3c48b8270cebe8a87eedb1af41e5c16`. Human review comprised **57 earlier decisions** plus **754 decisions made in the offline workbook** `Workflow08_offline_human_review(1).xlsx`, whose SHA-256 was `00e396231ba72f1369e9c763b5e19945a3c3fc8b3fb1a6ccaac8d045d77fbf85`.
+## Deterministic pre-review rules
 
-For current dynamic runs, W05 records with `farmed_species_codes == "NONE"` are deterministically excluded before W08 human review because no eligible salmon species was extracted. These records are suppressed from all W08 review queues, including any geography/topic issue they might otherwise have generated, while the raw W05 result is retained in provenance. Historical `species_none` human decisions remain readable by the finaliser for backward compatibility. Current dynamic geography review uses one consolidated decision vocabulary for both `geography_unresolved` and `geography_evidence_unvalidated`: `accept_model`, `override_country_set`, `assign_none`, or `exclude_record`. `geography_model_failure` allows `assign_country_set`, `assign_none`, or `exclude_record`, because there is no model country set to accept. `exclude_record` is a record-level eligibility decision made when geography review reveals that the record is not actually about eligible salmon aquaculture; finalisation marks the record excluded at Workflow 08 and retains the geography adjudication as provenance. For an unresolved case, `accept_model` means accepting Luna's proposed ISO3/country-name set and materialising the final geography as `RESOLVED`; it does not preserve the raw `UNRESOLVED` status as the final analytical geography. The raw W06 status remains preserved in provenance. Legacy `assign_country_set` decisions remain readable as an alias of `override_country_set` for backward compatibility. Topic-disagreement cases from historical states are no longer routed to human review solely because of Jaccard disagreement. Zero-topic eligibility cases could be retained uncoded or excluded.
+### Species `NONE`
 
-The automated outputs of Workflows 04–07 remain immutable. Workflow 08 applies an adjudication overlay. The final analytical canonical JSONL contains only records with final inclusion status. Excluded records are not carried in the canonical JSONL and are instead preserved in a separate exclusions register.
+For current dynamic runs, W05 records with `farmed_species_codes == "NONE"` are deterministically excluded before human review.
 
-## Processing modes or stages
+This rule means:
 
-### Current dynamic topic intake rule
+- the W05 automated result is preserved unchanged for provenance;
+- the record is omitted from the W08 human queue;
+- any geography or topic issue for the same record is suppressed because the record is already excluded; and
+- finalisation records `exclusion_reason = "species_none_deterministic_exclusion"`.
 
-Mean pairwise Jaccard from Workflow 07 is retained for inter-pass agreement/QC reporting but is **not** a W08 gate. Historical/current W07 rows labelled `extreme_three_pass_topic_disagreement` are suppressed during dynamic W08 intake and their retained topic sets are accepted automatically. Assignment-level uncertainty remains visible through 1/3, 2/3 and 3/3 pass support (★/★★/★★★).
+The current W05 state contains **191** such records.
 
-Human topic adjudication is reserved for records that already have retained deterministic W07 topic assignments but still require manual correction. The stable production W08 issue type is `topic_coding_review`, independent of the specific upstream trigger. The retained W07 topic pathways and support levels are visible to the reviewer, who can `accept_retained_topics`, `replace_topic_set`, `no_code`, or `exclude_record`. Historical `ontology_pathology` and `topic_extreme_disagreement` issue types remain readable by finalisation for backward compatibility, but `topic_extreme_disagreement` is not generated in production because Jaccard is descriptive QC only. Zero-topic eligibility uncertainty remains a separate `zero_topic_eligibility_uncertain` route and can now `assign_topic_set`, `include_uncoded`, or `exclude_record`.
+Historical `species_none` decisions remain readable by the finaliser solely so older archived runs can still be reconstructed.
 
-### Current dynamic species intake rule
+### Geography auto-resolution
 
-W05 `farmed_species_codes == "NONE"` is treated as a deterministic eligibility exclusion. The record is not sent to W08 human review and any other W08 issues for that record are suppressed because the record is already out of scope. Finalisation records `exclusion_reason = "species_none_deterministic_exclusion"` at Workflow 08 while preserving the W05 annotation/provenance. Historical `species_none` decisions are still honoured when explicitly present in an older decision ledger.
+A non-failure W06 record with raw `geography_status = UNRESOLVED` and no candidate Luna ISO3 code is deterministically materialised downstream as geography `NONE`. The raw W06 status is retained in provenance.
 
-### Current dynamic geography intake rule
+This rule does **not** auto-resolve:
 
-For current and future dynamic W08 runs, W06 geography escalation uses a minimum-review contract. A non-failure W06 record with raw `geography_status = UNRESOLVED` but **no Luna ISO3 country code** is deterministically assigned downstream geography `NONE` and is not sent to Shiny. The raw W06 model status is preserved in provenance. Only unresolved records with one or more candidate ISO3 country codes remain `geography_unresolved` human-review issues. This rule is implemented through the shared W06 geography validation helper, the dynamic W08 queue builder, and the dynamic W08 final assembler so queue suppression and final canonical materialisation cannot diverge.
+- terminal model/API failures;
+- unresolved records containing one or more candidate countries; or
+- resolved assignments that still fail the current evidence-validation contract.
 
-The rule is deliberately narrow: terminal model/API failures are not auto-resolved, and any unresolved record containing a candidate country code still requires human adjudication.
+## Current human-review issue types
 
-### Locked intake
+Current production W08 can generate:
 
-The W08 intake was rebuilt and validated in GitHub Actions run `36320650383`. It contained 169 species-NONE issues, 470 unresolved-geography issues, 51 geography evidence-grounding issues, 103 extreme topic-disagreement issues and 18 zero-topic eligibility issues. Records with multiple issues were represented once in the queue but required one decision per issue.
+- `geography_unresolved`;
+- `geography_evidence_unvalidated`;
+- `geography_model_failure`;
+- `topic_coding_review`; and
+- `zero_topic_eligibility_uncertain`.
 
-### Offline human adjudication
+Historical issue types such as `species_none`, `topic_extreme_disagreement` and `ontology_pathology` remain readable for backward compatibility but are not all current production routes.
 
-The offline review workbook separated geography, species, topic disagreement and zero-topic eligibility into distinct worksheets. The completed workbook was reduced to a compact specification of class defaults and record-specific overrides while preserving the workbook SHA-256 as provenance.
+Mean pairwise topic Jaccard is descriptive reproducibility/QC information and is **not** a W08 human-review gate.
 
-### Decision expansion and validation
+## Geography decision contract
 
-The finalisation process reconstructed all 754 offline decisions from the compact specification and merged them with the 57 earlier decisions. Expansion failed unless the queue SHA-256 matched, each decision used an allowed outcome, review keys were unique, and all **811** queue issues were resolved exactly once.
+For `geography_unresolved` and `geography_evidence_unvalidated`, allowed outcomes are:
 
-The complete adjudication ledger has SHA-256 `db27db784d66dbcfecebbc9b86307db5ea2f680ec9f5e82fd844168fbff1c0e2`.
+- `accept_model`;
+- `override_country_set`;
+- `assign_none`; or
+- `exclude_record`.
 
-### Final assembly and partition
+For `geography_model_failure`, allowed outcomes are:
 
-The W08 ledger was applied to the canonical evidence base together with the validated W03–W07 states. This produced a temporary all-record disposition state used only to verify final accounting.
+- `assign_country_set`;
+- `assign_none`; or
+- `exclude_record`.
 
-Workflow 07 supplied 123 late automatic exclusion candidates. One of those records was already excluded by a W08 human decision, so **122 additional exclusions** are attributed to the W07-late stage in the mutually exclusive final exclusion accounting.
+`accept_model` materialises Luna's proposed country set as final `RESOLVED` geography. It does not preserve raw `UNRESOLVED` as the analytical result.
 
-The 32,292-record source population partitions exactly into:
+`exclude_record` is a record-level eligibility decision discovered during geography review. Finalisation records it as a Workflow 08 exclusion while retaining the geography review provenance.
 
-- **19,117 included records**, written to `living_evidence_map_canonical_final.jsonl`;
-- **13,175 excluded records**, written to `workflow08_excluded_records.csv`.
+Legacy `assign_country_set` decisions for older unresolved/evidence-validation issues remain readable as a backward-compatible alias of `override_country_set`.
 
-Final exclusions are attributed to Workflow 03 = **9**, Workflow 04 = **12,876**, Workflow 07 late = **122**, and Workflow 08 = **168**. These sum exactly to 13,175.
+## Topic decision contract
 
-The exclusions CSV contains only:
+### `topic_coding_review`
 
-- `record_id`
-- `title`
-- `authors`
-- `year`
-- `journal`
-- `volume`
-- `issue`
-- `pages`
-- `doi`
-- `exclusion_stage`
-- `exclusion_reason`
+Allowed outcomes are:
 
-There are **231 included records with no final topic code** and **53,288 final topic assignments**.
+- `accept_retained_topics`;
+- `replace_topic_set`;
+- `no_code`; or
+- `exclude_record`.
 
-### Corrected archival
+### `zero_topic_eligibility_uncertain`
 
-The initial W08 archive, Zenodo record **22998606** (DOI `10.5281/zenodo.22998606`), incorrectly treated the 32,292-record all-disposition intermediate as the definitive canonical JSONL. The W08 adjudication and inclusion/exclusion decisions in that intermediate were valid, but its output partition was not the agreed architecture.
+Allowed outcomes are:
 
-GitHub Actions run `36329841121` therefore deterministically repartitioned that already validated post-adjudication state without rerunning human review, model coding or upstream workflows. The corrected partition was first published as restricted Zenodo record **22998934**, DOI **10.5281/zenodo.22998934**. A subsequent lossless reassembly preserved the full upstream Workflow 03–07 annotation/provenance objects in the final canonical records without changing the final inclusion/exclusion decisions or counts. That lossless canonical was published as restricted Zenodo record **23020526**, DOI **10.5281/zenodo.23020526**, which supersedes record 22998934.
+- `assign_topic_set`;
+- `include_uncoded`; or
+- `exclude_record`.
 
-## Provenance and documentation
+Raw W07 model assignments, retained pathways and pass-support values remain preserved for audit.
 
-The complete W08 decision ledger records stable review keys, record IDs, issue types, human decisions, final values, rationale, reviewer, resolution timestamp and queue provenance.
+## Record-level Shiny review
 
-The corrected final-output checksums are:
+The Shiny interface uses one row per unique record, with an `issues` array containing every current human-review issue for that record. All issues for the record are shown together and all must have valid decisions before the record is complete.
 
-- included canonical JSONL SHA-256: `8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c`;
-- exclusions CSV SHA-256: `d1733b27212d02d1d6d43011fa3fb38cd99ef779882c9ad94b7a7d2860d7c244`;
-- W08 adjudication ledger SHA-256: `db27db784d66dbcfecebbc9b86307db5ea2f680ec9f5e82fd844168fbff1c0e2`;
-- canonical gzip archive SHA-256: `ffcce9aeae0dfdc914fe47b0e18b390fdddc6a6102e3ab0ff1d23bb5b331756d`.
+The queue is checksum-locked. Decisions record:
 
-The included canonical JSONL is 240,405,647 bytes. For Zenodo transfer it is stored as `living_evidence_map_canonical_final.jsonl.gz` (29,865,281 bytes); the uncompressed JSONL SHA-256 remains authoritative. The exclusions CSV is 3,454,999 bytes.
+- stable `review_key`;
+- `record_id`;
+- `issue_type`;
+- exact `issue_state_sha256`;
+- chosen outcome;
+- final value where applicable;
+- reviewer;
+- resolution timestamp; and
+- queue SHA-256.
 
-## Storage and archival model
+The backend verifies the live queue SHA before accepting a save, so a stale browser session cannot silently write against a replaced W08 queue.
 
-### Permanent repository records
+## Decision reuse
 
-GitHub retains the compact offline-adjudication specification, prior human geography decisions, W08 implementation scripts, workflow definition, this report and the Zenodo pointer/registry. The reviewed workbook itself is represented by its cryptographic checksum and compact decision specification rather than committed as a binary repository file.
+Prior W08 decisions are reusable only when both the stable review key and exact current issue-state fingerprint match. A decision is not reused merely because the record or issue type has appeared previously.
 
-### Short-lived GitHub Actions artefacts
+The resume finaliser combines:
 
-Correction run `36329841121` retains the included canonical JSONL, exclusions CSV, complete adjudication ledger, corrected manifest and Zenodo receipt as the Actions artefact `workflow08-corrected-36329841121` for operational verification.
+1. compatible decisions already present in the immutable stopped-run state;
+2. cumulative historical Shiny decision history; and
+3. fresh decisions from the active batch.
 
-### Durable external archive
+Later/current decisions take precedence, but only when the exact issue-state fingerprint matches.
 
-The authoritative W08 output is archived as restricted Zenodo record **23020526**, DOI **10.5281/zenodo.23020526**. The deposit contains exactly:
+Finalisation stops unless the resulting ledger covers the entire current issue index exactly.
 
-1. `living_evidence_map_canonical_final.jsonl.gz` — gzip-compressed transfer form of the 19,117-record included canonical JSONL;
-2. `workflow08_excluded_records.csv` — 13,175 excluded records with bibliographic metadata and exclusion reasons;
-3. `workflow08_adjudication_ledger.jsonl` — all 811 W08 issue decisions; and
-4. `workflow08_final_manifest.json` — counts, provenance and checksums.
+## Final assembly
 
-Zenodo records **22998606** and **22998934** are superseded and must not be used as the authoritative W08 handoff.
+Workflow 08 assembles the full disposition state from the upstream canonical record plus W03-W07 layers and the complete W08 decision ledger, then partitions it into:
+
+1. an included-only canonical JSONL; and
+2. a separate exclusions CSV.
+
+The canonical JSONL retains the complete upstream annotation/provenance objects required for downstream reporting and dashboard use. The exclusions file preserves bibliographic identifiers and final exclusion stage/reason.
+
+The current archive uses annotation-preservation contract:
+
+`lossless-upstream-handoff-v2`
+
+## Durable archive
+
+The current authoritative restricted Zenodo record is:
+
+- record: **23138991**
+- DOI: `10.5281/zenodo.23138991`
+- source GitHub run: **37211675882**
+- visibility: restricted
+
+It contains:
+
+1. `living_evidence_map_canonical_final.jsonl`;
+2. `workflow08_excluded_records.csv`;
+3. `workflow08_adjudication_ledger.jsonl`; and
+4. `workflow08_final_manifest.json`.
+
+Repository lineage is recorded in:
+
+- `docs/workflow08/zenodo/run-37211675882.json`; and
+- `docs/workflow08/zenodo_registry.csv`.
+
+Zenodo record **23020526** is now superseded and must not be selected as the current W08 handoff.
 
 ## Downstream handoff
 
-The included-only Workflow 08 canonical JSONL from Zenodo record 23020526 is the authoritative input to Workflow 09 documentation/output-summary work and subsequently the dashboard/output layer. Downstream workflows must decompress `living_evidence_map_canonical_final.jsonl.gz` and verify the uncompressed SHA-256 `8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c` before use.
+Workflow 09 must resolve the single `authoritative` row in the W08 registry, restore the corresponding pointer and verify:
 
-The exclusions CSV is retained for audit, exclusion reporting and PRISMA-style flow reporting. It is not part of the analytical evidence-base input.
+- pointer status is `published`;
+- workflow is `08`;
+- canonical record count;
+- final canonical SHA-256;
+- archive/file checksum; and
+- the lossless annotation-preservation contract.
+
+For the current release, W09 therefore consumes run **37211675882**, not a historical W08 pointer.
+
+## Live pipeline-status handoff
+
+A final published W08 state now updates `docs/current_run/current_run_status.json` and the Shiny `pipeline_run_status` sheet **inside the W08 production/resume workflow itself** after registration.
+
+The current status after W08 is:
+
+- W00-W08 complete;
+- W10/dashboard position active/pending next;
+- status label: `Final adjudication complete; awaiting dashboard build`.
+
+This direct update is required because a registry commit made by a workflow using the repository `GITHUB_TOKEN` does not trigger another push-based status workflow. The Shiny application polls the status sheet every 30 seconds, so once the backend row exists the top progress display updates without republishing the app.
+
+## Historical baseline provenance
+
+The September 2026 baseline W08 release used an 811-issue offline adjudication over a 32,292-record source population and ultimately produced 19,117 included records in Zenodo record **23020526**. That archive remains an important immutable historical release and validation record, but it is no longer authoritative for the current living map.
+
+Historical counts, offline-workbook decisions and earlier partition corrections must therefore be interpreted as provenance for that baseline release rather than as the current W08 operating state.
 
 ## Methods text for research reporting
 
-> **Workflow 08: human adjudication and final assembly.** Records requiring manual resolution after species, geography and topic coding were collated into a checksum-locked review queue comprising 811 issues across 797 records. A single human reviewer adjudicated each issue using a structured offline workbook, with decisions recorded separately from the immutable automated outputs. Human decisions and late automatic exclusions were applied as overlays to the canonical evidence base. From a source population of 32,292 deduplicated records, 19,117 records were retained in the definitive canonical evidence-base JSONL and 13,175 excluded records were exported separately with bibliographic metadata and final exclusion reasons. The complete adjudication ledger and final outputs were checksum-validated and archived in a restricted Zenodo deposit (10.5281/zenodo.23020526).
+> **Workflow 08: human adjudication and final assembly.** Automated species, geography and topic layers were combined with deterministic final-routing rules before human review. Records for which Workflow 05 identified no eligible focal species were excluded deterministically without human review, and non-failure unresolved geography records without a candidate country were deterministically assigned no geography while preserving the raw model output. Remaining current review issues were represented in a checksum-locked record-level Shiny queue. Previously adjudicated issues were reused only when their stable review key and exact issue-state fingerprint matched the current state. Human geography and topic decisions were retained as a separate adjudication overlay and the workflow failed closed unless every current issue had a valid decision. Final assembly partitioned the complete source population into an included-only canonical JSONL and a separate exclusions register, retained upstream annotation provenance losslessly, checksum-validated all outputs and archived the definitive state in a restricted Zenodo record.
 
 ## Reporting status
 
-**COMPLETE and validated.** All 811 locked W08 issues were resolved exactly once. The 32,292-record source population was partitioned exactly into 19,117 included canonical records and 13,175 exclusions. The included canonical JSONL contains no excluded records. The exclusions file contains only bibliographic identification fields and exclusion stage/reason. The authoritative lossless archive is Zenodo record **23020526**, DOI **10.5281/zenodo.23020526**.
+**COMPLETE and validated for the current release.** Run **37211675882** produced the authoritative W08 state: **47,094 source records = 21,493 included + 25,601 excluded**, with **137/137 current decision issues resolved**. The authoritative archive is Zenodo record **23138991**, DOI `10.5281/zenodo.23138991`.
