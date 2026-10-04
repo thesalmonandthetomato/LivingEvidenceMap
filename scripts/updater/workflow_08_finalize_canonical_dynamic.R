@@ -48,7 +48,7 @@ topic_items<-function(ids,source,rid){ids<-unique(as.character(ids));ids<-ids[nz
 dir.create(dirname(ledger_path),recursive=TRUE,showWarnings=FALSE);file.copy(decisions_path,ledger_path,overwrite=TRUE)
 
 out<-file(out_path,"wt",encoding="UTF-8");on.exit(close(out),add=TRUE);can<-file(canonical_path,"rt",encoding="UTF-8");on.exit(close(can),add=TRUE)
-n<-0L;included<-0L;excluded<-0L;exc_counts<-c(workflow03=0L,workflow04=0L,workflow07_late=0L,workflow08=0L);included_uncoded<-0L;topic_assignments<-0L;species_overrides<-0L;geo_overrides<-0L;geo_auto_none<-0L;topic_overrides<-0L;seen<-character()
+n<-0L;included<-0L;excluded<-0L;exc_counts<-c(workflow03=0L,workflow04=0L,workflow07_late=0L,workflow08=0L);included_uncoded<-0L;topic_assignments<-0L;species_overrides<-0L;geo_overrides<-0L;geo_exclusions<-0L;geo_auto_none<-0L;topic_overrides<-0L;seen<-character()
 repeat{
  ln<-readLines(can,n=1L,warn=FALSE);if(!length(ln))break;if(!nzchar(trimws(ln)))next
  rec<-fromJSON(ln,simplifyVector=FALSE);incoming_rec<-rec;rid<-clean((rec$identity%||%list())$record_id);if(!nzchar(rid)||rid%in%seen)stop("Invalid/duplicate canonical record_id",call.=FALSE);seen<-c(seen,rid);n<-n+1L
@@ -64,7 +64,17 @@ repeat{
   z6<-w06[i6,,drop=FALSE];gst<-clean(z6$geography_status);auto_none<-gst=="UNRESOLVED" && !(z6$llm_failed[[1L]] %in% TRUE) && !length(normalise_iso3_set(z6$luna_iso3c[[1L]]));effective_gst<-if(auto_none)"NONE" else gst;geography<-list(status=effective_gst,iso3c=if(effective_gst=="RESOLVED")splitsemi(z6$luna_iso3c)else character(),country_names=if(effective_gst=="RESOLVED")splitsemi(z6$luna_country_names)else character(),evidence=if(auto_none)NULL else clean(z6$luna_evidence),reason=clean(z6$geography_reason),source=if(auto_none)"workflow06_deterministic_auto_none" else "workflow06",workflow06=row_payload(w06,i6,drop=c("record_id","title","abstract")),workflow08_adjudication=NULL);if(auto_none)geo_auto_none<-geo_auto_none+1L
   gd<-geo_map[[rid]];if(!is.null(gd)){
     gdec<-clean(gd$decision)
-    if(identical(gdec,"accept_model")){
+    if(identical(gdec,"exclude_record")){
+      geography$workflow08_adjudication<-gd
+      if(isTRUE(screening$final_included)){
+        screening$status<-"excluded"
+        screening$final_included<-FALSE
+        screening$exclusion_stage<-"workflow08"
+        screening$exclusion_reason<-"geography_human_exclusion"
+        screening$workflow08_exclusion<-TRUE
+        geo_exclusions<-geo_exclusions+1L
+      }
+    }else if(identical(gdec,"accept_model")){
       model_iso<-splitsemi(z6$luna_iso3c)
       model_names<-splitsemi(z6$luna_country_names)
       if(!length(model_iso))stop("W08 accept_model geography decision has no Luna country set: ",rid,call.=FALSE)
@@ -118,6 +128,6 @@ repeat{
 close(can);on.exit(NULL,add=FALSE);close(out);on.exit(NULL,add=FALSE)
 if(n!=length(canonical_ids)||included+excluded!=n)stop("Final canonical population invariant failed",call.=FALSE)
 if(sum(exc_counts)!=excluded)stop(sprintf("Exclusion accounting mismatch: stages=%d excluded=%d",sum(exc_counts),excluded),call.=FALSE)
-manifest<-list(schema="living-evidence-map-workflow08-final-v3",status="PASS",canonical_schema_version="living-evidence-map-canonical-v1",annotation_preservation="lossless-upstream-handoff-v2",canonical_records=n,final_included_records=included,final_excluded_records=excluded,exclusions_by_stage=as.list(exc_counts),included_uncoded_topic_records=included_uncoded,final_topic_assignments=topic_assignments,w08_decision_issues=length(decisions),w08_unique_review_records=length(unique(vapply(decisions,function(z)clean(z$record_id),character(1)))),species_overrides=species_overrides,geography_human_overrides=geo_overrides,geography_deterministic_auto_none=geo_auto_none,topic_human_overrides=topic_overrides,source_counts=list(workflow03=length(w03),workflow04=length(w04),workflow05=nrow(w05),workflow06=nrow(w06),workflow07_late_exclusions=nrow(late)),source_sha256=list(canonical_input=digest(file=canonical_path,algo="sha256",serialize=FALSE),workflow03=digest(file=w03_path,algo="sha256",serialize=FALSE),workflow04=digest(file=w04_path,algo="sha256",serialize=FALSE),workflow05=digest(file=w05_path,algo="sha256",serialize=FALSE),workflow06=digest(file=w06_path,algo="sha256",serialize=FALSE),workflow07_scores=digest(file=w07_scores_path,algo="sha256",serialize=FALSE),workflow08_decisions=digest(file=decisions_path,algo="sha256",serialize=FALSE),ontology=digest(file=ontology_path,algo="sha256",serialize=FALSE)),final_canonical_jsonl_sha256=digest(file=out_path,algo="sha256",serialize=FALSE),final_canonical_jsonl_bytes=unname(file.info(out_path)$size),adjudication_ledger_sha256=digest(file=ledger_path,algo="sha256",serialize=FALSE),generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"))
+manifest<-list(schema="living-evidence-map-workflow08-final-v3",status="PASS",canonical_schema_version="living-evidence-map-canonical-v1",annotation_preservation="lossless-upstream-handoff-v2",canonical_records=n,final_included_records=included,final_excluded_records=excluded,exclusions_by_stage=as.list(exc_counts),included_uncoded_topic_records=included_uncoded,final_topic_assignments=topic_assignments,w08_decision_issues=length(decisions),w08_unique_review_records=length(unique(vapply(decisions,function(z)clean(z$record_id),character(1)))),species_overrides=species_overrides,geography_human_overrides=geo_overrides,geography_human_exclusions=geo_exclusions,geography_deterministic_auto_none=geo_auto_none,topic_human_overrides=topic_overrides,source_counts=list(workflow03=length(w03),workflow04=length(w04),workflow05=nrow(w05),workflow06=nrow(w06),workflow07_late_exclusions=nrow(late)),source_sha256=list(canonical_input=digest(file=canonical_path,algo="sha256",serialize=FALSE),workflow03=digest(file=w03_path,algo="sha256",serialize=FALSE),workflow04=digest(file=w04_path,algo="sha256",serialize=FALSE),workflow05=digest(file=w05_path,algo="sha256",serialize=FALSE),workflow06=digest(file=w06_path,algo="sha256",serialize=FALSE),workflow07_scores=digest(file=w07_scores_path,algo="sha256",serialize=FALSE),workflow08_decisions=digest(file=decisions_path,algo="sha256",serialize=FALSE),ontology=digest(file=ontology_path,algo="sha256",serialize=FALSE)),final_canonical_jsonl_sha256=digest(file=out_path,algo="sha256",serialize=FALSE),final_canonical_jsonl_bytes=unname(file.info(out_path)$size),adjudication_ledger_sha256=digest(file=ledger_path,algo="sha256",serialize=FALSE),generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"))
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),manifest_path,useBytes=TRUE)
 cat(sprintf("PASS: final W08 canonical: %d included / %d excluded / %d total; SHA256=%s\n",included,excluded,n,manifest$final_canonical_jsonl_sha256))
