@@ -554,7 +554,7 @@ jobs:
           W04=$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$workflow_runs$W04)')
           W05=$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$workflow_runs$W05)')
           LEAN="docs/compaction/zenodo/run-$W02.json"
-          P03="docs/workflow03/zenodo/run-$W03.json"
+          P03="docs/publication_status/zenodo/run-$W03.json"
           P04="docs/workflow04/zenodo/run-$W04.json"
           P05="docs/workflow05/zenodo/run-$W05.json"
           P06="$W06_POINTER"
