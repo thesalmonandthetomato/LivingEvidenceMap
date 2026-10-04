@@ -49,7 +49,7 @@ jobs:
           install.packages(c(
             "jsonlite","dplyr","tidyr","readr","ggplot2","scales","here",
             "stringr","sf","classInt","rnaturalearth","rnaturalearthdata",
-            "httr2","digest","CiteSource","rmarkdown","knitr"
+            "httr2","digest","rmarkdown","knitr"
           ))
 
       - name: Resolve and validate release provenance
@@ -166,51 +166,65 @@ jobs:
           test -s workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
           test -s workflow08_reporting_state/workflow08_excluded_records.csv
 
-      - name: Restore authoritative pre-screening canonical and final included IDs
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-        shell: bash
+      - name: Validate compact Workflow 00-08 reporting inputs
+        shell: Rscript {0}
         run: |
-          set -euo pipefail
-          test -n "$W01_POINTER"
-          Rscript scripts/updater/workflow_01_restore_current_state.R \
-            --pointer "$W01_POINTER" \
-            --pointer-dir docs/deduplication/zenodo \
-            --output-root workflow01_state
-          test -s workflow01_state/canonical/records.jsonl
-          Rscript -e '
-            library(jsonlite)
-            p <- "workflow08_reporting_state/living_evidence_map_canonical_final.jsonl"
-            con <- file(p,"rt",encoding="UTF-8"); on.exit(close(con))
-            ids <- character()
-            repeat {
-              x <- readLines(con,n=5000L,warn=FALSE)
-              if(!length(x)) break
-              x <- x[nzchar(trimws(x))]
-              ids <- c(ids,vapply(x,function(z){
-                r<-fromJSON(z,simplifyVector=FALSE)
-                as.character(r$identity$record_id)
-              },character(1)))
-            }
-            stopifnot(length(ids)>0L,!anyDuplicated(ids),all(nzchar(ids)))
-            writeLines(ids,"workflow08_final_included_record_ids.txt",useBytes=TRUE)
-            cat(sprintf("PASS: extracted %d final included record IDs\n",length(ids)))
-          '
+          library(jsonlite)
+          library(digest)
 
-      - name: Restore authoritative Workflow 02 enrichment state
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$W02_POINTER"
-          Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
-            --pointer "$W02_POINTER" \
-            --output-dir workflow02_reporting_state
-          PATCH="$(find workflow02_reporting_state -type f -name cumulative_patch.jsonl -print -quit)"
-          test -n "$PATCH"
-          test -s "$PATCH"
-          cp "$PATCH" workflow02_cumulative_patch.jsonl
+          root <- "docs/reporting/workflow_09_inputs/current"
+          manifest_path <- file.path(root, "manifest.json")
+          if (!file.exists(manifest_path)) stop("Compact Workflow 09 input manifest is missing", call. = FALSE)
+          manifest <- fromJSON(manifest_path, simplifyVector = FALSE)
+          stopifnot(identical(manifest$schema, "living-evidence-map-workflow09-input-manifest-v1"))
+
+          stage_files <- sprintf("w%02d_summary.json", 0:8)
+          missing <- stage_files[!file.exists(file.path(root, stage_files))]
+          if (length(missing)) stop("Missing stage summary file(s): ", paste(missing, collapse = ", "), call. = FALSE)
+
+          summaries <- lapply(sprintf("W%02d", 0:8), function(stage) {
+            x <- fromJSON(file.path(root, paste0(tolower(stage), "_summary.json")), simplifyVector = FALSE)
+            stopifnot(identical(as.character(x$stage), stage), identical(as.character(x$status), "complete"))
+            x
+          })
+          names(summaries) <- sprintf("W%02d", 0:8)
+
+          w01 <- fromJSON(Sys.getenv("W01_POINTER"), simplifyVector = FALSE)
+          w02 <- fromJSON(Sys.getenv("W02_POINTER"), simplifyVector = FALSE)
+          w08 <- fromJSON(Sys.getenv("W08_POINTER"), simplifyVector = FALSE)
+          status <- fromJSON("docs/current_run/current_run_status.json", simplifyVector = FALSE)
+
+          expected_runs <- c(
+            W01 = as.character(status$workflow_runs$W01),
+            W02 = as.character(status$workflow_runs$W02),
+            W03 = as.character(status$workflow_runs$W03),
+            W04 = as.character(status$workflow_runs$W04),
+            W05 = as.character(status$workflow_runs$W05),
+            W06 = as.character(status$workflow_runs$W06),
+            W07 = as.character(status$workflow_runs$W07),
+            W08 = as.character(status$workflow_runs$W08)
+          )
+          observed_runs <- vapply(summaries[names(expected_runs)], function(x) as.character(x$source_run_id), character(1))
+          if (!identical(unname(observed_runs), unname(expected_runs))) {
+            stop("Compact Workflow 09 stage summaries do not match the current-run workflow IDs", call. = FALSE)
+          }
+
+          w01_src <- fromJSON(file.path(root, "w01_source_manifest.json"), simplifyVector = FALSE)
+          w08_src <- fromJSON(file.path(root, "w08_source_manifest.json"), simplifyVector = FALSE)
+          stopifnot(
+            identical(as.character(w01_src$source_run_id), as.character(status$workflow_runs$W01)),
+            identical(as.character(w08_src$source_run_id), as.character(status$workflow_runs$W08)),
+            identical(tolower(as.character(w01_src$canonical_sha256)), tolower(as.character(w01$canonical_jsonl_sha256))),
+            identical(tolower(as.character(w08_src$canonical_sha256)), tolower(as.character(w08$final_canonical_jsonl_sha256))),
+            as.integer(w01_src$canonical_records) == as.integer(w01$canonical_records),
+            as.integer(w08_src$canonical_records) == as.integer(w08$canonical_records)
+          )
+
+          cat(sprintf(
+            "PASS: compact W09 inputs match current release: W01=%s W02=%s W03=%s W04=%s W05=%s W06=%s W07=%s W08=%s\n",
+            expected_runs[["W01"]], expected_runs[["W02"]], expected_runs[["W03"]], expected_runs[["W04"]],
+            expected_runs[["W05"]], expected_runs[["W06"]], expected_runs[["W07"]], expected_runs[["W08"]]
+          ))
 
       - name: Export full canonical library to RIS
         shell: bash
@@ -225,9 +239,7 @@ jobs:
       - name: Render manuscript figures from authoritative pipeline data
         env:
           CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
-          EXCLUSIONS_CSV: ${{ github.workspace }}/workflow08_reporting_state/workflow08_excluded_records.csv
-          PRESCREEN_CANONICAL_JSONL: ${{ github.workspace }}/workflow01_state/canonical/records.jsonl
-          WORKFLOW02_PATCH_JSONL: ${{ github.workspace }}/workflow02_cumulative_patch.jsonl
+          W09_INPUT_DIR: ${{ github.workspace }}/docs/reporting/workflow_09_inputs/current
         shell: bash
         run: |
           set -euo pipefail
@@ -244,8 +256,7 @@ jobs:
         run: |
           set -euo pipefail
           Rscript scripts/reporting/plot_citesource_database_contribution.R \
-            --input workflow01_state/canonical/records.jsonl \
-            --included-ids workflow08_final_included_record_ids.txt \
+            --input-dir docs/reporting/workflow_09_inputs/current \
             --output-dir outputs/citesource_contribution
 
       - name: Render Methods and Results manuscripts
