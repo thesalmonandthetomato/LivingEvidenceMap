@@ -100,7 +100,7 @@ for(i in seq_len(nrow(w06_failures))){
       deterministic_primary_countries=clean_chr(z$deterministic_primary_countries),
       deterministic_primary_iso3c=clean_chr(z$deterministic_primary_iso3c)
     ),
-    allowed_human_outcomes=c("assign_country_set","assign_none")
+    allowed_human_outcomes=c("assign_country_set","assign_none","exclude_record")
   ))
 }
 
@@ -121,7 +121,7 @@ for(i in seq_len(nrow(w06_unresolved))){
       luna_evidence=clean_chr(z$luna_evidence),
       geography_reason=clean_chr(z$geography_reason)
     ),
-    allowed_human_outcomes=c("accept_model","override_country_set","assign_none")
+    allowed_human_outcomes=c("accept_model","override_country_set","assign_none","exclude_record")
   ))
 }
 
@@ -172,7 +172,7 @@ for(rid in resid_ids){
       luna_evidence=clean_chr(z$luna_evidence),
       geography_reason=clean_chr(z$geography_reason)
     ),
-    allowed_human_outcomes=c("accept_model","override_country_set","assign_none")
+    allowed_human_outcomes=c("accept_model","override_country_set","assign_none","exclude_record")
   ))
 }
 
