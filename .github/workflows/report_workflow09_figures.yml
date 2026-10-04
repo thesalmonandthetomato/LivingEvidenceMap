@@ -320,7 +320,7 @@ jobs:
         run: |
           set -euo pipefail
           PUB=docs/reporting/workflow_09
-          mkdir -p "$PUB/figures" "$PUB/figure_code" "$PUB/data" "$PUB/manuscript"
+          mkdir -p "$PUB/figures" "$PUB/figure_code" "$PUB/data" "$PUB/manuscript" "$PUB/data/workflow_inputs"
 
           # Remove superseded generated figure/code files from previous W09 runs
           # before staging the new publication package. Static manuscript source
@@ -366,6 +366,8 @@ jobs:
           cp visualisations/figure_07_flow_diagram_counts.json "$PUB/flow_counts.json"
           cp outputs/workflow09_data/living_evidence_map_canonical_final.ris "$PUB/data/living_evidence_map_canonical_final.ris"
           cp outputs/workflow09_data/living_evidence_map_canonical_final.ris.manifest.json "$PUB/data/living_evidence_map_canonical_final.ris.manifest.json"
+          rm -f "$PUB/data/workflow_inputs"/*
+          cp docs/reporting/workflow_09_inputs/current/* "$PUB/data/workflow_inputs/"
 
           # Snapshot the exact plotting code used for this publication package.
           cp visualisations/canonical_figure_data.R "$PUB/figure_code/canonical_figure_data.R"
@@ -469,7 +471,15 @@ jobs:
             "docs/reporting/workflow_09/manuscript/results.html",
             "docs/reporting/workflow_09/manuscript/results.docx",
             "docs/reporting/workflow_09/manuscript/results.pdf",
-            "docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris"
+            "docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris",
+            "docs/reporting/workflow_09/data/workflow_inputs/manifest.json",
+            sprintf("docs/reporting/workflow_09/data/workflow_inputs/w%02d_summary.json", 0:8),
+            "docs/reporting/workflow_09/data/workflow_inputs/w01_source_summary.csv",
+            "docs/reporting/workflow_09/data/workflow_inputs/w01_source_intersections.csv",
+            "docs/reporting/workflow_09/data/workflow_inputs/w01_source_manifest.json",
+            "docs/reporting/workflow_09/data/workflow_inputs/w08_source_summary.csv",
+            "docs/reporting/workflow_09/data/workflow_inputs/w08_source_intersections.csv",
+            "docs/reporting/workflow_09/data/workflow_inputs/w08_source_manifest.json"
           )
           stopifnot(all(file.exists(required)))
           cat("PASS: Workflow 09 publication package validated\n")
