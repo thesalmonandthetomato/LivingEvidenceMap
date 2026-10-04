@@ -116,7 +116,7 @@ process_box_w <- 2.75
 # grammar as the database set grows, it uses two columns for <=6 databases and
 # three columns for >6 databases. Each entry retains the source-specific hit
 # count and search date.
-n_source_cols <- if (nrow(source_meta) <= 6L) 2L else 3L
+n_source_cols <- if (nrow(source_meta) <= 10L) 2L else 3L
 n_source_rows <- ceiling(nrow(source_meta) / n_source_cols)
 source_panel_left <- 1.35
 source_panel_right <- 10.15
