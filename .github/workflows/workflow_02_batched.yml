@@ -45,6 +45,8 @@ on:
         required: true
       SCOPUS_INSTTOKEN:
         required: true
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: true
   workflow_dispatch:
     inputs:
       workflow01_pointer_path:
@@ -403,7 +405,7 @@ jobs:
 
       - name: Install finalization dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2'))
+        run: install.packages(c('jsonlite','digest','httr2','readr','googlesheets4'))
 
       - name: Download immutable finalization state
         uses: actions/download-artifact@v4
@@ -560,6 +562,31 @@ jobs:
             git commit -m "Register batched Workflow 02 enrichment state run $GITHUB_RUN_ID"
             git pull --rebase origin workflow01-final-architecture
             git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Update current-run live status through W02
+        if: ${{ inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W02
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W02 [skip ci]"
+            git pull --rebase origin "$WORKFLOW02_BRANCH"
+            git push origin HEAD:"$WORKFLOW02_BRANCH"
           fi
 
       - name: Upload validated Workflow 02 handoff cache
