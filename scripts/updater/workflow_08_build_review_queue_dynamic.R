@@ -104,7 +104,12 @@ for(i in seq_len(nrow(w06_failures))){
   ))
 }
 
-w06_unresolved<-w06 |> filter(geography_status=="UNRESOLVED", !(llm_failed %in% TRUE))
+w06_unresolved_all<-w06 |> filter(geography_status=="UNRESOLVED", !(llm_failed %in% TRUE))
+w06_unresolved_auto_none<-w06_unresolved_all |>
+  filter(!nzchar(vapply(luna_iso3c,norm_iso_set,character(1))))
+w06_unresolved<-w06_unresolved_all |>
+  filter(nzchar(vapply(luna_iso3c,norm_iso_set,character(1))))
+
 for(i in seq_len(nrow(w06_unresolved))){
   z<-w06_unresolved[i,,drop=FALSE]
   add_issue(z$record_id,list(
@@ -123,7 +128,10 @@ for(i in seq_len(nrow(w06_unresolved))){
 # W06 evidence-grounding residual after deterministic revalidation.
 resid_ids<-unique(as.character(g_resid$record_id))
 resid_ids<-resid_ids[nzchar(resid_ids)]
-resid_ids<-setdiff(resid_ids,unique(c(as.character(w06_failures$record_id),as.character(w06_unresolved$record_id))))
+resid_ids<-setdiff(resid_ids,unique(c(
+  as.character(w06_failures$record_id),
+  as.character(w06_unresolved_all$record_id)
+)))
 if(length(setdiff(resid_ids,w06$record_id)))stop("Grounding residual contains ID outside W06",call.=FALSE)
 
 # A grounding-format failure cannot change the substantive geography when
@@ -258,6 +266,7 @@ manifest<-list(
   input_population=nrow(context),
   w05_species_none=nrow(w05_none),
   w06_unresolved=nrow(w06_unresolved),
+  w06_unresolved_no_country_autoassigned_none=nrow(w06_unresolved_auto_none),
   w06_model_failures=nrow(w06_failures),
   w06_grounding_exact_agreement_autoaccepted=length(exact_grounding_accept_ids),
   w06_grounding_explicit_country_cue_autoaccepted=length(explicit_country_cue_accept_ids),
