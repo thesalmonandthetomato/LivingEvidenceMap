@@ -11,78 +11,97 @@ dir.create(out_dir,recursive=TRUE,showWarnings=FALSE)
 clean<-function(x){if(is.null(x)||!length(x))return("");z<-as.character(x[[1L]]);if(is.na(z))"" else z}
 canon_hash<-function(x)digest(toJSON(x,auto_unbox=TRUE,null="null",na="null",digits=NA,pretty=FALSE),algo="sha256",serialize=FALSE)
 read_jsonl<-function(path){x<-readLines(path,warn=FALSE,encoding="UTF-8");x<-x[nzchar(trimws(x))];lapply(x,fromJSON,simplifyVector=FALSE)}
+write_jsonl<-function(rows,path){con<-file(path,"wt",encoding="UTF-8");on.exit(close(con),add=TRUE);for(z in rows)writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null",digits=NA),con,useBytes=TRUE)}
 
+# Build the post-change queue from the exact pre-change immutable queue:
+# change only geography_unresolved allowed_human_outcomes and its resulting hash.
 queue<-read_jsonl(queue_path)
-reused<-read_jsonl(reused_path)
-old_state<-list();new_hash<-list()
+geo_changed<-0L
+for(i in seq_along(queue)){
+  rec<-queue[[i]]
+  rid<-clean(rec$record_id)
+  for(j in seq_along(rec$issues%||%list())){
+    issue<-rec$issues[[j]]
+    if(clean(issue$issue_type)!="geography_unresolved")next
+    if(!identical(as.character(issue$allowed_human_outcomes),c("assign_country_set","assign_none"))){
+      stop("Unexpected pre-change geography vocabulary for ",rid,call.=FALSE)
+    }
+    issue$allowed_human_outcomes<-c("accept_model","override_country_set","assign_none")
+    state<-list(
+      review_key=paste(rid,"geography_unresolved",sep="::"),
+      record_id=rid,
+      issue_type="geography_unresolved",
+      source_workflow=clean(issue$source_workflow),
+      title=clean(rec$title),
+      abstract=clean(rec$abstract),
+      automated_value=issue$automated_value,
+      allowed_human_outcomes=issue$allowed_human_outcomes
+    )
+    issue$issue_state_sha256<-canon_hash(state)
+    rec$issues[[j]]<-issue
+    geo_changed<-geo_changed+1L
+  }
+  queue[[i]]<-rec
+}
+new_queue<-file.path(out_dir,"current_queue_new_vocab.jsonl")
+write_jsonl(queue,new_queue)
 
+# Use the real decisions that were reusable in the successful pre-change run as
+# the historical ledger. This gives exact real decision hashes/payloads.
+prior<-read_jsonl(reused_path)
+prior_path<-file.path(out_dir,"prior_real_reused_decisions.jsonl")
+write_jsonl(prior,prior_path)
+
+prod_out<-file.path(out_dir,"production_reuse")
+dir.create(prod_out,recursive=TRUE,showWarnings=FALSE)
+status<-system2("Rscript",c(
+  "scripts/updater/workflow_08_reuse_decisions.R",
+  "--queue",new_queue,
+  "--prior-ledger",prior_path,
+  "--output-dir",prod_out
+))
+if(status!=0L)stop("Production W08 reuse script failed",call.=FALSE)
+
+manifest<-fromJSON(file.path(prod_out,"workflow08_reuse_manifest.json"),simplifyVector=FALSE)
+if(as.integer(manifest$current_issues)!=330L)stop("Expected 330 current issues",call.=FALSE)
+if(as.integer(manifest$reused_issues)!=219L)stop("Expected 219 reused issues",call.=FALSE)
+if(as.integer(manifest$pending_issues)!=111L)stop("Expected 111 pending issues",call.=FALSE)
+if(as.integer(manifest$compatible_geography_vocabulary_migrations)!=54L)stop("Expected 54 compatibility migrations",call.=FALSE)
+
+out<-read_jsonl(file.path(prod_out,"workflow08_reused_decisions.jsonl"))
+compat<-Filter(function(z)identical(clean((z$reuse%||%list())$basis),"compatible_geography_unresolved_vocabulary_migration"),out)
+if(length(compat)!=54L)stop("Expected 54 compatibility-tagged decisions",call.=FALSE)
+if(any(vapply(compat,function(z)clean(z$issue_type)!="geography_unresolved",logical(1))))stop("Non-geography decision used compatibility path",call.=FALSE)
+
+decs<-vapply(compat,function(z)clean(z$decision),character(1))
+if(sum(decs=="assign_none")!=53L)stop("Expected 53 preserved assign_none decisions",call.=FALSE)
+if(sum(decs=="override_country_set")!=1L)stop("Expected 1 migrated override_country_set decision",call.=FALSE)
+if(any(!decs%in%c("assign_none","override_country_set")))stop("Unexpected migrated decision code",call.=FALSE)
+
+# Every compatibility-reused decision must now carry the exact current issue hash.
+cur_hash<-list()
 for(rec in queue){
   rid<-clean(rec$record_id)
   for(issue in rec$issues%||%list()){
-    typ<-clean(issue$issue_type);key<-paste(rid,typ,sep="::")
-    state<-list(
-      review_key=key,record_id=rid,issue_type=typ,source_workflow=clean(issue$source_workflow),
-      title=clean(rec$title),abstract=clean(rec$abstract),
-      automated_value=issue$automated_value,allowed_human_outcomes=issue$allowed_human_outcomes
-    )
-    h<-canon_hash(state)
-    if(tolower(h)!=tolower(clean(issue$issue_state_sha256)))stop("Could not reproduce old issue hash for ",key,call.=FALSE)
-    if(typ=="geography_unresolved"){
-      if(!identical(as.character(issue$allowed_human_outcomes),c("assign_country_set","assign_none")))stop("Unexpected old vocabulary for ",key,call.=FALSE)
-      state2<-state;state2$allowed_human_outcomes<-c("accept_model","override_country_set","assign_none")
-      check<-state2;check$allowed_human_outcomes<-state$allowed_human_outcomes
-      if(!identical(toJSON(state,auto_unbox=TRUE,null="null",na="null",digits=NA,pretty=FALSE),
-                    toJSON(check,auto_unbox=TRUE,null="null",na="null",digits=NA,pretty=FALSE)))stop("Substantive state differs for ",key,call.=FALSE)
-      old_state[[key]]<-list(hash=h,state=state)
-      new_hash[[key]]<-canon_hash(state2)
-    }
+    cur_hash[[paste(rid,clean(issue$issue_type),sep="::")]]<-clean(issue$issue_state_sha256)
   }
 }
-
-migrated<-list();stale<-character();counts<-c(assign_none=0L,assign_country_set=0L,accept_model=0L)
-for(d in reused){
-  if(clean(d$issue_type)!="geography_unresolved")next
-  key<-clean(d$review_key)
-  if(is.null(old_state[[key]]))stop("Reused geography decision absent from old queue: ",key,call.=FALSE)
-  if(tolower(clean(d$issue_state_sha256))!=tolower(old_state[[key]]$hash)){stale<-c(stale,key);next}
-  dec<-clean(d$decision)
-  if(!dec%in%names(counts))stop("Unexpected old decision code for ",key,": ",dec,call.=FALSE)
-  counts[[dec]]<-counts[[dec]]+1L
-  z<-d
-  if(dec=="assign_country_set"){
-    fv<-z$final_value%||%list();iso<-as.character(fv$iso3c%||%character());nm<-as.character(fv$country_names%||%character())
-    if(clean(fv$geography_status)!="RESOLVED"||!length(iso)||length(iso)!=length(nm)||any(nchar(iso)!=3L))stop("Malformed legacy country-set decision for ",key,call.=FALSE)
-    z$decision<-"override_country_set"
-  }else if(dec=="assign_none"){
-    fv<-z$final_value%||%list()
-    if(clean(fv$geography_status)!="NONE")stop("Malformed legacy assign_none decision for ",key,call.=FALSE)
-  }else if(dec=="accept_model"){
-    av<-old_state[[key]]$state$automated_value%||%list()
-    iso<-trimws(unlist(strsplit(clean(av$luna_iso3c),";",fixed=TRUE),use.names=FALSE));iso<-iso[nzchar(iso)]
-    if(!length(iso))stop("Legacy accept_model has no Luna country set for ",key,call.=FALSE)
-  }
-  z$issue_state_sha256<-new_hash[[key]]
-  z$compatibility_migration<-list(migrated=TRUE,basis="geography_unresolved_decision_vocabulary_only",prior_issue_state_sha256=old_state[[key]]$hash)
-  migrated[[key]]<-z
+if(any(vapply(compat,function(z)!identical(tolower(clean(z$issue_state_sha256)),tolower(cur_hash[[clean(z$review_key)]])),logical(1)))){
+  stop("Migrated decision was not stamped with current issue hash",call.=FALSE)
 }
-
-if(length(stale))stop("Expected reused geography decisions had stale issue hashes",call.=FALSE)
-if(length(migrated)!=54L)stop("Expected 54 migratable geography_unresolved decisions, got ",length(migrated),call.=FALSE)
-if(counts[["assign_none"]]!=53L||counts[["assign_country_set"]]!=1L)stop("Unexpected decision mix in migration test",call.=FALSE)
-
-for(d in reused){
-  if(clean(d$review_key)%in%names(migrated)&&clean(d$issue_type)!="geography_unresolved")stop("Non-geography decision touched",call.=FALSE)
-}
-
-con<-file(file.path(out_dir,"migrated_decisions.jsonl"),"wt",encoding="UTF-8")
-for(z in migrated)writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null",digits=NA),con,useBytes=TRUE)
-close(con)
 
 summary<-list(
- schema="living-evidence-map-w08-geography-vocabulary-migration-validation-v1",status="PASS",model_calls=0L,
- validated_real_decisions=length(migrated),preserved_assign_none=53L,migrated_assign_country_set_to_override_country_set=1L,
- preserved_accept_model=0L,stale_issue_hashes=0L,non_geography_decisions_touched=0L,
- compatibility_basis="exact old issue hash; only allowed_human_outcomes changes",
+ schema="living-evidence-map-w08-production-geography-vocabulary-migration-validation-v1",
+ status="PASS",
+ model_calls=0L,
+ current_issues=330L,
+ reused_issues=219L,
+ pending_issues=111L,
+ compatibility_migrations=54L,
+ preserved_assign_none=53L,
+ migrated_assign_country_set_to_override_country_set=1L,
+ non_geography_compatibility_reuse=0L,
+ production_script="scripts/updater/workflow_08_reuse_decisions.R",
  validated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 write_json(summary,file.path(out_dir,"summary.json"),auto_unbox=TRUE,pretty=TRUE)
