@@ -85,6 +85,9 @@ jobs:
           Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R \
             --pointer "$PRIOR_W07_POINTER" \
             --output-dir inputs/prior_w07
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R \
+            --pointer "$PUBLISHED_W07_POINTER" \
+            --output-dir inputs/published_w07
 
           GEO=$(find inputs/current_w06 -type f -name geography_semantic_final.csv -print -quit)
           REC=$(find inputs/prior_w07 -type f -name workflow07_records.csv -print -quit)
@@ -228,10 +231,16 @@ jobs:
             identical(hash("outputs/workflow07_topic_complete/workflow07_topic_pathway_scores.csv"),as.character(p$workflow07_topic_pathway_scores_sha256)),
             identical(hash("outputs/workflow07_topic_complete/workflow07_topic_record_summary.csv"),as.character(p$workflow07_topic_record_summary_sha256)),
             identical(hash("outputs/workflow07_zero_complete/workflow07_zero_topic_targeted_rescreen.jsonl"),as.character(p$workflow07_zero_topic_rescreen_sha256)),
-            identical(hash("outputs/workflow07_final_qc/workflow07_topic_record_qc.csv"),as.character(p$workflow07_topic_record_qc_sha256)),
-            identical(hash("outputs/workflow07_final_qc/workflow07_qc_summary.json"),as.character(p$workflow07_qc_summary_sha256))
+            identical(hash("outputs/workflow07_final_qc/workflow07_topic_record_qc.csv"),as.character(p$workflow07_topic_record_qc_sha256))
           )
 
+          published_qc_path<-list.files("inputs/published_w07",pattern="workflow07_qc_summary\\.json$",recursive=TRUE,full.names=TRUE)
+          stopifnot(length(published_qc_path)==1L)
+          q<-fromJSON("outputs/workflow07_final_qc/workflow07_qc_summary.json",simplifyVector=FALSE)
+          qp<-fromJSON(published_qc_path,simplifyVector=FALSE)
+          q$created_at_utc<-NULL
+          qp$created_at_utc<-NULL
+          stopifnot(identical(q,qp))
           q<-fromJSON("outputs/workflow07_final_qc/workflow07_qc_summary.json")
           rec<-read_csv("outputs/workflow07_topic_complete/workflow07_records.csv",show_col_types=FALSE)
           scores<-read_csv("outputs/workflow07_topic_complete/workflow07_topic_pathway_scores.csv",show_col_types=FALSE)
@@ -246,7 +255,7 @@ jobs:
           )
 
           cat(sprintf(
-            "PASS: no-model W07 end-to-end validation exactly reproduces published state: records=%d assignments=%d zero=%d uncoded=%d exclusions=%d human_review=%d\n",
+            "PASS: no-model W07 end-to-end validation reproduces published state exactly except regenerated QC timestamp: records=%d assignments=%d zero=%d uncoded=%d exclusions=%d human_review=%d\n",
             nrow(rec),nrow(scores),q$zero_topic_records,q$included_uncoded_records,
             q$late_automatic_exclusions,q$immediate_human_adjudication_records
           ))
