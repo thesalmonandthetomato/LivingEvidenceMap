@@ -219,7 +219,11 @@ call_one <- function(row){
   # outputs such as INN/NIQ/FIJ/UNK and code/name mismatches.
   if(length(iso)){
     iso_norm <- toupper(trimws(iso))
-    names_norm <- tolower(trimws(names))
+    norm_country_label <- function(x){
+      x <- tolower(trimws(as.character(x)))
+      sub("^the\\s+","",x)
+    }
+    names_norm <- norm_country_label(names)
     valid_codes <- unique(allowed_pairs$iso3c)
     if(any(!iso_norm %in% valid_codes)){
       stop("Invalid geography ISO3 returned by model: ",
@@ -229,7 +233,7 @@ call_one <- function(row){
       allowed_pairs$country_name[allowed_pairs$iso3c %in% iso_norm],
       allowed_pairs$matched_place[allowed_pairs$iso3c %in% iso_norm]
     ))
-    allowed_labels <- tolower(allowed_labels[nzchar(allowed_labels)])
+    allowed_labels <- norm_country_label(allowed_labels[nzchar(allowed_labels)])
     if(any(!names_norm %in% allowed_labels)){
       stop("Invalid geography country name for returned ISO3 set: ",
            paste(unique(names[!names_norm %in% allowed_labels]),collapse=", "))
@@ -239,7 +243,7 @@ call_one <- function(row){
         allowed_pairs$country_name[allowed_pairs$iso3c==code],
         allowed_pairs$matched_place[allowed_pairs$iso3c==code]
       ))
-      labels <- tolower(labels[nzchar(labels)])
+      labels <- norm_country_label(labels[nzchar(labels)])
       if(!any(names_norm %in% labels)){
         stop("Returned ISO3 lacks a matching recognised country name: ",code)
       }
