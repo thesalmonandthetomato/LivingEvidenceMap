@@ -21,11 +21,15 @@ for(rec in queue){
 }
 
 out<-list()
+ambiguous_skipped<-0L
 for(z in legacy){
   rid<-clean(z$record_id)
   candidate_keys<-c(paste(rid,"geography_unresolved",sep="::"),paste(rid,"geography_evidence_unvalidated",sep="::"))
   key<-candidate_keys[vapply(candidate_keys,function(k)!is.null(qmap[[k]]),logical(1))]
-  if(length(key)>1L)stop(sprintf("Legacy geography decision %s maps to multiple current W08 issues",rid),call.=FALSE)
+  if(length(key)>1L){
+    ambiguous_skipped<-ambiguous_skipped+1L
+    next
+  }
   if(!length(key))next
   key<-key[[1L]]
   issue<-qmap[[key]]$issue
@@ -61,4 +65,4 @@ dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
 con<-file(output,"wt",encoding="UTF-8");on.exit(close(con),add=TRUE)
 for(z in out)writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null",digits=NA),con,useBytes=TRUE)
 close(con);on.exit(NULL,add=FALSE)
-cat(sprintf("PASS: migrated %d currently relevant legacy W08 geography decisions to standard reusable state\n",length(out)))
+cat(sprintf("PASS: migrated %d currently relevant legacy W08 geography decisions; skipped %d ambiguous mappings for fresh human review\n",length(out),ambiguous_skipped))
