@@ -3,5 +3,6 @@
   "batch_id": "w08-run-37207870620",
   "queue_sha256": "4790cdb20ac0d05126e2a131cb85009c5b956366caff32b98e6ac4d65bf57ee2",
   "requested_at_utc": "2026-10-04T14:53:00Z",
-  "requested_by": "ChatGPT branch-safe W08 recovery"
+  "requested_by": "ChatGPT branch-safe W08 recovery",
+  "retry_after_listener_permission_fix": "2026-10-04T15:05:00Z"
 }
