@@ -62,7 +62,39 @@ repeat{
   scodes<-splitsemi(w05$farmed_species_codes[[i5]]);slabs<-splitsemi(w05$farmed_species[[i5]]);species<-list(status=if(length(scodes)&&!identical(scodes,"NONE"))"coded" else "unresolved",codes=scodes,labels=slabs,source="workflow05",workflow05=row_payload(w05,i5,drop=c("record_id","title","abstract")),matches=rows_payload(w05_matches,w05_match_split[[rid]],drop=c("record_id")),workflow08_adjudication=NULL)
   sd<-species_map[[rid]];if(!is.null(sd)){fv<-sd$final_value;if(identical(sd$decision,"exclude_record")){screening$status<-"excluded";screening$final_included<-FALSE;screening$exclusion_stage<-"workflow08";screening$exclusion_reason<-"species_none_human_exclusion";screening$workflow08_exclusion<-TRUE}else{labs<-as.character(fv$farmed_species%||%fv$species_labels%||%character());labs<-labs[nzchar(labs)];codes<-unname(code_for_label[labs]);if(any(is.na(codes)))stop("Unknown W08 species label: ",rid,call.=FALSE);species$status<-"coded";species$codes<-codes;species$labels<-labs;species$source<-"workflow08_human";species$workflow08_adjudication<-sd;species_overrides<-species_overrides+1L}}
   z6<-w06[i6,,drop=FALSE];gst<-clean(z6$geography_status);auto_none<-gst=="UNRESOLVED" && !(z6$llm_failed[[1L]] %in% TRUE) && !length(normalise_iso3_set(z6$luna_iso3c[[1L]]));effective_gst<-if(auto_none)"NONE" else gst;geography<-list(status=effective_gst,iso3c=if(effective_gst=="RESOLVED")splitsemi(z6$luna_iso3c)else character(),country_names=if(effective_gst=="RESOLVED")splitsemi(z6$luna_country_names)else character(),evidence=if(auto_none)NULL else clean(z6$luna_evidence),reason=clean(z6$geography_reason),source=if(auto_none)"workflow06_deterministic_auto_none" else "workflow06",workflow06=row_payload(w06,i6,drop=c("record_id","title","abstract")),workflow08_adjudication=NULL);if(auto_none)geo_auto_none<-geo_auto_none+1L
-  gd<-geo_map[[rid]];if(!is.null(gd)){if(identical(clean(gd$decision),"accept_model")){geography$source<-"workflow06_human_validated";geography$workflow08_adjudication<-gd}else{fv<-gd$final_value;gst<-clean(fv$geography_status);if(!gst%in%c("RESOLVED","NONE"))stop("W08 geography override lacks valid final geography status: ",rid,call.=FALSE);geography$status<-gst;geography$iso3c<-as.character(fv$iso3c%||%character());geography$country_names<-as.character(fv$country_names%||%character());geography$evidence<-NULL;geography$reason<-clean(gd$rationale);geography$source<-"workflow08_human";geography$workflow08_adjudication<-gd;geo_overrides<-geo_overrides+1L}}
+  gd<-geo_map[[rid]];if(!is.null(gd)){
+    gdec<-clean(gd$decision)
+    if(identical(gdec,"accept_model")){
+      model_iso<-splitsemi(z6$luna_iso3c)
+      model_names<-splitsemi(z6$luna_country_names)
+      if(!length(model_iso))stop("W08 accept_model geography decision has no Luna country set: ",rid,call.=FALSE)
+      geography$status<-"RESOLVED"
+      geography$iso3c<-model_iso
+      geography$country_names<-model_names
+      geography$evidence<-clean(z6$luna_evidence)
+      geography$reason<-clean(gd$rationale)
+      geography$source<-"workflow06_human_validated"
+      geography$workflow08_adjudication<-gd
+    }else{
+      # assign_country_set is retained as a legacy alias for decisions already
+      # captured before the reviewer vocabulary was consolidated.
+      if(!gdec%in%c("override_country_set","assign_country_set","assign_none"))stop("Unknown W08 geography decision: ",gdec,call.=FALSE)
+      fv<-gd$final_value
+      gst<-clean(fv$geography_status)
+      if(identical(gdec,"assign_none"))gst<-"NONE"
+      if(gdec%in%c("override_country_set","assign_country_set")&&!nzchar(gst))gst<-"RESOLVED"
+      if(!gst%in%c("RESOLVED","NONE"))stop("W08 geography override lacks valid final geography status: ",rid,call.=FALSE)
+      geography$status<-gst
+      geography$iso3c<-if(gst=="RESOLVED")as.character(fv$iso3c%||%character())else character()
+      geography$country_names<-if(gst=="RESOLVED")as.character(fv$country_names%||%character())else character()
+      if(gst=="RESOLVED"&&!length(geography$iso3c))stop("W08 geography country override lacks ISO3 code: ",rid,call.=FALSE)
+      geography$evidence<-NULL
+      geography$reason<-clean(gd$rationale)
+      geography$source<-"workflow08_human"
+      geography$workflow08_adjudication<-gd
+      geo_overrides<-geo_overrides+1L
+    }
+  }
   ids<-character();idx<-ret_split[[rid]];if(!is.null(idx))ids<-as.character(ret$path_id[idx]);qci<-w07qci[[rid]];topics<-list(status=if(length(ids))"coded" else "uncoded",assignments=topic_items(ids,"workflow07",rid),path_ids=ids,source="workflow07",workflow07_assignments=rows_payload(ret,idx,drop=character()),workflow07_record_qc=row_payload(w07_qc,qci,drop=c("record_id")),workflow08_adjudication=NULL,zero_topic_adjudication=NULL)
   td<-topic_map[[rid]];if(!is.null(td)){fv<-td$final_value;if(isFALSE(fv$included)){screening$status<-"excluded";screening$final_included<-FALSE;screening$exclusion_stage<-"workflow08";screening$exclusion_reason<-"topic_human_exclusion";screening$workflow08_exclusion<-TRUE}else{ids<-as.character(fv$path_ids%||%character());topics$status<-if(length(ids))"coded" else "uncoded";topics$assignments<-topic_items(ids,"workflow08_human",rid);topics$path_ids<-ids;topics$source<-"workflow08_human";topics$workflow08_adjudication<-td;if(identical(td$decision,"no_code"))topics$status<-"included_uncoded";topic_overrides<-topic_overrides+1L}}
   zd<-zero_map[[rid]];if(!is.null(zd)){fv<-zd$final_value;if(isFALSE(fv$included)){screening$status<-"excluded";screening$final_included<-FALSE;screening$exclusion_stage<-"workflow08";screening$exclusion_reason<-"zero_topic_human_exclusion";screening$workflow08_exclusion<-TRUE}else{topics$status<-"included_uncoded";topics$assignments<-list();topics$path_ids<-character();topics$source<-"workflow08_human";topics$zero_topic_adjudication<-zd}}
