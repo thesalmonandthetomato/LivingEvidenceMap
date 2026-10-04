@@ -1,0 +1,216 @@
+name: TEMP Workflow 08 - correct geography codes and republish
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow08/.run_geography_code_correction'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  correct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest','httr2','googlesheets4'))
+
+      - name: Parse correction implementation
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_03_restore_lean_checkpoint.R',
+            'scripts/updater/workflow_03_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_04_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_05_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_06_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_07_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_08_finalize_canonical_dynamic.R',
+            'scripts/updater/workflow_08_partition_final_outputs_dynamic.R',
+            'scripts/updater/workflow_08_archive_to_zenodo.R',
+            'scripts/updater/workflow_current_run_status_observer.R',
+            'scripts/reporting/write_workflow09_stage_summary.R',
+            'scripts/reporting/write_workflow09_source_snapshot.R',
+            'scripts/reporting/refresh_workflow09_input_manifest.R'
+          )
+          invisible(lapply(files, parse))
+          cat('PASS: W08 geography correction implementation parses\n')
+
+      - name: Restore exact current W03-W07 inputs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/current
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R             --pointer docs/compaction/zenodo/run-37016080508.json             --output-dir inputs/current/lean
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R             --pointer docs/publication_status/zenodo/run-37024164176.json             --output-dir inputs/current/w03
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer docs/workflow04/zenodo/run-37051672356.json             --output-dir inputs/current/w04
+          Rscript scripts/updater/workflow_05_restore_state_from_zenodo.R             --pointer docs/workflow05/zenodo/run-37110114836.json             --output-dir inputs/current/w05
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R             --pointer docs/workflow06/zenodo/run-37114864202.json             --output-dir inputs/current/w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R             --pointer docs/workflow07/zenodo/run-37153534771.json             --output-dir inputs/current/w07
+
+          cp "$(find inputs/current/lean -type f -name canonical_lean.jsonl -print -quit)" inputs/current/canonical_lean.jsonl
+          cp "$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)" inputs/current/publication_status.jsonl
+          cp "$(find inputs/current/w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)" inputs/current/workflow04_final_screening_layer.jsonl
+          cp "$(find inputs/current/w05 -type f -name workflow05_species_layer.csv -print -quit)" inputs/current/workflow05_species_layer.csv
+          cp "$(find inputs/current/w05 -type f -name species_matches.csv -print -quit)" inputs/current/species_matches.csv
+          cp "$(find inputs/current/w06 -type f -name workflow06_geography_layer.csv -print -quit)" inputs/current/workflow06_geography_layer.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_pathway_scores_retained.csv -print -quit)" inputs/current/workflow07_scores.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_record_qc.csv -print -quit)" inputs/current/workflow07_qc.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_late_automatic_exclusions.csv -print -quit)" inputs/current/workflow07_late.csv
+
+      - name: Restore current W08 decision ledger and canonical for comparison
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/prior_w08
+          gh run download 37211675882             --repo "$GITHUB_REPOSITORY"             --name workflow08-shiny-resume-37211675882             --dir inputs/prior_w08
+          test -s inputs/prior_w08/workflow08/human_decisions_complete.jsonl
+          test -s inputs/prior_w08/workflow08/living_evidence_map_canonical_final.jsonl
+          test -s inputs/prior_w08/workflow08/workflow08_excluded_records.csv
+
+      - name: Re-finalise W08 with geography code corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow08
+          Rscript scripts/updater/workflow_08_finalize_canonical_dynamic.R             --canonical inputs/current/canonical_lean.jsonl             --w03 inputs/current/publication_status.jsonl             --w04 inputs/current/workflow04_final_screening_layer.jsonl             --w05 inputs/current/workflow05_species_layer.csv             --w05-matches inputs/current/species_matches.csv             --w06 inputs/current/workflow06_geography_layer.csv             --w07-scores inputs/current/workflow07_scores.csv             --w07-qc inputs/current/workflow07_qc.csv             --w07-late-exclusions inputs/current/workflow07_late.csv             --decisions inputs/prior_w08/workflow08/human_decisions_complete.jsonl             --ontology user_input/workflow07_topic_ontology.csv             --species-config user_input/workflow05_coding_config.json             --geography-corrections data/workflow08/geography_code_corrections_2026-10-04.csv             --gazetteer config/global_country_gazetteer_v3.csv             --output outputs/workflow08/post_adjudication_all.jsonl             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl             --manifest outputs/workflow08/post_adjudication_manifest.json
+
+          Rscript scripts/updater/workflow_08_partition_final_outputs_dynamic.R             --assembled outputs/workflow08/post_adjudication_all.jsonl             --old-manifest outputs/workflow08/post_adjudication_manifest.json             --canonical-output outputs/workflow08/living_evidence_map_canonical_final.jsonl             --exclusions-output outputs/workflow08/workflow08_excluded_records.csv             --manifest-output outputs/workflow08/workflow08_final_manifest.json
+
+      - name: Validate corrected W08 state
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          readj <- function(p) {
+            x <- readLines(p,warn=FALSE,encoding='UTF-8')
+            x <- x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          old <- readj('inputs/prior_w08/workflow08/living_evidence_map_canonical_final.jsonl')
+          new <- readj('outputs/workflow08/living_evidence_map_canonical_final.jsonl')
+          id <- function(r) as.character(r$identity$record_id)
+          old_ids <- vapply(old,id,character(1)); new_ids <- vapply(new,id,character(1))
+          stopifnot(length(new)==21493L, identical(old_ids,new_ids))
+
+          ni <- setNames(seq_along(new),new_ids)
+          expect <- list(
+            'work-04db00c1edfc2ca7'=list(iso=c('NOR','USA'),names=c('Norway','United States')),
+            'work-bf3f9e8b49733fac'=list(iso=c('BRA','CHL','ITA','MEX','NIC'),names=c('Brazil','Chile','Italy','Mexico','Nicaragua')),
+            'work-d5763e5c6c6ed928'=list(iso=c('GBR','IRL'),names=c('United Kingdom','Ireland'))
+          )
+          for(rid in names(expect)) {
+            g <- new[[ni[[rid]]]]$geography
+            stopifnot(
+              setequal(as.character(g$iso3c),expect[[rid]]$iso),
+              setequal(as.character(g$country_names),expect[[rid]]$names),
+              !is.null(g$code_correction)
+            )
+          }
+
+          bad <- c('IRE','INN','NIQ','FIJ','UNK')
+          all_iso <- unique(unlist(lapply(new,function(r)as.character((r$geography %||% list())$iso3c %||% character())),use.names=FALSE))
+          stopifnot(!any(bad %in% all_iso))
+
+          m <- fromJSON('outputs/workflow08/workflow08_final_manifest.json',simplifyVector=FALSE)
+          stopifnot(
+            as.integer(m$canonical_records)==21493L,
+            as.integer(m$excluded_records)==25601L,
+            as.integer(m$geography_code_corrections)==5L,
+            setequal(as.character(unlist(m$geography_code_correction_record_ids)), c(
+              'work-04db00c1edfc2ca7','work-0f8621294fe78304',
+              'work-bf3f9e8b49733fac','work-cdc027e9db628b7a',
+              'work-d5763e5c6c6ed928'
+            ))
+          )
+          cat('PASS: W08 geography corrections validated; population unchanged at 21,493 included records\n')
+
+      - name: Publish corrected W08 state to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow08_zenodo
+          Rscript scripts/updater/workflow_08_archive_to_zenodo.R             --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl             --exclusions outputs/workflow08/workflow08_excluded_records.csv             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl             --manifest outputs/workflow08/workflow08_final_manifest.json             --source-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow08_zenodo             --supersedes-record-id 23138991             --supersedes-doi 10.5281/zenodo.23138991
+
+      - name: Register corrected W08 and trigger W09 reproduction
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+
+          cp outputs/workflow08_zenodo/zenodo_receipt.json "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
+
+          RECEIPT=outputs/workflow08_zenodo/zenodo_receipt.json REG=docs/workflow08/zenodo_registry.csv Rscript -e '
+            x<-jsonlite::fromJSON(Sys.getenv("RECEIPT"),simplifyVector=FALSE)
+            reg<-read.csv(Sys.getenv("REG"),stringsAsFactors=FALSE,check.names=FALSE)
+            required<-c("source_run_id","zenodo_record_id","doi","canonical_sha256","exclusions_sha256","status","supersedes_zenodo_record_id","published_at_utc")
+            stopifnot(all(required%in%names(reg)))
+            reg$status[reg$status=="authoritative"]<-"superseded"
+            row<-data.frame(
+              source_run_id=as.character(x$source_github_run_id),
+              zenodo_record_id=as.character(x$zenodo_record_id),
+              doi=as.character(x$doi),
+              canonical_sha256=as.character(x$final_canonical_jsonl_sha256),
+              exclusions_sha256=as.character(x$excluded_records_csv_sha256),
+              status="authoritative",
+              supersedes_zenodo_record_id=as.character(x$supersedes_zenodo_record_id),
+              published_at_utc=as.character(x$published_at_utc),
+              stringsAsFactors=FALSE
+            )
+            reg<-reg[as.character(reg$source_run_id)!=row$source_run_id,,drop=FALSE]
+            write.csv(rbind(reg[,required,drop=FALSE],row),Sys.getenv("REG"),row.names=FALSE,quote=FALSE)
+          '
+
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W08
+
+          if [ -n "${LEM_GOOGLE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+            chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+            Rscript scripts/updater/workflow_current_run_status_to_shiny.R               --status docs/current_run/current_run_status.json               --sheet-id "$LEM_GOOGLE_SHEET_ID"               --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          fi
+
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id "$GITHUB_RUN_ID"
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R             --stage W08             --run-id "$GITHUB_RUN_ID"             --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+
+          printf 'rerun W09 after corrected W08 geography codes from run %s\n' "$GITHUB_RUN_ID" >> docs/reporting/.run_workflow09_figures
+
+          git add             docs/workflow08/zenodo_registry.csv             "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"             docs/current_run/current_run_status.json             docs/reporting/workflow_09_inputs/current             docs/reporting/.run_workflow09_figures
+          git commit -m "Publish corrected W08 geography state $GITHUB_RUN_ID"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
+
+      - name: Upload corrected W08 handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow08-geography-corrected-${{ github.run_id }}
+          path: |
+            outputs/workflow08/
+            outputs/workflow08_zenodo/
+          retention-days: 90
+          if-no-files-found: error
