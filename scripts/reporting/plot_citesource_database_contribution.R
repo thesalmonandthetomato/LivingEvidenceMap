@@ -491,26 +491,31 @@ plot_overlap_upset("png")
 plot_overlap_upset("pdf")
 
 report <- list(
-  schema = "living-evidence-map-citesource-contribution-v1",
+  schema = "living-evidence-map-citesource-contribution-v2",
   status = "PASS",
   canonical_records = nrow(canonical_sources),
   final_included_records = if (length(included_ids)) length(included_ids) else NULL,
   databases = unname(source_labels),
+  overlap_intersections = nrow(overlap_summary),
   interpretation = list(
     source_set_size = "Number of deduplicated canonical works with at least one manifestation from the database",
     unique_intersection = "Canonical works found by one database only",
-    shared_intersection = "Canonical works represented in two or more databases"
+    shared_intersection = "Canonical works represented in two or more databases",
+    unique_figure = "Unique single-database contribution before screening and in the definitive final included corpus",
+    overlap_figure = "Exact multi-database intersections only; singleton intersections are excluded because they are reported in the unique-contribution figure"
   ),
   outputs = list(
-    figure_png = "database_contribution_upset.png",
-    figure_pdf = "database_contribution_upset.pdf",
+    unique_figure_png = "database_unique_contribution.png",
+    unique_figure_pdf = "database_unique_contribution.pdf",
+    overlap_figure_png = "database_overlap_upset.png",
+    overlap_figure_pdf = "database_overlap_upset.pdf",
     summary_csv = "source_contribution_summary.csv",
+    unique_summary_csv = "source_unique_contribution_summary.csv",
     overlap_matrix_csv = "source_overlap_matrix.csv",
     provenance_screening_csv = "source_provenance_screening.csv",
     screening_summary_csv = "source_contribution_screening_summary.csv",
     intersection_screening_summary_csv = "source_intersection_screening_summary.csv",
-    paired_bar_png = "database_contribution_deduplicated_vs_included.png",
-    paired_bar_pdf = "database_contribution_deduplicated_vs_included.pdf"
+    overlap_intersection_summary_csv = "source_overlap_intersection_summary.csv"
   )
 )
 writeLines(
