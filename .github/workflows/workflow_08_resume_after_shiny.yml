@@ -61,6 +61,7 @@ jobs:
             'scripts/updater/workflow_05_restore_state_from_zenodo.R',
             'scripts/updater/workflow_06_restore_state_from_zenodo.R',
             'scripts/updater/workflow_07_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_08_capture_active_shiny_decisions.R',
             'scripts/updater/workflow_08_export_shiny_decisions.R',
             'scripts/updater/workflow_08_finalize_canonical_dynamic.R',
             'scripts/updater/workflow_08_partition_final_outputs_dynamic.R',
@@ -97,17 +98,28 @@ jobs:
           chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
           echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
 
-      - name: Export and validate completed W08 Shiny decisions
+      - name: Capture cumulative W08 Shiny decision history
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p outputs/w08_resume
+          Rscript scripts/updater/workflow_08_capture_active_shiny_decisions.R \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --output outputs/w08_resume/active_decisions.jsonl \
+            --history-output outputs/w08_resume/historical_decisions.jsonl
+
+      - name: Export and validate completed W08 Shiny decisions
+        shell: bash
+        run: |
+          set -euo pipefail
           Rscript scripts/updater/workflow_08_export_shiny_decisions.R \
             --queue source/workflow08_reuse/workflow08_pending_review_queue.jsonl \
             --batch-id "$BATCH_ID" \
             --queue-sha256 "$QUEUE_SHA256" \
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
             --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --fallback-decisions outputs/w08_resume/historical_decisions.jsonl \
             --output outputs/w08_resume/fresh_decisions.jsonl \
             --manifest outputs/w08_resume/shiny_export_manifest.json
 
@@ -121,18 +133,34 @@ jobs:
             lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
           }
           reused <- readj('source/workflow08_reuse/workflow08_reused_decisions.jsonl')
+          history <- readj('outputs/w08_resume/historical_decisions.jsonl')
           fresh <- readj('outputs/w08_resume/fresh_decisions.jsonl')
-          rows <- c(reused,fresh)
-          keys <- if(length(rows)) vapply(rows,function(z)as.character(z$review_key),character(1)) else character()
-          if(any(!nzchar(keys))||anyDuplicated(keys)) stop('Complete W08 ledger has duplicate/missing review_key')
+          candidates <- c(reused,history,fresh)
 
           current <- read_csv('source/workflow08_intake/workflow08_issue_index_current.csv',show_col_types=FALSE,progress=FALSE)
           current_keys <- as.character(current$review_key)
           if(any(!nzchar(current_keys))||anyDuplicated(current_keys)) stop('Current W08 issue index invalid')
-          if(!setequal(keys,current_keys)) stop('Complete W08 ledger does not exactly equal current issue set')
           current_hash <- setNames(as.character(current$issue_state_sha256),current_keys)
-          row_hash <- setNames(vapply(rows,function(z){h<-z$issue_state_sha256;if(is.null(h)||!length(h))'' else as.character(h[[1L]])},character(1)),keys)
-          if(any(tolower(row_hash[current_keys])!=tolower(current_hash[current_keys]))) stop('Complete W08 ledger has stale issue-state SHA')
+
+          # Prefer later candidate sources (fresh > historical > source reused),
+          # but only when the exact current issue-state fingerprint matches.
+          chosen <- list()
+          for(z in candidates){
+            key <- as.character(z$review_key)
+            h <- z$issue_state_sha256
+            h <- if(is.null(h)||!length(h)) '' else as.character(h[[1L]])
+            if(!nzchar(key)||!key%in%current_keys||!nzchar(h)) next
+            if(tolower(h)!=tolower(current_hash[[key]])) next
+            chosen[[key]] <- z
+          }
+          if(!setequal(names(chosen),current_keys)) {
+            missing <- setdiff(current_keys,names(chosen))
+            stop(sprintf('Complete W08 ledger is missing %d current issues after cumulative carry-forward: %s',
+                         length(missing),paste(head(missing,10),collapse=', ')))
+          }
+          rows <- unname(chosen[current_keys])
+          keys <- vapply(rows,function(z)as.character(z$review_key),character(1))
+          if(any(!nzchar(keys))||anyDuplicated(keys)) stop('Complete W08 ledger has duplicate/missing review_key')
 
           dir.create('outputs/workflow08',recursive=TRUE,showWarnings=FALSE)
           con<-file('outputs/workflow08/human_decisions_complete.jsonl','wt',encoding='UTF-8')
