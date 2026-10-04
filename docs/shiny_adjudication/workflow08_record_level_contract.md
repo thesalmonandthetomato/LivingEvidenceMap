@@ -1,109 +1,151 @@
 # Workflow 08 Shiny adjudication contract
 
-## Purpose
+## Scope
 
-Workflow 08 human review is record-level. A record may require species, geography and topic verification simultaneously, and must appear only once in the Shiny review queue.
+Workflow 08 human review is record-level. A record appears only once in the active Shiny queue and contains an `issues` array with every **current human-review issue** for that record.
 
-The existing dynamic Workflow 08 intake already satisfies the queue-side part of this design: each JSONL row is one unique `record_id` with an `issues` array containing every current W05-W07 issue for that record.
+Current production does not send W05 species-`NONE` records to Shiny: those records are deterministically excluded before queue construction. Historical queues may contain species issues and remain readable for reproducibility.
 
-## Queue contract
+## Queue schema
 
-Schema: `living-evidence-map-workflow08-shiny-record-case-v1`
+Schema:
+
+`living-evidence-map-workflow08-shiny-record-case-v1`
 
 Each record-level case contains:
 
-- `record_id`
-- `record_sequence`
-- `title`
-- `abstract`
-- `issues`
+- `record_id`;
+- bibliographic display fields;
+- `record_case_sha256`;
+- `issues`;
+- queue/batch provenance; and
+- the species/topic option metadata required by the interface.
 
-Each issue retains the existing Workflow 08 issue contract:
+Each issue contains:
 
-- `source_workflow`
-- `issue_type`
-- `automated_value`
-- `allowed_human_outcomes`
-- `issue_state_sha256`
+- `review_key`;
+- `source_workflow`;
+- `issue_type`;
+- `issue_state_sha256`;
+- `allowed_human_outcomes`;
+- automated evidence/value; and
+- issue-specific provenance.
 
-Current issue types are:
+The queue SHA-256 is calculated from the exact record-level JSONL bytes.
 
-- `species_none`
-- `geography_unresolved`
-- `geography_evidence_unvalidated`
-- `topic_extreme_disagreement`
-- `zero_topic_eligibility_uncertain`
+## Current production issue types
 
-The Shiny queue SHA-256 is the SHA-256 of the exact record-level JSONL bytes.
+Current W08 production can generate:
+
+- `geography_unresolved`;
+- `geography_evidence_unvalidated`;
+- `geography_model_failure`;
+- `topic_coding_review`; and
+- `zero_topic_eligibility_uncertain`.
+
+Historical issue types remain supported by the backend finaliser where required to reproduce an older run, including:
+
+- `species_none`;
+- `topic_extreme_disagreement`; and
+- `ontology_pathology`.
+
+`topic_extreme_disagreement` is not a current production route. Mean pairwise Jaccard is descriptive QC only.
 
 ## Human-review rule
 
-One review screen represents one record.
+All current issues for a record are displayed together. A record is complete only when every issue in its `issues` array has a valid decision.
 
-All issues for that record are displayed together. A record is complete only when every issue in its `issues` array has a valid human decision.
+### Geography
 
-Resolved annotation components that are not current review issues may be shown read-only for context but must not require a decision.
+For `geography_unresolved` and `geography_evidence_unvalidated`:
 
-## Persistent decision contract
+- `accept_model`;
+- `override_country_set`;
+- `assign_none`;
+- `exclude_record`.
 
-Google Sheets stores one append-only record-level decision row per completed save/revision.
+For `geography_model_failure`:
 
-Schema: `living-evidence-map-workflow08-shiny-record-decision-v1`
+- `assign_country_set`;
+- `assign_none`;
+- `exclude_record`.
 
-Fields:
+### Topics
 
-- `decision_id`
-- `record_id`
-- `queue_sha256`
-- `record_case_sha256`
-- `issue_decisions_json`
-- `reviewer`
-- `resolved_at_utc`
-- `supersedes_decision_id`
+For `topic_coding_review`:
 
-`issue_decisions_json` contains one decision object for every issue in the record-level case. Each object must retain:
+- `accept_retained_topics`;
+- `replace_topic_set`;
+- `no_code`;
+- `exclude_record`.
 
-- `review_key` = `record_id::issue_type`
-- `record_id`
-- `issue_type`
-- `issue_state_sha256`
-- `decision`
-- `final_value`
-- `rationale`
-- `reviewer`
-- `resolved_at_utc`
-- `queue_sha256`
+For `zero_topic_eligibility_uncertain`:
 
-A revision supersedes the previous record-level decision but does not delete it.
+- `assign_topic_set`;
+- `include_uncoded`;
+- `exclude_record`.
 
-## Return adapter
+## Decision schema
 
-The return adapter expands the latest record-level Shiny decisions back to the existing Workflow 08 issue-level decision ledger.
+Schema:
 
-It must fail unless:
+`living-evidence-map-workflow08-shiny-record-decision-v1`
 
-1. the queue SHA-256 matches exactly;
-2. every current record-level case has at most one latest decision;
-3. every issue in every completed record has exactly one issue decision;
-4. `review_key`, `issue_type` and `issue_state_sha256` match the frozen queue;
-5. each decision is one of that issue's `allowed_human_outcomes`;
-6. all pending issues are resolved before Workflow 08 finalisation resumes.
+A saved record-level decision contains:
 
-The expanded ledger must remain compatible with `workflow_08_finalize_canonical_dynamic.R`. No changes to the scientific finalisation semantics are required.
+- `record_id`;
+- `queue_sha256`;
+- `record_case_sha256`;
+- `issue_decisions_json`;
+- reviewer; and
+- resolution timestamp.
 
-## Dashboard semantics
+Each expanded issue decision contains the stable `review_key`, exact `issue_state_sha256`, decision, final value where applicable and queue provenance.
 
-The Shiny home screen permanently displays four verification stages:
+## Stale-session protection
 
-- Deduplication — Workflow 01
-- Enrichment — Workflow 02
-- Screening — Workflow 04
-- Annotation — Workflow 08
+Before saving a W08 record, the Shiny app reloads the live queue metadata and compares the live queue SHA-256 with the session SHA-256.
 
-Each card is always visible and shows `0` when no records remain.
+If they differ:
 
-The Annotation count is the number of unique records requiring review, not the number of individual annotation issues. A record requiring species, geography and topic review therefore contributes one to the remaining count.
+1. the stale save is refused;
+2. the active batch is reloaded from Sheets; and
+3. the reviewer must inspect the current record state before saving.
 
-## Provenance
+Opening W08 also refreshes the active queue rather than relying on the state loaded at login.
 
-Automated W05-W07 outputs remain immutable. Workflow 08 human decisions are an auditable overlay. Shiny must never edit the canonical JSONL directly.
+## Completion and resume
+
+When no unresolved records remain:
+
+1. Shiny records `review_complete` for the exact batch/SHA;
+2. the W08 resume request is dispatched;
+3. if direct GitHub `workflow_dispatch` is unavailable because the workflow is not on the repository default branch, Shiny writes a branch-safe resume marker under `docs/shiny_adjudication/w08_resume_requests/`;
+4. the listener calls the reusable W08 resume workflow;
+5. the backend exports decisions for the exact active queue;
+6. compatible cumulative decisions are combined with the current batch;
+7. finalisation requires exact coverage of every current `review_key + issue_state_sha256`; and
+8. the batch is marked `consumed` only after the final W08 canonical state is archived and registered.
+
+## Dashboard status
+
+The Shiny home screen displays the current pipeline status separately from adjudication queues. The backend appends current-run state to the `pipeline_run_status` sheet after each accepted workflow stage.
+
+The app polls that sheet every 30 seconds. Therefore the dashboard requires no application redeploy when a workflow completes; it updates after the backend status row is written.
+
+Current production workflows W00-W08 update this status explicitly within their accepted completion paths rather than relying on a secondary workflow being triggered by an Actions `GITHUB_TOKEN` push.
+
+## Permanent adjudication cards
+
+The Shiny home screen permanently displays the principal verification stages, including:
+
+- Deduplication — Workflow 01;
+- Enrichment — Workflow 02;
+- Screening — Workflow 04; and
+- Annotation — Workflow 08.
+
+Cards remain visible with zero outstanding cases when no review batch is active.
+
+## Provenance principle
+
+Automated W05-W07 outputs remain immutable. Workflow 08 human decisions are an auditable overlay. Shiny never edits the canonical JSONL directly.
