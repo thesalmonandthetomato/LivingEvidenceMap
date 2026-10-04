@@ -1,4 +1,4 @@
-name: TEMP validate production W08 geography vocabulary migration
+name: TEMP validate W08 geography record exclusion
 
 on:
   push:
@@ -38,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p source
-          gh run download 37192497959 --repo "$GITHUB_REPOSITORY" --name workflow08-review-state-37192497959 --dir source
+          gh run download 37196951511 --repo "$GITHUB_REPOSITORY" --name workflow08-review-state-37196951511 --dir source
           test -s source/workflow08_intake/workflow08_review_queue_current.jsonl
           test -s source/workflow08_reuse/workflow08_reused_decisions.jsonl
 
@@ -53,7 +53,7 @@ jobs:
       - name: Upload validation evidence
         uses: actions/upload-artifact@v4
         with:
-          name: w08-geography-vocab-migration-validation-${{ github.run_id }}
+          name: w08-geography-record-exclusion-validation-${{ github.run_id }}
           path: outputs/validation/
           retention-days: 30
           if-no-files-found: error
