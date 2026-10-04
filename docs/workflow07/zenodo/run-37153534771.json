@@ -1,0 +1,56 @@
+{
+  "schema": "living-evidence-map-workflow07-topic-archive-v1",
+  "workflow": "07",
+  "state": "topic_coding_and_qc",
+  "source_github_run_id": "37153534771",
+  "source_github_commit": "3b3fe87315390ce803911c21544d7df6009e9d7b",
+  "publication_github_run_id": "37180021271",
+  "source_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/37153534771",
+  "repository": "thesalmonandthetomato/LivingEvidenceMap",
+  "upstream_workflow06_zenodo_record_id": "23119991",
+  "upstream_workflow06_geography_layer_sha256": "9a22454fdbf313bb0ea350a951a3121c72361352a52d9032adbefb90c28e4d0e",
+  "records": 21819,
+  "raw_topic_assignments": 61939,
+  "zero_topic_records": 385,
+  "included_uncoded_records": 234,
+  "late_automatic_exclusions": 131,
+  "human_adjudication_records": 138,
+  "ontology_sha256": "4ad41f90e35099fdf5f0eb463c86d9245d07b357940804a4faa090eba452f798",
+  "prompt_sha256": "f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0",
+  "workflow07_records_sha256": "7efb2f1e902652d5fe0350596ee625c19f67719c24b00feb5ff058a6dbba0695",
+  "workflow07_topic_pathway_scores_sha256": "c05a1697adccf88a2b14a7335747dd866a59dedb687f498583a8208e47020b5d",
+  "workflow07_topic_record_summary_sha256": "6bf1ad8c8b7ef7437ebf31b9b585300e51f7cf68f0ec38c86b69444891bf3b98",
+  "workflow07_zero_topic_rescreen_sha256": "1ede05e504dd36589dd8853049a2bf37c21e4cd2c46db045fa9d0c87e3a873ca",
+  "workflow07_topic_record_qc_sha256": "9bb66566c539baa5b45a1c6d87c2eef07c8e86c2f88c0c16505f3b823b73913b",
+  "workflow07_qc_summary_sha256": "fdf0ef6782bc2488cd6d24422e7edfc66b944127d72aa37266394472205cb928",
+  "file_visibility": "restricted",
+  "files": {
+    "state_archive": {
+      "filename": "LivingEvidenceMap_workflow07_run-37153534771_topic_state.tar.gz",
+      "bytes": 26214267,
+      "sha256": "e49b0bc2892590861eadae3e007b4a4ee3c907f8143dfca835aefdd5b2929e7b"
+    }
+  },
+  "status": "published",
+  "zenodo_record_id": "23131972",
+  "zenodo_deposition_id": "23131972",
+  "doi": "10.5281/zenodo.23131972",
+  "record_url": "https://zenodo.org/records/23131972",
+  "visibility": "restricted",
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow07_run-37153534771_topic_state.tar.gz",
+      "bytes": 26214267,
+      "sha256": "e49b0bc2892590861eadae3e007b4a4ee3c907f8143dfca835aefdd5b2929e7b",
+      "zenodo_checksum": "md5:476674885f2f8c9e4f7f9c6471b1c5e5"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow07_run-37153534771_manifest.json",
+      "bytes": 1905,
+      "sha256": "edf2363a026093c26d1437a661a1ffb1b980332da5478add4ed9391cc3d4d221",
+      "zenodo_checksum": "md5:fdcda481f8024771e5f628a7d05acbdd"
+    }
+  ],
+  "manifest_sha256": "edf2363a026093c26d1437a661a1ffb1b980332da5478add4ed9391cc3d4d221",
+  "published_at_utc": "2026-10-04T05:36:33Z"
+}
