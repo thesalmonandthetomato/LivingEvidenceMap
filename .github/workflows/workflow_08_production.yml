@@ -1,6 +1,44 @@
 name: Workflow 08 - living finalisation
 
 on:
+  workflow_call:
+    inputs:
+      lean_pointer_path:
+        required: true
+        type: string
+      workflow03_pointer_path:
+        required: true
+        type: string
+      workflow04_pointer_path:
+        required: true
+        type: string
+      workflow05_pointer_path:
+        required: true
+        type: string
+      workflow06_pointer_path:
+        required: true
+        type: string
+      workflow07_pointer_path:
+        required: true
+        type: string
+      prior_workflow08_pointer_path:
+        required: false
+        default: 'docs/workflow08/zenodo/run-36442875006.json'
+        type: string
+      new_decisions_path:
+        required: false
+        default: ''
+        type: string
+      publish:
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: true
+
   workflow_dispatch:
     inputs:
       lean_pointer_path:
@@ -256,7 +294,8 @@ jobs:
           )
           jsonlite::write_json(x,"outputs/workflow08_reuse/shiny_resume_context.json",auto_unbox=TRUE,pretty=TRUE)
 
-      - name: Stop if new human review is required
+      - name: Determine whether human review pause is required
+        id: human_gate
         env:
           NEW_DECISIONS_PATH: ${{ inputs.new_decisions_path }}
         shell: bash
@@ -264,12 +303,17 @@ jobs:
           set -euo pipefail
           PENDING=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow08_reuse/workflow08_reuse_manifest.json");cat(as.integer(x$pending_issues))')
           echo "Pending W08 issues: $PENDING"
+          echo "pending_issues=$PENDING" >> "$GITHUB_OUTPUT"
           if [ "$PENDING" -gt 0 ] && [ -z "$NEW_DECISIONS_PATH" ]; then
-            echo "Human review required. Pending records have been published to Shiny." >&2
-            exit 2
+            echo "pause=true" >> "$GITHUB_OUTPUT"
+            echo "PASS: W08 paused after publishing pending records to Shiny; awaiting human decisions."
+          else
+            echo "pause=false" >> "$GITHUB_OUTPUT"
+            echo "PASS: W08 has no unresolved human-review gate."
           fi
 
       - name: Build complete current decision ledger
+        if: ${{ steps.human_gate.outputs.pause != 'true' }}
         env:
           NEW_DECISIONS_PATH: ${{ inputs.new_decisions_path }}
         shell: Rscript {0}
@@ -312,6 +356,7 @@ jobs:
           close(con)
 
       - name: Assemble and partition definitive W08 canonical
+        if: ${{ steps.human_gate.outputs.pause != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -322,7 +367,7 @@ jobs:
           rm outputs/workflow08/post_adjudication_all.jsonl outputs/workflow08/post_adjudication_manifest.json
 
       - name: Publish W08 state
-        if: ${{ inputs.publish == true }}
+        if: ${{ steps.human_gate.outputs.pause != 'true' && inputs.publish == true }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           PRIOR_W08_POINTER: ${{ inputs.prior_workflow08_pointer_path }}
@@ -348,7 +393,7 @@ jobs:
           Rscript scripts/updater/workflow_08_archive_to_zenodo.R "${ARGS[@]}"
 
       - name: Register W08 state
-        if: ${{ inputs.publish == true }}
+        if: ${{ steps.human_gate.outputs.pause != 'true' && inputs.publish == true }}
         shell: bash
         run: |
           set -euo pipefail
@@ -393,7 +438,7 @@ jobs:
           fi
 
       - name: Acknowledge consumed W08 Shiny batch
-        if: ${{ inputs.publish == true }}
+        if: ${{ steps.human_gate.outputs.pause != 'true' && inputs.publish == true }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
           LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
