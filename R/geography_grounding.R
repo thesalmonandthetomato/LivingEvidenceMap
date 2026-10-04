@@ -115,6 +115,9 @@ geography_auto_validation <- function(status, llm_failed, luna_iso3c,
                                       title, abstract, gazetteer) {
   status <- as.character(status)
   if (isTRUE(llm_failed)) return(list(valid = FALSE, basis = "model_failure"))
+  if (identical(status, "UNRESOLVED") && !length(normalise_iso3_set(luna_iso3c))) {
+    return(list(valid = TRUE, basis = "unresolved_no_country_assign_none"))
+  }
   if (identical(status, "UNRESOLVED")) return(list(valid = FALSE, basis = "unresolved"))
   if (identical(status, "NONE")) return(list(valid = TRUE, basis = "model_none"))
   if (!identical(status, "RESOLVED")) return(list(valid = FALSE, basis = "invalid_status"))
