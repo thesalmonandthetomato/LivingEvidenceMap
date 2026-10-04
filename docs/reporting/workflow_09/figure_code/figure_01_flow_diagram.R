@@ -58,6 +58,13 @@ source_meta <- read_csv(source_path, show_col_types = FALSE, progress = FALSE) |
     hits = as.integer(manifestations),
     search_date = as.character(search_date)
   ) |>
+  mutate(
+    search_date_display = if_else(
+      grepl("^\\d{4}-\\d{2}-\\d{2}$", search_date),
+      format(as.Date(search_date), "%d-%m-%Y"),
+      search_date
+    )
+  ) |>
   arrange(database)
 
 if (!nrow(source_meta) || any(!nzchar(source_meta$code)) || anyDuplicated(source_meta$code)) {
@@ -101,6 +108,13 @@ source_counts <- setNames(source_meta$hits, source_meta$database)
 valid_source_dates <- source_meta$search_date[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_meta$search_date)]
 search_update_date <- if (length(valid_source_dates)) max(valid_source_dates) else ""
 fmt <- function(x) format(as.integer(x), big.mark = ",", scientific = FALSE, trim = TRUE)
+font_family <- "sans"
+database_title_size <- 2.95
+database_header_size <- 2.20
+database_name_size <- 2.20
+database_value_size <- 2.20
+main_box_text_size <- 2.95
+phase_label_size <- 3.20
 
 # -------------------------------------------------------------------------
 # 5. DIAGRAM GEOMETRY
@@ -111,6 +125,8 @@ box <- function(id, x, y, w, h, label, stage) {
 }
 
 process_box_w <- 2.75
+main_x <- 3.65
+side_x <- 7.05
 
 # The search-source panel is always one box. To keep a consistent visual
 # grammar as the database set grows, it uses two columns for <=6 databases and
@@ -118,27 +134,36 @@ process_box_w <- 2.75
 # count and search date.
 n_source_cols <- if (nrow(source_meta) <= 10L) 2L else 3L
 n_source_rows <- ceiling(nrow(source_meta) / n_source_cols)
-source_panel_left <- 3.25
-source_panel_right <- 10.15
+# Align the database panel with the horizontal flow geometry: keep its left
+# edge aligned with the main left-hand column and narrow its right edge to align
+# exactly with the right edge of the side-column boxes below.
+source_panel_left <- main_x - process_box_w / 2
+source_panel_right <- side_x + process_box_w / 2
 source_panel_width <- source_panel_right - source_panel_left
 source_panel_bottom <- 11.55
 
 # Source-panel vertical spacing is deliberately derived from the number of rows.
 # Fewer rows receive more breathing room; denser source inventories tighten
 # slightly while preserving the title/header separation and bottom padding.
-source_row_h <- dplyr::case_when(
-  n_source_rows <= 1L ~ 0.50,
-  n_source_rows == 2L ~ 0.42,
-  n_source_rows == 3L ~ 0.37,
-  TRUE ~ 0.33
+source_row_h_base <- dplyr::case_when(
+  n_source_rows <= 1L ~ 0.42,
+  n_source_rows == 2L ~ 0.35,
+  n_source_rows == 3L ~ 0.31,
+  TRUE ~ 0.27
 )
+# Reduce database-row spacing by exactly 10% while preserving the existing
+# overall database-panel height. The recovered space is transferred to the
+# bottom padding rather than shrinking the panel.
+source_row_h <- source_row_h_base * 0.90
 source_title_offset <- 0.16
-source_header_offset <- 0.55
-source_first_row_offset <- 0.78
-source_bottom_padding <- 0.14
+source_header_offset <- 0.50
+source_first_row_offset <- 0.73
 source_panel_height <- source_first_row_offset +
-  (n_source_rows - 1L) * source_row_h +
-  source_bottom_padding
+  (n_source_rows - 1L) * source_row_h_base +
+  0.11
+source_bottom_padding <- source_panel_height -
+  source_first_row_offset -
+  (n_source_rows - 1L) * source_row_h
 source_panel_top <- source_panel_bottom + source_panel_height
 source_panel_y <- (source_panel_bottom + source_panel_top) / 2
 source_col_width <- (source_panel_width - 0.34) / n_source_cols
@@ -146,10 +171,10 @@ source_col_width <- (source_panel_width - 0.34) / n_source_cols
 # Within each source block, reserve less horizontal space for the database
 # label and more for hits/search date. Long labels are wrapped inside their
 # own block so they cannot collide with the neighbouring database column.
-source_name_share <- 0.46
-source_hits_x_share <- 0.56
-source_date_x_share <- 0.66
-source_name_wrap <- if (n_source_cols >= 3L) 14L else 16L
+source_name_share <- 0.42
+source_hits_x_share <- 0.46
+source_date_x_share <- 0.61
+source_name_wrap <- if (n_source_cols >= 3L) 14L else 17L
 
 source_layout <- source_meta |>
   mutate(
@@ -181,50 +206,50 @@ source_dividers <- if (n_source_cols > 1L) {
     x = source_panel_left + 0.17 + (seq_len(n_source_cols - 1L)) * source_col_width - 0.08,
     y = source_panel_bottom + 0.12,
     xend = x,
-    yend = source_panel_top - 0.18
+    yend = source_panel_top - 0.42
   )
 } else {
   tibble::tibble(x = numeric(), y = numeric(), xend = numeric(), yend = numeric())
 }
 
 boxes <- bind_rows(
-  box("combined", 5.64, 10.88, process_box_w, 0.76, paste0("Combined search results\nn = ", fmt(n_combined)), "search"),
-  box("dedup", 5.64, 9.78, process_box_w, 0.76, paste0("Deduplicated records\nn = ", fmt(n_deduplicated)), "screen"),
-  box("dupes", 9.15, 9.78, process_box_w, 0.76, paste0("Duplicate records removed\nn = ", fmt(n_duplicates_removed)), "exclude"),
+  box("combined", main_x, 10.88, process_box_w, 0.76, paste0("Combined search results\nn = ", fmt(n_combined)), "search"),
+  box("dedup", main_x, 9.78, process_box_w, 0.76, paste0("Deduplicated records\nn = ", fmt(n_deduplicated)), "screen"),
+  box("dupes", side_x, 9.78, process_box_w, 0.76, paste0("Duplicate records removed\nn = ", fmt(n_duplicates_removed)), "exclude"),
 
-  box("enrichment", 5.64, 8.68, process_box_w, 0.76, paste0("Record repair and enrichment\nn enriched = ", fmt(n_enriched)), "repair"),
+  box("enrichment", main_x, 8.68, process_box_w, 0.76, paste0("Record repair and enrichment\nn enriched = ", fmt(n_enriched)), "repair"),
 
-  box("status_sweep", 5.64, 7.58, process_box_w, 0.76, paste0("Records swept for retractions /\nwithdrawal notices\nn = ", fmt(n_deduplicated)), "screen"),
-  box("retractions", 9.15, 7.58, process_box_w, 0.76, paste0("Retractions excluded\nn = ", fmt(n_w03)), "exclude"),
+  box("status_sweep", main_x, 7.58, process_box_w, 0.76, paste0("Records swept for retractions /\nwithdrawal notices\nn = ", fmt(n_deduplicated)), "screen"),
+  box("retractions", side_x, 7.58, process_box_w, 0.76, paste0("Retractions excluded\nn = ", fmt(n_w03)), "exclude"),
 
-  box("screened", 5.64, 6.48, process_box_w, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
-  box("excluded_ta", 9.15, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_w04)), "exclude"),
-  box("retained", 5.64, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_w04_retained)), "retain"),
+  box("screened", main_x, 6.48, process_box_w, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
+  box("excluded_ta", side_x, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_w04)), "exclude"),
+  box("retained", main_x, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_w04_retained)), "retain"),
 
-  box("species", 5.64, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
-  box("geography", 5.64, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
-  box("geo_uncoded", 9.15, 3.13, process_box_w, 0.76, paste0("Included but uncoded for geography\nn = ", fmt(n_geography_uncoded)), "result"),
-  box("topic", 5.64, 2.08, process_box_w, 0.76, paste0("Records with topic annotation\nn = ", fmt(n_topic_coded)), "annotate"),
-  box("uncoded", 9.15, 2.08, process_box_w, 0.76, paste0("Included but uncoded for topics\nn = ", fmt(n_topic_uncoded)), "result"),
+  box("species", main_x, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
+  box("geography", main_x, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
+  box("geo_uncoded", side_x, 3.13, process_box_w, 0.76, paste0("Included but uncoded for geography\nn = ", fmt(n_geography_uncoded)), "result"),
+  box("topic", main_x, 2.08, process_box_w, 0.76, paste0("Records with topic annotation\nn = ", fmt(n_topic_coded)), "annotate"),
+  box("uncoded", side_x, 2.08, process_box_w, 0.76, paste0("Included but uncoded for topics\nn = ", fmt(n_topic_uncoded)), "result"),
 
-  box("map", 5.64, 0.88, process_box_w, 0.86, paste0("Living Evidence Map\nn = ", fmt(n_final_included)), "map")
+  box("map", main_x, 0.88, process_box_w, 0.86, paste0("Living Evidence Map\nn = ", fmt(n_final_included)), "map")
 )
 
 main_arrows <- data.frame(
-  x = rep(5.64, 9),
+  x = rep(main_x, 9),
   y = c(source_panel_bottom, 10.50, 9.40, 8.30, 7.20, 6.10, 5.00, 3.80, 2.75),
-  xend = rep(5.64, 9),
+  xend = rep(main_x, 9),
   yend = c(11.26, 10.16, 9.06, 7.96, 6.86, 5.76, 4.56, 3.51, 2.46)
 )
 main_arrows <- bind_rows(
   main_arrows,
-  data.frame(x = 5.64, y = 1.70, xend = 5.64, yend = 1.31)
+  data.frame(x = main_x, y = 1.70, xend = main_x, yend = 1.31)
 )
 
 side_connectors <- data.frame(
-  x = rep(5.64 + process_box_w / 2, 5),
+  x = rep(main_x + process_box_w / 2, 5),
   y = c(9.78, 7.58, 6.48, 3.13, 2.08),
-  xend = rep(9.15 - process_box_w / 2, 5),
+  xend = rep(side_x - process_box_w / 2, 5),
   yend = c(9.78, 7.58, 6.48, 3.13, 2.08)
 )
 
@@ -305,40 +330,41 @@ p <- ggplot() +
     label = "Bibliographic database searches",
     colour = "#2c454a",
     fontface = "bold",
-    size = 3.15
+    size = database_title_size,
+    family = font_family
   ) +
   geom_text(
     data = source_headers,
     aes(x = name_x, y = y),
     label = "Database", hjust = 0, fontface = "bold",
-    colour = "#2c454a", size = 2.35
+    colour = "#2c454a", size = database_header_size, family = font_family
   ) +
   geom_text(
     data = source_headers,
     aes(x = hits_x, y = y),
     label = "Hits", hjust = 1, fontface = "bold",
-    colour = "#2c454a", size = 2.35
+    colour = "#2c454a", size = database_header_size, family = font_family
   ) +
   geom_text(
     data = source_headers,
     aes(x = date_x, y = y),
     label = "Search date", hjust = 0, fontface = "bold",
-    colour = "#2c454a", size = 2.35
+    colour = "#2c454a", size = database_header_size, family = font_family
   ) +
   geom_text(
     data = source_layout,
     aes(x = name_x, y = y, label = database_label),
-    hjust = 0, colour = "#2c454a", size = 2.15, lineheight = 0.90
+    hjust = 0, colour = "#2c454a", size = database_name_size, lineheight = 0.90, family = font_family
   ) +
   geom_text(
     data = source_layout,
     aes(x = hits_x, y = y, label = hits_label),
-    hjust = 1, colour = "#2c454a", size = 2.25
+    hjust = 1, colour = "#2c454a", size = database_value_size, family = font_family
   ) +
   geom_text(
     data = source_layout,
-    aes(x = date_x, y = y, label = search_date),
-    hjust = 0, colour = "#2c454a", size = 2.25
+    aes(x = date_x, y = y, label = search_date_display),
+    hjust = 0, colour = "#2c454a", size = database_value_size, family = font_family
   ) +
   geom_rect(
     data = boxes,
@@ -352,7 +378,7 @@ p <- ggplot() +
   geom_text(
     data = boxes,
     aes(x=x, y=y, label=label, colour=stage),
-    size = 2.95, lineheight = 0.92
+    size = main_box_text_size, lineheight = 0.92, family = font_family
   ) +
   geom_rect(
     data = phase,
@@ -365,16 +391,16 @@ p <- ggplot() +
   geom_text(
     data = phase,
     aes(x=x, y=y, label=label),
-    angle = 90, colour = "white", fontface = "bold", size = 3.05
+    angle = 90, colour = "white", fontface = "bold", size = phase_label_size, family = font_family
   ) +
   scale_fill_manual(values = stage_fill, guide = "none") +
   scale_colour_manual(values = stage_text, guide = "none") +
   coord_cartesian(
-    xlim = c(0.45, 10.65),
+    xlim = c(0.45, 8.85),
     ylim = c(0.25, source_panel_top + 0.20),
     expand = FALSE
   ) +
-  theme_void(base_size = 11) +
+  theme_void(base_size = 11, base_family = font_family) +
   theme(
     plot.background = element_rect(fill = "white", colour = NA),
     plot.margin = margin(8, 8, 8, 8)
