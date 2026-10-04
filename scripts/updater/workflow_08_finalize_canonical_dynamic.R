@@ -3,9 +3,11 @@ suppressPackageStartupMessages({library(jsonlite);library(readr);library(digest)
 source("R/geography_grounding.R")
 args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
-canonical_path<-arg("--canonical");w03_path<-arg("--w03");w04_path<-arg("--w04");w05_path<-arg("--w05");w05_matches_path<-arg("--w05-matches");w06_path<-arg("--w06");w07_scores_path<-arg("--w07-scores");w07_qc_path<-arg("--w07-qc");w07_late_path<-arg("--w07-late-exclusions");decisions_path<-arg("--decisions");ontology_path<-arg("--ontology");species_config_path<-arg("--species-config","user_input/workflow05_coding_config.json");out_path<-arg("--output");ledger_path<-arg("--ledger");manifest_path<-arg("--manifest")
-req<-c(canonical_path,w03_path,w04_path,w05_path,w05_matches_path,w06_path,w07_scores_path,w07_qc_path,w07_late_path,decisions_path,ontology_path,species_config_path,out_path,ledger_path,manifest_path)
+canonical_path<-arg("--canonical");w03_path<-arg("--w03");w04_path<-arg("--w04");w05_path<-arg("--w05");w05_matches_path<-arg("--w05-matches");w06_path<-arg("--w06");w07_scores_path<-arg("--w07-scores");w07_qc_path<-arg("--w07-qc");w07_late_path<-arg("--w07-late-exclusions");decisions_path<-arg("--decisions");ontology_path<-arg("--ontology");species_config_path<-arg("--species-config","user_input/workflow05_coding_config.json");geography_corrections_path<-arg("--geography-corrections","data/workflow08/geography_code_corrections_2026-10-04.csv");gazetteer_path<-arg("--gazetteer","config/global_country_gazetteer_v3.csv");out_path<-arg("--output");ledger_path<-arg("--ledger");manifest_path<-arg("--manifest")
+req<-c(canonical_path,w03_path,w04_path,w05_path,w05_matches_path,w06_path,w07_scores_path,w07_qc_path,w07_late_path,decisions_path,ontology_path,species_config_path,gazetteer_path,out_path,ledger_path,manifest_path)
 if(any(is.na(req)|!nzchar(req)))stop("Missing required Workflow 08 finalisation argument",call.=FALSE)
+if(nzchar(geography_corrections_path)&&!file.exists(geography_corrections_path))stop("Workflow 08 geography correction file not found",call.=FALSE)
+if(!file.exists(gazetteer_path))stop("Workflow 08 gazetteer not found",call.=FALSE)
 `%||%`<-function(x,y)if(is.null(x)||length(x)==0L)y else x
 clean<-function(x){z<-as.character(x%||%"");if(length(z)==0L||is.na(z[[1L]]))"" else z[[1L]]}
 splitsemi<-function(x){z<-trimws(strsplit(clean(x),";",fixed=TRUE)[[1]]);z[nzchar(z)]}
@@ -14,6 +16,29 @@ index_jsonl<-function(x,keyfun){k<-vapply(x,keyfun,character(1));if(any(!nzchar(
 
 w03<-index_jsonl(read_jsonl(w03_path),function(z)clean(z$record_id));w04<-index_jsonl(read_jsonl(w04_path),function(z)clean(z$record_id))
 w05<-read_csv(w05_path,show_col_types=FALSE,progress=FALSE);w05_matches<-read_csv(w05_matches_path,show_col_types=FALSE,progress=FALSE);w06<-read_csv(w06_path,show_col_types=FALSE,progress=FALSE);scores<-read_csv(w07_scores_path,show_col_types=FALSE,progress=FALSE);w07_qc<-read_csv(w07_qc_path,show_col_types=FALSE,progress=FALSE);late<-read_csv(w07_late_path,show_col_types=FALSE,progress=FALSE);onto<-read_csv(ontology_path,show_col_types=FALSE,progress=FALSE);decisions<-read_jsonl(decisions_path)
+geo_corrections<-if(nzchar(geography_corrections_path))read_csv(geography_corrections_path,show_col_types=FALSE,progress=FALSE)else data.frame()
+if(nrow(geo_corrections)){
+  req_gc<-c("record_id","corrected_status","corrected_iso3c","corrected_country_names","correction_reason")
+  if(!all(req_gc%in%names(geo_corrections))||anyDuplicated(geo_corrections$record_id)||any(!nzchar(trimws(as.character(geo_corrections$record_id)))))stop("Invalid Workflow 08 geography correction table",call.=FALSE)
+}
+geo_correction_i<-if(nrow(geo_corrections))setNames(seq_len(nrow(geo_corrections)),as.character(geo_corrections$record_id))else integer()
+gazetteer<-read_csv(gazetteer_path,show_col_types=FALSE,progress=FALSE)
+gaz_pairs<-unique(data.frame(
+  iso3c=toupper(trimws(as.character(gazetteer$iso3c))),
+  country_name=trimws(as.character(gazetteer$country_name)),
+  stringsAsFactors=FALSE
+))
+gaz_pairs<-gaz_pairs[nzchar(gaz_pairs$iso3c)&nzchar(gaz_pairs$country_name),,drop=FALSE]
+validate_geo_set<-function(iso,names,rid){
+  iso<-as.character(iso);names<-as.character(names)
+  iso<-iso[nzchar(trimws(iso))];names<-names[nzchar(trimws(names))]
+  if(!length(iso)&&!length(names))return(invisible(TRUE))
+  if(!length(iso)||!length(names))stop("Incomplete geography code/name set for ",rid,call.=FALSE)
+  if(any(!iso%in%gaz_pairs$iso3c))stop("Unknown geography ISO3 code for ",rid,": ",paste(setdiff(iso,gaz_pairs$iso3c),collapse=", "),call.=FALSE)
+  mapped<-unique(gaz_pairs$country_name[gaz_pairs$iso3c%in%iso])
+  if(!setequal(tolower(names),tolower(mapped)))stop("Geography ISO3/country-name set mismatch for ",rid,call.=FALSE)
+  invisible(TRUE)
+}
 if(anyDuplicated(w05$record_id)||anyDuplicated(w06$record_id)||anyDuplicated(w07_qc$record_id)||anyDuplicated(late$record_id))stop("Duplicate record ID in W05-W07 record-level inputs",call.=FALSE)
 
 dkeys<-vapply(decisions,function(z)clean(z$review_key),character(1));if(anyDuplicated(dkeys))stop("Duplicate W08 review key",call.=FALSE);dmap<-setNames(decisions,dkeys)
@@ -73,7 +98,7 @@ invisible(lapply(zero_dec,validate_topic_decision,zero_topic=TRUE))
 dir.create(dirname(ledger_path),recursive=TRUE,showWarnings=FALSE);file.copy(decisions_path,ledger_path,overwrite=TRUE)
 
 out<-file(out_path,"wt",encoding="UTF-8");on.exit(close(out),add=TRUE);can<-file(canonical_path,"rt",encoding="UTF-8");on.exit(close(can),add=TRUE)
-n<-0L;included<-0L;excluded<-0L;exc_counts<-c(workflow03=0L,workflow04=0L,workflow07_late=0L,workflow08=0L);included_uncoded<-0L;topic_assignments<-0L;species_overrides<-0L;species_deterministic_exclusions<-0L;geo_overrides<-0L;geo_exclusions<-0L;geo_auto_none<-0L;topic_overrides<-0L;seen<-character()
+n<-0L;included<-0L;excluded<-0L;exc_counts<-c(workflow03=0L,workflow04=0L,workflow07_late=0L,workflow08=0L);included_uncoded<-0L;topic_assignments<-0L;species_overrides<-0L;species_deterministic_exclusions<-0L;geo_overrides<-0L;geo_exclusions<-0L;geo_auto_none<-0L;geo_code_corrections<-0L;geo_code_correction_ids<-character();topic_overrides<-0L;seen<-character()
 repeat{
  ln<-readLines(can,n=1L,warn=FALSE);if(!length(ln))break;if(!nzchar(trimws(ln)))next
  rec<-fromJSON(ln,simplifyVector=FALSE);incoming_rec<-rec;rid<-clean((rec$identity%||%list())$record_id);if(!nzchar(rid)||rid%in%seen)stop("Invalid/duplicate canonical record_id",call.=FALSE);seen<-c(seen,rid);n<-n+1L
@@ -141,6 +166,25 @@ repeat{
       geo_overrides<-geo_overrides+1L
     }
   }
+  # Apply explicitly version-controlled geography code corrections after
+  # W06 and any human override have been materialised. These corrections are
+  # provenance-preserving repairs of invalid ISO3/name values, not new
+  # substantive geography judgements.
+  gci<-geo_correction_i[[rid]]
+  if(!is.null(gci)&&length(gci)){
+    cr<-geo_corrections[gci[[1L]],,drop=FALSE]
+    geography$status<-as.character(cr$corrected_status[[1L]])
+    geography$iso3c<-if(identical(geography$status,"RESOLVED"))splitsemi(cr$corrected_iso3c[[1L]])else character()
+    geography$country_names<-if(identical(geography$status,"RESOLVED"))splitsemi(cr$corrected_country_names[[1L]])else character()
+    geography$source<-paste0(geography$source%||%"geography","_code_corrected")
+    geography$code_correction<-list(
+      correction_file=basename(geography_corrections_path),
+      correction_reason=as.character(cr$correction_reason[[1L]])
+    )
+    geo_code_corrections<-geo_code_corrections+1L
+    geo_code_correction_ids<-c(geo_code_correction_ids,rid)
+  }
+  if(identical(geography$status,"RESOLVED"))validate_geo_set(geography$iso3c,geography$country_names,rid)
   ids<-character();idx<-ret_split[[rid]];if(!is.null(idx))ids<-as.character(ret$path_id[idx]);qci<-w07qci[[rid]];topics<-list(status=if(length(ids))"coded" else "uncoded",assignments=topic_items(ids,"workflow07",rid),path_ids=ids,source="workflow07",workflow07_assignments=rows_payload(ret,idx,drop=character()),workflow07_record_qc=row_payload(w07_qc,qci,drop=c("record_id")),workflow08_adjudication=NULL,zero_topic_adjudication=NULL)
   td<-topic_map[[rid]];if(!is.null(td)){fv<-td$final_value;if(isFALSE(fv$included)){screening$status<-"excluded";screening$final_included<-FALSE;screening$exclusion_stage<-"workflow08";screening$exclusion_reason<-"topic_human_exclusion";screening$workflow08_exclusion<-TRUE}else{ids<-as.character(fv$path_ids%||%character());topics$status<-if(length(ids))"coded" else "uncoded";topics$assignments<-topic_items(ids,"workflow08_human",rid);topics$path_ids<-ids;topics$source<-"workflow08_human";topics$workflow08_adjudication<-td;if(identical(td$decision,"no_code"))topics$status<-"included_uncoded";topic_overrides<-topic_overrides+1L}}
   zd<-zero_map[[rid]];if(!is.null(zd)){fv<-zd$final_value;if(isFALSE(fv$included)){screening$status<-"excluded";screening$final_included<-FALSE;screening$exclusion_stage<-"workflow08";screening$exclusion_reason<-"zero_topic_human_exclusion";screening$workflow08_exclusion<-TRUE}else if(identical(clean(zd$decision),"assign_topic_set")){ids<-as.character(fv$path_ids%||%character());ids<-ids[nzchar(ids)];if(!length(ids))stop("W08 zero-topic assign_topic_set lacks topic path IDs: ",rid,call.=FALSE);topics$status<-"coded";topics$assignments<-topic_items(ids,"workflow08_human",rid);topics$path_ids<-ids;topics$source<-"workflow08_human";topics$zero_topic_adjudication<-zd;topic_overrides<-topic_overrides+1L}else{topics$status<-"included_uncoded";topics$assignments<-list();topics$path_ids<-character();topics$source<-"workflow08_human";topics$zero_topic_adjudication<-zd}}
@@ -164,6 +208,6 @@ repeat{
 close(can);on.exit(NULL,add=FALSE);close(out);on.exit(NULL,add=FALSE)
 if(n!=length(canonical_ids)||included+excluded!=n)stop("Final canonical population invariant failed",call.=FALSE)
 if(sum(exc_counts)!=excluded)stop(sprintf("Exclusion accounting mismatch: stages=%d excluded=%d",sum(exc_counts),excluded),call.=FALSE)
-manifest<-list(schema="living-evidence-map-workflow08-final-v3",status="PASS",canonical_schema_version="living-evidence-map-canonical-v1",annotation_preservation="lossless-upstream-handoff-v2",canonical_records=n,final_included_records=included,final_excluded_records=excluded,exclusions_by_stage=as.list(exc_counts),included_uncoded_topic_records=included_uncoded,final_topic_assignments=topic_assignments,w08_decision_issues=length(decisions),w08_unique_review_records=length(unique(vapply(decisions,function(z)clean(z$record_id),character(1)))),species_overrides=species_overrides,species_deterministic_exclusions=species_deterministic_exclusions,geography_human_overrides=geo_overrides,geography_human_exclusions=geo_exclusions,geography_deterministic_auto_none=geo_auto_none,topic_human_overrides=topic_overrides,source_counts=list(workflow03=length(w03),workflow04=length(w04),workflow05=nrow(w05),workflow06=nrow(w06),workflow07_late_exclusions=nrow(late)),source_sha256=list(canonical_input=digest(file=canonical_path,algo="sha256",serialize=FALSE),workflow03=digest(file=w03_path,algo="sha256",serialize=FALSE),workflow04=digest(file=w04_path,algo="sha256",serialize=FALSE),workflow05=digest(file=w05_path,algo="sha256",serialize=FALSE),workflow06=digest(file=w06_path,algo="sha256",serialize=FALSE),workflow07_scores=digest(file=w07_scores_path,algo="sha256",serialize=FALSE),workflow08_decisions=digest(file=decisions_path,algo="sha256",serialize=FALSE),ontology=digest(file=ontology_path,algo="sha256",serialize=FALSE)),final_canonical_jsonl_sha256=digest(file=out_path,algo="sha256",serialize=FALSE),final_canonical_jsonl_bytes=unname(file.info(out_path)$size),adjudication_ledger_sha256=digest(file=ledger_path,algo="sha256",serialize=FALSE),generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"))
+manifest<-list(schema="living-evidence-map-workflow08-final-v3",status="PASS",canonical_schema_version="living-evidence-map-canonical-v1",annotation_preservation="lossless-upstream-handoff-v2",canonical_records=n,final_included_records=included,final_excluded_records=excluded,exclusions_by_stage=as.list(exc_counts),included_uncoded_topic_records=included_uncoded,final_topic_assignments=topic_assignments,w08_decision_issues=length(decisions),w08_unique_review_records=length(unique(vapply(decisions,function(z)clean(z$record_id),character(1)))),species_overrides=species_overrides,species_deterministic_exclusions=species_deterministic_exclusions,geography_human_overrides=geo_overrides,geography_human_exclusions=geo_exclusions,geography_deterministic_auto_none=geo_auto_none,geography_code_corrections=geo_code_corrections,geography_code_correction_record_ids=unique(geo_code_correction_ids),topic_human_overrides=topic_overrides,source_counts=list(workflow03=length(w03),workflow04=length(w04),workflow05=nrow(w05),workflow06=nrow(w06),workflow07_late_exclusions=nrow(late)),source_sha256=list(canonical_input=digest(file=canonical_path,algo="sha256",serialize=FALSE),workflow03=digest(file=w03_path,algo="sha256",serialize=FALSE),workflow04=digest(file=w04_path,algo="sha256",serialize=FALSE),workflow05=digest(file=w05_path,algo="sha256",serialize=FALSE),workflow06=digest(file=w06_path,algo="sha256",serialize=FALSE),workflow07_scores=digest(file=w07_scores_path,algo="sha256",serialize=FALSE),workflow08_decisions=digest(file=decisions_path,algo="sha256",serialize=FALSE),ontology=digest(file=ontology_path,algo="sha256",serialize=FALSE)),final_canonical_jsonl_sha256=digest(file=out_path,algo="sha256",serialize=FALSE),final_canonical_jsonl_bytes=unname(file.info(out_path)$size),adjudication_ledger_sha256=digest(file=ledger_path,algo="sha256",serialize=FALSE),generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"))
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),manifest_path,useBytes=TRUE)
 cat(sprintf("PASS: final W08 canonical: %d included / %d excluded / %d total; SHA256=%s\n",included,excluded,n,manifest$final_canonical_jsonl_sha256))
