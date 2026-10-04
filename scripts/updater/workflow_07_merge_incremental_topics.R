@@ -72,15 +72,15 @@ counts<-if(nrow(all_scores)){
     .groups="drop")
 }else tibble(record_id=character(),retained_pathways=integer(),one_star=integer(),two_star=integer(),three_star=integer())
 
-reuse_ids<-unique(as.character(reuse$record_id))
 fresh_ids_from_results<-if(nrow(fresh_results))unique(as.character(fresh_results$record_id))else character()
+reused_ids_expected<-setdiff(as.character(current$record_id),fresh_ids_from_results)
+reuse_score_ids<-unique(as.character(reuse$record_id))
+if(length(setdiff(reuse_score_ids,reused_ids_expected)))stop("Reused W07 score set contains a record that was freshly processed",call.=FALSE)
+if(length(reused_ids_expected)!=as.integer(prep$reusable_records))stop("W07 expected reused record count mismatch",call.=FALSE)
+
 source_map<-current |> transmute(
   record_id=as.character(record_id),
-  topic_source=case_when(
-    record_id%in%reuse_ids ~ "reused_workflow07",
-    record_id%in%fresh_ids_from_results ~ "fresh_workflow07",
-    TRUE ~ "fresh_workflow07_zero_topic"
-  )
+  topic_source=if_else(record_id%in%fresh_ids_from_results,"fresh_workflow07","reused_workflow07")
 )
 
 record_summary<-source_map |> left_join(counts,by="record_id") |>
