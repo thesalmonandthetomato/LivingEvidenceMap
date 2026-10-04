@@ -36,3 +36,4 @@ jobs:
 # regenerate W08 queue after validated geography decision vocabulary migration
 # regenerate W08 queue after adding geography-level record exclusion
 # regenerate W08 after validated deterministic species-NONE exclusion
+# live regeneration after deterministic species-NONE validation
