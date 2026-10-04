@@ -13,8 +13,9 @@ canon_hash<-function(x)digest(toJSON(x,auto_unbox=TRUE,null="null",na="null",dig
 read_jsonl<-function(path){x<-readLines(path,warn=FALSE,encoding="UTF-8");x<-x[nzchar(trimws(x))];lapply(x,fromJSON,simplifyVector=FALSE)}
 write_jsonl<-function(rows,path){con<-file(path,"wt",encoding="UTF-8");on.exit(close(con),add=TRUE);for(z in rows)writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null",digits=NA),con,useBytes=TRUE)}
 
-# Build the post-change queue from the exact pre-change immutable queue:
-# change only geography_unresolved allowed_human_outcomes and its resulting hash.
+# Starting from the exact successful pre-exclude queue, change only the
+# geography decision vocabularies by appending exclude_record and recompute
+# their issue-state hashes.
 queue<-read_jsonl(queue_path)
 geo_changed<-0L
 for(i in seq_along(queue)){
@@ -22,15 +23,24 @@ for(i in seq_along(queue)){
   rid<-clean(rec$record_id)
   for(j in seq_along(rec$issues%||%list())){
     issue<-rec$issues[[j]]
-    if(clean(issue$issue_type)!="geography_unresolved")next
-    if(!identical(as.character(issue$allowed_human_outcomes),c("assign_country_set","assign_none"))){
-      stop("Unexpected pre-change geography vocabulary for ",rid,call.=FALSE)
+    typ<-clean(issue$issue_type)
+    if(!typ%in%c("geography_unresolved","geography_evidence_unvalidated","geography_model_failure"))next
+
+    expected_old<-switch(
+      typ,
+      geography_unresolved=c("accept_model","override_country_set","assign_none"),
+      geography_evidence_unvalidated=c("accept_model","override_country_set","assign_none"),
+      geography_model_failure=c("assign_country_set","assign_none")
+    )
+    expected_new<-c(expected_old,"exclude_record")
+    if(!identical(as.character(issue$allowed_human_outcomes),expected_old)){
+      stop("Unexpected pre-change geography vocabulary for ",rid," / ",typ,call.=FALSE)
     }
-    issue$allowed_human_outcomes<-c("accept_model","override_country_set","assign_none")
+    issue$allowed_human_outcomes<-expected_new
     state<-list(
-      review_key=paste(rid,"geography_unresolved",sep="::"),
+      review_key=paste(rid,typ,sep="::"),
       record_id=rid,
-      issue_type="geography_unresolved",
+      issue_type=typ,
       source_workflow=clean(issue$source_workflow),
       title=clean(rec$title),
       abstract=clean(rec$abstract),
@@ -43,11 +53,12 @@ for(i in seq_along(queue)){
   }
   queue[[i]]<-rec
 }
-new_queue<-file.path(out_dir,"current_queue_new_vocab.jsonl")
+if(geo_changed!=119L)stop("Expected 119 geography issues in source queue, got ",geo_changed,call.=FALSE)
+
+new_queue<-file.path(out_dir,"current_queue_with_geo_exclude.jsonl")
 write_jsonl(queue,new_queue)
 
-# Use the real decisions that were reusable in the successful pre-change run as
-# the historical ledger. This gives exact real decision hashes/payloads.
+# Real decisions reused by the successful source run are the historical ledger.
 prior<-read_jsonl(reused_path)
 prior_path<-file.path(out_dir,"prior_real_reused_decisions.jsonl")
 write_jsonl(prior,prior_path)
@@ -64,21 +75,24 @@ if(status!=0L)stop("Production W08 reuse script failed",call.=FALSE)
 
 manifest<-fromJSON(file.path(prod_out,"workflow08_reuse_manifest.json"),simplifyVector=FALSE)
 if(as.integer(manifest$current_issues)!=330L)stop("Expected 330 current issues",call.=FALSE)
-if(as.integer(manifest$reused_issues)!=219L)stop("Expected 219 reused issues",call.=FALSE)
-if(as.integer(manifest$pending_issues)!=111L)stop("Expected 111 pending issues",call.=FALSE)
-if(as.integer(manifest$compatible_geography_vocabulary_migrations)!=54L)stop("Expected 54 compatibility migrations",call.=FALSE)
+if(as.integer(manifest$reused_issues)!=234L)stop("Expected 234 reused issues",call.=FALSE)
+if(as.integer(manifest$pending_issues)!=96L)stop("Expected 96 pending issues",call.=FALSE)
+if(as.integer(manifest$compatible_geography_vocabulary_migrations)!=69L)stop("Expected 69 compatibility migrations",call.=FALSE)
 
 out<-read_jsonl(file.path(prod_out,"workflow08_reused_decisions.jsonl"))
-compat<-Filter(function(z)identical(clean((z$reuse%||%list())$basis),"compatible_geography_unresolved_vocabulary_migration"),out)
-if(length(compat)!=54L)stop("Expected 54 compatibility-tagged decisions",call.=FALSE)
-if(any(vapply(compat,function(z)clean(z$issue_type)!="geography_unresolved",logical(1))))stop("Non-geography decision used compatibility path",call.=FALSE)
+compat<-Filter(function(z)identical(clean((z$reuse%||%list())$basis),"compatible_geography_vocabulary_migration"),out)
+if(length(compat)!=69L)stop("Expected 69 compatibility-tagged decisions",call.=FALSE)
+types<-vapply(compat,function(z)clean(z$issue_type),character(1))
+if(sum(types=="geography_unresolved")!=59L)stop("Expected 59 migrated geography_unresolved decisions",call.=FALSE)
+if(sum(types=="geography_evidence_unvalidated")!=10L)stop("Expected 10 migrated geography_evidence_unvalidated decisions",call.=FALSE)
+if(any(!types%in%c("geography_unresolved","geography_evidence_unvalidated")))stop("Unexpected compatibility issue type",call.=FALSE)
 
+# Existing substantive decisions are unchanged by adding a new option.
 decs<-vapply(compat,function(z)clean(z$decision),character(1))
-if(sum(decs=="assign_none")!=53L)stop("Expected 53 preserved assign_none decisions",call.=FALSE)
-if(sum(decs=="override_country_set")!=1L)stop("Expected 1 migrated override_country_set decision",call.=FALSE)
-if(any(!decs%in%c("assign_none","override_country_set")))stop("Unexpected migrated decision code",call.=FALSE)
+expected_decisions<-c("accept_model","override_country_set","assign_none")
+if(any(!decs%in%expected_decisions))stop("Unexpected historical decision code after migration",call.=FALSE)
 
-# Every compatibility-reused decision must now carry the exact current issue hash.
+# Every migrated decision must carry the new current issue hash.
 cur_hash<-list()
 for(rec in queue){
   rid<-clean(rec$record_id)
@@ -90,18 +104,38 @@ if(any(vapply(compat,function(z)!identical(tolower(clean(z$issue_state_sha256)),
   stop("Migrated decision was not stamped with current issue hash",call.=FALSE)
 }
 
+# Validate the production contracts contain record-level geography exclusion.
+builder<-readLines("scripts/updater/workflow_08_build_review_queue_dynamic.R",warn=FALSE,encoding="UTF-8")
+finalizer<-readLines("scripts/updater/workflow_08_finalize_canonical_dynamic.R",warn=FALSE,encoding="UTF-8")
+required_builder<-c(
+  'allowed_human_outcomes=c("assign_country_set","assign_none","exclude_record")',
+  'allowed_human_outcomes=c("accept_model","override_country_set","assign_none","exclude_record")'
+)
+if(any(!vapply(required_builder,function(z)any(grepl(z,builder,fixed=TRUE)),logical(1))))stop("Builder geography exclude contract missing",call.=FALSE)
+required_finalizer<-c(
+  'if(identical(gdec,"exclude_record"))',
+  'screening$final_included<-FALSE',
+  'screening$exclusion_stage<-"workflow08"',
+  'screening$exclusion_reason<-"geography_human_exclusion"',
+  'geography$workflow08_adjudication<-gd'
+)
+if(any(!vapply(required_finalizer,function(z)any(grepl(z,finalizer,fixed=TRUE)),logical(1))))stop("Finalizer geography exclusion contract missing",call.=FALSE)
+
 summary<-list(
- schema="living-evidence-map-w08-production-geography-vocabulary-migration-validation-v1",
+ schema="living-evidence-map-w08-geography-record-exclusion-validation-v1",
  status="PASS",
  model_calls=0L,
  current_issues=330L,
- reused_issues=219L,
- pending_issues=111L,
- compatibility_migrations=54L,
- preserved_assign_none=53L,
- migrated_assign_country_set_to_override_country_set=1L,
+ geography_issues=119L,
+ reused_issues=234L,
+ pending_issues=96L,
+ compatibility_migrations=69L,
+ migrated_geography_unresolved=59L,
+ migrated_geography_evidence_unvalidated=10L,
  non_geography_compatibility_reuse=0L,
- production_script="scripts/updater/workflow_08_reuse_decisions.R",
+ geography_exclude_record_contract=TRUE,
+ production_reuse_script="scripts/updater/workflow_08_reuse_decisions.R",
+ production_finalizer="scripts/updater/workflow_08_finalize_canonical_dynamic.R",
  validated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 write_json(summary,file.path(out_dir,"summary.json"),auto_unbox=TRUE,pretty=TRUE)
