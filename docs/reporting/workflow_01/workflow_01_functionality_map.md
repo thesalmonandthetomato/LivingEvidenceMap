@@ -1,5 +1,13 @@
 # Workflow 01: Multi-source deduplication, adjudication and canonicalisation
 
+## Current production state (4 October 2026)
+
+The current authoritative W01 state is run **36971418284**, published as restricted Zenodo record **23096518** (DOI `10.5281/zenodo.23096518`). It contains **118,527 source manifestations** and **47,094 canonical works**, with canonical SHA-256 `fb6e35b0bceb15629af20f006310aaae75416fc3aa985b906cf82b0df7b6e142`. This state incorporates the current CAB Abstracts and ProQuest/PQD&T additions while preserving the earlier API-source manifestations and stable work identities.
+
+The historical 90,137-manifestation / 32,292-work five-source corpus remains the immutable full baseline from which the current state is reconstructed by registered deltas; it is not the current corpus size.
+
+Both the normal W01 production finalisation path and the post-Shiny human-review resume path now update the current-run status JSON and Shiny pipeline status directly after the accepted W01 state is registered.
+
 ## Purpose
 
 Workflow 01 converts the bibliographic manifestations retrieved by Workflow 00 into a source-agnostic canonical corpus of scholarly works. It preserves every source manifestation, carries forward previously resolved duplicate decisions, evaluates only the new or changed deduplication state, uses guarded cross-source identifiers to reduce avoidable pair scoring, applies deterministic and model-assisted duplicate adjudication, resolves a narrow validated set of title-wrapper/attachment cases, supports cryptographically locked human review, applies approved metadata repairs, preserves stable work identifiers, and materialises the canonical JSONL consumed by Workflow 02.
@@ -383,7 +391,7 @@ The Workflow 01 → Workflow 02 interface is considered valid only when Workflow
 
 Workflow 01 can be considered validated at the baseline/canonicalisation level when:
 
-- the full five-source baseline is checksum-verified;
+- the immutable full baseline is checksum-verified and the current source-generic delta chain reconstructs the selected multi-source state exactly;
 - the identifier-assist guard, thresholds, pre-score collapse and title-assist rules have passed their frozen-corpus safety/equivalence validations;
 - no unresolved pair decisions remain;
 - stable work-ID behaviour has passed preservation, merge and split-integrity tests;
