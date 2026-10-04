@@ -220,11 +220,11 @@ include_figure(here::here("visualisations", "figure_07_flow_diagram.png"))
 
 Database provenance was retained through deduplication, allowing the contribution and overlap of the `r length(flow$sources)` bibliographic sources to be compared for the deduplicated corpus and the definitive final included corpus. Figure 2 shows records contributed uniquely by each database, while Figure 3 shows only multi-database overlaps.
 
-```{r fig-source-unique, fig.cap="***Figure 2.*** *Unique contribution of each bibliographic database. Black bars show deduplicated canonical records found only by that database; olive-green bars show the subset of those unique records retained in the definitive final included corpus.*"}
+```{r fig-source-unique, fig.cap="***Figure 2.*** *Unique contribution of each bibliographic database. Records are counted as unique when they were retrieved from that database and no other searched database. Black bars show unique records in the deduplicated corpus; olive-green bars show the subset retained in the definitive final included corpus.*"}
 include_figure(citesource_unique_figure_path)
 ```
 
-```{r fig-source-overlap, fig.cap="***Figure 3.*** *Exact multi-database overlap among bibliographic sources. Singleton source contributions are excluded because they are shown in Figure 2. Black bars show deduplicated canonical records and olive-green bars show final included records; the matrix identifies the database combination defining each exact overlap.*"}
+```{r fig-source-overlap, fig.cap="***Figure 3.*** *Overlap among bibliographic databases. Only records retrieved from two or more databases are shown; single-database records are presented in Figure 2. Black bars show exact database intersections in the deduplicated corpus and olive-green bars show the corresponding records retained in the definitive final included corpus. The matrix indicates the databases represented in each intersection.*"}
 include_figure(citesource_overlap_figure_path)
 ```
 
