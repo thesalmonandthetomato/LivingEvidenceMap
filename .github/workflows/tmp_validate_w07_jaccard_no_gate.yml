@@ -1,4 +1,4 @@
-name: TEMP validate W08 ontology pathology routing
+name: TEMP validate stable W07-W08 topic review contract
 
 on:
   push:
@@ -31,15 +31,29 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('jsonlite','digest','readr'))
 
-      - name: Validate ontology pathology routing
+      - name: Download reference W08 state
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          Rscript scripts/updater/tmp_validate_w08_geography_vocab_migration.R
+          set -euo pipefail
+          mkdir -p source
+          gh run download 37198070493 --repo "$GITHUB_REPOSITORY" --name workflow08-review-state-37198070493 --dir source
+          test -s source/workflow08_intake/workflow08_review_queue_current.jsonl
+          test -s source/workflow08_reuse/workflow08_reused_decisions.jsonl
+
+      - name: Validate stable topic review contract
+        shell: bash
+        run: |
+          Rscript scripts/updater/tmp_validate_w08_geography_vocab_migration.R \
+            --queue source/workflow08_intake/workflow08_review_queue_current.jsonl \
+            --reused source/workflow08_reuse/workflow08_reused_decisions.jsonl \
+            --output-dir outputs/validation
 
       - name: Upload validation evidence
         uses: actions/upload-artifact@v4
         with:
-          name: w08-ontology-pathology-validation-${{ github.run_id }}
+          name: w08-topic-review-contract-validation-${{ github.run_id }}
           path: outputs/validation/
           retention-days: 30
           if-no-files-found: error
