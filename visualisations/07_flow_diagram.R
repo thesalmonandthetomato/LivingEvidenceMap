@@ -109,6 +109,7 @@ valid_source_dates <- source_meta$search_date[grepl("^\\d{4}-\\d{2}-\\d{2}$", so
 search_update_date <- if (length(valid_source_dates)) max(valid_source_dates) else ""
 fmt <- function(x) format(as.integer(x), big.mark = ",", scientific = FALSE, trim = TRUE)
 font_family <- "sans"
+text_size <- 2.65
 
 # -------------------------------------------------------------------------
 # 5. DIAGRAM GEOMETRY
@@ -315,41 +316,41 @@ p <- ggplot() +
     label = "Bibliographic database searches",
     colour = "#2c454a",
     fontface = "bold",
-    size = 3.15,
+    size = text_size,
     family = font_family
   ) +
   geom_text(
     data = source_headers,
     aes(x = name_x, y = y),
     label = "Database", hjust = 0, fontface = "bold",
-    colour = "#2c454a", size = 2.35, family = font_family
+    colour = "#2c454a", size = text_size, family = font_family
   ) +
   geom_text(
     data = source_headers,
     aes(x = hits_x, y = y),
     label = "Hits", hjust = 1, fontface = "bold",
-    colour = "#2c454a", size = 2.35, family = font_family
+    colour = "#2c454a", size = text_size, family = font_family
   ) +
   geom_text(
     data = source_headers,
     aes(x = date_x, y = y),
     label = "Search date", hjust = 0, fontface = "bold",
-    colour = "#2c454a", size = 2.35, family = font_family
+    colour = "#2c454a", size = text_size, family = font_family
   ) +
   geom_text(
     data = source_layout,
     aes(x = name_x, y = y, label = database_label),
-    hjust = 0, colour = "#2c454a", size = 2.15, lineheight = 0.90, family = font_family
+    hjust = 0, colour = "#2c454a", size = text_size, lineheight = 0.90, family = font_family
   ) +
   geom_text(
     data = source_layout,
     aes(x = hits_x, y = y, label = hits_label),
-    hjust = 1, colour = "#2c454a", size = 2.25, family = font_family
+    hjust = 1, colour = "#2c454a", size = text_size, family = font_family
   ) +
   geom_text(
     data = source_layout,
     aes(x = date_x, y = y, label = search_date_display),
-    hjust = 0, colour = "#2c454a", size = 2.25, family = font_family
+    hjust = 0, colour = "#2c454a", size = text_size, family = font_family
   ) +
   geom_rect(
     data = boxes,
@@ -363,7 +364,7 @@ p <- ggplot() +
   geom_text(
     data = boxes,
     aes(x=x, y=y, label=label, colour=stage),
-    size = 2.95, lineheight = 0.92, family = font_family
+    size = text_size, lineheight = 0.92, family = font_family
   ) +
   geom_rect(
     data = phase,
@@ -376,7 +377,7 @@ p <- ggplot() +
   geom_text(
     data = phase,
     aes(x=x, y=y, label=label),
-    angle = 90, colour = "white", fontface = "bold", size = 3.05, family = font_family
+    angle = 90, colour = "white", fontface = "bold", size = text_size, family = font_family
   ) +
   scale_fill_manual(values = stage_fill, guide = "none") +
   scale_colour_manual(values = stage_text, guide = "none") +
