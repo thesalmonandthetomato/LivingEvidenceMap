@@ -5,6 +5,8 @@ suppressPackageStartupMessages({
   library(digest)
 })
 
+%||% <- function(x, y) if (is.null(x)) y else x
+
 args <- commandArgs(trailingOnly = TRUE)
 arg <- function(flag, default = NULL) {
   i <- match(flag, args)
