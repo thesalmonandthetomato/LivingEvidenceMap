@@ -67,7 +67,7 @@ if (!nzchar(w02_patch_path) || !file.exists(w02_patch_path)) {
 # 2. WORKFLOW 01: SOURCE MANIFESTATIONS + DEDUPLICATED WORKS
 # -------------------------------------------------------------------------
 
-source_labels <- c(
+known_source_labels <- c(
   lens = "The Lens",
   scopus = "Scopus",
   openalex = "OpenAlex",
@@ -76,7 +76,14 @@ source_labels <- c(
   cab = "CAB Abstracts",
   proquest = "ProQuest/PQD&T"
 )
-source_counts_raw <- setNames(integer(length(source_labels)), names(source_labels))
+
+pretty_source_label <- function(code) {
+  if (code %in% names(known_source_labels)) return(unname(known_source_labels[[code]]))
+  z <- gsub("[_-]+", " ", code)
+  tools::toTitleCase(z)
+}
+
+source_counts_raw <- integer()
 n_deduplicated <- 0L
 n_combined <- 0L
 prescreen_ids <- character()
@@ -97,22 +104,78 @@ repeat {
 
   src <- vapply(mans, function(m) as.character(m$source %||% ""), character(1))
   if (any(!nzchar(src))) stop("Workflow 01 manifestation missing source in record: ", rid, call. = FALSE)
-  unknown <- setdiff(unique(src), names(source_labels))
-  if (length(unknown)) {
-    stop("Unknown Workflow 01 manifestation source(s): ", paste(unknown, collapse = ", "), call. = FALSE)
-  }
 
   n_deduplicated <- n_deduplicated + 1L
   n_combined <- n_combined + length(src)
   prescreen_ids <- c(prescreen_ids, rid)
   tab <- table(src)
-  source_counts_raw[names(tab)] <- source_counts_raw[names(tab)] + as.integer(tab)
+  for (nm in names(tab)) {
+    if (!nm %in% names(source_counts_raw)) source_counts_raw[[nm]] <- 0L
+    source_counts_raw[[nm]] <- source_counts_raw[[nm]] + as.integer(tab[[nm]])
+  }
 }
 close(con)
 on.exit(NULL, add = FALSE)
 
 if (anyDuplicated(prescreen_ids)) stop("Workflow 01 canonical JSONL contains duplicate record_id values.", call. = FALSE)
-source_counts <- setNames(as.integer(source_counts_raw[names(source_labels)]), unname(source_labels))
+if (!length(source_counts_raw)) stop("Workflow 01 canonical contains no source manifestations.", call. = FALSE)
+
+# Resolve source-specific search dates from version-controlled Workflow 00
+# provenance. Manual RIS registries take precedence; API baseline sources use
+# the accepted Workflow 00 state date. A release-level date is a final fallback.
+manual_registry_paths <- list.files(
+  "user_input",
+  pattern = "^workflow00_ris_.*\\.json$",
+  full.names = TRUE
+)
+manual_meta <- list()
+for (p in manual_registry_paths) {
+  z <- tryCatch(fromJSON(p, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.null(z)) next
+  code <- as.character((z$database %||% list())$short_name %||% "")
+  if (!nzchar(code)) next
+  manual_meta[[code]] <- list(
+    label = as.character((z$database %||% list())$name %||% pretty_source_label(code)),
+    search_date = as.character((z$search %||% list())$search_date %||% "")
+  )
+}
+
+state_date <- ""
+state_sources <- character()
+state_path <- "docs/search_record/state/current.json"
+if (file.exists(state_path)) {
+  st <- tryCatch(fromJSON(state_path, simplifyVector = FALSE), error = function(e) NULL)
+  if (!is.null(st)) {
+    state_sources <- names(st$sources %||% list())
+    sid <- as.character(st$state_id %||% "")
+    m <- regexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}", sid)
+    if (m[[1L]] > 0L) state_date <- regmatches(sid, m)
+  }
+}
+fallback_date <- trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
+
+source_meta <- tibble::tibble(
+  code = names(source_counts_raw),
+  database = vapply(names(source_counts_raw), function(code) {
+    if (!is.null(manual_meta[[code]]) && nzchar(manual_meta[[code]]$label)) manual_meta[[code]]$label
+    else pretty_source_label(code)
+  }, character(1)),
+  hits = as.integer(source_counts_raw),
+  search_date = vapply(names(source_counts_raw), function(code) {
+    if (!is.null(manual_meta[[code]]) && nzchar(manual_meta[[code]]$search_date)) manual_meta[[code]]$search_date
+    else if (code %in% state_sources && nzchar(state_date)) state_date
+    else fallback_date
+  }, character(1))
+) |>
+  arrange(database)
+
+if (any(!nzchar(source_meta$search_date))) {
+  warning(
+    "Search date unavailable for source(s): ",
+    paste(source_meta$database[!nzchar(source_meta$search_date)], collapse = ", ")
+  )
+}
+source_counts <- setNames(source_meta$hits, source_meta$database)
 n_duplicates_removed <- n_combined - n_deduplicated
 
 if (sum(source_counts) != n_combined) {
