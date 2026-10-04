@@ -15,6 +15,25 @@ on:
         description: 'Exact W08 Shiny queue SHA-256'
         required: true
         type: string
+  workflow_call:
+    inputs:
+      source_run_id:
+        description: 'Stopped W08 production run that published the Shiny queue'
+        required: true
+        type: string
+      batch_id:
+        description: 'Exact W08 Shiny batch ID'
+        required: true
+        type: string
+      queue_sha256:
+        description: 'Exact W08 Shiny queue SHA-256'
+        required: true
+        type: string
+    secrets:
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: true
+      ZENODO_ACCESS_TOKEN:
+        required: true
 
 permissions:
   contents: write
