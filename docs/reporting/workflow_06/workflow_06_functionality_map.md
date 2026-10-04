@@ -32,16 +32,21 @@ This document is intended to serve two purposes:
                           v
               [automatic validation]
                           |
+          +---------------+----------------+
+          |               |                |
+          v               v                v
+   raw evidence      geography auto-    UNRESOLVED /
+   grounding check     validation        model failure
+                          |
+          grounded evidence OR
+          exact deterministic/Luna set OR
+          explicit country cue(s)
+                          |
              +------------+-------------+
              |                          |
              v                          v
-      RESOLVED / NONE          UNRESOLVED / invalid
-      accept Luna output        automatic retry/repair
-             |                          |
-             |                    if still invalid
-             |                          |
-             v                          v
-      [W06 geography layer]   [W08 human adjudication]
+      auto-validated             residual uncertainty
+      W06 geography layer        -> W08 adjudication
              |
              v
       [downstream assembly]
@@ -55,7 +60,8 @@ This document is intended to serve two purposes:
 | `config/workflow06_geography_semantic_prompt_v2.txt` | Current locked W06 prompt for future production/update runs. |
 | `scripts/reporting/workflow06_geography_semantic_merge.R` | Merges and validates production shards. |
 | `scripts/reporting/workflow06_recover_failures.R` | Targeted retry of structurally failed semantic calls. |
-| `scripts/reporting/workflow06_revalidate_grounding.R` | Revalidates evidence grounding using the final relaxed grounding rules. |
+| `R/geography_grounding.R` | Shared raw evidence-grounding and geography auto-validation rules. |
+| `scripts/reporting/workflow06_revalidate_grounding.R` | Revalidates raw evidence grounding using the relaxed grounding rules. |
 | `.github/workflows/workflow_06_geography_merge_recovery.yml` | Recovery controller used to merge the completed baseline shards without repeating model calls. |
 | `scripts/updater/workflow_06_archive_state_to_zenodo.R` | Validates and archives the accepted automated W06 state. |
 | `scripts/updater/workflow_06_update_zenodo_registry.R` | Registers the authoritative W06 checkpoint. |
@@ -98,9 +104,10 @@ The semantic result is authoritative for automated coding:
 - deterministic `NONE` + Luna country/countries -> accept Luna country/countries;
 - both return different country sets -> accept Luna by default;
 - Luna `UNRESOLVED` -> flag for W08;
-- semantic output still structurally invalid or ungrounded after automatic retry/validation -> flag for W08.
+- terminal model/API failure -> flag for W08;
+- a resolved Luna geography with an evidence-string validation failure is retained automatically when the geography is independently corroborated by either exact deterministic/Luna country-set agreement or explicit country-level text cues; otherwise it is flagged for W08.
 
-The deterministic layer therefore serves **QC and regression monitoring only**. It does not override Luna and disagreement alone is not a W08 escalation criterion.
+The deterministic layer therefore remains **QC and corroboration only**. It does not override Luna. Exact agreement can suppress unnecessary human review, but deterministic/semantic disagreement alone is not an escalation criterion.
 
 ## Processing modes or stages
 
@@ -108,22 +115,23 @@ The deterministic layer therefore serves **QC and regression monitoring only**. 
 
 Each record is submitted independently with title and abstract, the locked prompt and the structured-response schema. Returned fields include geography status, ISO 3166-1 alpha-3 country codes, country names, evidence spans, mapping reasons and a record-level geography reason.
 
-### Evidence grounding
+### Evidence grounding and geography auto-validation
 
-Evidence is validated against the supplied title and abstract.
+W06 deliberately records two separate validation concepts.
 
-The final validator accepts evidence when it is demonstrably recoverable from the source after harmless normalisation, including:
+**Raw evidence grounding** asks whether Luna's returned evidence string can be mechanically recovered from the supplied title/abstract. The grounding validator accepts harmless normalisation, including whitespace and encoded line-break differences, HTML/markup removal, typographic punctuation variation, ordered compressed quotations and model-inserted ellipses whose fragments occur in source order.
 
-- whitespace and encoded line-break differences;
-- non-breaking spaces and HTML entities;
-- markup removal;
-- typographic quote/dash and punctuation variation;
-- model-inserted ellipses where the quoted fragments occur in the source in the same order; and
-- compressed quotations where the normalised evidence words occur in the source in the same order.
+**Geography auto-validation** asks whether the substantive country assignment is sufficiently corroborated to avoid human review. A `RESOLVED` Luna assignment is auto-validated when at least one of the following is true:
 
-These relaxations affect evidence-string validation only. They do not allow geography to be inferred from information absent from the title or abstract.
+1. the returned evidence is mechanically grounded;
+2. the deterministic ISO3 set and Luna ISO3 set agree exactly; or
+3. every Luna country has an explicit country-level cue in the title/abstract.
 
-Prompt v2 nevertheless instructs the model to return a single exact contiguous quotation so that relaxed validation should be needed less often in future runs.
+For rule 3, accepted cues are restricted to unambiguous gazetteer entries classified as country names, country-name variants, standard country abbreviations or demonyms. Subnational places, capitals, administrative regions and other place-to-country mappings do **not** satisfy this rule. Thus `UK` -> GBR or `Norwegian` -> NOR can corroborate an assignment, whereas a town or fjord name alone cannot.
+
+This separation preserves auditability: a failed quote-string check remains recorded as `evidence_all_grounded = FALSE`; it is not rewritten merely because the geography is independently corroborated. The final W06 layer additionally records `geography_autovalidated` and `geography_auto_validation_basis`.
+
+Prompt v2 still instructs the model to return a single exact contiguous quotation so that secondary corroboration should be needed less often in future runs.
 
 ### Structural validation and retry
 
@@ -150,9 +158,9 @@ Records are sent to Workflow 08 only when the semantic result remains:
 - `UNRESOLVED`;
 - structurally invalid after retry;
 - a model/API failure after retry; or
-- ungrounded after the final automatic evidence validator.
+- `RESOLVED` but still not auto-validated after raw evidence grounding, exact deterministic/Luna agreement and strict explicit-country-cue corroboration have all been evaluated.
 
-Deterministic/semantic disagreement alone is not sufficient for escalation.
+Deterministic/semantic disagreement alone is not sufficient for escalation. A raw evidence-string failure alone is also not sufficient when the country assignment is independently corroborated.
 
 Human confirmation or correction is stored as a W08 layer and is applied after W06.
 
@@ -167,7 +175,8 @@ For each record or run, W06 retains as applicable:
 - evidence span(s);
 - mapping reason(s);
 - record-level geography reason;
-- grounding-validation result;
+- raw evidence-grounding result;
+- geography auto-validation result and basis;
 - model failure/error state;
 - deterministic geography fields;
 - deterministic/semantic comparison fields;
@@ -238,13 +247,13 @@ Workflow 06 hands forward a sparse automated geography layer keyed by stable `re
 
 For ordinary resolved records, downstream processing uses the Luna semantic result irrespective of deterministic agreement.
 
-Records satisfying the minimum-escalation criteria are passed to Workflow 08 with their W06 provenance and issue flags. Workflow 08 records human confirmations/corrections as a separate layer. The final post-W08 JSONL is assembled later from the canonical record plus the accepted workflow layers; W06 does not rewrite the canonical bibliographic record.
+Records satisfying the minimum-escalation criteria are written to `geography_review_residual.csv` and passed to Workflow 08 with their W06 provenance and issue flags. `geography_ungrounded_evidence.csv` remains an audit file of raw quote-grounding failures and is not, by itself, the human-review queue. Workflow 08 records human confirmations/corrections as a separate layer. The final post-W08 JSONL is assembled later from the canonical record plus the accepted workflow layers; W06 does not rewrite the canonical bibliographic record.
 
 Integrity is verified through stable record identity, cardinality checks, prompt/checkpoint checksums and the registered Zenodo checkpoint.
 
 ## Methods text for research reporting
 
-> **Workflow 06: substantive study geography.** Substantive study geography was coded from publication titles and abstracts using GPT-5.6 Luna with a locked structured prompt. Countries were assigned only where the supplied text explicitly established substantive study activity or made a geographically defined system, industry, sector, provenance or study material an explicit object of analysis; incidental geography and geography requiring external knowledge were excluded. Multiple countries were retained where supported. Returned evidence was checked against the source text using a grounding validator tolerant of harmless formatting differences and recoverable compressed quotations. An independent deterministic geography layer was used only for quality control and regression monitoring; semantic model decisions remained authoritative when the two methods disagreed. Records that remained unresolved or invalid after automated validation and retry were flagged for subsequent human adjudication.
+> **Workflow 06: substantive study geography.** Substantive study geography was coded from publication titles and abstracts using GPT-5.6 Luna with a locked structured prompt. Countries were assigned only where the supplied text explicitly established substantive study activity or made a geographically defined system, industry, sector, provenance or study material an explicit object of analysis; incidental geography and geography requiring external knowledge were excluded. Multiple countries were retained where supported. Returned evidence was checked against the source text using a grounding validator tolerant of harmless formatting differences and recoverable compressed quotations. Raw evidence-string validation was kept separate from geography-level auto-validation. Resolved assignments with a failed evidence-string check were retained without human review when independently corroborated either by exact agreement with the deterministic ISO3 set or by explicit unambiguous country names, standard abbreviations or demonyms in the title/abstract. Subnational place-to-country inference was not accepted for this purpose. The semantic model remained authoritative when deterministic and semantic country sets disagreed. Only unresolved, terminal-failure or still-uncorroborated cases were flagged for subsequent human adjudication.
 
 ## Reporting status
 
