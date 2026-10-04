@@ -658,7 +658,7 @@ jobs:
 
       - name: Install Zenodo archive dependencies
         shell: Rscript {0}
-        run: install.packages(c('httr2','jsonlite','digest'))
+        run: install.packages(c('httr2','jsonlite','digest','readr','googlesheets4'))
 
       - name: Stage complete Workflow 00 search
         id: stage
@@ -735,6 +735,36 @@ jobs:
           else
             git commit -m "Register Zenodo archive for Workflow 00 run $GITHUB_RUN_ID"
             git push origin "HEAD:$WORKFLOW00_ORCHESTRATOR_BRANCH"
+          fi
+
+      - name: Update current-run live status through W00
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          git pull --ff-only origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
+          mkdir -p outputs/updater/live_status
+          git diff --name-only "$GITHUB_SHA"..HEAD > outputs/updater/live_status/changed_files.txt
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W00 \
+            --changed-files outputs/updater/live_status/changed_files.txt
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/current_run/current_run_status.json docs/current_run/current_run_record_ids.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W00 [skip ci]"
+            git pull --rebase origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
+            git push origin HEAD:"$WORKFLOW00_ORCHESTRATOR_BRANCH"
           fi
 
       - name: Upload Zenodo receipt
