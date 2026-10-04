@@ -69,7 +69,7 @@ write.csv(unique_summary, file.path(output_dir, "source_unique_contribution_summ
 
 plot_unique_contribution <- function(device = c("png", "pdf")) {
   device <- match.arg(device)
-  included_col <- "#6B6B2A"
+  included_col <- "#FF9D78"
   n_sources <- nrow(unique_summary)
   fig_h <- max(5.6, 2.4 + 0.42 * n_sources)
   if (device == "png") {
@@ -132,7 +132,7 @@ write.csv(overlap_summary, file.path(output_dir, "source_overlap_intersection_su
 
 plot_overlap_upset <- function(device = c("png", "pdf")) {
   device <- match.arg(device)
-  included_col <- "#6B6B2A"
+  included_col <- "#FF9D78"
   n_intersections <- nrow(overlap_summary)
   n_sources <- length(source_order)
   fig_w <- max(10.5, min(40, 6.5 + 0.22 * n_intersections))
