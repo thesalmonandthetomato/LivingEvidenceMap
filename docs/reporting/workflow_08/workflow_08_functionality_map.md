@@ -75,6 +75,12 @@ The automated outputs of Workflows 04–07 remain immutable. Workflow 08 applies
 
 ## Processing modes or stages
 
+### Current dynamic geography intake rule
+
+For current and future dynamic W08 runs, W06 geography escalation uses a minimum-review contract. A non-failure W06 record with raw `geography_status = UNRESOLVED` but **no Luna ISO3 country code** is deterministically assigned downstream geography `NONE` and is not sent to Shiny. The raw W06 model status is preserved in provenance. Only unresolved records with one or more candidate ISO3 country codes remain `geography_unresolved` human-review issues. This rule is implemented through the shared W06 geography validation helper, the dynamic W08 queue builder, and the dynamic W08 final assembler so queue suppression and final canonical materialisation cannot diverge.
+
+The rule is deliberately narrow: terminal model/API failures are not auto-resolved, and any unresolved record containing a candidate country code still requires human adjudication.
+
 ### Locked intake
 
 The W08 intake was rebuilt and validated in GitHub Actions run `36320650383`. It contained 169 species-NONE issues, 470 unresolved-geography issues, 51 geography evidence-grounding issues, 103 extreme topic-disagreement issues and 18 zero-topic eligibility issues. Records with multiple issues were represented once in the queue but required one decision per issue.
