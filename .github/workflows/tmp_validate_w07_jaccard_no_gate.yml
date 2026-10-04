@@ -1,4 +1,4 @@
-name: TEMP validate W08 geography vocabulary migration
+name: TEMP validate production W08 geography vocabulary migration
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest'))
+        run: install.packages(c('jsonlite','digest','readr'))
 
       - name: Download pre-change W08 state
         env:
