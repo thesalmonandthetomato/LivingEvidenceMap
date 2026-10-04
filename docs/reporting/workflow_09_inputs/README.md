@@ -5,7 +5,8 @@ This directory is the **current, version-controlled reporting handoff for Workfl
 Each accepted Workflow 00-08 stage owns one compact `wXX_summary.json` file. Workflow 01 and Workflow 08 additionally own compact source-provenance snapshots:
 
 - `w01_source_summary.csv` and `w01_source_intersections.csv`: database contribution and exact intersections for the deduplicated corpus;
-- `w08_source_summary.csv` and `w08_source_intersections.csv`: the same summaries for the definitive final included corpus.
+- `w01_source_membership.csv`: a compact two-column mapping of stable `record_id` to exact database-intersection key. This preserves source provenance without carrying the large W01 canonical JSONL forward;
+- `w08_source_summary.csv` and `w08_source_intersections.csv`: the corresponding summaries for the definitive final included corpus, derived by matching W08 included record IDs to the W01 membership map.
 
 `manifest.json` records the source run ID and SHA-256 for every current input file.
 
