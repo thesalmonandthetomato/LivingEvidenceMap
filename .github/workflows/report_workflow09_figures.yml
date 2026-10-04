@@ -311,6 +311,12 @@ jobs:
           PUB=docs/reporting/workflow_09
           mkdir -p "$PUB/figures" "$PUB/figure_code" "$PUB/data" "$PUB/manuscript"
 
+          # Remove superseded generated figure/code files from previous W09 runs
+          # before staging the new publication package. Static manuscript source
+          # files are deliberately retained.
+          rm -f "$PUB/figures"/figure_*.png "$PUB/figures"/figure_*.pdf
+          rm -f "$PUB/figure_code"/*.R
+
           # Final manuscript figure numbering.
           cp visualisations/figure_07_flow_diagram.png "$PUB/figures/figure_01_flow_diagram.png"
           cp visualisations/figure_07_flow_diagram.pdf "$PUB/figures/figure_01_flow_diagram.pdf"
@@ -413,8 +419,14 @@ jobs:
           required_figures <- unlist(lapply(c("png","pdf"), function(ext) {
             sprintf("docs/reporting/workflow_09/figures/figure_%02d_%s.%s", 1:16, stems, ext)
           }), use.names = FALSE)
-          required <- c(
-            required_figures,
+          actual_figures <- sort(list.files(
+            "docs/reporting/workflow_09/figures",
+            pattern = "^figure_[0-9]{2}_.+\\.(png|pdf)$",
+            full.names = TRUE
+          ))
+          stopifnot(identical(sort(required_figures), actual_figures))
+
+          required_code <- c(
             "docs/reporting/workflow_09/figure_code/canonical_figure_data.R",
             "docs/reporting/workflow_09/figure_code/figure_01_flow_diagram.R",
             "docs/reporting/workflow_09/figure_code/figures_02_03_database_sources.R",
@@ -423,7 +435,18 @@ jobs:
             "docs/reporting/workflow_09/figure_code/figure_06_country_choropleth.R",
             "docs/reporting/workflow_09/figure_code/figure_07_country_species.R",
             "docs/reporting/workflow_09/figure_code/figures_08_to_15_topic_hierarchy.R",
-            "docs/reporting/workflow_09/figure_code/figure_16_umbrella_review.R",
+            "docs/reporting/workflow_09/figure_code/figure_16_umbrella_review.R"
+          )
+          actual_code <- sort(list.files(
+            "docs/reporting/workflow_09/figure_code",
+            pattern = "\\.R$",
+            full.names = TRUE
+          ))
+          stopifnot(identical(sort(required_code), actual_code))
+
+          required <- c(
+            required_figures,
+            required_code,
             "docs/reporting/workflow_09/manuscript/long_form_methods.Rmd",
             "docs/reporting/workflow_09/manuscript/long_form_results.Rmd",
             "docs/reporting/workflow_09/manuscript/references.bib",
