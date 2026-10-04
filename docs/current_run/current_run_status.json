@@ -3,7 +3,7 @@
   "update_id": "w01-run-36971418284",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-02T06:30:47Z",
-  "last_updated_at_utc": "2026-10-04T16:33:30Z",
+  "last_updated_at_utc": "2026-10-04T21:33:23Z",
   "baseline": {
     "workflow08_pointer": "docs/workflow08/zenodo/run-36442875006.json",
     "workflow08_source_run_id": "36442875006",
@@ -80,6 +80,6 @@
     "W05": "37110114836",
     "W06": "37114864202",
     "W07": "37153534771",
-    "W08": "37211675882"
+    "W08": "37234697766"
   }
 }
