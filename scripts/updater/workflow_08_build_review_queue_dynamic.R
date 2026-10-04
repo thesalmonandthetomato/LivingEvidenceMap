@@ -121,7 +121,7 @@ for(i in seq_len(nrow(w06_unresolved))){
       luna_evidence=clean_chr(z$luna_evidence),
       geography_reason=clean_chr(z$geography_reason)
     ),
-    allowed_human_outcomes=c("assign_country_set","assign_none")
+    allowed_human_outcomes=c("accept_model","override_country_set","assign_none")
   ))
 }
 
