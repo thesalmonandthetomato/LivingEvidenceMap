@@ -19,6 +19,8 @@ on:
         required: true
       OPENAI_API_KEY:
         required: true
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: false
 
   workflow_dispatch:
     inputs:
@@ -406,7 +408,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','readr','digest','dplyr','httr2'))
+        run: install.packages(c('jsonlite','readr','digest','dplyr','httr2','googlesheets4'))
 
       - name: Download complete topic state
         uses: actions/download-artifact@v4
@@ -482,6 +484,32 @@ jobs:
             git push origin HEAD:workflow01-final-architecture
           fi
 
+      - name: Update live Shiny progress after published W07
+        if: ${{ inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W07
+          if [ -n "${LEM_GOOGLE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+            chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+            Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+              --status docs/current_run/current_run_status.json \
+              --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+              --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          fi
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W07 [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
       - name: Upload W07 handoff
         if: always()
         uses: actions/upload-artifact@v4
@@ -493,3 +521,67 @@ jobs:
             outputs/workflow07_zenodo/
           retention-days: 90
           if-no-files-found: error
+
+  prepare-w08-handoff:
+    needs: finalise
+    if: ${{ needs.finalise.result == 'success' && inputs.publish == true }}
+    runs-on: ubuntu-latest
+    outputs:
+      lean_pointer_path: ${{ steps.ptr.outputs.lean_pointer_path }}
+      workflow03_pointer_path: ${{ steps.ptr.outputs.workflow03_pointer_path }}
+      workflow04_pointer_path: ${{ steps.ptr.outputs.workflow04_pointer_path }}
+      workflow05_pointer_path: ${{ steps.ptr.outputs.workflow05_pointer_path }}
+      workflow06_pointer_path: ${{ steps.ptr.outputs.workflow06_pointer_path }}
+      workflow07_pointer_path: ${{ steps.ptr.outputs.workflow07_pointer_path }}
+      prior_workflow08_pointer_path: ${{ steps.ptr.outputs.prior_workflow08_pointer_path }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - name: Resolve and verify W08 handoff pointers
+        id: ptr
+        shell: bash
+        env:
+          W06_POINTER: ${{ inputs.workflow06_pointer_path }}
+        run: |
+          set -euo pipefail
+          STATUS=docs/current_run/current_run_status.json
+          test -s "$STATUS"
+          W02=$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$workflow_runs$W02)')
+          W03=$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$workflow_runs$W03)')
+          W04=$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$workflow_runs$W04)')
+          W05=$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$workflow_runs$W05)')
+          LEAN="docs/compaction/zenodo/run-$W02.json"
+          P03="docs/workflow03/zenodo/run-$W03.json"
+          P04="docs/workflow04/zenodo/run-$W04.json"
+          P05="docs/workflow05/zenodo/run-$W05.json"
+          P06="$W06_POINTER"
+          P07="docs/workflow07/zenodo/run-$GITHUB_RUN_ID.json"
+          PRIOR08=$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$baseline$workflow08_pointer)')
+          for p in "$LEAN" "$P03" "$P04" "$P05" "$P06" "$P07" "$PRIOR08"; do test -s "$p"; done
+          echo "lean_pointer_path=$LEAN" >> "$GITHUB_OUTPUT"
+          echo "workflow03_pointer_path=$P03" >> "$GITHUB_OUTPUT"
+          echo "workflow04_pointer_path=$P04" >> "$GITHUB_OUTPUT"
+          echo "workflow05_pointer_path=$P05" >> "$GITHUB_OUTPUT"
+          echo "workflow06_pointer_path=$P06" >> "$GITHUB_OUTPUT"
+          echo "workflow07_pointer_path=$P07" >> "$GITHUB_OUTPUT"
+          echo "prior_workflow08_pointer_path=$PRIOR08" >> "$GITHUB_OUTPUT"
+          echo "PASS: verified complete W07 -> W08 pointer contract"
+
+  handoff-w08:
+    needs: prepare-w08-handoff
+    uses: ./.github/workflows/workflow_08_production.yml
+    with:
+      lean_pointer_path: ${{ needs.prepare-w08-handoff.outputs.lean_pointer_path }}
+      workflow03_pointer_path: ${{ needs.prepare-w08-handoff.outputs.workflow03_pointer_path }}
+      workflow04_pointer_path: ${{ needs.prepare-w08-handoff.outputs.workflow04_pointer_path }}
+      workflow05_pointer_path: ${{ needs.prepare-w08-handoff.outputs.workflow05_pointer_path }}
+      workflow06_pointer_path: ${{ needs.prepare-w08-handoff.outputs.workflow06_pointer_path }}
+      workflow07_pointer_path: ${{ needs.prepare-w08-handoff.outputs.workflow07_pointer_path }}
+      prior_workflow08_pointer_path: ${{ needs.prepare-w08-handoff.outputs.prior_workflow08_pointer_path }}
+      new_decisions_path: ''
+      publish: true
+    secrets: inherit
+
