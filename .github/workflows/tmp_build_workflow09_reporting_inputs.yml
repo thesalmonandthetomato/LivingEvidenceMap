@@ -30,7 +30,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2','readr'))
+        run: install.packages(c('jsonlite','digest','httr2','readr','data.table','stringdist','stringi','xml2'))
 
       - name: Restore only the two source-provenance states needed for migration
         env:
