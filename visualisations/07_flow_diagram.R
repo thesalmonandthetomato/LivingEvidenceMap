@@ -548,9 +548,10 @@ ggsave(
 )
 
 # Machine-readable output generated from the same analysis used for the figure.
-search_update_date <- trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
+valid_source_dates <- source_meta$search_date[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_meta$search_date)]
+search_update_date <- if (length(valid_source_dates)) max(valid_source_dates) else trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
 if (nzchar(search_update_date) && !grepl("^\\d{4}-\\d{2}-\\d{2}$", search_update_date)) {
-  stop("SEARCH_UPDATE_DATE must be YYYY-MM-DD when supplied.", call. = FALSE)
+  stop("Resolved search update date must be YYYY-MM-DD.", call. = FALSE)
 }
 
 counts <- list(
@@ -565,6 +566,12 @@ counts <- list(
   ),
   counts = list(
     sources = as.list(source_counts),
+    source_searches = lapply(seq_len(nrow(source_meta)), function(i) list(
+      code = source_meta$code[[i]],
+      database = source_meta$database[[i]],
+      hits = as.integer(source_meta$hits[[i]]),
+      search_date = if (nzchar(source_meta$search_date[[i]])) source_meta$search_date[[i]] else NULL
+    )),
     combined_search_results = n_combined,
     duplicates_removed = n_duplicates_removed,
     deduplicated_records = n_deduplicated,
