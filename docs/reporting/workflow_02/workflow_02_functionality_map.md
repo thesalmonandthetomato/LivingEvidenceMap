@@ -8,6 +8,12 @@ Workflow 02 is now designed for incremental living updates. The current producti
 
 This document describes the **current operational architecture on branch `workflow01-final-architecture`**. Historical Workflow 02 files remain in the repository for provenance and will be dealt with during the later repository-cleanup stage; they must not be inferred to be current merely from their filenames.
 
+## Current production state (4 October 2026)
+
+The current authoritative W02 enrichment state is run **37016080508**, restricted Zenodo record **23104611** (DOI `10.5281/zenodo.23104611`). It is explicitly bound to W01 canonical SHA-256 `fb6e35b0bceb15629af20f006310aaae75416fc3aa985b906cf82b0df7b6e142` and contains **3,434 cumulative sparse patch records**. The current-run live KPI counts **2,218 enriched records** within the present W01 canonical population; older patch entries whose W01 identities were later retired remain in the cumulative provenance state but are not counted as current canonical records.
+
+The current production and post-Shiny resume routes now update the current-run status JSON and Shiny pipeline status immediately after a published W02 state is registered.
+
 ## Current workflow entry points
 
 ### Workflows currently used
