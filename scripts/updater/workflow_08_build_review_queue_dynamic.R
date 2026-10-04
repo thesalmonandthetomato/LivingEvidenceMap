@@ -191,7 +191,7 @@ for(i in seq_len(nrow(w07q))){
     if(is.null(idx)||!length(idx))stop("Topic disagreement lacks pathway scores: ",rid,call.=FALSE)
     w07_extreme_autoaccepted<-w07_extreme_autoaccepted+1L
     next
-  }else if(reason=="ontology_pathology"){
+  }else if(reason%in%c("topic_coding_review","ontology_pathology")){
     idx<-score_index[[rid]]
     if(is.null(idx)||!length(idx))stop("Ontology pathology lacks pathway scores: ",rid,call.=FALSE)
     s<-w07s[idx,,drop=FALSE]
@@ -206,9 +206,10 @@ for(i in seq_len(nrow(w07q))){
       retained_for_analysis=TRUE
     ))
     add_issue(rid,list(
-      source_workflow="07",issue_type="ontology_pathology",
+      source_workflow="07",issue_type="topic_coding_review",
       automated_value=list(
-        ontology_pathology=TRUE,
+        review_reason=reason,
+        ontology_pathology=if("ontology_pathology"%in%names(q))isTRUE(q$ontology_pathology[[1L]])else identical(reason,"ontology_pathology"),
         mean_pairwise_jaccard=if("mean_pairwise_jaccard"%in%names(q))as.numeric(q$mean_pairwise_jaccard)else NULL,
         pathways=pathways
       ),
@@ -222,7 +223,7 @@ for(i in seq_len(nrow(w07q))){
         zero_topic_rescreen_decision=as.character(q$zero_topic_rescreen_decision),
         screening_action=as.character(q$screening_action)
       ),
-      allowed_human_outcomes=c("include_uncoded","exclude_record")
+      allowed_human_outcomes=c("assign_topic_set","include_uncoded","exclude_record")
     ))
   }else stop("Unexpected W07 review reason: ",reason,call.=FALSE)
 }
