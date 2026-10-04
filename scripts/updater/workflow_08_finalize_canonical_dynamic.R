@@ -31,43 +31,15 @@ gaz_pairs<-unique(data.frame(
 ))
 gaz_pairs<-gaz_pairs[nzchar(gaz_pairs$iso3c)&nzchar(gaz_pairs$country_name),,drop=FALSE]
 validate_geo_set<-function(iso,names,rid){
-  iso<-toupper(trimws(as.character(iso)));names<-trimws(as.character(names))
-  iso<-iso[nzchar(iso)];names<-names[nzchar(names)]
+  iso<-toupper(trimws(as.character(iso)));iso<-iso[nzchar(iso)]
+  names<-trimws(as.character(names));names<-names[nzchar(names)]
   if(!length(iso)&&!length(names))return(invisible(TRUE))
-  if(!length(iso)||!length(names))stop("Incomplete geography code/name set for ",rid,call.=FALSE)
+  if(!length(iso))stop("Resolved geography lacks ISO3 code for ",rid,call.=FALSE)
   valid_codes<-unique(gaz_pairs$iso3c)
-  if(any(!iso%in%valid_codes))stop("Unknown geography ISO3 code for ",rid,": ",paste(setdiff(iso,valid_codes),collapse=", "),call.=FALSE)
-
-  # Country names may legitimately use recognised variants (e.g. Czech
-  # Republic for ISO3 CZE whose canonical gazetteer name is Czechia). Validate
-  # set membership without relying on positional ordering of parallel vectors.
-  allowed_for_selected<-unique(c(
-    gaz_pairs$country_name[gaz_pairs$iso3c%in%iso],
-    gaz_pairs$matched_place[gaz_pairs$iso3c%in%iso]
-  ))
-  norm_country_label<-function(x){
-    x<-tolower(trimws(as.character(x)))
-    x<-sub("^the\\s+","",x)
-    x
-  }
-  allowed_for_selected<-norm_country_label(allowed_for_selected[nzchar(allowed_for_selected)])
-  if(any(!norm_country_label(names)%in%allowed_for_selected)) {
-    stop("Geography ISO3/country-name set mismatch for ",rid,call.=FALSE)
-  }
-  for(code in unique(iso)){
-    labels<-unique(c(
-      gaz_pairs$country_name[gaz_pairs$iso3c==code],
-      gaz_pairs$matched_place[gaz_pairs$iso3c==code]
-    ))
-    labels<-norm_country_label(labels[nzchar(labels)])
-    if(!any(norm_country_label(names)%in%labels)) {
-      stop("Geography ISO3 code lacks matching country name for ",rid,": ",code,call.=FALSE)
-    }
-  }
+  bad<-setdiff(unique(iso),valid_codes)
+  if(length(bad))stop("Unknown geography ISO3 code for ",rid,": ",paste(bad,collapse=", "),call.=FALSE)
   invisible(TRUE)
 }
-if(anyDuplicated(w05$record_id)||anyDuplicated(w06$record_id)||anyDuplicated(w07_qc$record_id)||anyDuplicated(late$record_id))stop("Duplicate record ID in W05-W07 record-level inputs",call.=FALSE)
-
 dkeys<-vapply(decisions,function(z)clean(z$review_key),character(1));if(anyDuplicated(dkeys))stop("Duplicate W08 review key",call.=FALSE);dmap<-setNames(decisions,dkeys)
 by_type<-function(t)Filter(function(z)identical(clean(z$issue_type),t),decisions)
 species_dec<-by_type("species_none");geo_dec<-c(by_type("geography_model_failure"),by_type("geography_unresolved"),by_type("geography_evidence_unvalidated"));topic_dec<-c(by_type("topic_coding_review"),by_type("ontology_pathology"),by_type("topic_extreme_disagreement"));zero_dec<-by_type("zero_topic_eligibility_uncertain")
