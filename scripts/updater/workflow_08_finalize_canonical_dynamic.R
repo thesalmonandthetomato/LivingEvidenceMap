@@ -45,8 +45,13 @@ validate_geo_set<-function(iso,names,rid){
     gaz_pairs$country_name[gaz_pairs$iso3c%in%iso],
     gaz_pairs$matched_place[gaz_pairs$iso3c%in%iso]
   ))
-  allowed_for_selected<-tolower(allowed_for_selected[nzchar(allowed_for_selected)])
-  if(any(!tolower(names)%in%allowed_for_selected)) {
+  norm_country_label<-function(x){
+    x<-tolower(trimws(as.character(x)))
+    x<-sub("^the\\s+","",x)
+    x
+  }
+  allowed_for_selected<-norm_country_label(allowed_for_selected[nzchar(allowed_for_selected)])
+  if(any(!norm_country_label(names)%in%allowed_for_selected)) {
     stop("Geography ISO3/country-name set mismatch for ",rid,call.=FALSE)
   }
   for(code in unique(iso)){
@@ -54,8 +59,8 @@ validate_geo_set<-function(iso,names,rid){
       gaz_pairs$country_name[gaz_pairs$iso3c==code],
       gaz_pairs$matched_place[gaz_pairs$iso3c==code]
     ))
-    labels<-tolower(labels[nzchar(labels)])
-    if(!any(tolower(names)%in%labels)) {
+    labels<-norm_country_label(labels[nzchar(labels)])
+    if(!any(norm_country_label(names)%in%labels)) {
       stop("Geography ISO3 code lacks matching country name for ",rid,": ",code,call.=FALSE)
     }
   }
