@@ -219,35 +219,24 @@ call_one <- function(row){
   # outputs such as INN/NIQ/FIJ/UNK and code/name mismatches.
   if(length(iso)){
     iso_norm <- toupper(trimws(iso))
-    norm_country_label <- function(x){
-      x <- tolower(trimws(as.character(x)))
-      sub("^the\\s+","",x)
-    }
-    names_norm <- norm_country_label(names)
     valid_codes <- unique(allowed_pairs$iso3c)
-    if(any(!iso_norm %in% valid_codes)){
-      stop("Invalid geography ISO3 returned by model: ",
-           paste(unique(iso_norm[!iso_norm %in% valid_codes]),collapse=", "))
+    bad_codes <- setdiff(unique(iso_norm),valid_codes)
+    if(length(bad_codes)){
+      stop("Invalid geography ISO3 returned by model: ",paste(bad_codes,collapse=", "))
     }
-    allowed_labels <- unique(c(
-      allowed_pairs$country_name[allowed_pairs$iso3c %in% iso_norm],
-      allowed_pairs$matched_place[allowed_pairs$iso3c %in% iso_norm]
-    ))
-    allowed_labels <- norm_country_label(allowed_labels[nzchar(allowed_labels)])
-    if(any(!names_norm %in% allowed_labels)){
-      stop("Invalid geography country name for returned ISO3 set: ",
-           paste(unique(names[!names_norm %in% allowed_labels]),collapse=", "))
+
+    # ISO3 is the controlled machine identifier. Country names are descriptive
+    # labels, so derive them deterministically from the gazetteer rather than
+    # trusting model spelling/aliases. Raw model-returned names remain in the
+    # JSON locations payload for provenance.
+    canonical_name_for <- function(code){
+      vals <- unique(allowed_pairs$country_name[allowed_pairs$iso3c==code])
+      vals <- vals[nzchar(vals)]
+      if(!length(vals)) stop("No canonical country name for ISO3: ",code)
+      vals[[1L]]
     }
-    for(code in unique(iso_norm)){
-      labels <- unique(c(
-        allowed_pairs$country_name[allowed_pairs$iso3c==code],
-        allowed_pairs$matched_place[allowed_pairs$iso3c==code]
-      ))
-      labels <- norm_country_label(labels[nzchar(labels)])
-      if(!any(names_norm %in% labels)){
-        stop("Returned ISO3 lacks a matching recognised country name: ",code)
-      }
-    }
+    iso <- iso_norm
+    names <- vapply(iso_norm,canonical_name_for,character(1))
   }
 
   list(
