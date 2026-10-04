@@ -1,3 +1,5 @@
 run corrected W08 geography republish
 
 retry after sparse correction lookup fix
+
+retry after country-name variant validation fix
