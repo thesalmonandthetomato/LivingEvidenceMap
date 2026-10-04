@@ -1,5 +1,13 @@
 # Workflow 07: three-pass topic coding and topic-quality control
 
+## Current production state (4 October 2026)
+
+The current authoritative W07 state is source run **37153534771**, published as restricted Zenodo record **23131972** (DOI `10.5281/zenodo.23131972`). It covers **21,819 records** and contains **61,939 raw topic assignments**. There are **385 zero-topic records**, of which **234** are retained as included-but-uncoded and **131** are late automatic exclusions. The W07 state identifies **138 potential human-adjudication records** before W08 applies cross-workflow deterministic suppression and current issue-state reuse.
+
+Mean pairwise Jaccard is descriptive QC only. It is not a production W08 trigger. Current topic-related human escalation is limited to genuine residual ontology/coding review and unresolved zero-topic eligibility. W07 now has its own durable registered Zenodo checkpoint, while W08 remains the stage that applies final human decisions and assembles the definitive included/excluded corpus.
+
+The production W07 route explicitly updates current-run/Shiny progress after publication.
+
 ## Purpose
 
 Workflow 07 assigns substantive topic pathways to records retained after Workflow 06 using three independent GPT-5.6 Luna classifications against a frozen hierarchical ontology.
@@ -377,23 +385,21 @@ Production and recovery artifacts are retained for 90 days. Completed model outp
 
 ### Durable external archive
 
-Workflow 07 does not currently create an independent Zenodo checkpoint.
+Workflow 07 now creates an independent restricted Zenodo checkpoint for the automated topic/QC state. The current authoritative W07 archive is Zenodo record **23131972** (DOI `10.5281/zenodo.23131972`) from source run **37153534771**. This checkpoint is an automated pre-adjudication layer, not the definitive analytical corpus: W08 still applies late exclusions and human decisions before final canonical assembly.
 
-This is deliberate: W07 identifies late relevance exclusions and unresolved records that are adjudicated in Workflow 08. The final durable consolidated record state is therefore archived after W08/final assembly rather than treating the pre-adjudication W07 population as the definitive corpus.
-
-The repository nevertheless permanently preserves the frozen ontology, prompt, processing rules and run identifiers required to reconstruct the W07 layer from the retained execution artifacts during the active pipeline cycle.
+The repository permanently preserves the frozen ontology, prompt, processing rules, registered pointer/checksum metadata and run identifiers required to reconstruct the W07 layer.
 
 ## Downstream handoff
 
 Workflow 08 receives the validated W07 outputs keyed by stable `record_id`.
 
-For the current baseline:
+For the current production state:
 
-- **123** zero-topic records are handed forward as late automatic exclusions and do not require human review;
-- **217** zero-topic records are retained as included but uncoded and do not require human topic adjudication solely because they lack a code;
-- **18** zero-topic records require human eligibility adjudication;
-- **103** coded records require human topic adjudication because mean pairwise Jaccard is below 0.20;
-- high-topic records are resolved deterministically and are not escalated solely because they contain more than ten raw assignments.
+- **131** zero-topic records are handed forward as late automatic exclusions and do not require human review;
+- **234** zero-topic records are retained as included but uncoded and do not require human topic adjudication solely because they lack a code;
+- residual zero-topic eligibility uncertainty may be routed to W08;
+- low mean pairwise Jaccard, ordinary three-pass disagreement and high topic count are retained as QC information and **do not** independently trigger human review; and
+- W08 may suppress a W07 review candidate when another deterministic record-level exclusion, such as W05 species `NONE`, has already made human review unnecessary.
 
 Workflow 08 records human decisions as a separate adjudication layer. W07 does not alter the historical W04 screening layer or discard raw topic-model outputs.
 
@@ -416,9 +422,9 @@ Workflow 07 is considered complete and validated when:
 - zero-topic records undergo the targeted eligibility re-screen before Workflow 08 flagging;
 - included zero-topic records are explicitly retained as included but uncoded;
 - consensus zero-topic exclusions are recorded as late exclusions without rewriting W04;
-- unresolved zero-topic eligibility and extreme three-pass disagreement are explicitly routed to Workflow 08;
+- unresolved zero-topic eligibility and genuine residual ontology/coding uncertainty are explicitly routed to Workflow 08, while low Jaccard remains descriptive QC only;
 - final routing counts and identity invariants pass the finalisation validator; and
 - expensive completed model outputs can be reused without rerunning classification.
 
-These conditions are satisfied for the current baseline. The integrated final-routing implementation was validated against the preserved production topic handoff and zero-topic rescreen in GitHub Actions run **36305907080**. The validator confirmed 19,407 records, 358 zero-topic records, 217 included-but-uncoded records, 123 late automatic exclusions, 18 zero-topic eligibility-uncertain records, 103 extreme-disagreement records, and **121 total Workflow 07 human-adjudication records**.\n\n**Workflow 07 status: complete, validated and ready for Workflow 08 consumption.**
+These conditions are satisfied for the current production state. The historical run **36305907080** remains a validation record for the earlier baseline architecture. The current registered state is run **37153534771** with 21,819 records, 385 zero-topic records, 234 included-but-uncoded records, 131 late automatic exclusions and 138 potential W07 human-adjudication records before W08 cross-workflow suppression.\n\n**Workflow 07 status: complete, validated, durably archived and consumed by the current Workflow 08 finalisation.**
 
