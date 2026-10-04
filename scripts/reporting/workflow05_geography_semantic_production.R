@@ -202,6 +202,28 @@ call_one <- function(row){
   if(a$geography_status=="NONE" && length(locs)>0L) stop("NONE returned with non-empty locations")
   if(a$geography_status=="RESOLVED" && length(locs)==0L) stop("RESOLVED returned with no locations")
 
+  # The JSON schema only guarantees a three-letter token. Validate every
+  # model-returned code/name pair against the controlled gazetteer vocabulary
+  # before it can enter W06. This blocks syntactically plausible but invalid
+  # outputs such as INN/NIQ/FIJ/UNK and code/name mismatches.
+  gaz <- read_csv("config/global_country_gazetteer_v3.csv",show_col_types=FALSE,progress=FALSE)
+  allowed_pairs <- unique(data.frame(
+    iso3c=toupper(trimws(as.character(gaz$iso3c))),
+    country_name=trimws(as.character(gaz$country_name)),
+    stringsAsFactors=FALSE
+  ))
+  allowed_pairs <- allowed_pairs[nzchar(allowed_pairs$iso3c) & nzchar(allowed_pairs$country_name),,drop=FALSE]
+  if(length(iso)){
+    pair_ok <- mapply(function(code,name){
+      any(allowed_pairs$iso3c==toupper(trimws(code)) &
+          tolower(allowed_pairs$country_name)==tolower(trimws(name)))
+    },iso,names,USE.NAMES=FALSE)
+    if(any(!pair_ok)){
+      bad <- paste0(iso[!pair_ok],"=",names[!pair_ok],collapse="; ")
+      stop("Invalid geography ISO3/country pair returned by model: ",bad)
+    }
+  }
+
   list(
     record_id=as.character(row$record_id),
     record_sequence=as.integer(row$record_sequence),
