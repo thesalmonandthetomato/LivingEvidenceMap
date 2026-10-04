@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
 suppressPackageStartupMessages({library(readr);library(dplyr);library(jsonlite);library(digest)})
+source("R/geography_grounding.R")
 
 args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
@@ -39,6 +40,7 @@ w07q<-read_csv(w07_review_path,show_col_types=FALSE,progress=FALSE)
 w07s<-read_csv(w07_scores_path,show_col_types=FALSE,progress=FALSE)
 w07x<-read_csv(w07_late_path,show_col_types=FALSE,progress=FALSE)
 g_resid<-if(nzchar(w06_grounding_residual_path))read_csv(w06_grounding_residual_path,show_col_types=FALSE,progress=FALSE)else tibble(record_id=character())
+gazetteer<-read_csv("config/global_country_gazetteer_v3.csv",show_col_types=FALSE,progress=FALSE)
 
 for(z in list(w05,w06,ctx))if(!"record_id"%in%names(z)||any(!nzchar(as.character(z$record_id)))||anyDuplicated(z$record_id))stop("W05/W06/W07 context identity invariant failed",call.=FALSE)
 if(!setequal(w05$record_id,ctx$record_id)||!setequal(w06$record_id,ctx$record_id))stop("W05/W06/W07 current populations do not match",call.=FALSE)
@@ -136,6 +138,21 @@ exact_grounding_accept_ids<-as.character(resid_rows$record_id[
   nzchar(vapply(resid_rows$luna_iso3c,norm_iso_set,character(1)))
 ])
 resid_ids<-setdiff(resid_ids,exact_grounding_accept_ids)
+
+# For legacy/current W06 states that predate geography_autovalidated, apply the
+# same strict direct-country corroboration used by current W06: every Luna
+# country must be explicitly present as a country name, standard abbreviation
+# or unambiguous demonym in the title/abstract.
+explicit_country_cue_accept_ids<-character()
+for(rid in resid_ids){
+  z<-w06[match(rid,w06$record_id),,drop=FALSE]
+  cc<-context[match(rid,context$record_id),,drop=FALSE]
+  if(z$geography_status=="RESOLVED" && !(z$llm_failed %in% TRUE) &&
+     strict_country_cues_support_set(z$luna_iso3c,cc$title,cc$abstract,gazetteer)){
+    explicit_country_cue_accept_ids<-c(explicit_country_cue_accept_ids,rid)
+  }
+}
+resid_ids<-setdiff(resid_ids,explicit_country_cue_accept_ids)
 for(rid in resid_ids){
   z<-w06[match(rid,w06$record_id),,drop=FALSE]
   add_issue(rid,list(
@@ -243,6 +260,7 @@ manifest<-list(
   w06_unresolved=nrow(w06_unresolved),
   w06_model_failures=nrow(w06_failures),
   w06_grounding_exact_agreement_autoaccepted=length(exact_grounding_accept_ids),
+  w06_grounding_explicit_country_cue_autoaccepted=length(explicit_country_cue_accept_ids),
   w06_grounding_residual=length(resid_ids),
   w07_human_review_source=nrow(w07q),
   w07_extreme_disagreement_autoaccepted_after_pruning=w07_extreme_autoaccepted,
