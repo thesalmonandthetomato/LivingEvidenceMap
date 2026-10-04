@@ -134,9 +134,11 @@ side_x <- 7.05
 # count and search date.
 n_source_cols <- if (nrow(source_meta) <= 10L) 2L else 3L
 n_source_rows <- ceiling(nrow(source_meta) / n_source_cols)
-source_panel_left <- 1.72
-source_panel_right <- 8.02
-source_panel_width <- source_panel_right - source_panel_left
+# Align the database panel's left edge exactly with the main left-hand
+# process boxes so the white gutter beside the vertical phase bars is continuous.
+source_panel_width <- 8.02 - 1.72
+source_panel_left <- main_x - process_box_w / 2
+source_panel_right <- source_panel_left + source_panel_width
 source_panel_bottom <- 11.55
 
 # Source-panel vertical spacing is deliberately derived from the number of rows.
@@ -393,7 +395,7 @@ p <- ggplot() +
   scale_fill_manual(values = stage_fill, guide = "none") +
   scale_colour_manual(values = stage_text, guide = "none") +
   coord_cartesian(
-    xlim = c(0.45, 8.55),
+    xlim = c(0.45, 8.85),
     ylim = c(0.25, source_panel_top + 0.20),
     expand = FALSE
   ) +
