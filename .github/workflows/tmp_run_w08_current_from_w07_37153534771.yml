@@ -25,3 +25,4 @@ jobs:
       new_decisions_path: ''
       publish: true
     secrets: inherit
+# recovery: skip ambiguous legacy geography mappings
