@@ -27,3 +27,4 @@ jobs:
     secrets: inherit
 # recovery: skip ambiguous legacy geography mappings
 # regenerate mutually exclusive geography queue and carry forward valid active decisions
+# regenerate after W07 pruned-disagreement fix and W08 deterministic autoaccept rules
