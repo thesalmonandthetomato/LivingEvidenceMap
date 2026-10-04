@@ -52,6 +52,92 @@ jobs:
             "httr2","digest","CiteSource","rmarkdown","knitr"
           ))
 
+      - name: Resolve and validate release provenance
+        env:
+          SEARCH_UPDATE_DATE_OVERRIDE: ${{ inputs.search_update_date || '' }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+
+          status_path <- "docs/current_run/current_run_status.json"
+          if (!file.exists(status_path)) stop("Current-run status is missing", call. = FALSE)
+          status <- fromJSON(status_path, simplifyVector = FALSE)
+
+          one <- function(x, label) {
+            if (is.null(x) || !length(x) || !nzchar(as.character(x[[1L]]))) {
+              stop(label, " is missing from current-run provenance", call. = FALSE)
+            }
+            as.character(x[[1L]])
+          }
+
+          w01_run <- one(status$workflow_runs$W01, "Workflow 01 run ID")
+          w02_run <- one(status$workflow_runs$W02, "Workflow 02 run ID")
+          w01_pointer <- sprintf("docs/deduplication/zenodo/run-%s.json", w01_run)
+          w02_pointer <- sprintf("docs/enrichment/zenodo/run-%s.json", w02_run)
+
+          if (!file.exists(w01_pointer)) stop("Current release W01 pointer not found: ", w01_pointer, call. = FALSE)
+          if (!file.exists(w02_pointer)) stop("Current release W02 pointer not found: ", w02_pointer, call. = FALSE)
+
+          reg <- read.csv("docs/workflow08/zenodo_registry.csv", stringsAsFactors = FALSE, check.names = FALSE)
+          hit <- reg[as.character(reg$status) == "authoritative", , drop = FALSE]
+          if (nrow(hit) != 1L) stop("Expected exactly one authoritative Workflow 08 registry row", call. = FALSE)
+          w08_run <- as.character(hit$source_run_id[[1L]])
+          w08_pointer <- sprintf("docs/workflow08/zenodo/run-%s.json", w08_run)
+          if (!file.exists(w08_pointer)) stop("Authoritative W08 pointer not found: ", w08_pointer, call. = FALSE)
+
+          w01 <- fromJSON(w01_pointer, simplifyVector = FALSE)
+          w02 <- fromJSON(w02_pointer, simplifyVector = FALSE)
+          w08 <- fromJSON(w08_pointer, simplifyVector = FALSE)
+
+          stopifnot(
+            identical(as.character(w01$status), "published"),
+            identical(as.character(w01$workflow), "01"),
+            identical(as.character(w02$status), "published"),
+            identical(as.character(w02$workflow), "02"),
+            identical(as.character(w08$status), "published"),
+            identical(as.character(w08$workflow), "08")
+          )
+
+          if (!identical(
+            tolower(as.character(w02$upstream_workflow01_canonical_sha256)),
+            tolower(as.character(w01$canonical_jsonl_sha256))
+          )) {
+            stop("Workflow 02 pointer does not belong to the selected Workflow 01 canonical state", call. = FALSE)
+          }
+
+          w01_n <- as.integer(w01$canonical_records)
+          w08_source_n <- as.integer(w08$source_canonical_population)
+          w08_final_n <- as.integer(w08$canonical_records)
+          w08_excluded_n <- as.integer(w08$excluded_records)
+          if (is.na(w01_n) || is.na(w08_source_n) || is.na(w08_final_n) || is.na(w08_excluded_n)) {
+            stop("Release provenance contains invalid record counts", call. = FALSE)
+          }
+          if (w08_source_n != w01_n || (w08_final_n + w08_excluded_n) != w01_n) {
+            stop("Workflow 01 and Workflow 08 populations do not reconcile for this release", call. = FALSE)
+          }
+
+          search_date <- trimws(Sys.getenv("SEARCH_UPDATE_DATE_OVERRIDE", unset = ""))
+          if (!nzchar(search_date)) search_date <- one(status$search$search_date, "Search update date")
+          if (!grepl("^\\d{4}-\\d{2}-\\d{2}$", search_date)) {
+            stop("Search update date must be YYYY-MM-DD", call. = FALSE)
+          }
+
+          env <- Sys.getenv("GITHUB_ENV")
+          cat(sprintf("W01_POINTER=%s\n", w01_pointer), file = env, append = TRUE)
+          cat(sprintf("W02_POINTER=%s\n", w02_pointer), file = env, append = TRUE)
+          cat(sprintf("W08_POINTER=%s\n", w08_pointer), file = env, append = TRUE)
+          cat(sprintf("SEARCH_UPDATE_DATE=%s\n", search_date), file = env, append = TRUE)
+
+          cat(sprintf(
+            paste0(
+              "PASS: W09 release provenance: W01=%s (%d records; %s), ",
+              "W02=%s (upstream W01 SHA matched), ",
+              "W08=%s (%d included + %d excluded), search_date=%s\n"
+            ),
+            w01_run, w01_n, as.character(w01$canonical_jsonl_sha256),
+            w02_run, w08_run, w08_final_n, w08_excluded_n, search_date
+          ))
+
       - name: Restore latest authoritative Workflow 08 final state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
@@ -59,9 +145,7 @@ jobs:
         run: |
           set -euo pipefail
           git pull --ff-only origin workflow01-final-architecture
-          W08_POINTER="$(ls docs/workflow08/zenodo/run-*.json | sort -V | tail -1)"
           test -n "$W08_POINTER"
-          echo "W08_POINTER=$W08_POINTER" >> "$GITHUB_ENV"
           Rscript scripts/reporting/restore_workflow08_reporting_state.R \
             --pointer "$W08_POINTER" \
             --output-dir workflow08_reporting_state
@@ -74,7 +158,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          W01_POINTER="$(ls docs/deduplication/zenodo/run-*.json | sort -V | tail -1)"
           test -n "$W01_POINTER"
           Rscript scripts/updater/workflow_01_restore_current_state.R \
             --pointer "$W01_POINTER" \
@@ -106,7 +189,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          W02_POINTER="$(ls docs/workflow02/zenodo/run-*.json | sort -V | tail -1)"
           test -n "$W02_POINTER"
           Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
             --pointer "$W02_POINTER" \
@@ -132,7 +214,6 @@ jobs:
           EXCLUSIONS_CSV: ${{ github.workspace }}/workflow08_reporting_state/workflow08_excluded_records.csv
           PRESCREEN_CANONICAL_JSONL: ${{ github.workspace }}/workflow01_state/canonical/records.jsonl
           WORKFLOW02_PATCH_JSONL: ${{ github.workspace }}/workflow02_cumulative_patch.jsonl
-          SEARCH_UPDATE_DATE: ${{ inputs.search_update_date || '' }}
         shell: bash
         run: |
           set -euo pipefail
