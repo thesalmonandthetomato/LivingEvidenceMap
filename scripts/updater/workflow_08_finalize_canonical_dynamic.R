@@ -170,8 +170,8 @@ repeat{
   # W06 and any human override have been materialised. These corrections are
   # provenance-preserving repairs of invalid ISO3/name values, not new
   # substantive geography judgements.
-  gci<-geo_correction_i[[rid]]
-  if(!is.null(gci)&&length(gci)){
+  gci<-unname(geo_correction_i[rid])
+  if(length(gci)&&!is.na(gci)){
     cr<-geo_corrections[gci[[1L]],,drop=FALSE]
     geography$status<-as.character(cr$corrected_status[[1L]])
     geography$iso3c<-if(identical(geography$status,"RESOLVED"))splitsemi(cr$corrected_iso3c[[1L]])else character()
