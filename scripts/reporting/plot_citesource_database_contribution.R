@@ -166,89 +166,102 @@ write.csv(
 )
 
 
-# Paired source-contribution figure: black = all deduplicated canonical works;
-# olive = final included works. This is separate from, and complementary
-# to, the source-intersection UpSet figure below.
-bar_long <- screening_summary |>
-  select(database, deduplicated_records, included_records) |>
-  pivot_longer(
-    cols = c(deduplicated_records, included_records),
-    names_to = "stage",
-    values_to = "records"
-  ) |>
-  mutate(
-    stage = factor(
-      stage,
-      levels = c("deduplicated_records", "included_records"),
-      labels = c("Deduplicated records", "Included records")
-    ),
-    database = factor(
-      database,
-      levels = screening_summary$database[order(screening_summary$deduplicated_records, decreasing = TRUE)]
+# Unique-source contribution figure. A canonical work is "unique" when it
+# has manifestations from exactly one database. The paired bars show how many
+# such records exist before screening and how many remain in the definitive
+# final included corpus.
+source_order <- screening_summary |>
+  arrange(desc(deduplicated_records), database) |>
+  pull(database)
+
+presence_matrix_all <- as.matrix(source_presence[, source_order, drop = FALSE])
+storage.mode(presence_matrix_all) <- "logical"
+source_degree_all <- rowSums(presence_matrix_all)
+
+unique_summary <- tibble(
+  database = source_order,
+  unique_deduplicated_records = vapply(source_order, function(lab) {
+    sum(source_presence[[lab]] & source_degree_all == 1L)
+  }, integer(1)),
+  unique_included_records = vapply(source_order, function(lab) {
+    sum(source_presence[[lab]] & source_degree_all == 1L & source_presence$included_final)
+  }, integer(1))
+) |>
+  arrange(desc(unique_deduplicated_records), database)
+
+write.csv(
+  unique_summary,
+  file.path(output_dir, "source_unique_contribution_summary.csv"),
+  row.names = FALSE
+)
+
+plot_unique_contribution <- function(device = c("png", "pdf")) {
+  device <- match.arg(device)
+  included_col <- "#6B6B2A"
+  n_sources <- nrow(unique_summary)
+  fig_h <- max(5.6, 2.4 + 0.42 * n_sources)
+
+  if (device == "png") {
+    png(
+      file.path(output_dir, "database_unique_contribution.png"),
+      width = 2200,
+      height = round(fig_h * 220),
+      res = 220
     )
+  } else {
+    pdf(
+      file.path(output_dir, "database_unique_contribution.pdf"),
+      width = 10.0,
+      height = fig_h,
+      useDingbats = FALSE
+    )
+  }
+  on.exit(dev.off(), add = TRUE)
+
+  ord <- rev(seq_len(n_sources))
+  mat <- rbind(
+    unique_summary$unique_deduplicated_records[ord],
+    unique_summary$unique_included_records[ord]
   )
+  labs <- unique_summary$database[ord]
+  xmax <- max(mat)
+  if (!is.finite(xmax) || xmax <= 0) xmax <- 1
 
-png(
-  file.path(output_dir, "database_contribution_deduplicated_vs_included.png"),
-  width = 2200, height = 1400, res = 220
-)
-op <- par(mar = c(6.5, 5.5, 2.0, 1.0), xpd = FALSE)
-mat <- rbind(
-  screening_summary$deduplicated_records,
-  screening_summary$included_records
-)
-ord <- order(screening_summary$deduplicated_records, decreasing = TRUE)
-mat <- mat[, ord, drop = FALSE]
-labs <- screening_summary$database[ord]
-bp <- barplot(
-  mat,
-  beside = TRUE,
-  names.arg = labs,
-  las = 2,
-  col = c("black", "#6B6B2A"),
-  border = NA,
-  ylab = "Canonical records",
-  ylim = c(0, max(mat) * 1.12),
-  cex.names = 0.95
-)
-text(bp, mat, labels = format(mat, big.mark = ","), pos = 3, cex = 0.75)
-legend(
-  "topright",
-  legend = c("Deduplicated records", "Included records"),
-  fill = c("black", "#6B6B2A"),
-  border = NA,
-  bty = "n"
-)
-par(op)
-dev.off()
+  op <- par(mar = c(4.7, 9.2, 1.2, 1.0), xpd = NA)
+  bp <- barplot(
+    mat,
+    beside = TRUE,
+    horiz = TRUE,
+    names.arg = labs,
+    las = 1,
+    col = c("black", included_col),
+    border = NA,
+    xlab = "Records found only by this database",
+    xlim = c(0, xmax * 1.18),
+    cex.names = 0.92,
+    cex.axis = 0.90
+  )
+  text(
+    mat,
+    bp,
+    labels = format(mat, big.mark = ","),
+    pos = 4,
+    offset = 0.35,
+    cex = 0.76
+  )
+  legend(
+    "bottomright",
+    legend = c("Deduplicated records", "Final included records"),
+    fill = c("black", included_col),
+    border = NA,
+    bty = "n",
+    cex = 0.92
+  )
+  par(op)
+}
 
-pdf(
-  file.path(output_dir, "database_contribution_deduplicated_vs_included.pdf"),
-  width = 10.5, height = 7,
-  useDingbats = FALSE
-)
-op <- par(mar = c(6.5, 5.5, 2.0, 1.0), xpd = FALSE)
-bp <- barplot(
-  mat,
-  beside = TRUE,
-  names.arg = labs,
-  las = 2,
-  col = c("black", "#6B6B2A"),
-  border = NA,
-  ylab = "Canonical records",
-  ylim = c(0, max(mat) * 1.12),
-  cex.names = 0.95
-)
-text(bp, mat, labels = format(mat, big.mark = ","), pos = 3, cex = 0.75)
-legend(
-  "topright",
-  legend = c("Deduplicated records", "Included records"),
-  fill = c("black", "#6B6B2A"),
-  border = NA,
-  bty = "n"
-)
-par(op)
-dev.off()
+plot_unique_contribution("png")
+plot_unique_contribution("pdf")
 
 # Validate summary against the logical source matrix produced by CiteSource.
 matrix_counts <- comparison |>
