@@ -1,0 +1,138 @@
+name: TEMP validate W08 regeneration contract
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w08_regeneration_contract.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest','googlesheets4'))
+
+      - name: Parse contract implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_08_capture_active_shiny_decisions.R')
+          parse(file='scripts/updater/workflow_08_reuse_decisions.R')
+          parse(file='scripts/updater/workflow_08_export_shiny_decisions.R')
+          cat('PASS: W08 regeneration contract implementation parses\n')
+
+      - name: Download current immutable W08 review state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh run download 37185290960 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name workflow08-review-state-37185290960 \
+            --dir source
+          test -s source/workflow08_intake/workflow08_review_queue_current.jsonl
+          test -s source/workflow08_intake/workflow08_issue_index_current.csv
+          test -f source/workflow08_reuse/workflow08_reused_decisions.jsonl
+
+      - name: Read cumulative Shiny decision history
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          mkdir -p outputs/contract
+          Rscript scripts/updater/workflow_08_capture_active_shiny_decisions.R \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --output outputs/contract/active_decisions.jsonl \
+            --history-output outputs/contract/historical_decisions.jsonl
+
+      - name: Simulate cumulative reuse without publishing
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(readr)})
+          readj <- function(p){
+            if(!file.exists(p)) return(list())
+            x<-readLines(p,warn=FALSE,encoding='UTF-8');x<-x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          rows <- c(
+            readj('source/workflow08_reuse/workflow08_reused_decisions.jsonl'),
+            readj('outputs/contract/historical_decisions.jsonl'),
+            readj('outputs/contract/active_decisions.jsonl')
+          )
+          keys <- vapply(rows,function(z)as.character(z$review_key),character(1))
+          keep <- !duplicated(keys,fromLast=TRUE)
+          rows <- rows[keep]
+          con <- file('outputs/contract/cumulative_prior.jsonl','wt',encoding='UTF-8')
+          for(z in rows)writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con,useBytes=TRUE)
+          close(con)
+
+          current <- read_csv('source/workflow08_intake/workflow08_issue_index_current.csv',show_col_types=FALSE)
+          hist <- readj('outputs/contract/cumulative_prior.jsonl')
+          hmap <- setNames(hist,vapply(hist,function(z)as.character(z$review_key),character(1)))
+          cmap <- setNames(as.character(current$issue_state_sha256),as.character(current$review_key))
+
+          expected <- c(
+            'work-0082d80fac947dce::geography_unresolved',
+            'work-01a2d7b59a979162::geography_unresolved'
+          )
+          if(!all(expected %in% names(hmap))) stop('Known previously reused W08 decisions are absent from cumulative history')
+          for(k in expected){
+            h <- as.character(hmap[[k]]$issue_state_sha256)
+            if(tolower(h)!=tolower(cmap[[k]])) stop('Known recovered W08 decision has stale issue-state SHA: ',k)
+          }
+          d1 <- hmap[[expected[[1]]]]
+          if(as.character(d1$decision)!='assign_country_set') stop('Recovered BIH decision type changed')
+          iso <- sort(as.character(unlist(d1$assigned_iso3c,use.names=FALSE)))
+          if(!identical(iso,'BIH')) stop('Recovered BIH decision payload changed')
+
+          cat(sprintf('PASS: cumulative decision history contains %d unique reusable issue decisions; both known dropped decisions recovered exactly\n',length(hmap)))
+
+      - name: Replay reuse contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_reuse_decisions.R \
+            --queue source/workflow08_intake/workflow08_review_queue_current.jsonl \
+            --prior-ledger outputs/contract/cumulative_prior.jsonl \
+            --output-dir outputs/contract/replay
+
+          Rscript -e '
+            x<-readr::read_csv("outputs/contract/replay/workflow08_reuse_index.csv",show_col_types=FALSE)
+            need<-c("work-0082d80fac947dce::geography_unresolved","work-01a2d7b59a979162::geography_unresolved")
+            z<-x[x$review_key%in%need,,drop=FALSE]
+            stopifnot(nrow(z)==2L,all(z$status=="reused"))
+            cat("PASS: repeated regeneration reuses both formerly dropped decisions\n")
+          '
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow08-regeneration-contract-validation-${{ github.run_id }}
+          path: outputs/contract/
+          retention-days: 30
+          if-no-files-found: warn
