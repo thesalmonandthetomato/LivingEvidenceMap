@@ -1,0 +1,302 @@
+name: TEMP recover W07 37153534771 without reclassification
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_recover_w07_37153534771.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  SOURCE_W07_RUN: '37153534771'
+  SOURCE_W07_COMMIT: '3b3fe87315390ce803911c21544d7df6009e9d7b'
+  TOPIC_PROD_OUTPUT_DIR: outputs/workflow07_fresh
+  TOPIC_ONTOLOGY_PATH: user_input/workflow07_topic_ontology.csv
+  TOPIC_SYSTEM_PROMPT_PATH: user_input/workflow07_topic_system_prompt.txt
+
+jobs:
+  merge-topic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('curl','digest','httr2','jsonlite','readr','dplyr'))
+
+      - name: Restore original prepared state and validated topic chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_W07_RUN" -n "workflow07-prepared-$SOURCE_W07_RUN" -D prepared
+          mkdir -p "$TOPIC_PROD_OUTPUT_DIR"
+          cp prepared/outputs/workflow07_fresh/input_queue.csv "$TOPIC_PROD_OUTPUT_DIR/input_queue.csv"
+          cp prepared/outputs/workflow07_fresh/production_manifest.json "$TOPIC_PROD_OUTPUT_DIR/production_manifest.json"
+          for p in a b c; do
+            for ch in $(seq 1 5); do
+              tmp="/tmp/w07_${p}_${ch}"; rm -rf "$tmp"; mkdir -p "$tmp"
+              gh run download "$SOURCE_W07_RUN" -n "workflow07-topic-complete-$p-chunk-$ch-$SOURCE_W07_RUN" -D "$tmp"
+              marker=$(find "$tmp" -type f -name complete.ok -print -quit); test -n "$marker"
+              target="$TOPIC_PROD_OUTPUT_DIR/pass_$p/chunk_$(printf '%03d' "$ch")"
+              mkdir -p "$target"
+              cp -a "$(dirname "$marker")"/. "$target"/
+            done
+          done
+          Rscript R/run_topic_three_luna_production.R combine
+          Rscript R/run_topic_three_luna_production.R audit
+
+      - name: Merge reused and fresh topic state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_07_merge_incremental_topics.R \
+            --current-records prepared/outputs/workflow07_prepare/current_topic_records.csv \
+            --reused-scores prepared/outputs/workflow07_prepare/reused_topic_pathway_scores.csv \
+            --fresh-scores outputs/workflow07_fresh/three_luna_pathway_scores.csv \
+            --fresh-record-results outputs/workflow07_fresh/all_pass_record_results.csv \
+            --prepare-manifest prepared/outputs/workflow07_prepare/prepare_manifest.json \
+            --ontology "$TOPIC_ONTOLOGY_PATH" \
+            --output-dir outputs/workflow07_topic_complete
+
+      - name: Prepare incremental zero-topic rescreen
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --zero-records outputs/workflow07_topic_complete/workflow07_zero_code_records.csv
+            --current-records outputs/workflow07_topic_complete/workflow07_records.csv
+            --output-dir outputs/workflow07_zero_prepare
+          )
+          if [ -f prepared/inputs/prior/workflow07_records.csv ] && [ -f prepared/inputs/prior/workflow07_zero_topic_targeted_rescreen.jsonl ]; then
+            ARGS+=(--prior-records prepared/inputs/prior/workflow07_records.csv)
+            ARGS+=(--prior-zero-rescreen prepared/inputs/prior/workflow07_zero_topic_targeted_rescreen.jsonl)
+          fi
+          Rscript scripts/updater/workflow_07_prepare_zero_rescreen_incremental.R "${ARGS[@]}"
+
+      - name: Upload recovered complete topic state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-topic-complete-${{ github.run_id }}
+          path: |
+            outputs/workflow07_topic_complete/
+            outputs/workflow07_zero_prepare/
+          retention-days: 90
+          if-no-files-found: error
+
+  zero-screen:
+    needs: merge-topic
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1,2,3,4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','readr','digest'))
+
+      - name: Download zero-topic preparation
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow07-topic-complete-${{ github.run_id }}
+          path: topic
+
+      - name: Rescreen only newly required zero-topic records
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Q=topic/outputs/workflow07_zero_prepare/zero_topic_rescreen_queue.csv
+          N=$(Rscript -e 'x<-readr::read_csv(commandArgs(TRUE)[1],show_col_types=FALSE);cat(nrow(x))' "$Q")
+          echo "Zero-topic fresh rescreen queue: $N"
+          mkdir -p outputs/zero-${{ matrix.shard }}
+          if [ "$N" -eq 0 ]; then
+            : > outputs/zero-${{ matrix.shard }}/final_rescreen.jsonl
+            SHARD="${{ matrix.shard }}" OUT="outputs/zero-${{ matrix.shard }}/summary.json" Rscript -e 'jsonlite::write_json(list(records=0L,shard_index=as.integer(Sys.getenv("SHARD")),shard_count=4L),Sys.getenv("OUT"),auto_unbox=TRUE,pretty=TRUE)'
+          else
+            Rscript scripts/reporting/workflow07_zero_topic_targeted_rescreen.R \
+              --input "$Q" \
+              --output-dir outputs/zero-${{ matrix.shard }} \
+              --model gpt-5.6-luna \
+              --shard-index ${{ matrix.shard }} \
+              --shard-count 4
+          fi
+
+      - name: Upload zero-topic shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-zero-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: outputs/zero-${{ matrix.shard }}/
+          retention-days: 90
+          if-no-files-found: error
+
+  finalise:
+    needs: [merge-topic,zero-screen]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest','dplyr','httr2','googlesheets4'))
+
+      - name: Download complete topic state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow07-topic-complete-${{ github.run_id }}
+          path: topic
+
+      - name: Download zero-topic shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow07-zero-shard-*-${{ github.run_id }}
+          path: zero_shards
+          merge-multiple: false
+
+      - name: Build final W07 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow07_zero_topic_targeted_rescreen_merge.R \
+            --input-root zero_shards \
+            --output-dir outputs/workflow07_zero_fresh \
+            --expected-shards 4
+
+          Rscript scripts/updater/workflow_07_merge_zero_rescreen_incremental.R \
+            --zero-records topic/outputs/workflow07_topic_complete/workflow07_zero_code_records.csv \
+            --reused topic/outputs/workflow07_zero_prepare/reused_zero_topic_rescreen.jsonl \
+            --fresh outputs/workflow07_zero_fresh/workflow07_zero_topic_targeted_rescreen.jsonl \
+            --output-dir outputs/workflow07_zero_complete
+
+          Rscript scripts/reporting/workflow07_apply_retention_and_review_rules.R \
+            --scores topic/outputs/workflow07_topic_complete/workflow07_topic_pathway_scores.csv \
+            --records topic/outputs/workflow07_topic_complete/workflow07_topic_record_summary.csv \
+            --ontology "$TOPIC_ONTOLOGY_PATH" \
+            --zero-rescreen outputs/workflow07_zero_complete/workflow07_zero_topic_targeted_rescreen.jsonl \
+            --output-dir outputs/workflow07_final_qc
+
+          mkdir -p outputs/workflow07_state
+          cp topic/outputs/workflow07_topic_complete/workflow07_records.csv outputs/workflow07_state/
+          cp topic/outputs/workflow07_topic_complete/workflow07_topic_pathway_scores.csv outputs/workflow07_state/
+          cp topic/outputs/workflow07_topic_complete/workflow07_topic_record_summary.csv outputs/workflow07_state/
+          cp topic/outputs/workflow07_topic_complete/workflow07_topic_complete_manifest.json outputs/workflow07_state/
+          cp outputs/workflow07_zero_complete/workflow07_zero_topic_targeted_rescreen.jsonl outputs/workflow07_state/
+          cp outputs/workflow07_final_qc/workflow07_topic_pathway_scores_retained.csv outputs/workflow07_state/
+          cp outputs/workflow07_final_qc/workflow07_topic_record_qc.csv outputs/workflow07_state/
+          cp outputs/workflow07_final_qc/workflow07_workflow08_human_review_queue.csv outputs/workflow07_state/
+          cp outputs/workflow07_final_qc/workflow07_late_automatic_exclusions.csv outputs/workflow07_state/
+          cp outputs/workflow07_final_qc/workflow07_included_uncoded.csv outputs/workflow07_state/
+          cp outputs/workflow07_final_qc/workflow07_high_topic_automated_qc.csv outputs/workflow07_state/
+          cp outputs/workflow07_final_qc/workflow07_qc_summary.json outputs/workflow07_state/
+          cp "$TOPIC_ONTOLOGY_PATH" outputs/workflow07_state/topic_ontology_v3_6.csv
+          cp "$TOPIC_SYSTEM_PROMPT_PATH" outputs/workflow07_state/topic_system_prompt_v3_6.txt
+
+      - name: Publish recovered W07 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          W06_POINTER=docs/workflow06/zenodo/run-37114864202.json
+          W06_RECORD=$(P="$W06_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$zenodo_record_id)')
+          W06_SHA=$(P="$W06_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$workflow06_geography_layer_sha256)')
+          mkdir -p outputs/workflow07_zenodo
+          Rscript scripts/updater/workflow_07_archive_state_to_zenodo.R \
+            --state-dir outputs/workflow07_state \
+            --source-run-id "$SOURCE_W07_RUN" \
+            --source-commit "$SOURCE_W07_COMMIT" \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow07_zenodo \
+            --upstream-w06-record-id "$W06_RECORD" \
+            --upstream-w06-layer-sha256 "$W06_SHA"
+
+      - name: Register W07 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_07_update_zenodo_registry.R \
+            --receipt outputs/workflow07_zenodo/zenodo_receipt.json \
+            --registry docs/workflow07/zenodo_registry.csv \
+            --pointer-dir docs/workflow07/zenodo
+          git add docs/workflow07/zenodo_registry.csv docs/workflow07/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register recovered Workflow 07 topic state $SOURCE_W07_RUN"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Update live Shiny progress after W07
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W07
+          if [ -n "${LEM_GOOGLE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+            chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+            Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+              --status docs/current_run/current_run_status.json \
+              --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+              --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          fi
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W07 [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload recovered W07 handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow07-topic-handoff-${{ github.run_id }}
+          path: |
+            outputs/workflow07_state/
+            outputs/workflow07_final_qc/
+            outputs/workflow07_zenodo/
+          retention-days: 90
+          if-no-files-found: error
