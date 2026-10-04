@@ -114,6 +114,7 @@ jobs:
           parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
           parse(file='scripts/updater/workflow_05_materialise_retained.R')
           parse(file='scripts/updater/workflow_06_restore_state_from_zenodo.R')
+          parse(file='R/geography_grounding.R')
           parse(file='scripts/updater/workflow_06_prepare_current_inputs.R')
           parse(file='scripts/updater/workflow_06_prepare_incremental.R')
           parse(file='scripts/reporting/workflow05_geography_semantic_production.R')
