@@ -139,10 +139,13 @@ for(i in seq_len(nrow(R))) {
   # defined as an unresolved V3_120 + V3_121/122/123 combination.
   retained_ids <- as.character(S$path_id[retain_idx])
   pathology <- "V3_120" %in% retained_ids && any(retained_ids %in% c("V3_121","V3_122","V3_123"))
+  # Jaccard is retained as a descriptive inter-pass agreement metric only.
+  # Low agreement does not, by itself, imply that the retained union of topic
+  # pathways is wrong and therefore does not trigger human adjudication.
   extreme <- is.finite(mean_j) && mean_j < 0.20
 
-  route <- if(pathology || extreme) "human_adjudication" else "none"
-  reason <- if(pathology) "ontology_pathology" else if(extreme) "extreme_three_pass_topic_disagreement" else ""
+  route <- if(pathology) "human_adjudication" else "none"
+  reason <- if(pathology) "ontology_pathology" else ""
   record_rows[[i]] <- data.frame(
     record_id=rid,topic_count_raw=raw_n,
     topic_count_after_general_pruning=length(kept_idx),
@@ -200,6 +203,7 @@ summary <- list(
   late_automatic_exclusions=nrow(late_exclude),
   high_topic_raw_records=nrow(high),
   extreme_disagreement_threshold_mean_pairwise_jaccard=0.20,
+  extreme_disagreement_metric_role="descriptive_qc_only_not_human_review_gate",
   extreme_disagreement_records=sum(Q$extreme_disagreement),
   ontology_pathology_records=sum(Q$ontology_pathology),
   immediate_human_adjudication_records=nrow(human),
