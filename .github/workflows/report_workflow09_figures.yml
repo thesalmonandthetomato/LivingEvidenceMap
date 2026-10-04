@@ -49,7 +49,7 @@ jobs:
           install.packages(c(
             "jsonlite","dplyr","tidyr","readr","ggplot2","scales","here",
             "stringr","sf","classInt","rnaturalearth","rnaturalearthdata",
-            "httr2","digest","rmarkdown","knitr"
+            "httr2","digest","rmarkdown","knitr","xml2"
           ))
 
       - name: Resolve and validate release provenance
@@ -306,6 +306,20 @@ jobs:
 
           render_all("docs/reporting/workflow_09/manuscript/long_form_methods.Rmd", "methods")
           render_all("docs/reporting/workflow_09/manuscript/long_form_results.Rmd", "results")
+
+          # Apply deterministic Word/PDF publication styling after Pandoc render.
+          # This preserves manuscript content while enforcing requested table
+          # widths, caption sizing/spacing, and heading spacing.
+          system2(
+            "Rscript",
+            c(
+              "scripts/reporting/style_workflow09_docx.R",
+              "outputs/workflow09_manuscript/methods.docx",
+              "outputs/workflow09_manuscript/results.docx"
+            ),
+            stdout = "",
+            stderr = ""
+          )
 
           stopifnot(all(file.exists(file.path(
             "outputs/workflow09_manuscript",
