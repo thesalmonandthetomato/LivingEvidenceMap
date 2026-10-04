@@ -231,7 +231,8 @@ jobs:
           Rscript scripts/updater/workflow_08_capture_active_shiny_decisions.R \
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
             --credential "$RUNNER_TEMP/lem-google-service-account.json" \
-            --output outputs/workflow08_active_shiny/active_decisions.jsonl
+            --output outputs/workflow08_active_shiny/active_decisions.jsonl \
+            --history-output outputs/workflow08_active_shiny/historical_decisions.jsonl
 
       - name: Build reusable prior ledger
         shell: Rscript {0}
@@ -245,6 +246,7 @@ jobs:
           rows <- c(
             readj('inputs/prior_w08/prior_ledger.jsonl'),
             readj('outputs/workflow08_legacy_geo.jsonl'),
+            readj('outputs/workflow08_active_shiny/historical_decisions.jsonl'),
             readj('outputs/workflow08_active_shiny/active_decisions.jsonl')
           )
           keys <- if(length(rows)) vapply(rows,function(z)as.character(z$review_key),character(1)) else character()
@@ -257,7 +259,7 @@ jobs:
           con <- file('outputs/workflow08_prior_combined.jsonl','wt')
           for(z in rows) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
           close(con)
-          cat(sprintf('PASS: reusable prior ledger contains %d unique issues after active-Shiny carry-forward\n',length(rows)))
+          cat(sprintf('PASS: reusable prior ledger contains %d unique issues after cumulative Shiny carry-forward\n',length(rows)))
 
       - name: Reuse unchanged human decisions
         env:
