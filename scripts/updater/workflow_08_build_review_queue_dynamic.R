@@ -54,10 +54,19 @@ context<-ctx |> transmute(
   abstract=clean_chr(abstract)
 )
 
+# W05 NONE means no eligible salmon species could be extracted. Under the
+# current eligibility contract these records are deterministic exclusions and
+# must not consume W08 human-review effort, even if geography/topic QC would
+# otherwise also generate an issue.
+if(!all(c("farmed_species_codes","farmed_species")%in%names(w05)))stop("W05 layer lacks species columns",call.=FALSE)
+w05_none<-w05 |> filter(farmed_species_codes=="NONE")
+w05_none_ids<-unique(as.character(w05_none$record_id))
+
 issue_map<-setNames(vector("list",nrow(context)),context$record_id)
 add_issue<-function(record_id,issue){
   rid<-as.character(record_id)
   if(!rid%in%names(issue_map))stop("Issue record absent from current context: ",rid,call.=FALSE)
+  if(rid%in%w05_none_ids)return(invisible(NULL))
   state<-list(
     review_key=paste(rid,as.character(issue$issue_type),sep="::"),
     record_id=rid,
@@ -70,18 +79,6 @@ add_issue<-function(record_id,issue){
   )
   issue$issue_state_sha256<-canon_hash(state)
   issue_map[[rid]]<<-c(issue_map[[rid]],list(issue))
-}
-
-# W05 species NONE.
-if(!all(c("farmed_species_codes","farmed_species")%in%names(w05)))stop("W05 layer lacks species columns",call.=FALSE)
-w05_none<-w05 |> filter(farmed_species_codes=="NONE")
-for(i in seq_len(nrow(w05_none))){
-  z<-w05_none[i,,drop=FALSE]
-  add_issue(z$record_id,list(
-    source_workflow="05",issue_type="species_none",
-    automated_value=list(farmed_species_codes="NONE",farmed_species="NONE"),
-    allowed_human_outcomes=c("assign_named_species","assign_unspecified_species","exclude_record")
-  ))
 }
 
 # W06 unresolved geography and terminal model failures.
@@ -251,6 +248,8 @@ manifest<-list(
   created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
   input_population=nrow(context),
   w05_species_none=nrow(w05_none),
+  w05_species_none_deterministic_exclusions=nrow(w05_none),
+  w05_species_none_human_review_issues=0L,
   w06_unresolved=nrow(w06_unresolved),
   w06_unresolved_no_country_autoassigned_none=nrow(w06_unresolved_auto_none),
   w06_model_failures=nrow(w06_failures),
