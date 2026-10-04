@@ -333,91 +333,99 @@ write.csv(
   row.names = FALSE
 )
 
-# One integrated paired UpSet-style figure:
-#   left bars = source totals at both stages;
-#   top bars = exact source intersections at both stages;
-#   lower-right matrix = database combination defining each intersection.
-plot_paired_upset <- function(device = c("png", "pdf")) {
+# Standalone overlap-only UpSet-style figure. Singleton intersections are
+# deliberately excluded because unique-source contribution is shown separately.
+# Every database remains as a matrix row, including databases that contribute
+# few shared records. All observed multi-database intersections are retained.
+overlap_summary <- intersection_summary |>
+  filter(degree >= 2L) |>
+  arrange(desc(deduplicated_records), desc(included_records), intersection)
+
+if (!nrow(overlap_summary)) {
+  stop("No multi-database overlaps were found for the current canonical corpus", call. = FALSE)
+}
+
+write.csv(
+  overlap_summary,
+  file.path(output_dir, "source_overlap_intersection_summary.csv"),
+  row.names = FALSE
+)
+
+plot_overlap_upset <- function(device = c("png", "pdf")) {
   device <- match.arg(device)
-  included_col <- "#2596be"
+  included_col <- "#6B6B2A"
+  n_intersections <- nrow(overlap_summary)
+  n_sources <- length(source_order)
+
+  # Width expands with the number of observed intersections. Nothing is
+  # dropped or aggregated here; if future database expansion makes this
+  # impractical, aggregation must be an explicit reviewed reporting rule.
+  fig_w <- max(10.5, min(40, 6.5 + 0.22 * n_intersections))
+  fig_h <- max(6.8, 4.7 + 0.28 * n_sources)
+  if (n_intersections > 120L) {
+    warning(
+      sprintf(
+        "Overlap figure contains %d intersections; all are retained, but a future low-frequency combination rule may be needed.",
+        n_intersections
+      )
+    )
+  }
 
   if (device == "png") {
     png(
-      file.path(output_dir, "database_contribution_upset.png"),
-      width = 3000, height = 1900, res = 220
+      file.path(output_dir, "database_overlap_upset.png"),
+      width = round(fig_w * 220),
+      height = round(fig_h * 220),
+      res = 220
     )
   } else {
     pdf(
-      file.path(output_dir, "database_contribution_upset.pdf"),
-      width = 13.6, height = 8.6,
+      file.path(output_dir, "database_overlap_upset.pdf"),
+      width = fig_w,
+      height = fig_h,
       useDingbats = FALSE
     )
   }
   on.exit(dev.off(), add = TRUE)
 
-  layout(
-    matrix(c(0, 1,
-             2, 3), nrow = 2, byrow = TRUE),
-    widths = c(0.30, 0.70),
-    heights = c(0.59, 0.41)
-  )
+  layout(matrix(c(1, 2), nrow = 2), heights = c(0.58, 0.42))
 
-  # Top-right: paired exact-intersection bars.
-  par(mar = c(0.8, 5.2, 1.6, 1.0))
+  # Top: exact multi-database intersection sizes at the two reporting stages.
+  par(mar = c(0.6, 8.8, 1.4, 1.0))
   intersection_mat <- rbind(
-    intersection_summary$deduplicated_records,
-    intersection_summary$included_records
+    overlap_summary$deduplicated_records,
+    overlap_summary$included_records
   )
+  ymax <- max(intersection_mat)
+  if (!is.finite(ymax) || ymax <= 0) ymax <- 1
+
   ibp <- barplot(
     intersection_mat,
     beside = TRUE,
     col = c("black", included_col),
     border = NA,
     axes = FALSE,
-    ylim = c(0, max(intersection_mat) * 1.12),
-    space = c(0.10, 0.65)
+    ylim = c(0, ymax * 1.14),
+    space = c(0.10, 0.58)
   )
-  axis(2, las = 1, cex.axis = 0.95)
-  mtext("Canonical works in source intersection", side = 2, line = 4.0, cex = 1.0)
+  axis(2, las = 1, cex.axis = 0.88)
+  mtext("Records in exact database overlap", side = 2, line = 4.0, cex = 0.95)
   legend(
     "topright",
-    legend = c("Deduplicated records", "Included records"),
+    legend = c("Deduplicated records", "Final included records"),
     fill = c("black", included_col),
     border = NA,
     bty = "n",
-    cex = 1.02
+    cex = 0.92
   )
   intersection_x <- colMeans(ibp)
-  intersection_xlim <- range(ibp) + c(-0.8, 0.8)
+  intersection_xlim <- range(ibp) + c(-0.7, 0.7)
 
-  # Bottom-left: paired source totals.
-  par(mar = c(4.4, 8.3, 0.4, 0.8))
-  source_rows <- screening_summary |>
-    slice(match(source_order, database))
-  source_mat <- rbind(
-    source_rows$deduplicated_records,
-    source_rows$included_records
-  )
-  sbp <- barplot(
-    source_mat,
-    beside = TRUE,
-    horiz = TRUE,
-    names.arg = source_order,
-    las = 1,
-    col = c("black", included_col),
-    border = NA,
-    axes = FALSE,
-    xlim = c(max(source_mat) * 1.08, 0),
-    space = c(0.10, 0.55),
-    cex.names = 0.97
-  )
-  axis(1, las = 1, cex.axis = 0.90)
-  mtext("Canonical works contributed", side = 1, line = 3.0, cex = 0.98)
-  source_y <- colMeans(sbp)
-  source_ylim <- range(sbp) + c(-0.7, 0.7)
+  # Bottom: database-membership matrix. All databases are retained as rows.
+  par(mar = c(3.6, 8.8, 0.2, 1.0))
+  source_y <- rev(seq_along(source_order))
+  source_ylim <- c(0.45, length(source_order) + 0.55)
 
-  # Bottom-right: intersection membership matrix aligned to top bars.
-  par(mar = c(4.4, 5.2, 0.4, 1.0))
   plot(
     NA,
     xlim = intersection_xlim,
@@ -428,14 +436,21 @@ plot_paired_upset <- function(device = c("png", "pdf")) {
     ylab = "",
     bty = "n"
   )
+  axis(
+    2,
+    at = source_y,
+    labels = source_order,
+    las = 1,
+    tick = FALSE,
+    cex.axis = 0.88
+  )
 
-  # Alternating row guides improve readability while retaining the UpSet form.
-  for (i in seq_along(source_y)) {
-    abline(h = source_y[[i]], col = "grey92", lwd = 0.8)
+  for (yy in source_y) {
+    abline(h = yy, col = "grey92", lwd = 0.8)
   }
 
-  for (j in seq_len(nrow(intersection_summary))) {
-    members <- strsplit(intersection_summary$intersection[[j]], " | ", fixed = TRUE)[[1]]
+  for (j in seq_len(nrow(overlap_summary))) {
+    members <- strsplit(overlap_summary$intersection[[j]], " | ", fixed = TRUE)[[1]]
     active <- source_order %in% members
 
     points(
@@ -443,32 +458,37 @@ plot_paired_upset <- function(device = c("png", "pdf")) {
       source_y,
       pch = 16,
       col = "grey82",
-      cex = 0.75
+      cex = 0.62
     )
 
-    if (sum(active) > 1L) {
-      segments(
-        intersection_x[[j]],
-        min(source_y[active]),
-        intersection_x[[j]],
-        max(source_y[active]),
-        lwd = 1.5,
-        col = "black"
-      )
-    }
+    segments(
+      intersection_x[[j]],
+      min(source_y[active]),
+      intersection_x[[j]],
+      max(source_y[active]),
+      lwd = 1.35,
+      col = "black"
+    )
 
     points(
       rep(intersection_x[[j]], sum(active)),
       source_y[active],
       pch = 16,
       col = "black",
-      cex = 0.92
+      cex = 0.82
     )
   }
+
+  mtext(
+    sprintf("%d observed multi-database intersections; singleton contributions are shown separately", n_intersections),
+    side = 1,
+    line = 2.2,
+    cex = 0.82
+  )
 }
 
-plot_paired_upset("png")
-plot_paired_upset("pdf")
+plot_overlap_upset("png")
+plot_overlap_upset("pdf")
 
 report <- list(
   schema = "living-evidence-map-citesource-contribution-v1",
