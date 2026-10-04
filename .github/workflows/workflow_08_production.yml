@@ -470,6 +470,31 @@ jobs:
             git push origin HEAD:workflow01-final-architecture
           fi
 
+      - name: Update current-run live status through W08
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W08
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W08 [skip ci]"
+            git pull --rebase origin "workflow01-final-architecture"
+            git push origin HEAD:"workflow01-final-architecture"
+          fi
+
       - name: Acknowledge consumed W08 Shiny batch
         if: ${{ steps.human_gate.outputs.pause != 'true' && inputs.publish == true }}
         env:
