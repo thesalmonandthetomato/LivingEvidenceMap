@@ -1,4 +1,4 @@
-name: TEMP validate W07 Jaccard no-gate routing
+name: TEMP validate W08 geography vocabulary migration
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -29,111 +29,31 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','readr','digest'))
+        run: install.packages(c('jsonlite','digest'))
 
-      - name: Parse implementation
-        shell: Rscript {0}
-        run: |
-          parse(file='scripts/reporting/workflow07_apply_retention_and_review_rules.R')
-          parse(file='scripts/updater/workflow_08_build_review_queue_dynamic.R')
-          cat('PASS: W07/W08 Jaccard routing implementation parses\n')
-
-      - name: Download current immutable W08 review state
+      - name: Download pre-change W08 state
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p source
-          gh run download 37192497959 \
-            --repo "$GITHUB_REPOSITORY" \
-            --name workflow08-review-state-37192497959 \
-            --dir source
-          test -s source/workflow08_intake/workflow08_issue_index_current.csv
+          gh run download 37192497959 --repo "$GITHUB_REPOSITORY" --name workflow08-review-state-37192497959 --dir source
           test -s source/workflow08_intake/workflow08_review_queue_current.jsonl
+          test -s source/workflow08_reuse/workflow08_reused_decisions.jsonl
 
-      - name: Validate no Jaccard-only W08 issues
-        shell: Rscript {0}
+      - name: Validate migration
+        shell: bash
         run: |
-          suppressPackageStartupMessages({library(readr);library(jsonlite)})
-          idx <- read_csv('source/workflow08_intake/workflow08_issue_index_current.csv',show_col_types=FALSE,progress=FALSE)
-          if(any(idx$issue_type == 'topic_extreme_disagreement')) {
-            stop('Current W08 intake still contains topic_extreme_disagreement issues')
-          }
-          cat(sprintf('PASS: current W08 intake contains zero topic_extreme_disagreement issues; total issues=%d\n',nrow(idx)))
-
-      - name: Validate W07 routing semantics
-        shell: Rscript {0}
-        run: |
-          suppressPackageStartupMessages({library(readr)})
-          p <- 'scripts/reporting/workflow07_apply_retention_and_review_rules.R'
-          x <- readLines(p,warn=FALSE,encoding='UTF-8')
-
-          need <- c(
-            'mean_pairwise_jaccard=mean_j',
-            'extreme_disagreement=extreme',
-            'route <- if(pathology) "human_adjudication" else "none"',
-            'reason <- if(pathology) "ontology_pathology" else ""',
-            'extreme_disagreement_metric_role="descriptive_qc_only_not_human_review_gate"'
-          )
-          miss <- need[!vapply(need,function(z)any(grepl(z,x,fixed=TRUE)),logical(1))]
-          if(length(miss)) stop('Missing expected no-gate implementation markers: ',paste(miss,collapse=' | '))
-
-          bad <- c(
-            'route <- if(pathology || extreme) "human_adjudication" else "none"',
-            'reason <- if(pathology) "ontology_pathology" else if(extreme) "extreme_three_pass_topic_disagreement" else ""'
-          )
-          if(any(vapply(bad,function(z)any(grepl(z,x,fixed=TRUE)),logical(1)))) {
-            stop('Legacy Jaccard human-review gate still present in W07 implementation')
-          }
-
-          cat('PASS: W07 retains Jaccard fields but does not use low Jaccard for human-review routing\n')
-
-      - name: Validate retained-topic logic independent of Jaccard
-        shell: Rscript {0}
-        run: |
-          p <- readLines('scripts/reporting/workflow07_apply_retention_and_review_rules.R',warn=FALSE,encoding='UTF-8')
-          retain_lines <- grep('retained_for_analysis|retention_basis|retain_idx|dropped_cap',p,value=TRUE)
-          if(any(grepl('mean_j|extreme|jaccard',retain_lines,ignore.case=TRUE))) {
-            stop('Jaccard unexpectedly influences retained-topic selection logic')
-          }
-          cat('PASS: retained-topic selection remains independent of Jaccard\n')
-
-      - name: Validate zero-topic and ontology gates remain
-        shell: Rscript {0}
-        run: |
-          p <- readLines('scripts/reporting/workflow07_apply_retention_and_review_rules.R',warn=FALSE,encoding='UTF-8')
-          required <- c(
-            'workflow08_reason=if(zd=="uncertain") "zero_topic_eligibility_uncertain" else ""',
-            'route <- if(pathology) "human_adjudication" else "none"',
-            'reason <- if(pathology) "ontology_pathology" else ""'
-          )
-          miss <- required[!vapply(required,function(z)any(grepl(z,p,fixed=TRUE)),logical(1))]
-          if(length(miss)) stop('Expected residual human-review gates missing: ',paste(miss,collapse=' | '))
-          cat('PASS: zero-topic uncertainty and ontology pathology remain human-review gates\n')
-
-      - name: Record validation summary
-        shell: Rscript {0}
-        run: |
-          suppressPackageStartupMessages({library(readr);library(jsonlite)})
-          idx <- read_csv('source/workflow08_intake/workflow08_issue_index_current.csv',show_col_types=FALSE,progress=FALSE)
-          out <- list(
-            schema='living-evidence-map-w07-jaccard-no-gate-validation-v1',
-            status='PASS',
-            model_calls=0L,
-            current_w08_issues=nrow(idx),
-            topic_extreme_disagreement_issues=sum(idx$issue_type=='topic_extreme_disagreement'),
-            jaccard_role='descriptive_qc_only',
-            validated_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ')
-          )
-          dir.create('outputs/validation',recursive=TRUE,showWarnings=FALSE)
-          write_json(out,'outputs/validation/summary.json',auto_unbox=TRUE,pretty=TRUE)
-          cat(toJSON(out,auto_unbox=TRUE,pretty=TRUE),'\n')
+          Rscript scripts/updater/tmp_validate_w08_geography_vocab_migration.R \
+            --queue source/workflow08_intake/workflow08_review_queue_current.jsonl \
+            --reused source/workflow08_reuse/workflow08_reused_decisions.jsonl \
+            --output-dir outputs/validation
 
       - name: Upload validation evidence
         uses: actions/upload-artifact@v4
         with:
-          name: w07-jaccard-no-gate-validation-${{ github.run_id }}
+          name: w08-geography-vocab-migration-validation-${{ github.run_id }}
           path: outputs/validation/
           retention-days: 30
           if-no-files-found: error
