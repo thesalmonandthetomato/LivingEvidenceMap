@@ -1,4 +1,4 @@
-name: TEMP validate stable W07-W08 topic review contract
+name: TEMP validate deterministic W05 species-NONE exclusion
 
 on:
   push:
@@ -9,13 +9,11 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,31 +27,57 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','readr'))
+        run: install.packages(c('jsonlite','readr','dplyr','digest','httr2'))
 
-      - name: Download reference W08 state
+      - name: Restore current W05-W07 states
         env:
-          GH_TOKEN: ${{ github.token }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p source
-          gh run download 37198070493 --repo "$GITHUB_REPOSITORY" --name workflow08-review-state-37198070493 --dir source
-          test -s source/workflow08_intake/workflow08_review_queue_current.jsonl
-          test -s source/workflow08_reuse/workflow08_reused_decisions.jsonl
+          mkdir -p inputs/current
+          Rscript scripts/updater/workflow_05_restore_state_from_zenodo.R --pointer docs/workflow05/zenodo/run-37110114836.json --output-dir inputs/current/w05
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R --pointer docs/workflow06/zenodo/run-37114864202.json --output-dir inputs/current/w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R --pointer docs/workflow07/zenodo/run-37153534771.json --output-dir inputs/current/w07
+          cp "$(find inputs/current/w05 -type f -name workflow05_species_layer.csv -print -quit)" inputs/current/workflow05_species_layer.csv
+          cp "$(find inputs/current/w06 -type f -name workflow06_geography_layer.csv -print -quit)" inputs/current/workflow06_geography_layer.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_records.csv -print -quit)" inputs/current/workflow07_records.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_workflow08_human_review_queue.csv -print -quit)" inputs/current/workflow07_review.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_pathway_scores_retained.csv -print -quit)" inputs/current/workflow07_scores.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_late_automatic_exclusions.csv -print -quit)" inputs/current/workflow07_late.csv
+          GROUND=$(find inputs/current/w06 -type f -name geography_review_residual.csv -print -quit)
+          if [ -z "$GROUND" ]; then GROUND=$(find inputs/current/w06 -type f -name geography_ungrounded_evidence.csv -print -quit); fi
+          if [ -n "$GROUND" ]; then cp "$GROUND" inputs/current/workflow06_grounding_residual.csv; else Rscript -e 'readr::write_csv(data.frame(record_id=character()),"inputs/current/workflow06_grounding_residual.csv")'; fi
 
-      - name: Validate stable topic review contract
+      - name: Build current W08 intake without publishing
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_08_build_review_queue_dynamic.R \
+            --w05 inputs/current/workflow05_species_layer.csv \
+            --w06 inputs/current/workflow06_geography_layer.csv \
+            --w06-grounding-residual inputs/current/workflow06_grounding_residual.csv \
+            --w07-records inputs/current/workflow07_records.csv \
+            --w07-review inputs/current/workflow07_review.csv \
+            --w07-scores inputs/current/workflow07_scores.csv \
+            --w07-late-exclusions inputs/current/workflow07_late.csv \
+            --output-dir outputs/workflow08_intake
+
+      - name: Validate deterministic species-NONE contract
         shell: bash
         run: |
           Rscript scripts/updater/tmp_validate_w08_geography_vocab_migration.R \
-            --queue source/workflow08_intake/workflow08_review_queue_current.jsonl \
-            --reused source/workflow08_reuse/workflow08_reused_decisions.jsonl \
+            --queue outputs/workflow08_intake/workflow08_review_queue_current.jsonl \
+            --w05 inputs/current/workflow05_species_layer.csv \
+            --manifest outputs/workflow08_intake/workflow08_review_queue_manifest.json \
             --output-dir outputs/validation
 
       - name: Upload validation evidence
         uses: actions/upload-artifact@v4
         with:
-          name: w08-topic-review-contract-validation-${{ github.run_id }}
-          path: outputs/validation/
+          name: w08-species-none-validation-${{ github.run_id }}
+          path: |
+            outputs/validation/
+            outputs/workflow08_intake/workflow08_review_queue_manifest.json
+            outputs/workflow08_intake/workflow08_issue_index_current.csv
           retention-days: 30
           if-no-files-found: error
