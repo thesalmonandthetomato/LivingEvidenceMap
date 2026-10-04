@@ -6,3 +6,4 @@ trigger W09 after validated figure redesign and caption update
 rerun W09 after manuscript-figure embedding and package-cleanup audit
 validate production W09 using compact W00-W08 reporting inputs
 rerun W09 after flow spacing and salmon-colour figure refinements
+rerun W09 with two source columns through ten databases
