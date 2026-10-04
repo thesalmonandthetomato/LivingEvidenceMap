@@ -16,10 +16,12 @@ sheet_id <- arg("--sheet-id",Sys.getenv("LEM_GOOGLE_SHEET_ID"))
 credential <- arg("--credential",Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"))
 output <- arg("--output")
 manifest_path <- arg("--manifest")
+fallback_path <- arg("--fallback-decisions","")
 
 req <- c(queue_path,batch_id,queue_sha,sheet_id,credential,output,manifest_path)
 if(any(vapply(req,function(x)is.null(x)||!nzchar(x),logical(1)))) stop("Missing required W08 Shiny export argument",call.=FALSE)
 if(!file.exists(queue_path)||!file.exists(credential)) stop("Required W08 Shiny export file missing",call.=FALSE)
+if(nzchar(fallback_path)&&!file.exists(fallback_path)) stop("Fallback W08 decision file missing",call.=FALSE)
 
 lines <- readLines(queue_path,warn=FALSE,encoding="UTF-8")
 lines <- lines[nzchar(trimws(lines))]
@@ -42,37 +44,59 @@ if(length(unique(q$queue_sha256))!=1L || tolower(as.character(unique(q$queue_sha
 d <- read_sheet(sheet_id,sheet="decisions_w08",col_types="c")
 required <- c("decision_id","record_id","queue_sha256","record_case_sha256","issue_decisions_json","reviewer","resolved_at_utc")
 if(!all(required%in%names(d))) stop("W08 decision tab schema mismatch",call.=FALSE)
-d <- d[tolower(as.character(d$queue_sha256))==queue_sha,,drop=FALSE]
-if(!nrow(d)) stop("No W08 Shiny decisions for active queue",call.=FALSE)
-d <- d[order(as.character(d$resolved_at_utc),seq_len(nrow(d)),decreasing=TRUE),,drop=FALSE]
-active <- d[!duplicated(as.character(d$record_id)),,drop=FALSE]
-active <- active[match(record_ids,as.character(active$record_id)),,drop=FALSE]
-if(any(is.na(active$record_id))) stop("W08 Shiny decisions are incomplete",call.=FALSE)
+active_d <- d[tolower(as.character(d$queue_sha256))==queue_sha,,drop=FALSE]
+if(nrow(active_d)){
+  active_d <- active_d[order(as.character(active_d$resolved_at_utc),seq_len(nrow(active_d)),decreasing=TRUE),,drop=FALSE]
+  active_d <- active_d[!duplicated(as.character(active_d$record_id)),,drop=FALSE]
+}
+active_by_record <- if(nrow(active_d)) split(seq_len(nrow(active_d)),as.character(active_d$record_id)) else list()
+
+fallback <- list()
+if(nzchar(fallback_path)){
+  fx<-readLines(fallback_path,warn=FALSE,encoding="UTF-8")
+  fx<-fx[nzchar(trimws(fx))]
+  if(length(fx)){
+    rows<-lapply(fx,fromJSON,simplifyVector=FALSE)
+    for(z in rows){
+      key<-as.character(z$review_key %||% "")
+      h<-as.character(z$issue_state_sha256 %||% "")
+      if(!nzchar(key)||!nzchar(h))stop("Fallback W08 decision lacks review_key/issue_state_sha256",call.=FALSE)
+      fallback[[key]]<-z
+    }
+  }
+}
 
 all_out <- list()
+fallback_used <- 0L
 for(i in seq_along(cases)){
   rec <- cases[[i]]
   rid <- record_ids[[i]]
-  if(tolower(as.character(active$record_case_sha256[[i]]))!=tolower(case_sha[[rid]])) stop("W08 record-case SHA mismatch for ",rid,call.=FALSE)
-  got <- fromJSON(as.character(active$issue_decisions_json[[i]]),simplifyVector=FALSE)
-  if(!is.list(got)) stop("W08 issue_decisions_json malformed for ",rid,call.=FALSE)
   expected <- rec$issues %||% list()
-  if(length(got)!=length(expected)) stop("W08 issue decision count mismatch for ",rid,call.=FALSE)
-  got_keys <- vapply(got,function(z)as.character(z$review_key %||% ""),character(1))
-  if(any(!nzchar(got_keys))||anyDuplicated(got_keys)) stop("W08 issue decision keys invalid for ",rid,call.=FALSE)
+  got <- list()
+  idx <- active_by_record[[rid]]
+  if(!is.null(idx)&&length(idx)){
+    arow<-active_d[idx[[1L]],,drop=FALSE]
+    if(tolower(as.character(arow$record_case_sha256[[1L]]))!=tolower(case_sha[[rid]])) stop("W08 record-case SHA mismatch for ",rid,call.=FALSE)
+    got <- fromJSON(as.character(arow$issue_decisions_json[[1L]]),simplifyVector=FALSE)
+    if(!is.list(got)) stop("W08 issue_decisions_json malformed for ",rid,call.=FALSE)
+  }
+  got_keys <- if(length(got)) vapply(got,function(z)as.character(z$review_key %||% ""),character(1)) else character()
+  if(length(got_keys)&&(any(!nzchar(got_keys))||anyDuplicated(got_keys))) stop("W08 issue decision keys invalid for ",rid,call.=FALSE)
 
   for(issue in expected){
     typ <- as.character(issue$issue_type %||% "")
     key <- paste(rid,typ,sep="::")
     j <- match(key,got_keys)
-    if(is.na(j)) stop("Missing W08 decision for ",key,call.=FALSE)
-    z <- got[[j]]
+    z <- if(!is.na(j)) got[[j]] else fallback[[key]]
+    if(is.null(z)) stop("Missing W08 decision for ",key,call.=FALSE)
+    used_fallback <- is.na(j)
     allowed <- as.character(issue$allowed_human_outcomes %||% character())
     decision <- as.character(z$decision %||% "")
     if(!decision%in%allowed) stop("Invalid W08 decision for ",key,call.=FALSE)
     if(as.character(z$record_id %||% "")!=rid || as.character(z$issue_type %||% "")!=typ) stop("W08 decision identity mismatch for ",key,call.=FALSE)
     if(tolower(as.character(z$issue_state_sha256 %||% ""))!=tolower(as.character(issue$issue_state_sha256 %||% ""))) stop("W08 issue-state SHA mismatch for ",key,call.=FALSE)
-    if(tolower(as.character(z$queue_sha256 %||% ""))!=queue_sha) stop("W08 decision queue SHA mismatch for ",key,call.=FALSE)
+    if(!used_fallback && tolower(as.character(z$queue_sha256 %||% ""))!=queue_sha) stop("W08 decision queue SHA mismatch for ",key,call.=FALSE)
+    if(used_fallback) fallback_used <- fallback_used + 1L
     all_out[[length(all_out)+1L]] <- z
   }
 }
@@ -89,8 +113,9 @@ manifest <- list(
   queue_sha256=queue_sha,
   records=length(cases),
   issues=length(all_out),
+  fallback_issues=fallback_used,
   decisions_sha256=out_sha,
   exported_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE),manifest_path,useBytes=TRUE)
-cat(sprintf("PASS: exported W08 Shiny decisions: records=%d issues=%d sha=%s\n",length(cases),length(all_out),out_sha))
+cat(sprintf("PASS: exported W08 Shiny decisions: records=%d issues=%d fallback=%d sha=%s\n",length(cases),length(all_out),fallback_used,out_sha))
