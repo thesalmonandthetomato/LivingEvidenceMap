@@ -35,6 +35,8 @@ jobs:
           library(yaml)
 
           invisible(read_yaml(".github/workflows/report_workflow09_figures.yml"))
+          invisible(parse(file = "visualisations/07_flow_diagram.R"))
+          invisible(parse(file = "scripts/reporting/plot_citesource_database_contribution.R"))
 
           status <- fromJSON("docs/current_run/current_run_status.json", simplifyVector = FALSE)
           val <- function(x, label) {
@@ -66,13 +68,35 @@ jobs:
             as.integer(w08$canonical_records) + as.integer(w08$excluded_records) == as.integer(w01$canonical_records)
           )
 
-          search_date <- val(status$search$search_date, "search date")
-          stopifnot(grepl("^\\d{4}-\\d{2}-\\d{2}$", search_date))
+          source_dates <- val(status$search$search_date, "search date")
+          regs <- list.files("user_input", pattern = "^workflow00_ris_.*\\.json$", full.names = TRUE)
+          if (length(regs)) {
+            manual_dates <- vapply(regs, function(p) {
+              z <- tryCatch(fromJSON(p, simplifyVector = FALSE), error = function(e) NULL)
+              if (is.null(z) || is.null(z$search) || is.null(z$search$search_date)) "" else as.character(z$search$search_date)
+            }, character(1))
+            source_dates <- c(source_dates, manual_dates)
+          }
+          source_dates <- source_dates[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_dates)]
+          stopifnot(length(source_dates) > 0L)
+          search_date <- max(source_dates)
 
           methods <- paste(readLines("docs/reporting/workflow_09/manuscript/long_form_methods.Rmd", warn = FALSE), collapse = "\n")
           stopifnot(
             !grepl("may be retained as unspecified species", methods, fixed = TRUE),
             grepl("no eligible focal species can be assigned are excluded", methods, fixed = TRUE)
+          )
+
+          results <- paste(readLines("docs/reporting/workflow_09/manuscript/long_form_results.Rmd", warn = FALSE), collapse = "\n")
+          caps <- regmatches(results, gregexpr("\\\*\\\\*\\\\*Figure [0-9]+\\\\.", results, perl = TRUE))[[1L]]
+          cap_n <- as.integer(sub(".*Figure ([0-9]+)\\\\..*", "\\\\1", caps))
+          stopifnot(identical(cap_n, 1:16))
+
+          workflow_text <- paste(readLines(".github/workflows/report_workflow09_figures.yml", warn = FALSE), collapse = "\n")
+          stopifnot(
+            grepl("figure_02_database_unique_contribution", workflow_text, fixed = TRUE),
+            grepl("figure_03_database_overlap", workflow_text, fixed = TRUE),
+            grepl("figure_16_umbrella_review", workflow_text, fixed = TRUE)
           )
 
           cat(sprintf(
