@@ -35,3 +35,4 @@ jobs:
 # reissue W08 queue after removing Jaccard disagreement as human-review gate
 # regenerate W08 queue after validated geography decision vocabulary migration
 # regenerate W08 queue after adding geography-level record exclusion
+# regenerate W08 after validated deterministic species-NONE exclusion
