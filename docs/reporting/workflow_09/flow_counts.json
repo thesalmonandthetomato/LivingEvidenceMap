@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-flow-counts-v2",
-  "generated_at_utc": "2026-10-04T16:37:22Z",
+  "generated_at_utc": "2026-10-04T16:57:55Z",
   "search_update_date": "2026-09-30",
   "inputs": {
     "workflow01_canonical_jsonl": {
@@ -25,7 +25,7 @@
       "AGRICOLA": 2744,
       "CAB Abstracts": 26816,
       "OpenAlex": 28134,
-      "ProQuest Dissertations & Theses Global": 1574,
+      "ProQuest/PQD&T": 1574,
       "Scopus": 19948,
       "The Lens": 24135,
       "WoSCC": 15176
@@ -51,7 +51,7 @@
       },
       {
         "code": "proquest",
-        "database": "ProQuest Dissertations & Theses Global",
+        "database": "ProQuest/PQD&T",
         "hits": 1574,
         "search_date": "2026-09-30"
       },

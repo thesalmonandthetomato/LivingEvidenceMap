@@ -157,7 +157,8 @@ fallback_date <- trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
 source_meta <- tibble::tibble(
   code = names(source_counts_raw),
   database = vapply(names(source_counts_raw), function(code) {
-    if (!is.null(manual_meta[[code]]) && nzchar(manual_meta[[code]]$label)) manual_meta[[code]]$label
+    if (code %in% names(known_source_labels)) unname(known_source_labels[[code]])
+    else if (!is.null(manual_meta[[code]]) && nzchar(manual_meta[[code]]$label)) manual_meta[[code]]$label
     else pretty_source_label(code)
   }, character(1)),
   hits = as.integer(source_counts_raw),
