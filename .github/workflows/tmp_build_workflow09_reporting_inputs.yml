@@ -1,0 +1,113 @@
+name: TEMP build compact W09 reporting inputs
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_build_workflow09_reporting_inputs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      W01_POINTER: docs/deduplication/zenodo/run-36971418284.json
+      W08_POINTER: docs/workflow08/zenodo/run-37211675882.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','readr'))
+
+      - name: Restore only the two source-provenance states needed for migration
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$W01_POINTER" \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root workflow01_state
+          Rscript scripts/reporting/restore_workflow08_reporting_state.R \
+            --pointer "$W08_POINTER" \
+            --output-dir workflow08_reporting_state
+          test -s workflow01_state/canonical/records.jsonl
+          test -s workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
+
+      - name: Build compact current W00-W08 reporting inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=docs/reporting/workflow_09_inputs/current
+          mkdir -p "$OUT"
+
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W00 --run-id baseline-plus-manual-ris
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W01 --run-id 36971418284
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W02 --run-id 37016080508
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W03 --run-id 37024164176
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W04 --run-id 37051672356
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W05 --run-id 37110114836
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W06 --run-id 37114864202
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W07 --run-id 37153534771
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id 37211675882
+
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
+            --stage W01 --run-id 36971418284 \
+            --canonical workflow01_state/canonical/records.jsonl
+
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
+            --stage W08 --run-id 37211675882 \
+            --canonical workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
+
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+
+      - name: Validate and commit compact inputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          root <- "docs/reporting/workflow_09_inputs/current"
+          manifest <- fromJSON(file.path(root,"manifest.json"), simplifyVector=FALSE)
+          stopifnot(identical(manifest$schema,"living-evidence-map-workflow09-input-manifest-v1"))
+          stages <- vapply(manifest$stages,function(x)as.character(x$stage),character(1))
+          stopifnot(identical(stages,sprintf("W%02d",0:8)))
+          required <- c(
+            sprintf("w%02d_summary.json",0:8),
+            "w01_source_summary.csv","w01_source_intersections.csv","w01_source_manifest.json",
+            "w08_source_summary.csv","w08_source_intersections.csv","w08_source_manifest.json",
+            "manifest.json"
+          )
+          stopifnot(all(file.exists(file.path(root,required))))
+          w1 <- fromJSON(file.path(root,"w01_summary.json"))
+          w8 <- fromJSON(file.path(root,"w08_summary.json"))
+          stopifnot(
+            as.integer(w1$metrics$canonical_records)==47094L,
+            as.integer(w8$metrics$canonical_records)==21493L,
+            as.integer(w8$metrics$excluded_records)==25601L
+          )
+          cat("PASS: compact W09 current reporting inputs validated\n")
+
+      - name: Commit reporting inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/reporting/workflow_09_inputs/current
+          git commit -m "Build current compact Workflow 09 reporting inputs"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
