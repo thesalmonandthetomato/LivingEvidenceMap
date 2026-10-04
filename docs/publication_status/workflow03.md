@@ -6,6 +6,10 @@ Workflow 03 applies publication-status surveillance to the authoritative lean po
 
 This document describes the **current operational architecture on branch `workflow01-final-architecture`**. Historical Workflow 03 launchers and baseline-specific files remain in the repository for provenance and must not be inferred to be current merely from their filenames.
 
+## Current production state (4 October 2026)
+
+The current authoritative W03 state is run **37024164176**, restricted Zenodo record **23105974** (DOI `10.5281/zenodo.23105974`). It covers **47,094 records** and identifies **11 retractions** and **1 withdrawal**, so **12 records** are excluded before Workflow 04. The current sparse publication-status layer SHA-256 is `de4a5eb88dca7e30e239eca645ae51bd46de9bb5638ab8b96fa0fe3a34b08cce`.
+
 ## Current workflow entry point
 
 The current production workflow is:
