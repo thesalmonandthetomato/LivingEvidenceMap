@@ -18,7 +18,7 @@ if(anyDuplicated(w05$record_id)||anyDuplicated(w06$record_id)||anyDuplicated(w07
 
 dkeys<-vapply(decisions,function(z)clean(z$review_key),character(1));if(anyDuplicated(dkeys))stop("Duplicate W08 review key",call.=FALSE);dmap<-setNames(decisions,dkeys)
 by_type<-function(t)Filter(function(z)identical(clean(z$issue_type),t),decisions)
-species_dec<-by_type("species_none");geo_dec<-c(by_type("geography_model_failure"),by_type("geography_unresolved"),by_type("geography_evidence_unvalidated"));topic_dec<-by_type("topic_extreme_disagreement");zero_dec<-by_type("zero_topic_eligibility_uncertain")
+species_dec<-by_type("species_none");geo_dec<-c(by_type("geography_model_failure"),by_type("geography_unresolved"),by_type("geography_evidence_unvalidated"));topic_dec<-c(by_type("topic_extreme_disagreement"),by_type("ontology_pathology"));zero_dec<-by_type("zero_topic_eligibility_uncertain")
 species_map<-setNames(species_dec,vapply(species_dec,function(z)clean(z$record_id),character(1)));geo_map<-setNames(geo_dec,vapply(geo_dec,function(z)clean(z$record_id),character(1)));topic_map<-setNames(topic_dec,vapply(topic_dec,function(z)clean(z$record_id),character(1)));zero_map<-setNames(zero_dec,vapply(zero_dec,function(z)clean(z$record_id),character(1)))
 w05i<-setNames(seq_len(nrow(w05)),as.character(w05$record_id));w06i<-setNames(seq_len(nrow(w06)),as.character(w06$record_id));w07qci<-setNames(seq_len(nrow(w07_qc)),as.character(w07_qc$record_id));late_ids<-unique(as.character(late$record_id))
 
