@@ -312,6 +312,22 @@ jobs:
             c("methods.docx","methods.html","methods.md","results.docx","results.html","results.md")
           ))))
 
+          # Pandoc can otherwise succeed after replacing missing images with
+          # alt text. The results manuscript contains Figures 1-16, so require
+          # at least 16 embedded media assets in the generated Word file.
+          results_media <- unzip(
+            "outputs/workflow09_manuscript/results.docx",
+            list = TRUE
+          )
+          results_media <- results_media$Name[grepl("^word/media/", results_media$Name)]
+          if (length(results_media) < 16L) {
+            stop(sprintf(
+              "Results DOCX contains only %d embedded media files; expected at least 16",
+              length(results_media)
+            ), call. = FALSE)
+          }
+          cat(sprintf("PASS: results DOCX embeds %d media files\n", length(results_media)))
+
       - name: Convert Word manuscripts to PDF
         shell: bash
         run: |
