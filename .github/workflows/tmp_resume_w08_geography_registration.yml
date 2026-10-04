@@ -1,0 +1,115 @@
+name: TEMP Workflow 08 - resume corrected geography registration
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow08/.run_resume_geography_registration'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest','httr2','googlesheets4'))
+
+      - name: Restore published corrected W08 artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/corrected
+          gh run download 37234697766             --repo "$GITHUB_REPOSITORY"             --name workflow08-geography-corrected-37234697766             --dir inputs/corrected
+          test -s inputs/corrected/workflow08/living_evidence_map_canonical_final.jsonl
+          test -s inputs/corrected/workflow08/workflow08_final_manifest.json
+          test -s inputs/corrected/workflow08_zenodo/zenodo_receipt.json
+
+      - name: Validate existing corrected W08 publication
+        shell: Rscript {0}
+        run: |
+          x <- jsonlite::fromJSON('inputs/corrected/workflow08_zenodo/zenodo_receipt.json',simplifyVector=FALSE)
+          m <- jsonlite::fromJSON('inputs/corrected/workflow08/workflow08_final_manifest.json',simplifyVector=FALSE)
+          stopifnot(
+            identical(as.character(x$status),'published'),
+            identical(as.character(x$source_github_run_id),'37234697766'),
+            identical(as.character(x$zenodo_record_id),'23145712'),
+            identical(as.character(x$doi),'10.5281/zenodo.23145712'),
+            as.integer(x$canonical_records)==21493L,
+            as.integer(x$excluded_records)==25601L,
+            identical(as.character(x$final_canonical_jsonl_sha256),
+                      '96a854952aecf3a562fadf603670f650fa26ba9974c819e4b98f9c4dc4f6de20'),
+            as.integer(m$geography_code_corrections)==5L
+          )
+          cat('PASS: existing corrected W08 Zenodo publication validated\n')
+
+      - name: Register corrected W08 and trigger W09
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+
+          cp inputs/corrected/workflow08_zenodo/zenodo_receipt.json             docs/workflow08/zenodo/run-37234697766.json
+
+          RECEIPT=inputs/corrected/workflow08_zenodo/zenodo_receipt.json           REG=docs/workflow08/zenodo_registry.csv           Rscript -e '
+            x<-jsonlite::fromJSON(Sys.getenv("RECEIPT"),simplifyVector=FALSE)
+            reg<-read.csv(Sys.getenv("REG"),stringsAsFactors=FALSE,check.names=FALSE)
+            required<-c("source_run_id","zenodo_record_id","doi","canonical_sha256","exclusions_sha256","status","supersedes_zenodo_record_id","published_at_utc")
+            stopifnot(all(required%in%names(reg)))
+            reg$status[reg$status=="authoritative"]<-"superseded"
+            row<-data.frame(
+              source_run_id=as.character(x$source_github_run_id),
+              zenodo_record_id=as.character(x$zenodo_record_id),
+              doi=as.character(x$doi),
+              canonical_sha256=as.character(x$final_canonical_jsonl_sha256),
+              exclusions_sha256=as.character(x$excluded_records_csv_sha256),
+              status="authoritative",
+              supersedes_zenodo_record_id=as.character(x$supersedes_zenodo_record_id),
+              published_at_utc=as.character(x$published_at_utc),
+              stringsAsFactors=FALSE
+            )
+            reg<-reg[as.character(reg$source_run_id)!=row$source_run_id,,drop=FALSE]
+            write.csv(rbind(reg[,required,drop=FALSE],row),Sys.getenv("REG"),row.names=FALSE,quote=FALSE)
+          '
+
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W08
+
+          if [ -n "${LEM_GOOGLE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+            chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+            Rscript scripts/updater/workflow_current_run_status_to_shiny.R               --status docs/current_run/current_run_status.json               --sheet-id "$LEM_GOOGLE_SHEET_ID"               --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          fi
+
+          Rscript scripts/reporting/write_workflow09_stage_summary.R             --stage W08             --run-id 37234697766
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R             --stage W08             --run-id 37234697766             --canonical inputs/corrected/workflow08/living_evidence_map_canonical_final.jsonl
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+
+          printf 'rerun W09 after authoritative corrected W08 geography publication 37234697766\n'             >> docs/reporting/.run_workflow09_figures
+
+          git add             docs/workflow08/zenodo_registry.csv             docs/workflow08/zenodo/run-37234697766.json             docs/current_run/current_run_status.json             docs/reporting/workflow_09_inputs/current             docs/reporting/.run_workflow09_figures
+
+          git commit -m "Register corrected W08 geography state 37234697766"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
