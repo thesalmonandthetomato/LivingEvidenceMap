@@ -68,6 +68,52 @@ if(nzchar(fallback_path)){
 
 all_out <- list()
 fallback_used <- 0L
+
+clean1 <- function(x){
+  if(is.null(x)||!length(x)) return("")
+  z <- as.character(x[[1L]])
+  if(is.na(z)) "" else z
+}
+path_ids <- function(fv){
+  ids <- as.character((fv %||% list())$path_ids %||% character())
+  unique(ids[nzchar(ids)])
+}
+validate_issue_decision <- function(issue,z,key){
+  typ <- as.character(issue$issue_type %||% "")
+  dec <- as.character(z$decision %||% "")
+  fv <- z$final_value %||% list()
+
+  if(typ %in% c("topic_coding_review","ontology_pathology","topic_extreme_disagreement")){
+    ids <- path_ids(fv)
+    if(dec=="accept_retained_topics"){
+      expected <- vapply(
+        Filter(function(p)isTRUE(p$retained_for_analysis),issue$automated_value$pathways %||% list()),
+        function(p)as.character(p$path_id %||% ""),character(1)
+      )
+      expected <- unique(expected[nzchar(expected)])
+      if(!isTRUE(fv$included)||!setequal(ids,expected)) stop("Invalid accept_retained_topics payload for ",key,call.=FALSE)
+    } else if(dec=="replace_topic_set"){
+      if(!isTRUE(fv$included)||!length(ids)) stop("Invalid replace_topic_set payload for ",key,call.=FALSE)
+    } else if(dec=="no_code"){
+      if(!isTRUE(fv$included)||length(ids)) stop("Invalid no_code payload for ",key,call.=FALSE)
+    } else if(dec=="exclude_record"){
+      if(!isFALSE(fv$included)) stop("Invalid topic exclude_record payload for ",key,call.=FALSE)
+    }
+  }
+
+  if(typ=="zero_topic_eligibility_uncertain"){
+    ids <- path_ids(fv)
+    if(dec=="assign_topic_set"){
+      if(!isTRUE(fv$included)||!length(ids)) stop("Invalid zero-topic assign_topic_set payload for ",key,call.=FALSE)
+    } else if(dec=="include_uncoded"){
+      if(!isTRUE(fv$included)||length(ids)) stop("Invalid include_uncoded payload for ",key,call.=FALSE)
+    } else if(dec=="exclude_record"){
+      if(!isFALSE(fv$included)) stop("Invalid zero-topic exclude_record payload for ",key,call.=FALSE)
+    }
+  }
+  invisible(TRUE)
+}
+
 for(i in seq_along(cases)){
   rec <- cases[[i]]
   rid <- record_ids[[i]]
@@ -93,6 +139,7 @@ for(i in seq_along(cases)){
     allowed <- as.character(issue$allowed_human_outcomes %||% character())
     decision <- as.character(z$decision %||% "")
     if(!decision%in%allowed) stop("Invalid W08 decision for ",key,call.=FALSE)
+    validate_issue_decision(issue,z,key)
     if(as.character(z$record_id %||% "")!=rid || as.character(z$issue_type %||% "")!=typ) stop("W08 decision identity mismatch for ",key,call.=FALSE)
     if(tolower(as.character(z$issue_state_sha256 %||% ""))!=tolower(as.character(issue$issue_state_sha256 %||% ""))) stop("W08 issue-state SHA mismatch for ",key,call.=FALSE)
     if(!used_fallback && tolower(as.character(z$queue_sha256 %||% ""))!=queue_sha) stop("W08 decision queue SHA mismatch for ",key,call.=FALSE)
