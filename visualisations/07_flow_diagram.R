@@ -111,6 +111,8 @@ box <- function(id, x, y, w, h, label, stage) {
 }
 
 process_box_w <- 2.75
+main_x <- 3.65
+side_x <- 7.05
 
 # The search-source panel is always one box. To keep a consistent visual
 # grammar as the database set grows, it uses two columns for <=6 databases and
@@ -118,8 +120,8 @@ process_box_w <- 2.75
 # count and search date.
 n_source_cols <- if (nrow(source_meta) <= 10L) 2L else 3L
 n_source_rows <- ceiling(nrow(source_meta) / n_source_cols)
-source_panel_left <- 3.25
-source_panel_right <- 10.15
+source_panel_left <- 1.72
+source_panel_right <- 8.02
 source_panel_width <- source_panel_right - source_panel_left
 source_panel_bottom <- 11.55
 
@@ -127,15 +129,15 @@ source_panel_bottom <- 11.55
 # Fewer rows receive more breathing room; denser source inventories tighten
 # slightly while preserving the title/header separation and bottom padding.
 source_row_h <- dplyr::case_when(
-  n_source_rows <= 1L ~ 0.50,
-  n_source_rows == 2L ~ 0.42,
-  n_source_rows == 3L ~ 0.37,
-  TRUE ~ 0.33
+  n_source_rows <= 1L ~ 0.42,
+  n_source_rows == 2L ~ 0.35,
+  n_source_rows == 3L ~ 0.31,
+  TRUE ~ 0.27
 )
 source_title_offset <- 0.16
-source_header_offset <- 0.55
-source_first_row_offset <- 0.78
-source_bottom_padding <- 0.14
+source_header_offset <- 0.50
+source_first_row_offset <- 0.73
+source_bottom_padding <- 0.11
 source_panel_height <- source_first_row_offset +
   (n_source_rows - 1L) * source_row_h +
   source_bottom_padding
@@ -146,10 +148,10 @@ source_col_width <- (source_panel_width - 0.34) / n_source_cols
 # Within each source block, reserve less horizontal space for the database
 # label and more for hits/search date. Long labels are wrapped inside their
 # own block so they cannot collide with the neighbouring database column.
-source_name_share <- 0.46
-source_hits_x_share <- 0.56
-source_date_x_share <- 0.66
-source_name_wrap <- if (n_source_cols >= 3L) 14L else 16L
+source_name_share <- 0.42
+source_hits_x_share <- 0.46
+source_date_x_share <- 0.61
+source_name_wrap <- if (n_source_cols >= 3L) 14L else 17L
 
 source_layout <- source_meta |>
   mutate(
@@ -188,43 +190,43 @@ source_dividers <- if (n_source_cols > 1L) {
 }
 
 boxes <- bind_rows(
-  box("combined", 5.64, 10.88, process_box_w, 0.76, paste0("Combined search results\nn = ", fmt(n_combined)), "search"),
-  box("dedup", 5.64, 9.78, process_box_w, 0.76, paste0("Deduplicated records\nn = ", fmt(n_deduplicated)), "screen"),
-  box("dupes", 9.15, 9.78, process_box_w, 0.76, paste0("Duplicate records removed\nn = ", fmt(n_duplicates_removed)), "exclude"),
+  box("combined", main_x, 10.88, process_box_w, 0.76, paste0("Combined search results\nn = ", fmt(n_combined)), "search"),
+  box("dedup", main_x, 9.78, process_box_w, 0.76, paste0("Deduplicated records\nn = ", fmt(n_deduplicated)), "screen"),
+  box("dupes", side_x, 9.78, process_box_w, 0.76, paste0("Duplicate records removed\nn = ", fmt(n_duplicates_removed)), "exclude"),
 
-  box("enrichment", 5.64, 8.68, process_box_w, 0.76, paste0("Record repair and enrichment\nn enriched = ", fmt(n_enriched)), "repair"),
+  box("enrichment", main_x, 8.68, process_box_w, 0.76, paste0("Record repair and enrichment\nn enriched = ", fmt(n_enriched)), "repair"),
 
-  box("status_sweep", 5.64, 7.58, process_box_w, 0.76, paste0("Records swept for retractions /\nwithdrawal notices\nn = ", fmt(n_deduplicated)), "screen"),
-  box("retractions", 9.15, 7.58, process_box_w, 0.76, paste0("Retractions excluded\nn = ", fmt(n_w03)), "exclude"),
+  box("status_sweep", main_x, 7.58, process_box_w, 0.76, paste0("Records swept for retractions /\nwithdrawal notices\nn = ", fmt(n_deduplicated)), "screen"),
+  box("retractions", side_x, 7.58, process_box_w, 0.76, paste0("Retractions excluded\nn = ", fmt(n_w03)), "exclude"),
 
-  box("screened", 5.64, 6.48, process_box_w, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
-  box("excluded_ta", 9.15, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_w04)), "exclude"),
-  box("retained", 5.64, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_w04_retained)), "retain"),
+  box("screened", main_x, 6.48, process_box_w, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
+  box("excluded_ta", side_x, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_w04)), "exclude"),
+  box("retained", main_x, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_w04_retained)), "retain"),
 
-  box("species", 5.64, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
-  box("geography", 5.64, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
-  box("geo_uncoded", 9.15, 3.13, process_box_w, 0.76, paste0("Included but uncoded for geography\nn = ", fmt(n_geography_uncoded)), "result"),
-  box("topic", 5.64, 2.08, process_box_w, 0.76, paste0("Records with topic annotation\nn = ", fmt(n_topic_coded)), "annotate"),
-  box("uncoded", 9.15, 2.08, process_box_w, 0.76, paste0("Included but uncoded for topics\nn = ", fmt(n_topic_uncoded)), "result"),
+  box("species", main_x, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
+  box("geography", main_x, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
+  box("geo_uncoded", side_x, 3.13, process_box_w, 0.76, paste0("Included but uncoded for geography\nn = ", fmt(n_geography_uncoded)), "result"),
+  box("topic", main_x, 2.08, process_box_w, 0.76, paste0("Records with topic annotation\nn = ", fmt(n_topic_coded)), "annotate"),
+  box("uncoded", side_x, 2.08, process_box_w, 0.76, paste0("Included but uncoded for topics\nn = ", fmt(n_topic_uncoded)), "result"),
 
-  box("map", 5.64, 0.88, process_box_w, 0.86, paste0("Living Evidence Map\nn = ", fmt(n_final_included)), "map")
+  box("map", main_x, 0.88, process_box_w, 0.86, paste0("Living Evidence Map\nn = ", fmt(n_final_included)), "map")
 )
 
 main_arrows <- data.frame(
-  x = rep(5.64, 9),
+  x = rep(main_x, 9),
   y = c(source_panel_bottom, 10.50, 9.40, 8.30, 7.20, 6.10, 5.00, 3.80, 2.75),
-  xend = rep(5.64, 9),
+  xend = rep(main_x, 9),
   yend = c(11.26, 10.16, 9.06, 7.96, 6.86, 5.76, 4.56, 3.51, 2.46)
 )
 main_arrows <- bind_rows(
   main_arrows,
-  data.frame(x = 5.64, y = 1.70, xend = 5.64, yend = 1.31)
+  data.frame(x = main_x, y = 1.70, xend = main_x, yend = 1.31)
 )
 
 side_connectors <- data.frame(
-  x = rep(5.64 + process_box_w / 2, 5),
+  x = rep(main_x + process_box_w / 2, 5),
   y = c(9.78, 7.58, 6.48, 3.13, 2.08),
-  xend = rep(9.15 - process_box_w / 2, 5),
+  xend = rep(side_x - process_box_w / 2, 5),
   yend = c(9.78, 7.58, 6.48, 3.13, 2.08)
 )
 
@@ -370,7 +372,7 @@ p <- ggplot() +
   scale_fill_manual(values = stage_fill, guide = "none") +
   scale_colour_manual(values = stage_text, guide = "none") +
   coord_cartesian(
-    xlim = c(0.45, 10.65),
+    xlim = c(0.45, 8.55),
     ylim = c(0.25, source_panel_top + 0.20),
     expand = FALSE
   ) +
