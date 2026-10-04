@@ -148,7 +148,47 @@ compatible_geo_migration<-function(key,cur,pdec_row,prior_hash){
   d
 }
 
-reused<-list();pending_keys<-character();changed_keys<-character();new_keys<-character();compatible_migrations<-0L
+compatible_zero_topic_migration<-function(key,cur,pdec_row,prior_hash){
+  if(is.null(pdec_row)||is.null(prior_hash))return(NULL)
+  if(clean(cur$issue$issue_type)!="zero_topic_eligibility_uncertain")return(NULL)
+
+  current_allowed<-as.character(cur$issue$allowed_human_outcomes)
+  expected_current<-c("assign_topic_set","include_uncoded","exclude_record")
+  if(!identical(current_allowed,expected_current))stop("Unexpected current zero-topic vocabulary for ",key,call.=FALSE)
+
+  old_state<-list(
+    review_key=key,
+    record_id=clean(cur$record$record_id),
+    issue_type="zero_topic_eligibility_uncertain",
+    source_workflow=clean(cur$issue$source_workflow),
+    title=clean(cur$record$title),
+    abstract=clean(cur$record$abstract),
+    automated_value=cur$issue$automated_value,
+    allowed_human_outcomes=c("include_uncoded","exclude_record")
+  )
+  old_hash<-canon_hash(old_state)
+  if(!identical(tolower(old_hash),tolower(prior_hash)))return(NULL)
+
+  d<-pdec_row
+  dec<-clean(d$decision)
+  if(!dec%in%c("include_uncoded","exclude_record"))stop("Unexpected historical zero-topic decision for ",key,": ",dec,call.=FALSE)
+  fv<-d$final_value
+  if(dec=="include_uncoded"&&!isTRUE(fv$included))stop("Malformed historical include_uncoded decision for ",key,call.=FALSE)
+  if(dec=="exclude_record"&&!isFALSE(fv$included))stop("Malformed historical zero-topic exclusion for ",key,call.=FALSE)
+
+  d$issue_state_sha256<-clean(cur$issue$issue_state_sha256)
+  d$reuse<-list(
+    reused=TRUE,
+    basis="compatible_zero_topic_vocabulary_migration",
+    prior_issue_state_sha256=old_hash,
+    prior_allowed_human_outcomes=c("include_uncoded","exclude_record"),
+    prior_queue_sha256=clean(d$queue_sha256)
+  )
+  d
+}
+
+
+reused<-list();pending_keys<-character();changed_keys<-character();new_keys<-character();compatible_migrations<-0L;compatible_zero_topic_migrations<-0L
 for(key in names(current)){
   curh<-clean(current[[key]]$issue$issue_state_sha256)
   if(!nzchar(curh))stop("Current issue lacks issue_state_sha256: ",key,call.=FALSE)
@@ -163,8 +203,14 @@ for(key in names(current)){
       reused[[length(reused)+1L]]<-migrated
       compatible_migrations<-compatible_migrations+1L
     }else{
-      pending_keys<-c(pending_keys,key)
-      if(!is.null(pdec[[key]]))changed_keys<-c(changed_keys,key) else new_keys<-c(new_keys,key)
+      migrated_zero<-compatible_zero_topic_migration(key,current[[key]],pdec[[key]],prior_fp[[key]])
+      if(!is.null(migrated_zero)){
+        reused[[length(reused)+1L]]<-migrated_zero
+        compatible_zero_topic_migrations<-compatible_zero_topic_migrations+1L
+      }else{
+        pending_keys<-c(pending_keys,key)
+        if(!is.null(pdec[[key]]))changed_keys<-c(changed_keys,key) else new_keys<-c(new_keys,key)
+      }
     }
   }
 }
@@ -189,6 +235,7 @@ manifest<-list(
  schema="living-evidence-map-workflow08-decision-reuse-v1",status="PASS",
  current_issues=length(current),reused_issues=length(reused),pending_issues=length(pending_keys),
  compatible_geography_vocabulary_migrations=compatible_migrations,
+ compatible_zero_topic_vocabulary_migrations=compatible_zero_topic_migrations,
  new_issues=length(new_keys),changed_issues=length(changed_keys),
  current_review_records=length(queue),pending_review_records=length(pending_records),
  current_queue_sha256=digest(file=queue_path,algo="sha256",serialize=FALSE),
@@ -197,4 +244,4 @@ manifest<-list(
  generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 write_json(manifest,file.path(output_dir,"workflow08_reuse_manifest.json"),auto_unbox=TRUE,pretty=TRUE,null="null")
-cat(sprintf("PASS: W08 decision reuse current=%d reused=%d pending=%d compatible_geo_migrations=%d new=%d changed=%d\n",length(current),length(reused),length(pending_keys),compatible_migrations,length(new_keys),length(changed_keys)))
+cat(sprintf("PASS: W08 decision reuse current=%d reused=%d pending=%d compatible_geo_migrations=%d compatible_zero_topic_migrations=%d new=%d changed=%d\n",length(current),length(reused),length(pending_keys),compatible_migrations,compatible_zero_topic_migrations,length(new_keys),length(changed_keys)))
