@@ -86,7 +86,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest','httr2','stringdist','stringi','xml2','googlesheets4'))
+        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
 
       - name: Validate input pointers and source subset
         env:
@@ -804,6 +804,31 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "Record Workflow 01 delta run $GITHUB_RUN_ID"
             git push origin "HEAD:$WORKFLOW01_BRANCH"
+          fi
+
+      - name: Update current-run live status through W01
+        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W01
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W01 [skip ci]"
+            git pull --rebase origin "$WORKFLOW01_BRANCH"
+            git push origin HEAD:"$WORKFLOW01_BRANCH"
           fi
 
       - name: Upload validated Workflow 01 handoff cache
