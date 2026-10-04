@@ -1,5 +1,13 @@
 # Workflow 00: Search orchestration, provenance and archival
 
+## Current production state (4 October 2026)
+
+The accepted API baseline state remains the checksum-locked five-source state for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science searched on 23 September 2026. The current pipeline update additionally incorporated two independently archived manual RIS searches: CAB Abstracts (26,816 records; searched 30 September 2026) and ProQuest Dissertations & Theses Global (1,574 unique records; searched 30 September 2026). These manual sources have completed W00 ingestion and have progressed through W01-W08 in the current release.
+
+The source catalogue is broader than the currently incorporated release: ten coverage groups resolve to 26 API/database sources when fully selected, including 17 distinct EBSCO databases. EBSCO scoping/integration has been validated but has not yet been added to the present canonical release. PubMed/MEDLINE, EThOS, Chinese Biological Abstracts and Europe PMC preprints are implemented as separate W00 API sources and are available for a controlled future expansion rather than being blocked on completion of the CAB/PQDT update.
+
+A completed production W00 parent run now updates `docs/current_run/current_run_status.json` and the Shiny `pipeline_run_status` sheet directly after Zenodo registration. This explicit update is required because commits made with the Actions `GITHUB_TOKEN` do not trigger a second status workflow.
+
 ## Purpose
 
 Workflow 00 manages reproducible literature searching across the supported bibliographic sources. It contains two deliberately separate pathways: (1) an independent count-only search-scoping stage for testing a manually supplied Boolean search string without harvesting records, and (2) the production search-orchestration pathway that converts the version-controlled production strategy into source-specific queries, retrieves records, records provenance, and archives accepted search outputs.
@@ -299,7 +307,7 @@ The exact manually supplied Boolean string, run date, validation status, source,
 
 ## Europe PMC API source expansion
 
-Four additional API-backed Workflow 00 sources are implemented but intentionally disabled by default pending completion of the current CAB Abstracts and ProQuest Dissertations & Theses end-to-end pipeline update:
+Four additional API-backed Workflow 00 sources are implemented and remain disabled by default until they are deliberately selected for a controlled future source expansion:
 
 - PubMed/MEDLINE: Europe PMC `SRC:MED`;
 - EThOS theses: Europe PMC `SRC:ETH`;
