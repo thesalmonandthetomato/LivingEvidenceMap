@@ -5,7 +5,7 @@
 The review process is outlined in the flow diagram in Figure 1. Across
 the 7 databases searched, a total of 118,527 search results was
 obtained. Following deduplication, 47,094 unique candidate records
-remained. Title and abstract repair and enrichment supplemented 2,162
+remained. Title and abstract repair and enrichment supplemented 2,218
 records, whilst a sweep for retractions identified 12 records that were
 excluded from further analysis.
 

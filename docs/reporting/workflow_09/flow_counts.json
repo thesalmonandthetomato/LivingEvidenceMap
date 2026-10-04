@@ -1,24 +1,19 @@
 {
-  "schema": "living-evidence-map-workflow09-flow-counts-v2",
-  "generated_at_utc": "2026-10-04T16:57:55Z",
+  "schema": "living-evidence-map-workflow09-flow-counts-v3",
+  "generated_at_utc": "2026-10-04T17:44:19Z",
   "search_update_date": "2026-09-30",
-  "inputs": {
-    "workflow01_canonical_jsonl": {
-      "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow01_state/canonical/records.jsonl",
-      "sha256": "fb6e35b0bceb15629af20f006310aaae75416fc3aa985b906cf82b0df7b6e142"
-    },
-    "workflow02_cumulative_patch_jsonl": {
-      "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow02_cumulative_patch.jsonl",
-      "sha256": "186f8296da5e05ced6249caa508b4a9bedae9f5075aed01dfc107d306d13eec9"
-    },
-    "workflow08_final_canonical_jsonl": {
-      "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl",
-      "sha256": "cb1f28a2adb3edbc368d9d10de1517d51cd43d024e449bf1f7149eb87ab77ffb"
-    },
-    "workflow08_exclusions_csv": {
-      "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow08_reporting_state/workflow08_excluded_records.csv",
-      "sha256": "0333e94685f51b979ef2ad7782ff3f7ca2791f5954cfd1be97bab843da68c2de"
-    }
+  "input_mode": "compact_workflow_reporting_snapshots",
+  "input_directory": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/docs/reporting/workflow_09_inputs/current",
+  "source_runs": {
+    "W00": "baseline-plus-manual-ris",
+    "W01": "36971418284",
+    "W02": "37016080508",
+    "W03": "37024164176",
+    "W04": "37051672356",
+    "W05": "37110114836",
+    "W06": "37114864202",
+    "W07": "37153534771",
+    "W08": "37211675882"
   },
   "counts": {
     "sources": {
@@ -77,18 +72,20 @@
     "combined_search_results": 118527,
     "duplicates_removed": 71433,
     "deduplicated_records": 47094,
-    "records_enriched_workflow02": 2162,
+    "records_enriched_workflow02": 2218,
     "retractions_excluded": 12,
     "title_abstract_screened": 47082,
-    "title_abstract_excluded_total": 25589,
     "workflow04_exclusions": 25263,
-    "workflow07_late_exclusions": 129,
-    "workflow08_exclusions": 197,
-    "title_abstract_retained_final": 21493,
+    "title_abstract_retained": 21819,
+    "species_none_deterministic_exclusions": 191,
+    "workflow07_late_exclusions": 131,
+    "workflow08_other_exclusions": 4,
+    "post_workflow04_exclusions_total": 326,
     "final_geography_coded": 8923,
     "final_geography_uncoded": 12570,
     "final_topic_coded": 21246,
     "final_topic_uncoded": 247,
-    "final_included": 21493
+    "final_included": 21493,
+    "final_excluded": 25601
   }
 }

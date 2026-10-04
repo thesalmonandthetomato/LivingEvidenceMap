@@ -1,0 +1,14 @@
+{
+  "schema": "living-evidence-map-workflow09-stage-summary-v1",
+  "stage": "W00",
+  "source_run_id": "baseline-plus-manual-ris",
+  "update_id": "w01-run-36971418284",
+  "generated_at_utc": "2026-10-04T17:36:27Z",
+  "pointer_path": null,
+  "pointer_sha256": null,
+  "status": "complete",
+  "metrics": {
+    "search_results": 118527,
+    "search_date": "2026-09-23"
+  }
+}

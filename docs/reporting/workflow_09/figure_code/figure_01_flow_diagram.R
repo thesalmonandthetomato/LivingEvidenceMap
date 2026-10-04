@@ -2,15 +2,11 @@
 
 # Workflow 09 manuscript flow diagram.
 #
-# Counts are derived at render time from authoritative pipeline outputs:
-#   - Workflow 01 deduplicated canonical JSONL: source manifestations + deduplicated works
-#   - Workflow 02 cumulative enrichment patch JSONL: records with metadata fields filled
-#   - Workflow 08 final included canonical JSONL: final annotation state
-#   - Workflow 08 exclusions CSV: screening/exclusion stages
-#
-# No manuscript count is hard-coded. The script fails if stage totals do not reconcile.
+# Cross-workflow counts are read from the compact, version-controlled reporting
+# handoff under docs/reporting/workflow_09_inputs/current. W09 therefore does
+# not reconstruct W01 or restore W02 merely to draw the flow diagram.
 
-required <- c("dplyr", "ggplot2", "readr", "stringr", "here", "jsonlite", "digest")
+required <- c("dplyr", "ggplot2", "readr", "stringr", "here", "jsonlite")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing) > 0) stop("Install required packages: ", paste(missing, collapse = ", "))
 
@@ -20,268 +16,90 @@ library(readr)
 library(stringr)
 library(here)
 library(jsonlite)
-library(digest)
-
-source(here::here("visualisations", "canonical_figure_data.R"))
 
 out_dir <- here::here("visualisations")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-# -------------------------------------------------------------------------
-# 1. AUTHORITATIVE INPUTS
-# -------------------------------------------------------------------------
-
-final_path <- canonical_jsonl_path()
-canonical <- load_figure_master(final_path)
-n_final_included <- nrow(canonical)
-
-exclusions_path <- canonical_arg("--exclusions-csv") %||%
-  Sys.getenv("EXCLUSIONS_CSV", unset = "")
-
-if (!nzchar(exclusions_path)) {
-  candidates <- c(
-    file.path("data", "master", "current", "workflow08_excluded_records.csv"),
-    file.path("outputs", "workflow08_corrected", "workflow08_excluded_records.csv"),
-    file.path("outputs", "workflow08", "workflow08_excluded_records.csv")
-  )
-  hit <- candidates[file.exists(candidates)]
-  exclusions_path <- if (length(hit)) hit[[1L]] else ""
-}
-if (!nzchar(exclusions_path) || !file.exists(exclusions_path)) {
-  stop("Workflow 08 exclusions CSV is required. Provide --exclusions-csv or set EXCLUSIONS_CSV.", call. = FALSE)
-}
-
-prescreen_path <- canonical_arg("--prescreen-canonical") %||%
-  Sys.getenv("PRESCREEN_CANONICAL_JSONL", unset = "")
-if (!nzchar(prescreen_path) || !file.exists(prescreen_path)) {
-  stop("Workflow 01 pre-screening canonical JSONL is required. Provide --prescreen-canonical or set PRESCREEN_CANONICAL_JSONL.", call. = FALSE)
-}
-
-w02_patch_path <- canonical_arg("--workflow02-patch") %||%
-  Sys.getenv("WORKFLOW02_PATCH_JSONL", unset = "")
-if (!nzchar(w02_patch_path) || !file.exists(w02_patch_path)) {
-  stop("Workflow 02 cumulative enrichment patch JSONL is required. Provide --workflow02-patch or set WORKFLOW02_PATCH_JSONL.", call. = FALSE)
-}
-
-# -------------------------------------------------------------------------
-# 2. WORKFLOW 01: SOURCE MANIFESTATIONS + DEDUPLICATED WORKS
-# -------------------------------------------------------------------------
-
-known_source_labels <- c(
-  lens = "The Lens",
-  scopus = "Scopus",
-  openalex = "OpenAlex",
-  agricola = "AGRICOLA",
-  wos = "WoSCC",
-  cab = "CAB Abstracts",
-  proquest = "ProQuest/PQD&T"
+input_dir <- Sys.getenv(
+  "W09_INPUT_DIR",
+  unset = here::here("docs", "reporting", "workflow_09_inputs", "current")
 )
+if (!dir.exists(input_dir)) stop("Workflow 09 compact input directory not found: ", input_dir, call. = FALSE)
 
-pretty_source_label <- function(code) {
-  if (code %in% names(known_source_labels)) return(unname(known_source_labels[[code]]))
-  z <- gsub("[_-]+", " ", code)
-  tools::toTitleCase(z)
+read_stage <- function(stage) {
+  p <- file.path(input_dir, paste0(tolower(stage), "_summary.json"))
+  if (!file.exists(p)) stop("Missing compact Workflow 09 stage summary: ", p, call. = FALSE)
+  x <- fromJSON(p, simplifyVector = FALSE)
+  if (!identical(as.character(x$stage), stage)) stop("Stage mismatch in ", p, call. = FALSE)
+  x
+}
+metric <- function(x, name) {
+  z <- x$metrics[[name]]
+  if (is.null(z) || !length(z)) stop("Missing metric ", name, " in ", x$stage, call. = FALSE)
+  as.integer(z[[1L]])
 }
 
-source_counts_raw <- integer()
-n_deduplicated <- 0L
-n_combined <- 0L
-prescreen_ids <- character()
+w00 <- read_stage("W00")
+w01 <- read_stage("W01")
+w02 <- read_stage("W02")
+w03 <- read_stage("W03")
+w04 <- read_stage("W04")
+w05 <- read_stage("W05")
+w06 <- read_stage("W06")
+w07 <- read_stage("W07")
+w08 <- read_stage("W08")
 
-con <- file(prescreen_path, "rt", encoding = "UTF-8")
-on.exit(close(con), add = TRUE)
-repeat {
-  line <- readLines(con, n = 1L, warn = FALSE)
-  if (!length(line)) break
-  if (!nzchar(trimws(line))) next
-
-  rec <- jsonlite::fromJSON(line, simplifyVector = FALSE)
-  rid <- as.character(rec$identity$record_id %||% "")
-  if (!nzchar(rid)) stop("Workflow 01 canonical record missing identity.record_id.", call. = FALSE)
-
-  mans <- rec$manifestations %||% list()
-  if (!length(mans)) stop("Workflow 01 canonical record has no manifestations: ", rid, call. = FALSE)
-
-  src <- vapply(mans, function(m) as.character(m$source %||% ""), character(1))
-  if (any(!nzchar(src))) stop("Workflow 01 manifestation missing source in record: ", rid, call. = FALSE)
-
-  n_deduplicated <- n_deduplicated + 1L
-  n_combined <- n_combined + length(src)
-  prescreen_ids <- c(prescreen_ids, rid)
-  tab <- table(src)
-  for (nm in names(tab)) {
-    if (!nm %in% names(source_counts_raw)) source_counts_raw[[nm]] <- 0L
-    source_counts_raw[[nm]] <- source_counts_raw[[nm]] + as.integer(tab[[nm]])
-  }
-}
-close(con)
-on.exit(NULL, add = FALSE)
-
-if (anyDuplicated(prescreen_ids)) stop("Workflow 01 canonical JSONL contains duplicate record_id values.", call. = FALSE)
-if (!length(source_counts_raw)) stop("Workflow 01 canonical contains no source manifestations.", call. = FALSE)
-
-# Resolve source-specific search dates from version-controlled Workflow 00
-# provenance. Manual RIS registries take precedence; API baseline sources use
-# the accepted Workflow 00 state date. A release-level date is a final fallback.
-manual_registry_paths <- list.files(
-  "user_input",
-  pattern = "^workflow00_ris_.*\\.json$",
-  full.names = TRUE
-)
-manual_meta <- list()
-for (p in manual_registry_paths) {
-  z <- tryCatch(fromJSON(p, simplifyVector = FALSE), error = function(e) NULL)
-  if (is.null(z)) next
-  code <- as.character((z$database %||% list())$short_name %||% "")
-  if (!nzchar(code)) next
-  manual_meta[[code]] <- list(
-    label = as.character((z$database %||% list())$name %||% pretty_source_label(code)),
-    search_date = as.character((z$search %||% list())$search_date %||% "")
-  )
-}
-
-state_date <- ""
-state_sources <- character()
-state_path <- "docs/search_record/state/current.json"
-if (file.exists(state_path)) {
-  st <- tryCatch(fromJSON(state_path, simplifyVector = FALSE), error = function(e) NULL)
-  if (!is.null(st)) {
-    state_sources <- names(st$sources %||% list())
-    sid <- as.character(st$state_id %||% "")
-    m <- regexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}", sid)
-    if (m[[1L]] > 0L) state_date <- regmatches(sid, m)
-  }
-}
-fallback_date <- trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
-
-source_meta <- tibble::tibble(
-  code = names(source_counts_raw),
-  database = vapply(names(source_counts_raw), function(code) {
-    if (code %in% names(known_source_labels)) unname(known_source_labels[[code]])
-    else if (!is.null(manual_meta[[code]]) && nzchar(manual_meta[[code]]$label)) manual_meta[[code]]$label
-    else pretty_source_label(code)
-  }, character(1)),
-  hits = as.integer(source_counts_raw),
-  search_date = vapply(names(source_counts_raw), function(code) {
-    if (!is.null(manual_meta[[code]]) && nzchar(manual_meta[[code]]$search_date)) manual_meta[[code]]$search_date
-    else if (code %in% state_sources && nzchar(state_date)) state_date
-    else fallback_date
-  }, character(1))
-) |>
+source_path <- file.path(input_dir, "w01_source_summary.csv")
+if (!file.exists(source_path)) stop("Missing W01 compact source summary: ", source_path, call. = FALSE)
+source_meta <- read_csv(source_path, show_col_types = FALSE, progress = FALSE) |>
+  transmute(
+    code = as.character(source_code),
+    database = as.character(database),
+    hits = as.integer(manifestations),
+    search_date = as.character(search_date)
+  ) |>
   arrange(database)
 
-if (any(!nzchar(source_meta$search_date))) {
-  warning(
-    "Search date unavailable for source(s): ",
-    paste(source_meta$database[!nzchar(source_meta$search_date)], collapse = ", ")
-  )
-}
-source_counts <- setNames(source_meta$hits, source_meta$database)
-n_duplicates_removed <- n_combined - n_deduplicated
-
-if (sum(source_counts) != n_combined) {
-  stop("Source manifestation counts do not sum to combined search results.", call. = FALSE)
+if (!nrow(source_meta) || any(!nzchar(source_meta$code)) || anyDuplicated(source_meta$code)) {
+  stop("Invalid W01 source summary", call. = FALSE)
 }
 
-# -------------------------------------------------------------------------
-# 3. WORKFLOW 02: RECORDS ACTUALLY ENRICHED
-# -------------------------------------------------------------------------
+n_combined <- metric(w01, "source_manifestations")
+n_deduplicated <- metric(w01, "canonical_records")
+n_duplicates_removed <- metric(w01, "duplicates_removed")
+n_enriched <- metric(w02, "enriched_records")
+n_w03 <- metric(w03, "retraction_exclusions")
+n_screened_ta <- metric(w04, "records")
+n_w04 <- metric(w04, "excluded")
+n_w04_retained <- metric(w04, "retained")
+n_species_none <- metric(w05, "none_records")
+n_w07_late <- metric(w07, "late_automatic_exclusions")
+n_final_included <- metric(w08, "canonical_records")
+n_excluded <- metric(w08, "excluded_records")
+n_geography_coded <- metric(w08, "geography_with")
+n_geography_uncoded <- metric(w08, "geography_without")
+n_topic_coded <- metric(w08, "topic_with")
+n_topic_uncoded <- metric(w08, "topic_without")
 
-enriched_ids <- character()
-patch_ids <- character()
+# Final post-screening exclusions are recorded separately from W04 because they
+# arise during species/topic/final adjudication rather than title/abstract screening.
+n_post_w04_excluded <- n_w04_retained - n_final_included
 
-con <- file(w02_patch_path, "rt", encoding = "UTF-8")
-on.exit(close(con), add = TRUE)
-repeat {
-  line <- readLines(con, n = 1L, warn = FALSE)
-  if (!length(line)) break
-  if (!nzchar(trimws(line))) next
-
-  rec <- jsonlite::fromJSON(line, simplifyVector = FALSE)
-  rid <- as.character(rec$record_id %||% "")
-  if (!nzchar(rid)) stop("Workflow 02 patch record missing record_id.", call. = FALSE)
-  patch_ids <- c(patch_ids, rid)
-
-  meta <- rec$metadata_enrichment %||% list()
-  filled <- meta$filled_fields %||% character()
-  filled <- as.character(filled)
-  filled <- filled[!is.na(filled) & nzchar(trimws(filled))]
-  if (length(filled)) enriched_ids <- c(enriched_ids, rid)
-}
-close(con)
-on.exit(NULL, add = FALSE)
-
-if (anyDuplicated(patch_ids)) stop("Workflow 02 cumulative patch contains duplicate record_id values.", call. = FALSE)
-
-# The cumulative W02 patch is provenance-preserving across living updates and may
-# retain entries for canonical record IDs later retired by W01 reconciliation.
-# The release preflight independently verifies that this W02 state was built from
-# the selected W01 canonical SHA, so retired historical IDs are expected rather
-# than evidence of a cross-release mismatch. Count enrichment only for record IDs
-# that remain in the current W01 canonical population.
-retired_patch_ids <- setdiff(patch_ids, prescreen_ids)
-if (length(retired_patch_ids)) {
-  cat(sprintf(
-    "INFO: ignoring %d historical W02 patch record IDs retired from the current W01 canonical population\n",
-    length(retired_patch_ids)
-  ))
-}
-n_enriched <- length(intersect(unique(enriched_ids), prescreen_ids))
-
-# -------------------------------------------------------------------------
-# 4. WORKFLOW 08: SCREENING + FINAL ANNOTATION STATE
-# -------------------------------------------------------------------------
-
-exclusions <- readr::read_csv(exclusions_path, show_col_types = FALSE, progress = FALSE)
-if (!all(c("record_id", "exclusion_stage") %in% names(exclusions))) {
-  stop("Exclusions CSV must contain record_id and exclusion_stage.", call. = FALSE)
-}
-if (anyDuplicated(exclusions$record_id)) stop("Workflow 08 exclusions CSV contains duplicate record_id values.", call. = FALSE)
-
-stage_counts <- exclusions %>% count(exclusion_stage, name = "n")
-stage_n <- function(stage) {
-  x <- stage_counts$n[match(stage, stage_counts$exclusion_stage)]
-  if (!length(x) || is.na(x)) 0L else as.integer(x)
-}
-
-n_w03 <- stage_n("workflow03")
-n_w04 <- stage_n("workflow04")
-n_w07 <- stage_n("workflow07_late")
-n_w08 <- stage_n("workflow08")
-n_excluded <- nrow(exclusions)
-
-n_screened_ta <- n_deduplicated - n_w03
-n_excluded_ta_total <- n_w04 + n_w07 + n_w08
-n_retained_final <- n_screened_ta - n_excluded_ta_total
-
-geo_status <- toupper(trimws(as.character(canonical$geography_status)))
-unknown_geo <- setdiff(unique(geo_status), c("RESOLVED", "NONE"))
-if (length(unknown_geo)) {
-  stop("Unexpected final geography status value(s): ", paste(unknown_geo, collapse = ", "), call. = FALSE)
-}
-n_geography_coded <- sum(geo_status == "RESOLVED")
-n_geography_uncoded <- sum(geo_status == "NONE")
-
-n_topic_uncoded <- sum(
-  is.na(canonical$topic_hierarchy_paths) |
-    stringr::str_trim(canonical$topic_hierarchy_paths) == ""
+stopifnot(
+  sum(source_meta$hits) == n_combined,
+  n_combined - n_deduplicated == n_duplicates_removed,
+  n_deduplicated - n_w03 == n_screened_ta,
+  n_w04 + n_w04_retained == n_screened_ta,
+  n_w04_retained - n_post_w04_excluded == n_final_included,
+  n_deduplicated == n_final_included + n_excluded,
+  n_geography_coded + n_geography_uncoded == n_final_included,
+  n_topic_coded + n_topic_uncoded == n_final_included,
+  n_post_w04_excluded >= n_species_none + n_w07_late
 )
-n_topic_coded <- n_final_included - n_topic_uncoded
 
-# Cross-stage reconciliation. These are relationships, not frozen manuscript counts.
-if (n_deduplicated != n_final_included + n_excluded) {
-  stop("Workflow 01 deduplicated total does not reconcile with Workflow 08 included + excluded totals.", call. = FALSE)
-}
-if (n_retained_final != n_final_included) {
-  stop("Title/abstract screening flow does not reconcile to final included records.", call. = FALSE)
-}
-if (n_geography_coded + n_geography_uncoded != n_final_included) {
-  stop("Final geography counts do not reconcile to final included records.", call. = FALSE)
-}
-if (n_topic_coded + n_topic_uncoded != n_final_included) {
-  stop("Final topic counts do not reconcile to final included records.", call. = FALSE)
-}
-
+source_counts <- setNames(source_meta$hits, source_meta$database)
+valid_source_dates <- source_meta$search_date[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_meta$search_date)]
+search_update_date <- if (length(valid_source_dates)) max(valid_source_dates) else ""
 fmt <- function(x) format(as.integer(x), big.mark = ",", scientific = FALSE, trim = TRUE)
 
 # -------------------------------------------------------------------------
@@ -356,8 +174,8 @@ boxes <- bind_rows(
   box("retractions", 9.15, 7.58, process_box_w, 0.76, paste0("Retractions excluded\nn = ", fmt(n_w03)), "exclude"),
 
   box("screened", 5.64, 6.48, process_box_w, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
-  box("excluded_ta", 9.15, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_excluded_ta_total)), "exclude"),
-  box("retained", 5.64, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_retained_final)), "retain"),
+  box("excluded_ta", 9.15, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_w04)), "exclude"),
+  box("retained", 5.64, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_w04_retained)), "retain"),
 
   box("species", 5.64, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
   box("geography", 5.64, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
@@ -548,22 +366,26 @@ ggsave(
   p, width = 210, height = figure_height_mm, units = "mm", dpi = 600
 )
 
-# Machine-readable output generated from the same analysis used for the figure.
-valid_source_dates <- source_meta$search_date[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_meta$search_date)]
-search_update_date <- if (length(valid_source_dates)) max(valid_source_dates) else trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
-if (nzchar(search_update_date) && !grepl("^\\d{4}-\\d{2}-\\d{2}$", search_update_date)) {
-  stop("Resolved search update date must be YYYY-MM-DD.", call. = FALSE)
-}
+# Machine-readable output generated from the same compact reporting inputs.
+n_w08_other_exclusions <- n_post_w04_excluded - n_species_none - n_w07_late
+if (n_w08_other_exclusions < 0L) stop("Post-W04 exclusion accounting is negative", call. = FALSE)
 
 counts <- list(
-  schema = "living-evidence-map-workflow09-flow-counts-v2",
+  schema = "living-evidence-map-workflow09-flow-counts-v3",
   generated_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ"),
   search_update_date = if (nzchar(search_update_date)) search_update_date else NULL,
-  inputs = list(
-    workflow01_canonical_jsonl = list(path = prescreen_path, sha256 = digest(prescreen_path, algo = "sha256", file = TRUE, serialize = FALSE)),
-    workflow02_cumulative_patch_jsonl = list(path = w02_patch_path, sha256 = digest(w02_patch_path, algo = "sha256", file = TRUE, serialize = FALSE)),
-    workflow08_final_canonical_jsonl = list(path = final_path, sha256 = digest(final_path, algo = "sha256", file = TRUE, serialize = FALSE)),
-    workflow08_exclusions_csv = list(path = exclusions_path, sha256 = digest(exclusions_path, algo = "sha256", file = TRUE, serialize = FALSE))
+  input_mode = "compact_workflow_reporting_snapshots",
+  input_directory = input_dir,
+  source_runs = list(
+    W00 = as.character(w00$source_run_id),
+    W01 = as.character(w01$source_run_id),
+    W02 = as.character(w02$source_run_id),
+    W03 = as.character(w03$source_run_id),
+    W04 = as.character(w04$source_run_id),
+    W05 = as.character(w05$source_run_id),
+    W06 = as.character(w06$source_run_id),
+    W07 = as.character(w07$source_run_id),
+    W08 = as.character(w08$source_run_id)
   ),
   counts = list(
     sources = as.list(source_counts),
@@ -579,16 +401,18 @@ counts <- list(
     records_enriched_workflow02 = n_enriched,
     retractions_excluded = n_w03,
     title_abstract_screened = n_screened_ta,
-    title_abstract_excluded_total = n_excluded_ta_total,
     workflow04_exclusions = n_w04,
-    workflow07_late_exclusions = n_w07,
-    workflow08_exclusions = n_w08,
-    title_abstract_retained_final = n_retained_final,
+    title_abstract_retained = n_w04_retained,
+    species_none_deterministic_exclusions = n_species_none,
+    workflow07_late_exclusions = n_w07_late,
+    workflow08_other_exclusions = n_w08_other_exclusions,
+    post_workflow04_exclusions_total = n_post_w04_excluded,
     final_geography_coded = n_geography_coded,
     final_geography_uncoded = n_geography_uncoded,
     final_topic_coded = n_topic_coded,
     final_topic_uncoded = n_topic_uncoded,
-    final_included = n_final_included
+    final_included = n_final_included,
+    final_excluded = n_excluded
   )
 )
 
@@ -613,8 +437,11 @@ readr::write_csv(
       "records_enriched_workflow02",
       "retractions_excluded",
       "records_screened_title_abstract",
-      "records_excluded_title_abstract_total",
-      "records_retained_final",
+      "workflow04_exclusions",
+      "records_retained_after_title_abstract",
+      "species_none_deterministic_exclusions",
+      "workflow07_late_exclusions",
+      "workflow08_other_exclusions",
       "final_geography_coded",
       "final_geography_uncoded",
       "final_topic_coded",
@@ -629,8 +456,11 @@ readr::write_csv(
       n_enriched,
       n_w03,
       n_screened_ta,
-      n_excluded_ta_total,
-      n_retained_final,
+      n_w04,
+      n_w04_retained,
+      n_species_none,
+      n_w07_late,
+      n_w08_other_exclusions,
       n_geography_coded,
       n_geography_uncoded,
       n_topic_coded,
@@ -641,4 +471,4 @@ readr::write_csv(
   file.path(out_dir, "figure_07_flow_diagram_counts.csv")
 )
 
-message("Workflow 09 flow diagram written to: ", out_dir)
+message("Workflow 09 flow diagram written from compact reporting inputs: ", input_dir)
