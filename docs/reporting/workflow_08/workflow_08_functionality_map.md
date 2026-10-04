@@ -75,6 +75,12 @@ The automated outputs of Workflows 04–07 remain immutable. Workflow 08 applies
 
 ## Processing modes or stages
 
+### Current dynamic topic intake rule
+
+Mean pairwise Jaccard from Workflow 07 is retained for inter-pass agreement/QC reporting but is **not** a W08 gate. Historical/current W07 rows labelled `extreme_three_pass_topic_disagreement` are suppressed during dynamic W08 intake and their retained topic sets are accepted automatically. Assignment-level uncertainty remains visible through 1/3, 2/3 and 3/3 pass support (★/★★/★★★).
+
+Human topic adjudication is reserved for genuine residual ontology pathology that cannot be resolved by deterministic ontology rules. Zero-topic eligibility uncertainty remains a separate W08 review route.
+
 ### Current dynamic geography intake rule
 
 For current and future dynamic W08 runs, W06 geography escalation uses a minimum-review contract. A non-failure W06 record with raw `geography_status = UNRESOLVED` but **no Luna ISO3 country code** is deterministically assigned downstream geography `NONE` and is not sent to Shiny. The raw W06 model status is preserved in provenance. Only unresolved records with one or more candidate ISO3 country codes remain `geography_unresolved` human-review issues. This rule is implemented through the shared W06 geography validation helper, the dynamic W08 queue builder, and the dynamic W08 final assembler so queue suppression and final canonical materialisation cannot diverge.
