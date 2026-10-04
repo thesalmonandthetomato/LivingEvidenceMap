@@ -26,17 +26,39 @@ gazetteer<-read_csv(gazetteer_path,show_col_types=FALSE,progress=FALSE)
 gaz_pairs<-unique(data.frame(
   iso3c=toupper(trimws(as.character(gazetteer$iso3c))),
   country_name=trimws(as.character(gazetteer$country_name)),
+  matched_place=trimws(as.character(gazetteer$matched_place)),
   stringsAsFactors=FALSE
 ))
 gaz_pairs<-gaz_pairs[nzchar(gaz_pairs$iso3c)&nzchar(gaz_pairs$country_name),,drop=FALSE]
 validate_geo_set<-function(iso,names,rid){
-  iso<-as.character(iso);names<-as.character(names)
-  iso<-iso[nzchar(trimws(iso))];names<-names[nzchar(trimws(names))]
+  iso<-toupper(trimws(as.character(iso)));names<-trimws(as.character(names))
+  iso<-iso[nzchar(iso)];names<-names[nzchar(names)]
   if(!length(iso)&&!length(names))return(invisible(TRUE))
   if(!length(iso)||!length(names))stop("Incomplete geography code/name set for ",rid,call.=FALSE)
-  if(any(!iso%in%gaz_pairs$iso3c))stop("Unknown geography ISO3 code for ",rid,": ",paste(setdiff(iso,gaz_pairs$iso3c),collapse=", "),call.=FALSE)
-  mapped<-unique(gaz_pairs$country_name[gaz_pairs$iso3c%in%iso])
-  if(!setequal(tolower(names),tolower(mapped)))stop("Geography ISO3/country-name set mismatch for ",rid,call.=FALSE)
+  valid_codes<-unique(gaz_pairs$iso3c)
+  if(any(!iso%in%valid_codes))stop("Unknown geography ISO3 code for ",rid,": ",paste(setdiff(iso,valid_codes),collapse=", "),call.=FALSE)
+
+  # Country names may legitimately use recognised variants (e.g. Czech
+  # Republic for ISO3 CZE whose canonical gazetteer name is Czechia). Validate
+  # set membership without relying on positional ordering of parallel vectors.
+  allowed_for_selected<-unique(c(
+    gaz_pairs$country_name[gaz_pairs$iso3c%in%iso],
+    gaz_pairs$matched_place[gaz_pairs$iso3c%in%iso]
+  ))
+  allowed_for_selected<-tolower(allowed_for_selected[nzchar(allowed_for_selected)])
+  if(any(!tolower(names)%in%allowed_for_selected)) {
+    stop("Geography ISO3/country-name set mismatch for ",rid,call.=FALSE)
+  }
+  for(code in unique(iso)){
+    labels<-unique(c(
+      gaz_pairs$country_name[gaz_pairs$iso3c==code],
+      gaz_pairs$matched_place[gaz_pairs$iso3c==code]
+    ))
+    labels<-tolower(labels[nzchar(labels)])
+    if(!any(tolower(names)%in%labels)) {
+      stop("Geography ISO3 code lacks matching country name for ",rid,": ",code,call.=FALSE)
+    }
+  }
   invisible(TRUE)
 }
 if(anyDuplicated(w05$record_id)||anyDuplicated(w06$record_id)||anyDuplicated(w07_qc$record_id)||anyDuplicated(late$record_id))stop("Duplicate record ID in W05-W07 record-level inputs",call.=FALSE)
