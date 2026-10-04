@@ -1,47 +1,94 @@
 {
   "schema": "living-evidence-map-workflow09-flow-counts-v2",
-  "generated_at_utc": "2026-09-28T17:35:51Z",
+  "generated_at_utc": "2026-10-04T16:37:22Z",
+  "search_update_date": "2026-09-30",
   "inputs": {
     "workflow01_canonical_jsonl": {
       "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow01_state/canonical/records.jsonl",
-      "sha256": "f0772fb92cca9fcc676a0f77bf8b2eae0becebf60b07cb23db989d22b7cabe80"
+      "sha256": "fb6e35b0bceb15629af20f006310aaae75416fc3aa985b906cf82b0df7b6e142"
     },
     "workflow02_cumulative_patch_jsonl": {
       "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow02_cumulative_patch.jsonl",
-      "sha256": "206a35e63e1a08e5812a2043f07329a1a499c6737003e8fe352bb0ef151903fb"
+      "sha256": "186f8296da5e05ced6249caa508b4a9bedae9f5075aed01dfc107d306d13eec9"
     },
     "workflow08_final_canonical_jsonl": {
       "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl",
-      "sha256": "8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c"
+      "sha256": "cb1f28a2adb3edbc368d9d10de1517d51cd43d024e449bf1f7149eb87ab77ffb"
     },
     "workflow08_exclusions_csv": {
       "path": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/workflow08_reporting_state/workflow08_excluded_records.csv",
-      "sha256": "d1733b27212d02d1d6d43011fa3fb38cd99ef779882c9ad94b7a7d2860d7c244"
+      "sha256": "0333e94685f51b979ef2ad7782ff3f7ca2791f5954cfd1be97bab843da68c2de"
     }
   },
   "counts": {
     "sources": {
-      "The Lens": 24135,
-      "Scopus": 19948,
-      "OpenAlex": 28134,
       "AGRICOLA": 2744,
+      "CAB Abstracts": 26816,
+      "OpenAlex": 28134,
+      "ProQuest Dissertations & Theses Global": 1574,
+      "Scopus": 19948,
+      "The Lens": 24135,
       "WoSCC": 15176
     },
-    "combined_search_results": 90137,
-    "duplicates_removed": 57845,
-    "deduplicated_records": 32292,
-    "records_enriched_workflow02": 2190,
-    "retractions_excluded": 9,
-    "title_abstract_screened": 32283,
-    "title_abstract_excluded_total": 13166,
-    "workflow04_exclusions": 12876,
-    "workflow07_late_exclusions": 122,
-    "workflow08_exclusions": 168,
-    "title_abstract_retained_final": 19117,
-    "final_geography_coded": 7618,
-    "final_geography_uncoded": 11499,
-    "final_topic_coded": 18886,
-    "final_topic_uncoded": 231,
-    "final_included": 19117
+    "source_searches": [
+      {
+        "code": "agricola",
+        "database": "AGRICOLA",
+        "hits": 2744,
+        "search_date": "2026-09-23"
+      },
+      {
+        "code": "cab",
+        "database": "CAB Abstracts",
+        "hits": 26816,
+        "search_date": "2026-09-30"
+      },
+      {
+        "code": "openalex",
+        "database": "OpenAlex",
+        "hits": 28134,
+        "search_date": "2026-09-23"
+      },
+      {
+        "code": "proquest",
+        "database": "ProQuest Dissertations & Theses Global",
+        "hits": 1574,
+        "search_date": "2026-09-30"
+      },
+      {
+        "code": "scopus",
+        "database": "Scopus",
+        "hits": 19948,
+        "search_date": "2026-09-23"
+      },
+      {
+        "code": "lens",
+        "database": "The Lens",
+        "hits": 24135,
+        "search_date": "2026-09-23"
+      },
+      {
+        "code": "wos",
+        "database": "WoSCC",
+        "hits": 15176,
+        "search_date": "2026-09-23"
+      }
+    ],
+    "combined_search_results": 118527,
+    "duplicates_removed": 71433,
+    "deduplicated_records": 47094,
+    "records_enriched_workflow02": 2162,
+    "retractions_excluded": 12,
+    "title_abstract_screened": 47082,
+    "title_abstract_excluded_total": 25589,
+    "workflow04_exclusions": 25263,
+    "workflow07_late_exclusions": 129,
+    "workflow08_exclusions": 197,
+    "title_abstract_retained_final": 21493,
+    "final_geography_coded": 8923,
+    "final_geography_uncoded": 12570,
+    "final_topic_coded": 21246,
+    "final_topic_uncoded": 247,
+    "final_included": 21493
   }
 }

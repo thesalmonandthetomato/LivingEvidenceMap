@@ -67,14 +67,23 @@ if (!nzchar(w02_patch_path) || !file.exists(w02_patch_path)) {
 # 2. WORKFLOW 01: SOURCE MANIFESTATIONS + DEDUPLICATED WORKS
 # -------------------------------------------------------------------------
 
-source_labels <- c(
+known_source_labels <- c(
   lens = "The Lens",
   scopus = "Scopus",
   openalex = "OpenAlex",
   agricola = "AGRICOLA",
-  wos = "WoSCC"
+  wos = "WoSCC",
+  cab = "CAB Abstracts",
+  proquest = "ProQuest/PQD&T"
 )
-source_counts_raw <- setNames(integer(length(source_labels)), names(source_labels))
+
+pretty_source_label <- function(code) {
+  if (code %in% names(known_source_labels)) return(unname(known_source_labels[[code]]))
+  z <- gsub("[_-]+", " ", code)
+  tools::toTitleCase(z)
+}
+
+source_counts_raw <- integer()
 n_deduplicated <- 0L
 n_combined <- 0L
 prescreen_ids <- character()
@@ -95,22 +104,78 @@ repeat {
 
   src <- vapply(mans, function(m) as.character(m$source %||% ""), character(1))
   if (any(!nzchar(src))) stop("Workflow 01 manifestation missing source in record: ", rid, call. = FALSE)
-  unknown <- setdiff(unique(src), names(source_labels))
-  if (length(unknown)) {
-    stop("Unknown Workflow 01 manifestation source(s): ", paste(unknown, collapse = ", "), call. = FALSE)
-  }
 
   n_deduplicated <- n_deduplicated + 1L
   n_combined <- n_combined + length(src)
   prescreen_ids <- c(prescreen_ids, rid)
   tab <- table(src)
-  source_counts_raw[names(tab)] <- source_counts_raw[names(tab)] + as.integer(tab)
+  for (nm in names(tab)) {
+    if (!nm %in% names(source_counts_raw)) source_counts_raw[[nm]] <- 0L
+    source_counts_raw[[nm]] <- source_counts_raw[[nm]] + as.integer(tab[[nm]])
+  }
 }
 close(con)
 on.exit(NULL, add = FALSE)
 
 if (anyDuplicated(prescreen_ids)) stop("Workflow 01 canonical JSONL contains duplicate record_id values.", call. = FALSE)
-source_counts <- setNames(as.integer(source_counts_raw[names(source_labels)]), unname(source_labels))
+if (!length(source_counts_raw)) stop("Workflow 01 canonical contains no source manifestations.", call. = FALSE)
+
+# Resolve source-specific search dates from version-controlled Workflow 00
+# provenance. Manual RIS registries take precedence; API baseline sources use
+# the accepted Workflow 00 state date. A release-level date is a final fallback.
+manual_registry_paths <- list.files(
+  "user_input",
+  pattern = "^workflow00_ris_.*\\.json$",
+  full.names = TRUE
+)
+manual_meta <- list()
+for (p in manual_registry_paths) {
+  z <- tryCatch(fromJSON(p, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.null(z)) next
+  code <- as.character((z$database %||% list())$short_name %||% "")
+  if (!nzchar(code)) next
+  manual_meta[[code]] <- list(
+    label = as.character((z$database %||% list())$name %||% pretty_source_label(code)),
+    search_date = as.character((z$search %||% list())$search_date %||% "")
+  )
+}
+
+state_date <- ""
+state_sources <- character()
+state_path <- "docs/search_record/state/current.json"
+if (file.exists(state_path)) {
+  st <- tryCatch(fromJSON(state_path, simplifyVector = FALSE), error = function(e) NULL)
+  if (!is.null(st)) {
+    state_sources <- names(st$sources %||% list())
+    sid <- as.character(st$state_id %||% "")
+    m <- regexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}", sid)
+    if (m[[1L]] > 0L) state_date <- regmatches(sid, m)
+  }
+}
+fallback_date <- trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
+
+source_meta <- tibble::tibble(
+  code = names(source_counts_raw),
+  database = vapply(names(source_counts_raw), function(code) {
+    if (!is.null(manual_meta[[code]]) && nzchar(manual_meta[[code]]$label)) manual_meta[[code]]$label
+    else pretty_source_label(code)
+  }, character(1)),
+  hits = as.integer(source_counts_raw),
+  search_date = vapply(names(source_counts_raw), function(code) {
+    if (!is.null(manual_meta[[code]]) && nzchar(manual_meta[[code]]$search_date)) manual_meta[[code]]$search_date
+    else if (code %in% state_sources && nzchar(state_date)) state_date
+    else fallback_date
+  }, character(1))
+) |>
+  arrange(database)
+
+if (any(!nzchar(source_meta$search_date))) {
+  warning(
+    "Search date unavailable for source(s): ",
+    paste(source_meta$database[!nzchar(source_meta$search_date)], collapse = ", ")
+  )
+}
+source_counts <- setNames(source_meta$hits, source_meta$database)
 n_duplicates_removed <- n_combined - n_deduplicated
 
 if (sum(source_counts) != n_combined) {
@@ -146,10 +211,21 @@ close(con)
 on.exit(NULL, add = FALSE)
 
 if (anyDuplicated(patch_ids)) stop("Workflow 02 cumulative patch contains duplicate record_id values.", call. = FALSE)
-if (length(setdiff(patch_ids, prescreen_ids))) {
-  stop("Workflow 02 patch contains record IDs absent from the Workflow 01 canonical.", call. = FALSE)
+
+# The cumulative W02 patch is provenance-preserving across living updates and may
+# retain entries for canonical record IDs later retired by W01 reconciliation.
+# The release preflight independently verifies that this W02 state was built from
+# the selected W01 canonical SHA, so retired historical IDs are expected rather
+# than evidence of a cross-release mismatch. Count enrichment only for record IDs
+# that remain in the current W01 canonical population.
+retired_patch_ids <- setdiff(patch_ids, prescreen_ids)
+if (length(retired_patch_ids)) {
+  cat(sprintf(
+    "INFO: ignoring %d historical W02 patch record IDs retired from the current W01 canonical population\n",
+    length(retired_patch_ids)
+  ))
 }
-n_enriched <- length(unique(enriched_ids))
+n_enriched <- length(intersect(unique(enriched_ids), prescreen_ids))
 
 # -------------------------------------------------------------------------
 # 4. WORKFLOW 08: SCREENING + FINAL ANNOTATION STATE
@@ -215,16 +291,60 @@ box <- function(id, x, y, w, h, label, stage) {
   data.frame(id, x, y, w, h, label, stage, stringsAsFactors = FALSE)
 }
 
-source_box_w <- 1.45
 process_box_w <- 2.75
 
-boxes <- bind_rows(
-  box("agricola", 2.60, 12.00, source_box_w, 0.76, paste0("AGRICOLA\nn = ", fmt(source_counts[["AGRICOLA"]])), "source"),
-  box("lens",     4.12, 12.00, source_box_w, 0.76, paste0("The Lens\nn = ", fmt(source_counts[["The Lens"]])), "source"),
-  box("openalex", 5.64, 12.00, source_box_w, 0.76, paste0("OpenAlex\nn = ", fmt(source_counts[["OpenAlex"]])), "source"),
-  box("scopus",   7.16, 12.00, source_box_w, 0.76, paste0("Scopus\nn = ", fmt(source_counts[["Scopus"]])), "source"),
-  box("wos",      8.68, 12.00, source_box_w, 0.76, paste0("WoSCC\nn = ", fmt(source_counts[["WoSCC"]])), "source"),
+# The search-source panel is always one box. To keep a consistent visual
+# grammar as the database set grows, it uses two columns for <=6 databases and
+# three columns for >6 databases. Each entry retains the source-specific hit
+# count and search date.
+n_source_cols <- if (nrow(source_meta) <= 6L) 2L else 3L
+n_source_rows <- ceiling(nrow(source_meta) / n_source_cols)
+source_panel_left <- 1.35
+source_panel_right <- 10.15
+source_panel_width <- source_panel_right - source_panel_left
+source_panel_bottom <- 11.55
+source_row_h <- 0.38
+source_panel_height <- 0.78 + n_source_rows * source_row_h
+source_panel_top <- source_panel_bottom + source_panel_height
+source_panel_y <- (source_panel_bottom + source_panel_top) / 2
+source_col_width <- (source_panel_width - 0.34) / n_source_cols
 
+source_layout <- source_meta |>
+  mutate(
+    item = row_number(),
+    column = ((item - 1L) %/% n_source_rows) + 1L,
+    row = ((item - 1L) %% n_source_rows) + 1L,
+    col_left = source_panel_left + 0.17 + (column - 1L) * source_col_width,
+    name_x = col_left,
+    hits_x = col_left + source_col_width * 0.62,
+    date_x = col_left + source_col_width * 0.75,
+    y = source_panel_top - 0.63 - (row - 1L) * source_row_h,
+    hits_label = fmt(hits)
+  )
+
+source_headers <- tibble::tibble(
+  column = seq_len(n_source_cols),
+  col_left = source_panel_left + 0.17 + (seq_len(n_source_cols) - 1L) * source_col_width,
+  y = source_panel_top - 0.34
+) |>
+  mutate(
+    name_x = col_left,
+    hits_x = col_left + source_col_width * 0.62,
+    date_x = col_left + source_col_width * 0.75
+  )
+
+source_dividers <- if (n_source_cols > 1L) {
+  tibble::tibble(
+    x = source_panel_left + 0.17 + (seq_len(n_source_cols - 1L)) * source_col_width - 0.08,
+    y = source_panel_bottom + 0.12,
+    xend = x,
+    yend = source_panel_top - 0.18
+  )
+} else {
+  tibble::tibble(x = numeric(), y = numeric(), xend = numeric(), yend = numeric())
+}
+
+boxes <- bind_rows(
   box("combined", 5.64, 10.88, process_box_w, 0.76, paste0("Combined search results\nn = ", fmt(n_combined)), "search"),
   box("dedup", 5.64, 9.78, process_box_w, 0.76, paste0("Deduplicated records\nn = ", fmt(n_deduplicated)), "screen"),
   box("dupes", 9.15, 9.78, process_box_w, 0.76, paste0("Duplicate records removed\nn = ", fmt(n_duplicates_removed)), "exclude"),
@@ -247,17 +367,9 @@ boxes <- bind_rows(
   box("map", 5.64, 0.88, process_box_w, 0.86, paste0("Living Evidence Map\nn = ", fmt(n_final_included)), "map")
 )
 
-source_vertical <- data.frame(
-  x = c(2.60, 4.12, 5.64, 7.16, 8.68),
-  y = rep(11.62, 5),
-  xend = c(2.60, 4.12, 5.64, 7.16, 8.68),
-  yend = rep(11.43, 5)
-)
-source_collector <- data.frame(x = 2.60, y = 11.43, xend = 8.68, yend = 11.43)
-
 main_arrows <- data.frame(
   x = rep(5.64, 9),
-  y = c(11.43, 10.50, 9.40, 8.30, 7.20, 6.10, 5.00, 3.80, 2.75),
+  y = c(source_panel_bottom, 10.50, 9.40, 8.30, 7.20, 6.10, 5.00, 3.80, 2.75),
   xend = rep(5.64, 9),
   yend = c(11.26, 10.16, 9.06, 7.96, 6.86, 5.76, 4.56, 3.51, 2.46)
 )
@@ -273,11 +385,23 @@ side_connectors <- data.frame(
   yend = c(9.78, 7.58, 6.48, 3.13, 2.08)
 )
 
+search_phase_bottom <- 10.42
+search_phase_top <- source_panel_top + 0.05
 phase <- data.frame(
   x = rep(0.92, 4),
-  y = c(11.35, 7.20, 3.20, 0.88),
+  y = c(
+    (search_phase_bottom + search_phase_top) / 2,
+    7.20,
+    3.20,
+    0.88
+  ),
   w = rep(0.54, 4),
-  h = c(1.80, 4.35, 3.10, 0.96),
+  h = c(
+    search_phase_top - search_phase_bottom,
+    4.35,
+    3.10,
+    0.96
+  ),
   label = c("Searching", "Curation and screening", "Annotation and classification", "Map"),
   stringsAsFactors = FALSE
 )
@@ -287,7 +411,6 @@ phase <- data.frame(
 # -------------------------------------------------------------------------
 
 stage_fill <- c(
-  source = "#f5f4f0",
   search = "#dce7e7",
   screen = "#dce7e7",
   repair = "#a8bdbe",
@@ -298,7 +421,6 @@ stage_fill <- c(
   map = "#e55634"
 )
 stage_text <- c(
-  source = "#2c454a",
   search = "#2c454a",
   screen = "#2c454a",
   repair = "#2c454a",
@@ -311,16 +433,6 @@ stage_text <- c(
 
 p <- ggplot() +
   geom_segment(
-    data = source_vertical,
-    aes(x=x, y=y, xend=xend, yend=yend),
-    colour = "#577c84", linewidth = 0.55
-  ) +
-  geom_segment(
-    data = source_collector,
-    aes(x=x, y=y, xend=xend, yend=yend),
-    colour = "#577c84", linewidth = 0.55
-  ) +
-  geom_segment(
     data = main_arrows,
     aes(x=x, y=y, xend=xend, yend=yend),
     colour = "#577c84", linewidth = 0.55,
@@ -330,6 +442,60 @@ p <- ggplot() +
     data = side_connectors,
     aes(x=x, y=y, xend=xend, yend=yend),
     colour = "#577c84", linewidth = 0.55
+  ) +
+  geom_rect(
+    aes(
+      xmin = source_panel_left, xmax = source_panel_right,
+      ymin = source_panel_bottom, ymax = source_panel_top
+    ),
+    fill = "#f5f4f0", colour = "#2c454a", linewidth = 0.45
+  ) +
+  geom_segment(
+    data = source_dividers,
+    aes(x=x, y=y, xend=xend, yend=yend),
+    colour = "#c6ccca", linewidth = 0.4
+  ) +
+  annotate(
+    "text",
+    x = (source_panel_left + source_panel_right) / 2,
+    y = source_panel_top - 0.14,
+    label = "Bibliographic database searches",
+    colour = "#2c454a",
+    fontface = "bold",
+    size = 3.15
+  ) +
+  geom_text(
+    data = source_headers,
+    aes(x = name_x, y = y),
+    label = "Database", hjust = 0, fontface = "bold",
+    colour = "#2c454a", size = 2.35
+  ) +
+  geom_text(
+    data = source_headers,
+    aes(x = hits_x, y = y),
+    label = "Hits", hjust = 1, fontface = "bold",
+    colour = "#2c454a", size = 2.35
+  ) +
+  geom_text(
+    data = source_headers,
+    aes(x = date_x, y = y),
+    label = "Search date", hjust = 0, fontface = "bold",
+    colour = "#2c454a", size = 2.35
+  ) +
+  geom_text(
+    data = source_layout,
+    aes(x = name_x, y = y, label = database),
+    hjust = 0, colour = "#2c454a", size = 2.25
+  ) +
+  geom_text(
+    data = source_layout,
+    aes(x = hits_x, y = y, label = hits_label),
+    hjust = 1, colour = "#2c454a", size = 2.25
+  ) +
+  geom_text(
+    data = source_layout,
+    aes(x = date_x, y = y, label = search_date),
+    hjust = 0, colour = "#2c454a", size = 2.25
   ) +
   geom_rect(
     data = boxes,
@@ -360,26 +526,38 @@ p <- ggplot() +
   ) +
   scale_fill_manual(values = stage_fill, guide = "none") +
   scale_colour_manual(values = stage_text, guide = "none") +
-  coord_cartesian(xlim = c(0.45, 10.65), ylim = c(0.25, 12.50), expand = FALSE) +
+  coord_cartesian(
+    xlim = c(0.45, 10.65),
+    ylim = c(0.25, source_panel_top + 0.20),
+    expand = FALSE
+  ) +
   theme_void(base_size = 11) +
   theme(
     plot.background = element_rect(fill = "white", colour = NA),
     plot.margin = margin(8, 8, 8, 8)
   )
 
+figure_height_mm <- 245 + max(0, source_panel_height - 1.55) * 18
 ggsave(
   file.path(out_dir, "figure_07_flow_diagram.pdf"),
-  p, width = 210, height = 245, units = "mm", device = cairo_pdf
+  p, width = 210, height = figure_height_mm, units = "mm", device = cairo_pdf
 )
 ggsave(
   file.path(out_dir, "figure_07_flow_diagram.png"),
-  p, width = 210, height = 245, units = "mm", dpi = 600
+  p, width = 210, height = figure_height_mm, units = "mm", dpi = 600
 )
 
 # Machine-readable output generated from the same analysis used for the figure.
+valid_source_dates <- source_meta$search_date[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_meta$search_date)]
+search_update_date <- if (length(valid_source_dates)) max(valid_source_dates) else trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
+if (nzchar(search_update_date) && !grepl("^\\d{4}-\\d{2}-\\d{2}$", search_update_date)) {
+  stop("Resolved search update date must be YYYY-MM-DD.", call. = FALSE)
+}
+
 counts <- list(
   schema = "living-evidence-map-workflow09-flow-counts-v2",
   generated_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ"),
+  search_update_date = if (nzchar(search_update_date)) search_update_date else NULL,
   inputs = list(
     workflow01_canonical_jsonl = list(path = prescreen_path, sha256 = digest(prescreen_path, algo = "sha256", file = TRUE, serialize = FALSE)),
     workflow02_cumulative_patch_jsonl = list(path = w02_patch_path, sha256 = digest(w02_patch_path, algo = "sha256", file = TRUE, serialize = FALSE)),
@@ -388,6 +566,12 @@ counts <- list(
   ),
   counts = list(
     sources = as.list(source_counts),
+    source_searches = lapply(seq_len(nrow(source_meta)), function(i) list(
+      code = source_meta$code[[i]],
+      database = source_meta$database[[i]],
+      hits = as.integer(source_meta$hits[[i]]),
+      search_date = if (nzchar(source_meta$search_date[[i]])) source_meta$search_date[[i]] else NULL
+    )),
     combined_search_results = n_combined,
     duplicates_removed = n_duplicates_removed,
     deduplicated_records = n_deduplicated,

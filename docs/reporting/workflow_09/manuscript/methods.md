@@ -68,71 +68,70 @@ methodological developments were:
 The search strategy combined terms describing eligible salmon species
 with terms identifying aquaculture, farming and commercial production.
 The original search was developed and tested in The Lens bibliographic
-database. Original searches were performed on September 22nd 2026, with
-an initial screening of a validation set performed on 11th November 2024
-in The Lens. The searches ultimately applied across all databases are
-provided in Additional File 1.
+database, with an initial validation set screened on 11 November 2024.
+The living search architecture now applies one version-controlled
+conceptual strategy across all included sources, with source-specific
+syntax and field restrictions recorded in Workflow 00 provenance. Search
+dates and retrieved-result counts are therefore source- and
+update-specific rather than fixed in the manuscript text.
 
-Table 1. Search strategy and representative hits in The Lens
+Table 1. Conceptual search strategy
 
 <table>
 <colgroup>
-<col style="width: 33%" />
-<col style="width: 33%" />
-<col style="width: 33%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr class="header">
 <th>Substring number</th>
 <th>Substring</th>
-<th>Hits in Lens 27/09/26</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td>#1</td>
-<td>((title:(farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR
-commercial<em>)) OR (abstract:(farm</em> OR cage* OR pens OR penned OR
-pen OR aquacultur* OR commercial<em>)) OR (keyword:(farm</em> OR cage*
-OR pens OR penned OR pen OR aquacultur* OR commercial*)))</td>
-<td>4,664,409</td>
+<td>farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR
+commercial*</td>
 </tr>
 <tr class="even">
 <td>#2</td>
-<td>((title:(salmon OR Salmo OR Oncorhynchus)) OR (abstract:(salmon OR
-Salmo OR Oncorhynchus)) OR (keyword:(salmon OR Salmo OR
-Oncorhynchus)))</td>
-<td>158,889</td>
+<td>salmon OR salmonid* OR Salmo OR Oncorhynchus OR “rainbow trout”</td>
 </tr>
 <tr class="odd">
 <td>#3</td>
 <td>#1 AND #2</td>
-<td>24,343</td>
-</tr>
-<tr class="even">
-<td>#4</td>
-<td>#3 filtered &gt; excl. dataset, excl. report, excl. libguide, excl.
-news</td>
-<td>23,852</td>
 </tr>
 </tbody>
 </table>
 
 The living evidence map was subsequently expanded to retrieve
-bibliographic records independently from the following databases, all
-accessed via their APIs:
+bibliographic records independently from seven sources. Five are
+harvested through automated database workflows:
 
--   The Lens (filtered to exclude datasets, reports, libguides, news)
+-   The Lens
 -   OpenAlex
 -   Scopus
--   Web of Science Core Collection (Science Citation Index Expanded
-    (SCI-EXPANDED) 1981-present, Social Sciences Citation Index (SSCI)
-    1981-present, Arts & Humanities Citation Index (AHCI) 2017-present,
-    Emerging Sources Citation Index (ESCI) 2005-present)
--   AGRICOLA Database-specific implementations were derived from the
-    same underlying conceptual search and adapted to the syntax and
-    indexing of each source. Search strings are stored as
-    version-controlled user inputs in the project repository.
+-   Web of Science (Web of Science Core Collection: Science Citation
+    Index Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation
+    Index (SSCI) 1981-present, Arts & Humanities Citation Index (AHCI)
+    2017-present, Emerging Sources Citation Index (ESCI) 2005-present;
+    Current Contents Connect; MEDLINE; Preprint Citation Index; Research
+    Commons)
+-   AGRICOLA
+
+Two further sources are imported from manually exported RIS files
+because they are not harvested through the automated API workflows:
+
+-   CAB Abstracts, accessed via CABI Digital Library
+-   ProQuest Dissertations & Theses Global (PQD&T), accessed via
+    ProQuest
+
+Database-specific implementations were derived from the same underlying
+conceptual search and adapted to the syntax and indexing of each source.
+Search strings, search dates, fields and source-specific restrictions
+are stored as version-controlled user inputs and provenance records in
+the project repository.
 
 ### Searches for grey literature
 
@@ -158,8 +157,11 @@ multi-source workflow in which each bibliographic source is harvested
 separately, and source provenance is retained. Records newly retrieved
 in an update are standardised, repaired where possible, reconciled
 against the existing canonical corpus and passed through the same
-screening and annotation framework used for the living map. This report
-is based on searches performed on 22nd September 2026.
+screening and annotation framework used for the living map. The
+reporting workflow uses the latest validated source states available for
+the current living-map release; exact search dates, fields, restrictions
+and retrieved counts are retained in the Workflow 00 provenance for each
+source.
 
 ## Reference library repair
 
@@ -287,9 +289,9 @@ eligible.</td>
 <td>Atlantic salmon (Salmo salar); Chinook salmon (Oncorhynchus
 tshawytscha); coho salmon (O. kisutch); pink salmon (O. gorbuscha);
 sockeye salmon (O. nerka); masu salmon (O. masou); chum salmon (O.
-keta); and rainbow trout (O. mykiss). Records explicitly concerning
-farmed salmonids but lacking sufficient information for species-level
-assignment may be retained as unspecified species.</td>
+keta); and rainbow trout (O. mykiss). Records for which no eligible
+focal species can be assigned are excluded rather than retained under a
+broader unspecified salmonid category.</td>
 </tr>
 <tr class="odd">
 <td>Outcomes</td>
