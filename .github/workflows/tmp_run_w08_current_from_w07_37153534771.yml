@@ -32,3 +32,4 @@ jobs:
 # retry after geography grounding helper parse fix
 # regenerate current W08 queue using validated cumulative decision contract
 # reissue W08 queue after deterministic unresolved-no-country NONE rule
+# reissue W08 queue after removing Jaccard disagreement as human-review gate
