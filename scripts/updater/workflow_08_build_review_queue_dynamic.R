@@ -20,6 +20,11 @@ dir.create(out_dir,recursive=TRUE,showWarnings=FALSE)
 
 clean_chr<-function(x){z<-as.character(x);z[is.na(z)]<-"";z}
 is_true<-function(x)toupper(clean_chr(x))=="TRUE"
+norm_iso_set<-function(x){
+  z<-trimws(unlist(strsplit(clean_chr(x),";",fixed=TRUE),use.names=FALSE))
+  z<-z[nzchar(z)]
+  paste(sort(unique(z)),collapse=";")
+}
 canon_hash<-function(x)digest(toJSON(x,auto_unbox=TRUE,null="null",na="null",digits=NA,pretty=FALSE),algo="sha256",serialize=FALSE)
 
 w05<-read_csv(w05_path,show_col_types=FALSE,progress=FALSE)
@@ -113,6 +118,19 @@ resid_ids<-unique(as.character(g_resid$record_id))
 resid_ids<-resid_ids[nzchar(resid_ids)]
 resid_ids<-setdiff(resid_ids,unique(c(as.character(w06_failures$record_id),as.character(w06_unresolved$record_id))))
 if(length(setdiff(resid_ids,w06$record_id)))stop("Grounding residual contains ID outside W06",call.=FALSE)
+
+# A grounding-format failure cannot change the substantive geography when
+# deterministic and model country sets agree exactly on a resolved record.
+# Accept these deterministically rather than sending them to human review.
+resid_rows<-w06[match(resid_ids,w06$record_id),,drop=FALSE]
+exact_grounding_accept_ids<-as.character(resid_rows$record_id[
+  resid_rows$geography_status=="RESOLVED" &
+  !(resid_rows$llm_failed %in% TRUE) &
+  vapply(resid_rows$deterministic_primary_iso3c,norm_iso_set,character(1)) ==
+    vapply(resid_rows$luna_iso3c,norm_iso_set,character(1)) &
+  nzchar(vapply(resid_rows$luna_iso3c,norm_iso_set,character(1)))
+])
+resid_ids<-setdiff(resid_ids,exact_grounding_accept_ids)
 for(rid in resid_ids){
   z<-w06[match(rid,w06$record_id),,drop=FALSE]
   add_issue(rid,list(
@@ -195,6 +213,7 @@ manifest<-list(
   w05_species_none=nrow(w05_none),
   w06_unresolved=nrow(w06_unresolved),
   w06_model_failures=nrow(w06_failures),
+  w06_grounding_exact_agreement_autoaccepted=length(exact_grounding_accept_ids),
   w06_grounding_residual=length(resid_ids),
   w07_human_review=nrow(w07q),
   w07_late_automatic_exclusions=nrow(w07x),
