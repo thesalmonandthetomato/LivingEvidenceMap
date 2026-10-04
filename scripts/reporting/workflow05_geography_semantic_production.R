@@ -38,6 +38,7 @@ gaz <- read_csv("config/global_country_gazetteer_v3.csv",show_col_types=FALSE,pr
 allowed_pairs <- unique(data.frame(
   iso3c=toupper(trimws(as.character(gaz$iso3c))),
   country_name=trimws(as.character(gaz$country_name)),
+  matched_place=trimws(as.character(gaz$matched_place)),
   stringsAsFactors=FALSE
 ))
 allowed_pairs <- allowed_pairs[nzchar(allowed_pairs$iso3c) & nzchar(allowed_pairs$country_name),,drop=FALSE]
@@ -217,13 +218,31 @@ call_one <- function(row){
   # before it can enter W06. This blocks syntactically plausible but invalid
   # outputs such as INN/NIQ/FIJ/UNK and code/name mismatches.
   if(length(iso)){
-    pair_ok <- mapply(function(code,name){
-      any(allowed_pairs$iso3c==toupper(trimws(code)) &
-          tolower(allowed_pairs$country_name)==tolower(trimws(name)))
-    },iso,names,USE.NAMES=FALSE)
-    if(any(!pair_ok)){
-      bad <- paste0(iso[!pair_ok],"=",names[!pair_ok],collapse="; ")
-      stop("Invalid geography ISO3/country pair returned by model: ",bad)
+    iso_norm <- toupper(trimws(iso))
+    names_norm <- tolower(trimws(names))
+    valid_codes <- unique(allowed_pairs$iso3c)
+    if(any(!iso_norm %in% valid_codes)){
+      stop("Invalid geography ISO3 returned by model: ",
+           paste(unique(iso_norm[!iso_norm %in% valid_codes]),collapse=", "))
+    }
+    allowed_labels <- unique(c(
+      allowed_pairs$country_name[allowed_pairs$iso3c %in% iso_norm],
+      allowed_pairs$matched_place[allowed_pairs$iso3c %in% iso_norm]
+    ))
+    allowed_labels <- tolower(allowed_labels[nzchar(allowed_labels)])
+    if(any(!names_norm %in% allowed_labels)){
+      stop("Invalid geography country name for returned ISO3 set: ",
+           paste(unique(names[!names_norm %in% allowed_labels]),collapse=", "))
+    }
+    for(code in unique(iso_norm)){
+      labels <- unique(c(
+        allowed_pairs$country_name[allowed_pairs$iso3c==code],
+        allowed_pairs$matched_place[allowed_pairs$iso3c==code]
+      ))
+      labels <- tolower(labels[nzchar(labels)])
+      if(!any(names_norm %in% labels)){
+        stop("Returned ISO3 lacks a matching recognised country name: ",code)
+      }
     }
   }
 
