@@ -138,6 +138,7 @@ summary<-list(
   geography_review_residual_n=sum(!(x$geography_autovalidated%in%TRUE)),
   autoaccepted_exact_agreement_n=sum(x$geography_auto_validation_basis=="deterministic_exact_agreement"),
   autoaccepted_explicit_country_cues_n=sum(x$geography_auto_validation_basis=="explicit_country_cues"),
+  autoassigned_none_from_unresolved_no_country_n=sum(x$geography_auto_validation_basis=="unresolved_no_country_assign_none"),
   llm_failures_n=sum(x$llm_failed%in%TRUE),
   exact_agreement_discrepancy_class_n=sum(x$discrepancy_type=="exact_agreement"),
   qc_discrepancies_n=sum(x$discrepancy_type!="exact_agreement"),
