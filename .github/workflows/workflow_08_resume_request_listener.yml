@@ -1,0 +1,62 @@
+name: Workflow 08 - Resume request listener
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'docs/shiny_adjudication/w08_resume_requests/*.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      source_run_id: ${{ steps.request.outputs.source_run_id }}
+      batch_id: ${{ steps.request.outputs.batch_id }}
+      queue_sha256: ${{ steps.request.outputs.queue_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 2
+
+      - id: request
+        name: Resolve exactly one W08 resume request
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            mapfile -t FILES < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/shiny_adjudication/w08_resume_requests/.*\.json$' || true)
+            test "${#FILES[@]}" -eq 1
+            FILE="${FILES[0]}"
+          else
+            mapfile -t FILES < <(find docs/shiny_adjudication/w08_resume_requests -maxdepth 1 -type f -name '*.json' | sort)
+            test "${#FILES[@]}" -ge 1
+            FILE="${FILES[-1]}"
+          fi
+          Rscript -e '
+            suppressPackageStartupMessages(library(jsonlite))
+            x <- fromJSON(commandArgs(TRUE)[1], simplifyVector=FALSE)
+            rid <- as.character(x$source_run_id %||% "")
+            bid <- as.character(x$batch_id %||% "")
+            sha <- tolower(as.character(x$queue_sha256 %||% ""))
+            stopifnot(grepl("^[0-9]+$", rid), nzchar(bid), grepl("^[0-9a-f]{64}$", sha))
+            cat(sprintf("source_run_id=%s\n", rid), file=Sys.getenv("GITHUB_OUTPUT"), append=TRUE)
+            cat(sprintf("batch_id=%s\n", bid), file=Sys.getenv("GITHUB_OUTPUT"), append=TRUE)
+            cat(sprintf("queue_sha256=%s\n", sha), file=Sys.getenv("GITHUB_OUTPUT"), append=TRUE)
+          ' "$FILE"
+          echo "PASS: resolved W08 resume request $FILE"
+
+  resume:
+    needs: prepare
+    uses: ./.github/workflows/workflow_08_resume_after_shiny.yml
+    with:
+      source_run_id: ${{ needs.prepare.outputs.source_run_id }}
+      batch_id: ${{ needs.prepare.outputs.batch_id }}
+      queue_sha256: ${{ needs.prepare.outputs.queue_sha256 }}
+    secrets: inherit
