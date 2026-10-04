@@ -87,9 +87,9 @@ jobs:
             grepl("no eligible focal species can be assigned are excluded", methods, fixed = TRUE)
           )
 
-          results <- paste(readLines("docs/reporting/workflow_09/manuscript/long_form_results.Rmd", warn = FALSE), collapse = "\n")
-          caps <- regmatches(results, gregexpr("\\\*\\\\*\\\\*Figure [0-9]+\\\\.", results, perl = TRUE))[[1L]]
-          cap_n <- as.integer(sub(".*Figure ([0-9]+)\\\\..*", "\\\\1", caps))
+          results_lines <- readLines("docs/reporting/workflow_09/manuscript/long_form_results.Rmd", warn = FALSE)
+          cap_lines <- results_lines[grepl('fig.cap="***Figure ', results_lines, fixed = TRUE)]
+          cap_n <- as.integer(sub('.*fig.cap="\\*\\*\\*Figure ([0-9]+)\\..*', '\\1', cap_lines))
           stopifnot(identical(cap_n, 1:16))
 
           workflow_text <- paste(readLines(".github/workflows/report_workflow09_figures.yml", warn = FALSE), collapse = "\n")
