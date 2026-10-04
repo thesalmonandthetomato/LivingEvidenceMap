@@ -39,18 +39,22 @@ jobs:
             test "${#FILES[@]}" -ge 1
             FILE="${FILES[-1]}"
           fi
-          Rscript -e '
-            suppressPackageStartupMessages(library(jsonlite))
-            x <- fromJSON(commandArgs(TRUE)[1], simplifyVector=FALSE)
-            val <- function(z) if(is.null(z) || !length(z)) "" else as.character(z[[1L]])
-            rid <- val(x$source_run_id)
-            bid <- val(x$batch_id)
-            sha <- tolower(val(x$queue_sha256))
-            stopifnot(grepl("^[0-9]+$", rid), nzchar(bid), grepl("^[0-9a-f]{64}$", sha))
-            cat(sprintf("source_run_id=%s\n", rid), file=Sys.getenv("GITHUB_OUTPUT"), append=TRUE)
-            cat(sprintf("batch_id=%s\n", bid), file=Sys.getenv("GITHUB_OUTPUT"), append=TRUE)
-            cat(sprintf("queue_sha256=%s\n", sha), file=Sys.getenv("GITHUB_OUTPUT"), append=TRUE)
-          ' "$FILE"
+          python3 - "$FILE" "$GITHUB_OUTPUT" <<'PY'
+          import json,re,sys
+          path,out=sys.argv[1],sys.argv[2]
+          with open(path,encoding="utf-8") as fh:
+              x=json.load(fh)
+          rid=str(x.get("source_run_id",""))
+          bid=str(x.get("batch_id",""))
+          sha=str(x.get("queue_sha256","")).lower()
+          assert re.fullmatch(r"[0-9]+",rid), "invalid source_run_id"
+          assert bid, "invalid batch_id"
+          assert re.fullmatch(r"[0-9a-f]{64}",sha), "invalid queue_sha256"
+          with open(out,"a",encoding="utf-8") as fh:
+              fh.write(f"source_run_id={rid}\n")
+              fh.write(f"batch_id={bid}\n")
+              fh.write(f"queue_sha256={sha}\n")
+          PY
           echo "PASS: resolved W08 resume request $FILE"
 
   resume:
