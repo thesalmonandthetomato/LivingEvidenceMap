@@ -122,11 +122,34 @@ source_panel_left <- 1.35
 source_panel_right <- 10.15
 source_panel_width <- source_panel_right - source_panel_left
 source_panel_bottom <- 11.55
-source_row_h <- 0.38
-source_panel_height <- 0.78 + n_source_rows * source_row_h
+
+# Source-panel vertical spacing is deliberately derived from the number of rows.
+# Fewer rows receive more breathing room; denser source inventories tighten
+# slightly while preserving the title/header separation and bottom padding.
+source_row_h <- dplyr::case_when(
+  n_source_rows <= 1L ~ 0.58,
+  n_source_rows == 2L ~ 0.52,
+  n_source_rows == 3L ~ 0.46,
+  TRUE ~ 0.42
+)
+source_title_offset <- 0.16
+source_header_offset <- 0.55
+source_first_row_offset <- 0.88
+source_bottom_padding <- 0.20
+source_panel_height <- source_first_row_offset +
+  (n_source_rows - 1L) * source_row_h +
+  source_bottom_padding
 source_panel_top <- source_panel_bottom + source_panel_height
 source_panel_y <- (source_panel_bottom + source_panel_top) / 2
 source_col_width <- (source_panel_width - 0.34) / n_source_cols
+
+# Within each source block, reserve less horizontal space for the database
+# label and more for hits/search date. Long labels are wrapped inside their
+# own block so they cannot collide with the neighbouring database column.
+source_name_share <- 0.46
+source_hits_x_share <- 0.56
+source_date_x_share <- 0.66
+source_name_wrap <- if (n_source_cols >= 3L) 14L else 18L
 
 source_layout <- source_meta |>
   mutate(
@@ -134,22 +157,23 @@ source_layout <- source_meta |>
     column = ((item - 1L) %/% n_source_rows) + 1L,
     row = ((item - 1L) %% n_source_rows) + 1L,
     col_left = source_panel_left + 0.17 + (column - 1L) * source_col_width,
+    database_label = stringr::str_wrap(database, width = source_name_wrap),
     name_x = col_left,
-    hits_x = col_left + source_col_width * 0.62,
-    date_x = col_left + source_col_width * 0.75,
-    y = source_panel_top - 0.63 - (row - 1L) * source_row_h,
+    hits_x = col_left + source_col_width * source_hits_x_share,
+    date_x = col_left + source_col_width * source_date_x_share,
+    y = source_panel_top - source_first_row_offset - (row - 1L) * source_row_h,
     hits_label = fmt(hits)
   )
 
 source_headers <- tibble::tibble(
   column = seq_len(n_source_cols),
   col_left = source_panel_left + 0.17 + (seq_len(n_source_cols) - 1L) * source_col_width,
-  y = source_panel_top - 0.34
+  y = source_panel_top - source_header_offset
 ) |>
   mutate(
     name_x = col_left,
-    hits_x = col_left + source_col_width * 0.62,
-    date_x = col_left + source_col_width * 0.75
+    hits_x = col_left + source_col_width * source_hits_x_share,
+    date_x = col_left + source_col_width * source_date_x_share
   )
 
 source_dividers <- if (n_source_cols > 1L) {
@@ -277,7 +301,7 @@ p <- ggplot() +
   annotate(
     "text",
     x = (source_panel_left + source_panel_right) / 2,
-    y = source_panel_top - 0.14,
+    y = source_panel_top - source_title_offset,
     label = "Bibliographic database searches",
     colour = "#2c454a",
     fontface = "bold",
@@ -303,8 +327,8 @@ p <- ggplot() +
   ) +
   geom_text(
     data = source_layout,
-    aes(x = name_x, y = y, label = database),
-    hjust = 0, colour = "#2c454a", size = 2.25
+    aes(x = name_x, y = y, label = database_label),
+    hjust = 0, colour = "#2c454a", size = 2.15, lineheight = 0.90
   ) +
   geom_text(
     data = source_layout,
