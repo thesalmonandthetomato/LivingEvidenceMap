@@ -165,7 +165,10 @@ jobs:
           cp "$(find inputs/current/w07 -type f -name workflow07_topic_record_qc.csv -print -quit)" inputs/current/workflow07_qc.csv
           cp "$(find inputs/current/w07 -type f -name workflow07_late_automatic_exclusions.csv -print -quit)" inputs/current/workflow07_late.csv
 
-          GROUND=$(find inputs/current/w06 -type f -name geography_ungrounded_evidence.csv -print -quit)
+          GROUND=$(find inputs/current/w06 -type f -name geography_review_residual.csv -print -quit)
+          if [ -z "$GROUND" ]; then
+            GROUND=$(find inputs/current/w06 -type f -name geography_ungrounded_evidence.csv -print -quit)
+          fi
           if [ -n "$GROUND" ]; then
             cp "$GROUND" inputs/current/workflow06_grounding_residual.csv
           else
