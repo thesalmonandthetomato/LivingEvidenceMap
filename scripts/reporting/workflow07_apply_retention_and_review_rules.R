@@ -145,7 +145,7 @@ for(i in seq_len(nrow(R))) {
   extreme <- is.finite(mean_j) && mean_j < 0.20
 
   route <- if(pathology) "human_adjudication" else "none"
-  reason <- if(pathology) "ontology_pathology" else ""
+  reason <- if(pathology) "topic_coding_review" else ""
   record_rows[[i]] <- data.frame(
     record_id=rid,topic_count_raw=raw_n,
     topic_count_after_general_pruning=length(kept_idx),
@@ -210,6 +210,7 @@ summary <- list(
   zero_topic_route="targeted eligibility rescreen: include -> retain included-but-uncoded; exclude -> late automatic exclusion; uncertain -> Workflow 08 human adjudication",
   high_topic_rule="prune documented general/fallback codes; retain complete star tiers up to 10; if highest tier itself exceeds 10 retain the full tied tier",
   condition4_definition="residual ontology-semantic incompatibility after deterministic ontology-v3.6 fallback/supersession rules",
+  workflow08_existing_topic_review_issue="topic_coding_review",
   created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 write_json(summary,file.path(output_dir,"workflow07_qc_summary.json"),pretty=TRUE,auto_unbox=TRUE,null="null")
