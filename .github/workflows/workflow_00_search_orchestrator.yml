@@ -760,8 +760,7 @@ jobs:
             --credential "$RUNNER_TEMP/lem-google-service-account.json"
           Rscript scripts/reporting/write_workflow09_stage_summary.R \
             --stage W00 \
-            --run-id "$GITHUB_RUN_ID" \
-            --pointer "docs/search_record/zenodo/run-$GITHUB_RUN_ID.json"
+            --run-id "$GITHUB_RUN_ID"
           Rscript scripts/reporting/refresh_workflow09_input_manifest.R
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
