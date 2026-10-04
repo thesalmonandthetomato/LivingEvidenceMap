@@ -120,7 +120,12 @@ for(i in seq_len(nrow(R))) {
   dropped_cap <- setdiff(kept_idx,retain_idx)
   S$retention_basis[dropped_cap] <- "below_retention_star_threshold"
 
-  pass_sets <- lapply(c("role_a","role_b","role_c"),function(col) ids[present(S[[col]][idx])])
+  # Agreement is assessed after deterministic general/fallback pruning.
+  # Otherwise a pass that selects both a general code and its specific child can
+  # appear spuriously different from a pass that selects only the specific code.
+  pass_sets <- lapply(c("role_a","role_b","role_c"),function(col) {
+    as.character(S$path_id[kept_idx[present(S[[col]][kept_idx])]])
+  })
   jac <- function(a,b) {
     u <- union(a,b)
     if(!length(u)) return(1)
