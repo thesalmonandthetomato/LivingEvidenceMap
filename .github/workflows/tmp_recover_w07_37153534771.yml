@@ -138,7 +138,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Q=topic/outputs/workflow07_zero_prepare/zero_topic_rescreen_queue.csv
+          Q=topic/workflow07_zero_prepare/zero_topic_rescreen_queue.csv
           N=$(Rscript -e 'x<-readr::read_csv(commandArgs(TRUE)[1],show_col_types=FALSE);cat(nrow(x))' "$Q")
           echo "Zero-topic fresh rescreen queue: $N"
           mkdir -p outputs/zero-${{ matrix.shard }}
@@ -204,23 +204,23 @@ jobs:
             --expected-shards 4
 
           Rscript scripts/updater/workflow_07_merge_zero_rescreen_incremental.R \
-            --zero-records topic/outputs/workflow07_topic_complete/workflow07_zero_code_records.csv \
-            --reused topic/outputs/workflow07_zero_prepare/reused_zero_topic_rescreen.jsonl \
+            --zero-records topic/workflow07_topic_complete/workflow07_zero_code_records.csv \
+            --reused topic/workflow07_zero_prepare/reused_zero_topic_rescreen.jsonl \
             --fresh outputs/workflow07_zero_fresh/workflow07_zero_topic_targeted_rescreen.jsonl \
             --output-dir outputs/workflow07_zero_complete
 
           Rscript scripts/reporting/workflow07_apply_retention_and_review_rules.R \
-            --scores topic/outputs/workflow07_topic_complete/workflow07_topic_pathway_scores.csv \
-            --records topic/outputs/workflow07_topic_complete/workflow07_topic_record_summary.csv \
+            --scores topic/workflow07_topic_complete/workflow07_topic_pathway_scores.csv \
+            --records topic/workflow07_topic_complete/workflow07_topic_record_summary.csv \
             --ontology "$TOPIC_ONTOLOGY_PATH" \
             --zero-rescreen outputs/workflow07_zero_complete/workflow07_zero_topic_targeted_rescreen.jsonl \
             --output-dir outputs/workflow07_final_qc
 
           mkdir -p outputs/workflow07_state
-          cp topic/outputs/workflow07_topic_complete/workflow07_records.csv outputs/workflow07_state/
-          cp topic/outputs/workflow07_topic_complete/workflow07_topic_pathway_scores.csv outputs/workflow07_state/
-          cp topic/outputs/workflow07_topic_complete/workflow07_topic_record_summary.csv outputs/workflow07_state/
-          cp topic/outputs/workflow07_topic_complete/workflow07_topic_complete_manifest.json outputs/workflow07_state/
+          cp topic/workflow07_topic_complete/workflow07_records.csv outputs/workflow07_state/
+          cp topic/workflow07_topic_complete/workflow07_topic_pathway_scores.csv outputs/workflow07_state/
+          cp topic/workflow07_topic_complete/workflow07_topic_record_summary.csv outputs/workflow07_state/
+          cp topic/workflow07_topic_complete/workflow07_topic_complete_manifest.json outputs/workflow07_state/
           cp outputs/workflow07_zero_complete/workflow07_zero_topic_targeted_rescreen.jsonl outputs/workflow07_state/
           cp outputs/workflow07_final_qc/workflow07_topic_pathway_scores_retained.csv outputs/workflow07_state/
           cp outputs/workflow07_final_qc/workflow07_topic_record_qc.csv outputs/workflow07_state/
