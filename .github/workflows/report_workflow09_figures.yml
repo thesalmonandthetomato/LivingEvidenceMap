@@ -117,7 +117,21 @@ jobs:
           }
 
           search_date <- trimws(Sys.getenv("SEARCH_UPDATE_DATE_OVERRIDE", unset = ""))
-          if (!nzchar(search_date)) search_date <- one(status$search$search_date, "Search update date")
+          if (!nzchar(search_date)) {
+            source_dates <- one(status$search$search_date, "Search update date")
+            regs <- list.files("user_input", pattern = "^workflow00_ris_.*\\.json$", full.names = TRUE)
+            if (length(regs)) {
+              manual_dates <- vapply(regs, function(p) {
+                z <- tryCatch(fromJSON(p, simplifyVector = FALSE), error = function(e) NULL)
+                if (is.null(z)) return("")
+                if (is.null(z$search) || is.null(z$search$search_date)) "" else as.character(z$search$search_date)
+              }, character(1))
+              source_dates <- c(source_dates, manual_dates)
+            }
+            source_dates <- source_dates[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_dates)]
+            if (!length(source_dates)) stop("No valid source search dates found", call. = FALSE)
+            search_date <- max(source_dates)
+          }
           if (!grepl("^\\d{4}-\\d{2}-\\d{2}$", search_date)) {
             stop("Search update date must be YYYY-MM-DD", call. = FALSE)
           }
