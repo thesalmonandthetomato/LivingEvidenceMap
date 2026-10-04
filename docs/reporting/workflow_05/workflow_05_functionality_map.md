@@ -1,8 +1,14 @@
 # Workflow 05: deterministic species coding
 
+## Current production state (4 October 2026)
+
+The current authoritative W05 state is run **37110114836**, restricted Zenodo record **23118205** (DOI `10.5281/zenodo.23118205`). All **21,819** W04-retained records were processed: **21,628** received one or more eligible species codes and **191** received `NONE`.
+
+The current production contract treats `farmed_species_codes == "NONE"` as a deterministic downstream eligibility exclusion. Those 191 records remain preserved exactly in the W05 automated layer for provenance, but W08 suppresses them from human review and records the final exclusion reason `species_none_deterministic_exclusion`. Historical W08 `species_none` decisions remain readable only for reproducibility of older runs.
+
 ## Purpose
 
-Workflow 05 applies deterministic lexical species coding to the 19,407 records retained by Workflow 04.
+Workflow 05 applies deterministic lexical species coding to the records retained by Workflow 04.
 
 Its methodological function is to search each retained record's title and abstract for the versioned species vocabulary and assign every matching eligible species coding.
 
@@ -19,7 +25,7 @@ This document is intended to serve two purposes:
 Workflow 04 retained record set
           |
           v
-restore exact 19,407 canonical records
+restore exact W04-retained canonical records
           |
           v
 read three-column deterministic vocabulary
@@ -161,11 +167,11 @@ Every configured term is matched case-insensitively against title and abstract. 
 
 ### 5. Derive record-level species codes
 
-All named eligible species detected for a record are retained. If a named eligible species is present, the generic `Unspecified species` code is suppressed. Records with no configured match are coded `NONE` by Workflow 05. `NONE` is an automated review state rather than a terminal species classification and is routed to Workflow 08 for human adjudication.
+All named eligible species detected for a record are retained. If a named eligible species is present, the generic `Unspecified species` code is suppressed. Records with no configured match are coded `NONE` by Workflow 05. In the current production contract this is preserved as an automated W05 state but deterministically excluded during W08 intake; it is not routed to human review.
 
-### 6. Route `NONE` records to Workflow 08
+### 6. Preserve `NONE` records for deterministic W08 exclusion
 
-Records with `farmed_species_codes = NONE` are retained in the W05 automated layer but are automatically flagged for downstream human review in Workflow 08. W08 resolves these records to one or more eligible named species, `Unspecified species`, or a relevance/exclusion decision where appropriate. W05 itself does not perform semantic adjudication or rewrite these records.
+Records with `farmed_species_codes = NONE` are retained unchanged in the W05 automated layer. Current W08 intake deterministically excludes them before constructing the human-review queue and suppresses any geography/topic review issues for the same records. W05 itself does not perform semantic adjudication or rewrite these records.
 
 For the validated baseline, **169 records** enter this W08 species-review queue.
 
@@ -284,13 +290,13 @@ Workflow 06 consumes the same 19,407 stable `record_id` records together with th
 
 The registered Zenodo checkpoint is the authoritative W05 automated state. Workflow 06 should use a verified Actions handoff cache when available and otherwise restore from the registered durable checkpoint.
 
-The **169 W05 `NONE` records are additionally routed to Workflow 08 for human species adjudication**. Their later human decisions are stored as a W08 layer and applied during final post-W08 assembly; they do not modify the archived W05 deterministic checkpoint.
+The historical baseline contained 169 W05 `NONE` records. In the current release there are **191**. Under the current production rule these records are not human-adjudication cases: they are deterministically excluded at W08 while the archived W05 checkpoint remains unchanged.
 
 Workflow 06 is responsible for geography coding. Geography is not part of Workflow 05.
 
 ## Methods text for research reporting
 
-> **Workflow 05: deterministic species coding.** Records retained after relevance screening were coded for eligible farmed species using deterministic lexical matching of titles and abstracts against a versioned three-column vocabulary comprising canonical coding, entity and semicolon-separated search terms. The vocabulary included scientific and common names, historical synonyms, multilingual terms and spelling variants identified during validation. Matching was case-insensitive and normalised whitespace, hyphen variants, HTML/JATS markup and recognised OCR spacing artefacts. All named eligible species detected in a record were retained; no focal or primary species was inferred. A generic unspecified-salmon code was used only where generic salmon terminology was detected without a named eligible species. Records with no configured match were coded `NONE` and routed to downstream human adjudication rather than treated as a final species classification. Stable record identifiers and match-level lexical provenance were retained for reproducibility.
+> **Workflow 05: deterministic species coding.** Records retained after relevance screening were coded for eligible farmed species using deterministic lexical matching of titles and abstracts against a versioned three-column vocabulary comprising canonical coding, entity and semicolon-separated search terms. The vocabulary included scientific and common names, historical synonyms, multilingual terms and spelling variants identified during validation. Matching was case-insensitive and normalised whitespace, hyphen variants, HTML/JATS markup and recognised OCR spacing artefacts. All named eligible species detected in a record were retained; no focal or primary species was inferred. A generic unspecified-salmon code was used only where generic salmon terminology was detected without a named eligible species. Records with no configured match were coded `NONE`; the raw W05 state was retained for provenance and those records were deterministically excluded during W08 finalisation rather than sent to human review. Stable record identifiers and match-level lexical provenance were retained for reproducibility.
 
 ## Reporting status
 
@@ -299,10 +305,10 @@ Workflow 05 is considered complete and validated when:
 - the validated Workflow 04 retained state is identity-checked;
 - the runtime vocabulary has exactly `coding, entity, terms`;
 - the deterministic matcher passes the regression suite;
-- all 19,407 records are processed exactly once;
+- all W04-retained records are processed exactly once;
 - record identity and ordering are preserved;
 - all species codes and lexical match provenance are retained;
-- records coded `NONE` are explicitly identified for Workflow 08 human review rather than treated as terminal species classifications;
+- records coded `NONE` are explicitly identified and deterministically excluded by the current W08 intake without human review;
 - the output passes the validated count and schema invariants; and
 - the accepted sparse layer is published and registered as a durable Zenodo checkpoint.
 
