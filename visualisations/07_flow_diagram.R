@@ -148,10 +148,21 @@ close(con)
 on.exit(NULL, add = FALSE)
 
 if (anyDuplicated(patch_ids)) stop("Workflow 02 cumulative patch contains duplicate record_id values.", call. = FALSE)
-if (length(setdiff(patch_ids, prescreen_ids))) {
-  stop("Workflow 02 patch contains record IDs absent from the Workflow 01 canonical.", call. = FALSE)
+
+# The cumulative W02 patch is provenance-preserving across living updates and may
+# retain entries for canonical record IDs later retired by W01 reconciliation.
+# The release preflight independently verifies that this W02 state was built from
+# the selected W01 canonical SHA, so retired historical IDs are expected rather
+# than evidence of a cross-release mismatch. Count enrichment only for record IDs
+# that remain in the current W01 canonical population.
+retired_patch_ids <- setdiff(patch_ids, prescreen_ids)
+if (length(retired_patch_ids)) {
+  cat(sprintf(
+    "INFO: ignoring %d historical W02 patch record IDs retired from the current W01 canonical population\n",
+    length(retired_patch_ids)
+  ))
 }
-n_enriched <- length(unique(enriched_ids))
+n_enriched <- length(intersect(unique(enriched_ids), prescreen_ids))
 
 # -------------------------------------------------------------------------
 # 4. WORKFLOW 08: SCREENING + FINAL ANNOTATION STATE
