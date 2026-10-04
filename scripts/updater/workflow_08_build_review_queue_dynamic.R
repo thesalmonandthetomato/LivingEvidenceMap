@@ -92,7 +92,7 @@ for(i in seq_len(nrow(w06_failures))){
   ))
 }
 
-w06_unresolved<-w06 |> filter(geography_status=="UNRESOLVED")
+w06_unresolved<-w06 |> filter(geography_status=="UNRESOLVED", !(llm_failed %in% TRUE))
 for(i in seq_len(nrow(w06_unresolved))){
   z<-w06_unresolved[i,,drop=FALSE]
   add_issue(z$record_id,list(
@@ -111,6 +111,7 @@ for(i in seq_len(nrow(w06_unresolved))){
 # W06 evidence-grounding residual after deterministic revalidation.
 resid_ids<-unique(as.character(g_resid$record_id))
 resid_ids<-resid_ids[nzchar(resid_ids)]
+resid_ids<-setdiff(resid_ids,as.character(w06_failures$record_id))
 if(length(setdiff(resid_ids,w06$record_id)))stop("Grounding residual contains ID outside W06",call.=FALSE)
 for(rid in resid_ids){
   z<-w06[match(rid,w06$record_id),,drop=FALSE]
