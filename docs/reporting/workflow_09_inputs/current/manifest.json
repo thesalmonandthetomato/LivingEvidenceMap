@@ -1,0 +1,133 @@
+{
+  "schema": "living-evidence-map-workflow09-input-manifest-v1",
+  "generated_at_utc": "2026-10-04T17:37:09Z",
+  "stages": [
+    {
+      "stage": "W00",
+      "source_run_id": "baseline-plus-manual-ris",
+      "file": "w00_summary.json"
+    },
+    {
+      "stage": "W01",
+      "source_run_id": "36971418284",
+      "file": "w01_summary.json"
+    },
+    {
+      "stage": "W02",
+      "source_run_id": "37016080508",
+      "file": "w02_summary.json"
+    },
+    {
+      "stage": "W03",
+      "source_run_id": "37024164176",
+      "file": "w03_summary.json"
+    },
+    {
+      "stage": "W04",
+      "source_run_id": "37051672356",
+      "file": "w04_summary.json"
+    },
+    {
+      "stage": "W05",
+      "source_run_id": "37110114836",
+      "file": "w05_summary.json"
+    },
+    {
+      "stage": "W06",
+      "source_run_id": "37114864202",
+      "file": "w06_summary.json"
+    },
+    {
+      "stage": "W07",
+      "source_run_id": "37153534771",
+      "file": "w07_summary.json"
+    },
+    {
+      "stage": "W08",
+      "source_run_id": "37211675882",
+      "file": "w08_summary.json"
+    }
+  ],
+  "files": [
+    {
+      "file": "w00_summary.json",
+      "bytes": 371,
+      "sha256": "c0aa2d368b43d8941c140d388b4bba2b5763aa8c409fb5171d3f6a1b6f9b42f7"
+    },
+    {
+      "file": "w01_source_intersections.csv",
+      "bytes": 1788,
+      "sha256": "ac03f925d0eec2e7d166c268e88ca492f90386e2f9b50f3bf8737f4c5e42fb7d"
+    },
+    {
+      "file": "w01_source_manifest.json",
+      "bytes": 794,
+      "sha256": "2edfc98c3989a77ee02ea23b026da08a46da8e49831aac64041f534bf68a582f"
+    },
+    {
+      "file": "w01_source_membership.csv",
+      "bytes": 1917413,
+      "sha256": "7d2e20feda6401c78c41492d4d9e4a387b34def532b197b2b2481d3a2be996a0"
+    },
+    {
+      "file": "w01_source_summary.csv",
+      "bytes": 389,
+      "sha256": "51aade68ac6c21f112be5e4b4288ac3e9d6f5b2bd907f80c682be0d8f3191960"
+    },
+    {
+      "file": "w01_summary.json",
+      "bytes": 595,
+      "sha256": "f3fabf727c3403537de811194130f9bd44e7ac73a38576f38cb7982b78a431ba"
+    },
+    {
+      "file": "w02_summary.json",
+      "bytes": 675,
+      "sha256": "694351bb7103c9e5e1c2383ea23b8876097c7f5baeadf2d7a44173849d76c79a"
+    },
+    {
+      "file": "w03_summary.json",
+      "bytes": 636,
+      "sha256": "726f71c34e2a494cccdb2bec9813ba1112627290fab934fbc0061a0db6468b17"
+    },
+    {
+      "file": "w04_summary.json",
+      "bytes": 487,
+      "sha256": "84bc04436dd6af96cf25fc43dd040ef870983bc00834cf367e7225840bdc87a1"
+    },
+    {
+      "file": "w05_summary.json",
+      "bytes": 473,
+      "sha256": "578cf6ad36a3462b1f884e841de7b6044e9a99b2de2e62b57d22f35e3049ef22"
+    },
+    {
+      "file": "w06_summary.json",
+      "bytes": 543,
+      "sha256": "115d50a30571316b973292e9d28eb430ca600a75233dbd54d6a42161082c3ed9"
+    },
+    {
+      "file": "w07_summary.json",
+      "bytes": 601,
+      "sha256": "d6d08f4bb4533ab3e8d3ff6382101bad4b7898e399c84db49c57840a2462e1ed"
+    },
+    {
+      "file": "w08_source_intersections.csv",
+      "bytes": 1678,
+      "sha256": "7eadfafa3bec8dfc9adee94bbd9139f13b2d3f3cdfd46e7df50fe2d7daa1751f"
+    },
+    {
+      "file": "w08_source_manifest.json",
+      "bytes": 794,
+      "sha256": "5fa57ecf91f43ef135ce81e05ff7f6ecffecf3c61f7c17adfa178e81a6fd7c3e"
+    },
+    {
+      "file": "w08_source_summary.csv",
+      "bytes": 369,
+      "sha256": "b7e2438a64ba413657198f9f15d731e3df114b32ae035ff82552147f981d8f38"
+    },
+    {
+      "file": "w08_summary.json",
+      "bytes": 833,
+      "sha256": "351c240d82a58fe2f207005846fde66438fd47080b0cc8c3f3224210c9b8eba5"
+    }
+  ]
+}
