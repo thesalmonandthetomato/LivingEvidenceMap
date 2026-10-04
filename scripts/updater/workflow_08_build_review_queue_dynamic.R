@@ -183,52 +183,14 @@ w07_extreme_autoaccepted<-0L
 for(i in seq_len(nrow(w07q))){
   q<-w07q[i,,drop=FALSE];rid<-as.character(q$record_id);reason<-as.character(q$workflow08_reason)
   if(reason=="extreme_three_pass_topic_disagreement"){
+    # Legacy/current W07 states may contain a human-review route based solely
+    # on mean pairwise Jaccard < 0.20. Jaccard is now descriptive QC only:
+    # the retained union plus 1/2/3-pass support already represents model
+    # uncertainty, so disagreement alone is not a human-adjudication trigger.
     idx<-score_index[[rid]]
     if(is.null(idx)||!length(idx))stop("Topic disagreement lacks pathway scores: ",rid,call.=FALSE)
-    z<-w07s[idx,,drop=FALSE]
-
-    # Current published W07 may contain legacy extreme-disagreement flags
-    # calculated before deterministic general/fallback pruning. Recompute on
-    # the already-pruned pathway set and suppress false-positive human review.
-    kept<-rep(TRUE,nrow(z))
-    if("retention_basis"%in%names(z)) {
-      kept<-!grepl("^general_code_superseded_by_specific_code$",clean_chr(z$retention_basis))
-    }
-    zk<-z[kept,,drop=FALSE]
-    pass_sets<-lapply(c("role_a","role_b","role_c"),function(col){
-      if(!col%in%names(zk)) return(character())
-      as.character(zk$path_id[nzchar(trimws(clean_chr(zk[[col]])))])
-    })
-    corrected_mean_j<-mean(c(
-      jac_set(pass_sets[[1]],pass_sets[[2]]),
-      jac_set(pass_sets[[1]],pass_sets[[3]]),
-      jac_set(pass_sets[[2]],pass_sets[[3]])
-    ))
-    if(is.finite(corrected_mean_j) && corrected_mean_j >= 0.20){
-      w07_extreme_autoaccepted<-w07_extreme_autoaccepted+1L
-      next
-    }
-
-    pathways<-lapply(seq_len(nrow(z)),function(j)list(
-      path_id=as.character(z$path_id[[j]]),
-      hierarchy_path=as.character(z$hierarchy_path[[j]]),
-      confidence_n=as.integer(z$confidence_n[[j]]),
-      stars=as.character(z$stars[[j]]),
-      role_a=clean_chr(z$role_a[[j]]),role_b=clean_chr(z$role_b[[j]]),role_c=clean_chr(z$role_c[[j]]),
-      reason_a=clean_chr(z$reason_a[[j]]),reason_b=clean_chr(z$reason_b[[j]]),reason_c=clean_chr(z$reason_c[[j]]),
-      retained_for_analysis=isTRUE(z$retained_for_analysis[[j]]),
-      retention_basis=clean_chr(z$retention_basis[[j]])
-    ))
-    add_issue(rid,list(
-      source_workflow="07",issue_type="topic_extreme_disagreement",
-      automated_value=list(
-        mean_pairwise_jaccard=corrected_mean_j,
-        topic_count_raw=as.integer(q$topic_count_raw),
-        topic_count_retained=as.integer(q$topic_count_retained),
-        pathways=pathways
-      ),
-      allowed_human_outcomes=c("accept_retained_topics","replace_topic_set","exclude_record","no_code")
-    ))
+    w07_extreme_autoaccepted<-w07_extreme_autoaccepted+1L
+    next
   }else if(reason=="zero_topic_eligibility_uncertain"){
     add_issue(rid,list(
       source_workflow="07",issue_type="zero_topic_eligibility_uncertain",
@@ -272,7 +234,7 @@ manifest<-list(
   w06_grounding_explicit_country_cue_autoaccepted=length(explicit_country_cue_accept_ids),
   w06_grounding_residual=length(resid_ids),
   w07_human_review_source=nrow(w07q),
-  w07_extreme_disagreement_autoaccepted_after_pruning=w07_extreme_autoaccepted,
+  w07_extreme_disagreement_suppressed_descriptive_only=w07_extreme_autoaccepted,
   w07_human_review=nrow(w07q)-w07_extreme_autoaccepted,
   w07_late_automatic_exclusions=nrow(w07x),
   unique_records_with_review_issues=length(queue),
