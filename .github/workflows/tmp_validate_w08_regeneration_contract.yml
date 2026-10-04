@@ -106,8 +106,11 @@ jobs:
           }
           d1 <- hmap[[expected[[1]]]]
           if(as.character(d1$decision)!='assign_country_set') stop('Recovered BIH decision type changed')
-          iso <- sort(as.character(unlist(d1$assigned_iso3c,use.names=FALSE)))
-          if(!identical(iso,'BIH')) stop('Recovered BIH decision payload changed')
+          iso <- sort(as.character(unlist(d1$final_value$iso3c,use.names=FALSE)))
+          country <- as.character(unlist(d1$final_value$country_names,use.names=FALSE))
+          if(!identical(iso,'BIH') || !identical(country,'Bosnia and Herzegovina')) {
+            stop('Recovered BIH decision payload changed')
+          }
 
           cat(sprintf('PASS: cumulative decision history contains %d unique reusable issue decisions; both known dropped decisions recovered exactly\n',length(hmap)))
 
