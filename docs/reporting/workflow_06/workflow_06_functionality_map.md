@@ -1,5 +1,11 @@
 # Workflow 06: substantive study geography coding
 
+## Current production state (4 October 2026)
+
+The current authoritative W06 state is run **37114864202**, restricted Zenodo record **23119991** (DOI `10.5281/zenodo.23119991`). It covers **21,819 records**: **9,072 RESOLVED**, **12,185 NONE**, and **562 UNRESOLVED**; **166** records have raw evidence-grounding failures and **6** terminal model/API failures after the production retry logic. **11,709** records reused validated prior geography state and **10,110** were newly screened in this update.
+
+W08 applies a minimum-escalation rule to this automated layer. A non-failure `UNRESOLVED` record with no candidate ISO3 code is deterministically materialised as downstream `NONE`; unresolved records carrying candidate countries, terminal failures, and still-unvalidated resolved assignments are the cases eligible for human review. The raw W06 result remains unchanged in provenance.
+
 ## Purpose
 
 Workflow 06 assigns substantive study geography to records retained after Workflow 05. Its methodological purpose is to produce a reproducible automated geography layer from publication titles and abstracts while separating substantive study geography from incidental place mentions.
@@ -268,7 +274,7 @@ Workflow 06 is **finalised and locked** when:
 - deterministic geography is explicitly restricted to QC/regression monitoring;
 - automatic evidence validation and retry rules are defined;
 - minimum W08 escalation criteria are defined;
-- the 19,407-record baseline has been merged and validated without duplicate identities;
+- the current retained-record population has been merged and validated without duplicate identities;
 - technical model failures have been resolved or explicitly escalated;
 - the automated baseline is durably archived with checksums; and
 - human geography decisions are stored separately in Workflow 08.
