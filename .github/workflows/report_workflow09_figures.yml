@@ -300,34 +300,36 @@ jobs:
           # Final manuscript figure numbering.
           cp visualisations/figure_07_flow_diagram.png "$PUB/figures/figure_01_flow_diagram.png"
           cp visualisations/figure_07_flow_diagram.pdf "$PUB/figures/figure_01_flow_diagram.pdf"
-          cp outputs/citesource_contribution/database_contribution_upset.png "$PUB/figures/figure_02_database_contribution.png"
-          cp outputs/citesource_contribution/database_contribution_upset.pdf "$PUB/figures/figure_02_database_contribution.pdf"
-          cp visualisations/figure_01_records_by_publication_year.png "$PUB/figures/figure_03_publication_year_species.png"
-          cp visualisations/figure_01_records_by_publication_year.pdf "$PUB/figures/figure_03_publication_year_species.pdf"
-          cp visualisations/figure_05_records_by_publication_year_high_level_topic.png "$PUB/figures/figure_04_publication_year_topics.png"
-          cp visualisations/figure_05_records_by_publication_year_high_level_topic.pdf "$PUB/figures/figure_04_publication_year_topics.pdf"
-          cp visualisations/figure_03_choropleth_records_by_country.png "$PUB/figures/figure_05_country_choropleth.png"
-          cp visualisations/figure_03_choropleth_records_by_country.pdf "$PUB/figures/figure_05_country_choropleth.pdf"
-          cp visualisations/figure_02_records_by_country.png "$PUB/figures/figure_06_country_species.png"
-          cp visualisations/figure_02_records_by_country.pdf "$PUB/figures/figure_06_country_species.pdf"
-          cp visualisations/topic_hierarchy/figure_04a_top_level_topics.png "$PUB/figures/figure_07_top_level_topics.png"
-          cp visualisations/topic_hierarchy/figure_04a_top_level_topics.pdf "$PUB/figures/figure_07_top_level_topics.pdf"
-          cp visualisations/topic_hierarchy/figure_04a_hierarchy_production.png "$PUB/figures/figure_08_production.png"
-          cp visualisations/topic_hierarchy/figure_04a_hierarchy_production.pdf "$PUB/figures/figure_08_production.pdf"
-          cp visualisations/topic_hierarchy/figure_04b_hierarchy_environment.png "$PUB/figures/figure_09_environment.png"
-          cp visualisations/topic_hierarchy/figure_04b_hierarchy_environment.pdf "$PUB/figures/figure_09_environment.pdf"
-          cp visualisations/topic_hierarchy/figure_04c_hierarchy_methods.png "$PUB/figures/figure_10_methods.png"
-          cp visualisations/topic_hierarchy/figure_04c_hierarchy_methods.pdf "$PUB/figures/figure_10_methods.pdf"
-          cp visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.png "$PUB/figures/figure_11_industry_and_governance.png"
-          cp visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.pdf "$PUB/figures/figure_11_industry_and_governance.pdf"
-          cp visualisations/topic_hierarchy/figure_04e_hierarchy_product.png "$PUB/figures/figure_12_product.png"
-          cp visualisations/topic_hierarchy/figure_04e_hierarchy_product.pdf "$PUB/figures/figure_12_product.pdf"
-          cp visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.png "$PUB/figures/figure_13_people_and_society.png"
-          cp visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.pdf "$PUB/figures/figure_13_people_and_society.pdf"
-          cp visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.png "$PUB/figures/figure_14_inputs_and_resources.png"
-          cp visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.pdf "$PUB/figures/figure_14_inputs_and_resources.pdf"
-          cp visualisations/figure_08_umbrella_review.png "$PUB/figures/figure_15_umbrella_review.png"
-          cp visualisations/figure_08_umbrella_review.pdf "$PUB/figures/figure_15_umbrella_review.pdf"
+          cp outputs/citesource_contribution/database_unique_contribution.png "$PUB/figures/figure_02_database_unique_contribution.png"
+          cp outputs/citesource_contribution/database_unique_contribution.pdf "$PUB/figures/figure_02_database_unique_contribution.pdf"
+          cp outputs/citesource_contribution/database_overlap_upset.png "$PUB/figures/figure_03_database_overlap.png"
+          cp outputs/citesource_contribution/database_overlap_upset.pdf "$PUB/figures/figure_03_database_overlap.pdf"
+          cp visualisations/figure_01_records_by_publication_year.png "$PUB/figures/figure_04_publication_year_species.png"
+          cp visualisations/figure_01_records_by_publication_year.pdf "$PUB/figures/figure_04_publication_year_species.pdf"
+          cp visualisations/figure_05_records_by_publication_year_high_level_topic.png "$PUB/figures/figure_05_publication_year_topics.png"
+          cp visualisations/figure_05_records_by_publication_year_high_level_topic.pdf "$PUB/figures/figure_05_publication_year_topics.pdf"
+          cp visualisations/figure_03_choropleth_records_by_country.png "$PUB/figures/figure_06_country_choropleth.png"
+          cp visualisations/figure_03_choropleth_records_by_country.pdf "$PUB/figures/figure_06_country_choropleth.pdf"
+          cp visualisations/figure_02_records_by_country.png "$PUB/figures/figure_07_country_species.png"
+          cp visualisations/figure_02_records_by_country.pdf "$PUB/figures/figure_07_country_species.pdf"
+          cp visualisations/topic_hierarchy/figure_04a_top_level_topics.png "$PUB/figures/figure_08_top_level_topics.png"
+          cp visualisations/topic_hierarchy/figure_04a_top_level_topics.pdf "$PUB/figures/figure_08_top_level_topics.pdf"
+          cp visualisations/topic_hierarchy/figure_04a_hierarchy_production.png "$PUB/figures/figure_09_production.png"
+          cp visualisations/topic_hierarchy/figure_04a_hierarchy_production.pdf "$PUB/figures/figure_09_production.pdf"
+          cp visualisations/topic_hierarchy/figure_04b_hierarchy_environment.png "$PUB/figures/figure_10_environment.png"
+          cp visualisations/topic_hierarchy/figure_04b_hierarchy_environment.pdf "$PUB/figures/figure_10_environment.pdf"
+          cp visualisations/topic_hierarchy/figure_04c_hierarchy_methods.png "$PUB/figures/figure_11_methods.png"
+          cp visualisations/topic_hierarchy/figure_04c_hierarchy_methods.pdf "$PUB/figures/figure_11_methods.pdf"
+          cp visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.png "$PUB/figures/figure_12_industry_and_governance.png"
+          cp visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.pdf "$PUB/figures/figure_12_industry_and_governance.pdf"
+          cp visualisations/topic_hierarchy/figure_04e_hierarchy_product.png "$PUB/figures/figure_13_product.png"
+          cp visualisations/topic_hierarchy/figure_04e_hierarchy_product.pdf "$PUB/figures/figure_13_product.pdf"
+          cp visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.png "$PUB/figures/figure_14_people_and_society.png"
+          cp visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.pdf "$PUB/figures/figure_14_people_and_society.pdf"
+          cp visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.png "$PUB/figures/figure_15_inputs_and_resources.png"
+          cp visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.pdf "$PUB/figures/figure_15_inputs_and_resources.pdf"
+          cp visualisations/figure_08_umbrella_review.png "$PUB/figures/figure_16_umbrella_review.png"
+          cp visualisations/figure_08_umbrella_review.pdf "$PUB/figures/figure_16_umbrella_review.pdf"
 
           # Data products needed to audit figures and reuse the corpus.
           cp visualisations/figure_07_flow_diagram_counts.json "$PUB/flow_counts.json"
@@ -337,13 +339,13 @@ jobs:
           # Snapshot the exact plotting code used for this publication package.
           cp visualisations/canonical_figure_data.R "$PUB/figure_code/canonical_figure_data.R"
           cp visualisations/07_flow_diagram.R "$PUB/figure_code/figure_01_flow_diagram.R"
-          cp scripts/reporting/plot_citesource_database_contribution.R "$PUB/figure_code/figure_02_database_contribution.R"
-          cp visualisations/01_records_by_publication_year.R "$PUB/figure_code/figure_03_publication_year_species.R"
-          cp visualisations/05_records_by_publication_year_high_level_topic.R "$PUB/figure_code/figure_04_publication_year_topics.R"
-          cp visualisations/03_choropleth_records_by_country.R "$PUB/figure_code/figure_05_country_choropleth.R"
-          cp visualisations/02_records_by_country.R "$PUB/figure_code/figure_06_country_species.R"
-          cp visualisations/04_topic_hierarchy.R "$PUB/figure_code/figures_07_to_14_topic_hierarchy.R"
-          cp visualisations/08_umbrella_review_figure.R "$PUB/figure_code/figure_15_umbrella_review.R"
+          cp scripts/reporting/plot_citesource_database_contribution.R "$PUB/figure_code/figures_02_03_database_sources.R"
+          cp visualisations/01_records_by_publication_year.R "$PUB/figure_code/figure_04_publication_year_species.R"
+          cp visualisations/05_records_by_publication_year_high_level_topic.R "$PUB/figure_code/figure_05_publication_year_topics.R"
+          cp visualisations/03_choropleth_records_by_country.R "$PUB/figure_code/figure_06_country_choropleth.R"
+          cp visualisations/02_records_by_country.R "$PUB/figure_code/figure_07_country_species.R"
+          cp visualisations/04_topic_hierarchy.R "$PUB/figure_code/figures_08_to_15_topic_hierarchy.R"
+          cp visualisations/08_umbrella_review_figure.R "$PUB/figure_code/figure_16_umbrella_review.R"
 
           cp outputs/workflow09_manuscript/methods.{md,html,docx,pdf} "$PUB/manuscript/"
           cp outputs/workflow09_manuscript/results.{md,html,docx,pdf} "$PUB/manuscript/"
@@ -388,26 +390,26 @@ jobs:
           stopifnot(as.integer(flow$counts$final_included) == expected_n)
 
           stems <- c(
-            "flow_diagram","database_contribution","publication_year_species",
-            "publication_year_topics","country_choropleth","country_species",
-            "top_level_topics","production","environment","methods",
+            "flow_diagram","database_unique_contribution","database_overlap",
+            "publication_year_species","publication_year_topics","country_choropleth",
+            "country_species","top_level_topics","production","environment","methods",
             "industry_and_governance","product","people_and_society",
             "inputs_and_resources","umbrella_review"
           )
           required_figures <- unlist(lapply(c("png","pdf"), function(ext) {
-            sprintf("docs/reporting/workflow_09/figures/figure_%02d_%s.%s", 1:15, stems, ext)
+            sprintf("docs/reporting/workflow_09/figures/figure_%02d_%s.%s", 1:16, stems, ext)
           }), use.names = FALSE)
           required <- c(
             required_figures,
             "docs/reporting/workflow_09/figure_code/canonical_figure_data.R",
             "docs/reporting/workflow_09/figure_code/figure_01_flow_diagram.R",
-            "docs/reporting/workflow_09/figure_code/figure_02_database_contribution.R",
-            "docs/reporting/workflow_09/figure_code/figure_03_publication_year_species.R",
-            "docs/reporting/workflow_09/figure_code/figure_04_publication_year_topics.R",
-            "docs/reporting/workflow_09/figure_code/figure_05_country_choropleth.R",
-            "docs/reporting/workflow_09/figure_code/figure_06_country_species.R",
-            "docs/reporting/workflow_09/figure_code/figures_07_to_14_topic_hierarchy.R",
-            "docs/reporting/workflow_09/figure_code/figure_15_umbrella_review.R",
+            "docs/reporting/workflow_09/figure_code/figures_02_03_database_sources.R",
+            "docs/reporting/workflow_09/figure_code/figure_04_publication_year_species.R",
+            "docs/reporting/workflow_09/figure_code/figure_05_publication_year_topics.R",
+            "docs/reporting/workflow_09/figure_code/figure_06_country_choropleth.R",
+            "docs/reporting/workflow_09/figure_code/figure_07_country_species.R",
+            "docs/reporting/workflow_09/figure_code/figures_08_to_15_topic_hierarchy.R",
+            "docs/reporting/workflow_09/figure_code/figure_16_umbrella_review.R",
             "docs/reporting/workflow_09/manuscript/long_form_methods.Rmd",
             "docs/reporting/workflow_09/manuscript/long_form_results.Rmd",
             "docs/reporting/workflow_09/manuscript/references.bib",
