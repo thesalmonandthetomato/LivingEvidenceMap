@@ -26,6 +26,11 @@ norm_iso_set<-function(x){
   paste(sort(unique(z)),collapse=";")
 }
 canon_hash<-function(x)digest(toJSON(x,auto_unbox=TRUE,null="null",na="null",digits=NA,pretty=FALSE),algo="sha256",serialize=FALSE)
+jac_set<-function(a,b){
+  u<-union(a,b)
+  if(!length(u)) return(1)
+  length(intersect(a,b))/length(u)
+}
 
 w05<-read_csv(w05_path,show_col_types=FALSE,progress=FALSE)
 w06<-read_csv(w06_path,show_col_types=FALSE,progress=FALSE)
@@ -149,12 +154,36 @@ for(rid in resid_ids){
 # W07 human-review cases.
 if(nrow(w07q)&&(!all(c("record_id","workflow08_reason")%in%names(w07q))||anyDuplicated(w07q$record_id)))stop("Invalid W07 human-review layer",call.=FALSE)
 score_index<-split(seq_len(nrow(w07s)),as.character(w07s$record_id))
+w07_extreme_autoaccepted<-0L
 for(i in seq_len(nrow(w07q))){
   q<-w07q[i,,drop=FALSE];rid<-as.character(q$record_id);reason<-as.character(q$workflow08_reason)
   if(reason=="extreme_three_pass_topic_disagreement"){
     idx<-score_index[[rid]]
     if(is.null(idx)||!length(idx))stop("Topic disagreement lacks pathway scores: ",rid,call.=FALSE)
     z<-w07s[idx,,drop=FALSE]
+
+    # Current published W07 may contain legacy extreme-disagreement flags
+    # calculated before deterministic general/fallback pruning. Recompute on
+    # the already-pruned pathway set and suppress false-positive human review.
+    kept<-rep(TRUE,nrow(z))
+    if("retention_basis"%in%names(z)) {
+      kept<-!grepl("^general_code_superseded_by_specific_code$",clean_chr(z$retention_basis))
+    }
+    zk<-z[kept,,drop=FALSE]
+    pass_sets<-lapply(c("role_a","role_b","role_c"),function(col){
+      if(!col%in%names(zk)) return(character())
+      as.character(zk$path_id[nzchar(trimws(clean_chr(zk[[col]])))])
+    })
+    corrected_mean_j<-mean(c(
+      jac_set(pass_sets[[1]],pass_sets[[2]]),
+      jac_set(pass_sets[[1]],pass_sets[[3]]),
+      jac_set(pass_sets[[2]],pass_sets[[3]])
+    ))
+    if(is.finite(corrected_mean_j) && corrected_mean_j >= 0.20){
+      w07_extreme_autoaccepted<-w07_extreme_autoaccepted+1L
+      next
+    }
+
     pathways<-lapply(seq_len(nrow(z)),function(j)list(
       path_id=as.character(z$path_id[[j]]),
       hierarchy_path=as.character(z$hierarchy_path[[j]]),
@@ -168,7 +197,7 @@ for(i in seq_len(nrow(w07q))){
     add_issue(rid,list(
       source_workflow="07",issue_type="topic_extreme_disagreement",
       automated_value=list(
-        mean_pairwise_jaccard=as.numeric(q$mean_pairwise_jaccard),
+        mean_pairwise_jaccard=corrected_mean_j,
         topic_count_raw=as.integer(q$topic_count_raw),
         topic_count_retained=as.integer(q$topic_count_retained),
         pathways=pathways
@@ -215,7 +244,9 @@ manifest<-list(
   w06_model_failures=nrow(w06_failures),
   w06_grounding_exact_agreement_autoaccepted=length(exact_grounding_accept_ids),
   w06_grounding_residual=length(resid_ids),
-  w07_human_review=nrow(w07q),
+  w07_human_review_source=nrow(w07q),
+  w07_extreme_disagreement_autoaccepted_after_pruning=w07_extreme_autoaccepted,
+  w07_human_review=nrow(w07q)-w07_extreme_autoaccepted,
   w07_late_automatic_exclusions=nrow(w07x),
   unique_records_with_review_issues=length(queue),
   total_review_issues=nrow(issue_rows),
