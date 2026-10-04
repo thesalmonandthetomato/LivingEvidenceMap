@@ -1,0 +1,76 @@
+name: TEMP validate W06 auto-validation no model
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w06_autovalidation_no_model.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('readr','dplyr','jsonlite','digest','httr2'))
+
+      - name: Parse validation implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='R/geography_grounding.R')
+          parse(file='scripts/updater/workflow_06_validate_autovalidation_no_model.R')
+          parse(file='scripts/updater/workflow_06_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_07_restore_state_from_zenodo.R')
+          cat('PASS: W06 no-model validation implementation parses\n')
+
+      - name: Restore current W06 and W07 states
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R \
+            --pointer docs/workflow06/zenodo/run-37114864202.json \
+            --output-dir inputs/w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R \
+            --pointer docs/workflow07/zenodo/run-37153534771.json \
+            --output-dir inputs/w07
+          cp "$(find inputs/w06 -type f -name workflow06_geography_layer.csv -print -quit)" inputs/workflow06_geography_layer.csv
+          cp "$(find inputs/w07 -type f -name workflow07_records.csv -print -quit)" inputs/workflow07_records.csv
+          test -f inputs/workflow06_geography_layer.csv
+          test -f inputs/workflow07_records.csv
+
+      - name: Replay W06 auto-validation without model calls
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_06_validate_autovalidation_no_model.R \
+            --w06 inputs/workflow06_geography_layer.csv \
+            --records inputs/workflow07_records.csv \
+            --gazetteer config/global_country_gazetteer_v3.csv \
+            --output-dir outputs/workflow06_no_model_validation
+
+      - name: Upload validation artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow06-no-model-validation-${{ github.run_id }}
+          path: outputs/workflow06_no_model_validation/
+          retention-days: 30
+          if-no-files-found: warn
