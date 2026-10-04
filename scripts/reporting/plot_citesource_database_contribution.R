@@ -23,7 +23,7 @@ if (!file.exists(input_path)) stop(sprintf("Canonical JSONL not found: %s", inpu
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-source_labels <- c(
+known_source_labels <- c(
   lens = "Lens",
   scopus = "Scopus",
   openalex = "OpenAlex",
@@ -32,6 +32,11 @@ source_labels <- c(
   cab = "CAB Abstracts",
   proquest = "ProQuest/PQD&T"
 )
+pretty_source_label <- function(code) {
+  if (code %in% names(known_source_labels)) return(unname(known_source_labels[[code]]))
+  tools::toTitleCase(gsub("[_-]+", " ", code))
+}
+observed_source_codes <- character()
 
 
 included_ids <- character()
@@ -63,16 +68,17 @@ repeat {
   if (is.null(mans) || !length(mans)) stop(sprintf("Canonical record %s has no manifestations", rid), call. = FALSE)
 
   src <- unique(vapply(mans, function(m) as.character(m$source), character(1)))
-  unknown <- setdiff(src, names(source_labels))
-  if (length(unknown)) stop(sprintf("Unknown source(s) in %s: %s", rid, paste(unknown, collapse = ", ")), call. = FALSE)
+  if (any(!nzchar(src))) stop(sprintf("Blank source in canonical record %s", rid), call. = FALSE)
+  observed_source_codes <- union(observed_source_codes, src)
 
-  # Fixed source order makes outputs deterministic.
-  src <- names(source_labels)[names(source_labels) %in% src]
+  # Alphabetical display-label order makes outputs deterministic without
+  # requiring a hard-coded source inventory.
+  src <- src[order(vapply(src, pretty_source_label, character(1)))]
 
   n <- n + 1L
   rows[[n]] <- data.frame(
     duplicate_id = rid,
-    cite_source = paste(unname(source_labels[src]), collapse = ", "),
+    cite_source = paste(vapply(src, pretty_source_label, character(1)), collapse = ", "),
     cite_label = "search",
     cite_string = "canonical",
     stringsAsFactors = FALSE
@@ -84,6 +90,12 @@ on.exit(NULL, add = FALSE)
 canonical_sources <- bind_rows(rows)
 if (!nrow(canonical_sources)) stop("No canonical records parsed", call. = FALSE)
 if (anyDuplicated(canonical_sources$duplicate_id)) stop("Duplicate canonical record IDs", call. = FALSE)
+
+source_codes <- sort(unique(observed_source_codes))
+source_labels <- setNames(vapply(source_codes, pretty_source_label, character(1)), source_codes)
+if (anyDuplicated(unname(source_labels))) {
+  stop("Source display labels must be unique for CiteSource reporting", call. = FALSE)
+}
 
 
 # Machine-readable provenance matrix: one row per canonical work, one logical
