@@ -310,16 +310,17 @@ jobs:
           # Apply deterministic Word/PDF publication styling after Pandoc render.
           # This preserves manuscript content while enforcing requested table
           # widths, caption sizing/spacing, and heading spacing.
-          system2(
+          style_status <- system2(
             "Rscript",
             c(
               "scripts/reporting/style_workflow09_docx.R",
               "outputs/workflow09_manuscript/methods.docx",
               "outputs/workflow09_manuscript/results.docx"
-            ),
-            stdout = "",
-            stderr = ""
+            )
           )
+          if (!identical(style_status, 0L)) {
+            stop("Workflow 09 DOCX styling failed", call. = FALSE)
+          }
 
           stopifnot(all(file.exists(file.path(
             "outputs/workflow09_manuscript",
