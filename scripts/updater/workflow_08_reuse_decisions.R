@@ -52,30 +52,60 @@ for(key in names(pdec)){
 
 compatible_geo_migration<-function(key,cur,pdec_row,prior_hash){
   if(is.null(pdec_row)||is.null(prior_hash))return(NULL)
-  if(clean(cur$issue$issue_type)!="geography_unresolved")return(NULL)
-
-  # Reconstruct the exact pre-consolidation issue state. The only permitted
-  # difference is the allowed decision vocabulary.
-  old_state<-list(
-    review_key=key,
-    record_id=clean(cur$record$record_id),
-    issue_type=clean(cur$issue$issue_type),
-    source_workflow=clean(cur$issue$source_workflow),
-    title=clean(cur$record$title),
-    abstract=clean(cur$record$abstract),
-    automated_value=cur$issue$automated_value,
-    allowed_human_outcomes=c("assign_country_set","assign_none")
-  )
-  old_hash<-canon_hash(old_state)
-  if(!identical(tolower(old_hash),tolower(prior_hash)))return(NULL)
+  typ<-clean(cur$issue$issue_type)
+  if(!typ%in%c("geography_unresolved","geography_evidence_unvalidated","geography_model_failure"))return(NULL)
 
   current_allowed<-as.character(cur$issue$allowed_human_outcomes)
-  expected_current<-c("accept_model","override_country_set","assign_none")
-  if(!identical(current_allowed,expected_current))stop("Unexpected current geography_unresolved vocabulary for ",key,call.=FALSE)
+  expected_current<-switch(
+    typ,
+    geography_unresolved=c("accept_model","override_country_set","assign_none","exclude_record"),
+    geography_evidence_unvalidated=c("accept_model","override_country_set","assign_none","exclude_record"),
+    geography_model_failure=c("assign_country_set","assign_none","exclude_record")
+  )
+  if(!identical(current_allowed,expected_current))stop("Unexpected current geography vocabulary for ",key,call.=FALSE)
+
+  historical_vocabularies<-switch(
+    typ,
+    geography_unresolved=list(
+      c("accept_model","override_country_set","assign_none"),
+      c("assign_country_set","assign_none")
+    ),
+    geography_evidence_unvalidated=list(
+      c("accept_model","override_country_set","assign_none")
+    ),
+    geography_model_failure=list(
+      c("assign_country_set","assign_none")
+    )
+  )
+
+  matched_old_hash<-""
+  matched_old_vocab<-NULL
+  for(vocab in historical_vocabularies){
+    old_state<-list(
+      review_key=key,
+      record_id=clean(cur$record$record_id),
+      issue_type=typ,
+      source_workflow=clean(cur$issue$source_workflow),
+      title=clean(cur$record$title),
+      abstract=clean(cur$record$abstract),
+      automated_value=cur$issue$automated_value,
+      allowed_human_outcomes=vocab
+    )
+    h<-canon_hash(old_state)
+    if(identical(tolower(h),tolower(prior_hash))){
+      matched_old_hash<-h
+      matched_old_vocab<-vocab
+      break
+    }
+  }
+  if(!nzchar(matched_old_hash))return(NULL)
 
   d<-pdec_row
   dec<-clean(d$decision)
-  if(identical(dec,"assign_country_set")){
+
+  # The oldest unresolved-geography vocabulary used assign_country_set;
+  # migrate that label to the consolidated reviewer-facing code.
+  if(typ=="geography_unresolved" && identical(dec,"assign_country_set")){
     fv<-d$final_value
     iso<-as.character(fv$iso3c%||%character())
     nm<-as.character(fv$country_names%||%character())
@@ -83,18 +113,36 @@ compatible_geo_migration<-function(key,cur,pdec_row,prior_hash){
       stop("Malformed legacy assign_country_set decision for ",key,call.=FALSE)
     }
     d$decision<-"override_country_set"
-  }else if(identical(dec,"assign_none")){
+    dec<-"override_country_set"
+  }
+
+  permitted_prior<-switch(
+    typ,
+    geography_unresolved=c("accept_model","override_country_set","assign_none"),
+    geography_evidence_unvalidated=c("accept_model","override_country_set","assign_none"),
+    geography_model_failure=c("assign_country_set","assign_none")
+  )
+  if(!dec%in%permitted_prior)stop("Unexpected historical geography decision for ",key,": ",dec,call.=FALSE)
+
+  if(identical(dec,"assign_none")){
     fv<-d$final_value
     if(clean(fv$geography_status)!="NONE")stop("Malformed legacy assign_none decision for ",key,call.=FALSE)
-  }else{
-    stop("Unexpected legacy geography_unresolved decision for ",key,": ",dec,call.=FALSE)
+  }
+  if(dec%in%c("override_country_set","assign_country_set")){
+    fv<-d$final_value
+    iso<-as.character(fv$iso3c%||%character())
+    nm<-as.character(fv$country_names%||%character())
+    if(clean(fv$geography_status)!="RESOLVED"||!length(iso)||length(iso)!=length(nm)||any(nchar(iso)!=3L)){
+      stop("Malformed legacy country-set decision for ",key,call.=FALSE)
+    }
   }
 
   d$issue_state_sha256<-clean(cur$issue$issue_state_sha256)
   d$reuse<-list(
     reused=TRUE,
-    basis="compatible_geography_unresolved_vocabulary_migration",
-    prior_issue_state_sha256=old_hash,
+    basis="compatible_geography_vocabulary_migration",
+    prior_issue_state_sha256=matched_old_hash,
+    prior_allowed_human_outcomes=matched_old_vocab,
     prior_queue_sha256=clean(d$queue_sha256)
   )
   d
