@@ -13,6 +13,12 @@ This document serves two purposes:
 
 Operational recoveries, historical-state reuse and one-off adjudication actions used while establishing the validated baseline are intentionally excluded from this workflow description. They are documented separately in `docs/reporting/workflow_04/AD_HOC_ACTIONS.md`.
 
+## Current production state (4 October 2026)
+
+The current authoritative W04 state is source run **37051672356**, published as restricted Zenodo record **23117851** (DOI `10.5281/zenodo.23117851`). After the 12 W03 publication-status exclusions, **47,082 records** were screened: **21,819 retained**, **25,263 excluded**, and **0 unresolved**. The final screening-layer SHA-256 is `2d91d5d6b128136cd8edde5e6187cf1ff96dfa5c9257cee93b9d13fd4a20a947`.
+
+The W04 production and Shiny-resume routes explicitly update current-run/Shiny progress after publication, including the retained/excluded counts.
+
 ## Functionality map
 
 ```text
