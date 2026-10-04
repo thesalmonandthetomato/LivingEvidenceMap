@@ -111,7 +111,7 @@ for(i in seq_len(nrow(w06_unresolved))){
 # W06 evidence-grounding residual after deterministic revalidation.
 resid_ids<-unique(as.character(g_resid$record_id))
 resid_ids<-resid_ids[nzchar(resid_ids)]
-resid_ids<-setdiff(resid_ids,as.character(w06_failures$record_id))
+resid_ids<-setdiff(resid_ids,unique(c(as.character(w06_failures$record_id),as.character(w06_unresolved$record_id))))
 if(length(setdiff(resid_ids,w06$record_id)))stop("Grounding residual contains ID outside W06",call.=FALSE)
 for(rid in resid_ids){
   z<-w06[match(rid,w06$record_id),,drop=FALSE]
