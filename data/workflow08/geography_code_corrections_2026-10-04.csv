@@ -1,0 +1,6 @@
+record_id,corrected_status,corrected_iso3c,corrected_country_names,correction_reason
+work-04db00c1edfc2ca7,RESOLVED,"NOR; USA","Norway; United States","Removed UNK=European Community because European Community is not a country-level ISO3 geography."
+work-0f8621294fe78304,RESOLVED,IND,India,"Corrected model-generated invalid ISO3 INN to IND for India."
+work-bf3f9e8b49733fac,RESOLVED,"BRA; CHL; ITA; MEX; NIC","Brazil; Chile; Italy; Mexico; Nicaragua","Corrected model-generated invalid ISO3 NIQ to NIC for Nicaragua."
+work-cdc027e9db628b7a,RESOLVED,FIN,Finland,"Corrected model-generated FIJ to FIN for Finland."
+work-d5763e5c6c6ed928,RESOLVED,"GBR; IRL","United Kingdom; Ireland","Corrected human-entered invalid ISO3 IRE to IRL for Ireland."
