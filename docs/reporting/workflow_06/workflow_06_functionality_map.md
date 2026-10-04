@@ -103,7 +103,8 @@ The semantic result is authoritative for automated coding:
 - deterministic country/countries + Luna `NONE` -> accept Luna `NONE`;
 - deterministic `NONE` + Luna country/countries -> accept Luna country/countries;
 - both return different country sets -> accept Luna by default;
-- Luna `UNRESOLVED` -> flag for W08;
+- Luna `UNRESOLVED` with no returned ISO3 country code and no model/API failure -> deterministically interpret as `NONE` for downstream geography, while retaining the raw `UNRESOLVED` model status in the W06 provenance layer;
+- Luna `UNRESOLVED` with one or more returned ISO3 country codes -> flag for W08;
 - terminal model/API failure -> flag for W08;
 - a resolved Luna geography with an evidence-string validation failure is retained automatically when the geography is independently corroborated by either exact deterministic/Luna country-set agreement or explicit country-level text cues; otherwise it is flagged for W08.
 
@@ -128,6 +129,8 @@ W06 deliberately records two separate validation concepts.
 3. every Luna country has an explicit country-level cue in the title/abstract.
 
 For rule 3, accepted cues are restricted to unambiguous gazetteer entries classified as country names, country-name variants, standard country abbreviations or demonyms. Subnational places, capitals, administrative regions and other place-to-country mappings do **not** satisfy this rule. Thus `UK` -> GBR or `Norwegian` -> NOR can corroborate an assignment, whereas a town or fjord name alone cannot.
+
+A fourth deterministic rule applies to model outputs marked `UNRESOLVED`: when Luna returned **no ISO3 country code at all** and the record was not a model/API failure, the downstream geography outcome is `NONE`. The raw Luna `UNRESOLVED` status is retained in the W06 row for audit, but the case is auto-validated with basis `unresolved_no_country_assign_none` and is not escalated to human review. An unresolved result containing one or more candidate ISO3 codes remains a human-review case.
 
 This separation preserves auditability: a failed quote-string check remains recorded as `evidence_all_grounded = FALSE`; it is not rewritten merely because the geography is independently corroborated. The final W06 layer additionally records `geography_autovalidated` and `geography_auto_validation_basis`.
 
@@ -155,7 +158,7 @@ Workflow 06 uses a minimum-escalation rule.
 
 Records are sent to Workflow 08 only when the semantic result remains:
 
-- `UNRESOLVED`;
+- `UNRESOLVED` **and contains one or more candidate ISO3 country codes**;
 - structurally invalid after retry;
 - a model/API failure after retry; or
 - `RESOLVED` but still not auto-validated after raw evidence grounding, exact deterministic/Luna agreement and strict explicit-country-cue corroboration have all been evaluated.
@@ -253,7 +256,7 @@ Integrity is verified through stable record identity, cardinality checks, prompt
 
 ## Methods text for research reporting
 
-> **Workflow 06: substantive study geography.** Substantive study geography was coded from publication titles and abstracts using GPT-5.6 Luna with a locked structured prompt. Countries were assigned only where the supplied text explicitly established substantive study activity or made a geographically defined system, industry, sector, provenance or study material an explicit object of analysis; incidental geography and geography requiring external knowledge were excluded. Multiple countries were retained where supported. Returned evidence was checked against the source text using a grounding validator tolerant of harmless formatting differences and recoverable compressed quotations. Raw evidence-string validation was kept separate from geography-level auto-validation. Resolved assignments with a failed evidence-string check were retained without human review when independently corroborated either by exact agreement with the deterministic ISO3 set or by explicit unambiguous country names, standard abbreviations or demonyms in the title/abstract. Subnational place-to-country inference was not accepted for this purpose. The semantic model remained authoritative when deterministic and semantic country sets disagreed. Only unresolved, terminal-failure or still-uncorroborated cases were flagged for subsequent human adjudication.
+> **Workflow 06: substantive study geography.** Substantive study geography was coded from publication titles and abstracts using GPT-5.6 Luna with a locked structured prompt. Countries were assigned only where the supplied text explicitly established substantive study activity or made a geographically defined system, industry, sector, provenance or study material an explicit object of analysis; incidental geography and geography requiring external knowledge were excluded. Multiple countries were retained where supported. Returned evidence was checked against the source text using a grounding validator tolerant of harmless formatting differences and recoverable compressed quotations. Raw evidence-string validation was kept separate from geography-level auto-validation. Resolved assignments with a failed evidence-string check were retained without human review when independently corroborated either by exact agreement with the deterministic ISO3 set or by explicit unambiguous country names, standard abbreviations or demonyms in the title/abstract. Subnational place-to-country inference was not accepted for this purpose. Model outputs marked `UNRESOLVED` but containing no returned ISO3 country code and no model/API failure were deterministically treated as `NONE` downstream while preserving the raw model status for audit. The semantic model remained authoritative when deterministic and semantic country sets disagreed. Only unresolved cases containing candidate country codes, terminal failures or still-uncorroborated resolved cases were flagged for subsequent human adjudication.
 
 ## Reporting status
 
