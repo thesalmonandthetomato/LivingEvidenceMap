@@ -209,7 +209,9 @@ jobs:
             --status docs/current_run/current_run_status.json \
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
             --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
-          git add docs/current_run/current_run_status.json
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W04 --run-id "$SOURCE_RUN_ID"
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+          git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
           if ! git diff --cached --quiet; then
             git commit -m "Update current-run status through W04 [skip ci]"
             git pull --rebase origin "$WORKFLOW04_BRANCH"
