@@ -209,13 +209,19 @@ jobs:
             stop("Compact Workflow 09 stage summaries do not match the current-run workflow IDs", call. = FALSE)
           }
 
+          membership_path <- file.path(root, "w01_source_membership.csv")
+          if (!file.exists(membership_path)) stop("Compact W01 source membership is missing", call. = FALSE)
+
           w01_src <- fromJSON(file.path(root, "w01_source_manifest.json"), simplifyVector = FALSE)
           w08_src <- fromJSON(file.path(root, "w08_source_manifest.json"), simplifyVector = FALSE)
+          membership_sha <- digest(file = membership_path, algo = "sha256", serialize = FALSE)
           stopifnot(
             identical(as.character(w01_src$source_run_id), as.character(status$workflow_runs$W01)),
             identical(as.character(w08_src$source_run_id), as.character(status$workflow_runs$W08)),
             identical(tolower(as.character(w01_src$canonical_sha256)), tolower(as.character(w01$canonical_jsonl_sha256))),
             identical(tolower(as.character(w08_src$canonical_sha256)), tolower(as.character(w08$final_canonical_jsonl_sha256))),
+            identical(tolower(as.character(w01_src$w01_source_membership_sha256)), tolower(membership_sha)),
+            identical(tolower(as.character(w08_src$w01_source_membership_sha256)), tolower(membership_sha)),
             as.integer(w01_src$canonical_records) == as.integer(w01$canonical_records),
             as.integer(w08_src$canonical_records) == as.integer(w08$canonical_records)
           )
