@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
 suppressPackageStartupMessages({library(readr);library(dplyr);library(jsonlite);library(digest)})
+source("R/geography_grounding.R")
 
 args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
@@ -8,8 +9,9 @@ reuse_path<-arg("--reused")
 fresh_path<-arg("--fresh","")
 prepare_manifest_path<-arg("--prepare-manifest")
 prompt_path<-arg("--prompt","config/workflow06_geography_semantic_prompt_v2.txt")
+gazetteer_path<-arg("--gazetteer","config/global_country_gazetteer_v3.csv")
 output_dir<-arg("--output-dir","outputs/workflow06_final")
-if(any(vapply(c(current_path,reuse_path,prepare_manifest_path,prompt_path),function(p)is.null(p)||!file.exists(p),logical(1))))stop("Required W06 merge input missing",call.=FALSE)
+if(any(vapply(c(current_path,reuse_path,prepare_manifest_path,prompt_path,gazetteer_path),function(p)is.null(p)||!file.exists(p),logical(1))))stop("Required W06 merge input missing",call.=FALSE)
 if(nzchar(fresh_path)&&!file.exists(fresh_path))stop("Fresh W06 geography layer not found",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
@@ -17,6 +19,7 @@ current<-read_csv(current_path,show_col_types=FALSE,progress=FALSE)
 reuse<-read_csv(reuse_path,show_col_types=FALSE,progress=FALSE)
 fresh<-if(nzchar(fresh_path))read_csv(fresh_path,show_col_types=FALSE,progress=FALSE)else current[0,,drop=FALSE]
 prep<-fromJSON(prepare_manifest_path,simplifyVector=FALSE)
+gazetteer<-read_csv(gazetteer_path,show_col_types=FALSE,progress=FALSE)
 
 if(any(!nzchar(current$record_id))||anyDuplicated(current$record_id)||anyDuplicated(current$record_sequence))stop("Current W06 identity/sequence invariant failed",call.=FALSE)
 for(z in list(reuse,fresh))if(nrow(z)&&(any(!nzchar(z$record_id))||anyDuplicated(z$record_id)))stop("Reused/fresh W06 identity invariant failed",call.=FALSE)
@@ -57,10 +60,23 @@ x<-x |> mutate(
   luna_iso3c=norm_set(luna_iso3c),
   exact_agreement=det_iso3c==luna_iso3c,
   deterministic_none=!nzchar(det_iso3c),
-  luna_none=geography_status=="NONE",
+  luna_none=geography_status=="NONE"
+)
+
+validation<-lapply(seq_len(nrow(x)),function(i)geography_auto_validation(
+  status=x$geography_status[[i]],
+  llm_failed=x$llm_failed[[i]] %in% TRUE,
+  luna_iso3c=x$luna_iso3c[[i]],
+  deterministic_iso3c=x$det_iso3c[[i]],
+  evidence_all_grounded=x$evidence_all_grounded[[i]] %in% TRUE,
+  title=x$title[[i]],abstract=x$abstract[[i]],gazetteer=gazetteer
+))
+x$geography_autovalidated<-vapply(validation,function(z)isTRUE(z$valid),logical(1))
+x$geography_auto_validation_basis<-vapply(validation,function(z)as.character(z$basis),character(1))
+x<-x |> mutate(
   discrepancy_type=case_when(
     llm_failed %in% TRUE ~ "llm_failure",
-    !(evidence_all_grounded %in% TRUE) ~ "ungrounded_evidence",
+    geography_status=="UNRESOLVED" ~ "unresolved",
     exact_agreement ~ "exact_agreement",
     deterministic_none & geography_status=="RESOLVED" ~ "luna_only_geography",
     !deterministic_none & luna_none ~ "deterministic_only_geography",
@@ -74,6 +90,7 @@ if(any(!x$geography_status%in%allowed))stop("Invalid geography_status in complet
 write_csv(x,file.path(output_dir,"geography_semantic_final.csv"),na="")
 write_csv(x |> filter(geography_status=="UNRESOLVED"),file.path(output_dir,"geography_unresolved.csv"),na="")
 write_csv(x |> filter(!(evidence_all_grounded %in% TRUE)),file.path(output_dir,"geography_ungrounded_evidence.csv"),na="")
+write_csv(x |> filter(!(geography_autovalidated %in% TRUE)),file.path(output_dir,"geography_review_residual.csv"),na="")
 write_csv(x |> filter(llm_failed %in% TRUE),file.path(output_dir,"geography_llm_failures.csv"),na="")
 write_csv(x |> filter(discrepancy_type!="exact_agreement"),file.path(output_dir,"geography_deterministic_qc_discrepancies.csv"),na="")
 write_csv(x |> count(discrepancy_type,name="n") |> mutate(pct=100*n/nrow(x)) |> arrange(desc(n)),
@@ -88,7 +105,8 @@ keep<-c("record_id","record_sequence","geography_input_sha256",
         "geography_status","luna_iso3c","luna_country_names","luna_evidence",
         "luna_mapping_reason","evidence_all_grounded","geography_reason",
         "llm_failed","llm_error","det_iso3c","exact_agreement",
-        "deterministic_none","luna_none","discrepancy_type")
+        "deterministic_none","luna_none","geography_autovalidated",
+        "geography_auto_validation_basis","discrepancy_type")
 write_csv(x[,keep],file.path(output_dir,"workflow06_geography_layer.csv"),na="")
 
 # New durable JSONL is generated from the complete current sparse state.
@@ -116,6 +134,10 @@ summary<-list(
   none_n=sum(x$geography_status=="NONE"),
   unresolved_n=sum(x$geography_status=="UNRESOLVED"),
   evidence_not_grounded_n=sum(!(x$evidence_all_grounded%in%TRUE)),
+  geography_autovalidated_n=sum(x$geography_autovalidated%in%TRUE),
+  geography_review_residual_n=sum(!(x$geography_autovalidated%in%TRUE)),
+  autoaccepted_exact_agreement_n=sum(x$geography_auto_validation_basis=="deterministic_exact_agreement"),
+  autoaccepted_explicit_country_cues_n=sum(x$geography_auto_validation_basis=="explicit_country_cues"),
   llm_failures_n=sum(x$llm_failed%in%TRUE),
   exact_agreement_discrepancy_class_n=sum(x$discrepancy_type=="exact_agreement"),
   qc_discrepancies_n=sum(x$discrepancy_type!="exact_agreement"),
