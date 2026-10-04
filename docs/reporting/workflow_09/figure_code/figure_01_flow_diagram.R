@@ -118,7 +118,7 @@ process_box_w <- 2.75
 # count and search date.
 n_source_cols <- if (nrow(source_meta) <= 10L) 2L else 3L
 n_source_rows <- ceiling(nrow(source_meta) / n_source_cols)
-source_panel_left <- 1.35
+source_panel_left <- 3.25
 source_panel_right <- 10.15
 source_panel_width <- source_panel_right - source_panel_left
 source_panel_bottom <- 11.55
@@ -127,15 +127,15 @@ source_panel_bottom <- 11.55
 # Fewer rows receive more breathing room; denser source inventories tighten
 # slightly while preserving the title/header separation and bottom padding.
 source_row_h <- dplyr::case_when(
-  n_source_rows <= 1L ~ 0.58,
-  n_source_rows == 2L ~ 0.52,
-  n_source_rows == 3L ~ 0.46,
-  TRUE ~ 0.42
+  n_source_rows <= 1L ~ 0.50,
+  n_source_rows == 2L ~ 0.42,
+  n_source_rows == 3L ~ 0.37,
+  TRUE ~ 0.33
 )
 source_title_offset <- 0.16
 source_header_offset <- 0.55
-source_first_row_offset <- 0.88
-source_bottom_padding <- 0.20
+source_first_row_offset <- 0.78
+source_bottom_padding <- 0.14
 source_panel_height <- source_first_row_offset +
   (n_source_rows - 1L) * source_row_h +
   source_bottom_padding
@@ -149,7 +149,7 @@ source_col_width <- (source_panel_width - 0.34) / n_source_cols
 source_name_share <- 0.46
 source_hits_x_share <- 0.56
 source_date_x_share <- 0.66
-source_name_wrap <- if (n_source_cols >= 3L) 14L else 18L
+source_name_wrap <- if (n_source_cols >= 3L) 14L else 16L
 
 source_layout <- source_meta |>
   mutate(
