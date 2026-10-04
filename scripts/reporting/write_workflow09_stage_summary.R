@@ -35,6 +35,22 @@ output_dir <- arg("--output-dir", "docs/reporting/workflow_09_inputs/current")
 
 if (!file.exists(status_path)) stop("Current-run status not found: ", status_path, call. = FALSE)
 status <- fromJSON(status_path, simplifyVector = FALSE)
+
+if (!nzchar(pointer_path) && stage != "W00") {
+  stage_run <- as.character((status$workflow_runs %||% list())[[stage]] %||% "")
+  dirs <- c(
+    W01 = "docs/deduplication/zenodo",
+    W02 = "docs/enrichment/zenodo",
+    W03 = "docs/publication_status/zenodo",
+    W04 = "docs/workflow04/zenodo",
+    W05 = "docs/workflow05/zenodo",
+    W06 = "docs/workflow06/zenodo",
+    W07 = "docs/workflow07/zenodo",
+    W08 = "docs/workflow08/zenodo"
+  )
+  if (nzchar(stage_run)) pointer_path <- file.path(unname(dirs[[stage]]), paste0("run-", stage_run, ".json"))
+}
+
 pointer <- NULL
 pointer_sha <- NULL
 if (nzchar(pointer_path)) {
