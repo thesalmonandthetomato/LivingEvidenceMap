@@ -62,6 +62,7 @@ jobs:
             'scripts/updater/workflow_06_restore_state_from_zenodo.R',
             'scripts/updater/workflow_07_restore_state_from_zenodo.R',
             'scripts/updater/workflow_08_capture_active_shiny_decisions.R',
+            'R/geography_grounding.R',
             'scripts/updater/workflow_08_export_shiny_decisions.R',
             'scripts/updater/workflow_08_finalize_canonical_dynamic.R',
             'scripts/updater/workflow_08_partition_final_outputs_dynamic.R',
