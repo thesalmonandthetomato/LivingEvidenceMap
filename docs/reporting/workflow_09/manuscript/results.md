@@ -15,7 +15,8 @@ all 21,493 records, geography for 8,923 records, and topic
 classifications for 21,246 records.
 
 <figure>
-<img src="../../visualisations/figure_07_flow_diagram.png"
+<img
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/figure_07_flow_diagram.png"
 alt="Figure 1. Flow of records through database searching, deduplication, record repair and enrichment, retraction screening, title-and-abstract screening, annotation and inclusion in the Living Evidence Map." />
 <figcaption aria-hidden="true"><strong><em>Figure 1.</em></strong>
 <em>Flow of records through database searching, deduplication, record
@@ -31,24 +32,26 @@ Figure 2 shows records contributed uniquely by each database, while
 Figure 3 shows only multi-database overlaps.
 
 <figure>
-<img src="../citesource_contribution/database_unique_contribution.png"
-alt="Figure 2. Unique contribution of each bibliographic database. Records are counted as unique when they were retrieved from that database and no other searched database. Black bars show unique records in the deduplicated corpus; olive-green bars show the subset retained in the definitive final included corpus." />
+<img
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/outputs/citesource_contribution/database_unique_contribution.png"
+alt="Figure 2. Unique contribution of each bibliographic database. Records are counted as unique when they were retrieved from that database and no other searched database. Black bars show unique records in the deduplicated corpus; salmon-pink bars show the subset retained in the definitive final included corpus." />
 <figcaption aria-hidden="true"><strong><em>Figure 2.</em></strong>
 <em>Unique contribution of each bibliographic database. Records are
 counted as unique when they were retrieved from that database and no
 other searched database. Black bars show unique records in the
-deduplicated corpus; olive-green bars show the subset retained in the
+deduplicated corpus; salmon-pink bars show the subset retained in the
 definitive final included corpus.</em></figcaption>
 </figure>
 
 <figure>
-<img src="../citesource_contribution/database_overlap_upset.png"
-alt="Figure 3. Overlap among bibliographic databases. Only records retrieved from two or more databases are shown; single-database records are presented in Figure 2. Black bars show exact database intersections in the deduplicated corpus and olive-green bars show the corresponding records retained in the definitive final included corpus. The matrix indicates the databases represented in each intersection." />
+<img
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/outputs/citesource_contribution/database_overlap_upset.png"
+alt="Figure 3. Overlap among bibliographic databases. Only records retrieved from two or more databases are shown; single-database records are presented in Figure 2. Black bars show exact database intersections in the deduplicated corpus and salmon-pink bars show the corresponding records retained in the definitive final included corpus. The matrix indicates the databases represented in each intersection." />
 <figcaption aria-hidden="true"><strong><em>Figure 3.</em></strong>
 <em>Overlap among bibliographic databases. Only records retrieved from
 two or more databases are shown; single-database records are presented
 in Figure 2. Black bars show exact database intersections in the
-deduplicated corpus and olive-green bars show the corresponding records
+deduplicated corpus and salmon-pink bars show the corresponding records
 retained in the definitive final included corpus. The matrix indicates
 the databases represented in each intersection.</em></figcaption>
 </figure>
@@ -67,7 +70,7 @@ individual records can refer to more than one eligible farmed species.
 
 <figure>
 <img
-src="../../visualisations/figure_01_records_by_publication_year.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/figure_01_records_by_publication_year.png"
 alt="Figure 4. Records by publication year and focal farmed species." />
 <figcaption aria-hidden="true"><strong><em>Figure 4.</em></strong>
 <em>Records by publication year and focal farmed
@@ -82,7 +85,7 @@ exclusive studies.
 
 <figure>
 <img
-src="../../visualisations/figure_05_records_by_publication_year_high_level_topic.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/figure_05_records_by_publication_year_high_level_topic.png"
 alt="Figure 5. Topic-assignment frequency for high-level topics by publication year." />
 <figcaption aria-hidden="true"><strong><em>Figure 5.</em></strong>
 <em>Topic-assignment frequency for high-level topics by publication
@@ -105,7 +108,7 @@ than one country where the substantive study spans multiple countries.
 
 <figure>
 <img
-src="../../visualisations/figure_03_choropleth_records_by_country.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/figure_03_choropleth_records_by_country.png"
 alt="Figure 6. Global distribution of included records by substantive study country." />
 <figcaption aria-hidden="true"><strong><em>Figure 6.</em></strong>
 <em>Global distribution of included records by substantive study
@@ -113,7 +116,8 @@ country.</em></figcaption>
 </figure>
 
 <figure>
-<img src="../../visualisations/figure_02_records_by_country.png"
+<img
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/figure_02_records_by_country.png"
 alt="Figure 7. Records per country for the 20 most frequently represented study countries, by focal farmed species." />
 <figcaption aria-hidden="true"><strong><em>Figure 7.</em></strong>
 <em>Records per country for the 20 most frequently represented study
@@ -137,7 +141,7 @@ can be assigned to more than one theme.
 
 <figure>
 <img
-src="../../visualisations/topic_hierarchy/figure_04a_top_level_topics.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/topic_hierarchy/figure_04a_top_level_topics.png"
 alt="Figure 8. High-level topic frequency by focal farmed species. Numbers at bar ends are unique records assigned to each high-level theme; stacked species segments may sum above the unique-record total for multi-species records." />
 <figcaption aria-hidden="true"><strong><em>Figure 8.</em></strong>
 <em>High-level topic frequency by focal farmed species. Numbers at bar
@@ -161,7 +165,7 @@ control and treatment and 576 on Sea lice epidemiology.
 
 <figure>
 <img
-src="../../visualisations/topic_hierarchy/figure_04a_hierarchy_production.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/topic_hierarchy/figure_04a_hierarchy_production.png"
 alt="Figure 9. Topic-assignment frequency within the Production theme." />
 <figcaption aria-hidden="true"><strong><em>Figure 9.</em></strong>
 <em>Topic-assignment frequency within the Production
@@ -177,7 +181,7 @@ Other diseases - Epidemiology (1,658; 7.7%).
 
 <figure>
 <img
-src="../../visualisations/topic_hierarchy/figure_04b_hierarchy_environment.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/topic_hierarchy/figure_04b_hierarchy_environment.png"
 alt="Figure 10. Topic-assignment frequency within the Environment theme." />
 <figcaption aria-hidden="true"><strong><em>Figure 10.</em></strong>
 <em>Topic-assignment frequency within the Environment
@@ -193,7 +197,7 @@ Other diseases - Epidemiology (1,658; 7.7%).
 
 <figure>
 <img
-src="../../visualisations/topic_hierarchy/figure_04c_hierarchy_methods.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/topic_hierarchy/figure_04c_hierarchy_methods.png"
 alt="Figure 11. Topic-assignment frequency within the Methods theme." />
 <figcaption aria-hidden="true"><strong><em>Figure 11.</em></strong>
 <em>Topic-assignment frequency within the Methods
@@ -210,7 +214,7 @@ Other diseases - General (1,504; 7.0%).
 
 <figure>
 <img
-src="../../visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/topic_hierarchy/figure_04d_hierarchy_industry_and_governance.png"
 alt="Figure 12. Topic-assignment frequency within the Industry and governance theme." />
 <figcaption aria-hidden="true"><strong><em>Figure 12.</em></strong>
 <em>Topic-assignment frequency within the Industry and governance
@@ -227,7 +231,7 @@ prominent.
 
 <figure>
 <img
-src="../../visualisations/topic_hierarchy/figure_04e_hierarchy_product.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/topic_hierarchy/figure_04e_hierarchy_product.png"
 alt="Figure 13. Topic-assignment frequency within the Product theme." />
 <figcaption aria-hidden="true"><strong><em>Figure 13.</em></strong>
 <em>Topic-assignment frequency within the Product
@@ -252,7 +256,7 @@ represented under 0.5% of the full evidence map.
 
 <figure>
 <img
-src="../../visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/topic_hierarchy/figure_04f_hierarchy_people_and_society.png"
 alt="Figure 14. Topic-assignment frequency within the People and society theme." />
 <figcaption aria-hidden="true"><strong><em>Figure 14.</em></strong>
 <em>Topic-assignment frequency within the People and society
@@ -270,7 +274,7 @@ and access and Therapeutants and chemicals were represented in only 10
 
 <figure>
 <img
-src="../../visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.png"
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/topic_hierarchy/figure_04g_hierarchy_inputs_and_resources.png"
 alt="Figure 15. Topic-assignment frequency within the Inputs and resources theme." />
 <figcaption aria-hidden="true"><strong><em>Figure 15.</em></strong>
 <em>Topic-assignment frequency within the Inputs and resources
@@ -304,7 +308,8 @@ of several major physiological, environmental, methodological,
 governance and social research areas.
 
 <figure>
-<img src="../../visualisations/figure_08_umbrella_review.png"
+<img
+src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/figure_08_umbrella_review.png"
 alt="Figure 16. Topic-assignment frequency in the supplied umbrella review of 37 systematic reviews across salmon aquaculture. Data and figure retained from the supplied manuscript draft." />
 <figcaption aria-hidden="true"><strong><em>Figure 16.</em></strong>
 <em>Topic-assignment frequency in the supplied umbrella review of 37
