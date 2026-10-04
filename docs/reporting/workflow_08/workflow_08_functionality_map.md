@@ -79,7 +79,7 @@ The automated outputs of Workflows 04–07 remain immutable. Workflow 08 applies
 
 Mean pairwise Jaccard from Workflow 07 is retained for inter-pass agreement/QC reporting but is **not** a W08 gate. Historical/current W07 rows labelled `extreme_three_pass_topic_disagreement` are suppressed during dynamic W08 intake and their retained topic sets are accepted automatically. Assignment-level uncertainty remains visible through 1/3, 2/3 and 3/3 pass support (★/★★/★★★).
 
-Human topic adjudication is reserved for genuine residual ontology pathology that cannot be resolved by deterministic ontology rules. Zero-topic eligibility uncertainty remains a separate W08 review route.
+Human topic adjudication is reserved for genuine residual ontology pathology that cannot be resolved by deterministic ontology rules. These cases are routed as `ontology_pathology` issues with the retained W07 topic pathways and support levels visible to the reviewer. The reviewer can accept the retained topic set, replace it, retain the record with no topic code, or exclude the record. Zero-topic eligibility uncertainty remains a separate W08 review route.
 
 ### Current dynamic geography intake rule
 
