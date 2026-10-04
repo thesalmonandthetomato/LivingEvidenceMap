@@ -3,7 +3,7 @@
   "update_id": "w01-run-36971418284",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-02T06:30:47Z",
-  "last_updated_at_utc": "2026-10-03T11:08:46Z",
+  "last_updated_at_utc": "2026-10-04T05:37:22Z",
   "baseline": {
     "workflow08_pointer": "docs/workflow08/zenodo/run-36442875006.json",
     "workflow08_source_run_id": "36442875006",
@@ -32,8 +32,8 @@
       "without": 12747
     },
     "topics": {
-      "with": null,
-      "without": null
+      "with": 21434,
+      "without": 385
     }
   },
   "progress": {
@@ -59,18 +59,18 @@
       "status": "complete"
     },
     "W07": {
-      "status": "active"
+      "status": "complete"
     },
     "W08": {
-      "status": "pending"
+      "status": "active"
     },
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W06",
-    "completed_through": 7,
-    "active_position": 8,
-    "status_label": "Geography coding complete; awaiting topic coding"
+    "current_stage": "W07",
+    "completed_through": 8,
+    "active_position": 9,
+    "status_label": "Topic coding complete; awaiting final adjudication"
   },
   "workflow_runs": {
     "W01": "36971418284",
@@ -78,6 +78,7 @@
     "W03": "37024164176",
     "W04": "37051672356",
     "W05": "37110114836",
-    "W06": "37114864202"
+    "W06": "37114864202",
+    "W07": "37153534771"
   }
 }
