@@ -142,19 +142,25 @@ source_panel_bottom <- 11.55
 # Source-panel vertical spacing is deliberately derived from the number of rows.
 # Fewer rows receive more breathing room; denser source inventories tighten
 # slightly while preserving the title/header separation and bottom padding.
-source_row_h <- dplyr::case_when(
+source_row_h_base <- dplyr::case_when(
   n_source_rows <= 1L ~ 0.42,
   n_source_rows == 2L ~ 0.35,
   n_source_rows == 3L ~ 0.31,
   TRUE ~ 0.27
 )
+# Reduce database-row spacing by exactly 10% while preserving the existing
+# overall database-panel height. The recovered space is transferred to the
+# bottom padding rather than shrinking the panel.
+source_row_h <- source_row_h_base * 0.90
 source_title_offset <- 0.16
 source_header_offset <- 0.50
 source_first_row_offset <- 0.73
-source_bottom_padding <- 0.11
 source_panel_height <- source_first_row_offset +
-  (n_source_rows - 1L) * source_row_h +
-  source_bottom_padding
+  (n_source_rows - 1L) * source_row_h_base +
+  0.11
+source_bottom_padding <- source_panel_height -
+  source_first_row_offset -
+  (n_source_rows - 1L) * source_row_h
 source_panel_top <- source_panel_bottom + source_panel_height
 source_panel_y <- (source_panel_bottom + source_panel_top) / 2
 source_col_width <- (source_panel_width - 0.34) / n_source_cols
