@@ -329,9 +329,16 @@ jobs:
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
             --credential "$RUNNER_TEMP/lem-google-service-account.json"
 
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id "$GITHUB_RUN_ID"
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
+            --stage W08 \
+            --run-id "$GITHUB_RUN_ID" \
+            --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/current_run/current_run_status.json
+          git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
           if ! git diff --cached --quiet; then
             git commit -m "Update current-run status through W08 [skip ci]"
             git pull --rebase origin "$WORKFLOW08_BRANCH"
