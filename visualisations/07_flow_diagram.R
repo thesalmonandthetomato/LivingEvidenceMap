@@ -58,6 +58,13 @@ source_meta <- read_csv(source_path, show_col_types = FALSE, progress = FALSE) |
     hits = as.integer(manifestations),
     search_date = as.character(search_date)
   ) |>
+  mutate(
+    search_date_display = if_else(
+      grepl("^\\d{4}-\\d{2}-\\d{2}$", search_date),
+      format(as.Date(search_date), "%d-%m-%Y"),
+      search_date
+    )
+  ) |>
   arrange(database)
 
 if (!nrow(source_meta) || any(!nzchar(source_meta$code)) || anyDuplicated(source_meta$code)) {
@@ -101,6 +108,7 @@ source_counts <- setNames(source_meta$hits, source_meta$database)
 valid_source_dates <- source_meta$search_date[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_meta$search_date)]
 search_update_date <- if (length(valid_source_dates)) max(valid_source_dates) else ""
 fmt <- function(x) format(as.integer(x), big.mark = ",", scientific = FALSE, trim = TRUE)
+font_family <- "sans"
 
 # -------------------------------------------------------------------------
 # 5. DIAGRAM GEOMETRY
@@ -183,7 +191,7 @@ source_dividers <- if (n_source_cols > 1L) {
     x = source_panel_left + 0.17 + (seq_len(n_source_cols - 1L)) * source_col_width - 0.08,
     y = source_panel_bottom + 0.12,
     xend = x,
-    yend = source_panel_top - 0.18
+    yend = source_panel_top - 0.42
   )
 } else {
   tibble::tibble(x = numeric(), y = numeric(), xend = numeric(), yend = numeric())
@@ -307,40 +315,41 @@ p <- ggplot() +
     label = "Bibliographic database searches",
     colour = "#2c454a",
     fontface = "bold",
-    size = 3.15
+    size = 3.15,
+    family = font_family
   ) +
   geom_text(
     data = source_headers,
     aes(x = name_x, y = y),
     label = "Database", hjust = 0, fontface = "bold",
-    colour = "#2c454a", size = 2.35
+    colour = "#2c454a", size = 2.35, family = font_family
   ) +
   geom_text(
     data = source_headers,
     aes(x = hits_x, y = y),
     label = "Hits", hjust = 1, fontface = "bold",
-    colour = "#2c454a", size = 2.35
+    colour = "#2c454a", size = 2.35, family = font_family
   ) +
   geom_text(
     data = source_headers,
     aes(x = date_x, y = y),
     label = "Search date", hjust = 0, fontface = "bold",
-    colour = "#2c454a", size = 2.35
+    colour = "#2c454a", size = 2.35, family = font_family
   ) +
   geom_text(
     data = source_layout,
     aes(x = name_x, y = y, label = database_label),
-    hjust = 0, colour = "#2c454a", size = 2.15, lineheight = 0.90
+    hjust = 0, colour = "#2c454a", size = 2.15, lineheight = 0.90, family = font_family
   ) +
   geom_text(
     data = source_layout,
     aes(x = hits_x, y = y, label = hits_label),
-    hjust = 1, colour = "#2c454a", size = 2.25
+    hjust = 1, colour = "#2c454a", size = 2.25, family = font_family
   ) +
   geom_text(
     data = source_layout,
-    aes(x = date_x, y = y, label = search_date),
-    hjust = 0, colour = "#2c454a", size = 2.25
+    aes(x = date_x, y = y, label = search_date_display),
+    hjust = 0, colour = "#2c454a", size = 2.25, family = font_family
   ) +
   geom_rect(
     data = boxes,
@@ -354,7 +363,7 @@ p <- ggplot() +
   geom_text(
     data = boxes,
     aes(x=x, y=y, label=label, colour=stage),
-    size = 2.95, lineheight = 0.92
+    size = 2.95, lineheight = 0.92, family = font_family
   ) +
   geom_rect(
     data = phase,
@@ -367,7 +376,7 @@ p <- ggplot() +
   geom_text(
     data = phase,
     aes(x=x, y=y, label=label),
-    angle = 90, colour = "white", fontface = "bold", size = 3.05
+    angle = 90, colour = "white", fontface = "bold", size = 3.05, family = font_family
   ) +
   scale_fill_manual(values = stage_fill, guide = "none") +
   scale_colour_manual(values = stage_text, guide = "none") +
@@ -376,7 +385,7 @@ p <- ggplot() +
     ylim = c(0.25, source_panel_top + 0.20),
     expand = FALSE
   ) +
-  theme_void(base_size = 11) +
+  theme_void(base_size = 11, base_family = font_family) +
   theme(
     plot.background = element_rect(fill = "white", colour = NA),
     plot.margin = margin(8, 8, 8, 8)
