@@ -76,9 +76,13 @@ if(!identical(before_hash,after_hash))stop("Published W06 fields changed during 
 if(any(x$llm_failed %in% TRUE & x$geography_autovalidated))stop("Model failures were auto-validated",call.=FALSE)
 if(any(x$geography_status=="UNRESOLVED" & x$geography_autovalidated))stop("UNRESOLVED records were auto-validated",call.=FALSE)
 if(any(x$geography_status=="RESOLVED" & x$evidence_all_grounded %in% TRUE & !x$geography_autovalidated))stop("Grounded RESOLVED record left residual",call.=FALSE)
-if(any(x$geography_auto_validation_basis=="deterministic_exact_agreement" &
-       normalise_iso3_set(x$luna_iso3c) != normalise_iso3_set(x$deterministic_primary_iso3c))) {
-  stop("Exact-agreement basis assigned without exact agreement",call.=FALSE)
+exact_basis_idx<-which(x$geography_auto_validation_basis=="deterministic_exact_agreement")
+if(length(exact_basis_idx)){
+  exact_basis_ok<-vapply(exact_basis_idx,function(i)
+    identical(normalise_iso3_set(x$luna_iso3c[[i]]),
+              normalise_iso3_set(x$deterministic_primary_iso3c[[i]])),
+    logical(1))
+  if(!all(exact_basis_ok))stop("Exact-agreement basis assigned without exact agreement",call.=FALSE)
 }
 
 cue_ids<-which(x$geography_auto_validation_basis=="explicit_country_cues")
