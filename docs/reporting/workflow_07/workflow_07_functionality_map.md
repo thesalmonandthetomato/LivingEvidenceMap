@@ -51,19 +51,15 @@ This document is intended to serve two purposes:
             |                    uncoded       exclude       review
             |
             v
- [three-pass disagreement QC]
- mean pairwise Jaccard < 0.20
+ [three-pass agreement QC]
+ mean pairwise Jaccard
+ descriptive/reproducibility metric only
             |
-      +-----+-----+
-      |           |
-     no          yes
-      |           |
-      v           v
- final topic   W08 human
-    layer       review
-      |
-      v
-[Workflow 08 consolidated adjudication]
+            v
+       final topic layer
+            |
+            v
+[Workflow 08 only for genuine ontology pathology or zero-topic eligibility uncertainty]
 ```
 
 ## Components
@@ -164,11 +160,11 @@ For each record with topic assignments, the sets returned by passes A, B and C a
 
 The three pairwise values are averaged.
 
-Records with **mean pairwise Jaccard < 0.20** are flagged for Workflow 08 human topic adjudication.
+Mean pairwise Jaccard is retained as a **descriptive inter-pass agreement statistic** for quality control, reproducibility reporting and future prompt/model benchmarking. The historical threshold of 0.20 is still recorded so agreement distributions remain comparable with earlier runs, but it no longer triggers Workflow 08.
 
-The current baseline contains **103** such records.
+Low Jaccard indicates that the three independent passes selected different topic sets; it does not establish that the retained union is incorrect. Assignment-level uncertainty is represented directly by ★/★★/★★★ support.
 
-A high topic count, absence of a ★★★ topic, or ordinary model disagreement does not independently trigger human review.
+A high topic count, absence of a ★★★ topic, low Jaccard, or ordinary model disagreement does not independently trigger human review. Human topic escalation is reserved for genuine residual ontology pathology that cannot be resolved deterministically.
 
 ### Zero-topic eligibility re-screen
 
@@ -279,16 +275,16 @@ The analytical layer adds:
 
 High-topic records are processed under the documented complete-tier soft-cap rule.
 
-### 7. Calculate disagreement and final Workflow 08 flags
+### 7. Calculate inter-pass agreement and final Workflow 08 flags
 
-Mean pairwise Jaccard is calculated from the three pass-specific topic sets.
+Mean pairwise Jaccard is calculated from the three pass-specific topic sets and retained as a descriptive reproducibility/QC measure. It is not used to change topic retention or to trigger human review.
 
-Current W07 topic-related human escalation consists of:
+Topic-related human escalation now consists only of:
 
-- **103** records with mean pairwise Jaccard < 0.20;
-- **18** zero-topic records remaining eligibility-uncertain after targeted consensus re-screen.
+- genuine residual ontology pathology that remains after deterministic fallback/supersession rules; and
+- zero-topic records remaining eligibility-uncertain after targeted consensus re-screen.
 
-These groups are mutually exclusive by construction, giving **121 Workflow 07 records for human adjudication** before any future structural or ontology-pathology exceptions.
+Historical low-Jaccard flags remain available in archived W07 QC outputs for reporting and comparison, but current W08 intake suppresses them as non-actionable disagreement signals.
 
 ### 8. Produce late exclusions and included-uncoded outputs
 
@@ -405,7 +401,7 @@ Final post-W08 assembly combines the canonical bibliographic record with the pre
 
 ## Methods text for research reporting
 
-> **Workflow 07: topic coding and quality control.** Records were classified against a frozen hierarchical topic ontology using three independent GPT-5.6 Luna passes based on title and abstract. The union of returned pathways was retained, with model consistency represented by one, two or three stars corresponding to support from one, two or three passes. Raw assignments were preserved while an analytical retention layer removed documented general fallback codes when more specific pathways were present and applied a soft maximum of ten topics by retaining complete model-support tiers without arbitrary tie-breaking. Agreement among the three pass-specific topic sets was assessed using mean pairwise Jaccard similarity; records below 0.20 were routed to human adjudication. Records receiving zero topic assignments underwent a separate targeted eligibility re-screen rather than a fourth topic-coding pass. Consensus-eligible records were retained as included but uncoded, consensus-ineligible records were recorded as late exclusions, and unresolved records were routed to human adjudication. Original screening and raw topic outputs were retained for provenance.
+> **Workflow 07: topic coding and quality control.** Records were classified against a frozen hierarchical topic ontology using three independent GPT-5.6 Luna passes based on title and abstract. The union of returned pathways was retained, with model consistency represented by one, two or three stars corresponding to support from one, two or three passes. Raw assignments were preserved while an analytical retention layer removed documented general fallback codes when more specific pathways were present and applied a soft maximum of ten topics by retaining complete model-support tiers without arbitrary tie-breaking. Agreement among the three pass-specific topic sets was assessed using mean pairwise Jaccard similarity and retained as a descriptive reproducibility statistic rather than a human-review trigger. Records receiving zero topic assignments underwent a separate targeted eligibility re-screen rather than a fourth topic-coding pass. Consensus-eligible records were retained as included but uncoded, consensus-ineligible records were recorded as late exclusions, and unresolved records were routed to human adjudication. Human topic review was reserved for genuine residual ontology pathology. Original screening and raw topic outputs were retained for provenance.
 
 ## Reporting status
 
