@@ -366,22 +366,26 @@ ggsave(
   p, width = 210, height = figure_height_mm, units = "mm", dpi = 600
 )
 
-# Machine-readable output generated from the same analysis used for the figure.
-valid_source_dates <- source_meta$search_date[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_meta$search_date)]
-search_update_date <- if (length(valid_source_dates)) max(valid_source_dates) else trimws(Sys.getenv("SEARCH_UPDATE_DATE", unset = ""))
-if (nzchar(search_update_date) && !grepl("^\\d{4}-\\d{2}-\\d{2}$", search_update_date)) {
-  stop("Resolved search update date must be YYYY-MM-DD.", call. = FALSE)
-}
+# Machine-readable output generated from the same compact reporting inputs.
+n_w08_other_exclusions <- n_post_w04_excluded - n_species_none - n_w07_late
+if (n_w08_other_exclusions < 0L) stop("Post-W04 exclusion accounting is negative", call. = FALSE)
 
 counts <- list(
-  schema = "living-evidence-map-workflow09-flow-counts-v2",
+  schema = "living-evidence-map-workflow09-flow-counts-v3",
   generated_at_utc = format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ"),
   search_update_date = if (nzchar(search_update_date)) search_update_date else NULL,
-  inputs = list(
-    workflow01_canonical_jsonl = list(path = prescreen_path, sha256 = digest(prescreen_path, algo = "sha256", file = TRUE, serialize = FALSE)),
-    workflow02_cumulative_patch_jsonl = list(path = w02_patch_path, sha256 = digest(w02_patch_path, algo = "sha256", file = TRUE, serialize = FALSE)),
-    workflow08_final_canonical_jsonl = list(path = final_path, sha256 = digest(final_path, algo = "sha256", file = TRUE, serialize = FALSE)),
-    workflow08_exclusions_csv = list(path = exclusions_path, sha256 = digest(exclusions_path, algo = "sha256", file = TRUE, serialize = FALSE))
+  input_mode = "compact_workflow_reporting_snapshots",
+  input_directory = input_dir,
+  source_runs = list(
+    W00 = as.character(w00$source_run_id),
+    W01 = as.character(w01$source_run_id),
+    W02 = as.character(w02$source_run_id),
+    W03 = as.character(w03$source_run_id),
+    W04 = as.character(w04$source_run_id),
+    W05 = as.character(w05$source_run_id),
+    W06 = as.character(w06$source_run_id),
+    W07 = as.character(w07$source_run_id),
+    W08 = as.character(w08$source_run_id)
   ),
   counts = list(
     sources = as.list(source_counts),
@@ -397,16 +401,18 @@ counts <- list(
     records_enriched_workflow02 = n_enriched,
     retractions_excluded = n_w03,
     title_abstract_screened = n_screened_ta,
-    title_abstract_excluded_total = n_excluded_ta_total,
     workflow04_exclusions = n_w04,
-    workflow07_late_exclusions = n_w07,
-    workflow08_exclusions = n_w08,
-    title_abstract_retained_final = n_retained_final,
+    title_abstract_retained = n_w04_retained,
+    species_none_deterministic_exclusions = n_species_none,
+    workflow07_late_exclusions = n_w07_late,
+    workflow08_other_exclusions = n_w08_other_exclusions,
+    post_workflow04_exclusions_total = n_post_w04_excluded,
     final_geography_coded = n_geography_coded,
     final_geography_uncoded = n_geography_uncoded,
     final_topic_coded = n_topic_coded,
     final_topic_uncoded = n_topic_uncoded,
-    final_included = n_final_included
+    final_included = n_final_included,
+    final_excluded = n_excluded
   )
 )
 
@@ -431,8 +437,11 @@ readr::write_csv(
       "records_enriched_workflow02",
       "retractions_excluded",
       "records_screened_title_abstract",
-      "records_excluded_title_abstract_total",
-      "records_retained_final",
+      "workflow04_exclusions",
+      "records_retained_after_title_abstract",
+      "species_none_deterministic_exclusions",
+      "workflow07_late_exclusions",
+      "workflow08_other_exclusions",
       "final_geography_coded",
       "final_geography_uncoded",
       "final_topic_coded",
@@ -447,8 +456,11 @@ readr::write_csv(
       n_enriched,
       n_w03,
       n_screened_ta,
-      n_excluded_ta_total,
-      n_retained_final,
+      n_w04,
+      n_w04_retained,
+      n_species_none,
+      n_w07_late,
+      n_w08_other_exclusions,
       n_geography_coded,
       n_geography_uncoded,
       n_topic_coded,
@@ -459,4 +471,4 @@ readr::write_csv(
   file.path(out_dir, "figure_07_flow_diagram_counts.csv")
 )
 
-message("Workflow 09 flow diagram written to: ", out_dir)
+message("Workflow 09 flow diagram written from compact reporting inputs: ", input_dir)
