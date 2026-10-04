@@ -44,7 +44,7 @@ include_figure <- function(...) {
   candidates <- c(...)
   hit <- candidates[file.exists(candidates)]
   if (!length(hit)) stop("Missing manuscript figure: ", paste(candidates, collapse = " | "), call. = FALSE)
-  knitr::include_graphics(hit[[1L]])
+  knitr::include_graphics(normalizePath(hit[[1L]], winslash = "/", mustWork = TRUE))
 }
 
 # Publication year
