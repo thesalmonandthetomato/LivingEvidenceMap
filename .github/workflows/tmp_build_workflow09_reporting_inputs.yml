@@ -89,7 +89,7 @@ jobs:
           stopifnot(identical(stages,sprintf("W%02d",0:8)))
           required <- c(
             sprintf("w%02d_summary.json",0:8),
-            "w01_source_summary.csv","w01_source_intersections.csv","w01_source_manifest.json",
+            "w01_source_summary.csv","w01_source_intersections.csv","w01_source_membership.csv","w01_source_manifest.json",
             "w08_source_summary.csv","w08_source_intersections.csv","w08_source_manifest.json",
             "manifest.json"
           )
