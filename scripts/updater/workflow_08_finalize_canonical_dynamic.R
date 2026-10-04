@@ -44,6 +44,31 @@ rows_payload<-function(df,idx,drop=character()){if(is.null(idx)||!length(idx))re
 score_payload<-function(rid,pid){i<-score_i[[paste(rid,pid,sep="\r")]];if(is.null(i))return(NULL);row_payload(ret,i,drop=c("record_id","path_id","hierarchy_path"))}
 topic_items<-function(ids,source,rid){ids<-unique(as.character(ids));ids<-ids[nzchar(ids)];lapply(ids,function(pid){oi<-onto_i[[pid]];if(is.null(oi))stop("Unknown topic path: ",pid,call.=FALSE);list(path_id=pid,hierarchy_path=clean(onto$hierarchy_path[[oi]]),level_1=clean(onto$level_1[[oi]]),level_2=clean(onto$level_2[[oi]]),source=source,workflow07_score=score_payload(rid,pid))})}
 
+validate_topic_decision<-function(z,zero_topic=FALSE){
+  rid<-clean(z$record_id);dec<-clean(z$decision);fv<-z$final_value%||%list()
+  ids<-unique(as.character(fv$path_ids%||%character()));ids<-ids[nzchar(ids)]
+  if(length(setdiff(ids,as.character(onto$path_id))))stop("W08 topic decision contains unknown ontology path for ",rid,call.=FALSE)
+
+  if(zero_topic){
+    if(!dec%in%c("assign_topic_set","include_uncoded","exclude_record"))stop("Unknown W08 zero-topic decision: ",dec,call.=FALSE)
+    if(dec=="assign_topic_set"&&(!isTRUE(fv$included)||!length(ids)))stop("Invalid W08 zero-topic topic assignment: ",rid,call.=FALSE)
+    if(dec=="include_uncoded"&&(!isTRUE(fv$included)||length(ids)))stop("Invalid W08 include_uncoded decision: ",rid,call.=FALSE)
+    if(dec=="exclude_record"&&!isFALSE(fv$included))stop("Invalid W08 zero-topic exclusion: ",rid,call.=FALSE)
+  }else{
+    if(!dec%in%c("accept_retained_topics","replace_topic_set","no_code","exclude_record"))stop("Unknown W08 topic-coding review decision: ",dec,call.=FALSE)
+    if(dec=="accept_retained_topics"){
+      expected<-character();idx<-ret_split[[rid]];if(!is.null(idx))expected<-unique(as.character(ret$path_id[idx]))
+      if(!isTRUE(fv$included)||!setequal(ids,expected))stop("Invalid W08 accept_retained_topics decision: ",rid,call.=FALSE)
+    }
+    if(dec=="replace_topic_set"&&(!isTRUE(fv$included)||!length(ids)))stop("Invalid W08 replace_topic_set decision: ",rid,call.=FALSE)
+    if(dec=="no_code"&&(!isTRUE(fv$included)||length(ids)))stop("Invalid W08 no_code decision: ",rid,call.=FALSE)
+    if(dec=="exclude_record"&&!isFALSE(fv$included))stop("Invalid W08 topic exclusion: ",rid,call.=FALSE)
+  }
+  invisible(TRUE)
+}
+invisible(lapply(topic_dec,validate_topic_decision,zero_topic=FALSE))
+invisible(lapply(zero_dec,validate_topic_decision,zero_topic=TRUE))
+
 # Write a clean machine-readable copy of the complete W08 decisions as the adjudication ledger.
 dir.create(dirname(ledger_path),recursive=TRUE,showWarnings=FALSE);file.copy(decisions_path,ledger_path,overwrite=TRUE)
 
