@@ -10,7 +10,7 @@ normalise_geography_grounding_text <- function(z) {
   z <- gsub("<[^>]+>", " ", z, perl = TRUE)
   z <- gsub("[\u00AD\u200B\uFEFF]", "", z, perl = TRUE)
   z <- gsub("[\u2018\u2019]", "'", z, perl = TRUE)
-  z <- gsub("[\u201C\u201D]", "\\"", z, perl = TRUE)
+  z <- gsub("[\u201C\u201D]", '"', z, perl = TRUE)
   z <- gsub("[\u2010\u2011\u2012\u2013\u2014]", "-", z, perl = TRUE)
   z <- gsub("[[:punct:]]+", " ", z, perl = TRUE)
   z <- trimws(gsub("[[:space:]]+", " ", z, perl = TRUE))
