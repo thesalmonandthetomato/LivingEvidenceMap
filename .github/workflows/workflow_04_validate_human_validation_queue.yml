@@ -143,11 +143,7 @@ jobs:
             identical(m$randomisation_seed,'fixed-seed'),
             identical(m$randomisation_method,'sha256(seed|record_id) ascending'),
             isFALSE(m$llm_outputs_exposed),
-            grepl('^[0-9a-f]{64}
+            grepl('^[0-9a-f]{64},m$model_reference_sha256)
           )
 
-          cat('PASS: deterministic W04 randomisation, eligibility filtering, and bibliographic fields validated\n')
-,m$model_reference_sha256)
-          )
-
-          cat('PASS: deterministic W04 randomisation, eligibility filtering, and bibliographic fields validated\n')
+          cat('PASS: deterministic W04 randomisation, eligibility filtering, hidden model reference, and bibliographic fields validated\n')
