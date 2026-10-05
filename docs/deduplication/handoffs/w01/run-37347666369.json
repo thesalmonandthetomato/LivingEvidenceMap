@@ -11,5 +11,8 @@
   "decisions_export_sha256": "13a7cddac06abc2dd6989cc7cbdb9f6c2d6c21d318e99d2a08fdcc40abc22178",
   "created_at_utc": "2026-10-05T20:14:56Z",
   "resume_redispatch_requested_at_utc": "2026-10-05T20:16:30Z",
-  "resume_redispatch_reason": "Explicitly re-signal ready handoff after fixing GITHUB_TOKEN downstream-trigger suppression."
+  "resume_redispatch_reason": "Explicitly re-signal ready handoff after fixing GITHUB_TOKEN downstream-trigger suppression.",
+  "resume_request_counter": 1,
+  "resume_request_note": "Fresh standard W01 resume requested from the completed post-Shiny handoff after runner cancellations.",
+  "resume_requested_at_utc": "2026-10-05T20:55:30Z"
 }
