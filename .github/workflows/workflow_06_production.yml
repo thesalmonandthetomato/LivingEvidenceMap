@@ -92,11 +92,17 @@ jobs:
     outputs:
       queue_n: ${{ steps.queue.outputs.queue_n }}
       mode: ${{ steps.queue.outputs.mode }}
+      execution_ref: ${{ steps.execution_ref.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
           fetch-depth: 0
+
+      - name: Freeze W06 execution commit
+        id: execution_ref
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -238,7 +244,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: ${{ needs.prepare.outputs.execution_ref }}
           fetch-depth: 1
 
       - uses: r-lib/actions/setup-r@v2
@@ -280,7 +286,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: ${{ needs.prepare.outputs.execution_ref }}
           fetch-depth: 1
 
       - uses: r-lib/actions/setup-r@v2
@@ -341,7 +347,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: ${{ needs.prepare.outputs.execution_ref }}
           fetch-depth: 0
 
       - uses: r-lib/actions/setup-r@v2
@@ -381,7 +387,7 @@ jobs:
           W05_RECORD=$(P="$W05_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$zenodo_record_id)')
           W05_SHA=$(P="$W05_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$workflow05_species_layer_sha256)')
           mkdir -p outputs/workflow06_zenodo
-          Rscript scripts/updater/workflow_06_archive_state_to_zenodo.R             --state-dir outputs/workflow06_final             --source-run-id "$GITHUB_RUN_ID"             --source-commit "$GITHUB_SHA"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow06_zenodo             --upstream-w05-record-id "$W05_RECORD"             --upstream-w05-layer-sha256 "$W05_SHA"
+          Rscript scripts/updater/workflow_06_archive_state_to_zenodo.R             --state-dir outputs/workflow06_final             --source-run-id "$GITHUB_RUN_ID"             --source-commit "${{ needs.prepare.outputs.execution_ref }}"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow06_zenodo             --upstream-w05-record-id "$W05_RECORD"             --upstream-w05-layer-sha256 "$W05_SHA"
 
       - name: Register W06 state
         if: ${{ inputs.publish == true }}
