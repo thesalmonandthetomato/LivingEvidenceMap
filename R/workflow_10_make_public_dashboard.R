@@ -43,9 +43,23 @@ writeLines(
   output_js,useBytes=TRUE
 )
 
-out <- paste(readLines(output_js,warn=FALSE,encoding="UTF-8"),collapse="\n")
-for(term in c('"record_id"', '"abstract"', '"doi"', '"authors"', '"journal"', '"lens_url"')){
-  if(grepl(term,out,fixed=TRUE)) stop(sprintf("Forbidden field token remains in public JS: %s",term),call.=FALSE)
+# Validate forbidden fields structurally within public record objects only.
+# Top-level provenance may legitimately contain identifiers such as the source DOI.
+roundtrip <- fromJSON(
+  substr(
+    paste(readLines(output_js,warn=FALSE,encoding="UTF-8"),collapse="\n"),
+    nchar(prefix)+1L,
+    nchar(paste(readLines(output_js,warn=FALSE,encoding="UTF-8"),collapse="\n"))-1L
+  ),
+  simplifyVector=FALSE
+)
+forbidden <- c("record_id","title","abstract","doi","authors","journal","volume","pages","lens_url")
+if(!is.list(roundtrip$records) || length(roundtrip$records)!=length(public_records)) {
+  stop("Public dashboard round-trip record structure is invalid",call.=FALSE)
+}
+bad_fields <- unique(unlist(lapply(roundtrip$records,function(r)intersect(names(r),forbidden)),use.names=FALSE))
+if(length(bad_fields)) {
+  stop(sprintf("Forbidden public record fields remain: %s",paste(bad_fields,collapse=", ")),call.=FALSE)
 }
 
 cat(sprintf(
