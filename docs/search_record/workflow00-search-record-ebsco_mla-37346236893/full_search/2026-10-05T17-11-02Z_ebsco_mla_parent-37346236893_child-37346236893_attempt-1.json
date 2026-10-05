@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-05T17:11:02Z",
+  "source": "ebsco_mla",
+  "run_type": "full",
+  "search_version": "v1",
+  "additional_search_term": null,
+  "search_string": "((TI (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR AB (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\")) AND (TI (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR AB (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))",
+  "database_scope": {
+    "provider": "EBSCOhost EIT",
+    "database_code": "mzh",
+    "database_name": "MLA International Bibliography",
+    "field_scope": [
+      "TI",
+      "AB"
+    ]
+  },
+  "search_window": null,
+  "reported_search_results": 5,
+  "successfully_downloaded_results": 5,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "37346236893",
+    "child_workflow_run_id": "37346236893",
+    "run_attempt": "1",
+    "ref": "workflow01-final-architecture",
+    "triggering_sha": "c8a60eecb5c6434701a3d9e1a174a632a624c238",
+    "orchestrator_sha": "c8a60eecb5c6434701a3d9e1a174a632a624c238",
+    "source_handler_sha": "c8a60eecb5c6434701a3d9e1a174a632a624c238"
+  },
+  "artifact_name": "workflow00-ebsco_mla-harvest-37346236893"
+}

@@ -1,0 +1,21 @@
+{
+  "workflow": "00_ebsco_native_id_reconciliation",
+  "status": "success",
+  "run_type": "full",
+  "source": "ebsco_econlit",
+  "reconciliation_key": "EBSCO source slug + accession number",
+  "current_raw_records": 311,
+  "current_unique_records": 311,
+  "exact_duplicate_ids_suppressed": 0,
+  "duplicate_native_ids": [],
+  "historical_unique_native_ids": 0,
+  "already_known_native_ids": 0,
+  "new_native_ids": 311,
+  "records_passed_downstream": 311,
+  "filtered_source_root": "filtered_source",
+  "bibliographic_deduplication_performed": false,
+  "doi_matching_performed": false,
+  "fuzzy_matching_performed": false,
+  "downstream_deduplication": "Workflow 01",
+  "reconciled_at": "2026-10-05T17:11:07Z"
+}

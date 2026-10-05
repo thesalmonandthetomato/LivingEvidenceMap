@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-05T17:11:10Z",
+  "source": "ebsco_atla_religion",
+  "run_type": "full",
+  "search_version": "v1",
+  "additional_search_term": null,
+  "search_string": "((TI (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\")) AND (TI (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))",
+  "database_scope": {
+    "provider": "EBSCOhost EIT",
+    "database_code": "rfh",
+    "database_name": "Atla Religion Database with AtlaSerials",
+    "field_scope": "TI"
+  },
+  "search_window": null,
+  "reported_search_results": 0,
+  "successfully_downloaded_results": 0,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "37346236893",
+    "child_workflow_run_id": "37346236893",
+    "run_attempt": "1",
+    "ref": "workflow01-final-architecture",
+    "triggering_sha": "c8a60eecb5c6434701a3d9e1a174a632a624c238",
+    "orchestrator_sha": "c8a60eecb5c6434701a3d9e1a174a632a624c238",
+    "source_handler_sha": "c8a60eecb5c6434701a3d9e1a174a632a624c238"
+  },
+  "artifact_name": "workflow00-ebsco_atla_religion-harvest-37346236893"
+}
