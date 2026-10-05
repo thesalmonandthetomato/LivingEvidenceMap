@@ -11,11 +11,11 @@ on:
         type: string
       prior_workflow04_pointer_path:
         required: false
-        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        default: 'none'
         type: string
       prior_lean_pointer_path:
         required: false
-        default: 'docs/compaction/zenodo/run-36166883249.json'
+        default: ''
         type: string
       manual_decisions_path:
         required: false
@@ -54,12 +54,12 @@ on:
       prior_workflow04_pointer_path:
         description: 'Prior authoritative W04 pointer; use none for a first run'
         required: true
-        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        default: 'none'
         type: string
       prior_lean_pointer_path:
         description: 'Fallback prior canonical pointer for legacy W04 states lacking stored title/abstract availability; exact prior W04 input is preferred from its prepared artefact'
         required: false
-        default: 'docs/compaction/zenodo/run-36166883249.json'
+        default: ''
         type: string
       manual_decisions_path:
         description: 'Optional repo JSONL resolving residual W04 uncertain records'
