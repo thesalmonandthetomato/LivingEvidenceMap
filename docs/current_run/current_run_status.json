@@ -1,39 +1,93 @@
 {
   "schema": "living-evidence-map-current-run-status-v1",
-  "update_id": "w01-run-36971418284",
+  "update_id": "w00-run-37326710853",
   "branch": "workflow01-final-architecture",
-  "started_at_utc": "2026-10-02T06:30:47Z",
-  "last_updated_at_utc": "2026-10-05T13:35:36Z",
+  "started_at_utc": "2026-10-05T15:05:24Z",
+  "last_updated_at_utc": "2026-10-05T15:05:24Z",
   "baseline": {
-    "workflow08_pointer": "docs/workflow08/zenodo/run-36442875006.json",
-    "workflow08_source_run_id": "36442875006",
-    "canonical_records": 19117,
-    "canonical_sha256": "8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c"
+    "workflow08_pointer": "docs/workflow08/zenodo/run-37234697766.json",
+    "workflow08_source_run_id": "37234697766",
+    "canonical_records": 21493,
+    "canonical_sha256": "96a854952aecf3a562fadf603670f650fa26ba9974c819e4b98f9c4dc4f6de20"
   },
   "search": {
-    "workflow00_run_id": "",
-    "search_date": "2026-09-23",
-    "search_results": 118527,
-    "sources": []
+    "workflow00_run_id": "37326710853",
+    "search_date": "2026-10-05",
+    "search_results": 17039,
+    "sources": {
+      "ebsco_africa_wide": {
+        "reported_search_results": 431,
+        "successfully_downloaded_results": 431
+      },
+      "ebsco_amed": {
+        "reported_search_results": 3,
+        "successfully_downloaded_results": 3
+      },
+      "ebsco_atla_religion": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_biological_agricultural_index": {
+        "reported_search_results": 2913,
+        "successfully_downloaded_results": 2913
+      },
+      "ebsco_cinahl": {
+        "reported_search_results": 102,
+        "successfully_downloaded_results": 102
+      },
+      "ebsco_econlit": {
+        "reported_search_results": 311,
+        "successfully_downloaded_results": 311
+      },
+      "ebsco_family_society": {
+        "reported_search_results": 121,
+        "successfully_downloaded_results": 121
+      },
+      "ebsco_greenfile": {
+        "reported_search_results": 916,
+        "successfully_downloaded_results": 916
+      },
+      "ebsco_medline": {
+        "reported_search_results": 6854,
+        "successfully_downloaded_results": 6854
+      },
+      "ebsco_mla": {
+        "reported_search_results": 5,
+        "successfully_downloaded_results": 5
+      },
+      "ebsco_political_science": {
+        "reported_search_results": 30,
+        "successfully_downloaded_results": 30
+      },
+      "ebsco_psycinfo": {
+        "reported_search_results": 97,
+        "successfully_downloaded_results": 97
+      },
+      "ebsco_waters_oceans": {
+        "reported_search_results": 5256,
+        "successfully_downloaded_results": 5256
+      }
+    }
   },
   "cohort": {
     "record_ids_path": "docs/current_run/current_run_record_ids.txt",
-    "deduplicated_records": 47094
+    "record_ids_sha256": null,
+    "deduplicated_records": null
   },
   "counts": {
-    "search_results": 118527,
-    "deduplicated_records": 47094,
-    "enriched_records": 2218,
-    "retraction_exclusions": 12,
-    "screened_include": 21819,
-    "screened_exclude": 25263,
+    "search_results": 17039,
+    "deduplicated_records": null,
+    "enriched_records": null,
+    "retraction_exclusions": null,
+    "screened_include": null,
+    "screened_exclude": null,
     "geography": {
-      "with": 8923,
-      "without": 12570
+      "with": null,
+      "without": null
     },
     "topics": {
-      "with": 21246,
-      "without": 247
+      "with": null,
+      "without": null
     }
   },
   "progress": {
@@ -41,49 +95,41 @@
       "status": "complete"
     },
     "W01": {
-      "status": "complete"
+      "status": "active"
     },
     "W02": {
-      "status": "complete"
+      "status": "pending"
     },
     "W03": {
-      "status": "complete"
+      "status": "pending"
     },
     "W04": {
-      "status": "complete"
+      "status": "pending"
     },
     "W05": {
-      "status": "complete"
+      "status": "pending"
     },
     "W06": {
-      "status": "complete"
+      "status": "pending"
     },
     "W07": {
-      "status": "complete"
+      "status": "pending"
     },
     "W08": {
-      "status": "complete"
+      "status": "pending"
     },
     "W09": {
-      "status": "complete"
+      "status": "pending"
     },
     "W10": {
-      "status": "complete"
+      "status": "pending"
     },
-    "current_stage": "W10",
-    "completed_through": 11,
-    "status_label": "Current update complete"
+    "current_stage": "W00",
+    "completed_through": 1,
+    "active_position": 2,
+    "status_label": "Search complete; awaiting deduplication"
   },
   "workflow_runs": {
-    "W01": "36971418284",
-    "W02": "37016080508",
-    "W03": "37024164176",
-    "W04": "37051672356",
-    "W05": "37110114836",
-    "W06": "37114864202",
-    "W07": "37153534771",
-    "W08": "37234697766",
-    "W10": "37316623264",
-    "W09": "37315066051"
+    "W00": "37326710853"
   }
 }
