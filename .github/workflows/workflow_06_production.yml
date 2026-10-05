@@ -408,7 +408,9 @@ jobs:
         run: |
           set -euo pipefail
           git pull --rebase origin workflow01-final-architecture
-          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W06
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W06 \
+            --pointer "docs/workflow06/zenodo/run-$GITHUB_RUN_ID.json"
           if [ -n "${LEM_GOOGLE_SERVICE_ACCOUNT_JSON:-}" ]; then
             printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
             chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
