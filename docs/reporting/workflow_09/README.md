@@ -41,3 +41,10 @@ The Workflow 08 JSONL remains authoritative for nested workflow provenance and r
 ## Current validated release
 
 The current publication package was generated successfully by Workflow 09 run **37268896083** from authoritative Workflow 08 run **37234697766**, Zenodo record **23145712** (DOI `10.5281/zenodo.23145712`). Workflow 09 is automatically dispatched after successful published W08 finalisation in both the direct production and post-Shiny resume paths, and remains manually reproducible.
+
+
+## Automatic Workflow 10 handoff
+
+After the Workflow 09 publication package has passed validation, been committed, and its live status has been recorded, Workflow 09 writes `docs/reporting/.run_workflow10_dashboard`. That dedicated provenance trigger starts Workflow 10 on `workflow01-final-architecture`.
+
+W10 no longer relies on incidental W08/W09 output-file pushes for production orchestration. This provides a single explicit W09 to W10 handoff and prevents premature dashboard builds during publication-package commits.
