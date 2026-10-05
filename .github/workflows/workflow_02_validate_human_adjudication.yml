@@ -6,6 +6,7 @@ on:
       - workflow01-final-architecture
     paths:
       - 'scripts/updater/workflow_02_apply_human_decisions.R'
+      - 'scripts/updater/workflow_02_publish_human_review_queue_to_shiny.R'
       - '.github/workflows/workflow_02_validate_human_adjudication.yml'
       - '.github/workflows/workflow_02_batched.yml'
       - '.github/workflows/shiny-adjudication-publish-w02-queue.yml'
@@ -36,7 +37,8 @@ jobs:
         shell: Rscript {0}
         run: |
           parse(file="scripts/updater/workflow_02_apply_human_decisions.R")
-          cat("PASS: W02 human adjudication adapter parses\n")
+          parse(file="scripts/updater/workflow_02_publish_human_review_queue_to_shiny.R")
+          cat("PASS: W02 human adjudication and direct Shiny publisher scripts parse\n")
 
       - name: Validate accepted and rejected decisions
         shell: Rscript {0}
