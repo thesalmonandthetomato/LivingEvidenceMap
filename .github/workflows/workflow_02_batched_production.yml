@@ -33,5 +33,6 @@ jobs:
       max_records: '0'
       recheck_after_days: '90'
       publish: true
-      use_scopus: true
+      use_scopus: false
+      enrich_author_keywords: false
     secrets: inherit
