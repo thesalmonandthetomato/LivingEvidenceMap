@@ -37,3 +37,7 @@ The final 16 manuscript figures are stored in both PNG and PDF under `figures/`.
 `data/living_evidence_map_canonical_final.ris` is the complete-record portable RIS export of the final included canonical evidence base. Its checksum and source-canonical checksum are recorded in `data/living_evidence_map_canonical_final.ris.manifest.json`.
 
 The Workflow 08 JSONL remains authoritative for nested workflow provenance and record state.
+
+## Current validated release
+
+The current publication package was generated successfully by Workflow 09 run **37268896083** from authoritative Workflow 08 run **37234697766**, Zenodo record **23145712** (DOI `10.5281/zenodo.23145712`). Workflow 09 is automatically dispatched after successful published W08 finalisation in both the direct production and post-Shiny resume paths, and remains manually reproducible.
