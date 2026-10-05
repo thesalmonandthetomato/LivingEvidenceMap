@@ -225,7 +225,9 @@ jobs:
           # workflow automatically, so update the current-run status here.
           Rscript -e "install.packages(c('readr','googlesheets4'),repos='https://cloud.r-project.org')"
           git pull --rebase origin workflow01-final-architecture
-          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W03
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W03 \
+            --pointer "docs/publication_status/zenodo/run-$GITHUB_RUN_ID.json"
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
           chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
           Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
