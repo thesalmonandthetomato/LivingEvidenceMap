@@ -141,7 +141,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 env:
   WORKFLOW00_ORCHESTRATOR_BRANCH: workflow01-final-architecture
@@ -771,6 +771,32 @@ jobs:
             git pull --rebase origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
             git push origin HEAD:"$WORKFLOW00_ORCHESTRATOR_BRANCH"
           fi
+
+      - name: Trigger Workflow 01 after successful Workflow 00
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="docs/current_run/current_run_status.json"
+          W00_POINTER="docs/search_record/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "$STATUS"
+          test -s "$W00_POINTER"
+          EXPECTED="w00-run-$GITHUB_RUN_ID"
+          ACTUAL="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(as.character(x$update_id))')"
+          test "$ACTUAL" = "$EXPECTED"
+          PREV_W01="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow01_pointer))')"
+          test -n "$PREV_W01"
+          test -s "$PREV_W01"
+          gh workflow run workflow_01_production.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$WORKFLOW00_ORCHESTRATOR_BRANCH" \
+            -f workflow00_pointer_path="$W00_POINTER" \
+            -f previous_workflow01_pointer_path="$PREV_W01" \
+            -f model='gpt-5.6-luna' \
+            -f auto_threshold='0.95' \
+            -f max_llm_cases='5000'
+          echo "PASS: dispatched Workflow 01 from authoritative W00 run $GITHUB_RUN_ID"
 
       - name: Upload Zenodo receipt
         if: always()
