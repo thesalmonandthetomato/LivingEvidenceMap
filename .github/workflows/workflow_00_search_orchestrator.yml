@@ -62,6 +62,10 @@ on:
         required: false
         default: ''
         type: string
+      supersede_incomplete_update:
+        required: false
+        default: false
+        type: boolean
 
   workflow_dispatch:
     inputs:
@@ -138,6 +142,11 @@ on:
         required: false
         default: ''
         type: string
+      supersede_incomplete_update:
+        description: 'Explicitly abandon an incomplete current update and start a new W00 run'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -181,6 +190,44 @@ jobs:
       - name: Install R dependency
         shell: Rscript {0}
         run: install.packages('jsonlite')
+
+      - name: Refuse overlapping pipeline update
+        env:
+          SUPERSEDE_INCOMPLETE: ${{ inputs.supersede_incomplete_update }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+        shell: Rscript {0}
+        run: |
+          status_path <- "docs/current_run/current_run_status.json"
+          if (!file.exists(status_path)) {
+            cat("PASS: no existing current-run status; W00 may start\n")
+            quit(status=0)
+          }
+
+          x <- jsonlite::fromJSON(status_path,simplifyVector=FALSE)
+          completed <- suppressWarnings(as.integer(x$progress$completed_through))
+          active <- x$progress$active_position
+          is_complete <- !is.na(completed) && completed >= 11L &&
+            (is.null(active) || !length(active))
+
+          supersede <- identical(tolower(Sys.getenv("SUPERSEDE_INCOMPLETE")),"true")
+          resume_id <- trimws(Sys.getenv("RESUME_RUN_ID"))
+
+          if (is_complete) {
+            cat("PASS: previous pipeline update is complete; W00 may start\n")
+          } else if (nzchar(resume_id)) {
+            cat("PASS: explicit W00 resume requested; overlap guard bypassed for resume\n")
+          } else if (supersede) {
+            cat("PASS: explicit supersede authorised for incomplete update ",
+                as.character(x$update_id), "\n", sep="")
+          } else {
+            stop(
+              "A pipeline update is already incomplete (",
+              as.character(x$update_id),
+              "). Refusing to spend search/API resources on an overlapping update. ",
+              "Resume it or explicitly set supersede_incomplete_update=true.",
+              call.=FALSE
+            )
+          }
 
       - name: Resolve and freeze source selection
         id: selection
