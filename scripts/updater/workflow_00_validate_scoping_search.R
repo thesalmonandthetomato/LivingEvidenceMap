@@ -12,10 +12,14 @@ arg <- function(flag, default = NULL) {
 
 input_path <- arg("--input")
 output_json <- arg("--output")
+ebsco_config_path <- arg("--ebsco-config", "config/workflow00_ebsco_sources.json")
 if (is.null(input_path) || is.null(output_json)) {
   stop("Required: --input --output", call. = FALSE)
 }
 if (!file.exists(input_path)) stop("Scoping search string file not found", call. = FALSE)
+if (!file.exists(ebsco_config_path)) stop("EBSCO source config not found", call. = FALSE)
+ebsco_cfg <- fromJSON(ebsco_config_path, simplifyVector = FALSE)
+if (is.null(ebsco_cfg$sources) || !length(ebsco_cfg$sources)) stop("EBSCO source catalogue contains no sources", call. = FALSE)
 
 raw_lines <- readLines(input_path, warn = FALSE, encoding = "UTF-8")
 raw <- trimws(paste(raw_lines, collapse = " "))
@@ -188,6 +192,23 @@ source_queries <- list(
   epmc_preprints = sprintf("SRC:PPR AND TITLE_ABS:(%s)", normalised),
   wos = sprintf("(TI=(%s)) OR (AB=(%s)) OR (AK=(%s))", normalised, normalised, normalised)
 )
+
+ebsco_field_query <- function(fields, expression) {
+  fields <- trimws(as.character(fields))
+  fields <- fields[nzchar(fields)]
+  if (!length(fields)) stop("EBSCO source has no configured search fields", call. = FALSE)
+  paste0(
+    "(",
+    paste(vapply(fields, function(tag) sprintf("%s (%s)", tag, expression), character(1)), collapse = " OR "),
+    ")"
+  )
+}
+ebsco_queries <- lapply(names(ebsco_cfg$sources), function(source_slug) {
+  src <- ebsco_cfg$sources[[source_slug]]
+  ebsco_field_query(unlist(src$search_fields, use.names = FALSE), normalised)
+})
+names(ebsco_queries) <- names(ebsco_cfg$sources)
+source_queries <- c(source_queries, ebsco_queries)
 
 out <- list(
   schema = "living-evidence-map-workflow00-scoping-search-plan-v1",
