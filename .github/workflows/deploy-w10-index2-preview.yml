@@ -1,0 +1,102 @@
+name: Deploy validated W10 index2 preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/index2.html'
+      - '.github/workflows/deploy-w10-index2-preview.yml'
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  SOURCE_RUN_ID: '37278806375'
+  SOURCE_ARTIFACT: 'workflow10-dashboard-37278806375'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout main site
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: production
+          fetch-depth: 1
+
+      - name: Download validated W10 artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.SOURCE_ARTIFACT }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          path: validated_w10
+
+      - name: Assemble and verify index2 preview
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HTML=$(find validated_w10 -maxdepth 2 -type f -name index.html -print -quit)
+          DATA=$(find validated_w10 -maxdepth 2 -type f -name dashboard-data.js -print -quit)
+          test -s "$HTML"
+          test -s "$DATA"
+          test -s production/docs/index2.html
+
+          # The committed preview HTML must be byte-for-byte the validated W10
+          # HTML except for its isolated data filename.
+          cp "$HTML" /tmp/expected-index2.html
+          sed -i 's#./dashboard-data.js#./index2-data.js#g' /tmp/expected-index2.html
+          cmp -s /tmp/expected-index2.html production/docs/index2.html
+
+          # Preserve the validated public database table, but ensure the
+          # search/download/RIS functionality remains absent.
+          grep -q 'id="database"' production/docs/index2.html
+          grep -q 'id="tableSpecies"' production/docs/index2.html
+          grep -q 'id="tableCountry"' production/docs/index2.html
+          grep -q 'id="tableYear"' production/docs/index2.html
+          grep -q 'id="tableTopic"' production/docs/index2.html
+          grep -q 'filter the database' production/docs/index2.html
+          ! grep -q 'Search and download' production/docs/index2.html
+          ! grep -q 'Download filtered results (.RIS)' production/docs/index2.html
+          ! grep -q 'LIVING_EVIDENCE_MAP_ABSTRACT_INDEX' production/docs/index2.html
+
+          # The public data retains the database-table fields and 30-word
+          # snippets, but never full abstracts or an abstract search index.
+          grep -q '"database_table":true' "$DATA"
+          grep -q '"full_abstracts":false' "$DATA"
+          grep -q '"abstract_snippet_words":30' "$DATA"
+          grep -q '"search":false' "$DATA"
+          grep -q '"ris_download":false' "$DATA"
+          grep -q '"abstract_index":false' "$DATA"
+          grep -q '"abstract_snippet":' "$DATA"
+          ! grep -q '"abstract":' "$DATA"
+
+          cp "$DATA" production/docs/index2-data.js
+          echo "PASS: validated W10 preview assembled as docs/index2.html + index2-data.js"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: production/docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
