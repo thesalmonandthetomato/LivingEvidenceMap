@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: r-lib/actions/setup-r@v2
@@ -77,8 +77,13 @@ jobs:
           stopifnot(!grepl('ref: workflow01-final-architecture',prod,fixed=TRUE))
           stopifnot(!grepl('ref: workflow01-final-architecture',resume,fixed=TRUE))
           stopifnot(grepl('ref: ${{ github.sha }}',prod,fixed=TRUE))
-          stopifnot(grepl('prompt_provenance.json',prod,fixed=TRUE))
-          stopifnot(grepl('source/final/workflow04_final/prompt_provenance.json',resume,fixed=TRUE))
+          stopifnot(grepl('Freeze screening prompt provenance',prod,fixed=TRUE))
+          stopifnot(grepl('source_github_sha',prod,fixed=TRUE))
+          stopifnot(grepl('outputs/workflow04_prepare/prompt_provenance.json',prod,fixed=TRUE))
+          stopifnot(grepl('cp prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json',prod,fixed=TRUE))
+          stopifnot(grepl('source/prepared/outputs/workflow04_prepare/prompt_provenance.json',resume,fixed=TRUE))
+          stopifnot(!grepl('source/final/workflow04_final/prompt_provenance.json',resume,fixed=TRUE))
+          stopifnot(grepl('cp source/prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json',resume,fixed=TRUE))
 
           stopifnot(grepl('title_gained_ids',prep,fixed=TRUE))
           stopifnot(grepl('abstract_gained_ids',prep,fixed=TRUE))
@@ -91,4 +96,4 @@ jobs:
           stopifnot(grepl('workflow_05_production.yml',prod,fixed=TRUE))
           stopifnot(grepl('workflow_05_production.yml',resume,fixed=TRUE))
           stopifnot(grepl('--status consumed',resume,fixed=TRUE))
-          cat('PASS: W04 production is commit-pinned, prompt-frozen, incrementally safe, human-pausable and resumes to W05\n')
+          cat('PASS: W04 production is commit-pinned, freezes prompt provenance before screening, resumes from immutable source-run provenance, remains incrementally safe and hands off to W05\n')
