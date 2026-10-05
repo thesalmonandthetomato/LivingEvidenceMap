@@ -107,7 +107,23 @@ published_release_baseline <- function(){
     workflow08_pointer=auth$pointer,
     workflow08_source_run_id=auth$run_id,
     canonical_records=auth$records,
-    canonical_sha256=auth$sha256
+    canonical_sha256=auth$sha256,
+    previous_counts=list(
+      deduplicated_records=as.integer(summaries$W01$metrics$canonical_records),
+      enriched_records=as.integer(summaries$W02$metrics$enriched_records),
+      retraction_exclusions=as.integer(summaries$W03$metrics$retraction_exclusions),
+      screened_include=as.integer(summaries$W04$metrics$retained),
+      screened_exclude=as.integer(summaries$W04$metrics$excluded),
+      species_records=as.integer(summaries$W05$metrics$records),
+      geography=list(
+        with=as.integer(summaries$W08$metrics$geography_with),
+        without=as.integer(summaries$W08$metrics$geography_without)
+      ),
+      topics=list(
+        with=as.integer(summaries$W08$metrics$topic_with),
+        without=as.integer(summaries$W08$metrics$topic_without)
+      )
+    )
   )
 }
 stage_from_changed <- function(){
@@ -204,9 +220,17 @@ if(stage=="W00"){
     search=list(workflow00_run_id=parent,search_date=as.character(max(dates,na.rm=TRUE)),
                 search_results=total,sources=src),
     cohort=list(record_ids_path=ids_path,record_ids_sha256=NULL,deduplicated_records=NULL),
-    counts=list(search_results=total,deduplicated_records=NULL,enriched_records=NULL,
-                retraction_exclusions=NULL,screened_include=NULL,screened_exclude=NULL,
-                geography=list(with=NULL,without=NULL),topics=list(with=NULL,without=NULL)),
+    counts=list(
+      search_results=total,
+      deduplicated_records=baseline$previous_counts$deduplicated_records,
+      enriched_records=baseline$previous_counts$enriched_records,
+      retraction_exclusions=baseline$previous_counts$retraction_exclusions,
+      screened_include=baseline$previous_counts$screened_include,
+      screened_exclude=baseline$previous_counts$screened_exclude,
+      species_records=baseline$previous_counts$species_records,
+      geography=baseline$previous_counts$geography,
+      topics=baseline$previous_counts$topics
+    ),
     progress=progress(1L,2L),
     workflow_runs=list(W00=parent)
   )
