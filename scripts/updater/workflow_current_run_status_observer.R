@@ -67,8 +67,8 @@ authoritative_w08 <- function(){
 }
 
 published_release_baseline <- function(){
-  root <- "docs/reporting/workflow_09_inputs/current"
-  stages <- c("W01","W02","W04","W05","W06","W07","W08")
+  root <- "docs/reporting/workflow_09/data/workflow_inputs"
+  stages <- c("W01","W02","W03","W04","W05","W06","W07","W08")
   summaries <- setNames(lapply(stages,function(stage){
     p <- file.path(root,paste0(tolower(stage),"_summary.json"))
     if(!file.exists(p)) stop("Published-release baseline summary missing: ",p,call.=FALSE)
