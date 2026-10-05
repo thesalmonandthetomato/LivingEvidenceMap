@@ -815,7 +815,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W01
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W01 \
+            --pointer "docs/deduplication/zenodo/run-$GITHUB_RUN_ID.json"
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
           chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
           Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
