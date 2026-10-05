@@ -12,7 +12,7 @@
   "created_at_utc": "2026-10-05T20:14:56Z",
   "resume_redispatch_requested_at_utc": "2026-10-05T20:16:30Z",
   "resume_redispatch_reason": "Explicitly re-signal ready handoff after fixing GITHUB_TOKEN downstream-trigger suppression.",
-  "resume_request_counter": 1,
-  "resume_request_note": "Fresh standard W01 resume requested from the completed post-Shiny handoff after runner cancellations.",
-  "resume_requested_at_utc": "2026-10-05T20:55:30Z"
+  "resume_request_counter": 2,
+  "resume_request_note": "Fresh standard W01 resume requested after fixing shell heredoc delimiters in the production resume workflow.",
+  "resume_requested_at_utc": "2026-10-05T21:05:30Z"
 }
