@@ -237,4 +237,6 @@ Future living updates automatically dispatch Workflow 09 after a new validated W
 
 ## Reporting status
 
-Workflow 09 is complete when the publication workflow passes all validation checks and commits the generated package to `workflow01-final-architecture`. The final successful run and generated checksums are recorded in the repository publication package and branch history.
+**COMPLETE and validated for the current release.** Production run **37268896083** successfully regenerated the complete Workflow 09 publication package from authoritative W08 run **37234697766** / Zenodo record **23145712** after the geography-code correction. All production validation steps passed, including authoritative W08 restoration, compact W00-W08 handoff validation, RIS export, all 16 figures, Methods and Results rendering, permanent package staging, package validation, branch commit and Actions artefact upload.
+
+Workflow 09 remains reproducible independently through `.github/workflows/report_workflow09_figures.yml`, and is also explicitly dispatched by both successful published W08 completion paths.
