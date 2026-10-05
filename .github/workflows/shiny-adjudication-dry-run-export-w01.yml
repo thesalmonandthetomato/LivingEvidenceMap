@@ -204,8 +204,9 @@ jobs:
             rr <- rr[tolower(rr$queue_sha256)==expected_sha,repair_required,drop=FALSE]
             if(nrow(rr)) {
               if(any(!rr$review_case_id %in% queue_ids)) stop("W01 repair references case outside locked queue")
-              if(any(rr$action!="replace_abstract")) stop("Unsupported W01 Shiny repair action")
-              if(any(!nzchar(trimws(rr$value)))) stop("W01 replace_abstract repair has empty value")
+              if(any(!rr$action %in% c("replace_abstract","strip_abstract"))) stop("Unsupported W01 Shiny repair action")
+              bad_replace <- rr$action=="replace_abstract" & !nzchar(trimws(rr$value))
+              if(any(bad_replace)) stop("W01 replace_abstract repair has empty value")
               parsed_repair_time <- as.POSIXct(rr$saved_at_utc,format="%Y-%m-%dT%H:%M:%SZ",tz="UTC")
               if(any(is.na(parsed_repair_time))) stop("W01 repair has invalid saved_at_utc")
               repair_key <- paste(rr$source,rr$source_record_id,sep="::")
@@ -233,8 +234,8 @@ jobs:
               review_case_id=repair_rows$review_case_id[[i]],
               source=repair_rows$source[[i]],
               source_record_id=repair_rows$source_record_id[[i]],
-              action="replace_abstract",
-              value=repair_rows$value[[i]],
+              action=repair_rows$action[[i]],
+              value=if(identical(repair_rows$action[[i]],"strip_abstract")) NULL else repair_rows$value[[i]],
               reason=repair_rows$reason[[i]],
               recorded_by=repair_rows$reviewer[[i]],
               recorded_at_utc=repair_rows$saved_at_utc[[i]],
