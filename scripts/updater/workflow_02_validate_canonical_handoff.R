@@ -16,7 +16,7 @@ arg <- function(flag,default=NULL){
 input_path <- arg("--input")
 sample_path <- arg("--sample")
 report_path <- arg("--report")
-sample_n <- as.integer(arg("--sample-n","10"))
+sample_n <- as.integer(arg("--sample-n","10"))\nenrich_author_keywords <- tolower(arg("--enrich-author-keywords","false")) %in% c("true","1","yes")
 expected_records <- as.integer(arg("--expected-records","32292"))
 expected_manifestations <- as.integer(arg("--expected-manifestations","90137"))
 if(any(vapply(list(input_path,sample_path,report_path),is.null,logical(1)))) {
@@ -102,7 +102,7 @@ repeat {
   if(mk) n_missing_author_keywords <- n_missing_author_keywords + 1L
   # Production Workflow 02 enrichment is eligible when DOI is present
   # and title, abstract, or author keywords are missing.
-  eligible <- !is.null(d) && (mt || ma || mk)
+  eligible <- !is.null(d) && (mt || ma || (enrich_author_keywords && mk))
   if(eligible){
     n_eligible <- n_eligible + 1L
     if(length(sample_lines) < sample_n) sample_lines <- c(sample_lines,line)
