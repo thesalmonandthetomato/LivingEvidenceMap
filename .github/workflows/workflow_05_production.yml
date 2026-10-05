@@ -240,13 +240,63 @@ jobs:
           if-no-files-found: error
 
 
-  handoff-w06:
+  prepare-w06-handoff:
     needs: species
     if: ${{ needs.species.result == 'success' && inputs.publish == true }}
+    runs-on: ubuntu-latest
+    outputs:
+      lean_pointer_path: ${{ steps.ptr.outputs.lean_pointer_path }}
+      prior_workflow06_pointer_path: ${{ steps.ptr.outputs.prior_workflow06_pointer_path }}
+      prior_workflow04_pointer_path: ${{ steps.ptr.outputs.prior_workflow04_pointer_path }}
+      prior_lean_pointer_path: ${{ steps.ptr.outputs.prior_lean_pointer_path }}
+      prior_workflow07_pointer_path: ${{ steps.ptr.outputs.prior_workflow07_pointer_path }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - name: Resolve frozen baseline for W06 and W07
+        id: ptr
+        env:
+          INPUT_LEAN: ${{ inputs.lean_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="docs/current_run/current_run_status.json"
+          test -s "$STATUS"
+          CURRENT_LEAN="$INPUT_LEAN"
+          if [ -z "$CURRENT_LEAN" ]; then
+            W02_RUN="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$workflow_runs$W02))')"
+            test -n "$W02_RUN"
+            CURRENT_LEAN="docs/compaction/zenodo/run-$W02_RUN.json"
+          fi
+          PRIOR_W06="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow06_pointer))')"
+          PRIOR_W04="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow04_pointer))')"
+          PRIOR_LEAN="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$lean_pointer))')"
+          PRIOR_W07="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow07_pointer))')"
+          for p in "$CURRENT_LEAN" "$PRIOR_W06" "$PRIOR_W04" "$PRIOR_LEAN" "$PRIOR_W07"; do
+            test -n "$p"
+            test -s "$p"
+          done
+          echo "lean_pointer_path=$CURRENT_LEAN" >> "$GITHUB_OUTPUT"
+          echo "prior_workflow06_pointer_path=$PRIOR_W06" >> "$GITHUB_OUTPUT"
+          echo "prior_workflow04_pointer_path=$PRIOR_W04" >> "$GITHUB_OUTPUT"
+          echo "prior_lean_pointer_path=$PRIOR_LEAN" >> "$GITHUB_OUTPUT"
+          echo "prior_workflow07_pointer_path=$PRIOR_W07" >> "$GITHUB_OUTPUT"
+          echo "PASS: frozen release baseline resolved for W06/W07"
+
+  handoff-w06:
+    needs: [species, prepare-w06-handoff]
+    if: ${{ needs.species.result == 'success' && needs.prepare-w06-handoff.result == 'success' && inputs.publish == true }}
     uses: ./.github/workflows/workflow_06_production.yml
     with:
       workflow04_pointer_path: ${{ inputs.workflow04_pointer_path }}
       workflow05_pointer_path: ${{ format('docs/workflow05/zenodo/run-{0}.json', github.run_id) }}
-      lean_pointer_path: ${{ inputs.lean_pointer_path }}
+      lean_pointer_path: ${{ needs.prepare-w06-handoff.outputs.lean_pointer_path }}
+      prior_workflow06_pointer_path: ${{ needs.prepare-w06-handoff.outputs.prior_workflow06_pointer_path }}
+      prior_workflow04_pointer_path: ${{ needs.prepare-w06-handoff.outputs.prior_workflow04_pointer_path }}
+      prior_lean_pointer_path: ${{ needs.prepare-w06-handoff.outputs.prior_lean_pointer_path }}
+      prior_workflow07_pointer_path: ${{ needs.prepare-w06-handoff.outputs.prior_workflow07_pointer_path }}
       publish: true
     secrets: inherit
