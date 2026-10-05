@@ -36,7 +36,11 @@ on:
         type: boolean
       use_scopus:
         required: false
-        default: true
+        default: false
+        type: boolean
+      enrich_author_keywords:
+        required: false
+        default: false
         type: boolean
     secrets:
       ZENODO_ACCESS_TOKEN:
@@ -92,7 +96,12 @@ on:
       use_scopus:
         description: 'Use Scopus as fallback after Europe PMC'
         required: true
-        default: true
+        default: false
+        type: boolean
+      enrich_author_keywords:
+        description: 'Attempt author-keyword enrichment, including optional Scopus FULL lookups'
+        required: true
+        default: false
         type: boolean
 
 permissions:
@@ -214,6 +223,7 @@ jobs:
           MAX_RECORDS: ${{ inputs.max_records }}
           RECHECK: ${{ inputs.recheck_after_days }}
           USE_SCOPUS: ${{ inputs.use_scopus }}
+          ENRICH_AUTHOR_KEYWORDS: ${{ inputs.enrich_author_keywords }}
           MODE: ${{ inputs.mode }}
         shell: bash
         run: |
@@ -225,7 +235,7 @@ jobs:
             cp workflow01_state/canonical/records.jsonl outputs/workflow02/input_with_previous_state.jsonl
             : > previous_cumulative_patch.jsonl
           fi
-          Rscript scripts/updater/workflow_02_plan_batches.R             --input outputs/workflow02/input_with_previous_state.jsonl             --output-dir outputs/workflow02_plan             --batch-size "$BATCH_SIZE"             --max-records "$MAX_RECORDS"             --recheck-after-days "$RECHECK"             --mode "$MODE"
+          Rscript scripts/updater/workflow_02_plan_batches.R             --input outputs/workflow02/input_with_previous_state.jsonl             --output-dir outputs/workflow02_plan             --batch-size "$BATCH_SIZE"             --max-records "$MAX_RECORDS"             --recheck-after-days "$RECHECK"             --mode "$MODE"             --enrich-author-keywords "$ENRICH_AUTHOR_KEYWORDS"
 
           MATRIX="$(tr -d '\n' < outputs/workflow02_plan/matrix.json)"
           BATCH_COUNT="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow02_plan/plan.json");cat(x$batch_count)')"
@@ -350,7 +360,7 @@ jobs:
           BATCH_INPUT="prepared-plan/batch-$BATCH.jsonl"
           test -s "$BATCH_INPUT"
           echo "Starting Workflow 02 batch $BATCH with $(wc -l < "$BATCH_INPUT") records"
-          Rscript scripts/updater/workflow_02_metadata_enrichment.R             --input "$BATCH_INPUT"             --output outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --report outputs/batch/enrichment_report.json             --progress-every 50             --delay 0.5             --max-rate-limit-wait 60             --scopus-rate-limit-trip 3             --skip-scopus "$([ "$USE_SCOPUS" = "true" ] && echo false || echo true)"             --recheck-after-days "$RECHECK"
+          Rscript scripts/updater/workflow_02_metadata_enrichment.R             --input "$BATCH_INPUT"             --output outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --report outputs/batch/enrichment_report.json             --progress-every 50             --delay 0.5             --max-rate-limit-wait 60             --scopus-rate-limit-trip 3             --skip-scopus "$([ "$USE_SCOPUS" = "true" ] && echo false || echo true)"             --enrich-author-keywords "$ENRICH_AUTHOR_KEYWORDS"             --recheck-after-days "$RECHECK"
 
           Rscript scripts/updater/workflow_02_build_patch.R             --input "$BATCH_INPUT"             --enriched outputs/batch/enriched.jsonl             --audit outputs/batch/enrichment_audit.jsonl             --enrichment-report outputs/batch/enrichment_report.json             --patch outputs/batch/current_patch.jsonl             --retry-queue outputs/batch/retry_queue.jsonl             --report outputs/batch/current_patch_report.json
 
