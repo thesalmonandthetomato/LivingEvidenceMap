@@ -1,0 +1,94 @@
+name: Workflow 04 - Validate production architecture
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_04_production.yml'
+      - '.github/workflows/workflow_04_resume_after_shiny.yml'
+      - '.github/workflows/workflow_04_validate_production_architecture.yml'
+      - 'scripts/updater/workflow_04_prepare_incremental.R'
+      - 'scripts/updater/workflow_04_luna_consensus.R'
+      - 'scripts/updater/workflow_04_merge_incremental.R'
+      - 'scripts/updater/workflow_04_build_resolution_queue.R'
+      - 'scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R'
+      - 'scripts/updater/workflow_04_export_shiny_resolution_decisions.R'
+      - 'scripts/updater/workflow_04_apply_human_resolution.R'
+      - 'scripts/updater/workflow_04_archive_state_to_zenodo.R'
+      - 'scripts/updater/workflow_04_update_zenodo_registry.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Lint W04 production workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= \
+            .github/workflows/workflow_04_production.yml \
+            .github/workflows/workflow_04_resume_after_shiny.yml
+
+      - name: Parse W04 production scripts
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_04_prepare_incremental.R',
+            'scripts/updater/workflow_04_luna_consensus.R',
+            'scripts/updater/workflow_04_merge_incremental.R',
+            'scripts/updater/workflow_04_build_resolution_queue.R',
+            'scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R',
+            'scripts/updater/workflow_04_export_shiny_resolution_decisions.R',
+            'scripts/updater/workflow_04_apply_human_resolution.R',
+            'scripts/updater/workflow_04_archive_state_to_zenodo.R',
+            'scripts/updater/workflow_04_update_zenodo_registry.R'
+          )
+          invisible(lapply(files,parse))
+          cat('PASS: W04 production scripts parse\n')
+
+      - name: Validate W04 immutable execution contract
+        shell: Rscript {0}
+        run: |
+          prod <- paste(readLines('.github/workflows/workflow_04_production.yml',warn=FALSE),collapse='\n')
+          resume <- paste(readLines('.github/workflows/workflow_04_resume_after_shiny.yml',warn=FALSE),collapse='\n')
+          prep <- paste(readLines('scripts/updater/workflow_04_prepare_incremental.R',warn=FALSE),collapse='\n')
+          merge <- paste(readLines('scripts/updater/workflow_04_merge_incremental.R',warn=FALSE),collapse='\n')
+
+          stopifnot(!grepl('ref: workflow01-final-architecture',prod,fixed=TRUE))
+          stopifnot(!grepl('ref: workflow01-final-architecture',resume,fixed=TRUE))
+          stopifnot(grepl('ref: ${{ github.sha }}',prod,fixed=TRUE))
+          stopifnot(grepl('prompt_provenance.json',prod,fixed=TRUE))
+          stopifnot(grepl('source/final/workflow04_final/prompt_provenance.json',resume,fixed=TRUE))
+
+          stopifnot(grepl('title_gained_ids',prep,fixed=TRUE))
+          stopifnot(grepl('abstract_gained_ids',prep,fixed=TRUE))
+          stopifnot(grepl('rescreen_existing_ids',prep,fixed=TRUE))
+          stopifnot(grepl('screening_input_sha256',prep,fixed=TRUE))
+          stopifnot(grepl('HUMAN_REVIEW_REQUIRED',merge,fixed=TRUE))
+          stopifnot(grepl('workflow04_included_canonical.jsonl',merge,fixed=TRUE))
+
+          stopifnot(grepl('--stage-status waiting_human',prod,fixed=TRUE))
+          stopifnot(grepl('workflow_05_production.yml',prod,fixed=TRUE))
+          stopifnot(grepl('workflow_05_production.yml',resume,fixed=TRUE))
+          stopifnot(grepl('--status consumed',resume,fixed=TRUE))
+          cat('PASS: W04 production is commit-pinned, prompt-frozen, incrementally safe, human-pausable and resumes to W05\n')
