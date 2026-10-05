@@ -255,6 +255,29 @@ jobs:
           echo "queue_n=$QUEUE_N" >> "$GITHUB_OUTPUT"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
+      - name: Freeze screening prompt provenance
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          cfg <- fromJSON("user_input/workflow04_screening_config.json", simplifyVector=FALSE)
+          prompt <- paste(readLines(cfg$prompt_path, warn=FALSE, encoding="UTF-8"), collapse="\n")
+          prompt_sha <- digest(prompt, algo="sha256", serialize=FALSE)
+          stopifnot(identical(prompt_sha, as.character(cfg$expected_prompt_sha256)))
+          provenance <- list(
+            schema="living-evidence-map-workflow04-prompt-provenance-v1",
+            prompt_path=cfg$prompt_path,
+            prompt_version=cfg$prompt_version,
+            prompt_sha256=prompt_sha,
+            source_github_run_id=Sys.getenv("GITHUB_RUN_ID"),
+            source_github_sha=Sys.getenv("GITHUB_SHA")
+          )
+          writeLines(
+            toJSON(provenance, auto_unbox=TRUE, pretty=TRUE, null="null"),
+            "outputs/workflow04_prepare/prompt_provenance.json"
+          )
+          cat("PASS: froze W04 prompt provenance before screening\n")
+
       - name: Restore and seed optional recovered pass-1 decisions
         if: ${{ inputs.recovery_pass1_zenodo_record_id != '' && steps.queue.outputs.queue_n != '0' }}
         env:
@@ -462,21 +485,15 @@ jobs:
           if [ -n "$MANUAL_PATH" ]; then ARGS+=(--manual-decisions "$MANUAL_PATH"); fi
           Rscript scripts/updater/workflow_04_merge_incremental.R "${ARGS[@]}"
 
+          test -s prepared/outputs/workflow04_prepare/prompt_provenance.json
           Rscript -e '
-            library(jsonlite); library(digest)
-            x <- fromJSON("user_input/workflow04_screening_config.json",simplifyVector=FALSE)
-            p <- paste(readLines(x$prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n")
-            h <- digest(p,algo="sha256",serialize=FALSE)
-            stopifnot(identical(h,x$expected_prompt_sha256))
-            z <- list(
-              schema="living-evidence-map-workflow04-prompt-provenance-v1",
-              prompt_path=x$prompt_path,
-              prompt_version=x$prompt_version,
-              prompt_sha256=h,
-              source_github_run_id=Sys.getenv("GITHUB_RUN_ID")
-            )
-            writeLines(toJSON(z,auto_unbox=TRUE,pretty=TRUE,null="null"),"outputs/workflow04_final/prompt_provenance.json")
+            library(jsonlite)
+            z <- fromJSON("prepared/outputs/workflow04_prepare/prompt_provenance.json", simplifyVector=FALSE)
+            stopifnot(identical(as.character(z$source_github_run_id), Sys.getenv("GITHUB_RUN_ID")))
+            stopifnot(identical(as.character(z$source_github_sha), Sys.getenv("GITHUB_SHA")))
+            stopifnot(grepl("^[0-9a-f]{64}$", as.character(z$prompt_sha256)))
           '
+          cp prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json
 
       - name: Inspect final status
         id: status
