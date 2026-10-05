@@ -23,8 +23,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+      LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
       DECISIONS_TAB: 'decisions'
+      REPAIRS_TAB: 'w01_data_quality_repairs'
       WORKFLOW01_BRANCH: workflow01-final-architecture
 
     steps:
@@ -105,6 +106,7 @@ jobs:
           queue_path <- Sys.getenv("QUEUE_PATH")
           root <- Sys.getenv("RETURN_ROOT")
           output_path <- file.path(root, "human_decisions.jsonl")
+          repairs_output_path <- file.path(root, "data_quality_repairs.jsonl")
           output_manifest_path <- file.path(root, "human_decisions.manifest.json")
 
           expected_sha <- tolower(as.character(pointer$queue_sha256))
@@ -189,7 +191,61 @@ jobs:
           if (any(!exported_decisions %in% c("duplicate","not_duplicate"))) stop("Export contains non-final W01 decision")
           if (any(exported_queue_sha != expected_sha)) stop("Exported decision queue SHA mismatch")
 
+          repair_rows <- data.frame()
+          repairs_tab <- Sys.getenv("REPAIRS_TAB")
+          if (repairs_tab %in% sheet_names(sheet_id)) {
+            rr <- read_sheet(sheet_id, sheet = repairs_tab, col_types = "c")
+            repair_required <- c(
+              "repair_id","review_case_id","source","source_record_id","action","value",
+              "reason","reviewer","saved_at_utc","queue_sha256","supersedes_repair_id"
+            )
+            repair_missing <- setdiff(repair_required,names(rr))
+            if(length(repair_missing)) stop("W01 repair sheet missing field(s): ",paste(repair_missing,collapse=", "))
+            rr <- rr[tolower(rr$queue_sha256)==expected_sha,repair_required,drop=FALSE]
+            if(nrow(rr)) {
+              if(any(!rr$review_case_id %in% queue_ids)) stop("W01 repair references case outside locked queue")
+              if(any(rr$action!="replace_abstract")) stop("Unsupported W01 Shiny repair action")
+              if(any(!nzchar(trimws(rr$value)))) stop("W01 replace_abstract repair has empty value")
+              parsed_repair_time <- as.POSIXct(rr$saved_at_utc,format="%Y-%m-%dT%H:%M:%SZ",tz="UTC")
+              if(any(is.na(parsed_repair_time))) stop("W01 repair has invalid saved_at_utc")
+              repair_key <- paste(rr$source,rr$source_record_id,sep="::")
+              ord_r <- order(parsed_repair_time,seq_len(nrow(rr)),decreasing=TRUE)
+              rr <- rr[ord_r,,drop=FALSE]
+              repair_key <- repair_key[ord_r]
+              repair_rows <- rr[!duplicated(repair_key),,drop=FALSE]
+
+              q_by_id <- setNames(queue_cases,queue_ids)
+              for(i in seq_len(nrow(repair_rows))) {
+                q <- q_by_id[[repair_rows$review_case_id[[i]]]]
+                allowed_members <- c(
+                  paste(as.character(q$record_i$source),as.character(q$record_i$source_record_id),sep="::"),
+                  paste(as.character(q$record_j$source),as.character(q$record_j$source_record_id),sep="::")
+                )
+                rk <- paste(repair_rows$source[[i]],repair_rows$source_record_id[[i]],sep="::")
+                if(!(rk %in% allowed_members)) stop("W01 repair targets a source record outside its adjudication pair")
+              }
+            }
+          }
+
+          repairs_con <- file(repairs_output_path,"wt",encoding="UTF-8")
+          if(nrow(repair_rows)) for(i in seq_len(nrow(repair_rows))) {
+            repair_out <- list(
+              review_case_id=repair_rows$review_case_id[[i]],
+              source=repair_rows$source[[i]],
+              source_record_id=repair_rows$source_record_id[[i]],
+              action="replace_abstract",
+              value=repair_rows$value[[i]],
+              reason=repair_rows$reason[[i]],
+              reviewer=repair_rows$reviewer[[i]],
+              saved_at_utc=repair_rows$saved_at_utc[[i]],
+              queue_sha256=tolower(repair_rows$queue_sha256[[i]])
+            )
+            writeLines(toJSON(repair_out,auto_unbox=TRUE,null="null",na="null"),repairs_con,useBytes=TRUE)
+          }
+          close(repairs_con)
+
           export_sha <- digest(file = output_path, algo = "sha256", serialize = FALSE)
+          repairs_sha <- digest(file = repairs_output_path, algo = "sha256", serialize = FALSE)
           manifest <- list(
             schema = "living-evidence-map-workflow01-shiny-decision-export-manifest-v2",
             checkpoint_pointer_path = Sys.getenv("POINTER"),
@@ -199,6 +255,9 @@ jobs:
             queue_sha256 = expected_sha,
             decision_log_rows_for_batch = nrow(d),
             active_decisions_exported = nrow(active),
+            active_repairs_exported = nrow(repair_rows),
+            repairs_file = basename(repairs_output_path),
+            repairs_sha256 = repairs_sha,
             unresolved_cases = 0L,
             uncertain_cases = 0L,
             complete = TRUE,
@@ -214,7 +273,9 @@ jobs:
           cat("Locked queue cases:", expected_cases, "\n")
           cat("Unresolved cases: 0\n")
           cat("Uncertain cases: 0\n")
+          cat("Active abstract repairs:",nrow(repair_rows),"\n")
           cat("Export SHA-256:", export_sha, "\n")
+          cat("Repairs SHA-256:",repairs_sha,"\n")
 
       - name: Upload validated W01 human decisions
         if: env.HAS_PENDING == 'true'
@@ -223,6 +284,7 @@ jobs:
           name: ${{ env.DECISIONS_ARTIFACT }}
           path: |
             ${{ env.RETURN_ROOT }}/human_decisions.jsonl
+            ${{ env.RETURN_ROOT }}/data_quality_repairs.jsonl
             ${{ env.RETURN_ROOT }}/human_decisions.manifest.json
           if-no-files-found: error
           retention-days: 90
