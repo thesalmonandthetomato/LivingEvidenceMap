@@ -556,7 +556,9 @@ jobs:
           # Registry commits made by GITHUB_TOKEN do not trigger a second
           # workflow, so update the live status explicitly in this job.
           git pull --rebase origin workflow01-final-architecture
-          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W04
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W04 \
+            --pointer "docs/workflow04/zenodo/run-$GITHUB_RUN_ID.json"
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
           chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
           Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
