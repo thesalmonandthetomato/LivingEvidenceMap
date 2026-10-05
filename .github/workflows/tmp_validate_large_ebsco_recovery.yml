@@ -68,13 +68,16 @@ jobs:
         shell: Rscript {0}
         run: |
           library(jsonlite)
-          check <- function(path) {
+          check <- function(path, expect_undated=FALSE) {
             x <- fromJSON(path,simplifyVector=FALSE)
             stopifnot(x$status=='success')
             stopifnot(as.integer(x$records_retrieved)==as.integer(x$reported_total))
             stopifnot(x$retrieval_strategy == 'publication_year_partitions')
-            stopifnot(length(x$year_partitions)>0L); cat(sprintf('%s reported=%d retrieved=%d strategy=%s partitions=%d\n',x$source,x$reported_total,x$records_retrieved,x$retrieval_strategy,length(x$year_partitions)))
+            stopifnot(length(x$year_partitions)>0L)
+            types <- vapply(x$year_partitions,function(z) if(is.null(z$partition_type)) 'dated' else as.character(z$partition_type),character(1))
+            if (expect_undated) stopifnot('undated' %in% types)
+            cat(sprintf('%s reported=%d retrieved=%d strategy=%s partitions=%d undated=%s\n',x$source,x$reported_total,x$records_retrieved,x$retrieval_strategy,length(x$year_partitions),expect_undated))
           }
-          check('outputs/medline/manifest.json')
-          check('outputs/waters/manifest.json')
+          check('outputs/medline/manifest.json',FALSE)
+          check('outputs/waters/manifest.json',TRUE)
           cat('PASS: large EBSCO harvests are complete\n')
