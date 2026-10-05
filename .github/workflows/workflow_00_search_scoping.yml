@@ -61,6 +61,19 @@ jobs:
             --ebsco-config config/workflow00_ebsco_sources.json \
             --output outputs/workflow00_search_scope/plan/search_plan.json
 
+      - name: Validate EBSCO scoping coverage
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- fromJSON('outputs/workflow00_search_scope/plan/search_plan.json', simplifyVector=FALSE)
+          e <- fromJSON('config/workflow00_ebsco_sources.json', simplifyVector=FALSE)
+          expected <- names(e$sources)
+          missing <- setdiff(expected, names(p$source_queries))
+          if (length(missing)) {
+            stop(sprintf('Scoping plan is missing EBSCO source query/queries: %s', paste(missing, collapse=', ')))
+          }
+          cat(sprintf('PASS: scoping plan contains all %d configured EBSCO databases\n', length(expected)))
+
       - name: Run count-only API searches
         env:
           LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
