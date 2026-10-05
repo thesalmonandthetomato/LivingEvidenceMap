@@ -3,13 +3,20 @@ name: Workflow 01 - Resume after human duplicate adjudication
 on:
   workflow_dispatch:
     inputs:
+      handoff_path:
+        description: 'Repository path to a ready W01 Shiny handoff manifest'
+        required: false
+        default: ''
+        type: string
       preadjudication_pointer_path:
         description: 'Repository path to compact Workflow 01 checkpoint pointer'
-        required: true
+        required: false
+        default: ''
         type: string
       decisions_path:
         description: 'Repository path to completed human duplicate decisions JSONL'
-        required: true
+        required: false
+        default: ''
         type: string
       repairs_path:
         description: 'Repository path to data-quality repair actions JSONL; blank means none'
@@ -58,6 +65,7 @@ jobs:
       - name: Resolve resume inputs
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_HANDOFF: ${{ inputs.handoff_path }}
           INPUT_POINTER: ${{ inputs.preadjudication_pointer_path }}
           INPUT_DECISIONS: ${{ inputs.decisions_path }}
           INPUT_REPAIRS: ${{ inputs.repairs_path }}
@@ -66,9 +74,35 @@ jobs:
           set -euo pipefail
           mkdir -p outputs/resume_inputs
 
-          if [ "${{ github.event_name }}" = "push" ]; then
-            Rscript scripts/updater/workflow_01_select_ready_handoff.R \
-              --output outputs/resume_inputs/handoff_selection.json
+          if [ "${{ github.event_name }}" = "push" ] || [ -n "$INPUT_HANDOFF" ]; then
+            if [ -n "$INPUT_HANDOFF" ]; then
+              test -s "$INPUT_HANDOFF"
+              INPUT_HANDOFF="$INPUT_HANDOFF" Rscript - <<'RS'
+              suppressPackageStartupMessages(library(jsonlite))
+              p <- Sys.getenv("INPUT_HANDOFF")
+              x <- fromJSON(p,simplifyVector=FALSE)
+              stopifnot(
+                identical(as.character(x$schema),"living-evidence-map-workflow01-shiny-handoff-v1"),
+                identical(as.character(x$status),"ready")
+              )
+              out <- c(
+                list(
+                  schema="living-evidence-map-workflow01-ready-handoff-selection-v1",
+                  found=TRUE,
+                  handoff_path=p
+                ),
+                x
+              )
+              writeLines(
+                toJSON(out,auto_unbox=TRUE,pretty=TRUE,null="null"),
+                "outputs/resume_inputs/handoff_selection.json",
+                useBytes=TRUE
+              )
+              RS
+            else
+              Rscript scripts/updater/workflow_01_select_ready_handoff.R \
+                --output outputs/resume_inputs/handoff_selection.json
+            fi
 
             FOUND="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(tolower(as.character(isTRUE(x$found))))' outputs/resume_inputs/handoff_selection.json)"
             if [ "$FOUND" != "true" ]; then
