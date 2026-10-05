@@ -1,0 +1,98 @@
+name: TEMP validate full pipeline contracts 20261005
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_full_pipeline_contracts_20261005.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Lint production workflow YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 \
+            .github/workflows/workflow_00_search_orchestrator.yml \
+            .github/workflows/workflow_01_production.yml \
+            .github/workflows/workflow_01_resume_after_human_review.yml \
+            .github/workflows/workflow_02_batched_production.yml \
+            .github/workflows/workflow_02_batched.yml \
+            .github/workflows/workflow_02_resume_after_human_review.yml \
+            .github/workflows/shiny-adjudication-publish-w02-queue.yml \
+            .github/workflows/workflow_03_production.yml \
+            .github/workflows/workflow_04_production.yml \
+            .github/workflows/workflow_04_resume_after_shiny.yml \
+            .github/workflows/workflow_05_production.yml \
+            .github/workflows/workflow_06_production.yml \
+            .github/workflows/workflow_07_production.yml \
+            .github/workflows/workflow_08_production.yml \
+            .github/workflows/workflow_08_resume_after_shiny.yml \
+            .github/workflows/report_workflow09_figures.yml \
+            .github/workflows/workflow_10_dashboard.yml
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install status-test dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','readr','httr2'))
+
+      - name: Parse changed status implementation
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_current_run_status_observer.R')
+          cat('PASS: live-status observer parses\n')
+
+      - name: Dry-run exact W00 reset against archived run
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W00 \
+            --w00-run-id 37326710853 \
+            --status "$RUNNER_TEMP/current_run_status.json" \
+            --record-ids "$RUNNER_TEMP/current_run_record_ids.txt"
+
+          STATUS="$RUNNER_TEMP/current_run_status.json" Rscript -e '
+            x <- jsonlite::fromJSON(Sys.getenv("STATUS"),simplifyVector=FALSE)
+            stopifnot(
+              identical(as.character(x$update_id),"w00-run-37326710853"),
+              as.integer(x$counts$search_results)==17039L,
+              identical(as.character(x$baseline$workflow01_source_run_id),"36971418284"),
+              identical(as.character(x$baseline$workflow02_source_run_id),"37016080508"),
+              identical(as.character(x$baseline$workflow08_source_run_id),"37234697766"),
+              identical(as.character(x$baseline$workflow01_pointer),"docs/deduplication/zenodo/run-36971418284.json"),
+              identical(as.character(x$baseline$workflow02_pointer),"docs/enrichment/zenodo/run-37016080508.json"),
+              identical(as.character(x$baseline$lean_pointer),"docs/compaction/zenodo/run-37016080508.json"),
+              as.integer(x$baseline$canonical_records)==21493L,
+              as.integer(x$counts$deduplicated_records)==47094L,
+              as.integer(x$counts$enriched_records)==2218L,
+              as.integer(x$counts$retraction_exclusions)==12L,
+              as.integer(x$counts$screened_include)==21819L,
+              as.integer(x$counts$screened_exclude)==25263L,
+              as.integer(x$counts$geography$with)==8923L,
+              as.integer(x$counts$geography$without)==12570L,
+              as.integer(x$counts$topics$with)==21246L,
+              as.integer(x$counts$topics$without)==247L,
+              as.integer(x$progress$completed_through)==1L,
+              as.integer(x$progress$active_position)==2L,
+              identical(as.character(x$progress$W00$status),"complete"),
+              identical(as.character(x$progress$W01$status),"active")
+            )
+            cat("PASS: W00 exact-run reset and frozen release baseline validated\n")
+          '
