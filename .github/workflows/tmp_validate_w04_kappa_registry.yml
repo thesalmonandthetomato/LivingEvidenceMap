@@ -9,6 +9,8 @@ on:
       - 'scripts/updater/workflow_04_sync_kappa_registry_to_sheet.R'
       - 'scripts/updater/workflow_04_build_human_validation_queue.R'
       - 'docs/workflow04/kappa_registry.csv'
+      - '.github/workflows/workflow_04_finalize_human_validation.yml'
+      - '.github/workflows/shiny-adjudication-publish-w04-validation.yml'
       - '.github/workflows/tmp_validate_w04_kappa_registry.yml'
 
 permissions:
@@ -29,7 +31,7 @@ jobs:
 
       - name: Install local-test dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest'))
+        run: install.packages(c('jsonlite','digest','yaml'))
 
       - name: Parse changed scripts
         shell: Rscript {0}
@@ -38,6 +40,26 @@ jobs:
           parse(file='scripts/updater/workflow_04_sync_kappa_registry_to_sheet.R')
           parse(file='scripts/updater/workflow_04_build_human_validation_queue.R')
           cat('PASS: W04 kappa scripts parse\n')
+
+      - name: Validate W04 workflow YAML contracts
+        shell: Rscript {0}
+        run: |
+          library(yaml)
+          for (p in c(
+            '.github/workflows/workflow_04_finalize_human_validation.yml',
+            '.github/workflows/shiny-adjudication-publish-w04-validation.yml'
+          )) {
+            x <- yaml.load_file(p)
+            stopifnot(is.list(x),length(x)>0L)
+          }
+          txt <- paste(readLines('.github/workflows/workflow_04_finalize_human_validation.yml',warn=FALSE),collapse='\n')
+          stopifnot(grepl('workflow_04_update_kappa_registry.R',txt,fixed=TRUE))
+          stopifnot(grepl('workflow_04_sync_kappa_registry_to_sheet.R',txt,fixed=TRUE))
+          stopifnot(grepl('workflow04-human-validation-',txt,fixed=TRUE))
+          pub <- paste(readLines('.github/workflows/shiny-adjudication-publish-w04-validation.yml',warn=FALSE),collapse='\n')
+          stopifnot(grepl('--workflow04-layer',pub,fixed=TRUE))
+          stopifnot(grepl('source_publish_run_id',pub,fixed=TRUE))
+          cat('PASS: W04 validation publisher/finaliser YAML contracts are present\n')
 
       - name: Verify historical baseline contingency reproduces published kappa
         shell: Rscript {0}
