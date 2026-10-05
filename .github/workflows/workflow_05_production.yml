@@ -180,7 +180,8 @@ jobs:
           W04_RECORD=$(P="$W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$zenodo_record_id)')
           W04_SHA=$(P="$W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$workflow04_final_screening_layer_sha256)')
           mkdir -p outputs/workflow05_zenodo
-          Rscript scripts/updater/workflow_05_archive_state_to_zenodo.R             --state-dir outputs/workflow05_state             --source-run-id "$GITHUB_RUN_ID"             --source-commit "$GITHUB_SHA"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow05_zenodo             --upstream-w04-record-id "$W04_RECORD"             --upstream-w04-layer-sha256 "$W04_SHA"
+          SOURCE_COMMIT="$(git rev-parse HEAD)"
+          Rscript scripts/updater/workflow_05_archive_state_to_zenodo.R             --state-dir outputs/workflow05_state             --source-run-id "$GITHUB_RUN_ID"             --source-commit "$SOURCE_COMMIT"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow05_zenodo             --upstream-w04-record-id "$W04_RECORD"             --upstream-w04-layer-sha256 "$W04_SHA"
 
       - name: Register W05 state
         if: ${{ inputs.publish == true }}
