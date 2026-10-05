@@ -101,7 +101,7 @@ permissions:
 
 concurrency:
   group: workflow02-batched
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   WORKFLOW02_BRANCH: workflow01-final-architecture
