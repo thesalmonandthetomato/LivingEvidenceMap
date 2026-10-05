@@ -101,6 +101,113 @@ if (length(missing_fields)) {
   stop(sprintf("Configured search fields absent from live EBSCO Info for %s: %s",
                source_slug,paste(missing_fields,collapse=", ")),call.=FALSE)
 }
+live_sorts <- unique(xml_attr(xml_find_all(db_node,".//*[local-name()='sort']"),"id"))
+supports_date2 <- "date2" %in% live_sorts
+
+parse_record <- function(rec, page_label) {
+  header <- xml_find_first(rec,".//*[local-name()='header']")
+  accession <- if (!inherits(header,"xml_missing")) xml_attr(header,"uiTerm") else NA_character_
+  if (is.na(accession) || !nzchar(trimws(accession))) {
+    ui_plain <- xml_find_all(rec,".//*[local-name()='ui' and not(@type)]")
+    accession <- scalar_text(ui_plain)
+  }
+  accession <- if (is.null(accession)) "" else trimws(accession)
+  if (!nzchar(accession)) stop(sprintf("Missing EBSCO accession number on %s",page_label),call.=FALSE)
+
+  short_db <- if (!inherits(header,"xml_missing")) xml_attr(header,"shortDbName") else db_code
+  long_db <- if (!inherits(header,"xml_missing")) xml_attr(header,"longDbName") else db_name
+  if (!is.na(short_db) && nzchar(short_db) && short_db != db_code) {
+    stop(sprintf("EBSCO response provenance mismatch: requested %s received %s",db_code,short_db),call.=FALSE)
+  }
+
+  title <- first_text(rec,c(".//*[local-name()='atl']",".//*[local-name()='btl']"))
+  abstract <- first_text(rec,c(".//*[local-name()='ab']"))
+  au <- texts(rec,".//*[local-name()='au']")
+  doi_nodes <- xml_find_all(rec,".//*[local-name()='ui' and translate(@type,'DOI','doi')='doi']")
+  doi <- norm_doi(scalar_text(doi_nodes))
+  ui_nodes <- xml_find_all(rec,".//*[local-name()='ui' and @type]")
+  typed_ids <- list()
+  if (length(ui_nodes)) {
+    for (node in ui_nodes) {
+      typ <- tolower(trimws(xml_attr(node,"type")))
+      val <- trimws(xml_text(node))
+      if (!nzchar(typ) || !nzchar(val)) next
+      typed_ids[[typ]] <- unique(c(typed_ids[[typ]],val))
+    }
+  }
+  first_id <- function(type) {
+    z <- typed_ids[[tolower(type)]]
+    if (is.null(z) || !length(z)) NULL else z[[1L]]
+  }
+  pmid <- first_id("pmid")
+  pmcid <- first_id("pmcid")
+  umi <- first_id("umi")
+  dt <- xml_find_first(rec,".//*[local-name()='dt']")
+  year <- if (!inherits(dt,"xml_missing")) suppressWarnings(as.integer(xml_attr(dt,"year"))) else NA_integer_
+  if (is.na(year)) year <- NULL
+  pub_date <- if (!inherits(dt,"xml_missing")) trimws(xml_text(dt)) else ""
+  if (!nzchar(pub_date)) pub_date <- NULL
+  journal <- first_text(rec,c(".//*[local-name()='jtl']"))
+  kw <- unique(texts(rec,".//*[local-name()='kw']"))
+  subjects <- unique(c(texts(rec,".//*[local-name()='su']"),texts(rec,".//*[local-name()='subj']")))
+  pubtypes <- unique(c(texts(rec,".//*[local-name()='doctype']"),texts(rec,".//*[local-name()='pubtype']")))
+  plink <- first_text(rec,c(".//*[local-name()='plink']"))
+
+  sidecar_id <- paste(source_slug,accession,sep=":")
+  authors <- if (length(au)) lapply(au,function(a) list(display_name=a)) else NULL
+
+  list(
+    sidecar_identity=list(
+      sidecar_record_id=sidecar_id,
+      ebsco_accession_number=accession,
+      doi=doi,
+      pmid=pmid,
+      pmcid=pmcid,
+      umi=umi
+    ),
+    source=list(
+      provider=source_slug,
+      source_format="ebscohost_eit_search_api_xml",
+      ebsco_database_code=db_code,
+      ebsco_database_name=if(!is.na(long_db)&&nzchar(long_db)) long_db else db_name
+    ),
+    ebsco=list(
+      accession_number=accession,
+      database_code=db_code,
+      database_name=if(!is.na(long_db)&&nzchar(long_db)) long_db else db_name,
+      permalink=plink,
+      subject_terms=if(length(subjects)) subjects else NULL,
+      publication_types=if(length(pubtypes)) pubtypes else NULL,
+      identifiers=if(length(typed_ids)) typed_ids else NULL
+    ),
+    mapped_fields=list(
+      title=title,
+      abstract=abstract,
+      authors=authors,
+      first_author=if(length(au)) au[[1L]] else NULL,
+      year=year,
+      publication_date=pub_date,
+      source=journal,
+      doi=doi,
+      pmid=pmid,
+      pmcid=pmcid,
+      umi=umi,
+      keywords=if(length(kw)) kw else NULL,
+      author_keywords=if(length(kw)) kw else NULL,
+      publication_type=if(length(pubtypes)) pubtypes[[1L]] else NULL,
+      affiliations=NULL
+    ),
+    provenance=list(
+      adapter_workflow="workflow_00g_ebsco_ingestion",
+      implementation_language="R",
+      harvested_at=now_utc(),
+      source_stage="ebscohost_eit_search",
+      database_code=db_code,
+      database_name=db_name,
+      canonical_json_modified=FALSE
+    )
+  )
+}
 
 records <- list()
 reported_total <- NA_integer_
@@ -140,114 +247,78 @@ repeat {
 
   for (rec in rec_nodes) {
     if (length(records) >= max_records) break
-    header <- xml_find_first(rec,".//*[local-name()='header']")
-    accession <- if (!inherits(header,"xml_missing")) xml_attr(header,"uiTerm") else NA_character_
-    if (is.na(accession) || !nzchar(trimws(accession))) {
-      ui_plain <- xml_find_all(rec,".//*[local-name()='ui' and not(@type)]")
-      accession <- scalar_text(ui_plain)
-    }
-    accession <- if (is.null(accession)) "" else trimws(accession)
-    if (!nzchar(accession)) stop(sprintf("Missing EBSCO accession number on page %d",page),call.=FALSE)
-
-    short_db <- if (!inherits(header,"xml_missing")) xml_attr(header,"shortDbName") else db_code
-    long_db <- if (!inherits(header,"xml_missing")) xml_attr(header,"longDbName") else db_name
-    if (!is.na(short_db) && nzchar(short_db) && short_db != db_code) {
-      stop(sprintf("EBSCO response provenance mismatch: requested %s received %s",db_code,short_db),call.=FALSE)
-    }
-
-    title <- first_text(rec,c(".//*[local-name()='atl']",".//*[local-name()='btl']"))
-    abstract <- first_text(rec,c(".//*[local-name()='ab']"))
-    au <- texts(rec,".//*[local-name()='au']")
-    doi_nodes <- xml_find_all(rec,".//*[local-name()='ui' and translate(@type,'DOI','doi')='doi']")
-    doi <- norm_doi(scalar_text(doi_nodes))
-    ui_nodes <- xml_find_all(rec,".//*[local-name()='ui' and @type]")
-    typed_ids <- list()
-    if (length(ui_nodes)) {
-      for (node in ui_nodes) {
-        typ <- tolower(trimws(xml_attr(node,"type")))
-        val <- trimws(xml_text(node))
-        if (!nzchar(typ) || !nzchar(val)) next
-        typed_ids[[typ]] <- unique(c(typed_ids[[typ]],val))
-      }
-    }
-    first_id <- function(type) {
-      z <- typed_ids[[tolower(type)]]
-      if (is.null(z) || !length(z)) NULL else z[[1L]]
-    }
-    pmid <- first_id("pmid")
-    pmcid <- first_id("pmcid")
-    umi <- first_id("umi")
-    dt <- xml_find_first(rec,".//*[local-name()='dt']")
-    year <- if (!inherits(dt,"xml_missing")) suppressWarnings(as.integer(xml_attr(dt,"year"))) else NA_integer_
-    if (is.na(year)) year <- NULL
-    pub_date <- if (!inherits(dt,"xml_missing")) trimws(xml_text(dt)) else ""
-    if (!nzchar(pub_date)) pub_date <- NULL
-    journal <- first_text(rec,c(".//*[local-name()='jtl']"))
-    kw <- unique(texts(rec,".//*[local-name()='kw']"))
-    subjects <- unique(c(texts(rec,".//*[local-name()='su']"),texts(rec,".//*[local-name()='subj']")))
-    pubtypes <- unique(c(texts(rec,".//*[local-name()='doctype']"),texts(rec,".//*[local-name()='pubtype']")))
-    plink <- first_text(rec,c(".//*[local-name()='plink']"))
-
-    sidecar_id <- paste(source_slug,accession,sep=":")
-    authors <- if (length(au)) lapply(au,function(a) list(display_name=a)) else NULL
-
-    records[[length(records)+1L]] <- list(
-      sidecar_identity=list(
-        sidecar_record_id=sidecar_id,
-        ebsco_accession_number=accession,
-        doi=doi,
-        pmid=pmid,
-        pmcid=pmcid,
-        umi=umi
-      ),
-      source=list(
-        provider=source_slug,
-        source_format="ebscohost_eit_search_api_xml",
-        ebsco_database_code=db_code,
-        ebsco_database_name=if(!is.na(long_db)&&nzchar(long_db)) long_db else db_name
-      ),
-      ebsco=list(
-        accession_number=accession,
-        database_code=db_code,
-        database_name=if(!is.na(long_db)&&nzchar(long_db)) long_db else db_name,
-        permalink=plink,
-        subject_terms=if(length(subjects)) subjects else NULL,
-        publication_types=if(length(pubtypes)) pubtypes else NULL,
-        identifiers=if(length(typed_ids)) typed_ids else NULL
-      ),
-      mapped_fields=list(
-        title=title,
-        abstract=abstract,
-        authors=authors,
-        first_author=if(length(au)) au[[1L]] else NULL,
-        year=year,
-        publication_date=pub_date,
-        source=journal,
-        doi=doi,
-        pmid=pmid,
-        pmcid=pmcid,
-        umi=umi,
-        keywords=if(length(kw)) kw else NULL,
-        author_keywords=if(length(kw)) kw else NULL,
-        publication_type=if(length(pubtypes)) pubtypes[[1L]] else NULL,
-        affiliations=NULL
-      ),
-      provenance=list(
-        adapter_workflow="workflow_00g_ebsco_ingestion",
-        implementation_language="R",
-        harvested_at=now_utc(),
-        source_stage="ebscohost_eit_search",
-        database_code=db_code,
-        database_name=db_name,
-        canonical_json_modified=FALSE
-      )
-    )
+    records[[length(records)+1L]] <- parse_record(rec,sprintf("newest-first page %d",page))
   }
 
   if (length(records) >= max_records) break
   if (!is.na(reported_total) && length(records) >= reported_total) break
   if (length(rec_nodes) < page_size) break
   startrec <- startrec + length(rec_nodes)
+}
+
+retrieval_strategy <- "date_newest"
+oldest_pages <- 0L
+if (is.infinite(max_records) && !is.na(reported_total) && length(records) < reported_total) {
+  if (!supports_date2) {
+    stop(sprintf(
+      "EBSCO harvest count mismatch for %s and database does not advertise date2 fallback: reported=%d retrieved=%d",
+      source_slug,reported_total,length(records)
+    ),call.=FALSE)
+  }
+  retrieval_strategy <- "date_newest_plus_date_oldest"
+  seen_ids <- vapply(records,function(r) r$sidecar_identity$sidecar_record_id,character(1))
+  startrec_oldest <- 1L
+
+  repeat {
+    oldest_pages <- oldest_pages + 1L
+    ans <- perform_xml(
+      "https://eit.ebscohost.com/Services/SearchService.asmx/Search",
+      list(
+        prof=uid,
+        pwd=pwd,
+        authType="profile",
+        db=db_code,
+        query=query,
+        format="detailed",
+        sort="date2",
+        startrec=as.character(startrec_oldest),
+        numrec=as.character(page_size)
+      ),
+      sprintf("oldest-first Search page %d",oldest_pages),
+      timeout=300
+    )
+
+    raw_path <- file.path(raw_dir,sprintf("response_oldest_%06d.xml",oldest_pages))
+    writeBin(ans$raw,raw_path)
+    page_files <- c(page_files,raw_path)
+
+    hit_nodes <- xml_find_all(ans$doc,"//*[local-name()='Hits']")
+    hit_vals <- suppressWarnings(as.integer(trimws(xml_text(hit_nodes))))
+    hit_vals <- hit_vals[!is.na(hit_vals)]
+    if (length(hit_vals) && hit_vals[[1L]] != reported_total) {
+      stop(sprintf(
+        "EBSCO reported total changed between newest/oldest passes for %s: newest=%d oldest=%d",
+        source_slug,reported_total,hit_vals[[1L]]
+      ),call.=FALSE)
+    }
+
+    rec_nodes <- xml_find_all(ans$doc,"//*[local-name()='rec']")
+    if (!length(rec_nodes)) break
+
+    for (rec in rec_nodes) {
+      parsed <- parse_record(rec,sprintf("oldest-first page %d",oldest_pages))
+      rid <- parsed$sidecar_identity$sidecar_record_id
+      if (!(rid %in% seen_ids)) {
+        records[[length(records)+1L]] <- parsed
+        seen_ids <- c(seen_ids,rid)
+      }
+      if (length(records) >= reported_total) break
+    }
+
+    if (length(records) >= reported_total) break
+    if (length(rec_nodes) < page_size) break
+    startrec_oldest <- startrec_oldest + length(rec_nodes)
+  }
 }
 
 ids <- vapply(records,function(r) r$sidecar_identity$sidecar_record_id,character(1))
@@ -295,7 +366,10 @@ manifest <- list(
   records_retrieved=length(records),
   max_records=if(is.infinite(max_records)) "all" else as.integer(max_records),
   page_size=page_size,
-  pages_retrieved=page,
+  pages_retrieved=page + oldest_pages,
+  newest_first_pages=page,
+  oldest_first_pages=oldest_pages,
+  retrieval_strategy=retrieval_strategy,
   native_id="EBSCO accession number",
   raw_response_format="XML",
   raw_files=basename(page_files),
@@ -313,5 +387,5 @@ checksum_lines <- vapply(checksum_files,function(p)
           substring(p,nchar(output_dir)+2L)),character(1))
 writeLines(checksum_lines,file.path(output_dir,"SHA256SUMS"))
 
-message(sprintf("PASS: EBSCO source=%s db=%s reported=%d retrieved=%d pages=%d",
-                source_slug,db_code,reported_total,length(records),page))
+message(sprintf("PASS: EBSCO source=%s db=%s reported=%d retrieved=%d pages=%d strategy=%s",
+                source_slug,db_code,reported_total,length(records),page+oldest_pages,retrieval_strategy))
