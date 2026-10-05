@@ -8,13 +8,13 @@ exclusions <- arg("--exclusions")
 ledger <- arg("--ledger")
 manifest <- arg("--manifest")
 source_run_id <- arg("--source-run-id")
-source_commit <- arg("--source-commit")
+source_commit <- arg("--source-commit","")
 repository <- arg("--repository")
 output_dir <- arg("--output-dir")
 supersedes_record_id <- arg("--supersedes-record-id","")
 supersedes_doi <- arg("--supersedes-doi","")
-if(any(vapply(list(canonical,exclusions,ledger,manifest,source_run_id,source_commit,repository,output_dir),is.null,logical(1)))) stop("Required W08 Zenodo arguments missing",call.=FALSE)
-if(!grepl("^[0-9a-fA-F]{40}$",source_commit)) stop("Invalid W08 source commit SHA",call.=FALSE)
+if(any(vapply(list(canonical,exclusions,ledger,manifest,source_run_id,repository,output_dir),is.null,logical(1)))) stop("Required W08 Zenodo arguments missing",call.=FALSE)
+if(nzchar(source_commit) && !grepl("^[0-9a-fA-F]{40}$",source_commit)) stop("Invalid W08 source commit SHA",call.=FALSE)
 for(p in c(canonical,exclusions,ledger,manifest)) if(!file.exists(p)) stop("Missing W08 archive file: ",p,call.=FALSE)
 
 m <- fromJSON(manifest,simplifyVector=FALSE)
@@ -118,7 +118,7 @@ receipt <- list(
   supersedes_zenodo_record_id=if(nzchar(supersedes_record_id))supersedes_record_id else NULL,
   supersedes_doi=if(nzchar(supersedes_doi))supersedes_doi else NULL,
   source_github_run_id=as.character(source_run_id),
-  source_github_commit=tolower(as.character(source_commit)),
+  source_github_commit=if(nzchar(source_commit))tolower(as.character(source_commit))else NULL,
   source_github_run_url=sprintf("https://github.com/%s/actions/runs/%s",repository,source_run_id),
   source_canonical_population=as.integer(m$source_canonical_population),
   canonical_records=as.integer(m$canonical_records),
