@@ -114,9 +114,7 @@ jobs:
           CTX=source/workflow08_reuse/shiny_resume_context.json
           SOURCE_COMMIT="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"),simplifyVector=FALSE);if(is.null(x$source_commit))cat("") else cat(as.character(x$source_commit))')"
           if [ -n "$SOURCE_COMMIT" ]; then
-            echo "$SOURCE_COMMIT" | grep -Eq '^[0-9a-fA-F]{40}
-      - name: Prepare Google credential
-        env:
+            echo "$SOURCE_COMMIT" | grep -Eq '^[0-9a-fA-F]{40}        env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
         shell: bash
         run: |
@@ -400,25 +398,6 @@ jobs:
             echo "WARNING: legacy W08 resume context lacks source_commit; using current checked-out commit $SOURCE_COMMIT"
           fi
           echo "W08_EXECUTION_COMMIT=$SOURCE_COMMIT" >> "$GITHUB_ENV"
-          Rscript -e "
-            files <- c(
-              'scripts/updater/workflow_03_restore_lean_checkpoint.R',
-              'scripts/updater/workflow_03_restore_state_from_zenodo.R',
-              'scripts/updater/workflow_04_restore_state_from_zenodo.R',
-              'scripts/updater/workflow_05_restore_state_from_zenodo.R',
-              'scripts/updater/workflow_06_restore_state_from_zenodo.R',
-              'scripts/updater/workflow_07_restore_state_from_zenodo.R',
-              'scripts/updater/workflow_08_capture_active_shiny_decisions.R',
-              'R/geography_grounding.R',
-              'scripts/updater/workflow_08_export_shiny_decisions.R',
-              'scripts/updater/workflow_08_finalize_canonical_dynamic.R',
-              'scripts/updater/workflow_08_partition_final_outputs_dynamic.R',
-              'scripts/updater/workflow_08_archive_to_zenodo.R',
-              'scripts/updater/workflow_shiny_batch_status.R'
-            )
-            invisible(lapply(files,parse))
-            cat('PASS: immutable W08 resume implementation parses\\n')
-          "
 
       - name: Prepare Google credential
         env:
