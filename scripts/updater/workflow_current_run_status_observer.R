@@ -29,6 +29,7 @@ stage_status <- tolower(arg("--stage-status","complete"))
 if(!stage_status %in% c("start","complete")) stop("--stage-status must be start or complete",call.=FALSE)
 changed_file <- arg("--changed-files","")
 pointer_path <- arg("--pointer","")
+w00_run_id <- arg("--w00-run-id","")
 changed <- if(nzchar(changed_file) && file.exists(changed_file)) {
   trimws(readLines(changed_file,warn=FALSE))
 } else character()
@@ -165,15 +166,26 @@ if(!nzchar(stage)){
 }
 
 if(stage=="W00"){
-  ps<-changed[grepl("^docs/search_record/(?:[^/]+/)*(full_search|fortnightly_update|ad_hoc)/.*\\.json$",changed,perl=TRUE)]
+  path_re <- "^docs/search_record/(?:[^/]+/)*(full_search|fortnightly_update|ad_hoc)/.*\\.json$"
+  if(nzchar(w00_run_id)){
+    all_json <- list.files("docs/search_record",pattern="\\.json$",recursive=TRUE,full.names=TRUE)
+    ps <- all_json[grepl(path_re,all_json,perl=TRUE)]
+  } else {
+    ps <- changed[grepl(path_re,changed,perl=TRUE)]
+  }
   recs<-list()
   for(p in ps){
     z<-tryCatch(fromJSON(p,simplifyVector=FALSE),error=function(e)NULL)
-    if(!is.null(z)&&identical(as.character(z$schema_version),"1.2")&&!is.null(z$reported_search_results)) recs[[length(recs)+1L]]<-z
+    if(is.null(z)||!identical(as.character(z$schema_version),"1.2")||is.null(z$reported_search_results)) next
+    parent_id<-clean((z$github%||%list())$parent_workflow_run_id)
+    if(!nzchar(parent_id)) parent_id<-clean(z$github$parent_workflow_run_id)
+    if(nzchar(w00_run_id) && !identical(parent_id,w00_run_id)) next
+    recs[[length(recs)+1L]]<-z
   }
-  if(!length(recs)) stop("W00 change contained no v1.2 search records",call.=FALSE)
-  parents<-vapply(recs,function(z)as.character(z$github$parent_workflow_run_id),character(1))
-  tab<-sort(table(parents),decreasing=TRUE);parent<-names(tab)[[1L]]
+  if(!length(recs)) stop("W00 archive contained no matching v1.2 search records",call.=FALSE)
+  parents<-vapply(recs,function(z)clean((z$github%||%list())$parent_workflow_run_id),character(1))
+  if(any(!nzchar(parents))) stop("W00 search record is missing github.parent_workflow_run_id",call.=FALSE)
+  parent<-if(nzchar(w00_run_id)) w00_run_id else names(sort(table(parents),decreasing=TRUE))[[1L]]
   recs<-recs[parents==parent]
   baseline<-published_release_baseline()
   total<-sum(vapply(recs,function(z)as.integer(z$reported_search_results),integer(1)))
