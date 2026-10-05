@@ -3,7 +3,7 @@
   "update_id": "w00-run-37346236893",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-05T17:20:08Z",
-  "last_updated_at_utc": "2026-10-05T22:12:05Z",
+  "last_updated_at_utc": "2026-10-05T22:44:43Z",
   "baseline": {
     "release_update_id": "w01-run-36971418284",
     "workflow01_source_run_id": "36971418284",
@@ -106,7 +106,7 @@
   "counts": {
     "search_results": 135566,
     "deduplicated_records": 50430,
-    "enriched_records": [],
+    "enriched_records": 2224,
     "retraction_exclusions": [],
     "screened_include": [],
     "screened_exclude": [],
@@ -128,10 +128,10 @@
       "status": "complete"
     },
     "W02": {
-      "status": "active"
+      "status": "complete"
     },
     "W03": {
-      "status": "pending"
+      "status": "active"
     },
     "W04": {
       "status": "pending"
@@ -154,14 +154,15 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W01",
-    "completed_through": 2,
-    "active_position": 3,
-    "status_label": "Deduplication complete; Workflow 02 enrichment in progress"
+    "current_stage": "W02",
+    "completed_through": 3,
+    "active_position": 4,
+    "status_label": "Enrichment complete; awaiting retraction screening"
   },
   "workflow_runs": {
     "W00": "37346236893",
     "W01": "37373748707",
-    "W10": "37370263748"
+    "W10": "37370263748",
+    "W02": "37381023181"
   }
 }
