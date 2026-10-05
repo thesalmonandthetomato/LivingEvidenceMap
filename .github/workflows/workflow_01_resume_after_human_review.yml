@@ -98,7 +98,7 @@ jobs:
                 "outputs/resume_inputs/handoff_selection.json",
                 useBytes=TRUE
               )
-              RS
+          RS
             else
               Rscript scripts/updater/workflow_01_select_ready_handoff.R \
                 --output outputs/resume_inputs/handoff_selection.json
@@ -152,7 +152,7 @@ jobs:
               stop("Downloaded W01 repairs SHA-256 does not match export manifest",call.=FALSE)
             }
             cat("PASS: W01 handoff and downloaded decision/repair artefacts agree\n")
-            RS
+          RS
 
             echo "POINTER=$POINTER" >> "$GITHUB_ENV"
             echo "DECISIONS=outputs/resume_inputs/human_decisions.jsonl" >> "$GITHUB_ENV"
