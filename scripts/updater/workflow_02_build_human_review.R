@@ -99,7 +99,10 @@ for (a in conflict_audit) {
     eid <- clean(q$eid)
     provider_title <- NA_character_
     if (identical(provider, "europe_pmc")) provider_title <- clean(a$europe_pmc$title)
-    if (identical(provider, "scopus")) provider_title <- clean(a$scopus$title)
+    if (identical(provider, "scopus")) {
+      sc_provider <- if (identical(field, "author_keywords") && !is.null(a$scopus_keywords)) a$scopus_keywords else a$scopus
+      provider_title <- clean(sc_provider$title)
+    }
 
     rows[[k]] <- data.frame(
       record_id = rid,
@@ -121,7 +124,11 @@ for (a in conflict_audit) {
       doi = clean(a$doi),
       canonical = ctx,
       conflict = q,
-      provider_response = if (identical(provider, "europe_pmc")) a$europe_pmc else if (identical(provider, "scopus")) a$scopus else NULL
+      provider_response = if (identical(provider, "europe_pmc")) {
+        a$europe_pmc
+      } else if (identical(provider, "scopus")) {
+        if (identical(field, "author_keywords") && !is.null(a$scopus_keywords)) a$scopus_keywords else a$scopus
+      } else NULL
     )
   }
 }
