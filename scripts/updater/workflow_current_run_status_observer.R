@@ -25,6 +25,8 @@ read_jsonl <- function(path){
 status_path <- arg("--status","docs/current_run/current_run_status.json")
 ids_path <- arg("--record-ids","docs/current_run/current_run_record_ids.txt")
 force_stage <- toupper(arg("--force-stage",""))
+stage_status <- tolower(arg("--stage-status","complete"))
+if(!stage_status %in% c("start","complete")) stop("--stage-status must be start or complete",call.=FALSE)
 changed_file <- arg("--changed-files","")
 changed <- if(nzchar(changed_file) && file.exists(changed_file)) {
   trimws(readLines(changed_file,warn=FALSE))
@@ -41,7 +43,7 @@ save_status <- function(x){
   writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null="null",na="null",digits=NA),status_path,useBytes=TRUE)
 }
 progress <- function(done,current=NULL){
-  labs<-c("W00","W01","W02","W03","W04","W05","W06","W07","W08","W10")
+  labs<-c("W00","W01","W02","W03","W04","W05","W06","W07","W08","W09","W10")
   setNames(lapply(seq_along(labs),function(i){
     st<-if(i<=done)"complete" else if(!is.null(current)&&i==current)"active" else "pending"
     list(status=st)
@@ -286,7 +288,11 @@ if(stage=="W08"){
 }
 
 if(stage=="W10"){
-  s<-set_run(s,"W10",Sys.getenv("GITHUB_RUN_ID",""),10L,NULL,"Current update complete")
+  if(stage_status=="start"){
+    s<-set_run(s,"W10",Sys.getenv("GITHUB_RUN_ID",""),10L,11L,"Report complete; dashboard build in progress")
+    save_status(s);cat("PASS: W10 current-run progress started\n");quit(status=0)
+  }
+  s<-set_run(s,"W10",Sys.getenv("GITHUB_RUN_ID",""),11L,NULL,"Current update complete")
   save_status(s);cat("PASS: W10 current-run progress complete\n");quit(status=0)
 }
 
