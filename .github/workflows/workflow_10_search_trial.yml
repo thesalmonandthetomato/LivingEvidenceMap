@@ -1,13 +1,9 @@
 name: Workflow 10 - isolated search/download trial
 
+# Archived restoration path for the retired search/download/RIS feature.
+# Manual-only by design: production W10 must not build the abstract index.
 on:
   workflow_dispatch:
-  push:
-    branches: [workflow01-final-architecture]
-    paths:
-      - '.github/workflows/workflow_10_search_trial.yml'
-      - 'R/workflow_10_build_search_trial.R'
-      - 'docs/dashboard-search-trial.html'
 
 permissions:
   contents: read
