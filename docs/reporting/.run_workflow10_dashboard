@@ -1,7 +1,6 @@
 {
   "schema": "living-evidence-map-workflow10-trigger-v1",
-  "workflow09_run_id": "37268896083",
-  "workflow09_commit_sha": "008b0c307a37e727d46324cafa5a010749b25ab8",
-  "triggered_at_utc": "2026-10-05T08:00:00Z",
-  "purpose": "handoff-mechanism-validation"
+  "workflow09_run_id": "37309046559",
+  "workflow09_commit_sha": "91f88d6808d431c8926e27f023a14fe383d9ea65",
+  "triggered_at_utc": "2026-10-05T12:31:50Z"
 }
