@@ -46,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: ${{ github.sha }}
           fetch-depth: 2
 
       - name: Resolve push-based W04 resume request
