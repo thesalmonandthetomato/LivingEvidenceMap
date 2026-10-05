@@ -21,6 +21,8 @@ concurrency:
 env:
   SOURCE_RUN_ID: '37278806375'
   SOURCE_ARTIFACT: 'workflow10-dashboard-37278806375'
+  W09_RUN_ID: '37268896083'
+  W09_ARTIFACT: 'workflow09-publication-package-37268896083'
 
 jobs:
   deploy:
@@ -45,6 +47,15 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ env.SOURCE_RUN_ID }}
           path: validated_w10
+
+      - name: Download validated W09 publication artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.W09_ARTIFACT }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.W09_RUN_ID }}
+          path: validated_w09
 
       - name: Assemble and verify index2 preview
         shell: bash
@@ -87,7 +98,17 @@ jobs:
           ! grep -q '"abstract":' "$DATA"
 
           cp "$DATA" production/docs/index2-data.js
-          echo "PASS: validated W10 preview assembled as docs/index2.html + index2-data.js"
+
+          METHODS=$(find validated_w09 -type f -path '*/manuscript/methods.html' -print -quit)
+          RESULTS=$(find validated_w09 -type f -path '*/manuscript/results.html' -print -quit)
+          test -s "$METHODS"
+          test -s "$RESULTS"
+          cp "$METHODS" production/docs/methodology.html
+          cp "$RESULTS" production/docs/results.html
+          grep -q 'The status of academic research on salmon farming: a living evidence map' production/docs/methodology.html
+          grep -q 'The status of academic research on salmon farming: a living evidence map' production/docs/results.html
+
+          echo "PASS: validated W09 methods/results and W10 index2 preview assembled"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
