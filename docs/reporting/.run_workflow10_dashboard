@@ -1,6 +1,7 @@
 {
   "schema": "living-evidence-map-workflow10-trigger-v1",
   "workflow09_run_id": "37309046559",
-  "workflow09_commit_sha": "91f88d6808d431c8926e27f023a14fe383d9ea65",
-  "triggered_at_utc": "2026-10-05T12:31:50Z"
+  "workflow09_commit_sha": "6656cb939a92db924a8d5c45c443bd0ccfedd6a5",
+  "triggered_at_utc": "2026-10-05T12:40:00Z",
+  "reason": "manual recovery after fixing suppressed GITHUB_TOKEN handover"
 }
