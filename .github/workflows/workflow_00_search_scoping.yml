@@ -39,7 +39,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('httr2','jsonlite','rmarkdown','knitr'))
+        run: install.packages(c('httr2','jsonlite','xml2','rmarkdown','knitr'))
 
       - name: Parse scoping implementation
         shell: Rscript {0}
@@ -58,6 +58,7 @@ jobs:
           mkdir -p outputs/workflow00_search_scope/plan
           Rscript scripts/updater/workflow_00_validate_scoping_search.R \
             --input "$SEARCH_STRING" \
+            --ebsco-config config/workflow00_ebsco_sources.json \
             --output outputs/workflow00_search_scope/plan/search_plan.json
 
       - name: Run count-only API searches
@@ -68,12 +69,15 @@ jobs:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
           OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
           WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+          EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+          EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_00_search_scope_counts.R \
             --plan outputs/workflow00_search_scope/plan/search_plan.json \
             --lens-config config/lens_search.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
             --output-csv outputs/workflow00_search_scope/search_scope_counts.csv \
             --output-json outputs/workflow00_search_scope/search_scope_counts.json
 
