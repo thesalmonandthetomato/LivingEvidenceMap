@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 \
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= \
             .github/workflows/workflow_00_search_orchestrator.yml \
             .github/workflows/workflow_01_production.yml \
             .github/workflows/workflow_01_resume_after_human_review.yml \
@@ -57,6 +57,49 @@ jobs:
         run: |
           parse(file='scripts/updater/workflow_current_run_status_observer.R')
           cat('PASS: live-status observer parses\n')
+
+      - name: Validate zero-result W00 source contract in W01
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w01-zero"
+          : > "$RUNNER_TEMP/w01-zero/records.jsonl"
+          ZERO_PATH="$RUNNER_TEMP/w01-zero/records.jsonl" Rscript -e '
+            x <- list(
+              schema="living-evidence-map-workflow01-source-catalogue-v1",
+              sources=list(test_zero=list(
+                kind="workflow00_state",
+                source="test_zero",
+                prepared_path=Sys.getenv("ZERO_PATH"),
+                expected_records=0L
+              ))
+            )
+            jsonlite::write_json(x,file.path(Sys.getenv("RUNNER_TEMP"),"w01-zero","catalogue-zero.json"),auto_unbox=TRUE,pretty=TRUE)
+          '
+          Rscript scripts/updater/workflow_01_prepare_source_catalogue.R \
+            --catalogue "$RUNNER_TEMP/w01-zero/catalogue-zero.json" \
+            --output-manifest "$RUNNER_TEMP/w01-zero/manifest-zero.json"
+          test -s "$RUNNER_TEMP/w01-zero/manifest-zero.json"
+
+          NONZERO_PATH="$RUNNER_TEMP/w01-zero/records.jsonl" Rscript -e '
+            x <- list(
+              schema="living-evidence-map-workflow01-source-catalogue-v1",
+              sources=list(test_nonzero=list(
+                kind="workflow00_state",
+                source="test_nonzero",
+                prepared_path=Sys.getenv("NONZERO_PATH"),
+                expected_records=1L
+              ))
+            )
+            jsonlite::write_json(x,file.path(Sys.getenv("RUNNER_TEMP"),"w01-zero","catalogue-nonzero.json"),auto_unbox=TRUE,pretty=TRUE)
+          '
+          if Rscript scripts/updater/workflow_01_prepare_source_catalogue.R \
+            --catalogue "$RUNNER_TEMP/w01-zero/catalogue-nonzero.json" \
+            --output-manifest "$RUNNER_TEMP/w01-zero/manifest-nonzero.json"; then
+            echo "ERROR: non-zero expected count incorrectly accepted empty source" >&2
+            exit 1
+          fi
+          echo "PASS: verified zero-result source accepted and non-zero empty source rejected"
 
       - name: Dry-run exact W00 reset against archived run
         shell: bash
