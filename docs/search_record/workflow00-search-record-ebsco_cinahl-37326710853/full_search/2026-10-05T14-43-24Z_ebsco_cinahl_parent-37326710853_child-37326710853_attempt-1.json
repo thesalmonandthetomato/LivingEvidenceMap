@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-05T14:43:24Z",
+  "source": "ebsco_cinahl",
+  "run_type": "full",
+  "search_version": "v1",
+  "additional_search_term": null,
+  "search_string": "((TI (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR AB (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\")) AND (TI (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR AB (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))",
+  "database_scope": {
+    "provider": "EBSCOhost EIT",
+    "database_code": "c8h",
+    "database_name": "CINAHL with Full Text",
+    "field_scope": [
+      "TI",
+      "AB"
+    ]
+  },
+  "search_window": null,
+  "reported_search_results": 102,
+  "successfully_downloaded_results": 102,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "37326710853",
+    "child_workflow_run_id": "37326710853",
+    "run_attempt": "1",
+    "ref": "workflow01-final-architecture",
+    "triggering_sha": "1ab00eb5d6480b89948c57fb42dbe355676ab12f",
+    "orchestrator_sha": "1ab00eb5d6480b89948c57fb42dbe355676ab12f",
+    "source_handler_sha": "1ab00eb5d6480b89948c57fb42dbe355676ab12f"
+  },
+  "artifact_name": "workflow00-ebsco_cinahl-harvest-37326710853"
+}

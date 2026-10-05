@@ -1,0 +1,12 @@
+{
+  "schema": "living-evidence-map-workflow00-source-selection-v1",
+  "run_type": "full",
+  "selection_origin": "full_run_group_inputs",
+  "baseline_run_id": "37326710853",
+  "selected_groups": [],
+  "additional_sources": ["ebsco_medline", "ebsco_cinahl", "ebsco_amed", "ebsco_psycinfo", "ebsco_biological_agricultural_index", "ebsco_greenfile", "ebsco_waters_oceans", "ebsco_econlit", "ebsco_political_science", "ebsco_family_society", "ebsco_africa_wide", "ebsco_mla", "ebsco_atla_religion"],
+  "excluded_sources": [],
+  "selected_sources": ["ebsco_africa_wide", "ebsco_amed", "ebsco_psycinfo", "ebsco_atla_religion", "ebsco_biological_agricultural_index", "ebsco_cinahl", "ebsco_econlit", "ebsco_family_society", "ebsco_greenfile", "ebsco_medline", "ebsco_mla", "ebsco_political_science", "ebsco_waters_oceans"],
+  "selected_source_count": 13,
+  "generated_at_utc": "2026-10-05T14:42:15Z"
+}
