@@ -544,6 +544,7 @@ jobs:
       workflow06_pointer_path: ${{ steps.ptr.outputs.workflow06_pointer_path }}
       workflow07_pointer_path: ${{ steps.ptr.outputs.workflow07_pointer_path }}
       prior_workflow08_pointer_path: ${{ steps.ptr.outputs.prior_workflow08_pointer_path }}
+      execution_ref: ${{ steps.ptr.outputs.execution_ref }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -578,6 +579,7 @@ jobs:
           echo "workflow06_pointer_path=$P06" >> "$GITHUB_OUTPUT"
           echo "workflow07_pointer_path=$P07" >> "$GITHUB_OUTPUT"
           echo "prior_workflow08_pointer_path=$PRIOR08" >> "$GITHUB_OUTPUT"
+          echo "execution_ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "PASS: verified complete W07 -> W08 pointer contract"
 
   handoff-w08:
@@ -591,6 +593,7 @@ jobs:
       workflow06_pointer_path: ${{ needs.prepare-w08-handoff.outputs.workflow06_pointer_path }}
       workflow07_pointer_path: ${{ needs.prepare-w08-handoff.outputs.workflow07_pointer_path }}
       prior_workflow08_pointer_path: ${{ needs.prepare-w08-handoff.outputs.prior_workflow08_pointer_path }}
+      execution_ref: ${{ needs.prepare-w08-handoff.outputs.execution_ref }}
       new_decisions_path: ''
       publish: true
     secrets: inherit
