@@ -72,8 +72,8 @@ jobs:
             x <- fromJSON(path,simplifyVector=FALSE)
             stopifnot(x$status=='success')
             stopifnot(as.integer(x$records_retrieved)==as.integer(x$reported_total))
-            stopifnot(x$retrieval_strategy %in% c('date_newest','date_newest_plus_date_oldest'))
-            cat(sprintf('%s reported=%d retrieved=%d strategy=%s\n',x$source,x$reported_total,x$records_retrieved,x$retrieval_strategy))
+            stopifnot(x$retrieval_strategy == 'publication_year_partitions')
+            stopifnot(length(x$year_partitions)>0L); cat(sprintf('%s reported=%d retrieved=%d strategy=%s partitions=%d\n',x$source,x$reported_total,x$records_retrieved,x$retrieval_strategy,length(x$year_partitions)))
           }
           check('outputs/medline/manifest.json')
           check('outputs/waters/manifest.json')
