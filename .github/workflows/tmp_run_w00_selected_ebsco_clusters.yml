@@ -1,0 +1,57 @@
+name: TEMP EBSCO selected-cluster production intake
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_run_w00_selected_ebsco_clusters.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  w00:
+    uses: ./.github/workflows/workflow_00_search_orchestrator.yml
+    with:
+      run_type: full
+      group_core_multidisciplinary: false
+      group_health_medicine: false
+      group_environment_agriculture: false
+      group_social_sciences: false
+      group_education: false
+      group_regional: false
+      group_media_communication: false
+      group_humanities: false
+      group_sport_tourism: false
+      group_grey_preprints: false
+      additional_sources: >-
+        ebsco_medline,ebsco_cinahl,ebsco_amed,ebsco_psycinfo,
+        ebsco_biological_agricultural_index,ebsco_greenfile,ebsco_waters_oceans,
+        ebsco_econlit,ebsco_political_science,ebsco_family_society,
+        ebsco_africa_wide,ebsco_mla,ebsco_atla_religion
+      exclude_sources: ''
+      additional_search_term: ''
+    secrets: inherit
+
+  dispatch-w01:
+    needs: w00
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch W01 with published W00 pointer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          W00_POINTER="docs/search_record/zenodo/run-${GITHUB_RUN_ID}.json"
+          PREV_W01="docs/deduplication/zenodo/run-36971418284.json"
+          gh workflow run workflow_01_production.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref workflow01-final-architecture \
+            -f workflow00_pointer_path="$W00_POINTER" \
+            -f previous_workflow01_pointer_path="$PREV_W01" \
+            -f model="gpt-5.6-luna" \
+            -f auto_threshold="0.95" \
+            -f max_llm_cases="5000"
+          echo "PASS: dispatched W01 with $W00_POINTER against $PREV_W01"
