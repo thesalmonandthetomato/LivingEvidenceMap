@@ -136,8 +136,6 @@ Before screening the full original set, however, a subset of 150 records was scr
 
 Later automated stages were also subjected to manual validation. Review sets were used to assess uncertain screening decisions and ambiguous or conflicting species, geography and topic assignments. Where validation revealed a recurrent class of LLM error, the underlying rule, dictionary, prompt or ontology was revised where appropriate rather than correcting only the individual record. Validation findings were therefore used both to adjudicate individual records and to revise the relevant workflow components.
 
-Reviewer consistency was assessed at saved milestones using independently assigned screening decisions. For two reviewers, agreement was summarised using Cohen's kappa; for three or more reviewers, Fleiss' kappa was used. Cumulative estimates were recalculated from the underlying decision patterns rather than averaged across milestones. Where a complete reviewer set encompassed records included in earlier partial checks, the complete set superseded those overlapping partial checks in the cumulative estimate.
-
 ### Large Language Model Screening
 
 Automated relevance screening used GPT-5.6 Luna under a fixed, version-controlled eligibility prompt. Every record remaining after publication-status filtering was screened twice independently using the same bibliographic input, including titles and abstracts. Each pass returned one of three structured decisions: retain, exclude or uncertain, together with a concise justification grounded in the supplied record. The two model calls were independent: neither pass was given the decision or reasoning from the other.
