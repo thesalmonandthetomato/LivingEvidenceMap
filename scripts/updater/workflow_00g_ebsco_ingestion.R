@@ -367,15 +367,32 @@ if (!is.infinite(max_records) || reported_total <= window_limit) {
   }
 
   partition_sum <- sum(vapply(resolved,function(x) x$reported_total,integer(1)))
-  if (partition_sum != reported_total) {
+  residual_expected <- reported_total - partition_sum
+  if (residual_expected < 0L) {
     stop(sprintf(
-      paste0(
-        "EBSCO publication-year partitions do not exhaust the full result set for %s: ",
-        "full=%d partition_sum=%d year_domain=%d-%d. ",
-        "This usually indicates undated records or records outside the configured year domain; refusing incomplete harvest."
-      ),
-      source_slug,reported_total,partition_sum,year_start,year_end
+      "EBSCO publication-year partitions exceed the full result count for %s: full=%d partition_sum=%d",
+      source_slug,reported_total,partition_sum
     ),call.=FALSE)
+  }
+
+  residual_query <- sprintf("(%s) NOT ZR (*)",query)
+  if (residual_expected > 0L) {
+    residual_count <- count_query(residual_query,"undated residual count")
+    if (residual_count != residual_expected) {
+      stop(sprintf(
+        paste0(
+          "EBSCO undated residual does not reconcile for %s: ",
+          "full=%d dated=%d expected_residual=%d observed_residual=%d"
+        ),
+        source_slug,reported_total,partition_sum,residual_expected,residual_count
+      ),call.=FALSE)
+    }
+    if (residual_count > window_limit) {
+      stop(sprintf(
+        "EBSCO source %s has %d undated records, exceeding safe EIT window %d; a finer residual partition is required",
+        source_slug,residual_count,window_limit
+      ),call.=FALSE)
+    }
   }
 
   seen <- character()
@@ -407,6 +424,37 @@ if (!is.infinite(max_records) || reported_total <= window_limit) {
     resolved[[i]]$pages_retrieved <- h$pages
     resolved[[i]]$records_retrieved <- length(h$records)
   }
+
+  if (residual_expected > 0L) {
+    h <- harvest_query(
+      residual_query,
+      expected_total=residual_expected,
+      label="undated residual",
+      raw_prefix="response_undated",
+      record_limit=Inf
+    )
+    ids <- if (length(h$records)) {
+      vapply(h$records,function(r) r$sidecar_identity$sidecar_record_id,character(1))
+    } else character()
+    overlap <- intersect(seen,ids)
+    if (length(overlap)) {
+      stop(sprintf(
+        "EBSCO undated residual overlaps dated partitions for %s: %d duplicate accession number(s)",
+        source_slug,length(overlap)
+      ),call.=FALSE)
+    }
+    seen <- c(seen,ids)
+    records <- c(records,h$records)
+    page <- page + h$pages
+    page_files <- c(page_files,h$files)
+    resolved[[length(resolved)+1L]] <- list(
+      partition_type="undated",
+      reported_total=as.integer(residual_expected),
+      pages_retrieved=h$pages,
+      records_retrieved=length(h$records)
+    )
+  }
+
   partition_manifest <- resolved
 }
 
