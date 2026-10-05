@@ -132,3 +132,20 @@ jobs:
           grep -Fq "workflow_01_select_pending_checkpoint.R" .github/workflows/shiny-adjudication-dry-run-export-w01.yml
           grep -Fq "workflow_01_select_ready_handoff.R" .github/workflows/workflow_01_resume_after_human_review.yml
           echo "PASS: W01 Shiny return path is manifest-driven and contains no recovery pins"
+
+      - name: Validate W01 abstract-repair round trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPORT=.github/workflows/shiny-adjudication-dry-run-export-w01.yml
+          RESUME=.github/workflows/workflow_01_resume_after_human_review.yml
+          grep -Fq "REPAIRS_TAB: 'w01_data_quality_repairs'" "$EXPORT"
+          grep -Fq "data_quality_repairs.jsonl" "$EXPORT"
+          grep -Fq 'action="replace_abstract"' "$EXPORT"
+          grep -Fq 'recorded_by=repair_rows$reviewer' "$EXPORT"
+          grep -Fq 'recorded_at_utc=repair_rows$saved_at_utc' "$EXPORT"
+          grep -Fq 'REPAIRS=outputs/resume_inputs/data_quality_repairs.jsonl' "$RESUME"
+          grep -Fq 'repairs_sha256' "$RESUME"
+          grep -Fq "1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA" "$EXPORT"
+          echo "PASS: W01 Shiny abstract corrections are exported as replace_abstract repairs and consumed by resume"
+
