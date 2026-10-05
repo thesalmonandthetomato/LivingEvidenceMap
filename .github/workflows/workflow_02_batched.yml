@@ -488,17 +488,61 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      - name: Publish Workflow 02 review queue to Shiny
+      - name: Publish and verify Workflow 02 review queue in Shiny
         if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          TITLE="Publish W02 queue $GITHUB_RUN_ID"
           gh workflow run shiny-adjudication-publish-w02-queue.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$WORKFLOW02_BRANCH" \
             -f source_run_id="$GITHUB_RUN_ID"
+
+          SIDECAR_RUN=""
+          for attempt in $(seq 1 30); do
+            SIDECAR_RUN="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow shiny-adjudication-publish-w02-queue.yml \
+              --branch "$WORKFLOW02_BRANCH" \
+              --event workflow_dispatch \
+              --limit 30 \
+              --json databaseId,displayTitle \
+              --jq ".[] | select(.displayTitle == \"$TITLE\") | .databaseId" | head -1)"
+            if [ -n "$SIDECAR_RUN" ]; then break; fi
+            sleep 2
+          done
+          test -n "$SIDECAR_RUN"
+          gh run watch "$SIDECAR_RUN" --repo "$GITHUB_REPOSITORY" --exit-status
+          echo "PASS: W02 Shiny queue publisher run $SIDECAR_RUN completed successfully"
+
+      - name: Mark Workflow 02 awaiting human review
+        if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W02 \
+            --stage-status waiting_human
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Mark W02 awaiting human review [skip ci]"
+            git pull --rebase origin "$WORKFLOW02_BRANCH"
+            git push origin HEAD:"$WORKFLOW02_BRANCH"
+          fi
 
       - name: Stop for Workflow 02 human adjudication
         if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
