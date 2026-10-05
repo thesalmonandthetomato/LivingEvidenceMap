@@ -7,7 +7,6 @@ on:
     paths:
       - '.github/workflows/workflow_10_dashboard.yml'
       - 'R/workflow_10_dashboard_from_canonical_jsonl.R'
-      - 'R/workflow_10_build_search_trial.R'
       - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
       - 'docs/index.html'
       - 'docs/dashboard-topic-definitions.json'
@@ -53,7 +52,6 @@ jobs:
         run: |
           parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
           parse(file='R/workflow_10_dashboard_from_canonical_jsonl.R')
-          parse(file='R/workflow_10_build_search_trial.R')
           cat('PASS: Workflow 10 scripts parse\n')
 
       - name: Resolve authoritative Workflow 08 pointer
@@ -138,18 +136,8 @@ jobs:
           Rscript R/workflow_10_dashboard_from_canonical_jsonl.R \
             inputs/workflow10/living_evidence_map_canonical_final.jsonl \
             outputs/workflow10/living_evidence_map.csv \
-            outputs/workflow10/dashboard-base-data.js \
-            "$W08_POINTER"
-
-      - name: Build production dashboard data and search index
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript R/workflow_10_build_search_trial.R \
-            outputs/workflow10/dashboard-base-data.js \
-            inputs/workflow10/living_evidence_map_canonical_final.jsonl \
             outputs/workflow10/dashboard-data.js \
-            outputs/workflow10/dashboard-search-index.js
+            "$W08_POINTER"
           cp docs/index.html outputs/workflow10/index.html
 
       - name: Validate Workflow 10 output
@@ -182,17 +170,12 @@ jobs:
           stopifnot(length(stars)>0L,all(nzchar(stars)),all(stars %in% c('★','★★','★★★')))
 
           html <- paste(readLines('outputs/workflow10/index.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
-          manifest <- fromJSON('outputs/workflow10/search-trial-manifest.json',simplifyVector=FALSE)
           stopifnot(expected_n==21493L)
-          stopifnot(as.integer(manifest$records)==expected_n)
-          stopifnot(tolower(as.character(manifest$canonical_jsonl_sha256))==expected_sha)
-          stopifnot(file.exists('outputs/workflow10/dashboard-search-index.js'))
           stopifnot(grepl('Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).',html,fixed=TRUE))
-          stopifnot(grepl('.search-download-btn{display:none!important',html,fixed=TRUE))
-          stopifnot(length(gregexpr('function tree\\(',html,perl=TRUE)[[1L]])==3L)
           stopifnot(grepl('./dashboard-data.js',html,fixed=TRUE))
-          stopifnot(grepl('./dashboard-search-index.js',html,fixed=TRUE))
-          stopifnot(!grepl('workflow10-search-trial-data.js',html,fixed=TRUE))
+          stopifnot(!grepl('dashboard-search-index.js',html,fixed=TRUE))
+          stopifnot(!file.exists('outputs/workflow10/dashboard-search-index.js'))
+          stopifnot(!file.exists('outputs/workflow10/search-trial-manifest.json'))
 
           cat(sprintf(
             'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
