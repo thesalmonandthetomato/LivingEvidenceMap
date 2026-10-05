@@ -747,11 +747,9 @@ jobs:
           set -euo pipefail
           test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
           git pull --ff-only origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
-          mkdir -p outputs/updater/live_status
-          git diff --name-only "$GITHUB_SHA"..HEAD > outputs/updater/live_status/changed_files.txt
           Rscript scripts/updater/workflow_current_run_status_observer.R \
             --force-stage W00 \
-            --changed-files outputs/updater/live_status/changed_files.txt
+            --w00-run-id "$GITHUB_RUN_ID"
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
           chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
           Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
