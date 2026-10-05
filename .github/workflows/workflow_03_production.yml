@@ -23,6 +23,8 @@ on:
         required: true
       OPENALEX_API_KEY:
         required: false
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: false
     outputs:
       pointer_path:
         description: 'Authoritative Workflow 03 Zenodo pointer path when a full state is published'
