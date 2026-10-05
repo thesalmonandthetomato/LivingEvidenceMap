@@ -273,9 +273,14 @@ jobs:
           W00_SOURCES="$W00_SOURCES" Rscript -e '
             library(jsonlite)
             p <- fromJSON("config/workflow01_source_catalogue.json", simplifyVector=FALSE)
+            status <- fromJSON("docs/current_run/current_run_status.json", simplifyVector=FALSE)
             src <- trimws(strsplit(Sys.getenv("W00_SOURCES"), ",", fixed=TRUE)[[1L]])
             src <- src[nzchar(src)]
             for (s in src) {
+              expected <- status$search$sources[[s]]$successfully_downloaded_results
+              if (is.null(expected) || is.na(as.integer(expected))) {
+                stop(sprintf("Current-run status lacks W00 downloaded count for %s",s),call.=FALSE)
+              }
               if (is.null(p$sources[[s]])) {
                 p$sources[[s]] <- list(
                   kind="workflow00_state",
@@ -283,6 +288,7 @@ jobs:
                   prepared_path=file.path("current_sources",s,"records.jsonl")
                 )
               }
+              p$sources[[s]]$expected_records <- as.integer(expected)
             }
             writeLines(toJSON(p,auto_unbox=TRUE,pretty=TRUE,null="null"),
                        "outputs/workflow01_runtime_source_catalogue.json")
