@@ -84,12 +84,15 @@ jobs:
           ptxt <- paste(planner,collapse="\n")
           etxt <- paste(enrich,collapse="\n")
 
-          stopifnot(grepl("use_scopus: true",wtxt,fixed=TRUE))
-          stopifnot(grepl("keywords_missing(r$canonical$author_keywords)",ptxt,fixed=TRUE))
-          stopifnot(grepl("missing_author_keywords_before)",etxt,fixed=TRUE))
+          stopifnot(grepl("use_scopus: false",wtxt,fixed=TRUE))
+          stopifnot(grepl("enrich_author_keywords: false",wtxt,fixed=TRUE))
+          stopifnot(grepl("--enrich-author-keywords",ptxt,fixed=TRUE))
+          stopifnot(grepl("enrich_author_keywords && keywords_missing(r$canonical$author_keywords)",ptxt,fixed=TRUE))
+          stopifnot(grepl("missing_author_keywords_before",etxt,fixed=TRUE))
           stopifnot(grepl("retained Scopus EID -> FULL",etxt,fixed=TRUE))
           stopifnot(grepl("direct DOI -> FULL",etxt,fixed=TRUE))
           stopifnot(grepl("No DOI-search -> EID fallback",etxt,fixed=TRUE))
+          stopifnot(grepl("enrich_author_keywords && still_missing_author_keywords",etxt,fixed=TRUE))
 
           a <- grep("^scopus_lookup <- function\\(d\\)\\{",enrich)
           b <- grep("^read_jsonl <- function\\(path\\)\\{",enrich)
@@ -97,7 +100,7 @@ jobs:
           body <- paste(enrich[a:(b-1L)],collapse="\n")
           stopifnot(!grepl("scopus_search_doi",body,fixed=TRUE))
           stopifnot(!grepl("scopus_lookup_eid(",body,fixed=TRUE))
-          cat("PASS: production W02 policy is Europe PMC -> direct Scopus DOI for title/abstract; retained EID FULL -> DOI FULL for keywords; no Search-to-EID fallback\n")
+          cat("PASS: production W02 defaults are Europe PMC only with Scopus and author-keyword enrichment disabled; optional Scopus/keyword routes remain available; no Search-to-EID fallback\n")
 
       - name: Validate incremental, repair, and backfill planner modes
         shell: Rscript {0}
