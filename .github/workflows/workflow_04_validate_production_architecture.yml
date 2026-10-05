@@ -76,6 +76,7 @@ jobs:
 
           stopifnot(!grepl('ref: workflow01-final-architecture',prod,fixed=TRUE))
           stopifnot(!grepl('ref: workflow01-final-architecture',resume,fixed=TRUE))
+          # Build the literal Actions expression without allowing this validator step to interpolate it.
           pinned_ref <- paste0("ref: $", "{", "{ github.sha ", "}", "}")
           stopifnot(grepl(pinned_ref,prod,fixed=TRUE))
           stopifnot(grepl(pinned_ref,resume,fixed=TRUE))
