@@ -111,6 +111,9 @@ if(length(doi_idx)){
     st <- resp_status(resp)
     if(st!=200L){
       audit_n<-audit_n+1L;audit[[audit_n]]<-list(kind="doi_batch_error",http_status=st,dois=dois)
+      for(d in dois) oa_map[[paste0("doi:",d)]] <- list(
+        work_id=NULL,is_retracted=NULL,type=NULL,lookup_status=paste0("http_",st)
+      )
       next
     }
     body <- resp_body_json(resp,simplifyVector=FALSE)
@@ -142,7 +145,7 @@ for(i in seq_along(meta)){
 dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
 dir.create(dirname(audit_path),recursive=TRUE,showWarnings=FALSE)
 outcon<-file(output_path,"wt",encoding="UTF-8");on.exit(close(outcon),add=TRUE)
-counts<-setNames(integer(length(precedence)),names(precedence)); conflicts<-0L; multiple_signals<-0L; excluded<-0L; found<-0L; notfound<-0L; unavailable<-0L
+counts<-setNames(integer(length(precedence)),names(precedence)); conflicts<-0L; multiple_signals<-0L; excluded<-0L; found<-0L; notfound<-0L; unavailable<-0L; technical_lookup_errors<-0L
 
 for(i in seq_along(meta)){
   z<-meta[[i]]
@@ -157,7 +160,14 @@ for(i in seq_along(meta)){
     key<-paste0("wid:",lookup_id)
     if(exists(key,envir=oa_map,inherits=FALSE)) oa<-oa_map[[key]]
   }
-  if(identical(oa$lookup_status,"found")) found<-found+1L else if(identical(oa$lookup_status,"not_found")) notfound<-notfound+1L else unavailable<-unavailable+1L
+  if(identical(oa$lookup_status,"found")) {
+    found<-found+1L
+  } else if(identical(oa$lookup_status,"not_found")) {
+    notfound<-notfound+1L
+  } else {
+    unavailable<-unavailable+1L
+    if(grepl("^http_",oa$lookup_status%||%"")) technical_lookup_errors<-technical_lookup_errors+1L
+  }
   tm<-prefix_match(z$title)
   res<-resolve_code(oa,tm)
   code<-res$code
@@ -172,7 +182,7 @@ for(i in seq_along(meta)){
     publication_status=list(
       code=code,
       exclude_from_workflow04=excl,
-      needs_review=FALSE,
+      needs_review=grepl("^http_",oa$lookup_status%||%""),
       evidence_conflict=isTRUE(res$conflict),
       multiple_positive_signals=isTRUE(res$multiple_positive_signals),
       positive_codes=if(length(res$positive_codes))res$positive_codes else list(),
@@ -202,9 +212,13 @@ report<-list(
   exclude_from_workflow04=excluded,
   evidence_conflicts=conflicts,
   multiple_positive_signals=multiple_signals,
-  openalex_lookup=list(found=found,not_found=notfound,unavailable_or_error=unavailable),
+  openalex_lookup=list(found=found,not_found=notfound,unavailable_or_error=unavailable,technical_errors=technical_lookup_errors),
   output_sha256=digest(file=output_path,algo="sha256",serialize=FALSE),
   checked_at=checked_at
 )
+if(technical_lookup_errors>0L) report$status <- "FAIL_PROVIDER_ERRORS"
 writeLines(toJSON(report,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),report_path,useBytes=TRUE)
+if(technical_lookup_errors>0L) {
+  stop(sprintf("Workflow 03 blocked: %d record(s) have unresolved OpenAlex technical lookup errors",technical_lookup_errors),call.=FALSE)
+}
 cat(sprintf("PASS: Workflow 03 publication-status scan processed %d records; excluded=%d conflicts=%d\n",length(meta),excluded,conflicts))
