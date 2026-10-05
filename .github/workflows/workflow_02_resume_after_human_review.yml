@@ -151,6 +151,8 @@ jobs:
 
           test -s source/prepared/outputs/workflow02/input_with_previous_state.jsonl
           test -s source/prepared/workflow01_state/canonical/records.jsonl
+          test -s source/prepared/workflow01_pointer_path.txt
+          test -f source/prepared/previous_workflow02_pointer_path.txt
           test -s source/prepared/outputs/workflow02_plan/plan.json
           test -f source/prepared/previous_cumulative_patch.jsonl
           test -s source/review/workflow02_human_review_manifest.json
@@ -336,7 +338,9 @@ jobs:
           cp outputs/w02_resume/cumulative_patch_replay.json outputs/workflow02_state/
 
           W01_SHA="$(cat source/prepared/workflow01_sha.txt)"
-          W01_SHA="$W01_SHA" Rscript -e "library(jsonlite);library(digest);x<-list(schema='living-evidence-map-workflow02-state-manifest-v1',workflow='02',execution='deterministic_batched_human_resumed',repairable_fields=c('title','abstract','author_keywords'),source_github_run_id=Sys.getenv('SOURCE_RUN_ID'),resume_github_run_id=Sys.getenv('GITHUB_RUN_ID'),workflow01_canonical_sha256=Sys.getenv('W01_SHA'),final_enriched_sha256=digest(file='outputs/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE),human_adjudication_manifest_sha256=digest(file='outputs/w02_resume/human_application_manifest.json',algo='sha256',serialize=FALSE),created_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'));writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/workflow02_state/state_manifest.json')"
+          W01_POINTER="$(cat source/prepared/workflow01_pointer_path.txt)"
+          PREV_W02_POINTER="$(cat source/prepared/previous_workflow02_pointer_path.txt)"
+          W01_SHA="$W01_SHA" W01_POINTER="$W01_POINTER" PREV_W02_POINTER="$PREV_W02_POINTER" Rscript -e "library(jsonlite);library(digest);x<-list(schema='living-evidence-map-workflow02-state-manifest-v1',workflow='02',execution='deterministic_batched_human_resumed',repairable_fields=c('title','abstract','author_keywords'),source_github_run_id=Sys.getenv('SOURCE_RUN_ID'),resume_github_run_id=Sys.getenv('GITHUB_RUN_ID'),workflow01_pointer=Sys.getenv('W01_POINTER'),workflow01_canonical_sha256=Sys.getenv('W01_SHA'),previous_workflow02_pointer=if(nzchar(Sys.getenv('PREV_W02_POINTER')))Sys.getenv('PREV_W02_POINTER') else NULL,final_enriched_sha256=digest(file='outputs/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE),human_adjudication_manifest_sha256=digest(file='outputs/w02_resume/human_application_manifest.json',algo='sha256',serialize=FALSE),created_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'));writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/workflow02_state/state_manifest.json')"
 
       - name: Publish resumed sparse Workflow 02 state to restricted Zenodo
         if: ${{ needs.prepare.outputs.publish == 'true' }}
@@ -347,12 +351,16 @@ jobs:
           set -euo pipefail
           mkdir -p outputs/workflow02_zenodo
           W01_SHA="$(cat source/prepared/workflow01_sha.txt)"
-          Rscript scripts/updater/workflow_02_archive_state_to_zenodo.R \
-            --state-dir outputs/workflow02_state \
-            --run-id "$GITHUB_RUN_ID" \
-            --repository "$GITHUB_REPOSITORY" \
-            --output-dir outputs/workflow02_zenodo \
+          PREV_W02_POINTER="$(cat source/prepared/previous_workflow02_pointer_path.txt)"
+          ARGS=(
+            --state-dir outputs/workflow02_state
+            --run-id "$GITHUB_RUN_ID"
+            --repository "$GITHUB_REPOSITORY"
+            --output-dir outputs/workflow02_zenodo
             --workflow01-canonical-sha256 "$W01_SHA"
+          )
+          if [ -n "$PREV_W02_POINTER" ]; then ARGS+=(--previous-pointer "$PREV_W02_POINTER"); fi
+          Rscript scripts/updater/workflow_02_archive_state_to_zenodo.R "${ARGS[@]}"
 
       - name: Register published resumed Workflow 02 state
         if: ${{ needs.prepare.outputs.publish == 'true' }}
