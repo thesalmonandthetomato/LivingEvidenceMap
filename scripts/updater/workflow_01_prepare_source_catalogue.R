@@ -51,8 +51,22 @@ for (src in names(sources)) {
     stop(sprintf("Unsupported catalogue source kind for %s: %s",src,kind),call.=FALSE)
   }
 
-  if (!file.exists(prepared) || file.info(prepared)$size <= 0) {
-    stop(sprintf("Prepared source input missing/empty for %s: %s",src,prepared),call.=FALSE)
+  if (!file.exists(prepared)) {
+    stop(sprintf("Prepared source input missing for %s: %s",src,prepared),call.=FALSE)
+  }
+
+  expected_records <- suppressWarnings(as.integer(z$expected_records %||% NA_integer_))
+  if (identical(kind,"workflow00_state") && !is.na(expected_records)) {
+    lines <- readLines(prepared,warn=FALSE,encoding="UTF-8")
+    actual_records <- sum(nzchar(trimws(lines)))
+    if (actual_records != expected_records) {
+      stop(sprintf(
+        "Prepared source count mismatch for %s: expected %d from W00, found %d in %s",
+        src,expected_records,actual_records,prepared
+      ),call.=FALSE)
+    }
+  } else if (file.info(prepared)$size <= 0) {
+    stop(sprintf("Prepared source input is empty for %s without an authoritative zero-result count: %s",src,prepared),call.=FALSE)
   }
   input_paths[[src]] <- prepared
 }
