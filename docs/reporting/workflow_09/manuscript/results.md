@@ -329,36 +329,43 @@ theme.</em></figcaption>
 
 ## Comparison with secondary research
 
-The supplied manuscript draft compares this evidence map with a recent
-umbrella review of 37 systematic reviews across salmon aquaculture.
-Recalculation against the final canonical evidence map confirms the
-principal imbalance identified in the draft. Sea lice control and
-treatment occurs in 770 mapped records (3.6%), compared with 8 of 37
-systematic reviews (21.6%) in the umbrella-review dataset. By contrast,
-several of the largest areas in the mapped literature have comparatively
-little systematic-review coverage, including Physiology, metabolism and
+We compare these results with a recent umbrella review of 37 systematic
+reviews across salmon aquaculture ([Haddaway et al.
+2026](#ref-haddaway2026overview)). This comparison shows substantial
+differences between the distribution of primary research and
+systematic-review coverage. Sea lice control and treatment occurs in 770
+mapped records (3.6%), compared with 8 of 37 systematic reviews (21.6%)
+in the umbrella-review dataset. By contrast, several of the largest
+areas in the mapped literature have comparatively little
+systematic-review coverage, including Physiology, metabolism and
 biological responses (23.3% of mapped records), Growth and development
 (14.5%), and major disease, environmental and methodological topics.
 
-The social evidence base is particularly weakly represented in the
-systematic-review literature described in the draft. In the final
-canonical map, Antimicrobial resistance and One Health accounts for
-23.3% of records, Conflict and social licence for 14.5%, and Public
-discourse and representation for 9.3%; the supplied umbrella-review
-dataset contains one review on antimicrobial resistance/One Health and
-none in most of the other social categories. Overall, the comparison
-continues to indicate that the systematic-review evidence covers a
-narrower subset of the topics represented across the mapped literature,
-with particularly strong representation of sea lice and limited coverage
-of several major physiological, environmental, methodological,
-governance and social research areas.
+Social research was particularly weakly represented in the
+systematic-review literature. In the final canonical map, Antimicrobial
+resistance and One Health accounts for 23.3% of records, Conflict and
+social licence for 14.5%, and Public discourse and representation for
+9.3%; the umbrella review includes one review on antimicrobial
+resistance/One Health and none in most of the other social categories.
+Overall, the comparison continues to indicate that the systematic-review
+evidence covers a narrower subset of the topics represented across the
+mapped literature, with particularly strong representation of sea lice
+and limited coverage of several major physiological, environmental,
+methodological, governance and social research areas.
 
 <figure>
 <img
 src="/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/visualisations/figure_08_umbrella_review.png"
-alt="Figure 16. Topic-assignment frequency in the supplied umbrella review of 37 systematic reviews across salmon aquaculture. Data and figure retained from the supplied manuscript draft." />
+alt="Figure 16. Topic-assignment frequency among the 37 systematic reviews included in the umbrella review (Haddaway et al. 2026)." />
 <figcaption aria-hidden="true"><strong><em>Figure 16.</em></strong>
-<em>Topic-assignment frequency in the supplied umbrella review of 37
-systematic reviews across salmon aquaculture. Data and figure retained
-from the supplied manuscript draft.</em></figcaption>
+<em>Topic-assignment frequency among the 37 systematic reviews included
+in the umbrella review <span class="citation"
+data-cites="haddaway2026overview">(<a href="#ref-haddaway2026overview"
+role="doc-biblioref">Haddaway et al. 2026</a>)</span>.</em></figcaption>
 </figure>
+
+# References
+
+Haddaway, Neal, María D. López Rodríguez, Heather Cooley, et al. 2026.
+“What Evidence Exists on Salmon Farming? An Overview of Reviews.”
+*Environmental Evidence*. <https://doi.org/10.1186/s13750-026-00391-y>.

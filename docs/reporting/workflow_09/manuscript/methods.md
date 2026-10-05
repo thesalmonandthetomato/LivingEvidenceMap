@@ -349,25 +349,9 @@ sets were used to assess uncertain screening decisions and ambiguous or
 conflicting species, geography and topic assignments. Where validation
 revealed a recurrent class of LLM error, the underlying rule,
 dictionary, prompt or ontology was revised where appropriate rather than
-correcting only the individual record. Human review therefore served
-both as case-level adjudication and as pipeline-level quality assurance.
-
-For ongoing reviewer-consistency assessment, independently assigned
-human screening decisions could be analysed at explicit milestones. A
-saved **Partial** check contained only jointly completed records not
-represented in an earlier saved milestone for the same reviewer set,
-whereas a **Full** check represented the complete jointly assigned set
-once all selected reviewers had finished it. Saved checks retained exact
-record membership and decision-pattern counts. Cumulative Cohen’s kappa
-for two reviewers, or Fleiss’ kappa for three or more reviewers, was
-therefore recalculated from the underlying saved decision patterns
-rather than by averaging kappa statistics. Where a saved Full check
-contained earlier Partial checks, the Full check superseded those
-contained Partial rows in the cumulative calculation while the
-individual milestone rows remained available for assessing change over
-time. Saved milestones could be deleted only through an explicit
-administrator confirmation, without altering the underlying screening
-decisions.
+correcting only the individual record. Validation findings were
+therefore used both to adjudicate individual records and to revise the
+relevant workflow components.
 
 ### Large Language Model Screening
 
@@ -413,7 +397,6 @@ review states. Excluded records retained their bibliographic information
 and exclusion reason for audit purposes but were not included in the
 canonical evidence-map dataset. Records requiring human review were kept
 separate from validated inclusions until adjudication was complete.
-Exclusions reasons were:
 
 ## Ontology development
 
@@ -436,22 +419,21 @@ used to apply it.
 
 Records included in the evidence map were annotated for focal farmed
 species, primary study geography and research topic using a set of three
-reproducible workflows. Annotation was designed conservatively: where
-available evidence did not support a defensible assignment, the record
-was retained without that annotation or referred for review rather than
-being assigned by unsupported inference.
+reproducible workflows. Where the available title and abstract did not
+support an assignment, the record was left uncoded for that field or
+referred for review.
 
 ### Species annotation
 
 Species annotation was conducted entirely deterministically (i.e. based
-on term recognition without the use of AI) began with a curated
-dictionary of scientific names, common names, synonyms and other
-validated species expressions (see Additional File 3). Eligible codes
-were Atlantic salmon, Chinook salmon, chum salmon, coho salmon, masu
-salmon, pink salmon, sockeye salmon, rainbow trout and unspecified
-salmon species. Ambiguous cases were referred for manual review. The
-algorithm supported minor text differences caused by within-word spaces,
-formatting code and punctuation.
+on term recognition without the use of AI), using a curated dictionary
+of scientific names, common names, synonyms and other validated species
+expressions (see Additional File 3). Eligible codes were Atlantic
+salmon, Chinook salmon, chum salmon, coho salmon, masu salmon, pink
+salmon, sockeye salmon, rainbow trout and unspecified salmon species.
+Ambiguous cases were referred for manual review. The algorithm supported
+minor text differences caused by within-word spaces, formatting code and
+punctuation.
 
 ### Geographic annotation
 
@@ -493,23 +475,17 @@ objective, intervention, exposure, outcome, interpretation or
 application. Assignments were not made solely on the basis of isolated
 lexical mentions or background statements.
 
-Topic coding used three independent model passes under the same
-structured classification task. Agreement between passes was retained as
-a measure of consistency: assignments supported by all three passes
-received three stars, assignments supported by two received two stars,
-and single-pass assignments were treated according to the review rules.
-Records that could not be assigned a defensible topic, including some
-records with insufficient abstract information, were retained in the map
-as uncoded rather than being excluded.
-
 Topic coding used three independent GPT-5.6 Luna passes against the same
 final version of the topic ontology and system prompt. For each record,
 the union of pathways returned across the three passes was retained, and
 support for each record-topic assignment was recorded as one, two or
 three model votes, represented in the database as one, two or three
-stars. Pass-level roles and reasons were retained for provenance. Raw
-model assignments were preserved even where they were not subsequently
-retained for analysis.
+stars. Pass-level roles and reasons were retained for provenance, and
+raw model assignments were preserved even where they were not
+subsequently retained for analysis. Records that could not be assigned a
+defensible topic, including some records with insufficient abstract
+information, were retained in the map as uncoded rather than being
+excluded.
 
 A deterministic analytical layer then removed ‘general’ codes where a
 more specific assigned pathway superseded them (e.g. “Other diseases –
@@ -559,7 +535,7 @@ completed. Versioned intermediate outputs and review artefacts are
 retained so that the transformation from retrieved source records to the
 released evidence map can be audited.
 
-In additional, a quarterly sweep of the entire evidence base will be
+In addition, a quarterly sweep of the entire evidence base will be
 conducted using DOI lookup in the OpenAlex API to identify potential
 retractions and withdrawals. These records will be removed from the
 database and the dashboard updated accordingly.
