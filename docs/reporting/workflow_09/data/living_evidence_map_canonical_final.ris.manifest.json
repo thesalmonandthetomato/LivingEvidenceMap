@@ -1,11 +1,11 @@
 {
   "schema": "living-evidence-map-ris-export-v1",
   "source_jsonl": "living_evidence_map_canonical_final.jsonl",
-  "source_jsonl_sha256": "cb1f28a2adb3edbc368d9d10de1517d51cd43d024e449bf1f7149eb87ab77ffb",
+  "source_jsonl_sha256": "96a854952aecf3a562fadf603670f650fa26ba9974c819e4b98f9c4dc4f6de20",
   "records": 21493,
   "ris_file": "living_evidence_map_canonical_final.ris",
-  "ris_bytes": 52298295,
-  "ris_sha256": "fed66de13a2aa6d0e92b6618e7153aee929b45d4c1dfdd9928399d80214dd83b",
+  "ris_bytes": 52298264,
+  "ris_sha256": "355f4f8de335fbea070d9cd596faeb0195513b743e288bc626ebe14755695190",
   "contents": ["all included canonical records", "title/authors/year/journal/volume/issue/pages/DOI", "abstract", "stable canonical record ID", "species labels", "country names", "retained topic pathways and star support where available", "source manifestation references"],
   "omitted_as_nonportable_ris": ["workflow-specific provenance internals", "deduplication state", "screening audit structure", "manifestation-level provenance"]
 }

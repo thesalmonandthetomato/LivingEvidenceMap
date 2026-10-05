@@ -1,11 +1,11 @@
 {
   "schema": "living-evidence-map-workflow09-stage-summary-v1",
   "stage": "W08",
-  "source_run_id": "37211675882",
+  "source_run_id": "37234697766",
   "update_id": "w01-run-36971418284",
-  "generated_at_utc": "2026-10-04T17:36:28Z",
-  "pointer_path": "docs/workflow08/zenodo/run-37211675882.json",
-  "pointer_sha256": "77f2bab7096f64a33f38d63efed9fedd36bee072e459c30690461b053b5bb94f",
+  "generated_at_utc": "2026-10-04T21:33:27Z",
+  "pointer_path": "docs/workflow08/zenodo/run-37234697766.json",
+  "pointer_sha256": "010efe5fba60ba2c4c250430fbf49a7a5d3e09646b85463d52d5cf84e4c14826",
   "status": "complete",
   "metrics": {
     "source_canonical_population": 47094,
@@ -16,7 +16,7 @@
     "geography_without": 12570,
     "topic_with": 21246,
     "topic_without": 247,
-    "final_canonical_sha256": "cb1f28a2adb3edbc368d9d10de1517d51cd43d024e449bf1f7149eb87ab77ffb",
+    "final_canonical_sha256": "96a854952aecf3a562fadf603670f650fa26ba9974c819e4b98f9c4dc4f6de20",
     "exclusions_sha256": "0333e94685f51b979ef2ad7782ff3f7ca2791f5954cfd1be97bab843da68c2de"
   }
 }
