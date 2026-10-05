@@ -61,7 +61,10 @@ jobs:
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/current_run/current_run_status.json docs/current_run/current_run_record_ids.txt
+          git add docs/current_run/current_run_status.json
+          if [ -e docs/current_run/current_run_record_ids.txt ] || git ls-files --error-unmatch docs/current_run/current_run_record_ids.txt >/dev/null 2>&1; then
+            git add -A -- docs/current_run/current_run_record_ids.txt
+          fi
           if ! git diff --cached --quiet; then
             git commit -m 'Recover current-run status for W00 run 37326710853 [skip ci]'
             git pull --rebase origin workflow01-final-architecture
