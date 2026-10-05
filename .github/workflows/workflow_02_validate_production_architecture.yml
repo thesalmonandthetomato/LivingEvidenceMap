@@ -65,6 +65,31 @@ jobs:
           invisible(lapply(files,parse))
           cat('PASS: all Workflow 02 production R scripts parse\n')
 
+      - name: Validate production W02 enrichment policy
+        shell: Rscript {0}
+        run: |
+          wrapper <- readLines(".github/workflows/workflow_02_batched_production.yml",warn=FALSE)
+          planner <- readLines("scripts/updater/workflow_02_plan_batches.R",warn=FALSE)
+          enrich <- readLines("scripts/updater/workflow_02_metadata_enrichment.R",warn=FALSE)
+          wtxt <- paste(wrapper,collapse="\n")
+          ptxt <- paste(planner,collapse="\n")
+          etxt <- paste(enrich,collapse="\n")
+
+          stopifnot(grepl("use_scopus: true",wtxt,fixed=TRUE))
+          stopifnot(grepl("keywords_missing(r$canonical$author_keywords)",ptxt,fixed=TRUE))
+          stopifnot(grepl("missing_author_keywords_before)",etxt,fixed=TRUE))
+          stopifnot(grepl("retained Scopus EID -> FULL",etxt,fixed=TRUE))
+          stopifnot(grepl("direct DOI -> FULL",etxt,fixed=TRUE))
+          stopifnot(grepl("No DOI-search -> EID fallback",etxt,fixed=TRUE))
+
+          a <- grep("^scopus_lookup <- function\\(d\\)\\{",enrich)
+          b <- grep("^read_jsonl <- function\\(path\\)\\{",enrich)
+          stopifnot(length(a)==1L,length(b)==1L,b>a)
+          body <- paste(enrich[a:(b-1L)],collapse="\n")
+          stopifnot(!grepl("scopus_search_doi",body,fixed=TRUE))
+          stopifnot(!grepl("scopus_lookup_eid(",body,fixed=TRUE))
+          cat("PASS: production W02 policy is Europe PMC -> direct Scopus DOI for title/abstract; retained EID FULL -> DOI FULL for keywords; no Search-to-EID fallback\n")
+
       - name: Validate incremental, repair, and backfill planner modes
         shell: Rscript {0}
         run: |
