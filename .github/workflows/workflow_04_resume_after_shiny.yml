@@ -204,7 +204,9 @@ jobs:
         run: |
           set -euo pipefail
           git pull --rebase origin "$WORKFLOW04_BRANCH"
-          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W04
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W04 \
+            --pointer "docs/workflow04/zenodo/run-$SOURCE_RUN_ID.json"
           Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
             --status docs/current_run/current_run_status.json \
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
