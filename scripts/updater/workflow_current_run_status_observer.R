@@ -63,6 +63,51 @@ authoritative_w08 <- function(){
   list(pointer=p,run_id=as.character(x$source_github_run_id),records=as.integer(x$canonical_records),
        sha256=as.character(x$final_canonical_jsonl_sha256))
 }
+
+published_release_baseline <- function(){
+  root <- "docs/reporting/workflow_09_inputs/current"
+  stages <- c("W01","W02","W04","W05","W06","W07","W08")
+  summaries <- setNames(lapply(stages,function(stage){
+    p <- file.path(root,paste0(tolower(stage),"_summary.json"))
+    if(!file.exists(p)) stop("Published-release baseline summary missing: ",p,call.=FALSE)
+    x <- fromJSON(p,simplifyVector=FALSE)
+    if(!identical(as.character(x$stage),stage) || !identical(as.character(x$status),"complete")) {
+      stop("Published-release baseline summary is not complete: ",p,call.=FALSE)
+    }
+    pointer <- clean(x$pointer_path)
+    if(!nzchar(pointer) || !file.exists(pointer)) stop("Published-release baseline pointer missing: ",pointer,call.=FALSE)
+    list(run_id=clean(x$source_run_id),pointer=pointer,update_id=clean(x$update_id))
+  }),stages)
+
+  auth <- authoritative_w08()
+  if(!identical(summaries$W08$run_id,auth$run_id) || !identical(summaries$W08$pointer,auth$pointer)) {
+    stop("Latest completed reporting release does not match the authoritative W08 baseline",call.=FALSE)
+  }
+
+  lean_pointer <- sprintf("docs/compaction/zenodo/run-%s.json",summaries$W02$run_id)
+  if(!file.exists(lean_pointer)) stop("Published-release post-W02 lean pointer missing: ",lean_pointer,call.=FALSE)
+
+  list(
+    release_update_id=summaries$W08$update_id,
+    workflow01_source_run_id=summaries$W01$run_id,
+    workflow01_pointer=summaries$W01$pointer,
+    workflow02_source_run_id=summaries$W02$run_id,
+    workflow02_pointer=summaries$W02$pointer,
+    lean_pointer=lean_pointer,
+    workflow04_source_run_id=summaries$W04$run_id,
+    workflow04_pointer=summaries$W04$pointer,
+    workflow05_source_run_id=summaries$W05$run_id,
+    workflow05_pointer=summaries$W05$pointer,
+    workflow06_source_run_id=summaries$W06$run_id,
+    workflow06_pointer=summaries$W06$pointer,
+    workflow07_source_run_id=summaries$W07$run_id,
+    workflow07_pointer=summaries$W07$pointer,
+    workflow08_pointer=auth$pointer,
+    workflow08_source_run_id=auth$run_id,
+    canonical_records=auth$records,
+    canonical_sha256=auth$sha256
+  )
+}
 stage_from_changed <- function(){
   if(nzchar(force_stage)) return(force_stage)
   if(any(grepl("^docs/search_record/(?:[^/]+/)*(full_search|fortnightly_update|ad_hoc)/.*\\.json$",changed,perl=TRUE))) return("W00")
@@ -129,7 +174,7 @@ if(stage=="W00"){
   parents<-vapply(recs,function(z)as.character(z$github$parent_workflow_run_id),character(1))
   tab<-sort(table(parents),decreasing=TRUE);parent<-names(tab)[[1L]]
   recs<-recs[parents==parent]
-  baseline<-authoritative_w08()
+  baseline<-published_release_baseline()
   total<-sum(vapply(recs,function(z)as.integer(z$reported_search_results),integer(1)))
   dates<-as.Date(substr(vapply(recs,function(z)as.character(z$recorded_at_utc),character(1)),1,10))
   src<-setNames(lapply(recs,function(z)list(
@@ -142,8 +187,7 @@ if(stage=="W00"){
     branch="workflow01-final-architecture",
     started_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
     last_updated_at_utc=NULL,
-    baseline=list(workflow08_pointer=baseline$pointer,workflow08_source_run_id=baseline$run_id,
-                  canonical_records=baseline$records,canonical_sha256=baseline$sha256),
+    baseline=baseline,
     search=list(workflow00_run_id=parent,search_date=as.character(max(dates,na.rm=TRUE)),
                 search_results=total,sources=src),
     cohort=list(record_ids_path=ids_path,record_ids_sha256=NULL,deduplicated_records=NULL),
