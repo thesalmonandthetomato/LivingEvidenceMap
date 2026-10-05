@@ -74,6 +74,9 @@ if(length(manual)){
     if(current!="uncertain")stop(sprintf("Manual W04 decision supplied for non-uncertain record: %s",id),call.=FALSE)
     d<-scalar(manual[[i]]$decision)
     if(!d%in%c("retain","exclude"))stop(sprintf("Invalid manual W04 decision for %s",id),call.=FALSE)
+    m[[id]]$screening$model_decision_before_human<-current
+    m[[id]]$screening$model_decision_origin_before_human<-scalar((m[[id]]$screening %||% list())$decision_origin)
+    m[[id]]$screening$model_screening_input_sha256<-scalar((m[[id]]$screening %||% list())$screening_input_sha256)
     m[[id]]$screening$decision<-d
     m[[id]]$screening$decision_origin<-"human_adjudication_after_luna_uncertain"
     m[[id]]$screening$requires_human_review<-FALSE

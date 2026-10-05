@@ -75,6 +75,54 @@ screen_view <- function(r) {
   )
 }
 
+model_reference_from_layer <- function(r) {
+  s <- r$screening %||% list()
+  origin <- first_nonempty(s$decision_origin)
+  explicit <- first_nonempty(s$model_decision_before_human)
+  luna <- s$luna_consensus %||% list()
+  luna_decision <- first_nonempty(luna$decision)
+  top_decision <- first_nonempty(s$decision)
+
+  if (explicit %in% c("retain","exclude","uncertain")) {
+    decision <- explicit
+    source <- "screening.model_decision_before_human"
+  } else if (luna_decision %in% c("retain","exclude","uncertain")) {
+    decision <- luna_decision
+    source <- "screening.luna_consensus.decision"
+  } else if (grepl("after_luna_(uncertain|unresolved)",origin,ignore.case=TRUE)) {
+    decision <- "uncertain"
+    source <- "decision_origin_implies_luna_uncertain"
+  } else if (identical(origin,"luna_consensus") && top_decision %in% c("retain","exclude","uncertain")) {
+    decision <- top_decision
+    source <- "screening.decision_luna_consensus"
+  } else if (grepl("human|historical",origin,ignore.case=TRUE)) {
+    stop(sprintf(
+      "W04 record %s has human/historical final decision but no recoverable pre-human model decision",
+      first_nonempty(r$record_id)
+    ),call.=FALSE)
+  } else if (top_decision %in% c("retain","exclude","uncertain")) {
+    decision <- top_decision
+    source <- "screening.decision_fallback"
+  } else {
+    stop(sprintf(
+      "W04 record %s has no recoverable model decision",
+      first_nonempty(r$record_id)
+    ),call.=FALSE)
+  }
+
+  list(
+    decision=decision,
+    source=source,
+    final_decision=top_decision,
+    final_decision_origin=origin,
+    screening_input_sha256=first_nonempty(
+      s$model_screening_input_sha256,
+      luna$screening_input_sha256,
+      s$screening_input_sha256
+    )
+  )
+}
+
 canonical <- read_jsonl(canonical_path)
 w03 <- read_jsonl(w03_path)
 w04 <- read_jsonl(workflow04_layer_path)
@@ -114,12 +162,15 @@ rows <- lapply(seq_along(selected),function(i) {
   )
 })
 
+model_ref <- lapply(selected,function(id)model_reference_from_layer(w04map[[id]]))
 model_reference <- data.frame(
   review_case_id=vapply(rows,function(x)as.character(x$review_case_id),character(1)),
   record_id=selected,
-  model_decision=vapply(selected,function(id)first_nonempty((w04map[[id]]$screening %||% list())$decision),character(1)),
-  decision_origin=vapply(selected,function(id)first_nonempty((w04map[[id]]$screening %||% list())$decision_origin),character(1)),
-  screening_input_sha256=vapply(selected,function(id)first_nonempty((w04map[[id]]$screening %||% list())$screening_input_sha256),character(1)),
+  model_decision=vapply(model_ref,function(x)x$decision,character(1)),
+  model_decision_source=vapply(model_ref,function(x)x$source,character(1)),
+  final_decision=vapply(model_ref,function(x)x$final_decision,character(1)),
+  final_decision_origin=vapply(model_ref,function(x)x$final_decision_origin,character(1)),
+  screening_input_sha256=vapply(model_ref,function(x)x$screening_input_sha256,character(1)),
   stringsAsFactors=FALSE
 )
 if(any(!model_reference$model_decision %in% c("retain","exclude","uncertain"))) {

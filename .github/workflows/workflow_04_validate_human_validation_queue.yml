@@ -35,7 +35,8 @@ jobs:
         shell: Rscript {0}
         run: |
           parse(file='scripts/updater/workflow_04_build_human_validation_queue.R')
-          cat('PASS: W04 validation queue builder parses\n')
+          parse(file='scripts/updater/workflow_04_merge_incremental.R')
+          cat('PASS: W04 validation queue builder and merge script parse\n')
 
       - name: Build synthetic canonical and W03 fixtures
         shell: Rscript {0}
@@ -69,14 +70,41 @@ jobs:
           for(z in w03)writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con)
           close(con)
 
-          w04 <- lapply(1:5,function(i) list(
-            record_id=paste0('rec-',i),
-            screening=list(
-              decision=if(i%%2L)'retain' else 'exclude',
-              decision_origin='synthetic_consensus',
-              screening_input_sha256=paste0('sha-',i)
-            )
-          ))
+          w04 <- lapply(1:5,function(i) {
+            model_decision <- if(i%%2L)'retain' else 'exclude'
+            if(i==1L) {
+              list(
+                record_id=paste0('rec-',i),
+                screening=list(
+                  decision='exclude',
+                  decision_origin='historical_exclude_authoritative',
+                  luna_consensus=list(
+                    decision=model_decision,
+                    screening_input_sha256=paste0('sha-',i)
+                  ),
+                  historical_override_applied=TRUE
+                )
+              )
+            } else if(i==2L) {
+              list(
+                record_id=paste0('rec-',i),
+                screening=list(
+                  decision='retain',
+                  decision_origin='human_adjudication_after_luna_uncertain',
+                  screening_input_sha256=paste0('sha-',i)
+                )
+              )
+            } else {
+              list(
+                record_id=paste0('rec-',i),
+                screening=list(
+                  decision=model_decision,
+                  decision_origin='luna_consensus',
+                  screening_input_sha256=paste0('sha-',i)
+                )
+              )
+            }
+          })
           con<-file('tmp/w04val/w04.jsonl','wt')
           for(z in w04)writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con)
           close(con)
@@ -120,7 +148,19 @@ jobs:
 
           model_ref <- read.csv('tmp/w04val/out1/workflow04_validation_model_reference.csv',stringsAsFactors=FALSE)
           stopifnot(nrow(model_ref)==4L,setequal(model_ref$record_id,ids))
-          stopifnot(all(model_ref$model_decision %in% c('retain','exclude')))
+          stopifnot(all(model_ref$model_decision %in% c('retain','exclude','uncertain')))
+          if('rec-1' %in% model_ref$record_id) {
+            z <- model_ref[model_ref$record_id=='rec-1',,drop=FALSE]
+            stopifnot(z$model_decision=='retain')
+            stopifnot(z$final_decision=='exclude')
+            stopifnot(z$model_decision_source=='screening.luna_consensus.decision')
+          }
+          if('rec-2' %in% model_ref$record_id) {
+            z <- model_ref[model_ref$record_id=='rec-2',,drop=FALSE]
+            stopifnot(z$model_decision=='uncertain')
+            stopifnot(z$final_decision=='retain')
+            stopifnot(z$model_decision_source=='decision_origin_implies_luna_uncertain')
+          }
 
           for(z in rows) {
             b <- z$bibliographic
