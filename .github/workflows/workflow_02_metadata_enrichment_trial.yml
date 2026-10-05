@@ -1,12 +1,6 @@
 name: Workflow 02 - Metadata enrichment trial (Europe PMC then Scopus)
 
 on:
-  push:
-    branches:
-      - workflow01-final-architecture
-    paths:
-      - '.github/workflows/workflow_02_metadata_enrichment_trial.yml'
-      - 'scripts/updater/workflow_02_metadata_enrichment.R'
   workflow_dispatch:
 
 permissions:
