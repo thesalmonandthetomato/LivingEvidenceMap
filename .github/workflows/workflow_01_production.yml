@@ -649,6 +649,19 @@ jobs:
             --source-run-id "$GITHUB_RUN_ID" \
             --credential "$RUNNER_TEMP/lem-google-service-account.json"
 
+          BATCH_ID="w01-run-$GITHUB_RUN_ID"
+          QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/adjudication/human_review_package/review_manifest.json");cat(as.character(x$queue_sha256))')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "01" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status published \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --message "Workflow 01 duplicate adjudication paused for human review."
+
       - name: Mark Workflow 01 awaiting human review
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
         env:
