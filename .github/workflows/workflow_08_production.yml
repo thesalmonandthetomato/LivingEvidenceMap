@@ -3,6 +3,10 @@ name: Workflow 08 - living finalisation
 on:
   workflow_call:
     inputs:
+      execution_ref:
+        required: false
+        default: ''
+        type: string
       lean_pointer_path:
         required: true
         type: string
@@ -41,6 +45,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      execution_ref:
+        description: Exact repository commit to use; blank uses current workflow01-final-architecture head
+        required: false
+        default: ''
+        type: string
       lean_pointer_path:
         description: Current post-W02 lean canonical pointer
         required: true
@@ -93,8 +102,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: ${{ inputs.execution_ref || 'workflow01-final-architecture' }}
           fetch-depth: 0
+
+      - name: Record W08 execution commit
+        shell: bash
+        run: echo "W08_EXECUTION_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -317,6 +330,7 @@ jobs:
           x <- list(
             schema="living-evidence-map-workflow08-shiny-resume-context-v1",
             source_run_id=Sys.getenv("GITHUB_RUN_ID"),
+            source_commit=Sys.getenv("W08_EXECUTION_COMMIT"),
             lean_pointer_path="${{ inputs.lean_pointer_path }}",
             workflow03_pointer_path="${{ inputs.workflow03_pointer_path }}",
             workflow04_pointer_path="${{ inputs.workflow04_pointer_path }}",
@@ -440,6 +454,7 @@ jobs:
             --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl
             --manifest outputs/workflow08/workflow08_final_manifest.json
             --source-run-id "$GITHUB_RUN_ID"
+            --source-commit "$W08_EXECUTION_COMMIT"
             --repository "$GITHUB_REPOSITORY"
             --output-dir outputs/workflow08_zenodo
           )
