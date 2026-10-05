@@ -23,7 +23,7 @@ on:
         type: string
       prior_workflow08_pointer_path:
         required: false
-        default: 'docs/workflow08/zenodo/run-36442875006.json'
+        default: 'none'
         type: string
       new_decisions_path:
         required: false
@@ -68,7 +68,7 @@ on:
       prior_workflow08_pointer_path:
         description: Prior W08 pointer, or none for first run
         required: true
-        default: docs/workflow08/zenodo/run-36442875006.json
+        default: 'none'
         type: string
       new_decisions_path:
         description: Optional repo JSONL resolving all new/changed W08 issues
