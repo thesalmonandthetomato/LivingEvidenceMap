@@ -76,7 +76,9 @@ jobs:
 
           stopifnot(!grepl('ref: workflow01-final-architecture',prod,fixed=TRUE))
           stopifnot(!grepl('ref: workflow01-final-architecture',resume,fixed=TRUE))
-          pinned_ref <- paste0('ref: 
+          pinned_ref <- paste0("ref: $", "{", "{ github.sha ", "}", "}")
+          stopifnot(grepl(pinned_ref,prod,fixed=TRUE))
+          stopifnot(grepl(pinned_ref,resume,fixed=TRUE))
           stopifnot(grepl('Freeze screening prompt provenance',prod,fixed=TRUE))
           stopifnot(grepl('source_github_sha',prod,fixed=TRUE))
           stopifnot(grepl('outputs/workflow04_prepare/prompt_provenance.json',prod,fixed=TRUE))
