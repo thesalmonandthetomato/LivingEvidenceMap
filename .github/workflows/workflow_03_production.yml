@@ -52,11 +52,9 @@ on:
         required: true
         type: string
 
-  push:
-    branches:
-      - workflow01-final-architecture
-    paths:
-      - 'docs/publication_status/.run_workflow03_full'
+concurrency:
+  group: workflow03-publication-status
+  cancel-in-progress: false
 
 permissions:
   contents: write
