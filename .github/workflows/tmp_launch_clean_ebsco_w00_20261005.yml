@@ -1,0 +1,36 @@
+name: TEMP clean EBSCO W00 production launch 20261005
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_launch_clean_ebsco_w00_20261005.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  w00:
+    uses: ./.github/workflows/workflow_00_search_orchestrator.yml
+    with:
+      run_type: full
+      group_core_multidisciplinary: false
+      group_health_medicine: false
+      group_environment_agriculture: false
+      group_social_sciences: false
+      group_education: false
+      group_regional: false
+      group_media_communication: false
+      group_humanities: false
+      group_sport_tourism: false
+      group_grey_preprints: false
+      additional_sources: >-
+        ebsco_medline,ebsco_cinahl,ebsco_amed,ebsco_psycinfo,
+        ebsco_biological_agricultural_index,ebsco_greenfile,ebsco_waters_oceans,
+        ebsco_econlit,ebsco_political_science,ebsco_family_society,
+        ebsco_africa_wide,ebsco_mla,ebsco_atla_religion
+      exclude_sources: ''
+      additional_search_term: ''
+      supersede_incomplete_update: true
+    secrets: inherit
