@@ -26,7 +26,7 @@ status_path <- arg("--status","docs/current_run/current_run_status.json")
 ids_path <- arg("--record-ids","docs/current_run/current_run_record_ids.txt")
 force_stage <- toupper(arg("--force-stage",""))
 stage_status <- tolower(arg("--stage-status","complete"))
-if(!stage_status %in% c("start","complete")) stop("--stage-status must be start or complete",call.=FALSE)
+if(!stage_status %in% c("start","complete","waiting_human")) stop("--stage-status must be start, complete or waiting_human",call.=FALSE)
 changed_file <- arg("--changed-files","")
 pointer_path <- arg("--pointer","")
 w00_run_id <- arg("--w00-run-id","")
@@ -245,6 +245,29 @@ if(stage=="W00"){
 s<-load_status()
 if(is.null(s)){
   cat(sprintf("No current_run_status.json exists; ignoring %s historical/provenance update.\n",stage))
+  quit(status=0)
+}
+
+if(stage_status %in% c("start","waiting_human") && stage %in% sprintf("W%02d",1:8)){
+  stage_num<-as.integer(sub("^W0?","",stage))
+  labels<-list(
+    W01=list(start="Deduplication in progress",waiting_human="Deduplication awaiting human review"),
+    W02=list(start="Enrichment in progress",waiting_human="Enrichment awaiting human review"),
+    W03=list(start="Retraction screening in progress",waiting_human="Retraction screening awaiting human review"),
+    W04=list(start="Relevance screening in progress",waiting_human="Screening awaiting human review"),
+    W05=list(start="Species coding in progress",waiting_human="Species coding awaiting human review"),
+    W06=list(start="Geography coding in progress",waiting_human="Geography coding awaiting human review"),
+    W07=list(start="Topic coding in progress",waiting_human="Topic coding awaiting human review"),
+    W08=list(start="Final adjudication in progress",waiting_human="Final adjudication awaiting human review")
+  )
+  s$progress<-progress(stage_num,stage_num+1L)
+  s$progress$current_stage<-stage
+  s$progress$completed_through<-stage_num
+  s$progress$active_position<-stage_num+1L
+  s$progress$status_label<-labels[[stage]][[stage_status]]
+  s$workflow_runs[[stage]]<-as.character(Sys.getenv("GITHUB_RUN_ID",""))
+  save_status(s)
+  cat(sprintf("PASS: %s live status marked %s\n",stage,stage_status))
   quit(status=0)
 }
 
