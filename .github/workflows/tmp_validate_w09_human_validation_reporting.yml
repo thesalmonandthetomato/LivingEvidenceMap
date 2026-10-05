@@ -1,0 +1,146 @@
+name: TEMP validate W09 human validation reporting
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'scripts/reporting/workflow09_human_validation_report.R'
+      - 'docs/reporting/workflow_09/manuscript/long_form_methods.Rmd'
+      - 'docs/reporting/workflow_09/manuscript/long_form_results.Rmd'
+      - '.github/workflows/report_workflow09_figures.yml'
+      - '.github/workflows/tmp_validate_w09_human_validation_reporting.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install test dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','googlesheets4','yaml'))
+
+      - name: Parse reporting script and Workflow 09
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/reporting/workflow09_human_validation_report.R')
+          yaml::yaml.load_file('.github/workflows/report_workflow09_figures.yml')
+          cat('PASS: W09 human-validation reporting script and workflow parse\n')
+
+      - name: Build synthetic validation registries
+        shell: Rscript {0}
+        run: |
+          dir.create('tmp/w09hv',recursive=TRUE,showWarnings=FALSE)
+
+          model <- data.frame(
+            registry_row_id=c('m1','m2'),
+            date=c('2026-10-01','2026-10-05'),
+            source=c('historical_baseline','shiny_validation'),
+            batch_id=c('baseline','batch2'),
+            queue_sha256=c('',paste(rep('a',64),collapse='')),
+            workflow04_run_id=c('1','2'),
+            records_reviewed=c('4','4'),
+            records_compared=c('4','4'),
+            model_retain_human_retain=c('2','1'),
+            model_retain_human_exclude=c('0','1'),
+            model_exclude_human_retain=c('0','1'),
+            model_exclude_human_exclude=c('2','1'),
+            human_uncertain=c('0','0'),
+            model_uncertain=c('0','0'),
+            raw_agreement=c('1','0.5'),
+            human_model_kappa=c('1','0'),
+            humans_model_fleiss_kappa=c('',''),
+            created_at_utc=c('2026-10-01T00:00:00Z','2026-10-05T00:00:00Z'),
+            source_github_run_id=c('1','2'),
+            stringsAsFactors=FALSE
+          )
+          write.csv(model,'tmp/w09hv/model.csv',row.names=FALSE,na='')
+
+          cols <- c(
+            'consistency_id','date','batch_id','queue_sha256','assignment_scope_id',
+            'scope_type','reviewer_key','rater_ids_json','rater_labels_json','n_raters',
+            'records_n','record_ids_json','record_ids_sha256','metric',
+            'agreement_n','conflict_n','raw_agreement','kappa',
+            'patterns_json','pairwise_json','analysis_id','created_by','created_at_utc'
+          )
+          mk <- function(id,scope,records,patterns,when) {
+            data.frame(
+              consistency_id=id,date=substr(when,1,10),batch_id='b1',queue_sha256=paste(rep('b',64),collapse=''),
+              assignment_scope_id='scope1',scope_type=scope,reviewer_key='matt|sini',
+              rater_ids_json=jsonlite::toJSON(c('matt','sini'),auto_unbox=FALSE),
+              rater_labels_json=jsonlite::toJSON(c('Matt','Sini'),auto_unbox=FALSE),
+              n_raters='2',records_n=as.character(length(records)),
+              record_ids_json=jsonlite::toJSON(records,auto_unbox=FALSE),
+              record_ids_sha256=digest::digest(paste(records,collapse='\n'),algo='sha256',serialize=FALSE),
+              metric="Cohen's kappa",
+              agreement_n=as.character(sum(vapply(patterns,function(z)if(length(unique(strsplit(z$pattern,' \\| ')[[1]]))==1L)z$n else 0L,integer(1)))),
+              conflict_n='0',raw_agreement='',kappa='',
+              patterns_json=jsonlite::toJSON(patterns,auto_unbox=TRUE),
+              pairwise_json='[]',analysis_id=id,created_by='admin',created_at_utc=when,
+              stringsAsFactors=FALSE
+            )
+          }
+          p1 <- list(list(pattern='retain | retain',n=1L),list(pattern='retain | exclude',n=1L))
+          p2 <- list(list(pattern='exclude | exclude',n=1L),list(pattern='exclude | retain',n=1L))
+          pall <- c(p1,p2)
+          h <- rbind(
+            mk('h1','partial',c('r1','r2'),p1,'2026-10-05T10:00:00Z'),
+            mk('h2','partial',c('r3','r4'),p2,'2026-10-05T11:00:00Z'),
+            mk('h3','full',c('r1','r2','r3','r4'),pall,'2026-10-05T12:00:00Z')
+          )
+          h <- h[,cols]
+          write.csv(h,'tmp/w09hv/human.csv',row.names=FALSE,na='')
+
+          empty <- as.data.frame(
+            setNames(replicate(length(cols),character(),simplify=FALSE),cols),
+            stringsAsFactors=FALSE
+          )
+          write.csv(empty,'tmp/w09hv/human_empty.csv',row.names=FALSE,na='')
+
+      - name: Validate Full supersession and model cumulative calculation
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow09_human_validation_report.R \
+            --model-registry tmp/w09hv/model.csv \
+            --human-csv tmp/w09hv/human.csv \
+            --output-dir tmp/w09hv/out
+          Rscript -e '
+            s<-jsonlite::fromJSON("tmp/w09hv/out/human_validation_summary.json",simplifyVector=FALSE)
+            stopifnot(s$model_validation$saved_sets==2L)
+            stopifnot(s$model_validation$substantive_comparisons==8L)
+            h<-read.csv("tmp/w09hv/out/human_consistency_history.csv",stringsAsFactors=FALSE)
+            stopifnot(nrow(h)==3L,sum(h$included_in_cumulative)==1L)
+            stopifnot(h$included_in_cumulative[h$scope_type=="full"])
+            c<-read.csv("tmp/w09hv/out/human_consistency_cumulative.csv",stringsAsFactors=FALSE)
+            stopifnot(nrow(c)==1L,c$records_n==4L,c$contributing_sets==1L)
+            cat("PASS: Full result supersedes contained Partial rows without deleting history\n")
+          '
+
+      - name: Validate empty human-consistency registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow09_human_validation_report.R \
+            --model-registry tmp/w09hv/model.csv \
+            --human-csv tmp/w09hv/human_empty.csv \
+            --output-dir tmp/w09hv/out_empty
+          Rscript -e '
+            s<-jsonlite::fromJSON("tmp/w09hv/out_empty/human_validation_summary.json",simplifyVector=FALSE)
+            stopifnot(isFALSE(s$human_consistency$available))
+            h<-read.csv("tmp/w09hv/out_empty/human_consistency_history.csv",stringsAsFactors=FALSE)
+            c<-read.csv("tmp/w09hv/out_empty/human_consistency_cumulative.csv",stringsAsFactors=FALSE)
+            stopifnot(nrow(h)==0L,nrow(c)==0L)
+            cat("PASS: empty human-consistency state is valid\n")
+          '

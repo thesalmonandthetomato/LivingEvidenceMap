@@ -63,11 +63,12 @@ Workflow 09 no longer reconstructs the full Workflow 01 state or restores the Wo
 | `visualisations/07_flow_diagram.R` | Review/process flow figure and machine-readable flow counts. |
 | `visualisations/08_umbrella_review_figure.R` | Comparison with the supplied umbrella-review dataset. |
 | `scripts/reporting/plot_citesource_database_contribution.R` | Paired database-contribution/overlap figure before and after relevance screening. |
+| `scripts/reporting/workflow09_human_validation_report.R` | Builds the W09 screening-validation report from the durable W04 model registry and the saved Shiny human-consistency registry. |
 | `docs/reporting/workflow_09/manuscript/long_form_methods.Rmd` | Version-controlled Methods source. |
 | `docs/reporting/workflow_09/manuscript/long_form_results.Rmd` | Version-controlled Results source with values calculated from the current reporting state. |
 | `docs/reporting/workflow_09/figures/` | Permanent PNG and PDF publication figures, numbered in manuscript order. |
 | `docs/reporting/workflow_09/figure_code/` | Snapshot of the exact R plotting code used for the permanent figure set. |
-| `docs/reporting/workflow_09/data/` | RIS export and export manifest. |
+| `docs/reporting/workflow_09/data/` | RIS export, export manifest, compact workflow inputs and the human-validation reporting snapshot. |
 
 ## Authoritative inputs
 
@@ -96,6 +97,8 @@ Each accepted workflow updates only its own summary after its authoritative stat
 Before rendering, W09 requires the W01-W08 summary run IDs to match `docs/current_run/current_run_status.json`, requires the W01 source snapshot checksum to match the registered W01 canonical checksum, and requires the W08 source snapshot checksum to match the authoritative final W08 canonical checksum. A stale or mixed reporting handoff therefore fails closed.
 
 The compact inputs are also copied into each permanent W09 publication package under `docs/reporting/workflow_09/data/workflow_inputs/`, preserving the exact reporting handoff used for that publication snapshot.
+
+In addition to the W00-W08 compact handoffs, Workflow 09 reads two screening-quality registries. The human–model validation history is read from the version-controlled W04 kappa registry. Saved human–human consistency milestones are read from the Shiny Google Sheets tab `w04_human_kappa_registry` when that tab exists. Each saved human milestone retains its reviewer set, Full/Partial scope, exact record membership and decision-pattern counts. Workflow 09 applies the same supersession rule used by Shiny: a Full result supersedes any contained Partial rows for cumulative calculations, while non-overlapping Partial rows are combined. Cohen's or Fleiss' kappa is recalculated from the underlying counts/patterns and is never averaged across saved kappa values.
 
 ## RIS export
 

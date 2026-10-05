@@ -38,6 +38,17 @@ The final 16 manuscript figures are stored in both PNG and PDF under `figures/`.
 
 The Workflow 08 JSONL remains authoritative for nested workflow provenance and record state.
 
+## Human validation reporting
+
+`data/human_validation/` contains the Workflow 09 snapshot of screening-validation evidence used in the report:
+
+- `model_validation_history.csv`: independent saved human–model validation sets from the authoritative W04 kappa registry;
+- `human_consistency_history.csv`: saved human–human consistency milestones from Shiny, including Partial/Full scope and whether each row contributes to the cumulative statistic;
+- `human_consistency_cumulative.csv`: cumulative Cohen's or Fleiss' kappa by reviewer set after Full/Partial supersession; and
+- `human_validation_summary.json`: machine-readable summary used by the Results manuscript.
+
+Workflow 09 reads the human-consistency registry from Google Sheets when available. An absent or empty human-consistency tab is a valid state and is reported as no saved human–human consistency milestones. Cumulative kappa values are reconstructed from stored contingency or decision-pattern counts; saved kappa values are never averaged.
+
 ## Current validated release
 
 The current publication package was generated successfully by Workflow 09 run **37268896083** from authoritative Workflow 08 run **37234697766**, Zenodo record **23145712** (DOI `10.5281/zenodo.23145712`). Workflow 09 is automatically dispatched after successful published W08 finalisation in both the direct production and post-Shiny resume paths, and remains manually reproducible.

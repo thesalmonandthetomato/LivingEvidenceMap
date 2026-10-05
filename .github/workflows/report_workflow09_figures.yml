@@ -250,6 +250,28 @@ jobs:
             expected_runs[["W05"]], expected_runs[["W06"]], expected_runs[["W07"]], expected_runs[["W08"]]
           ))
 
+      - name: Build human validation report
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          rm -rf outputs/workflow09_human_validation
+          Rscript scripts/reporting/workflow09_human_validation_report.R \
+            --model-registry docs/workflow04/kappa_registry.csv \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --human-tab w04_human_kappa_registry \
+            --output-dir outputs/workflow09_human_validation
+          test -s outputs/workflow09_human_validation/human_validation_summary.json
+          test -s outputs/workflow09_human_validation/model_validation_history.csv
+          test -f outputs/workflow09_human_validation/human_consistency_history.csv
+          test -f outputs/workflow09_human_validation/human_consistency_cumulative.csv
+
       - name: Export full canonical library to RIS
         shell: bash
         run: |
@@ -288,6 +310,10 @@ jobs:
           CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
           FLOW_COUNTS_JSON: ${{ github.workspace }}/visualisations/figure_07_flow_diagram_counts.json
           CITESOURCE_OUTPUT_DIR: ${{ github.workspace }}/outputs/citesource_contribution
+          HUMAN_VALIDATION_SUMMARY_JSON: ${{ github.workspace }}/outputs/workflow09_human_validation/human_validation_summary.json
+          MODEL_VALIDATION_HISTORY_CSV: ${{ github.workspace }}/outputs/workflow09_human_validation/model_validation_history.csv
+          HUMAN_CONSISTENCY_HISTORY_CSV: ${{ github.workspace }}/outputs/workflow09_human_validation/human_consistency_history.csv
+          HUMAN_CONSISTENCY_CUMULATIVE_CSV: ${{ github.workspace }}/outputs/workflow09_human_validation/human_consistency_cumulative.csv
         shell: Rscript {0}
         run: |
           dir.create("outputs/workflow09_manuscript", recursive = TRUE, showWarnings = FALSE)
@@ -375,7 +401,7 @@ jobs:
         run: |
           set -euo pipefail
           PUB=docs/reporting/workflow_09
-          mkdir -p "$PUB/figures" "$PUB/figure_code" "$PUB/data" "$PUB/manuscript" "$PUB/data/workflow_inputs"
+          mkdir -p "$PUB/figures" "$PUB/figure_code" "$PUB/data" "$PUB/manuscript" "$PUB/data/workflow_inputs" "$PUB/data/human_validation"
 
           # Remove superseded generated figure/code files from previous W09 runs
           # before staging the new publication package. Static manuscript source
@@ -423,6 +449,11 @@ jobs:
           cp outputs/workflow09_data/living_evidence_map_canonical_final.ris.manifest.json "$PUB/data/living_evidence_map_canonical_final.ris.manifest.json"
           rm -f "$PUB/data/workflow_inputs"/*
           cp docs/reporting/workflow_09_inputs/current/* "$PUB/data/workflow_inputs/"
+          rm -f "$PUB/data/human_validation"/*
+          cp outputs/workflow09_human_validation/human_validation_summary.json "$PUB/data/human_validation/"
+          cp outputs/workflow09_human_validation/model_validation_history.csv "$PUB/data/human_validation/"
+          cp outputs/workflow09_human_validation/human_consistency_history.csv "$PUB/data/human_validation/"
+          cp outputs/workflow09_human_validation/human_consistency_cumulative.csv "$PUB/data/human_validation/"
 
           # Snapshot the exact plotting code used for this publication package.
           cp visualisations/canonical_figure_data.R "$PUB/figure_code/canonical_figure_data.R"
@@ -438,6 +469,7 @@ jobs:
           cp outputs/workflow09_manuscript/methods.{md,html,docx,pdf} "$PUB/manuscript/"
           cp outputs/workflow09_manuscript/results.{md,html,docx,pdf} "$PUB/manuscript/"
           cp scripts/reporting/export_canonical_ris.R "$PUB/data/export_canonical_ris.R"
+          cp scripts/reporting/workflow09_human_validation_report.R "$PUB/data/human_validation/workflow09_human_validation_report.R"
 
       - name: Validate Workflow 09 publication package
         shell: Rscript {0}
@@ -476,6 +508,37 @@ jobs:
 
           flow <- fromJSON("docs/reporting/workflow_09/flow_counts.json", simplifyVector = FALSE)
           stopifnot(as.integer(flow$counts$final_included) == expected_n)
+
+          human_validation <- fromJSON(
+            "docs/reporting/workflow_09/data/human_validation/human_validation_summary.json",
+            simplifyVector = FALSE
+          )
+          stopifnot(
+            identical(
+              as.character(human_validation$schema),
+              "living-evidence-map-workflow09-human-validation-report-v1"
+            ),
+            as.integer(human_validation$model_validation$saved_sets) >= 1L,
+            as.integer(human_validation$model_validation$substantive_comparisons) >= 1L
+          )
+          human_history <- read.csv(
+            "docs/reporting/workflow_09/data/human_validation/human_consistency_history.csv",
+            stringsAsFactors = FALSE,
+            check.names = FALSE
+          )
+          human_cumulative <- read.csv(
+            "docs/reporting/workflow_09/data/human_validation/human_consistency_cumulative.csv",
+            stringsAsFactors = FALSE,
+            check.names = FALSE
+          )
+          if (isTRUE(human_validation$human_consistency$available)) {
+            stopifnot(
+              nrow(human_history) == as.integer(human_validation$human_consistency$saved_sets),
+              nrow(human_cumulative) == as.integer(human_validation$human_consistency$reviewer_groups)
+            )
+          } else {
+            stopifnot(nrow(human_history) == 0L, nrow(human_cumulative) == 0L)
+          }
 
           stems <- c(
             "flow_diagram","database_unique_contribution","database_overlap",
@@ -527,6 +590,11 @@ jobs:
             "docs/reporting/workflow_09/manuscript/results.docx",
             "docs/reporting/workflow_09/manuscript/results.pdf",
             "docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris",
+            "docs/reporting/workflow_09/data/human_validation/human_validation_summary.json",
+            "docs/reporting/workflow_09/data/human_validation/model_validation_history.csv",
+            "docs/reporting/workflow_09/data/human_validation/human_consistency_history.csv",
+            "docs/reporting/workflow_09/data/human_validation/human_consistency_cumulative.csv",
+            "docs/reporting/workflow_09/data/human_validation/workflow09_human_validation_report.R",
             "docs/reporting/workflow_09/data/workflow_inputs/manifest.json",
             sprintf("docs/reporting/workflow_09/data/workflow_inputs/w%02d_summary.json", 0:8),
             "docs/reporting/workflow_09/data/workflow_inputs/w01_source_summary.csv",
