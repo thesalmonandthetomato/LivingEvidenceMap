@@ -1,0 +1,116 @@
+name: TEMP validate W04 kappa registry
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'scripts/updater/workflow_04_update_kappa_registry.R'
+      - 'scripts/updater/workflow_04_sync_kappa_registry_to_sheet.R'
+      - 'scripts/updater/workflow_04_build_human_validation_queue.R'
+      - 'docs/workflow04/kappa_registry.csv'
+      - '.github/workflows/tmp_validate_w04_kappa_registry.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install local-test dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Parse changed scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_04_update_kappa_registry.R')
+          parse(file='scripts/updater/workflow_04_sync_kappa_registry_to_sheet.R')
+          parse(file='scripts/updater/workflow_04_build_human_validation_queue.R')
+          cat('PASS: W04 kappa scripts parse\n')
+
+      - name: Verify historical baseline contingency reproduces published kappa
+        shell: Rscript {0}
+        run: |
+          x<-read.csv('docs/workflow04/kappa_registry.csv',stringsAsFactors=FALSE)
+          stopifnot(nrow(x)>=1L)
+          b<-x[x$source=='historical_baseline',,drop=FALSE]
+          stopifnot(nrow(b)==1L)
+          rr<-as.integer(b$model_retain_human_retain);re<-as.integer(b$model_retain_human_exclude)
+          er<-as.integer(b$model_exclude_human_retain);ee<-as.integer(b$model_exclude_human_exclude)
+          n<-rr+re+er+ee;po<-(rr+ee)/n
+          mr<-(rr+re)/n;hr<-(rr+er)/n;pe<-mr*hr+(1-mr)*(1-hr)
+          k<-(po-pe)/(1-pe)
+          stopifnot(n==21950L,rr==15301L,re==344L,er==360L,ee==5945L)
+          stopifnot(abs(k-0.9216127141125978)<1e-12)
+          cat(sprintf('PASS: historical baseline contingency reproduces kappa %.12f\n',k))
+
+      - name: Build synthetic completed validation batch
+        shell: Rscript {0}
+        run: |
+          dir.create('tmp_kappa',showWarnings=FALSE)
+          human<-list(
+            list(review_case_id='c1',record_id='r1',decision='retain'),
+            list(review_case_id='c2',record_id='r2',decision='exclude'),
+            list(review_case_id='c3',record_id='r3',decision='exclude'),
+            list(review_case_id='c4',record_id='r4',decision='retain'),
+            list(review_case_id='c5',record_id='r5',decision='uncertain')
+          )
+          con<-file('tmp_kappa/human.jsonl','wt')
+          for(z in human)writeLines(jsonlite::toJSON(z,auto_unbox=TRUE),con)
+          close(con)
+          model<-data.frame(
+            review_case_id=paste0('c',1:5),record_id=paste0('r',1:5),
+            model_decision=c('retain','exclude','retain','exclude','retain'),
+            stringsAsFactors=FALSE
+          )
+          write.csv(model,'tmp_kappa/model.csv',row.names=FALSE)
+          file.copy('docs/workflow04/kappa_registry.csv','tmp_kappa/registry.csv')
+
+      - name: Validate append, cells and idempotency
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(printf synthetic | sha256sum | cut -d' ' -f1)"
+          Rscript scripts/updater/workflow_04_update_kappa_registry.R \
+            --registry tmp_kappa/registry.csv \
+            --human-decisions tmp_kappa/human.jsonl \
+            --model-reference tmp_kappa/model.csv \
+            --batch-id w04-validation-synthetic \
+            --queue-sha256 "$SHA" \
+            --workflow04-run-id 123 \
+            --source-github-run-id 456 \
+            --output tmp_kappa/registry.csv
+          Rscript -e '
+            x<-read.csv("tmp_kappa/registry.csv",stringsAsFactors=FALSE)
+            z<-x[x$batch_id=="w04-validation-synthetic",,drop=FALSE]
+            stopifnot(nrow(z)==1L,as.integer(z$records_reviewed)==5L,as.integer(z$records_compared)==4L)
+            stopifnot(as.integer(z$model_retain_human_retain)==1L)
+            stopifnot(as.integer(z$model_retain_human_exclude)==1L)
+            stopifnot(as.integer(z$model_exclude_human_retain)==1L)
+            stopifnot(as.integer(z$model_exclude_human_exclude)==1L)
+            stopifnot(as.integer(z$human_uncertain)==1L)
+            stopifnot(abs(as.numeric(z$human_model_kappa))<1e-12)
+            cat("PASS: synthetic W04 kappa registry row is correct\n")
+          '
+          Rscript scripts/updater/workflow_04_update_kappa_registry.R \
+            --registry tmp_kappa/registry.csv \
+            --human-decisions tmp_kappa/human.jsonl \
+            --model-reference tmp_kappa/model.csv \
+            --batch-id w04-validation-synthetic \
+            --queue-sha256 "$SHA" \
+            --workflow04-run-id 123 \
+            --source-github-run-id 456 \
+            --output tmp_kappa/registry.csv
+          test "$(grep -c w04-validation-synthetic tmp_kappa/registry.csv)" -eq 1
+          echo "PASS: kappa registry append is idempotent and uses no external APIs"

@@ -16,12 +16,13 @@ arg <- function(flag, default=NULL) {
 
 canonical_path <- arg("--canonical")
 w03_path <- arg("--workflow03-status")
+workflow04_layer_path <- arg("--workflow04-layer")
 output_dir <- arg("--output-dir")
 sample_size <- as.integer(arg("--sample-size","500"))
 seed <- arg("--seed","w04-validation-v1")
 
-if (any(vapply(list(canonical_path,w03_path,output_dir),is.null,logical(1)))) {
-  stop("Required: --canonical --workflow03-status --output-dir",call.=FALSE)
+if (any(vapply(list(canonical_path,w03_path,workflow04_layer_path,output_dir),is.null,logical(1)))) {
+  stop("Required: --canonical --workflow03-status --workflow04-layer --output-dir",call.=FALSE)
 }
 if (is.na(sample_size) || sample_size < 1L) stop("--sample-size must be >= 1",call.=FALSE)
 if (!nzchar(seed)) stop("--seed must be non-empty",call.=FALSE)
@@ -76,14 +77,19 @@ screen_view <- function(r) {
 
 canonical <- read_jsonl(canonical_path)
 w03 <- read_jsonl(w03_path)
+w04 <- read_jsonl(workflow04_layer_path)
 cids <- vapply(canonical,record_id,character(1))
 wids <- vapply(w03,w03_id,character(1))
+w04ids <- vapply(w04,function(x)first_nonempty(x$record_id),character(1))
 if (any(!nzchar(cids)) || anyDuplicated(cids)) stop("Canonical record_id invariant failed",call.=FALSE)
 if (any(!nzchar(wids)) || anyDuplicated(wids) || !setequal(cids,wids)) stop("W03 identity invariant failed",call.=FALSE)
+if (any(!nzchar(w04ids)) || anyDuplicated(w04ids)) stop("W04 layer identity invariant failed",call.=FALSE)
 
 cmap <- setNames(canonical,cids)
 wmap <- setNames(w03,wids)
+w04map <- setNames(w04,w04ids)
 eligible <- sort(cids[!vapply(cids,function(id)w03_excluded(wmap[[id]]),logical(1))])
+if (!setequal(eligible,w04ids)) stop("W04 validation source layer does not exactly cover current W04-eligible records",call.=FALSE)
 if (!length(eligible)) stop("No W04-eligible records available",call.=FALSE)
 
 # Deterministic pseudo-random order: stable across R versions/platforms.
@@ -108,10 +114,25 @@ rows <- lapply(seq_along(selected),function(i) {
   )
 })
 
+model_reference <- data.frame(
+  review_case_id=vapply(rows,function(x)as.character(x$review_case_id),character(1)),
+  record_id=selected,
+  model_decision=vapply(selected,function(id)first_nonempty((w04map[[id]]$screening %||% list())$decision),character(1)),
+  decision_origin=vapply(selected,function(id)first_nonempty((w04map[[id]]$screening %||% list())$decision_origin),character(1)),
+  screening_input_sha256=vapply(selected,function(id)first_nonempty((w04map[[id]]$screening %||% list())$screening_input_sha256),character(1)),
+  stringsAsFactors=FALSE
+)
+if(any(!model_reference$model_decision %in% c("retain","exclude","uncertain"))) {
+  stop("W04 validation model reference contains invalid decisions",call.=FALSE)
+}
+
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 queue_path <- file.path(output_dir,"workflow04_validation_queue.jsonl")
+model_reference_path <- file.path(output_dir,"workflow04_validation_model_reference.csv")
 write_jsonl(rows,queue_path)
+write.csv(model_reference,model_reference_path,row.names=FALSE,na="")
 queue_sha <- digest(file=queue_path,algo="sha256",serialize=FALSE)
+model_reference_sha <- digest(file=model_reference_path,algo="sha256",serialize=FALSE)
 
 manifest <- list(
   schema="living-evidence-map-workflow04-human-validation-queue-manifest-v1",
@@ -126,7 +147,9 @@ manifest <- list(
   sampled_records=length(rows),
   canonical_sha256=digest(file=canonical_path,algo="sha256",serialize=FALSE),
   workflow03_sha256=digest(file=w03_path,algo="sha256",serialize=FALSE),
+  workflow04_layer_sha256=digest(file=workflow04_layer_path,algo="sha256",serialize=FALSE),
   queue_sha256=queue_sha,
+  model_reference_sha256=model_reference_sha,
   created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(

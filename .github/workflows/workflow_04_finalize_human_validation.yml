@@ -13,7 +13,8 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
+  actions: read
 
 jobs:
   finalise:
@@ -62,7 +63,8 @@ jobs:
           gs4_auth(path=Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cache=FALSE)
 
           q <- read_sheet(ss,sheet='queue_w04_validation_active',col_types='c')
-          req <- c('batch_id','queue_sha256','case_index','review_case_id','case_json')
+          req <- c('batch_id','queue_sha256','case_index','review_case_id','case_json',
+                   'source_publish_run_id','source_workflow04_run_id','source_workflow04_pointer')
           stopifnot(all(req %in% names(q)),nrow(q)>0)
           q <- q[order(as.integer(q$case_index)),,drop=FALSE]
           if(length(unique(q$batch_id))!=1L || unique(q$batch_id)[[1L]]!=batch_id) stop('W04 batch ID mismatch')
@@ -81,6 +83,11 @@ jobs:
           active <- active[match(qids,as.character(active$review_case_id)),,drop=FALSE]
           if(any(is.na(active$review_case_id))) stop('W04 validation batch is incomplete')
           if(any(!as.character(active$decision) %in% c('retain','exclude','uncertain'))) stop('Invalid W04 validation decision')
+          provenance_cols <- c('source_publish_run_id','source_workflow04_run_id','source_workflow04_pointer')
+          for(nm in provenance_cols) {
+            vals <- unique(as.character(q[[nm]]))
+            if(length(vals)!=1L || !nzchar(vals[[1L]])) stop('Invalid W04 validation provenance: ',nm)
+          }
 
           dir.create('outputs/w04_validation_completed',recursive=TRUE,showWarnings=FALSE)
           out <- 'outputs/w04_validation_completed/human_validation_decisions.jsonl'
@@ -104,7 +111,68 @@ jobs:
           )
           writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE),'outputs/w04_validation_completed/manifest.json')
           writeLines(out_sha,'outputs/w04_validation_completed/decision_sha256.txt')
+          writeLines(unique(as.character(q$source_publish_run_id)),'outputs/w04_validation_completed/source_publish_run_id.txt')
+          writeLines(unique(as.character(q$source_workflow04_run_id)),'outputs/w04_validation_completed/source_workflow04_run_id.txt')
+          writeLines(unique(as.character(q$source_workflow04_pointer)),'outputs/w04_validation_completed/source_workflow04_pointer.txt')
           cat(sprintf('PASS: finalised W04 human validation batch %s (%d records)\n',batch_id,nrow(q)))
+
+      - name: Restore blinded model reference from validation publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_RUN="$(cat outputs/w04_validation_completed/source_publish_run_id.txt)"
+          rm -rf inputs/w04_validation_published
+          mkdir -p inputs/w04_validation_published
+          gh run download "$SOURCE_RUN" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "workflow04-human-validation-$SOURCE_RUN" \
+            --dir inputs/w04_validation_published
+          MODEL_REF="$(find inputs/w04_validation_published -type f -name workflow04_validation_model_reference.csv -print -quit)"
+          PUB_MANIFEST="$(find inputs/w04_validation_published -type f -name workflow04_validation_queue_manifest.json -print -quit)"
+          test -n "$MODEL_REF"
+          test -n "$PUB_MANIFEST"
+          EXPECTED="$(P="$PUB_MANIFEST" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$model_reference_sha256)')"
+          ACTUAL="$(P="$MODEL_REF" Rscript -e 'cat(digest::digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')"
+          test "$EXPECTED" = "$ACTUAL"
+          cp "$MODEL_REF" outputs/w04_validation_completed/workflow04_validation_model_reference.csv
+          echo "PASS: restored exact blinded W04 model reference from publisher run $SOURCE_RUN"
+
+      - name: Append authoritative W04 kappa registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          W04_RUN="$(cat outputs/w04_validation_completed/source_workflow04_run_id.txt)"
+          Rscript scripts/updater/workflow_04_update_kappa_registry.R \
+            --registry docs/workflow04/kappa_registry.csv \
+            --human-decisions outputs/w04_validation_completed/human_validation_decisions.jsonl \
+            --model-reference outputs/w04_validation_completed/workflow04_validation_model_reference.csv \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA256" \
+            --workflow04-run-id "$W04_RUN" \
+            --source-github-run-id "$GITHUB_RUN_ID" \
+            --output docs/workflow04/kappa_registry.csv
+          cp docs/workflow04/kappa_registry.csv outputs/w04_validation_completed/kappa_registry_snapshot.csv
+          git add docs/workflow04/kappa_registry.csv
+          if ! git diff --cached --quiet; then
+            git commit -m "Append W04 validation kappa $BATCH_ID"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Synchronise Google kappa registry mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_sync_kappa_registry_to_sheet.R \
+            --registry docs/workflow04/kappa_registry.csv \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --tab w04_kappa_registry
 
       - name: Acknowledge consumed W04 Shiny batch
         shell: bash

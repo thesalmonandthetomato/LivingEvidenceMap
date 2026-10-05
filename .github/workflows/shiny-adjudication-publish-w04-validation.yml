@@ -18,6 +18,11 @@ on:
         required: true
         default: 'docs/publication_status/zenodo/run-36172718538.json'
         type: string
+      workflow04_pointer_path:
+        description: 'Authoritative Workflow 04 screening state used as the blinded model comparator'
+        required: true
+        default: 'docs/workflow04/zenodo/run-37051672356.json'
+        type: string
       sample_size:
         description: 'Number of W04-eligible records to sample'
         required: true
@@ -61,6 +66,7 @@ jobs:
           parse(file='scripts/updater/workflow_04_build_human_validation_queue.R')
           parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
           parse(file='scripts/updater/workflow_03_restore_state_from_zenodo.R')
+          parse(file='scripts/updater/workflow_04_restore_state_from_zenodo.R')
           cat('PASS: W04 validation publisher scripts parse\n')
 
       - name: Restore authoritative W04 screening inputs
@@ -68,11 +74,12 @@ jobs:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEAN_POINTER: ${{ inputs.lean_pointer_path || 'docs/compaction/zenodo/run-36166883249.json' }}
           W03_POINTER: ${{ inputs.workflow03_pointer_path || 'docs/publication_status/zenodo/run-36172718538.json' }}
+          W04_POINTER: ${{ inputs.workflow04_pointer_path || 'docs/workflow04/zenodo/run-37051672356.json' }}
         shell: bash
         run: |
           set -euo pipefail
           rm -rf inputs/w04_validation
-          mkdir -p inputs/w04_validation/canonical inputs/w04_validation/w03
+          mkdir -p inputs/w04_validation/canonical inputs/w04_validation/w03 inputs/w04_validation/w04
 
           Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
             --pointer "$LEAN_POINTER" \
@@ -82,12 +89,19 @@ jobs:
             --pointer "$W03_POINTER" \
             --output-dir inputs/w04_validation/w03
 
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
+            --pointer "$W04_POINTER" \
+            --output-dir inputs/w04_validation/w04
+
           CAN="$(find inputs/w04_validation/canonical -type f -name canonical_lean.jsonl -print -quit)"
           STA="$(find inputs/w04_validation/w03 -type f -name publication_status.jsonl -print -quit)"
+          W04="$(find inputs/w04_validation/w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)"
           test -n "$CAN"
           test -n "$STA"
+          test -n "$W04"
           cp "$CAN" inputs/w04_validation/canonical_lean.jsonl
           cp "$STA" inputs/w04_validation/publication_status.jsonl
+          cp "$W04" inputs/w04_validation/workflow04_final_screening_layer.jsonl
 
       - name: Build deterministic randomised W04 validation queue
         env:
@@ -99,6 +113,7 @@ jobs:
           Rscript scripts/updater/workflow_04_build_human_validation_queue.R \
             --canonical inputs/w04_validation/canonical_lean.jsonl \
             --workflow03-status inputs/w04_validation/publication_status.jsonl \
+            --workflow04-layer inputs/w04_validation/workflow04_final_screening_layer.jsonl \
             --output-dir outputs/w04_validation \
             --sample-size "$SAMPLE_SIZE" \
             --seed "$RANDOM_SEED"
@@ -157,12 +172,20 @@ jobs:
           include_json <- toJSON(include_terms,auto_unbox=FALSE)
           exclude_json <- toJSON(exclude_terms,auto_unbox=FALSE)
 
+          w04_pointer <- '${{ inputs.workflow04_pointer_path || 'docs/workflow04/zenodo/run-37051672356.json' }}'
+          w04_meta <- fromJSON(w04_pointer,simplifyVector=FALSE)
+          source_w04_run <- as.character(w04_meta$source_github_run_id)
+          if(!nzchar(source_w04_run)) stop('W04 pointer lacks source_github_run_id')
+
           payload <- data.frame(
             batch_id=rep(batch_id,length(lines)),
             queue_sha256=rep(actual_sha,length(lines)),
             case_index=as.character(seq_along(lines)),
             review_case_id=ids,
             case_json=lines,
+            source_publish_run_id=rep(Sys.getenv('GITHUB_RUN_ID'),length(lines)),
+            source_workflow04_run_id=rep(source_w04_run,length(lines)),
+            source_workflow04_pointer=rep(w04_pointer,length(lines)),
             highlight_include_json=c(include_json,rep('',max(0,length(lines)-1L))),
             highlight_exclude_json=c(exclude_json,rep('',max(0,length(lines)-1L))),
             stringsAsFactors=FALSE
@@ -174,7 +197,7 @@ jobs:
           sheet_write(payload,ss=ss,sheet=tab)
 
           verify <- read_sheet(ss,sheet=tab,col_types='c')
-          req <- c('batch_id','queue_sha256','case_index','review_case_id','case_json','highlight_include_json','highlight_exclude_json')
+          req <- c('batch_id','queue_sha256','case_index','review_case_id','case_json','source_publish_run_id','source_workflow04_run_id','source_workflow04_pointer','highlight_include_json','highlight_exclude_json')
           if(!all(req %in% names(verify))) stop('Published W04 queue missing required columns')
           verify <- verify[,req,drop=FALSE]
           if(nrow(verify)!=length(lines)) stop('Published W04 queue row count mismatch')
