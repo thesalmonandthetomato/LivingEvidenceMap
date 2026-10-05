@@ -52,12 +52,12 @@ on:
       workflow01_pointer_path:
         description: 'Authoritative Workflow 01 Zenodo pointer'
         required: true
-        default: 'docs/deduplication/zenodo/run-36128255337.json'
+        default: ''
         type: string
       previous_workflow02_pointer_path:
         description: 'Previous Workflow 02 pointer'
         required: false
-        default: 'docs/enrichment/zenodo/run-36725200424.json'
+        default: ''
         type: string
       mode:
         description: 'incremental=new eligible records only; repair=previous technical failures; backfill=all due eligible records'
