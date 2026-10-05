@@ -35,4 +35,4 @@ The rapidly-emerging-topics figure explored during development is not part of th
 
 All analytical figures use the final included-only Workflow 08 canonical JSONL through `visualisations/canonical_figure_data.R`. Workflow 09 selects the latest registered Workflow 08 Zenodo pointer and verifies the canonical SHA-256 before publication.
 
-Figures requiring upstream process/provenance data additionally restore the corresponding validated Workflow 01, Workflow 02 and Workflow 04 states. These are reporting inputs only and do not replace Workflow 08 final inclusion decisions.
+Figures requiring upstream process/provenance data use the checksum-validated compact W00-W08 reporting handoff under `docs/reporting/workflow_09_inputs/current/`. Workflow 09 does not reconstruct the full W01 state or restore W02 merely for reporting. These compact inputs are reporting provenance only and do not replace Workflow 08 final inclusion decisions.
