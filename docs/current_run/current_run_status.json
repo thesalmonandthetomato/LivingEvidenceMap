@@ -3,7 +3,7 @@
   "update_id": "w01-run-36971418284",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-02T06:30:47Z",
-  "last_updated_at_utc": "2026-10-04T21:33:23Z",
+  "last_updated_at_utc": "2026-10-05T07:01:04Z",
   "baseline": {
     "workflow08_pointer": "docs/workflow08/zenodo/run-36442875006.json",
     "workflow08_source_run_id": "36442875006",
@@ -65,12 +65,11 @@
       "status": "complete"
     },
     "W10": {
-      "status": "active"
+      "status": "complete"
     },
-    "current_stage": "W08",
-    "completed_through": 9,
-    "active_position": 10,
-    "status_label": "Final adjudication complete; awaiting dashboard build"
+    "current_stage": "W10",
+    "completed_through": 10,
+    "status_label": "Current update complete"
   },
   "workflow_runs": {
     "W01": "36971418284",
@@ -80,6 +79,7 @@
     "W05": "37110114836",
     "W06": "37114864202",
     "W07": "37153534771",
-    "W08": "37234697766"
+    "W08": "37234697766",
+    "W10": "37273787828"
   }
 }
