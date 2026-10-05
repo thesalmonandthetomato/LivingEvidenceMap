@@ -236,8 +236,8 @@ jobs:
               action="replace_abstract",
               value=repair_rows$value[[i]],
               reason=repair_rows$reason[[i]],
-              reviewer=repair_rows$reviewer[[i]],
-              saved_at_utc=repair_rows$saved_at_utc[[i]],
+              recorded_by=repair_rows$reviewer[[i]],
+              recorded_at_utc=repair_rows$saved_at_utc[[i]],
               queue_sha256=tolower(repair_rows$queue_sha256[[i]])
             )
             writeLines(toJSON(repair_out,auto_unbox=TRUE,null="null",na="null"),repairs_con,useBytes=TRUE)
