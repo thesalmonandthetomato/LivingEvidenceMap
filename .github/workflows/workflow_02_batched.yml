@@ -299,6 +299,16 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      - name: Persist immutable W02 pointer provenance
+        env:
+          W01_POINTER: ${{ inputs.workflow01_pointer_path }}
+          PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$W01_POINTER" > workflow01_pointer_path.txt
+          printf '%s\n' "$PREV_W02_POINTER" > previous_workflow02_pointer_path.txt
+
       - name: Upload immutable finalization state
         uses: actions/upload-artifact@v4
         with:
@@ -306,6 +316,8 @@ jobs:
           path: |
             workflow01_state/canonical/records.jsonl
             workflow01_sha.txt
+            workflow01_pointer_path.txt
+            previous_workflow02_pointer_path.txt
             previous_cumulative_patch.jsonl
             outputs/workflow02/input_with_previous_state.jsonl
             outputs/workflow02_plan/plan.json
