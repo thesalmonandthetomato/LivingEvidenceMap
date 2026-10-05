@@ -160,6 +160,7 @@ jobs:
             "$W08_POINTER"
           Rscript R/workflow_10_make_public_dashboard.R \
             outputs/workflow10/dashboard-internal-data.js \
+            inputs/workflow10/living_evidence_map_canonical_final.jsonl \
             outputs/workflow10/dashboard-data.js
           cp docs/index.html outputs/workflow10/index.html
 
@@ -167,6 +168,7 @@ jobs:
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages({library(jsonlite);library(readr);library(digest)})
+          `%||%` <- function(x,y) if(is.null(x)||length(x)==0L)y else x
           pointer <- fromJSON(Sys.getenv('W08_POINTER'),simplifyVector=FALSE)
           expected_n <- as.integer(pointer$canonical_records)
           expected_sha <- tolower(as.character(pointer$final_canonical_jsonl_sha256))
@@ -200,18 +202,90 @@ jobs:
           html <- paste(readLines('outputs/workflow10/index.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
           stopifnot(expected_n==21493L)
           stopifnot(grepl('./dashboard-data.js',html,fixed=TRUE))
-          stopifnot(!grepl('id="database"',html,fixed=TRUE))
+          stopifnot(grepl('id="database"',html,fixed=TRUE))
+          stopifnot(grepl('id="tableSpecies"',html,fixed=TRUE))
+          stopifnot(grepl('id="tableCountry"',html,fixed=TRUE))
+          stopifnot(grepl('id="tableYear"',html,fixed=TRUE))
+          stopifnot(grepl('id="tableTopic"',html,fixed=TRUE))
+          stopifnot(grepl('id="tbody"',html,fixed=TRUE))
+          stopifnot(grepl('filter the database',html,fixed=TRUE))
           stopifnot(!grepl('Search and download',html,fixed=TRUE))
-          stopifnot(!grepl('dashboard-search-index.js',html,fixed=TRUE))
+          stopifnot(!grepl('Search across titles and abstracts',html,fixed=TRUE))
+          stopifnot(!grepl('Download filtered results (.RIS)',html,fixed=TRUE))
+          stopifnot(!grepl('workflow10-search-trial-controller',html,fixed=TRUE))
+          stopifnot(!grepl('LIVING_EVIDENCE_MAP_ABSTRACT_INDEX',html,fixed=TRUE))
           stopifnot(!file.exists('outputs/workflow10/dashboard-search-index.js'))
           stopifnot(!file.exists('outputs/workflow10/search-trial-manifest.json'))
 
-          stopifnot(isFALSE(payload$public_projection$record_level_identifiers))
-          stopifnot(isFALSE(payload$public_projection$titles))
-          stopifnot(isFALSE(payload$public_projection$abstracts))
-          stopifnot(isFALSE(payload$public_projection$citation_metadata))
-          forbidden <- c('record_id','title','abstract','doi','authors','journal','volume','pages','lens_url')
-          stopifnot(all(vapply(payload$records,function(r)length(intersect(names(r),forbidden))==0L,logical(1))))
+          stopifnot(isTRUE(payload$public_projection$database_table))
+          stopifnot(isFALSE(payload$public_projection$full_abstracts))
+          stopifnot(as.integer(payload$public_projection$abstract_snippet_words)==30L)
+          stopifnot(isFALSE(payload$public_projection$search))
+          stopifnot(isFALSE(payload$public_projection$ris_download))
+          stopifnot(isFALSE(payload$public_projection$abstract_index))
+          required_table_fields <- c(
+            'record_id','title','abstract_snippet','doi','year','authors','journal',
+            'volume','pages','species','countries','iso3','topics','topic_paths','topic_stars'
+          )
+          stopifnot(all(vapply(payload$records,function(r)all(required_table_fields %in% names(r)),logical(1))))
+          stopifnot(all(vapply(payload$records,function(r)is.null(r[['abstract',exact=TRUE]]),logical(1))))
+          snippet_words <- vapply(payload$records,function(r){
+            x <- sub('…
+          cat(sprintf(
+            'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
+            pointer$zenodo_record_id,nrow(csv),length(stars)
+          ))
+
+      - name: Upload Workflow 10 dashboard artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow10-dashboard-${{ github.run_id }}
+          path: |
+            outputs/workflow10/index.html
+            outputs/workflow10/dashboard-data.js
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Mark current-run dashboard stage complete
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W10 \
+            --stage-status complete
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+      - name: Commit current-run reporting metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d docs/current_run ]; then
+            echo "No active current-run status exists; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs/current_run
+          if git diff --cached --quiet; then
+            echo "No W10 reporting changes to commit."
+            exit 0
+          fi
+          git commit -m "Complete current-run live status [skip ci]"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
+,'',as.character(r$abstract_snippet %||% ''))
+            if(!nzchar(x)) 0L else length(strsplit(x,' ',fixed=TRUE)[[1L]])
+          },integer(1))
+          stopifnot(all(snippet_words<=30L))
 
           cat(sprintf(
             'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
