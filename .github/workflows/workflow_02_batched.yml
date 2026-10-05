@@ -509,7 +509,7 @@ jobs:
             --source-run-id "$GITHUB_RUN_ID" \
             --credential "$RUNNER_TEMP/lem-google-service-account.json"
 
-          META="$(Rscript -e 'suppressPackageStartupMessages(library(googlesheets4));gs4_auth(path=Sys.getenv("CRED"),cache=FALSE);x<-read_sheet(Sys.getenv("SHEET"),sheet=Sys.getenv("TAB"),col_types="c");stopifnot(nrow(x)>0);cat(paste(x$batch_id[[1]],x$queue_sha256[[1]],sep="|"))' CRED="$RUNNER_TEMP/lem-google-service-account.json" SHEET="$LEM_GOOGLE_SHEET_ID" TAB="$QUEUE_TAB")"
+          META="$(CRED="$RUNNER_TEMP/lem-google-service-account.json" SHEET="$LEM_GOOGLE_SHEET_ID" TAB="$QUEUE_TAB" Rscript -e 'suppressPackageStartupMessages(library(googlesheets4));gs4_auth(path=Sys.getenv("CRED"),cache=FALSE);x<-read_sheet(Sys.getenv("SHEET"),sheet=Sys.getenv("TAB"),col_types="c");stopifnot(nrow(x)>0);cat(paste(x$batch_id[[1]],x$queue_sha256[[1]],sep="|"))')"
           BATCH_ID="${META%%|*}"
           QUEUE_SHA="${META#*|}"
           Rscript scripts/updater/workflow_shiny_batch_status.R \
