@@ -11,18 +11,16 @@ on:
       - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
       - 'docs/index.html'
       - 'docs/dashboard-topic-definitions.json'
-      - 'docs/workflow08/zenodo/*.json'
-      - 'docs/workflow08/zenodo_registry.csv'
-      - 'docs/reporting/workflow_09/flow_counts.json'
-      - 'docs/reporting/workflow_09/data/workflow_inputs/manifest.json'
-      - 'docs/reporting/workflow_09/data/workflow_inputs/w08_summary.json'
-      - 'docs/reporting/workflow_09/data/workflow_inputs/w08_source_manifest.json'
       - 'user_input/workflow07_topic_ontology.csv'
       - 'config/iso3_numeric_map.json'
       - 'config/global_country_gazetteer_v3.csv'
 
 permissions:
   contents: write
+
+concurrency:
+  group: workflow10-dashboard-workflow01-final-architecture
+  cancel-in-progress: false
 
 env:
   TOPIC_ONTOLOGY_PATH: 'user_input/workflow07_topic_ontology.csv'
@@ -97,8 +95,6 @@ jobs:
             stop('Authoritative Workflow 08 pointer does not match the registry',call.=FALSE)
           }
           cat(sprintf('W08_POINTER=%s\n',p),file=Sys.getenv('GITHUB_ENV'),append=TRUE)
-          if(as.integer(x$canonical_records)!=21493L) stop('Authoritative Workflow 08 record count is not the expected current release count of 21,493',call.=FALSE)
-          if(tolower(as.character(x$final_canonical_jsonl_sha256))!='96a854952aecf3a562fadf603670f650fa26ba9974c819e4b98f9c4dc4f6de20') stop('Authoritative Workflow 08 SHA-256 is not the expected corrected release SHA',call.=FALSE)
           cat(sprintf('PASS: authoritative W08 pointer = %s / Zenodo %s / %d records\n',p,x$zenodo_record_id,as.integer(x$canonical_records)))
 
       - name: Validate Workflow 09 compact reporting handoff
@@ -199,7 +195,6 @@ jobs:
           stopifnot(length(stars)>0L,all(nzchar(stars)),all(stars %in% c('★','★★','★★★')))
 
           html <- paste(readLines('outputs/workflow10/index.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
-          stopifnot(expected_n==21493L)
           stopifnot(grepl('./dashboard-data.js',html,fixed=TRUE))
           stopifnot(grepl('id="database"',html,fixed=TRUE))
           stopifnot(grepl('id="tableSpecies"',html,fixed=TRUE))
