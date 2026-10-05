@@ -58,6 +58,19 @@ fingerprint <- function(r){
   v<-screening_view(r)
   digest(toJSON(v,auto_unbox=TRUE,null="null",na="null",digits=NA),algo="sha256",serialize=FALSE)
 }
+screening_availability <- function(r){
+  v<-screening_view(r)
+  c(title_present=nzchar(trimws(v$title)),abstract_present=nzchar(trimws(v$abstract)))
+}
+bool_or_na <- function(x){
+  if(is.null(x)||!length(x))return(NA)
+  z<-x[[1L]]
+  if(is.logical(z)&&length(z)==1L&&!is.na(z))return(z)
+  s<-tolower(trimws(as.character(z)))
+  if(s=="true")return(TRUE)
+  if(s=="false")return(FALSE)
+  NA
+}
 
 canonical <- read_jsonl(canonical_path)
 w03 <- read_jsonl(w03_path)
@@ -71,8 +84,23 @@ eligible_ids <- cids[!vapply(cids,function(id)w03_excluded(w03map[[id]]),logical
 eligible_ids <- sort(eligible_ids)
 cmap <- setNames(canonical,cids)
 current_fp <- setNames(vapply(eligible_ids,function(id)fingerprint(cmap[[id]]),character(1)),eligible_ids)
+current_availability <- lapply(eligible_ids,function(id)screening_availability(cmap[[id]]))
+names(current_availability) <- eligible_ids
+current_title_present <- setNames(vapply(current_availability,function(x)isTRUE(x[["title_present"]]),logical(1)),eligible_ids)
+current_abstract_present <- setNames(vapply(current_availability,function(x)isTRUE(x[["abstract_present"]]),logical(1)),eligible_ids)
 
 prior <- list(); prior_ids <- character(); prior_map <- list(); prior_fp <- character()
+prior_title_present <- logical(); prior_abstract_present <- logical()
+prior_canonical_map <- NULL
+load_prior_canonical <- function(){
+  if(!is.null(prior_canonical_map))return(prior_canonical_map)
+  if(!nzchar(prior_canonical_path))stop("Prior W04 state lacks input-availability provenance; --prior-canonical is required for one-time legacy bootstrap",call.=FALSE)
+  pc <- read_jsonl(prior_canonical_path)
+  pcids <- vapply(pc,record_id,character(1))
+  if(any(!nzchar(pcids))||anyDuplicated(pcids))stop("Prior canonical record_id invariant failed",call.=FALSE)
+  prior_canonical_map <<- setNames(pc,pcids)
+  prior_canonical_map
+}
 mode <- "first_run"
 if(nzchar(prior_w04_path)){
   mode <- "update"
@@ -82,27 +110,37 @@ if(nzchar(prior_w04_path)){
   prior_map <- setNames(prior,prior_ids)
 
   prior_fp <- setNames(vapply(prior,function(x)scalar((x$screening %||% list())$screening_input_sha256),character(1)),prior_ids)
-  missing_fp <- names(prior_fp)[!nzchar(prior_fp)]
-  if(length(missing_fp)){
-    if(!nzchar(prior_canonical_path)) stop(sprintf("Prior W04 layer lacks fingerprints for %d records; --prior-canonical is required for bootstrap",length(missing_fp)),call.=FALSE)
-    pc <- read_jsonl(prior_canonical_path)
-    pcids <- vapply(pc,record_id,character(1))
-    if(any(!nzchar(pcids))||anyDuplicated(pcids)) stop("Prior canonical record_id invariant failed",call.=FALSE)
-    pcmap <- setNames(pc,pcids)
-    absent <- setdiff(missing_fp,pcids)
-    if(length(absent)) stop(sprintf("Prior canonical lacks %d W04 records needed to bootstrap fingerprints",length(absent)),call.=FALSE)
-    prior_fp[missing_fp] <- vapply(missing_fp,function(id)fingerprint(pcmap[[id]]),character(1))
-  }
+  prior_title_present <- setNames(vapply(prior,function(x)bool_or_na((x$screening %||% list())$input_title_present),logical(1)),prior_ids)
+  prior_abstract_present <- setNames(vapply(prior,function(x)bool_or_na((x$screening %||% list())$input_abstract_present),logical(1)),prior_ids)
 }
 
 known <- intersect(eligible_ids,prior_ids)
 new_ids <- setdiff(eligible_ids,prior_ids)
 
-# A substantive W04 decision is durable for a stable canonical record_id.
-# Metadata enrichment or canonical field-selection changes MUST NOT trigger
-# paid re-screening unless the caller supplies an explicit, auditable override
-# for records whose scientific screening inputs have genuinely been repaired.
+missing_fp <- known[!nzchar(prior_fp[known])]
+missing_availability <- known[is.na(prior_title_present[known])|is.na(prior_abstract_present[known])]
+bootstrap_ids <- sort(unique(c(missing_fp,missing_availability)))
+if(length(bootstrap_ids)){
+  pcmap <- load_prior_canonical()
+  absent <- setdiff(bootstrap_ids,names(pcmap))
+  if(length(absent))stop(sprintf("Prior canonical lacks %d W04 records needed for legacy provenance bootstrap",length(absent)),call.=FALSE)
+  if(length(missing_fp))prior_fp[missing_fp] <- vapply(missing_fp,function(id)fingerprint(pcmap[[id]]),character(1))
+  for(id in missing_availability){
+    a <- screening_availability(pcmap[[id]])
+    prior_title_present[[id]] <- isTRUE(a[["title_present"]])
+    prior_abstract_present[[id]] <- isTRUE(a[["abstract_present"]])
+  }
+}
+
+# Existing substantive decisions remain durable for ordinary metadata edits.
+# The exception is a scientific-input gain: a title or abstract that was absent
+# when the prior decision was made and is now present. Those records are
+# re-screened automatically, irrespective of whether the gain came from W01
+# reclustering/source reconciliation, W02 enrichment, or an explicit repair.
 changed_ids <- known[current_fp[known] != prior_fp[known]]
+title_gained_ids <- known[!prior_title_present[known] & current_title_present[known]]
+abstract_gained_ids <- known[!prior_abstract_present[known] & current_abstract_present[known]]
+refresh_ids <- sort(unique(c(title_gained_ids,abstract_gained_ids)))
 force_ids <- character()
 if(nzchar(force_rescreen_path)){
   force_ids <- trimws(readLines(force_rescreen_path,warn=FALSE,encoding="UTF-8"))
@@ -112,8 +150,9 @@ if(nzchar(force_rescreen_path)){
   force_without_prior <- setdiff(force_ids,prior_ids)
   if(length(force_without_prior)) stop(sprintf("Forced rescreen list contains %d IDs without a prior W04 decision; new records must not be force-listed",length(force_without_prior)),call.=FALSE)
 }
-reuse_ids <- sort(setdiff(known,force_ids))
-queue_ids <- sort(unique(c(new_ids,force_ids)))
+rescreen_existing_ids <- sort(unique(c(refresh_ids,force_ids)))
+reuse_ids <- sort(setdiff(known,rescreen_existing_ids))
+queue_ids <- sort(unique(c(new_ids,rescreen_existing_ids)))
 
 queue_canonical <- unname(cmap[queue_ids])
 queue_w03 <- unname(w03map[queue_ids])
@@ -124,6 +163,8 @@ reuse_rows <- lapply(reuse_ids,function(id){
   d <- scalar(z$screening$decision)
   if(!d %in% c("retain","exclude")) stop(sprintf("Prior W04 reusable decision is not substantive for %s",id),call.=FALSE)
   old_fp <- scalar(z$screening$screening_input_sha256)
+  z$screening$input_title_present <- unname(current_title_present[[id]])
+  z$screening$input_abstract_present <- unname(current_abstract_present[[id]])
   z$screening$reuse <- list(
     reused=TRUE,
     basis="stable_record_id_with_existing_substantive_decision",
@@ -141,13 +182,36 @@ write_jsonl(reuse_rows,file.path(output_dir,"reused_workflow04_layer.jsonl"))
 writeLines(queue_ids,file.path(output_dir,"screen_queue_record_ids.txt"),useBytes=TRUE)
 writeLines(reuse_ids,file.path(output_dir,"reused_record_ids.txt"),useBytes=TRUE)
 
+refresh_reason <- function(id){
+  tg <- id %in% title_gained_ids
+  ag <- id %in% abstract_gained_ids
+  if(tg&&ag)return("missing_title_and_abstract_now_present")
+  if(tg)return("missing_title_now_present")
+  if(ag)return("missing_abstract_now_present")
+  if(id %in% force_ids)return("explicit_repair_rescreen")
+  "new_record_id"
+}
 reason_rows <- data.frame(
   record_id=queue_ids,
-  queue_reason=ifelse(queue_ids %in% force_ids,"explicit_repair_rescreen","new_record_id"),
+  queue_reason=vapply(queue_ids,refresh_reason,character(1)),
+  title_gained=queue_ids %in% title_gained_ids,
+  abstract_gained=queue_ids %in% abstract_gained_ids,
+  explicit_force_rescreen=queue_ids %in% force_ids,
   screening_input_sha256=unname(current_fp[queue_ids]),
   stringsAsFactors=FALSE
 )
 write.csv(reason_rows,file.path(output_dir,"screen_queue_manifest.csv"),row.names=FALSE,na="")
+
+refresh_rows <- data.frame(
+  record_id=refresh_ids,
+  prior_title_present=unname(prior_title_present[refresh_ids]),
+  current_title_present=unname(current_title_present[refresh_ids]),
+  prior_abstract_present=unname(prior_abstract_present[refresh_ids]),
+  current_abstract_present=unname(current_abstract_present[refresh_ids]),
+  refresh_reason=vapply(refresh_ids,refresh_reason,character(1)),
+  stringsAsFactors=FALSE
+)
+write.csv(refresh_rows,file.path(output_dir,"scientific_input_refresh_records.csv"),row.names=FALSE,na="")
 
 manifest <- list(
   schema="living-evidence-map-workflow04-incremental-prepare-v1",
@@ -161,9 +225,14 @@ manifest <- list(
   screen_queue_records=length(queue_ids),
   new_record_ids=length(new_ids),
   explicitly_forced_rescreen_records=length(force_ids),
+  existing_records_title_gained=length(title_gained_ids),
+  existing_records_abstract_gained=length(abstract_gained_ids),
+  existing_records_title_and_abstract_gained=length(intersect(title_gained_ids,abstract_gained_ids)),
+  existing_records_refreshed=length(refresh_ids),
+  scientific_input_refresh_rule="missing_to_present_title_or_abstract_only",
   changed_screening_input=length(changed_ids),
-  changed_screening_input_reused=length(changed_ids),
-  rescreen_existing_decisions=length(force_ids)>0L,
+  changed_screening_input_reused=length(setdiff(changed_ids,rescreen_existing_ids)),
+  rescreen_existing_decisions=length(rescreen_existing_ids)>0L,
   forced_rescreen_record_ids_sha256=if(nzchar(force_rescreen_path))digest(file=force_rescreen_path,algo="sha256",serialize=FALSE)else NULL,
   prior_records_not_currently_w03_eligible=length(setdiff(prior_ids,eligible_ids)),
   screening_fingerprint_fields=c("title","abstract","keywords","journal_source_title","affiliations","funding"),
@@ -173,5 +242,5 @@ manifest <- list(
   generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(output_dir,"prepare_manifest.json"),useBytes=TRUE)
-cat(sprintf("PASS: W04 %s preparation: eligible=%d reuse=%d screen=%d (new=%d explicit-repair-rescreen=%d metadata-changed=%d)\n",
-            mode,length(eligible_ids),length(reuse_ids),length(queue_ids),length(new_ids),length(force_ids),length(changed_ids)))
+cat(sprintf("PASS: W04 %s preparation: eligible=%d reuse=%d screen=%d (new=%d missing-to-present=%d explicit-repair-rescreen=%d metadata-changed=%d)\n",
+            mode,length(eligible_ids),length(reuse_ids),length(queue_ids),length(new_ids),length(refresh_ids),length(force_ids),length(changed_ids)))

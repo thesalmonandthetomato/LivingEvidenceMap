@@ -57,7 +57,7 @@ on:
         default: 'docs/workflow04/zenodo/run-36227737500.json'
         type: string
       prior_lean_pointer_path:
-        description: 'Prior canonical pointer used only to bootstrap fingerprints for legacy W04 states'
+        description: 'Fallback prior canonical pointer for legacy W04 states lacking stored title/abstract availability; exact prior W04 input is preferred from its prepared artefact'
         required: false
         default: 'docs/compaction/zenodo/run-36166883249.json'
         type: string
@@ -171,30 +171,60 @@ jobs:
         if: ${{ inputs.prior_workflow04_pointer_path != 'none' && inputs.prior_workflow04_pointer_path != '' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           PRIOR_W04: ${{ inputs.prior_workflow04_pointer_path }}
           PRIOR_LEAN: ${{ inputs.prior_lean_pointer_path }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf inputs/prior_w04 inputs/prior_canonical
+          rm -rf inputs/prior_w04 inputs/prior_canonical inputs/prior_prepared
           Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer "$PRIOR_W04"             --output-dir inputs/prior_w04
           PRIOR_LAYER=$(find inputs/prior_w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)
           test -n "$PRIOR_LAYER"
           cp "$PRIOR_LAYER" inputs/prior_workflow04_layer.jsonl
 
-          MISSING_FP=$(P=inputs/prior_workflow04_layer.jsonl Rscript -e '
+          read NEED_PRIOR_CANONICAL MISSING_FP MISSING_AVAIL <<< "$(P=inputs/prior_workflow04_layer.jsonl Rscript -e '
             library(jsonlite)
             x<-readLines(Sys.getenv("P"),warn=FALSE);x<-x[nzchar(trimws(x))]
-            n<-sum(vapply(x,function(z){r<-fromJSON(z,simplifyVector=FALSE);s<-r$screening$screening_input_sha256;if(is.null(s)||!length(s))return(TRUE);!nzchar(trimws(as.character(s[[1L]])))},logical(1)))
-            cat(n)
-          ')
-          echo "Prior W04 rows without fingerprints: $MISSING_FP"
-          if [ "$MISSING_FP" -gt 0 ]; then
-            test -n "$PRIOR_LEAN"
-            Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R               --pointer "$PRIOR_LEAN"               --output-dir inputs/prior_canonical
-            P=$(find inputs/prior_canonical -type f -name canonical_lean.jsonl -print -quit)
-            test -n "$P"
-            cp "$P" inputs/prior_canonical_lean.jsonl
+            rows<-lapply(x,fromJSON,simplifyVector=FALSE)
+            missing_fp<-sum(vapply(rows,function(r){s<-r$screening$screening_input_sha256;if(is.null(s)||!length(s))return(TRUE);!nzchar(trimws(as.character(s[[1L]])))},logical(1)))
+            missing_avail<-sum(vapply(rows,function(r){s<-r$screening;is.null(s$input_title_present)||is.null(s$input_abstract_present)},logical(1)))
+            cat(as.integer(missing_fp>0L||missing_avail>0L),missing_fp,missing_avail)
+          ')"
+          echo "Prior W04 rows without fingerprints: $MISSING_FP; without title/abstract availability provenance: $MISSING_AVAIL"
+
+          if [ "$NEED_PRIOR_CANONICAL" -eq 1 ]; then
+            PRIOR_RUN=$(P="$PRIOR_W04" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$source_github_run_id)')
+            EXPECTED_SHA=$(P="$PRIOR_W04" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(tolower(x$upstream_lean_canonical_sha256))')
+            FOUND_EXACT=false
+
+            mkdir -p inputs/prior_prepared
+            if gh run download "$PRIOR_RUN" --repo "$GITHUB_REPOSITORY" --name "workflow04-prepared-$PRIOR_RUN" --dir inputs/prior_prepared; then
+              P=$(find inputs/prior_prepared -type f -path '*/inputs/current/canonical_lean.jsonl' -print -quit)
+              if [ -n "$P" ]; then
+                SHA=$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')
+                if [ "$SHA" = "$EXPECTED_SHA" ]; then
+                  cp "$P" inputs/prior_canonical_lean.jsonl
+                  FOUND_EXACT=true
+                  echo "PASS: restored exact prior W04 canonical input from prepared artefact"
+                fi
+              fi
+            fi
+
+            if [ "$FOUND_EXACT" != true ]; then
+              test -n "$PRIOR_LEAN"
+              Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R                 --pointer "$PRIOR_LEAN"                 --output-dir inputs/prior_canonical
+              P=$(find inputs/prior_canonical -type f -name canonical_lean.jsonl -print -quit)
+              test -n "$P"
+              SHA=$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')
+              if [ "$SHA" != "$EXPECTED_SHA" ]; then
+                echo "ERROR: legacy W04 state needs its exact prior screening input to classify missing-to-present text safely." >&2
+                echo "Expected canonical SHA: $EXPECTED_SHA; fallback prior canonical SHA: $SHA" >&2
+                exit 1
+              fi
+              cp "$P" inputs/prior_canonical_lean.jsonl
+              echo "PASS: restored exact prior W04 canonical input from fallback pointer"
+            fi
           fi
 
       - name: Prepare first-run/update queue

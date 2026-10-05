@@ -75,6 +75,13 @@ record_view <- function(r)c(list(record_id=record_id(r)),screening_view(r))
 screening_fingerprint <- function(r){
   digest(toJSON(screening_view(r),auto_unbox=TRUE,null="null",na="null",digits=NA),algo="sha256",serialize=FALSE)
 }
+screening_availability <- function(r){
+  v<-screening_view(r)
+  list(
+    title_present=nzchar(trimws(v$title)),
+    abstract_present=nzchar(trimws(v$abstract))
+  )
+}
 extract_output_text <- function(resp){
   for(it in resp$output %||% list()) if(is.list(it)&&identical(it$type,"message"))
     for(ct in it$content %||% list()) if(is.list(ct)&&identical(ct$type,"output_text")&&!is.null(ct$text)) return(as.character(ct$text))
@@ -218,6 +225,7 @@ for(i in seq_along(ids)){
   substantive<-votes[!failures & votes %in% c("retain","exclude")]
   nr<-sum(substantive=="retain"); ne<-sum(substantive=="exclude")
   decision<-if(nr>=2L)"retain" else if(ne>=2L)"exclude" else "uncertain"
+  availability<-screening_availability(eligible[[i]])
   final[[i]]<-list(
     record_id=id,
     screening=list(
@@ -231,7 +239,9 @@ for(i in seq_along(ids)){
       requires_human_review=identical(decision,"uncertain"),
       technical_failure_present=any(failures),
       model=model,prompt_version=PROMPT_VERSION,prompt_sha256=PROMPT_SHA256,
-      screening_input_sha256=screening_fingerprint(eligible[[i]])
+      screening_input_sha256=screening_fingerprint(eligible[[i]]),
+      input_title_present=availability$title_present,
+      input_abstract_present=availability$abstract_present
     )
   )
 }

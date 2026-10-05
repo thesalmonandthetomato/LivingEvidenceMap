@@ -34,8 +34,14 @@ if(nzchar(prior_records_path)||nzchar(prior_scores_path)||nzchar(prior_manifest_
   mode<-"update"
   prior_records<-read_csv(prior_records_path,show_col_types=FALSE,progress=FALSE)
   prior_scores<-read_csv(prior_scores_path,show_col_types=FALSE,progress=FALSE)
+  if(!all(c("record_id","title","abstract","topic_input_sha256")%in%names(prior_records)))stop("Prior W07 records lack title/abstract/fingerprint columns",call.=FALSE)
+  prior_records<-prior_records |> mutate(
+    record_id=as.character(record_id),
+    title=coalesce(as.character(title),""),
+    abstract=coalesce(as.character(abstract),""),
+    topic_input_sha256=coalesce(as.character(topic_input_sha256),"")
+  )
   pm<-fromJSON(prior_manifest_path,simplifyVector=FALSE)
-  if(!all(c("record_id","topic_input_sha256")%in%names(prior_records)))stop("Prior W07 records lack fingerprint columns",call.=FALSE)
   if(any(!nzchar(prior_records$record_id))||anyDuplicated(prior_records$record_id))stop("Prior W07 record identity invariant failed",call.=FALSE)
   if(!all(c("record_id","path_id")%in%names(prior_scores)))stop("Prior W07 scores missing record_id/path_id",call.=FALSE)
   if(anyDuplicated(prior_scores[,c("record_id","path_id")]))stop("Prior W07 scores contain duplicate record/path pairs",call.=FALSE)
@@ -52,13 +58,25 @@ if(mode=="update"&&!reuse_allowed){
 }else{
   known<-intersect(current$record_id,prior_ids)
   changed_ids<-known[current_fp[known]!=prior_fp[known]]
-  reuse_ids<-known
   new_ids<-setdiff(current$record_id,prior_ids)
-  queue_ids<-new_ids
-  reuse_reason<-"existing_record_id_has_prior_topic_assessment"
+
+  current_map<-setNames(seq_len(nrow(current)),current$record_id)
+  prior_map<-setNames(seq_len(nrow(prior_records)),prior_records$record_id)
+  prior_title_present<-setNames(nzchar(trimws(prior_records$title)),prior_records$record_id)
+  prior_abstract_present<-setNames(nzchar(trimws(prior_records$abstract)),prior_records$record_id)
+  current_title_present<-setNames(nzchar(trimws(current$title)),current$record_id)
+  current_abstract_present<-setNames(nzchar(trimws(current$abstract)),current$record_id)
+
+  title_gained_ids<-known[!prior_title_present[known] & current_title_present[known]]
+  abstract_gained_ids<-known[!prior_abstract_present[known] & current_abstract_present[known]]
+  refresh_ids<-sort(unique(c(title_gained_ids,abstract_gained_ids)))
+
+  reuse_ids<-setdiff(known,refresh_ids)
+  queue_ids<-c(new_ids,refresh_ids)
+  reuse_reason<-"existing_record_id_reused_unless_title_or_abstract_changed_from_missing_to_present"
 }
 
-if(length(intersect(queue_ids,prior_ids)))stop("W07 invariant failed: previously assessed record queued for fresh topic coding",call.=FALSE)
+if(length(setdiff(intersect(queue_ids,prior_ids),refresh_ids)))stop("W07 invariant failed: prior record queued without an authorised missing-to-present refresh",call.=FALSE)
 queue<-current |> filter(record_id%in%queue_ids)
 reused_records<-current |> filter(record_id%in%reuse_ids)
 reused_scores<-if(length(reuse_ids))prior_scores |> filter(record_id%in%reuse_ids) else prior_scores[0,,drop=FALSE]
@@ -67,24 +85,47 @@ write_csv(queue |> select(record_id,title,abstract),file.path(output_dir,"topic_
 write_csv(reused_records,file.path(output_dir,"reused_topic_records.csv"),na="")
 write_csv(reused_scores,file.path(output_dir,"reused_topic_pathway_scores.csv"),na="")
 write_csv(current,file.path(output_dir,"current_topic_records.csv"),na="")
+queue_reason<-function(id){
+  tg<-id%in%title_gained_ids
+  ag<-id%in%abstract_gained_ids
+  if(tg&&ag)return("missing_title_and_abstract_now_present")
+  if(tg)return("missing_title_now_present")
+  if(ag)return("missing_abstract_now_present")
+  "new_record_id"
+}
 write_csv(tibble(record_id=queue$record_id,
-                 queue_reason=rep("new_record_id",nrow(queue)),
+                 queue_reason=vapply(queue$record_id,queue_reason,character(1)),
+                 title_gained=queue$record_id%in%title_gained_ids,
+                 abstract_gained=queue$record_id%in%abstract_gained_ids,
                  topic_input_sha256=queue$topic_input_sha256),
           file.path(output_dir,"topic_screen_queue_manifest.csv"),na="")
+write_csv(tibble(
+  record_id=refresh_ids,
+  prior_title_present=unname(prior_title_present[refresh_ids]),
+  current_title_present=unname(current_title_present[refresh_ids]),
+  prior_abstract_present=unname(prior_abstract_present[refresh_ids]),
+  current_abstract_present=unname(current_abstract_present[refresh_ids]),
+  refresh_reason=vapply(refresh_ids,queue_reason,character(1))
+),file.path(output_dir,"scientific_input_refresh_records.csv"),na="")
 
 manifest<-list(
   schema="living-evidence-map-workflow07-incremental-prepare-v1",status="PASS",mode=mode,
   current_records=nrow(current),prior_records=length(prior_ids),
   reusable_records=length(reuse_ids),screen_queue_records=nrow(queue),
   new_record_ids=length(new_ids),changed_title_abstract=length(changed_ids),
+  existing_records_title_gained=length(title_gained_ids),
+  existing_records_abstract_gained=length(abstract_gained_ids),
+  existing_records_title_and_abstract_gained=length(intersect(title_gained_ids,abstract_gained_ids)),
+  existing_records_refreshed=length(refresh_ids),
+  scientific_input_refresh_rule="missing_to_present_title_or_abstract_only",
   prior_records_no_longer_current=length(setdiff(prior_ids,current$record_id)),
   reuse_allowed=reuse_allowed,reuse_basis=reuse_reason,
-  previously_assessed_records_never_requeued=TRUE,
-  changed_title_abstract_reused=length(changed_ids),
+  previously_assessed_records_requeued_only_for_missing_to_present_text=TRUE,
+  changed_title_abstract_reused=length(setdiff(changed_ids,refresh_ids)),
   fingerprint_fields=c("title","abstract"),
   ontology_sha256=ontology_sha,prompt_sha256=prompt_sha,
   current_input_sha256=digest(file=current_path,algo="sha256",serialize=FALSE),
   generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 write_json(manifest,file.path(output_dir,"prepare_manifest.json"),auto_unbox=TRUE,pretty=TRUE,null="null")
-cat(sprintf("PASS: W07 %s preparation current=%d reuse=%d screen=%d new=%d changed=%d\n",mode,nrow(current),length(reuse_ids),nrow(queue),length(new_ids),length(changed_ids)))
+cat(sprintf("PASS: W07 %s preparation current=%d reuse=%d screen=%d new=%d missing-to-present=%d changed=%d\n",mode,nrow(current),length(reuse_ids),nrow(queue),length(new_ids),length(refresh_ids),length(changed_ids)))

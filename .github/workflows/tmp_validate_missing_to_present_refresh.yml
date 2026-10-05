@@ -1,0 +1,185 @@
+name: TEMP validate missing-to-present refresh routing
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'scripts/updater/workflow_04_prepare_incremental.R'
+      - 'scripts/updater/workflow_04_luna_consensus.R'
+      - 'scripts/updater/workflow_07_prepare_incremental.R'
+      - '.github/workflows/workflow_04_production.yml'
+      - '.github/workflows/tmp_validate_missing_to_present_refresh.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install local-test dependencies
+        shell: Rscript {0}
+        run: install.packages(c('digest','dplyr','jsonlite','readr'))
+
+      - name: Parse changed production scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_04_prepare_incremental.R')
+          parse(file='scripts/updater/workflow_04_luna_consensus.R')
+          parse(file='scripts/updater/workflow_07_prepare_incremental.R')
+          cat('PASS: changed R scripts parse\n')
+
+      - name: Build synthetic no-API fixtures
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          library(readr)
+
+          dir.create('tmp_refresh/prior',recursive=TRUE,showWarnings=FALSE)
+          dir.create('tmp_refresh/current',recursive=TRUE,showWarnings=FALSE)
+
+          rec <- function(id,title='',abstract='',keywords=''){
+            list(identity=list(record_id=id),canonical=list(title=title,abstract=abstract,keywords=keywords))
+          }
+          prior <- list(
+            rec('r1','',               'existing abstract'),
+            rec('r2','existing title', ''),
+            rec('r3','',               '',                 'salmon aquaculture'),
+            rec('r4','old title',      'existing abstract'),
+            rec('r5','stable title',   'stable abstract'),
+            rec('r7','forced title',   'forced abstract')
+          )
+          current <- list(
+            rec('r1','new title',      'existing abstract'),
+            rec('r2','existing title', 'new abstract'),
+            rec('r3','new title',      'new abstract',      'salmon aquaculture'),
+            rec('r4','revised title',  'existing abstract'),
+            rec('r5','stable title',   'stable abstract'),
+            rec('r6','brand new',      'brand new abstract'),
+            rec('r7','forced title',   'forced abstract')
+          )
+          write_jsonl <- function(x,path){
+            con<-file(path,'wt');on.exit(close(con),add=TRUE)
+            for(z in x)writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con)
+          }
+          write_jsonl(prior,'tmp_refresh/prior/canonical.jsonl')
+          write_jsonl(current,'tmp_refresh/current/canonical.jsonl')
+
+          w03 <- lapply(current,function(x)list(record_id=x$identity$record_id,exclude_from_workflow04=FALSE))
+          write_jsonl(w03,'tmp_refresh/current/w03.jsonl')
+
+          prior_w04 <- lapply(prior,function(x)list(
+            record_id=x$identity$record_id,
+            screening=list(decision='retain',decision_origin='fixture')
+          ))
+          write_jsonl(prior_w04,'tmp_refresh/prior/w04.jsonl')
+          writeLines('r7','tmp_refresh/current/force.txt')
+
+          fp <- function(t,a)digest(toJSON(list(title=t,abstract=a),auto_unbox=TRUE,null='null',na='null'),algo='sha256',serialize=FALSE)
+          prior_df <- data.frame(
+            record_id=vapply(prior,function(x)x$identity$record_id,character(1)),
+            title=vapply(prior,function(x)x$canonical$title,character(1)),
+            abstract=vapply(prior,function(x)x$canonical$abstract,character(1)),
+            stringsAsFactors=FALSE
+          )
+          prior_df$topic_input_sha256 <- mapply(fp,prior_df$title,prior_df$abstract,USE.NAMES=FALSE)
+          write_csv(prior_df,'tmp_refresh/prior/w07_records.csv',na='')
+          write_csv(data.frame(record_id=prior_df$record_id,path_id='P1'),'tmp_refresh/prior/w07_scores.csv',na='')
+
+          current_df <- data.frame(
+            record_id=vapply(current,function(x)x$identity$record_id,character(1)),
+            title=vapply(current,function(x)x$canonical$title,character(1)),
+            abstract=vapply(current,function(x)x$canonical$abstract,character(1)),
+            stringsAsFactors=FALSE
+          )
+          write_csv(current_df,'tmp_refresh/current/w07_current.csv',na='')
+
+          ontology_sha<-digest(file='user_input/workflow07_topic_ontology.csv',algo='sha256',serialize=FALSE)
+          prompt_sha<-digest(file='user_input/workflow07_topic_system_prompt.txt',algo='sha256',serialize=FALSE)
+          write_json(list(ontology_sha256=ontology_sha,prompt_sha256=prompt_sha),
+                     'tmp_refresh/prior/w07_manifest.json',auto_unbox=TRUE,pretty=TRUE)
+
+      - name: Validate W04 missing-to-present routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_prepare_incremental.R \
+            --canonical tmp_refresh/current/canonical.jsonl \
+            --workflow03-status tmp_refresh/current/w03.jsonl \
+            --prior-workflow04 tmp_refresh/prior/w04.jsonl \
+            --prior-canonical tmp_refresh/prior/canonical.jsonl \
+            --force-rescreen-record-ids tmp_refresh/current/force.txt \
+            --output-dir tmp_refresh/out_w04
+
+          Rscript -e '
+            library(readr);library(jsonlite)
+            q<-read_csv("tmp_refresh/out_w04/screen_queue_manifest.csv",show_col_types=FALSE)
+            r<-read_csv("tmp_refresh/out_w04/scientific_input_refresh_records.csv",show_col_types=FALSE)
+            m<-fromJSON("tmp_refresh/out_w04/prepare_manifest.json")
+            stopifnot(setequal(q$record_id,c("r1","r2","r3","r6","r7")))
+            stopifnot(setequal(r$record_id,c("r1","r2","r3")))
+            stopifnot(q$queue_reason[q$record_id=="r1"]=="missing_title_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r2"]=="missing_abstract_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r3"]=="missing_title_and_abstract_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r6"]=="new_record_id")
+            stopifnot(q$queue_reason[q$record_id=="r7"]=="explicit_repair_rescreen")
+            stopifnot(as.integer(m$existing_records_refreshed)==3L)
+            stopifnot(as.integer(m$existing_records_title_gained)==2L)
+            stopifnot(as.integer(m$existing_records_abstract_gained)==2L)
+            stopifnot(as.integer(m$existing_records_title_and_abstract_gained)==1L)
+            stopifnot(as.integer(m$changed_screening_input_reused)==1L)
+            reuse<-readLines("tmp_refresh/out_w04/reused_record_ids.txt",warn=FALSE)
+            stopifnot(setequal(reuse,c("r4","r5")))
+            cat("PASS: W04 refreshes only missing-to-present scientific text plus explicit force/new records\n")
+          '
+
+      - name: Validate W07 missing-to-present routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_07_prepare_incremental.R \
+            --current tmp_refresh/current/w07_current.csv \
+            --prior-records tmp_refresh/prior/w07_records.csv \
+            --prior-scores tmp_refresh/prior/w07_scores.csv \
+            --prior-manifest tmp_refresh/prior/w07_manifest.json \
+            --ontology user_input/workflow07_topic_ontology.csv \
+            --prompt user_input/workflow07_topic_system_prompt.txt \
+            --output-dir tmp_refresh/out_w07
+
+          Rscript -e '
+            library(readr);library(jsonlite)
+            q<-read_csv("tmp_refresh/out_w07/topic_screen_queue_manifest.csv",show_col_types=FALSE)
+            r<-read_csv("tmp_refresh/out_w07/scientific_input_refresh_records.csv",show_col_types=FALSE)
+            m<-fromJSON("tmp_refresh/out_w07/prepare_manifest.json")
+            stopifnot(setequal(q$record_id,c("r1","r2","r3","r6")))
+            stopifnot(setequal(r$record_id,c("r1","r2","r3")))
+            stopifnot(q$queue_reason[q$record_id=="r1"]=="missing_title_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r2"]=="missing_abstract_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r3"]=="missing_title_and_abstract_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r6"]=="new_record_id")
+            stopifnot(as.integer(m$existing_records_refreshed)==3L)
+            stopifnot(as.integer(m$changed_title_abstract_reused)==1L)
+            stopifnot(isTRUE(m$previously_assessed_records_requeued_only_for_missing_to_present_text))
+            reuse<-read_csv("tmp_refresh/out_w07/reused_topic_records.csv",show_col_types=FALSE)
+            stopifnot(setequal(reuse$record_id,c("r4","r5","r7")))
+            cat("PASS: W07 refreshes missing-to-present records while reusing ordinary text edits\n")
+          '
+
+      - name: Assert no paid/external APIs were used
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${OPENAI_API_KEY:-}"
+          test -z "${ZENODO_ACCESS_TOKEN:-}"
+          echo "PASS: synthetic validation completed without OpenAI, database, Google Sheets, or Zenodo calls"
