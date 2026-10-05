@@ -15,19 +15,19 @@ on:
         type: string
       prior_workflow06_pointer_path:
         required: false
-        default: 'docs/workflow06/zenodo/run-36265092530.json'
+        default: 'none'
         type: string
       prior_workflow04_pointer_path:
         required: false
-        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        default: ''
         type: string
       prior_lean_pointer_path:
         required: false
-        default: 'docs/compaction/zenodo/run-36166883249.json'
+        default: ''
         type: string
       prior_workflow07_pointer_path:
         required: false
-        default: 'docs/workflow07/zenodo/run-36772700615.json'
+        default: 'none'
         type: string
       publish:
         required: false
@@ -58,22 +58,22 @@ on:
       prior_workflow06_pointer_path:
         description: 'Prior authoritative W06 pointer; use none for a first run'
         required: true
-        default: 'docs/workflow06/zenodo/run-36265092530.json'
+        default: 'none'
         type: string
       prior_workflow04_pointer_path:
         description: 'Prior W04 pointer used only to bootstrap legacy W06 fingerprints'
         required: false
-        default: 'docs/workflow04/zenodo/run-36227737500.json'
+        default: ''
         type: string
       prior_lean_pointer_path:
         description: 'Prior lean pointer used only if prior W04 archive lacks retained canonical JSONL'
         required: false
-        default: 'docs/compaction/zenodo/run-36166883249.json'
+        default: ''
         type: string
       prior_workflow07_pointer_path:
         description: 'Prior authoritative W07 topic state; existing record IDs will be reused and never reclassified'
         required: false
-        default: 'docs/workflow07/zenodo/run-36772700615.json'
+        default: 'none'
         type: string
       publish:
         description: 'Publish resolved automated W06 state to restricted Zenodo'
