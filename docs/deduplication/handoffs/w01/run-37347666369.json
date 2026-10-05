@@ -9,5 +9,7 @@
   "export_run_id": "37366599800",
   "decisions_artifact": "workflow01-human-decisions-37347666369-37366599800",
   "decisions_export_sha256": "13a7cddac06abc2dd6989cc7cbdb9f6c2d6c21d318e99d2a08fdcc40abc22178",
-  "created_at_utc": "2026-10-05T20:14:56Z"
+  "created_at_utc": "2026-10-05T20:14:56Z",
+  "resume_redispatch_requested_at_utc": "2026-10-05T20:16:30Z",
+  "resume_redispatch_reason": "Explicitly re-signal ready handoff after fixing GITHUB_TOKEN downstream-trigger suppression."
 }
