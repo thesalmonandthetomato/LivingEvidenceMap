@@ -47,6 +47,15 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('jsonlite','digest','httr2','stringdist'))
 
+      - name: Lint W02 production workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= \
+            .github/workflows/workflow_02_batched_production.yml \
+            .github/workflows/workflow_02_batched.yml \
+            .github/workflows/workflow_02_resume_after_human_review.yml
+
       - name: Parse all production scripts
         shell: Rscript {0}
         run: |
