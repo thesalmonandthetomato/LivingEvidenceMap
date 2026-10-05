@@ -101,8 +101,6 @@ if (length(missing_fields)) {
   stop(sprintf("Configured search fields absent from live EBSCO Info for %s: %s",
                source_slug,paste(missing_fields,collapse=", ")),call.=FALSE)
 }
-live_sorts <- unique(xml_attr(xml_find_all(db_node,".//*[local-name()='sort']"),"id"))
-supports_date2 <- "date2" %in% live_sorts
 
 parse_record <- function(rec, page_label) {
   header <- xml_find_first(rec,".//*[local-name()='header']")
@@ -210,13 +208,23 @@ parse_record <- function(rec, page_label) {
 }
 
 records <- list()
-reported_total <- NA_integer_
-startrec <- 1L
-page <- 0L
 page_files <- character()
+page <- 0L
+partition_manifest <- list()
+retrieval_strategy <- "single_query"
+window_limit <- 4880L
+year_start <- 1800L
+year_end <- as.integer(format(Sys.Date(), "%Y")) + 1L
 
-repeat {
-  page <- page + 1L
+extract_hits <- function(doc, label) {
+  hit_nodes <- xml_find_all(doc,"//*[local-name()='Hits']")
+  hit_vals <- suppressWarnings(as.integer(trimws(xml_text(hit_nodes))))
+  hit_vals <- hit_vals[!is.na(hit_vals)]
+  if (!length(hit_vals)) stop(sprintf("EBSCO %s response did not contain Hits",label),call.=FALSE)
+  hit_vals[[1L]]
+}
+
+count_query <- function(q, label) {
   ans <- perform_xml(
     "https://eit.ebscohost.com/Services/SearchService.asmx/Search",
     list(
@@ -224,53 +232,32 @@ repeat {
       pwd=pwd,
       authType="profile",
       db=db_code,
-      query=query,
+      query=q,
       format="detailed",
-      startrec=as.character(startrec),
-      numrec=as.character(page_size)
+      startrec="1",
+      numrec="1"
     ),
-    sprintf("Search page %d",page),
-    timeout=300
+    label,
+    timeout=180
   )
-
-  raw_path <- file.path(raw_dir,sprintf("response_%06d.xml",page))
-  writeBin(ans$raw,raw_path)
-  page_files <- c(page_files,raw_path)
-
-  hit_nodes <- xml_find_all(ans$doc,"//*[local-name()='Hits']")
-  hit_vals <- suppressWarnings(as.integer(trimws(xml_text(hit_nodes))))
-  hit_vals <- hit_vals[!is.na(hit_vals)]
-  if (is.na(reported_total) && length(hit_vals)) reported_total <- hit_vals[[1L]]
-
-  rec_nodes <- xml_find_all(ans$doc,"//*[local-name()='rec']")
-  if (!length(rec_nodes)) break
-
-  for (rec in rec_nodes) {
-    if (length(records) >= max_records) break
-    records[[length(records)+1L]] <- parse_record(rec,sprintf("newest-first page %d",page))
-  }
-
-  if (length(records) >= max_records) break
-  if (!is.na(reported_total) && length(records) >= reported_total) break
-  if (length(rec_nodes) < page_size) break
-  startrec <- startrec + length(rec_nodes)
+  extract_hits(ans$doc,label)
 }
 
-retrieval_strategy <- "date_newest"
-oldest_pages <- 0L
-if (is.infinite(max_records) && !is.na(reported_total) && length(records) < reported_total) {
-  if (!supports_date2) {
-    stop(sprintf(
-      "EBSCO harvest count mismatch for %s and database does not advertise date2 fallback: reported=%d retrieved=%d",
-      source_slug,reported_total,length(records)
-    ),call.=FALSE)
-  }
-  retrieval_strategy <- "date_newest_plus_date_oldest"
-  seen_ids <- vapply(records,function(r) r$sidecar_identity$sidecar_record_id,character(1))
-  startrec_oldest <- 1L
+year_expression <- function(years) {
+  paste0("(",paste(sprintf("ZR (%d)",as.integer(years)),collapse=" OR "),")")
+}
+partition_query <- function(years) {
+  sprintf("(%s) AND %s",query,year_expression(years))
+}
+
+harvest_query <- function(q, expected_total, label, raw_prefix, record_limit=Inf) {
+  local_records <- list()
+  startrec <- 1L
+  local_page <- 0L
+  local_files <- character()
 
   repeat {
-    oldest_pages <- oldest_pages + 1L
+    local_page <- local_page + 1L
     ans <- perform_xml(
       "https://eit.ebscohost.com/Services/SearchService.asmx/Search",
       list(
@@ -278,27 +265,24 @@ if (is.infinite(max_records) && !is.na(reported_total) && length(records) < repo
         pwd=pwd,
         authType="profile",
         db=db_code,
-        query=query,
+        query=q,
         format="detailed",
-        sort="date2",
-        startrec=as.character(startrec_oldest),
+        startrec=as.character(startrec),
         numrec=as.character(page_size)
       ),
-      sprintf("oldest-first Search page %d",oldest_pages),
+      sprintf("%s page %d",label,local_page),
       timeout=300
     )
 
-    raw_path <- file.path(raw_dir,sprintf("response_oldest_%06d.xml",oldest_pages))
+    raw_path <- file.path(raw_dir,sprintf("%s_%06d.xml",raw_prefix,local_page))
     writeBin(ans$raw,raw_path)
-    page_files <- c(page_files,raw_path)
+    local_files <- c(local_files,raw_path)
 
-    hit_nodes <- xml_find_all(ans$doc,"//*[local-name()='Hits']")
-    hit_vals <- suppressWarnings(as.integer(trimws(xml_text(hit_nodes))))
-    hit_vals <- hit_vals[!is.na(hit_vals)]
-    if (length(hit_vals) && hit_vals[[1L]] != reported_total) {
+    observed_total <- extract_hits(ans$doc,sprintf("%s page %d",label,local_page))
+    if (!is.na(expected_total) && observed_total != expected_total) {
       stop(sprintf(
-        "EBSCO reported total changed between newest/oldest passes for %s: newest=%d oldest=%d",
-        source_slug,reported_total,hit_vals[[1L]]
+        "EBSCO partition total changed for %s (%s): expected=%d observed=%d",
+        source_slug,label,expected_total,observed_total
       ),call.=FALSE)
     }
 
@@ -306,19 +290,124 @@ if (is.infinite(max_records) && !is.na(reported_total) && length(records) < repo
     if (!length(rec_nodes)) break
 
     for (rec in rec_nodes) {
-      parsed <- parse_record(rec,sprintf("oldest-first page %d",oldest_pages))
-      rid <- parsed$sidecar_identity$sidecar_record_id
-      if (!(rid %in% seen_ids)) {
-        records[[length(records)+1L]] <- parsed
-        seen_ids <- c(seen_ids,rid)
-      }
-      if (length(records) >= reported_total) break
+      if (length(local_records) >= record_limit) break
+      local_records[[length(local_records)+1L]] <- parse_record(rec,sprintf("%s page %d",label,local_page))
     }
 
-    if (length(records) >= reported_total) break
+    if (length(local_records) >= record_limit) break
+    if (!is.na(expected_total) && length(local_records) >= expected_total) break
     if (length(rec_nodes) < page_size) break
-    startrec_oldest <- startrec_oldest + length(rec_nodes)
+    startrec <- startrec + length(rec_nodes)
   }
+
+  local_ids <- if (length(local_records)) {
+    vapply(local_records,function(r) r$sidecar_identity$sidecar_record_id,character(1))
+  } else character()
+  if (anyDuplicated(local_ids)) stop(sprintf("Duplicate EBSCO accession numbers within %s",label),call.=FALSE)
+
+  if (is.infinite(record_limit) && !is.na(expected_total) && length(local_records) != expected_total) {
+    stop(sprintf(
+      "EBSCO partition harvest mismatch for %s (%s): reported=%d retrieved=%d",
+      source_slug,label,expected_total,length(local_records)
+    ),call.=FALSE)
+  }
+
+  list(records=local_records,pages=local_page,files=local_files)
+}
+
+reported_total <- count_query(query,"full-query count")
+
+if (!is.infinite(max_records) || reported_total <= window_limit) {
+  retrieval_strategy <- if (is.infinite(max_records)) "single_query" else "single_query_limited"
+  h <- harvest_query(
+    query,
+    expected_total=reported_total,
+    label="full query",
+    raw_prefix="response",
+    record_limit=max_records
+  )
+  records <- h$records
+  page <- h$pages
+  page_files <- h$files
+} else {
+  retrieval_strategy <- "publication_year_partitions"
+  initial_starts <- seq(year_start,year_end,by=10L)
+  pending <- lapply(initial_starts,function(s) seq.int(s,min(s+9L,year_end)))
+  resolved <- list()
+
+  while (length(pending)) {
+    years <- pending[[1L]]
+    pending <- pending[-1L]
+    label <- sprintf("%d-%d",min(years),max(years))
+    n <- count_query(partition_query(years),sprintf("year partition %s count",label))
+    if (n == 0L) next
+
+    if (n > window_limit) {
+      if (length(years) == 1L) {
+        stop(sprintf(
+          "EBSCO source %s has %d records in publication year %d, exceeding safe EIT window %d; finer-than-year partitioning is required",
+          source_slug,n,years[[1L]],window_limit
+        ),call.=FALSE)
+      }
+      cut <- ceiling(length(years)/2)
+      pending <- c(
+        list(years[seq_len(cut)]),
+        list(years[(cut+1L):length(years)]),
+        pending
+      )
+      next
+    }
+
+    resolved[[length(resolved)+1L]] <- list(
+      years=as.integer(years),
+      year_from=min(years),
+      year_to=max(years),
+      reported_total=as.integer(n)
+    )
+  }
+
+  partition_sum <- sum(vapply(resolved,function(x) x$reported_total,integer(1)))
+  if (partition_sum != reported_total) {
+    stop(sprintf(
+      paste0(
+        "EBSCO publication-year partitions do not exhaust the full result set for %s: ",
+        "full=%d partition_sum=%d year_domain=%d-%d. ",
+        "This usually indicates undated records or records outside the configured year domain; refusing incomplete harvest."
+      ),
+      source_slug,reported_total,partition_sum,year_start,year_end
+    ),call.=FALSE)
+  }
+
+  seen <- character()
+  for (i in seq_along(resolved)) {
+    part <- resolved[[i]]
+    label <- sprintf("year partition %d-%d",part$year_from,part$year_to)
+    prefix <- sprintf("response_year_%04d_%04d",part$year_from,part$year_to)
+    h <- harvest_query(
+      partition_query(part$years),
+      expected_total=part$reported_total,
+      label=label,
+      raw_prefix=prefix,
+      record_limit=Inf
+    )
+    ids <- if (length(h$records)) {
+      vapply(h$records,function(r) r$sidecar_identity$sidecar_record_id,character(1))
+    } else character()
+    overlap <- intersect(seen,ids)
+    if (length(overlap)) {
+      stop(sprintf(
+        "EBSCO publication-year partitions overlap for %s: %d duplicate accession number(s)",
+        source_slug,length(overlap)
+      ),call.=FALSE)
+    }
+    seen <- c(seen,ids)
+    records <- c(records,h$records)
+    page <- page + h$pages
+    page_files <- c(page_files,h$files)
+    resolved[[i]]$pages_retrieved <- h$pages
+    resolved[[i]]$records_retrieved <- length(h$records)
+  }
+  partition_manifest <- resolved
 }
 
 ids <- vapply(records,function(r) r$sidecar_identity$sidecar_record_id,character(1))
@@ -366,10 +455,11 @@ manifest <- list(
   records_retrieved=length(records),
   max_records=if(is.infinite(max_records)) "all" else as.integer(max_records),
   page_size=page_size,
-  pages_retrieved=page + oldest_pages,
-  newest_first_pages=page,
-  oldest_first_pages=oldest_pages,
+  pages_retrieved=page,
   retrieval_strategy=retrieval_strategy,
+  result_window_limit=window_limit,
+  partition_year_domain=if(retrieval_strategy=="publication_year_partitions") list(from=year_start,to=year_end) else NULL,
+  year_partitions=if(length(partition_manifest)) partition_manifest else NULL,
   native_id="EBSCO accession number",
   raw_response_format="XML",
   raw_files=basename(page_files),
@@ -388,4 +478,4 @@ checksum_lines <- vapply(checksum_files,function(p)
 writeLines(checksum_lines,file.path(output_dir,"SHA256SUMS"))
 
 message(sprintf("PASS: EBSCO source=%s db=%s reported=%d retrieved=%d pages=%d strategy=%s",
-                source_slug,db_code,reported_total,length(records),page+oldest_pages,retrieval_strategy))
+                source_slug,db_code,reported_total,length(records),page,retrieval_strategy))
