@@ -1,0 +1,33 @@
+name: TEMP validate large EBSCO harvest recovery
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_validate_large_ebsco_recovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  medline:
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_medline
+      run_type: full
+      query: '((TI (salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") OR AB (salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout")) AND (TI (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR AB (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))'
+      parent_run_id: ${{ github.run_id }}
+      search_version: validation
+      max_records: all
+    secrets: inherit
+
+  waters:
+    uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
+    with:
+      source: ebsco_waters_oceans
+      run_type: full
+      query: '((TI (salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") OR AB (salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") OR KW (salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout")) AND (TI (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR AB (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR KW (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))'
+      parent_run_id: ${{ github.run_id }}
+      search_version: validation
+      max_records: all
+    secrets: inherit
