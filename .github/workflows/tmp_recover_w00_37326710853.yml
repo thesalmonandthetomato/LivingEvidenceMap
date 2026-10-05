@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','googlesheets4','digest'))
+        run: install.packages(c('jsonlite','googlesheets4','digest','readr'))
 
       - name: Rebuild W00 live status from archived search records
         env:
