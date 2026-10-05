@@ -37,7 +37,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: workflow08-human-resume
@@ -361,6 +361,17 @@ jobs:
             --source-run-id "$SOURCE_RUN_ID" \
             --output-sha256 "$OUTPUT_SHA" \
             --message "Workflow 08 Shiny decisions applied; final canonical state archived and registered."
+
+      - name: Trigger Workflow 09 publication package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run report_workflow09_figures.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$WORKFLOW08_BRANCH"
+          echo "PASS: triggered Workflow 09 after successful resumed W08 finalisation"
 
       - name: Upload resumed W08 handoff
         uses: actions/upload-artifact@v4
