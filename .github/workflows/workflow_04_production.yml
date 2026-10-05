@@ -462,6 +462,22 @@ jobs:
           if [ -n "$MANUAL_PATH" ]; then ARGS+=(--manual-decisions "$MANUAL_PATH"); fi
           Rscript scripts/updater/workflow_04_merge_incremental.R "${ARGS[@]}"
 
+          Rscript -e '
+            library(jsonlite); library(digest)
+            x <- fromJSON("user_input/workflow04_screening_config.json",simplifyVector=FALSE)
+            p <- paste(readLines(x$prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n")
+            h <- digest(p,algo="sha256",serialize=FALSE)
+            stopifnot(identical(h,x$expected_prompt_sha256))
+            z <- list(
+              schema="living-evidence-map-workflow04-prompt-provenance-v1",
+              prompt_path=x$prompt_path,
+              prompt_version=x$prompt_version,
+              prompt_sha256=h,
+              source_github_run_id=Sys.getenv("GITHUB_RUN_ID")
+            )
+            writeLines(toJSON(z,auto_unbox=TRUE,pretty=TRUE,null="null"),"outputs/workflow04_final/prompt_provenance.json")
+          '
+
       - name: Inspect final status
         id: status
         shell: bash
@@ -551,7 +567,7 @@ jobs:
           set -euo pipefail
           LEAN_SHA=$(Rscript -e 'cat(digest::digest(file="prepared/inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')
           W03_SHA=$(P="$W03_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$publication_status_sha256)')
-          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("user_input/workflow04_screening_config.json",simplifyVector=FALSE);p<-paste(readLines(x$prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\\n");h<-digest::digest(p,algo="sha256",serialize=FALSE);stopifnot(identical(h,x$expected_prompt_sha256));cat(h)')"
+          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/prompt_provenance.json",simplifyVector=FALSE);stopifnot(grepl("^[0-9a-f]{64}$",x$prompt_sha256));cat(x$prompt_sha256)')"
           mkdir -p outputs/workflow04_zenodo
           Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R             --state-dir outputs/workflow04_final             --source-run-id "$GITHUB_RUN_ID"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow04_zenodo             --upstream-lean-sha256 "$LEAN_SHA"             --upstream-workflow03-sha256 "$W03_SHA"             --prompt-sha256 "$PROMPT_SHA"
 
