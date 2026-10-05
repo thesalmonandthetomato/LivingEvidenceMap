@@ -387,59 +387,22 @@ scopus_lookup <- function(d){
     scopus_headers()
   z <- perform_retry(req)
   st <- resp_status(z$resp)
-  if(st>=200L && st<400L){
-    parsed <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
-    if(!is.null(parsed)){
-      ex <- scopus_extract(parsed)
-      if(!is.null(ex$title) || !is.null(ex$abstract) || !is.null(ex$doi)){
-        return(list(status=st,title=ex$title,abstract=ex$abstract,author_keywords=ex$author_keywords,returned_doi=ex$doi,eid=ex$eid,
-                    outcome="direct_doi_metadata_returned",attempts=z$attempts,route="direct_doi"))
-      }
-    }
-  }
-
-  # DOI endpoint may miss records that are still indexed in Scopus. Search by DOI,
-  # then retrieve the uniquely compatible hit by EID using META_ABS.
-  sr <- scopus_search_doi(d)
-  if(!length(sr$entries)){
+  if(st>=400L){
     return(list(status=st,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,
-                outcome=paste0("direct_",ifelse(st>=400L,paste0("http_",st),"no_metadata"),";search_",sr$outcome),
-                attempts=z$attempts+sr$attempts,route="doi_then_search"))
+                outcome=paste0("http_",st),attempts=z$attempts,route="direct_doi"))
   }
-
-  # DOI search responses do not reliably expose prism:doi in every returned
-  # entry/view. If the search result itself exposes DOI, use it to narrow. If it
-  # does not, a single search hit may still be followed to EID, but the full
-  # META_ABS record must then return the exact requested DOI before it is usable.
-  entry_dois <- vapply(sr$entries,function(e){
-    norm_doi(e[["prism:doi"]] %||% e[["doi"]]) %||% ""
-  },character(1))
-  exact_idx <- which(nzchar(entry_dois) & entry_dois==d)
-  candidates <- if(length(exact_idx)) sr$entries[exact_idx] else if(length(sr$entries)==1L) sr$entries else list()
-
-  if(!length(candidates)){
-    return(list(status=sr$status,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,
-                outcome=if(any(nzchar(entry_dois)))"search_hits_no_exact_doi" else "search_hits_nonunique_without_doi",
-                attempts=z$attempts+sr$attempts,route="doi_then_search"))
+  parsed <- tryCatch(resp_body_json(z$resp,simplifyVector=FALSE),error=function(e)NULL)
+  if(is.null(parsed)){
+    return(list(status=st,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,
+                outcome="invalid_json",attempts=z$attempts,route="direct_doi"))
   }
-
-  candidate_eids <- unlist(lapply(candidates,extract_scopus_eid),use.names=FALSE)
-  candidate_eids <- unique(candidate_eids[nzchar(candidate_eids)])
-  if(length(candidate_eids)!=1L){
-    return(list(status=sr$status,title=NULL,abstract=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,
-                outcome=if(!length(candidate_eids))"search_candidate_missing_eid" else "search_candidate_nonunique_eid",
-                attempts=z$attempts+sr$attempts,route="doi_then_search"))
-  }
-
-  er <- scopus_lookup_eid(candidate_eids[[1L]])
-  er$route <- "doi_then_search_eid"
-  er$attempts <- z$attempts + sr$attempts + (er$attempts %||% 0L)
-  if(!identical(er$returned_doi,d)){
-    er$title <- NULL
-    er$abstract <- NULL
-    er$outcome <- if(is.null(er$returned_doi))"eid_retrieval_no_doi" else "eid_retrieval_doi_mismatch"
-  }
-  er
+  ex <- scopus_extract(parsed)
+  list(
+    status=st,title=ex$title,abstract=ex$abstract,author_keywords=ex$author_keywords,
+    returned_doi=ex$doi,eid=ex$eid,
+    outcome=if(!is.null(ex$title)||!is.null(ex$abstract)||length(ex$author_keywords))"direct_doi_metadata_returned" else "direct_doi_no_metadata",
+    attempts=z$attempts,route="direct_doi"
+  )
 }
 
 read_jsonl <- function(path){
@@ -499,7 +462,7 @@ for(i in seq_along(rows)){
   missing_title_before <- is_missing(r$canonical$title)
   missing_abstract_before <- is_missing(r$canonical$abstract)
   missing_author_keywords_before <- keywords_missing(r$canonical$author_keywords)
-  eligible <- !is.null(d) && (missing_title_before || missing_abstract_before)
+  eligible <- !is.null(d) && (missing_title_before || missing_abstract_before || missing_author_keywords_before)
   if(!eligible) next
   counts$eligible_doi_missing_metadata <- counts$eligible_doi_missing_metadata + 1L
   if(!previous_attempt_due(r$metadata_enrichment)){
@@ -641,31 +604,57 @@ for(i in seq_along(rows)){
     }
   }
 
-  # Author keywords are optional enrichment only. Never issue a dedicated
-  # provider request solely to obtain them. If the Scopus title/abstract lookup
-  # already returned keywords, retain them subject to the same identity guard.
-  if(keywords_missing(r$canonical$author_keywords) && !is.null(rec_audit$scopus) &&
-     identical(rec_audit$scopus$returned_doi,d) && length(rec_audit$scopus$author_keywords)){
-    sc_kw_sim <- if(!is.null(rec_audit$scopus$title) && !is_missing(r$canonical$title)) title_similarity(r$canonical$title,rec_audit$scopus$title) else NA_real_
-    sc_kw_guard <- !is.null(rec_audit$scopus$title) && !is_missing(r$canonical$title) && !is.na(sc_kw_sim) && sc_kw_sim>=0.90
-    if(sc_kw_guard){
-      r$canonical$author_keywords <- rec_audit$scopus$author_keywords
+  still_missing_title <- is_missing(r$canonical$title)
+  still_missing_abstract <- is_missing(r$canonical$abstract)
+  still_missing_author_keywords <- keywords_missing(r$canonical$author_keywords)
+
+  # Author-keyword repair order after Europe PMC:
+  # 1) retained Scopus EID -> FULL;
+  # 2) if no retained EID, direct DOI -> FULL;
+  # 3) if direct DOI returns no record/404, stop. No DOI-search -> EID fallback.
+  eid_for_keywords <- retained_scopus_eid(r)
+  if(still_missing_author_keywords && !skip_scopus){
+    counts$scopus_author_keywords_attempted <- counts$scopus_author_keywords_attempted + 1L
+    sk <- if(!is.null(eid_for_keywords)){
+      tryCatch(
+        scopus_lookup_eid_full(eid_for_keywords),
+        error=function(e) list(outcome="technical_error",error=conditionMessage(e),title=NULL,author_keywords=character(),returned_doi=NULL,eid=eid_for_keywords,status=NULL,attempts=NULL,route="retained_eid_full")
+      )
+    } else {
+      tryCatch(
+        scopus_lookup_doi_full(d),
+        error=function(e) list(outcome="technical_error",error=conditionMessage(e),title=NULL,author_keywords=character(),returned_doi=NULL,eid=NULL,status=NULL,attempts=NULL,route="direct_doi_full")
+      )
+    }
+    rec_audit$scopus_keywords <- sk
+    sim <- if(!is.null(sk$title) && !is_missing(r$canonical$title)) title_similarity(r$canonical$title,sk$title) else NA_real_
+    guard_ok <- identical(sk$returned_doi,d) && !is.null(sk$title) && !is_missing(r$canonical$title) && !is.na(sim) && sim>=0.90
+    if(guard_ok && length(sk$author_keywords)){
+      r$canonical$author_keywords <- sk$author_keywords
       counts$scopus_author_keywords_filled <- counts$scopus_author_keywords_filled + 1L
       rec_audit$applied <- c(rec_audit$applied,list(list(
-        provider="scopus",field="author_keywords",eid=rec_audit$scopus$eid,title_similarity=sc_kw_sim,
-        route="existing_title_abstract_lookup",
-        identity_guard="exact_doi+title"
+        provider="scopus",field="author_keywords",eid=sk$eid,title_similarity=sim,
+        route=sk$route,
+        identity_guard=if(!is.null(eid_for_keywords))"retained_eid+exact_doi+title" else "direct_doi+exact_doi+title"
+      )))
+    } else if(length(sk$author_keywords) && !guard_ok){
+      counts$conflicts_quarantined <- counts$conflicts_quarantined + 1L
+      rec_audit$quarantined <- c(rec_audit$quarantined,list(list(
+        provider="scopus",field="author_keywords",reason="keyword_identity_guard_failed",
+        route=sk$route,eid=sk$eid,returned_doi=sk$returned_doi,title_similarity=sim
       )))
     }
+    Sys.sleep(delay)
   }
 
   still_missing_title <- is_missing(r$canonical$title)
   still_missing_abstract <- is_missing(r$canonical$abstract)
   still_missing_author_keywords <- keywords_missing(r$canonical$author_keywords)
-  if(still_missing_title || still_missing_abstract) counts$still_missing_after <- counts$still_missing_after + 1L
+  if(still_missing_title || still_missing_abstract || still_missing_author_keywords) counts$still_missing_after <- counts$still_missing_after + 1L
 
   technical_error <- identical(clean_text(ep$outcome),"technical_error") ||
-    (!is.null(rec_audit$scopus) && identical(clean_text(rec_audit$scopus$outcome),"technical_error"))
+    (!is.null(rec_audit$scopus) && identical(clean_text(rec_audit$scopus$outcome),"technical_error")) ||
+    (!is.null(rec_audit$scopus_keywords) && identical(clean_text(rec_audit$scopus_keywords$outcome),"technical_error"))
   if(technical_error) counts$technical_error_records <- counts$technical_error_records + 1L
   filled_fields <- vapply(rec_audit$applied,function(z) clean_text(z$field) %||% "",character(1))
   filled_fields <- unique(filled_fields[nzchar(filled_fields)])
@@ -704,10 +693,10 @@ report <- list(
   implementation_language="R",
   provider_order=if(skip_scopus)c("europe_pmc") else c("europe_pmc","scopus"),
   policy=list(
-    eligibility="DOI present and title or abstract missing; author keywords alone do not make a record eligible",
+    eligibility="DOI present and title, abstract, or author keywords missing",
     overwrite_existing_fields=FALSE,
     europe_pmc_match="exact normalised DOI plus canonical/provider title similarity >= 0.90 for abstract/author-keyword fills; exact DOI may fill a missing title",
-    scopus_match="direct DOI Abstract Retrieval with view=META_ABS; on miss, Scopus Search by DOI then unique exact-DOI EID retrieval with view=META_ABS",
+    scopus_match="direct DOI Abstract Retrieval with view=META_ABS only; no Search-to-EID fallback",
     abstract_title_guard="if a title is present on both sides, Jaro-Winkler similarity must be >= 0.90; otherwise quarantine",
     provider_fallback=if(skip_scopus)"Scopus disabled for this run; unresolved metadata is retained unchanged and is not classified as a technical failure." else "existing Scopus DOI/EID path retained for missing title/abstract; author keywords are retained only when returned opportunistically by an already-required Europe PMC or Scopus lookup; no dedicated keyword-only Scopus FULL request",
     repeat_policy=sprintf("successful/no-result attempts are deferred for %.0f days; technical failures are eligible for retry on the next run",recheck_after_days),
