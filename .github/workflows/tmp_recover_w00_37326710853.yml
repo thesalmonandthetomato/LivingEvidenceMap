@@ -1,0 +1,77 @@
+name: TEMP recover W00 37326710853 live status and dispatch W01
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_recover_w00_37326710853.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','googlesheets4','digest'))
+
+      - name: Rebuild W00 live status from archived search records
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          find docs/search_record -type f \
+            -path '*workflow00-search-record-*-37326710853/full_search/*.json' \
+            -print | sort > /tmp/w00_changed_files.txt
+          test -s /tmp/w00_changed_files.txt
+
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W00 \
+            --changed-files /tmp/w00_changed_files.txt
+
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/current_run/current_run_status.json docs/current_run/current_run_record_ids.txt
+          if ! git diff --cached --quiet; then
+            git commit -m 'Recover current-run status for W00 run 37326710853 [skip ci]'
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Dispatch W01
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run workflow_01_production.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref workflow01-final-architecture \
+            -f workflow00_pointer_path='docs/search_record/zenodo/run-37326710853.json' \
+            -f previous_workflow01_pointer_path='docs/deduplication/zenodo/run-36971418284.json' \
+            -f model='gpt-5.6-luna' \
+            -f auto_threshold='0.95' \
+            -f max_llm_cases='5000'
+          echo 'PASS: recovered W00 status and dispatched W01'
