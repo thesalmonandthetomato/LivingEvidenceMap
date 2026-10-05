@@ -86,6 +86,7 @@ jobs:
               --dir outputs/resume_inputs
 
             test -s outputs/resume_inputs/human_decisions.jsonl
+            test -f outputs/resume_inputs/data_quality_repairs.jsonl
             test -s outputs/resume_inputs/human_decisions.manifest.json
 
             Rscript - <<'RS'
@@ -112,12 +113,16 @@ jobs:
             if(!identical(tolower(actual),tolower(as.character(h$decisions_export_sha256)))) {
               stop("Downloaded W01 decisions SHA-256 does not match handoff manifest",call.=FALSE)
             }
-            cat("PASS: W01 handoff and downloaded decision artefact agree\n")
+            repairs_actual <- digest(file="outputs/resume_inputs/data_quality_repairs.jsonl",algo="sha256",serialize=FALSE)
+            if (is.null(d$repairs_sha256) || !identical(tolower(repairs_actual),tolower(as.character(d$repairs_sha256)))) {
+              stop("Downloaded W01 repairs SHA-256 does not match export manifest",call.=FALSE)
+            }
+            cat("PASS: W01 handoff and downloaded decision/repair artefacts agree\n")
             RS
 
             echo "POINTER=$POINTER" >> "$GITHUB_ENV"
             echo "DECISIONS=outputs/resume_inputs/human_decisions.jsonl" >> "$GITHUB_ENV"
-            echo "REPAIRS=" >> "$GITHUB_ENV"
+            echo "REPAIRS=outputs/resume_inputs/data_quality_repairs.jsonl" >> "$GITHUB_ENV"
           else
             echo "POINTER=$INPUT_POINTER" >> "$GITHUB_ENV"
             echo "DECISIONS=$INPUT_DECISIONS" >> "$GITHUB_ENV"
