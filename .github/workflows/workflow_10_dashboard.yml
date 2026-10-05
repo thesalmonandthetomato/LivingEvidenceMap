@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/workflow_10_dashboard.yml'
       - 'R/workflow_10_dashboard_from_canonical_jsonl.R'
+      - 'R/workflow_10_make_public_dashboard.R'
       - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
       - 'docs/index.html'
       - 'docs/dashboard-topic-definitions.json'
@@ -52,6 +53,7 @@ jobs:
         run: |
           parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
           parse(file='R/workflow_10_dashboard_from_canonical_jsonl.R')
+          parse(file='R/workflow_10_make_public_dashboard.R')
           cat('PASS: Workflow 10 scripts parse\n')
 
       - name: Resolve authoritative Workflow 08 pointer
@@ -135,9 +137,12 @@ jobs:
           set -euo pipefail
           Rscript R/workflow_10_dashboard_from_canonical_jsonl.R \
             inputs/workflow10/living_evidence_map_canonical_final.jsonl \
-            outputs/workflow10/living_evidence_map.csv \
-            outputs/workflow10/dashboard-data.js \
+            outputs/workflow10/living_evidence_map-internal.csv \
+            outputs/workflow10/dashboard-internal-data.js \
             "$W08_POINTER"
+          Rscript R/workflow_10_make_public_dashboard.R \
+            outputs/workflow10/dashboard-internal-data.js \
+            outputs/workflow10/dashboard-data.js
           cp docs/index.html outputs/workflow10/index.html
 
       - name: Validate Workflow 10 output
@@ -149,14 +154,19 @@ jobs:
           expected_sha <- tolower(as.character(pointer$final_canonical_jsonl_sha256))
           stopifnot(!is.na(expected_n),expected_n>0L,grepl('^[0-9a-f]{64}$',expected_sha))
 
-          csv <- read_csv('outputs/workflow10/living_evidence_map.csv',show_col_types=FALSE,progress=FALSE)
+          csv <- read_csv('outputs/workflow10/living_evidence_map-internal.csv',show_col_types=FALSE,progress=FALSE)
           stopifnot(nrow(csv)==expected_n,!anyDuplicated(csv$record_id))
 
-          js <- paste(readLines('outputs/workflow10/dashboard-data.js',warn=FALSE,encoding='UTF-8'),collapse='\n')
           prefix <- 'window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA='
+          internal_js <- paste(readLines('outputs/workflow10/dashboard-internal-data.js',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(startsWith(internal_js,prefix),endsWith(internal_js,';'))
+          internal_payload <- fromJSON(substr(internal_js,nchar(prefix)+1L,nchar(internal_js)-1L),simplifyVector=FALSE)
+
+          js <- paste(readLines('outputs/workflow10/dashboard-data.js',warn=FALSE,encoding='UTF-8'),collapse='\n')
           stopifnot(startsWith(js,prefix),endsWith(js,';'))
           payload <- fromJSON(substr(js,nchar(prefix)+1L,nchar(js)-1L),simplifyVector=FALSE)
           flow <- fromJSON('docs/reporting/workflow_09/flow_counts.json',simplifyVector=FALSE)
+          stopifnot(length(internal_payload$records)==expected_n)
           stopifnot(length(payload$records)==expected_n)
           stopifnot(as.integer(payload$metrics$total_records)==expected_n)
           stopifnot(as.integer(payload$metrics$search_results)==as.integer(flow$counts$combined_search_results))
@@ -166,16 +176,24 @@ jobs:
           stopifnot(as.character(payload$source$zenodo_record_id)==as.character(pointer$zenodo_record_id))
           stopifnot(tolower(as.character(payload$source$canonical_sha256))==expected_sha)
 
-          stars <- unlist(lapply(payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
+          stars <- unlist(lapply(internal_payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
           stopifnot(length(stars)>0L,all(nzchar(stars)),all(stars %in% c('★','★★','★★★')))
 
           html <- paste(readLines('outputs/workflow10/index.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
           stopifnot(expected_n==21493L)
-          stopifnot(grepl('Stars beside topic codes indicate model agreement across 3-passes of a large language model (OpenAI GPT-5.6 Luna).',html,fixed=TRUE))
           stopifnot(grepl('./dashboard-data.js',html,fixed=TRUE))
+          stopifnot(!grepl('id="database"',html,fixed=TRUE))
+          stopifnot(!grepl('Search and download',html,fixed=TRUE))
           stopifnot(!grepl('dashboard-search-index.js',html,fixed=TRUE))
           stopifnot(!file.exists('outputs/workflow10/dashboard-search-index.js'))
           stopifnot(!file.exists('outputs/workflow10/search-trial-manifest.json'))
+
+          stopifnot(isFALSE(payload$public_projection$record_level_identifiers))
+          stopifnot(isFALSE(payload$public_projection$titles))
+          stopifnot(isFALSE(payload$public_projection$abstracts))
+          stopifnot(isFALSE(payload$public_projection$citation_metadata))
+          forbidden <- c('record_id','title','abstract','doi','authors','journal','volume','pages','lens_url')
+          stopifnot(all(vapply(payload$records,function(r)length(intersect(names(r),forbidden))==0L,logical(1))))
 
           cat(sprintf(
             'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
@@ -187,7 +205,8 @@ jobs:
         with:
           name: workflow10-dashboard-${{ github.run_id }}
           path: |
-            outputs/workflow10/
+            outputs/workflow10/index.html
+            outputs/workflow10/dashboard-data.js
           retention-days: 30
           if-no-files-found: error
 
