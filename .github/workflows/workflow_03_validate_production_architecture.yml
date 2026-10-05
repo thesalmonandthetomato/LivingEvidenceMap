@@ -1,0 +1,90 @@
+name: Workflow 03 - Validate production architecture
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/workflow_03_production.yml'
+      - '.github/workflows/workflow_03_validate_production_architecture.yml'
+      - 'scripts/updater/workflow_03_publication_status.R'
+      - 'scripts/updater/workflow_03_restore_lean_checkpoint.R'
+      - 'scripts/updater/workflow_03_archive_state_to_zenodo.R'
+      - 'scripts/updater/workflow_03_update_zenodo_registry.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Lint W03 production workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= \
+            .github/workflows/workflow_03_production.yml
+
+      - name: Parse W03 production scripts
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_03_publication_status.R',
+            'scripts/updater/workflow_03_restore_lean_checkpoint.R',
+            'scripts/updater/workflow_03_archive_state_to_zenodo.R',
+            'scripts/updater/workflow_03_update_zenodo_registry.R'
+          )
+          invisible(lapply(files,parse))
+          cat('PASS: W03 production scripts parse\n')
+
+      - name: Validate W03 fail-closed provider contract
+        shell: Rscript {0}
+        run: |
+          wf <- paste(readLines('.github/workflows/workflow_03_production.yml',warn=FALSE),collapse='\n')
+          sc <- paste(readLines('scripts/updater/workflow_03_publication_status.R',warn=FALSE),collapse='\n')
+
+          stopifnot(grepl('concurrency:',wf,fixed=TRUE))
+          stopifnot(!grepl("docs/publication_status/.run_workflow03_full",wf,fixed=TRUE))
+          stopifnot(grepl('lean_pointer_path:',wf,fixed=TRUE))
+          stopifnot(grepl('--pointer "docs/publication_status/zenodo/run-$GITHUB_RUN_ID.json"',wf,fixed=TRUE))
+          stopifnot(grepl('workflow_04_production.yml',wf,fixed=TRUE))
+          stopifnot(grepl('baseline$workflow04_pointer',wf,fixed=TRUE))
+          stopifnot(grepl('baseline$lean_pointer',wf,fixed=TRUE))
+
+          stopifnot(grepl('lookup_status=paste0("http_",st)',sc,fixed=TRUE))
+          stopifnot(grepl('technical_lookup_errors',sc,fixed=TRUE))
+          stopifnot(grepl('FAIL_PROVIDER_ERRORS',sc,fixed=TRUE))
+          stopifnot(grepl('Workflow 03 blocked:',sc,fixed=TRUE))
+          stopifnot(grepl('needs_review=grepl("^http_",oa$lookup_status',sc,fixed=TRUE))
+          cat('PASS: W03 requires an authoritative lean pointer, fails closed on provider errors, and dispatches W04 with frozen baselines\n')
+
+      - name: Validate lean restore and archive contracts
+        shell: Rscript {0}
+        run: |
+          restore <- paste(readLines('scripts/updater/workflow_03_restore_lean_checkpoint.R',warn=FALSE),collapse='\n')
+          archive <- paste(readLines('scripts/updater/workflow_03_archive_state_to_zenodo.R',warn=FALSE),collapse='\n')
+          stopifnot(
+            grepl('lean_canonical_sha256',restore,fixed=TRUE),
+            grepl('canonical_records',restore,fixed=TRUE),
+            grepl('Lean canonical SHA mismatch',restore,fixed=TRUE),
+            grepl('records_scanned)!=expected_records',archive,fixed=TRUE),
+            grepl('upstream_lean_canonical_sha256',archive,fixed=TRUE)
+          )
+          cat('PASS: W03 restore/archive contracts preserve exact cohort SHA and record count\n')
