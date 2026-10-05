@@ -16,6 +16,10 @@ permissions:
   contents: write
   actions: read
 
+concurrency:
+  group: workflow04-human-validation-finalisation
+  cancel-in-progress: false
+
 jobs:
   finalise:
     runs-on: ubuntu-latest
