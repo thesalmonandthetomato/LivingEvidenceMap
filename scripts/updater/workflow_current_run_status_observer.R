@@ -28,6 +28,7 @@ force_stage <- toupper(arg("--force-stage",""))
 stage_status <- tolower(arg("--stage-status","complete"))
 if(!stage_status %in% c("start","complete")) stop("--stage-status must be start or complete",call.=FALSE)
 changed_file <- arg("--changed-files","")
+pointer_path <- arg("--pointer","")
 changed <- if(nzchar(changed_file) && file.exists(changed_file)) {
   trimws(readLines(changed_file,warn=FALSE))
 } else character()
@@ -212,11 +213,19 @@ if(is.null(s)){
 }
 
 if(stage=="W01"){
-  row<-latest_row("docs/deduplication/zenodo_registry.csv")
-  if(!as.character(row$state[[1L]]) %in% c("delta","final")) stop("Latest W01 registry row is not final/delta",call.=FALSE)
-  run_id<-as.character(row$github_run_id[[1L]])
-  ptr<-sprintf("docs/deduplication/zenodo/run-%s.json",run_id)
-  p<-fromJSON(ptr,simplifyVector=FALSE)
+  if(nzchar(pointer_path)){
+    ptr<-pointer_path
+    if(!file.exists(ptr)) stop("W01 pointer not found: ",ptr,call.=FALSE)
+    p<-fromJSON(ptr,simplifyVector=FALSE)
+    if(!as.character(p$state) %in% c("delta","final")) stop("W01 pointer is not final/delta",call.=FALSE)
+    run_id<-as.character(p$github_run_id)
+  } else {
+    row<-latest_row("docs/deduplication/zenodo_registry.csv")
+    if(!as.character(row$state[[1L]]) %in% c("delta","final")) stop("Latest W01 registry row is not final/delta",call.=FALSE)
+    run_id<-as.character(row$github_run_id[[1L]])
+    ptr<-sprintf("docs/deduplication/zenodo/run-%s.json",run_id)
+    p<-fromJSON(ptr,simplifyVector=FALSE)
+  }
 
   # KPI semantics are totals for the current update state, not only the newly
   # added manifestation cohort. This avoids coupling reporting to delta-key
@@ -233,8 +242,15 @@ if(stage=="W01"){
 }
 
 if(stage=="W02"){
-  row<-latest_row("docs/enrichment/zenodo_registry.csv");run_id<-as.character(row$github_run_id[[1L]])
-  ptr<-sprintf("docs/enrichment/zenodo/run-%s.json",run_id)
+  if(nzchar(pointer_path)){
+    ptr<-pointer_path
+    if(!file.exists(ptr)) stop("W02 pointer not found: ",ptr,call.=FALSE)
+    px<-fromJSON(ptr,simplifyVector=FALSE)
+    run_id<-as.character(px$github_run_id)
+  } else {
+    row<-latest_row("docs/enrichment/zenodo_registry.csv");run_id<-as.character(row$github_run_id[[1L]])
+    ptr<-sprintf("docs/enrichment/zenodo/run-%s.json",run_id)
+  }
   out<-tempfile("w02_");dir.create(out)
   st<-system2("Rscript",c("scripts/updater/workflow_02_restore_state_from_zenodo.R","--pointer",ptr,"--output-dir",out))
   if(st!=0L) stop("Failed restoring W02 state",call.=FALSE)
@@ -250,8 +266,15 @@ if(stage=="W02"){
 }
 
 if(stage=="W03"){
-  row<-latest_row("docs/publication_status/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
-  ptr<-sprintf("docs/publication_status/zenodo/run-%s.json",run_id)
+  if(nzchar(pointer_path)){
+    ptr<-pointer_path
+    if(!file.exists(ptr)) stop("W03 pointer not found: ",ptr,call.=FALSE)
+    px<-fromJSON(ptr,simplifyVector=FALSE)
+    run_id<-as.character(px$source_github_run_id)
+  } else {
+    row<-latest_row("docs/publication_status/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
+    ptr<-sprintf("docs/publication_status/zenodo/run-%s.json",run_id)
+  }
   out<-tempfile("w03_");dir.create(out)
   st<-system2("Rscript",c("scripts/updater/workflow_03_restore_state_from_zenodo.R","--pointer",ptr,"--output-dir",out))
   if(st!=0L) stop("Failed restoring W03 state",call.=FALSE)
@@ -263,8 +286,15 @@ if(stage=="W03"){
 }
 
 if(stage=="W04"){
-  row<-latest_row("docs/workflow04/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
-  ptr<-sprintf("docs/workflow04/zenodo/run-%s.json",run_id)
+  if(nzchar(pointer_path)){
+    ptr<-pointer_path
+    if(!file.exists(ptr)) stop("W04 pointer not found: ",ptr,call.=FALSE)
+    px<-fromJSON(ptr,simplifyVector=FALSE)
+    run_id<-as.character(px$source_github_run_id)
+  } else {
+    row<-latest_row("docs/workflow04/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
+    ptr<-sprintf("docs/workflow04/zenodo/run-%s.json",run_id)
+  }
   out<-tempfile("w04_");dir.create(out)
   st<-system2("Rscript",c("scripts/updater/workflow_04_restore_state_from_zenodo.R","--pointer",ptr,"--output-dir",out))
   if(st!=0L) stop("Failed restoring W04 state",call.=FALSE)
@@ -278,14 +308,27 @@ if(stage=="W04"){
 }
 
 if(stage=="W05"){
-  row<-latest_row("docs/workflow05/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
+  if(nzchar(pointer_path)){
+    if(!file.exists(pointer_path)) stop("W05 pointer not found: ",pointer_path,call.=FALSE)
+    px<-fromJSON(pointer_path,simplifyVector=FALSE)
+    run_id<-as.character(px$source_github_run_id)
+  } else {
+    row<-latest_row("docs/workflow05/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
+  }
   s<-set_run(s,"W05",run_id,6L,7L,"Species coding complete; awaiting geography coding")
   save_status(s);cat("PASS: W05 live progress updated\n");quit(status=0)
 }
 
 if(stage=="W06"){
-  row<-latest_row("docs/workflow06/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
-  ptr<-sprintf("docs/workflow06/zenodo/run-%s.json",run_id)
+  if(nzchar(pointer_path)){
+    ptr<-pointer_path
+    if(!file.exists(ptr)) stop("W06 pointer not found: ",ptr,call.=FALSE)
+    px<-fromJSON(ptr,simplifyVector=FALSE)
+    run_id<-as.character(px$source_github_run_id)
+  } else {
+    row<-latest_row("docs/workflow06/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
+    ptr<-sprintf("docs/workflow06/zenodo/run-%s.json",run_id)
+  }
   out<-tempfile("w06_");dir.create(out)
   st<-system2("Rscript",c("scripts/updater/workflow_06_restore_state_from_zenodo.R","--pointer",ptr,"--output-dir",out))
   if(st!=0L) stop("Failed restoring W06 state",call.=FALSE)
@@ -298,8 +341,15 @@ if(stage=="W06"){
 }
 
 if(stage=="W07"){
-  row<-latest_row("docs/workflow07/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
-  ptr<-sprintf("docs/workflow07/zenodo/run-%s.json",run_id)
+  if(nzchar(pointer_path)){
+    ptr<-pointer_path
+    if(!file.exists(ptr)) stop("W07 pointer not found: ",ptr,call.=FALSE)
+    px<-fromJSON(ptr,simplifyVector=FALSE)
+    run_id<-as.character(px$source_github_run_id)
+  } else {
+    row<-latest_row("docs/workflow07/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
+    ptr<-sprintf("docs/workflow07/zenodo/run-%s.json",run_id)
+  }
   out<-tempfile("w07_");dir.create(out)
   st<-system2("Rscript",c("scripts/updater/workflow_07_restore_state_from_zenodo.R","--pointer",ptr,"--output-dir",out))
   if(st!=0L) stop("Failed restoring W07 state",call.=FALSE)
