@@ -39,7 +39,9 @@ jobs:
             zr_exact=paste0('(',base,') AND ZR (2020)'),
             zr_range=paste0('(',base,') AND ZR (2015-2020)'),
             waters_full=waters_base,
-            waters_undated=paste0('(',waters_base,') AND NOT (',all_years,')')
+            waters_zr_any=paste0('(',waters_base,') AND ZR (*)'),
+            waters_not_zr_any=paste0('(',waters_base,') NOT ZR (*)'),
+            waters_and_not_zr_any=paste0('(',waters_base,') AND NOT ZR (*)')
           )
           count <- function(q) {
             db <- if (grepl('waters_',nm)) 'wrw' else 'cmedm'
