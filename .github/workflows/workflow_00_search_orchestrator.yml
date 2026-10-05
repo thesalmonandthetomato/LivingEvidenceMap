@@ -564,7 +564,7 @@ jobs:
               --dir "$dest"
             if [ -d "$dest/source_delta" ]; then
               test -s "$dest/source_delta/reconciliation_manifest.json"
-              test -s "$dest/source_delta/updated_native_ids.txt"
+              test -f "$dest/source_delta/updated_native_ids.txt"
             fi
           done
 
