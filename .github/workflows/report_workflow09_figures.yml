@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   publish:
@@ -657,22 +658,15 @@ jobs:
           fi
 
       - name: Trigger Workflow 10 after successful Workflow 09
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          git pull --ff-only origin workflow01-final-architecture
-          mkdir -p docs/reporting
-          cat > docs/reporting/.run_workflow10_dashboard <<EOF
-          {
-            "schema": "living-evidence-map-workflow10-trigger-v1",
-            "workflow09_run_id": "${GITHUB_RUN_ID}",
-            "workflow09_commit_sha": "$(git rev-parse HEAD)",
-            "triggered_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          }
-          EOF
-          git add docs/reporting/.run_workflow10_dashboard
-          git commit -m "Trigger W10 after successful W09"
-          git push origin HEAD:workflow01-final-architecture
+          gh workflow run workflow_10_dashboard.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref workflow01-final-architecture
+          echo "PASS: dispatched Workflow 10 after successful Workflow 09"
 
       - name: Upload Workflow 09 publication package
         if: always()
