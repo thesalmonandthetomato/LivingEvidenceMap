@@ -118,7 +118,7 @@ jobs:
           test -s source/final/workflow04_final/workflow04_final_screening_layer.jsonl
           test -s source/final/workflow04_final/workflow04_human_review_queue.jsonl
           test -s source/final/workflow04_final/summary.json
-          test -s source/final/workflow04_final/prompt_provenance.json
+          test -s source/prepared/outputs/workflow04_prepare/prompt_provenance.json
           test -s source/prepared/inputs/current/canonical_lean.jsonl
           test -s source/prepared/inputs/current/publication_status.jsonl
 
@@ -160,6 +160,7 @@ jobs:
             --output-dir outputs/workflow04_final
           STATUS="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(x$status)')"
           test "$STATUS" = "PASS"
+          cp source/prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json
 
       - name: Publish resolved W04 state to restricted Zenodo
         env:
@@ -169,7 +170,7 @@ jobs:
           set -euo pipefail
           CAN_SHA="$(Rscript -e 'cat(digest::digest(file="source/prepared/inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
           W03_SHA="$(Rscript -e 'cat(digest::digest(file="source/prepared/inputs/current/publication_status.jsonl",algo="sha256",serialize=FALSE))')"
-          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("source/final/workflow04_final/prompt_provenance.json",simplifyVector=FALSE);stopifnot(grepl("^[0-9a-f]{64}$",x$prompt_sha256));cat(x$prompt_sha256)')"
+          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("source/prepared/outputs/workflow04_prepare/prompt_provenance.json",simplifyVector=FALSE);stopifnot(grepl("^[0-9a-f]{64}$",x$prompt_sha256));cat(x$prompt_sha256)')"
           mkdir -p outputs/workflow04_zenodo
           Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R \
             --state-dir outputs/workflow04_final \
