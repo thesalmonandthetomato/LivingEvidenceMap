@@ -3,7 +3,7 @@
   "update_id": "w00-run-37346236893",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-05T17:20:08Z",
-  "last_updated_at_utc": "2026-10-05T20:48:12Z",
+  "last_updated_at_utc": "2026-10-05T22:12:05Z",
   "baseline": {
     "release_update_id": "w01-run-36971418284",
     "workflow01_source_run_id": "36971418284",
@@ -101,12 +101,11 @@
   },
   "cohort": {
     "record_ids_path": "docs/current_run/current_run_record_ids.txt",
-    "record_ids_sha256": null,
-    "deduplicated_records": null
+    "deduplicated_records": 50430
   },
   "counts": {
-    "search_results": 17039,
-    "deduplicated_records": [],
+    "search_results": 135566,
+    "deduplicated_records": 50430,
     "enriched_records": [],
     "retraction_exclusions": [],
     "screened_include": [],
@@ -129,39 +128,40 @@
       "status": "complete"
     },
     "W02": {
-      "status": "complete"
+      "status": "active"
     },
     "W03": {
-      "status": "complete"
+      "status": "pending"
     },
     "W04": {
-      "status": "complete"
+      "status": "pending"
     },
     "W05": {
-      "status": "complete"
+      "status": "pending"
     },
     "W06": {
-      "status": "complete"
+      "status": "pending"
     },
     "W07": {
-      "status": "complete"
+      "status": "pending"
     },
     "W08": {
-      "status": "complete"
+      "status": "pending"
     },
     "W09": {
-      "status": "complete"
+      "status": "pending"
     },
     "W10": {
-      "status": "complete"
+      "status": "pending"
     },
-    "current_stage": "W10",
-    "completed_through": 11,
-    "status_label": "Current update complete"
+    "current_stage": "W01",
+    "completed_through": 2,
+    "active_position": 3,
+    "status_label": "Deduplication complete; Workflow 02 enrichment in progress"
   },
   "workflow_runs": {
     "W00": "37346236893",
-    "W01": "37347666369",
+    "W01": "37373748707",
     "W10": "37370263748"
   }
 }

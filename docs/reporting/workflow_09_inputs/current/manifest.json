@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-input-manifest-v1",
-  "generated_at_utc": "2026-10-05T17:20:13Z",
+  "generated_at_utc": "2026-10-05T22:12:56Z",
   "stages": [
     {
       "stage": "W00",
@@ -9,7 +9,7 @@
     },
     {
       "stage": "W01",
-      "source_run_id": "36971418284",
+      "source_run_id": "37373748707",
       "file": "w01_summary.json"
     },
     {
@@ -56,28 +56,28 @@
     },
     {
       "file": "w01_source_intersections.csv",
-      "bytes": 1788,
-      "sha256": "ac03f925d0eec2e7d166c268e88ca492f90386e2f9b50f3bf8737f4c5e42fb7d"
+      "bytes": 25870,
+      "sha256": "d8946b29803f2f4d5d9a27a6e34e95563d3001c076b8ad0456fe1382f2e1cb22"
     },
     {
       "file": "w01_source_manifest.json",
-      "bytes": 794,
-      "sha256": "2edfc98c3989a77ee02ea23b026da08a46da8e49831aac64041f534bf68a582f"
+      "bytes": 796,
+      "sha256": "cbff7ce271d304ff6a6150a31dd39563583be320783cad5d44ad594ade88ec13"
     },
     {
       "file": "w01_source_membership.csv",
-      "bytes": 1917413,
-      "sha256": "7d2e20feda6401c78c41492d4d9e4a387b34def532b197b2b2481d3a2be996a0"
+      "bytes": 2335825,
+      "sha256": "de90db069e41dd2a9f63bc43b5ae2959bd254af169c2e7cebb82ac5e57f007e9"
     },
     {
       "file": "w01_source_summary.csv",
-      "bytes": 389,
-      "sha256": "51aade68ac6c21f112be5e4b4288ac3e9d6f5b2bd907f80c682be0d8f3191960"
+      "bytes": 1106,
+      "sha256": "9098440997ec6e036da0a79f4d8f64c404a949205cdf3abd4bbf48022213eab6"
     },
     {
       "file": "w01_summary.json",
       "bytes": 595,
-      "sha256": "f3fabf727c3403537de811194130f9bd44e7ac73a38576f38cb7982b78a431ba"
+      "sha256": "8cff7cc1045ccaee34f15eec91c812a6b22c05aa3af643b46b3aeda1136386c7"
     },
     {
       "file": "w02_summary.json",
