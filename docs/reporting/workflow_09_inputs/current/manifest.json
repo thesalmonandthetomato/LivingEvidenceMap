@@ -1,10 +1,10 @@
 {
   "schema": "living-evidence-map-workflow09-input-manifest-v1",
-  "generated_at_utc": "2026-10-04T21:33:39Z",
+  "generated_at_utc": "2026-10-05T17:20:13Z",
   "stages": [
     {
       "stage": "W00",
-      "source_run_id": "baseline-plus-manual-ris",
+      "source_run_id": "37346236893",
       "file": "w00_summary.json"
     },
     {
@@ -51,8 +51,8 @@
   "files": [
     {
       "file": "w00_summary.json",
-      "bytes": 371,
-      "sha256": "c0aa2d368b43d8941c140d388b4bba2b5763aa8c409fb5171d3f6a1b6f9b42f7"
+      "bytes": 357,
+      "sha256": "ce5d9199d4d63a1521294b92611c8d79d9d7f117afd4ff82f0f8b5c387893bcd"
     },
     {
       "file": "w01_source_intersections.csv",

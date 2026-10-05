@@ -1,17 +1,47 @@
 {
   "schema": "living-evidence-map-current-run-status-v1",
-  "update_id": "w00-run-37326710853",
+  "update_id": "w00-run-37346236893",
   "branch": "workflow01-final-architecture",
-  "started_at_utc": "2026-10-05T15:05:24Z",
-  "last_updated_at_utc": "2026-10-05T15:05:24Z",
+  "started_at_utc": "2026-10-05T17:20:08Z",
+  "last_updated_at_utc": "2026-10-05T17:20:08Z",
   "baseline": {
+    "release_update_id": "w01-run-36971418284",
+    "workflow01_source_run_id": "36971418284",
+    "workflow01_pointer": "docs/deduplication/zenodo/run-36971418284.json",
+    "workflow02_source_run_id": "37016080508",
+    "workflow02_pointer": "docs/enrichment/zenodo/run-37016080508.json",
+    "lean_pointer": "docs/compaction/zenodo/run-37016080508.json",
+    "workflow04_source_run_id": "37051672356",
+    "workflow04_pointer": "docs/workflow04/zenodo/run-37051672356.json",
+    "workflow05_source_run_id": "37110114836",
+    "workflow05_pointer": "docs/workflow05/zenodo/run-37110114836.json",
+    "workflow06_source_run_id": "37114864202",
+    "workflow06_pointer": "docs/workflow06/zenodo/run-37114864202.json",
+    "workflow07_source_run_id": "37153534771",
+    "workflow07_pointer": "docs/workflow07/zenodo/run-37153534771.json",
     "workflow08_pointer": "docs/workflow08/zenodo/run-37234697766.json",
     "workflow08_source_run_id": "37234697766",
     "canonical_records": 21493,
-    "canonical_sha256": "96a854952aecf3a562fadf603670f650fa26ba9974c819e4b98f9c4dc4f6de20"
+    "canonical_sha256": "96a854952aecf3a562fadf603670f650fa26ba9974c819e4b98f9c4dc4f6de20",
+    "previous_counts": {
+      "deduplicated_records": [],
+      "enriched_records": [],
+      "retraction_exclusions": [],
+      "screened_include": [],
+      "screened_exclude": [],
+      "species_records": [],
+      "geography": {
+        "with": [],
+        "without": []
+      },
+      "topics": {
+        "with": [],
+        "without": []
+      }
+    }
   },
   "search": {
-    "workflow00_run_id": "37326710853",
+    "workflow00_run_id": "37346236893",
     "search_date": "2026-10-05",
     "search_results": 17039,
     "sources": {
@@ -76,18 +106,19 @@
   },
   "counts": {
     "search_results": 17039,
-    "deduplicated_records": null,
-    "enriched_records": null,
-    "retraction_exclusions": null,
-    "screened_include": null,
-    "screened_exclude": null,
+    "deduplicated_records": [],
+    "enriched_records": [],
+    "retraction_exclusions": [],
+    "screened_include": [],
+    "screened_exclude": [],
+    "species_records": [],
     "geography": {
-      "with": null,
-      "without": null
+      "with": [],
+      "without": []
     },
     "topics": {
-      "with": null,
-      "without": null
+      "with": [],
+      "without": []
     }
   },
   "progress": {
@@ -130,6 +161,6 @@
     "status_label": "Search complete; awaiting deduplication"
   },
   "workflow_runs": {
-    "W00": "37326710853"
+    "W00": "37346236893"
   }
 }
