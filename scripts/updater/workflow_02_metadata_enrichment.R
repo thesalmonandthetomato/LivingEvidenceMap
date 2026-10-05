@@ -27,6 +27,7 @@ max_rate_limit_wait <- as.numeric(arg("--max-rate-limit-wait","60"))
 scopus_rate_limit_trip <- as.integer(arg("--scopus-rate-limit-trip","3"))
 skip_scopus <- tolower(arg("--skip-scopus","false")) %in% c("true","1","yes")
 recheck_after_days <- as.numeric(arg("--recheck-after-days","90"))
+enrich_author_keywords <- tolower(arg("--enrich-author-keywords","false")) %in% c("true","1","yes")
 if(is.na(delay) || delay < 0) stop("--delay must be >= 0",call.=FALSE)
 if(is.na(max_rate_limit_wait) || max_rate_limit_wait < 0) stop("--max-rate-limit-wait must be >= 0",call.=FALSE)
 if(is.na(scopus_rate_limit_trip) || scopus_rate_limit_trip < 1L) stop("--scopus-rate-limit-trip must be >= 1",call.=FALSE)
@@ -462,7 +463,7 @@ for(i in seq_along(rows)){
   missing_title_before <- is_missing(r$canonical$title)
   missing_abstract_before <- is_missing(r$canonical$abstract)
   missing_author_keywords_before <- keywords_missing(r$canonical$author_keywords)
-  eligible <- !is.null(d) && (missing_title_before || missing_abstract_before || missing_author_keywords_before)
+  eligible <- !is.null(d) && (missing_title_before || missing_abstract_before || (enrich_author_keywords && missing_author_keywords_before))
   if(!eligible) next
   counts$eligible_doi_missing_metadata <- counts$eligible_doi_missing_metadata + 1L
   if(!previous_attempt_due(r$metadata_enrichment)){
@@ -527,7 +528,7 @@ for(i in seq_along(rows)){
       }
     }
 
-    if(keywords_missing(r$canonical$author_keywords) && length(ep$author_keywords)){
+    if(enrich_author_keywords && keywords_missing(r$canonical$author_keywords) && length(ep$author_keywords)){
       if(ep_title_guard){
         r$canonical$author_keywords <- ep$author_keywords
         counts$europepmc_author_keywords_filled <- counts$europepmc_author_keywords_filled + 1L
@@ -613,7 +614,7 @@ for(i in seq_along(rows)){
   # 2) if no retained EID, direct DOI -> FULL;
   # 3) if direct DOI returns no record/404, stop. No DOI-search -> EID fallback.
   eid_for_keywords <- retained_scopus_eid(r)
-  if(still_missing_author_keywords && !skip_scopus){
+  if(enrich_author_keywords && still_missing_author_keywords && !skip_scopus){
     counts$scopus_author_keywords_attempted <- counts$scopus_author_keywords_attempted + 1L
     sk <- if(!is.null(eid_for_keywords)){
       tryCatch(
@@ -650,7 +651,7 @@ for(i in seq_along(rows)){
   still_missing_title <- is_missing(r$canonical$title)
   still_missing_abstract <- is_missing(r$canonical$abstract)
   still_missing_author_keywords <- keywords_missing(r$canonical$author_keywords)
-  if(still_missing_title || still_missing_abstract || still_missing_author_keywords) counts$still_missing_after <- counts$still_missing_after + 1L
+  if(still_missing_title || still_missing_abstract || (enrich_author_keywords && still_missing_author_keywords)) counts$still_missing_after <- counts$still_missing_after + 1L
 
   technical_error <- identical(clean_text(ep$outcome),"technical_error") ||
     (!is.null(rec_audit$scopus) && identical(clean_text(rec_audit$scopus$outcome),"technical_error")) ||
@@ -693,7 +694,7 @@ report <- list(
   implementation_language="R",
   provider_order=if(skip_scopus)c("europe_pmc") else c("europe_pmc","scopus"),
   policy=list(
-    eligibility="DOI present and title, abstract, or author keywords missing",
+    eligibility=if(enrich_author_keywords)"DOI present and title, abstract, or author keywords missing" else "DOI present and title or abstract missing",
     overwrite_existing_fields=FALSE,
     europe_pmc_match="exact normalised DOI plus canonical/provider title similarity >= 0.90 for abstract/author-keyword fills; exact DOI may fill a missing title",
     scopus_match="direct DOI Abstract Retrieval with view=META_ABS only; no Search-to-EID fallback",
