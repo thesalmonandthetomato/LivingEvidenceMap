@@ -10,7 +10,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: workflow01-shiny-export
@@ -332,3 +332,18 @@ jobs:
             git fetch origin "$WORKFLOW01_BRANCH"
             git rebase "origin/$WORKFLOW01_BRANCH"
           done
+
+      - name: Dispatch W01 resume from published handoff
+        if: env.HAS_PENDING == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HANDOFF="docs/deduplication/handoffs/w01/run-$CHECKPOINT_RUN.json"
+          test -s "$HANDOFF"
+          gh workflow run workflow_01_resume_after_human_review.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$WORKFLOW01_BRANCH" \
+            -f handoff_path="$HANDOFF"
+          echo "PASS: explicitly dispatched W01 resume from $HANDOFF"
