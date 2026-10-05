@@ -7,6 +7,7 @@ on:
       - workflow01-final-architecture
     paths:
       - '.github/workflows/shiny-adjudication-dry-run-export-w01.yml'
+      - 'docs/deduplication/w01_export_requests/**'
 
 permissions:
   contents: write
