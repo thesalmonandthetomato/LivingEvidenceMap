@@ -83,7 +83,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 jobs:
   workflow08:
@@ -526,6 +526,18 @@ jobs:
             --workflow-run-id "$GITHUB_RUN_ID" \
             --output-sha256 "$OUTPUT_SHA" \
             --message "Workflow 08 decisions applied; final canonical state archived and registered."
+
+      - name: Trigger Workflow 09 publication package
+        if: ${{ steps.human_gate.outputs.pause != 'true' && inputs.publish == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run report_workflow09_figures.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref workflow01-final-architecture
+          echo "PASS: triggered Workflow 09 after successful published W08 finalisation"
 
       - name: Upload review and final state
         if: always()
