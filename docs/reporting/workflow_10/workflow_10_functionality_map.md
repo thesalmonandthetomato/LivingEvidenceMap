@@ -2,25 +2,23 @@
 
 ## Purpose
 
-Workflow 10 is the public interactive presentation layer of the LivingEvidenceMap pipeline. It restores the authoritative Workflow 08 included-only canonical evidence base and projects it into a static browser-based dashboard without altering screening, deduplication, species, geography or topic decisions.
+Workflow 10 is the public presentation endpoint of the LivingEvidenceMap pipeline. It restores the latest authoritative Workflow 08 included-only canonical evidence base after successful Workflow 09 publication, validates its provenance, and projects it into a static browser-based dashboard.
 
-The dashboard is a derived presentation layer rather than an analytical authority. The Workflow 08 canonical JSONL remains the definitive record-level evidence base, while Workflow 09 remains the authoritative manuscript/reporting layer.
+Workflow 10 does not modify deduplication, screening, species, geography or topic decisions. The Workflow 08 canonical JSONL remains the authoritative record-level analytical dataset, while Workflow 09 remains the authoritative reporting and manuscript layer.
 
-The accepted final W10 architecture provides:
+The accepted Workflow 10 interface provides:
 
 1. headline evidence-map metrics;
 2. geographic distribution and country filtering;
 3. publication-year summaries;
-4. species-by-topic views;
-5. a navigable hierarchical topic visualisation;
-6. an interactive bibliographic database with species, country, year and topic filters; and
-7. links to the methodological and results reports.
+4. topic-assignment summaries by species;
+5. hierarchical topic exploration;
+6. an interactive bibliographic database table with coordinated filters; and
+7. links to the rendered Methods and Results reports.
 
-A title/abstract search and RIS-download interface was developed and validated during W10 development. Its underlying implementation is retained for possible future reactivation, but the public entry button is deliberately hidden in the accepted final dashboard.
+A title/abstract search and filtered RIS-download feature was developed during W10 development but is **not part of the current production architecture**. Its implementation is retained as a manual restoration path only. Production W10 does not build the abstract inverted index, does not reconstruct full abstracts, and does not generate the browser-side RIS download.
 
-Keyword enrichment is **not part of Workflow 10**. The final dashboard does not depend on author keywords, indexing terms or any future keyword-retrieval process.
-
-This document is intended to serve two purposes:
+This document serves two purposes:
 
 1. as a methodological guide to the repository implementation; and
 2. as source text for reporting the workflow in a research paper.
@@ -28,318 +26,464 @@ This document is intended to serve two purposes:
 ## Functionality map
 
 ```text
-[authoritative Workflow 08 included-only canonical JSONL]
+[authoritative Workflow 08 final canonical JSONL]
                          |
                          v
-          [checksum-validated restoration]
+              [Workflow 09 publication]
+                         |
+                         | successful validation + publication
+                         v
+ [docs/reporting/.run_workflow10_dashboard]
                          |
                          v
-             [W10 dashboard projection]
+             [Workflow 10 production]
                          |
-         +---------------+----------------+
-         |               |                |
-         v               v                v
- [bibliographic]    [geography]      [topic hierarchy]
-   metadata          + species        + star support
-         |               |                |
-         +---------------+----------------+
-                         |
-                         v
-              [static dashboard data]
+            +------------+-------------+
+            |                          |
+            v                          v
+ [restore + verify W08]       [validate W09 handoff]
+            |                          |
+            +------------+-------------+
                          |
                          v
-                [browser interface]
+          [internal dashboard projection]
+                         |
+                         v
+             [public table projection]
                          |
        +-----------------+------------------+
        |                 |                  |
        v                 v                  v
-   KPI summary       interactive        filtered
-   and charts          figures          database
-       |
-       v
- [public GitHub Pages dashboard]
-
-Optional retained but inactive branch:
-[title/abstract search + RIS export implementation]
+   KPI/charts       linked filters     bibliographic
+ + visualisations   + navigation       database table
+       |                 |                  |
+       +-----------------+------------------+
                          |
                          v
-           [public entry button hidden]
+            [static W10 Pages artefact]
+                         |
+                         v
+              [public presentation]
+
+Retained restoration path only:
+[dashboard-search-trial.html + workflow_10_build_search_trial.R]
+                         |
+                         v
+        [manual-only search/RIS workflow]
 ```
 
 ## Components
 
 | Component | Function |
 |---|---|
-| `.github/workflows/workflow_10_dashboard.yml` | Production controller that restores and validates the authoritative Workflow 08 canonical JSONL and builds the dashboard projection. |
-| `scripts/updater/workflow_10_restore_canonical_from_zenodo.R` | Restores the registered authoritative W08 canonical archive and verifies its provenance/checksum. |
-| `R/workflow_10_dashboard_from_canonical_jsonl.R` | Converts the included canonical JSONL into the static dashboard data projection and summary metrics. |
-| `docs/dashboard-redesign-temp.html` | Core dashboard presentation template used during W10 development and preview deployment. |
-| `docs/dashboard-search-trial.html` | Accepted final dashboard template containing the later database/search interface implementation; the search/download opener is hidden in the final public presentation. The historical filename is retained to avoid unnecessary refactoring of a validated implementation. |
-| `R/workflow_10_build_search_trial.R` | Builds the lightweight browser payload and positional abstract index used by the optional search/download implementation. |
-| `.github/workflows/workflow_10_search_trial.yml` | Validates the search/download implementation and associated data/index artefacts. |
-| `.github/workflows/workflow_10_pages_preview.yml` | Deploys an isolated W10 Pages preview while preserving the production site. |
-| `docs/dashboard-topic-definitions.json` | Dashboard-only explanatory definitions for higher-level topic nodes. |
-| `data/reference/topic_ontology_v3_6.csv` | Frozen topic ontology used to validate and label W08/W07 topic pathways. |
-| `config/iso3_numeric_map.json` and `config/global_country_gazetteer_v3.csv` | Country-code mappings used for geographic presentation. |
-| `docs/reporting/workflow_09/flow_counts.json` | Reporting-layer source for search, deduplication and screening headline metrics displayed by W10. |
+| `.github/workflows/workflow_10_dashboard.yml` | Production W10 controller. Restores and validates the authoritative W08 state, validates the W09 handoff, builds the internal and public dashboard projections, validates the public interface, updates live pipeline status and uploads the W10 artefact. |
+| `scripts/updater/workflow_10_restore_canonical_from_zenodo.R` | Restores the registered authoritative W08 canonical archive and verifies the downloaded canonical file against the registered pointer. |
+| `R/workflow_10_dashboard_from_canonical_jsonl.R` | Builds the complete internal W10 dashboard projection and aggregate metrics from the authoritative canonical JSONL. |
+| `R/workflow_10_make_public_dashboard.R` | Converts the internal projection into the public database-table payload. It removes full abstracts, replaces them with a maximum 30-word snippet, and asserts that search/RIS/index functionality is disabled. |
+| `docs/index.html` | Accepted W10 dashboard interface on the workflow branch. The database table and all ordinary table/filter interactions remain present; search/download controls are absent. |
+| `docs/dashboard-search-trial.html` | Preserved reference implementation containing the previously developed search/download interface. It is not the production W10 template. |
+| `R/workflow_10_build_search_trial.R` | Preserved builder for the retired browser-side abstract search/index/RIS feature. Not called by production W10. |
+| `.github/workflows/workflow_10_search_trial.yml` | Manual-only restoration/test workflow for the retired search/download functionality. It no longer auto-triggers. |
+| `docs/dashboard-topic-definitions.json` | Dashboard-only definitions for higher-level topic nodes. These do not alter the analytical ontology. |
+| `user_input/workflow07_topic_ontology.csv` | Current controlled topic ontology used to validate retained W07/W08 topic pathways. |
+| `config/iso3_numeric_map.json` | Mapping between ISO3 country codes and numeric map identifiers. |
+| `config/global_country_gazetteer_v3.csv` | Country-name lookup used for dashboard presentation. |
+| `docs/reporting/workflow_09/flow_counts.json` | Authoritative reporting-layer source for headline search, deduplication and screening metrics. |
+| `docs/reporting/.run_workflow10_dashboard` | Dedicated W09→W10 provenance trigger. Its update is the production handoff event from successful W09 publication to W10. |
+| `scripts/updater/workflow_current_run_status_observer.R` | Tracks W09 and W10 start/completion states for the current-run progress display. |
+| `scripts/updater/workflow_current_run_status_to_shiny.R` | Writes the current-run status to the Shiny backing store. |
 
 ## Inputs and methodological rules
 
 ### Authoritative evidence input
 
-Workflow 10 consumes the definitive **19,117-record included-only Workflow 08 canonical JSONL**.
+Workflow 10 does not use a hard-coded release count or canonical checksum.
 
-The accepted baseline is the restricted Zenodo record:
+For each run it resolves the single row marked `authoritative` in:
 
-- Zenodo record: **23020526**;
-- DOI: `10.5281/zenodo.23020526`;
-- canonical SHA-256:  
-  `8a42fe35f3c08bb4cd80824e494b9b579797a2c83286799b999aa9024ce9bb8c`.
+`docs/workflow08/zenodo_registry.csv`
 
-The dashboard build rejects unexpected schema versions, duplicate record IDs, non-included records, unknown topic paths and malformed topic-support values.
+and then resolves the corresponding published pointer under:
 
-Workflow 10 never modifies the canonical JSONL.
+`docs/workflow08/zenodo/`
 
-### Dashboard projection
+The pointer supplies the current:
 
-For each included record, W10 projects the fields needed for public exploration:
+- authoritative Workflow 08 source run;
+- Zenodo record;
+- DOI;
+- canonical record count;
+- excluded-record count; and
+- final canonical JSONL SHA-256.
+
+The restored canonical JSONL is accepted only when its checksum matches the authoritative pointer.
+
+For the current validated release, the authoritative input is:
+
+- Workflow 08 source run: **37234697766**;
+- Zenodo record: **23145712**;
+- DOI: `10.5281/zenodo.23145712`;
+- included records: **21,493**; and
+- canonical SHA-256: `96a854952aecf3a562fadf603670f650fa26ba9974c819e4b98f9c4dc4f6de20`.
+
+These values document the current release but are not embedded as production gates in W10.
+
+### Workflow 09 handoff
+
+Production W10 begins only after successful Workflow 09 publication.
+
+Workflow 09 writes:
+
+`docs/reporting/.run_workflow10_dashboard`
+
+after its publication package has passed validation, been committed, and its live W09 status has been updated. The trigger records Workflow 09 provenance and causes one branch-native W10 run.
+
+W10 no longer relies on incidental changes to W08 pointers, W09 flow-count files or W09 compact handoff files to start a production build. This prevents dashboard generation from starting while W09 is still writing its publication package.
+
+### Internal dashboard projection
+
+`R/workflow_10_dashboard_from_canonical_jsonl.R` validates and projects the final included canonical population.
+
+The internal projection contains the fields required for W10 rendering and validation, including:
 
 - stable canonical record ID;
 - title;
-- abstract or permitted abstract representation for the relevant interface;
+- full abstract within the runner-only internal projection;
 - DOI;
 - publication year;
 - authors;
 - journal;
 - volume and pages;
 - final species labels;
-- final country/ISO3 assignments;
-- retained topic pathways;
-- Workflow 07 topic-support stars; and
-- topic path identifiers.
+- final countries and ISO3 codes;
+- retained topic paths;
+- Workflow 07 topic-support stars;
+- topic-support counts;
+- topic path IDs; and
+- topic-finalisation provenance.
 
-The projection is deliberately narrower than the canonical record. Nested provenance, screening internals, model outputs and adjudication state remain in the authoritative W08 JSONL.
+This internal projection is runner-only and is not uploaded as the public W10 artefact.
+
+### Public database-table projection
+
+The public projection preserves the accepted bibliographic database table while removing the retired search/download data requirements.
+
+For each included record, the public dashboard contains the table fields required to render and filter the database, including:
+
+- stable record ID used by the browser interface;
+- title;
+- DOI;
+- publication year;
+- authors;
+- journal;
+- volume and pages;
+- species;
+- countries and ISO3 codes;
+- topic paths and topic-support stars; and
+- an abstract snippet of at most 30 words.
+
+It does **not** contain the full abstract field.
+
+The public projection explicitly records:
+
+- `database_table = true`;
+- `full_abstracts = false`;
+- `abstract_snippet_words = 30`;
+- `search = false`;
+- `ris_download = false`; and
+- `abstract_index = false`.
 
 ### Species
 
-The dashboard consumes the final post-W08 species layer. Species filters are intersective with other dashboard filters rather than independent views.
+W10 consumes final post-W08 species labels. Species selection is coordinated with country, publication-year and topic filters in the database table and with the relevant dashboard figures.
 
-The dashboard display order is fixed for the focal farmed species categories and the unspecified-salmon category.
+No species inference or recoding occurs in W10.
 
 ### Geography
 
-Country visualisation uses final W08 geography assignments and validated ISO3 mappings. Country counts represent unique included records associated with each country.
+W10 uses final post-W08 country and ISO3 assignments.
 
-Country selection in the map or database is propagated to the same shared filter state.
+Map and table interactions operate on the same final geography layer. The production build uses the controlled ISO3 mapping and country gazetteer for presentation only; it does not re-adjudicate geography.
 
 ### Topics
 
-Workflow 10 uses final retained topic pathways from W07/W08 and the frozen v3.6 ontology.
+W10 uses final retained topic pathways and Workflow 07 agreement values carried through W08.
 
-Topic support is displayed using the preserved three-pass model-agreement convention:
+The dashboard displays three-pass support using:
 
-- ★ = one of three passes;
-- ★★ = two of three passes;
-- ★★★ = three of three passes.
+- ★ = one supporting pass;
+- ★★ = two supporting passes; and
+- ★★★ = three supporting passes.
 
-Higher-level dashboard topic definitions are presentation metadata only. They do not change the ontology or record-level topic assignments.
+Dashboard-only higher-level definitions are explanatory presentation metadata and do not modify the controlled topic ontology.
+
+### Search and RIS download
+
+Search/download is deliberately excluded from production W10.
+
+Production W10 therefore does not:
+
+- expose a title/abstract search interface;
+- build a positional abstract index;
+- expose full abstracts;
+- reconstruct abstracts in the browser;
+- produce a filtered browser-side RIS file; or
+- upload the search-trial manifest/index.
+
+The previously validated implementation remains preserved in version control and can be restored deliberately through the manual-only search-trial workflow.
 
 ### Keywords
 
-Keywords are intentionally excluded from the accepted W10 architecture.
+Keyword enrichment is not a W10 dependency.
 
-Neither author keywords nor database indexing terms are required for:
+Author keywords and database indexing terms are not required for:
 
 - dashboard filtering;
-- topic assignment;
-- geographic analysis;
-- species analysis;
-- publication-year analysis;
-- bibliographic display; or
-- future W10 regeneration.
+- topic visualisation;
+- species visualisation;
+- geography visualisation;
+- publication-year visualisation; or
+- bibliographic table rendering.
 
-Keyword repair/enrichment is therefore not a W10 dependency and should not block future dashboard updates.
-
-### Search/download implementation
-
-A richer browser-side title/abstract search and filtered RIS-download interface was developed and validated as part of W10.
-
-For that implementation:
-
-- the main public data payload contains only the first up-to-30 words of each abstract;
-- a separate positional inverted index supports browser-side abstract searching and reconstruction for the optional export function;
-- Boolean `AND`, `OR`, `NOT`, parentheses, phrases and wildcard matching were implemented;
-- RIS export is limited to the filtered subset.
-
-For the accepted final dashboard, the **Search and download** opener is hidden using a presentation-only CSS rule. The underlying implementation is retained unchanged so it can be re-enabled later without reconstructing the feature.
-
-Hiding the control does not alter any other W10 functionality.
+Keyword retrieval therefore does not block W10 regeneration.
 
 ## Processing modes or stages
 
-### 1. Restore the authoritative W08 canonical state
+### 1. Receive the W09 handoff
 
-The W10 production workflow resolves the registered authoritative W08 pointer and verifies:
+A successful W09 run commits the dedicated W10 trigger file only after W09 validation and publication complete.
 
-- Zenodo record identity;
-- DOI;
-- canonical JSONL checksum; and
-- expected record schema.
+W10 also remains manually dispatchable for independent reproduction and testing.
 
-The source file is restored only after these checks pass.
+A concurrency group prevents overlapping W10 builds from racing; later builds wait rather than cancelling the active production build.
 
-### 2. Build the dashboard data projection
+### 2. Mark W10 active
 
-`R/workflow_10_dashboard_from_canonical_jsonl.R` reads the canonical JSONL record by record and validates:
+At the beginning of W10, the current-run status is updated so the Shiny progress display shows:
 
-- exactly 19,117 included records;
+- W09 complete; and
+- W10 active.
+
+This status is written before the substantive W10 build begins.
+
+### 3. Resolve the authoritative W08 state
+
+W10 reads the authoritative W08 registry and pointer, verifies that exactly one authoritative state is registered, and checks pointer status and provenance.
+
+No release-specific record count or SHA is hard-coded in the production workflow.
+
+### 4. Validate the W09 reporting handoff
+
+Before building the dashboard, W10 checks the current W09 publication handoff against the authoritative W08 pointer, including:
+
+- W08 source run identity;
+- final canonical SHA-256;
+- included-record count; and
+- excluded-record count.
+
+The dashboard therefore cannot silently combine a current W08 canonical state with a stale W09 reporting package.
+
+### 5. Restore the authoritative W08 canonical JSONL
+
+The canonical JSONL is restored from the registered restricted Zenodo record using the workflow credential.
+
+The restored file is temporary runner state and is not committed or uploaded as part of W10.
+
+### 6. Build the internal W10 projection
+
+The internal builder reads the canonical JSONL record by record and validates:
+
+- canonical schema;
 - unique stable record IDs;
-- valid species labels;
-- structured geography fields;
-- valid topic path IDs;
-- agreement between topic IDs and ontology hierarchy paths; and
+- final inclusion status;
+- final species labels;
+- geography structure;
+- topic path IDs;
+- agreement between topic IDs and ontology paths; and
 - valid 1–3 star topic-support values.
 
-It then builds:
+It generates the complete runner-only dashboard projection and the flat internal validation CSV.
 
-- record-level dashboard data;
-- species counts;
-- country counts;
-- country-by-species counts;
-- hierarchical topic counts;
-- topic definitions;
-- map lookup data; and
-- headline evidence-flow metrics.
+### 7. Build the public table projection
 
-### 3. Render the interactive interface
+The public projection step reproduces the accepted database-table payload but removes full abstracts.
 
-The browser interface exposes the projection through coordinated views.
+Each full abstract is replaced with its first up-to-30 whitespace-delimited words, adding an ellipsis only when truncation occurs.
 
-The accepted final dashboard includes:
+The builder verifies record-by-record that:
 
-- headline KPIs;
-- geographic distribution map;
-- publication-year chart;
-- topic-assignment frequency by species;
-- species × topic heat-map navigation;
-- radial topic hierarchy;
-- database table;
+- no full `abstract` field survives;
+- every `abstract_snippet` matches the canonical source;
+- no snippet exceeds 30 words; and
+- all required table fields remain present.
+
+### 8. Validate the dashboard interface
+
+The W10 workflow requires the final HTML to retain:
+
+- the database section;
 - species filter;
 - country filter;
 - publication-year filter;
 - topic filter;
-- record-page-size control;
-- filter reset; and
-- sortable bibliographic columns.
+- database table body;
+- chart-to-database filtering language and interaction structure; and
+- the production dashboard data script.
 
-Selections made in figures can be used to jump directly to the database under the corresponding filter state.
+It also requires search/download-specific UI and artefacts to be absent.
 
-### 4. Optional search/download layer
+### 9. Upload the W10 artefact
 
-The validated search/download layer derives a browser-safe dashboard payload and positional abstract index from the same W08 canonical state.
+The production W10 artefact contains only:
 
-This branch remains technically present but is **inactive in the accepted final public interface** because its opener is hidden.
+- `index.html`; and
+- `dashboard-data.js`.
 
-### 5. Static deployment
+It does not upload:
 
-W10 is deployed as static HTML/JavaScript through GitHub Pages. It requires no application server or live database.
+- the restored canonical JSONL;
+- the runner-only internal CSV;
+- the runner-only internal JS projection;
+- an abstract index;
+- a search-trial manifest; or
+- a separate browser-generated RIS database.
 
-The final hidden-button implementation was validated in GitHub Actions run **36747709725** and deployed successfully through the lightweight Pages deployment in run **36752942486**.
+### 10. Mark W10 complete
+
+After successful W10 validation and artefact upload, the current-run status is updated so W10 is complete and no workflow remains active.
+
+The resulting status metadata are committed back to the workflow branch.
+
+### 11. Static Pages deployment
+
+W10 is designed for static GitHub Pages deployment and requires no application server.
+
+While the workflow architecture remains on `workflow01-final-architecture`, the validated dashboard can be tested without replacing the existing public homepage by publishing it on `main` as:
+
+- `docs/index2.html`; plus
+- deployment-only `index2-data.js`.
+
+The same preview bundle can expose the validated W09 HTML as:
+
+- `methodology.html`; and
+- `results.html`.
+
+The preview deployment does not alter the existing `docs/index.html` homepage.
 
 ## Provenance and documentation
 
-Workflow 10 records or validates, as applicable:
+Each W10 run validates or records:
 
-- authoritative W08 Zenodo record ID and DOI;
-- source canonical JSONL SHA-256;
-- source GitHub Actions run identity;
-- ontology path and version;
-- dashboard-generation timestamp;
-- output record count;
-- topic-assignment count;
-- records without topic assignments;
-- country count;
-- species-category count;
-- dashboard data SHA-256;
-- search-trial dashboard-data SHA-256;
-- search-trial abstract-index SHA-256;
-- public data/index file sizes;
-- Git commit;
-- validation run; and
-- deployment run.
+- W10 GitHub Actions run ID;
+- upstream W09 trigger provenance;
+- authoritative W08 source run;
+- W08 Zenodo record and DOI;
+- source canonical SHA-256;
+- included and excluded record counts;
+- topic ontology source;
+- current W09 reporting handoff;
+- public projection schema;
+- public record count;
+- topic-assignment support;
+- absence of full abstracts;
+- 30-word abstract-snippet constraint;
+- database-table presence;
+- search/RIS/index absence;
+- uploaded artefact composition;
+- current-run W10 start/completion state; and
+- Git commit associated with the build.
 
-Current accepted presentation baseline:
+Current validation milestones are:
 
-- hidden search/download button commit on W10 branch:  
-  `36d0f72dc4b69dd6acddc5e811f2b54e42bb951a`;
-- W10 validation run: **36747709725**;
-- lightweight final Pages deployment run: **36752942486**.
+- restored database-table production W10: run **37278806375**;
+- W10 hardening without release-specific gates: run **37280449723**;
+- explicit W09→W10 trigger validation: run **37280725369**; and
+- W09 Methods/Results plus W10 `index2` Pages preview: run **37280303397**.
 
 ## Storage and archival model
 
 ### Permanent repository records
 
-GitHub retains:
+The workflow branch retains:
 
-- W10 R build scripts;
+- production W10 R scripts;
 - W10 workflow definitions;
-- dashboard HTML templates;
-- topic-definition presentation metadata;
-- geographic lookup configuration;
-- this methodological report; and
-- the W10 status README.
+- accepted dashboard HTML;
+- presentation metadata and lookup files;
+- the dedicated W09→W10 trigger record;
+- the preserved manual search/download restoration implementation;
+- W10 methodological documentation; and
+- W10 status documentation.
 
-The accepted hidden-button rule is retained in version control rather than deleting the search/download implementation.
+The public database table remains part of the production interface.
 
 ### Short-lived GitHub Actions artefacts
 
-W10 build/validation runs may retain:
+Each W10 production run uploads the validated static dashboard bundle containing:
 
-- generated dashboard JavaScript;
-- flat dashboard CSV;
-- dashboard-data manifest;
-- optional search-trial data payload;
-- positional abstract index;
-- search-trial manifest; and
-- assembled preview files.
+- `index.html`; and
+- `dashboard-data.js`.
 
-These are operational outputs rather than the authoritative evidence record.
+The artefact is an operational/publication bundle, not the authoritative analytical dataset.
+
+The full restored canonical JSONL and internal full-abstract dashboard projection remain runner-only.
 
 ### Durable external archive
 
-Workflow 10 does not create a separate Zenodo evidence archive.
+Workflow 10 creates no separate evidence archive.
 
-The durable analytical source remains the Workflow 08 Zenodo archive. W10 can be regenerated from that canonical state plus the version-controlled dashboard implementation.
+The authoritative analytical dataset remains the restricted Workflow 08 Zenodo canonical archive. W10 is fully regenerable from that canonical state, the validated W09 reporting handoff and the version-controlled W10 implementation.
 
 ## Downstream handoff
 
-Workflow 10 is the public presentation endpoint of the pipeline and has no analytical downstream workflow.
+Workflow 10 is the final public-presentation stage and has no downstream analytical workflow.
 
-Future living-evidence updates should regenerate W10 only after a new W08 state has been validated and made authoritative. The dashboard architecture itself is considered frozen: routine updates should replace the data projection and headline metrics while preserving the accepted interface and interaction model unless a deliberate redesign is initiated.
+The production orchestration chain is:
 
-Keyword enrichment is not required before such an update.
+```text
+W08 final publication
+        |
+        v
+W09 reporting/publication
+        |
+        v
+dedicated W09→W10 trigger
+        |
+        v
+W10 dashboard
+```
 
-The hidden search/download implementation may be reactivated deliberately by removing the visibility rule from the opener control; doing so is a presentation decision and does not require rebuilding the underlying evidence pipeline.
+Routine living updates should regenerate W10 only after a new W08 canonical state has passed W09 publication validation.
+
+The dashboard interface is treated as locked for routine updates. Future updates should replace the underlying authoritative data projection while preserving the accepted interactions and table design unless a deliberate redesign is approved.
+
+The search/download/RIS implementation can be restored only by an explicit future decision; its manual restoration path is retained but separated from production orchestration.
 
 ## Methods text for research reporting
 
-> **Workflow 10: interactive evidence-map dashboard.** The final included canonical evidence base was projected into a static interactive dashboard after checksum validation of the authoritative post-adjudication dataset. Record-level bibliographic metadata were combined with final species, geography and hierarchical topic annotations to support linked geographic, temporal, species and topic summaries and an interactive filtered database. Topic assignments retained their three-pass model-agreement indicators. The dashboard was implemented as static HTML and JavaScript and deployed through GitHub Pages, while the provenance-preserving canonical JSONL remained the authoritative analytical record. Dashboard generation did not modify screening or annotation decisions and did not depend on keyword enrichment.
+> **Workflow 10: interactive evidence-map dashboard.** Following successful generation of the reporting package, the final included canonical evidence base was restored from its checksum-validated authoritative archive and projected into a static interactive dashboard. Final bibliographic metadata, species assignments, geography and hierarchical topic annotations were combined to support coordinated geographic, temporal, species and topic visualisations and a filterable bibliographic database. Full abstracts were excluded from the public dashboard payload and represented in the database only by snippets of up to 30 words. A previously developed browser-side title/abstract search and filtered RIS-export implementation was retained separately but disabled from the production workflow. Dashboard generation was deterministic, did not modify any screening or annotation decisions, and was deployed as static HTML and JavaScript while the provenance-preserving Workflow 08 canonical JSONL remained the authoritative analytical record.
 
 ## Reporting status
 
 Workflow 10 is considered complete and validated when:
 
-- the authoritative W08 pointer and canonical checksum are verified;
-- exactly 19,117 included records are represented for the current baseline;
+- a successful Workflow 09 publication explicitly triggers W10;
+- the single authoritative W08 pointer is resolved dynamically;
+- the restored canonical checksum matches that pointer;
+- the W09 publication handoff matches the same authoritative W08 state;
+- the complete final included population is represented;
 - stable record identity is preserved;
 - final species, geography and topic fields are projected without recoding;
-- topic pathways and model-support stars validate against the frozen ontology;
-- coordinated dashboard filters and visualisations function against the same record population;
-- generated dashboard outputs pass structural validation;
-- the accepted public presentation deploys successfully;
-- the search/download opener is hidden while the underlying optional implementation remains recoverable; and
-- keyword enrichment is not treated as a W10 dependency.
+- topic pathways and support stars validate against the controlled ontology;
+- the accepted database table and its species, country, year and topic filters remain present;
+- chart and topic interactions continue to filter or navigate to the database;
+- public abstracts are limited to at most 30-word snippets;
+- no full abstract field is exposed in the public payload;
+- no search panel, abstract index or W10-generated RIS download is produced;
+- the W10 artefact contains only the validated public HTML and JavaScript payload;
+- W10 start and completion are reflected in current-run status; and
+- static Pages deployment succeeds.
 
-These conditions are satisfied for the accepted 30 September 2026 baseline.
+These conditions have been validated for the current release. Run **37278806375** validated the restored database-table architecture, run **37280449723** validated the hardened dynamic W10 workflow, and run **37280725369** validated the dedicated automatic W09→W10 handoff.
 
-**Workflow 10 status: complete, validated and locked as the final dashboard architecture.**
+**Workflow 10 status: complete, validated and locked on `workflow01-final-architecture` pending final integration to `main`.**
