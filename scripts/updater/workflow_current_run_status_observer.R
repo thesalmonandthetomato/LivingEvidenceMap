@@ -65,7 +65,7 @@ authoritative_w08 <- function(){
 }
 stage_from_changed <- function(){
   if(nzchar(force_stage)) return(force_stage)
-  if(any(grepl("^docs/search_record/(full_search|fortnightly_update|ad_hoc)/.*\\.json$",changed))) return("W00")
+  if(any(grepl("^docs/search_record/(?:[^/]+/)*(full_search|fortnightly_update|ad_hoc)/.*\\.json$",changed,perl=TRUE))) return("W00")
   if("docs/deduplication/zenodo_registry.csv" %in% changed) return("W01")
   if("docs/enrichment/zenodo_registry.csv" %in% changed) return("W02")
   if("docs/publication_status/zenodo_registry.csv" %in% changed) return("W03")
@@ -119,7 +119,7 @@ if(!nzchar(stage)){
 }
 
 if(stage=="W00"){
-  ps<-changed[grepl("^docs/search_record/(full_search|fortnightly_update|ad_hoc)/.*\\.json$",changed)]
+  ps<-changed[grepl("^docs/search_record/(?:[^/]+/)*(full_search|fortnightly_update|ad_hoc)/.*\\.json$",changed,perl=TRUE)]
   recs<-list()
   for(p in ps){
     z<-tryCatch(fromJSON(p,simplifyVector=FALSE),error=function(e)NULL)
