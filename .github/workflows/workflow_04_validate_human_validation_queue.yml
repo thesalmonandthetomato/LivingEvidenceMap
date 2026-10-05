@@ -69,6 +69,18 @@ jobs:
           for(z in w03)writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con)
           close(con)
 
+          w04 <- lapply(1:5,function(i) list(
+            record_id=paste0('rec-',i),
+            screening=list(
+              decision=if(i%%2L)'retain' else 'exclude',
+              decision_origin='synthetic_consensus',
+              screening_input_sha256=paste0('sha-',i)
+            )
+          ))
+          con<-file('tmp/w04val/w04.jsonl','wt')
+          for(z in w04)writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con)
+          close(con)
+
       - name: Validate deterministic random sample and bibliographic fields
         shell: Rscript {0}
         run: |
@@ -80,6 +92,7 @@ jobs:
               'scripts/updater/workflow_04_build_human_validation_queue.R',
               '--canonical','tmp/w04val/canonical.jsonl',
               '--workflow03-status','tmp/w04val/w03.jsonl',
+              '--workflow04-layer','tmp/w04val/w04.jsonl',
               '--output-dir',out,
               '--sample-size','4',
               '--seed',seed
@@ -103,6 +116,11 @@ jobs:
           ids <- vapply(rows,function(z)z$record_id,character(1))
           stopifnot(!'rec-6' %in% ids)
           stopifnot(!anyDuplicated(vapply(rows,function(z)z$review_case_id,character(1))))
+          stopifnot(all(vapply(rows,function(z)is.null(z$model_decision),logical(1))))
+
+          model_ref <- read.csv('tmp/w04val/out1/workflow04_validation_model_reference.csv',stringsAsFactors=FALSE)
+          stopifnot(nrow(model_ref)==4L,setequal(model_ref$record_id,ids))
+          stopifnot(all(model_ref$model_decision %in% c('retain','exclude')))
 
           for(z in rows) {
             b <- z$bibliographic
@@ -124,7 +142,12 @@ jobs:
             m$eligible_records==5L,
             identical(m$randomisation_seed,'fixed-seed'),
             identical(m$randomisation_method,'sha256(seed|record_id) ascending'),
-            isFALSE(m$llm_outputs_exposed)
+            isFALSE(m$llm_outputs_exposed),
+            grepl('^[0-9a-f]{64}
+          )
+
+          cat('PASS: deterministic W04 randomisation, eligibility filtering, and bibliographic fields validated\n')
+,m$model_reference_sha256)
           )
 
           cat('PASS: deterministic W04 randomisation, eligibility filtering, and bibliographic fields validated\n')
