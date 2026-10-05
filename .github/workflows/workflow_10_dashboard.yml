@@ -6,6 +6,7 @@ on:
     branches: [workflow01-final-architecture]
     paths:
       - '.github/workflows/workflow_10_dashboard.yml'
+      - 'docs/reporting/.run_workflow10_dashboard'
       - 'R/workflow_10_dashboard_from_canonical_jsonl.R'
       - 'R/workflow_10_make_public_dashboard.R'
       - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
