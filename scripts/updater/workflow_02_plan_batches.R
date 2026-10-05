@@ -16,6 +16,7 @@ input_path <- arg("--input")
 output_dir <- arg("--output-dir")
 batch_size <- as.integer(arg("--batch-size","1000"))
 recheck_after_days <- as.numeric(arg("--recheck-after-days","90"))
+enrich_author_keywords <- tolower(arg("--enrich-author-keywords","false")) %in% c("true","1","yes")
 max_records <- as.integer(arg("--max-records","0"))
 mode <- tolower(arg("--mode","incremental"))
 if(is.null(input_path)||is.null(output_dir)) stop("Required: --input --output-dir",call.=FALSE)
@@ -75,7 +76,7 @@ for(r in rows){
   eligible <- !is.null(d) && (
     is_missing(r$canonical$title) ||
     is_missing(r$canonical$abstract) ||
-    keywords_missing(r$canonical$author_keywords)
+    (enrich_author_keywords && keywords_missing(r$canonical$author_keywords))
   )
   if(!eligible) next
   eligible_total <- eligible_total + 1L
