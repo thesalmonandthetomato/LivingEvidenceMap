@@ -593,6 +593,78 @@ jobs:
             git push origin HEAD:"$WORKFLOW02_BRANCH"
           fi
 
+      - name: Build and publish post-W02 lean checkpoint
+        if: ${{ inputs.publish == true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          W02_POINTER="docs/enrichment/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "$W02_POINTER"
+          EXPECTED_SHA="$(P="$W02_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"));cat(as.character(x$final_enriched_sha256))')"
+          ACTUAL_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/workflow02/enriched.jsonl",algo="sha256",serialize=FALSE))')"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+
+          mkdir -p outputs/post_w02_lean outputs/lean_checkpoint_zenodo
+          Rscript scripts/updater/workflow_02_compact_post_w02_canonical.R \
+            --input outputs/workflow02/enriched.jsonl \
+            --output outputs/post_w02_lean/canonical_lean.jsonl \
+            --report outputs/post_w02_lean/compaction_report.json \
+            --expected-input-sha256 "$ACTUAL_SHA"
+
+          LEAN_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/post_w02_lean/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_02_archive_lean_checkpoint_to_zenodo.R \
+            --state-dir outputs/post_w02_lean \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/lean_checkpoint_zenodo \
+            --input-canonical-sha256 "$ACTUAL_SHA" \
+            --lean-canonical-sha256 "$LEAN_SHA"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "$WORKFLOW02_BRANCH"
+          Rscript scripts/updater/workflow_02_update_lean_checkpoint_registry.R \
+            --receipt outputs/lean_checkpoint_zenodo/zenodo_receipt.json \
+            --registry docs/compaction/zenodo_registry.csv \
+            --pointer-dir docs/compaction/zenodo
+          LEAN_POINTER="docs/compaction/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "$LEAN_POINTER"
+          git add docs/compaction/zenodo_registry.csv "$LEAN_POINTER"
+          if ! git diff --cached --quiet; then
+            git commit -m "Register W02 to W03 lean handoff for run $GITHUB_RUN_ID"
+            git pull --rebase origin "$WORKFLOW02_BRANCH"
+            git push origin HEAD:"$WORKFLOW02_BRANCH"
+          fi
+
+          rm -rf outputs/restored_w03
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer "$LEAN_POINTER" \
+            --output-dir outputs/restored_w03
+          RESTORED_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/restored_w03/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
+          test "$RESTORED_SHA" = "$LEAN_SHA"
+          echo "PASS: W02 lean checkpoint published and restored exactly"
+
+      - name: Trigger Workflow 03 after successful Workflow 02
+        if: ${{ inputs.publish == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LEAN_POINTER="docs/compaction/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "$LEAN_POINTER"
+          gh workflow run workflow_03_production.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$WORKFLOW02_BRANCH" \
+            -f limit='0' \
+            -f batch_size='100' \
+            -f publish='true' \
+            -f lean_pointer_path="$LEAN_POINTER"
+          echo "PASS: dispatched Workflow 03 from W02 run $GITHUB_RUN_ID"
+
       - name: Upload validated Workflow 02 handoff cache
         if: ${{ inputs.publish == true }}
         uses: actions/upload-artifact@v4
