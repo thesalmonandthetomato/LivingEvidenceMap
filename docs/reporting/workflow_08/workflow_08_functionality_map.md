@@ -301,3 +301,5 @@ Historical counts, offline-workbook decisions and earlier partition corrections 
 ## Reporting status
 
 **COMPLETE and validated for the current release.** Corrected finalisation run **37234697766** produced the authoritative W08 state: **47,094 source records = 21,493 included + 25,601 excluded**, with **137/137 current decision issues resolved**. The authoritative archive is Zenodo record **23145712**, DOI `10.5281/zenodo.23145712`.
+
+The production W08 workflow and the post-Shiny W08 resume workflow both explicitly dispatch `.github/workflows/report_workflow09_figures.yml` after successful published finalisation. This handoff was verified against the current production definitions on 5 October 2026. The first W09 package regenerated from the corrected authoritative W08 state passed as run **37268896083**.
