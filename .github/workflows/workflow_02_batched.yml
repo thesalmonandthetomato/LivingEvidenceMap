@@ -353,6 +353,8 @@ jobs:
           SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
           BATCH: ${{ matrix.batch }}
           RECHECK: ${{ inputs.recheck_after_days }}
+          USE_SCOPUS: ${{ inputs.use_scopus }}
+          ENRICH_AUTHOR_KEYWORDS: ${{ inputs.enrich_author_keywords }}
         shell: bash
         run: |
           set -euo pipefail
