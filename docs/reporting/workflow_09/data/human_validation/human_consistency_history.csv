@@ -1,0 +1,1 @@
+"consistency_id","date","batch_id","queue_sha256","assignment_scope_id","scope_type","reviewer_key","rater_ids_json","rater_labels_json","n_raters","records_n","record_ids_json","record_ids_sha256","metric","agreement_n","conflict_n","raw_agreement","kappa","patterns_json","pairwise_json","analysis_id","created_by","created_at_utc","included_in_cumulative","superseded_by"

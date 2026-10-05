@@ -352,6 +352,23 @@ dictionary, prompt or ontology was revised where appropriate rather than
 correcting only the individual record. Human review therefore served
 both as case-level adjudication and as pipeline-level quality assurance.
 
+For ongoing reviewer-consistency assessment, independently assigned
+human screening decisions could be analysed at explicit milestones. A
+saved **Partial** check contained only jointly completed records not
+represented in an earlier saved milestone for the same reviewer set,
+whereas a **Full** check represented the complete jointly assigned set
+once all selected reviewers had finished it. Saved checks retained exact
+record membership and decision-pattern counts. Cumulative Cohen’s kappa
+for two reviewers, or Fleiss’ kappa for three or more reviewers, was
+therefore recalculated from the underlying saved decision patterns
+rather than by averaging kappa statistics. Where a saved Full check
+contained earlier Partial checks, the Full check superseded those
+contained Partial rows in the cumulative calculation while the
+individual milestone rows remained available for assessing change over
+time. Saved milestones could be deleted only through an explicit
+administrator confirmation, without altering the underlying screening
+decisions.
+
 ### Large Language Model Screening
 
 Automated relevance screening used GPT-5.6 Luna under a fixed,

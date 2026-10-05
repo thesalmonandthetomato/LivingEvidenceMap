@@ -25,6 +25,52 @@ screening, annotation and inclusion in the Living Evidence
 Map.</em></figcaption>
 </figure>
 
+### Screening validation and reviewer consistency
+
+Across the saved human–model validation history, 21,950 substantive
+screening comparisons were available. The cumulative raw agreement was
+96.79% and cumulative Cohen’s kappa was 0.922.
+
+**Model validation history**
+
+<table>
+<colgroup>
+<col style="width: 18%" />
+<col style="width: 11%" />
+<col style="width: 34%" />
+<col style="width: 20%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Date</th>
+<th style="text-align: right;">Records</th>
+<th style="text-align: right;">Substantive comparisons</th>
+<th style="text-align: right;">Raw agreement</th>
+<th style="text-align: right;">Cohen’s κ</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">26-09-2026</td>
+<td style="text-align: right;">22,198</td>
+<td style="text-align: right;">21,950</td>
+<td style="text-align: right;">96.8%</td>
+<td style="text-align: right;">0.922</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><em>Cumulative</em></td>
+<td style="text-align: right;">22,198</td>
+<td style="text-align: right;">21,950</td>
+<td style="text-align: right;">96.8%</td>
+<td style="text-align: right;">0.922</td>
+</tr>
+</tbody>
+</table>
+
+No saved human–human consistency milestones were available for this
+reporting run.
+
 Database provenance was retained through deduplication, allowing the
 contribution and overlap of the 7 bibliographic sources to be compared
 for the deduplicated corpus and the definitive final included corpus.

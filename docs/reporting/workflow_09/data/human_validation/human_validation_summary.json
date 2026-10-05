@@ -1,0 +1,28 @@
+{
+  "schema": "living-evidence-map-workflow09-human-validation-report-v1",
+  "generated_at_utc": "2026-10-05T12:26:03Z",
+  "model_validation": {
+    "saved_sets": 1,
+    "records_reviewed_sum": 22198,
+    "substantive_comparisons": 21950,
+    "raw_agreement": 0.9679,
+    "cohen_kappa": 0.9216,
+    "contingency": {
+      "model_retain_human_retain": 15301,
+      "model_retain_human_exclude": 344,
+      "model_exclude_human_retain": 360,
+      "model_exclude_human_exclude": 5945
+    }
+  },
+  "human_consistency": {
+    "available": false,
+    "saved_sets": 0,
+    "reviewer_groups": 0,
+    "cumulative": []
+  },
+  "files": {
+    "model_validation_history": "model_validation_history.csv",
+    "human_consistency_history": "human_consistency_history.csv",
+    "human_consistency_cumulative": "human_consistency_cumulative.csv"
+  }
+}
