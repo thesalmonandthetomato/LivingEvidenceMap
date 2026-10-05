@@ -148,6 +148,10 @@ on:
         default: false
         type: boolean
 
+concurrency:
+  group: workflow00-search-orchestrator
+  cancel-in-progress: false
+
 permissions:
   contents: write
   actions: write
