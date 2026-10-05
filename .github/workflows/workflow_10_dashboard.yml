@@ -229,8 +229,7 @@ jobs:
           )
           stopifnot(all(vapply(payload$records,function(r)all(required_table_fields %in% names(r)),logical(1))))
           stopifnot(all(vapply(payload$records,function(r)is.null(r[['abstract',exact=TRUE]]),logical(1))))
-          snippet_words <- vapply(payload$records,function(r){
-            x <- sub('…
+
           cat(sprintf(
             'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
             pointer$zenodo_record_id,nrow(csv),length(stars)
