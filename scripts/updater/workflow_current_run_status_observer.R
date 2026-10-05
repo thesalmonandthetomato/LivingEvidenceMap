@@ -283,8 +283,17 @@ if(stage=="W08"){
   tw<-sum(vapply(rr,function(z)length((z$topics%||%list())$path_ids%||%character())>0L,logical(1)))
   s$counts$geography<-list(with=as.integer(gw),without=as.integer(length(rr)-gw))
   s$counts$topics<-list(with=as.integer(tw),without=as.integer(length(rr)-tw))
-  s<-set_run(s,"W08",run_id,9L,10L,"Final adjudication complete; awaiting dashboard build")
+  s<-set_run(s,"W08",run_id,9L,10L,"Final adjudication complete; awaiting report build")
   save_status(s);cat(sprintf("PASS: W08 final current-run geography With=%d Without=%d; topics With=%d Without=%d\n",gw,length(rr)-gw,tw,length(rr)-tw));quit(status=0)
+}
+
+if(stage=="W09"){
+  if(stage_status=="start"){
+    s<-set_run(s,"W09",Sys.getenv("GITHUB_RUN_ID",""),9L,10L,"Report build in progress")
+    save_status(s);cat("PASS: W09 current-run progress started\n");quit(status=0)
+  }
+  s<-set_run(s,"W09",Sys.getenv("GITHUB_RUN_ID",""),10L,11L,"Report complete; awaiting dashboard build")
+  save_status(s);cat("PASS: W09 current-run progress complete\n");quit(status=0)
 }
 
 if(stage=="W10"){
