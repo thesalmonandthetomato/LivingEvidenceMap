@@ -49,8 +49,26 @@ jobs:
           install.packages(c(
             "jsonlite","dplyr","tidyr","readr","ggplot2","scales","here",
             "stringr","sf","classInt","rnaturalearth","rnaturalearthdata",
-            "httr2","digest","rmarkdown","knitr","xml2"
+            "httr2","digest","rmarkdown","knitr","xml2","googlesheets4"
           ))
+
+      - name: Mark Workflow 09 started in Shiny
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W09 \
+            --stage-status start
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
 
       - name: Resolve and validate release provenance
         env:
@@ -539,6 +557,54 @@ jobs:
             git pull --rebase origin workflow01-final-architecture
             git push origin HEAD:workflow01-final-architecture
           fi
+
+      - name: Mark Workflow 09 complete in Shiny
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W09 \
+            --stage-status complete
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+      - name: Commit Workflow 09 live status
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A docs/current_run
+          if ! git diff --cached --quiet; then
+            git commit -m "Complete W09 current-run status [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Trigger Workflow 10 after successful Workflow 09
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin workflow01-final-architecture
+          mkdir -p docs/reporting
+          cat > docs/reporting/.run_workflow10_dashboard <<EOF
+          {
+            "schema": "living-evidence-map-workflow10-trigger-v1",
+            "workflow09_run_id": "${GITHUB_RUN_ID}",
+            "workflow09_commit_sha": "$(git rev-parse HEAD)",
+            "triggered_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          git add docs/reporting/.run_workflow10_dashboard
+          git commit -m "Trigger W10 after successful W09"
+          git push origin HEAD:workflow01-final-architecture
 
       - name: Upload Workflow 09 publication package
         if: always()
