@@ -1,50 +1,43 @@
 # Workflow 08 geography adjudication
 
-Human geography decisions are stored here because Workflow 06 is an automated coding and QC stage. Workflow 08 applies human decisions on top of W06 without rewriting the W06 automated result.
+Workflow 06 is the automated geography-coding and QC stage. Workflow 08 applies human decisions only to the residual cases that cannot be accepted deterministically, while preserving the original W06 result and provenance.
 
-The current geography decision layer is:
+## Current routing
 
-`data/workflow08/geography_adjudication_decisions.jsonl`
+Current production W08 can receive three geography issue types:
 
-Each decision records:
+- `geography_unresolved`;
+- `geography_evidence_unvalidated`; and
+- `geography_model_failure`.
 
-- `record_id`;
-- source workflow;
-- issue type;
-- automated W06 status and country set;
-- human decision (`accept_model` or `override`);
-- final adjudicated status and country set;
-- rationale; and
-- decision date.
+A non-failure W06 record with no candidate country may be deterministically assigned geography `NONE` without human review. Invalid model/API outputs, including unrecognised ISO3 codes, are not auto-accepted: they are represented as model failures and routed to W08 human review.
 
-The current batch includes six explicitly reviewed records from the Workflow 06 validation exercise on 27 September 2026. These decisions should be applied during Workflow 08 and then incorporated into the final post-W08 JSONL layer assembly.
+For unresolved or evidence-unvalidated cases, allowed decisions are `accept_model`, `override_country_set`, `assign_none`, or `exclude_record`. For model failures, allowed decisions are `assign_country_set`, `assign_none`, or `exclude_record`.
 
-Deterministic/semantic disagreement alone is not a mandatory W08 review trigger. The routine W08 geography escalation set is limited to W06 records that remain unresolved, structurally invalid, failed after retry, or ungrounded after automatic validation. Additional disagreement cases may be reviewed opportunistically as validation samples.
+Human decisions are stored as an overlay and are applied during final W08 assembly; the archived W06 automated layer is not rewritten.
 
+## ISO3 validation
 
-## Workflow 05 species NONE review queue
+ISO3 is the controlled machine identifier. Future W06 model-returned codes are checked against `config/global_country_gazetteer_v3.csv` before acceptance. An unrecognised code fails the model result and is sent to W08 as `geography_model_failure`.
 
-Workflow 05 is deterministic and does not itself perform semantic adjudication. However, a record retained by Workflow 04 should not ordinarily remain with a terminal species state of `NONE`.
+For valid W06 ISO3 codes, the country display name is derived deterministically from the controlled gazetteer. Raw model-returned names remain in provenance. W08 finalisation validates the final ISO3 vocabulary but does not treat harmless display-name variants such as “The Gambia” versus “Gambia” as code errors.
 
-The validated W05 baseline contains **169 records** with `farmed_species_codes = NONE`. These records are therefore added to Workflow 08 for human review.
+The October 2026 audit corrected five values in the authoritative release without changing inclusion decisions:
 
-The exact baseline record IDs are stored in:
+- `INN → IND` for India;
+- `NIQ → NIC` for Nicaragua;
+- `FIJ → FIN` for Finland;
+- `IRE → IRL` for Ireland; and
+- removal of `UNK` where it represented the European Community rather than a country.
 
-`data/workflow08/species_none_review_queue_ids.txt`
+`XKX` remains intentionally permitted for Kosovo under the current controlled gazetteer policy.
 
-Queue provenance:
+The correction provenance is stored in:
 
-- source workflow: Workflow 05;
-- source run: `36268840588`;
-- source commit: `636428716c0a2e66431720dbffaf392e688b5b56`;
-- W05 Zenodo record: `22982751`;
-- W05 species-layer SHA-256: `85f4003d3835535f6ab1c50691c79159640448642bb7b20974d58856dab44cdf`;
-- queue size: **169 records**.
+`data/workflow08/geography_code_corrections_2026-10-04.csv`
 
-For adjudication, each queued record should be joined to its title and abstract from the authoritative canonical record and reviewed for one of three outcomes:
+The corrected authoritative W08 release is GitHub run **37234697766**, Zenodo record **23145712**, DOI `10.5281/zenodo.23145712`.
 
-1. assign one or more eligible named species;
-2. assign `Unspecified species` where salmon/trout aquaculture relevance is clear but species cannot be resolved more specifically from the available text; or
-3. flag a relevance problem for human exclusion review where the record does not actually satisfy the map eligibility criteria.
+## Historical note
 
-The W05 automated layer remains unchanged. Any human species decision is stored as a Workflow 08 layer and applied during final post-W08 assembly.
+Earlier development used `data/workflow08/geography_adjudication_decisions.jsonl` for a small validation set and routed Workflow 05 species-`NONE` cases to human review. Those behaviours are historical only. Current production deterministically excludes Workflow 05 species-`NONE` records before W08 human review, and current geography decisions are managed through the checksum-locked W08 decision ledger/Shiny handoff described in `workflow_08_functionality_map.md`.
