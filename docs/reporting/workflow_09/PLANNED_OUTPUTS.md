@@ -6,12 +6,12 @@ Authoritative documentation:
 
 - `docs/reporting/workflow_09/workflow_09_functionality_map.md`
 - `docs/reporting/workflow_09/FIGURE_INVENTORY.md`
-- `docs/workflow09/README.md`
+- `docs/reporting/workflow_09/README.md`
 
 The production workflow publishes:
 
 - the complete included canonical library as a lightweight RIS file plus checksum manifest;
-- all 15 final manuscript figures in PNG and PDF;
+- all 16 final manuscript figures in PNG and PDF;
 - a snapshot of the R code used to generate every figure;
 - Methods and Results R Markdown sources;
 - rendered Methods and Results in Markdown, HTML, Word and PDF; and
