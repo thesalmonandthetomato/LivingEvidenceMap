@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Workflow 09 is the final reporting and publication stage of the LivingEvidenceMap pipeline. It does not alter screening or annotation decisions. Instead, it restores the latest authoritative Workflow 08 included-only canonical dataset and the upstream provenance states needed for reporting, then produces a reproducible publication package consisting of:
+Workflow 09 is the final reporting and publication stage of the LivingEvidenceMap pipeline. It does not alter screening or annotation decisions. Instead, it restores the latest authoritative Workflow 08 included-only canonical dataset and the compact upstream provenance state needed for reporting, then produces a reproducible publication package consisting of:
 
 1. a lightweight RIS representation of the complete included canonical library;
 2. manuscript figures and their exact R source code;
@@ -73,7 +73,7 @@ Workflow 09 no longer reconstructs the full Workflow 01 state or restores the Wo
 
 ### Final included corpus
 
-Workflow 09 restores the latest registered authoritative Workflow 08 Zenodo pointer from `docs/workflow08/zenodo/`. The restored canonical JSONL is accepted only when its SHA-256 and record count match that pointer. This makes reporting advance automatically with a newly published Workflow 08 state rather than remaining pinned to a historical baseline.
+Workflow 09 restores the latest registered authoritative Workflow 08 Zenodo pointer from `docs/workflow08/zenodo/`. The restored canonical JSONL is accepted only when its SHA-256 and record count match that pointer. The current authoritative input is W08 run **37234697766**, Zenodo record **23145712** (DOI `10.5281/zenodo.23145712`), with **21,493 included records**. This makes reporting advance with a newly published Workflow 08 state rather than remaining pinned to a historical baseline.
 
 The final Workflow 08 JSONL remains the authoritative representation because it preserves nested workflow provenance, screening state, species coding, geography coding, topic assignments and manifestation references.
 
@@ -229,7 +229,7 @@ The Workflow 08 layer remains the authoritative source of the canonical JSONL an
 
 Workflow 09 is the reporting endpoint for the manuscript and static publication package. Workflow 10 may consume the same final canonical data to build the interactive dashboard, but the dashboard is not authoritative for manuscript counts.
 
-Future living updates should rerun Workflow 09 after a new validated Workflow 08 final state is published. The production controller selects the latest registered Workflow 08 pointer and validates its checksum, record count and lossless handoff contract before regenerating the publication package.
+Future living updates automatically dispatch Workflow 09 after a new validated Workflow 08 final state has been published and its reporting handoff/status have been updated. Both the direct W08 production path and the post-Shiny W08 resume path call `report_workflow09_figures.yml` explicitly via workflow dispatch, avoiding reliance on recursive push events from `GITHUB_TOKEN`. Workflow 09 remains manually dispatchable for independent reproduction. The production controller selects the latest registered Workflow 08 pointer and validates its checksum, record count and lossless handoff contract before regenerating the publication package.
 
 ## Methods text for research reporting
 
