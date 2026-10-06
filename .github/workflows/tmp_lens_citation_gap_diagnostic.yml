@@ -1,4 +1,4 @@
-name: Temporary Lens citation-gap diagnostic v2
+name: Temporary Lens citation-gap diagnostic v3
 
 on:
   workflow_dispatch:
