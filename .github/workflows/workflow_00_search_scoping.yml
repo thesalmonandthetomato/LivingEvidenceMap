@@ -1,7 +1,11 @@
 name: Workflow 00 - Count-only search scoping
-run-name: W00 scope ${{ inputs.request_id }}
+run-name: W00 scope ${{ inputs.request_id || github.event.head_commit.message }}
 
 on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/shiny_scoping_requests/**'
   workflow_dispatch:
     inputs:
       search_string_path:
