@@ -58,7 +58,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/temporary/lens_citation_gap_diagnostic.R             --canonical /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl             --output-dir outputs/lens_citation_gap             --batch-size 500             --max-batches "$MAX_BATCHES"
+          Rscript scripts/temporary/lens_citation_gap_diagnostic.R \
+            --canonical /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl \
+            --output-dir outputs/lens_citation_gap \
+            --batch-size 1 \
+            --max-batches "$MAX_BATCHES"
 
       - name: Publish diagnostic summary
         if: always()
