@@ -274,13 +274,27 @@ jobs:
           REG_DIR="internal/output_registry/archive/$SEARCH_DATE"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # W10 has other generated working-tree changes at this point
+          # (for example docs/current_run and outputs/workflow10). Keep only
+          # the registry staged while rebasing/pushing, then restore the rest.
           git add "$REG_DIR"
+          STASHED=0
+          if [ -n "$(git status --porcelain --untracked-files=all | grep -v '^A  internal/output_registry/archive/' || true)" ]; then
+            git stash push --include-untracked --keep-index -m "w10-registry-nonregistry-$GITHUB_RUN_ID"
+            STASHED=1
+          fi
+
           if git diff --cached --quiet; then
             echo "Internal output registry for $SEARCH_DATE is already current."
           else
             git commit -m "Archive internal output registry for $SEARCH_DATE [skip ci]"
             git pull --rebase origin workflow01-final-architecture
             git push origin HEAD:workflow01-final-architecture
+          fi
+
+          if [ "$STASHED" -eq 1 ]; then
+            git stash pop
           fi
 
       - name: Upload Workflow 10 dashboard artefact
