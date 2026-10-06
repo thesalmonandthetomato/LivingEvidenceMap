@@ -180,7 +180,14 @@ for (f in metadata_files) {
   }
 }
 
-candidate_ids <- sort(unique(canonical_edges$candidate_lens_id))
+candidate_id_files <- list.files(metadata_root, pattern = "candidate_ids\\.txt$",
+                                 recursive = TRUE, full.names = TRUE)
+if (!length(candidate_id_files)) stop("No candidate_ids.txt filter outputs found", call. = FALSE)
+candidate_ids <- sort(unique(unlist(lapply(candidate_id_files, function(f) {
+  z <- readLines(f, warn = FALSE, encoding = "UTF-8")
+  trimws(z[nzchar(trimws(z))])
+}), use.names = FALSE)))
+candidate_ids <- intersect(candidate_ids, canonical_edges$candidate_lens_id)
 rank_rows <- vector("list", length(candidate_ids))
 candidate_records <- list()
 
