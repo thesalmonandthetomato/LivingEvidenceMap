@@ -105,10 +105,14 @@ run_batch <- function(seed_ids, field, direction, batch_number) {
       bool = list(
         must = list(
           terms_clause,
-          list(query_string = list(query = text_query))
+          list(query_string = list(query = positive))
+        ),
+        must_not = list(
+          list(query_string = list(query = negative))
         )
       )
     ),
+    stemming = FALSE,
     size = page_size,
     scroll = scroll_ttl,
     include = c("lens_id")
