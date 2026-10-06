@@ -2,10 +2,6 @@ name: Workflow 00 - Count-only search scoping
 run-name: W00 scope ${{ inputs.request_id }}
 
 on:
-  push:
-    branches: [workflow01-final-architecture]
-    paths:
-      - '.github/workflows/workflow_00_search_scoping.yml'
   workflow_dispatch:
     inputs:
       search_string_path:
