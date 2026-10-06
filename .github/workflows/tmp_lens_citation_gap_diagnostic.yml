@@ -93,7 +93,7 @@ jobs:
 
       - name: Install R dependency
         shell: Rscript {0}
-        run: install.packages("jsonlite")
+        run: install.packages(c("httr2", "jsonlite"))
 
       - name: Download all seed checkpoints
         uses: actions/download-artifact@v4
