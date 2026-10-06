@@ -81,13 +81,21 @@ if(length(calls)){
 }
 screened_ids <- if(length(calls)) unique(vapply(calls,function(x)scalar(x$record_id),character(1))) else character()
 affected_screened_this_run <- intersect(affected,screened_ids)
+pass_counts <- if(length(calls)) table(vapply(calls,function(x)scalar(x$pass),character(1))) else integer()
+model_counts <- if(length(calls)) table(vapply(calls,function(x)scalar(x$model_returned %||% x$model_requested),character(1))) else integer()
 
 usage_num <- function(u,name){
   z<-u[[name]]
   if(is.null(z)||!length(z)) return(0)
   v<-suppressWarnings(as.numeric(z[[1L]])); if(is.na(v))0 else v
 }
-usage <- list(calls=length(calls),input_tokens=0,cached_input_tokens=0,output_tokens=0)
+usage <- list(
+  screened_records=length(screened_ids),
+  calls=length(calls),
+  pass_counts=as.list(pass_counts),
+  model_counts=as.list(model_counts),
+  input_tokens=0,cached_input_tokens=0,output_tokens=0
+)
 if(length(calls)){
   for(z in calls){
     u<-z$usage %||% list()
