@@ -9,6 +9,8 @@ on:
       - '.github/workflows/workflow_04_resume_after_shiny.yml'
       - '.github/workflows/workflow_04_validate_production_architecture.yml'
       - 'scripts/updater/workflow_04_prepare_incremental.R'
+      - 'scripts/updater/workflow_04_apply_manual_metadata_repairs.R'
+      - 'scripts/updater/workflow_04_build_human_validation_queue.R'
       - 'scripts/updater/workflow_04_luna_consensus.R'
       - 'scripts/updater/workflow_04_merge_incremental.R'
       - 'scripts/updater/workflow_04_build_resolution_queue.R'
@@ -54,6 +56,8 @@ jobs:
         run: |
           files <- c(
             'scripts/updater/workflow_04_prepare_incremental.R',
+            'scripts/updater/workflow_04_apply_manual_metadata_repairs.R',
+            'scripts/updater/workflow_04_build_human_validation_queue.R',
             'scripts/updater/workflow_04_luna_consensus.R',
             'scripts/updater/workflow_04_merge_incremental.R',
             'scripts/updater/workflow_04_build_resolution_queue.R',
@@ -87,6 +91,18 @@ jobs:
           stopifnot(grepl('source/prepared/outputs/workflow04_prepare/prompt_provenance.json',resume,fixed=TRUE))
           stopifnot(!grepl('source/final/workflow04_final/prompt_provenance.json',resume,fixed=TRUE))
           stopifnot(grepl('cp source/prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json',resume,fixed=TRUE))
+
+          exact_abstract_files <- c(
+            'scripts/updater/workflow_04_prepare_incremental.R',
+            'scripts/updater/workflow_04_luna_consensus.R',
+            'scripts/updater/workflow_04_apply_manual_metadata_repairs.R',
+            'scripts/updater/workflow_04_build_human_validation_queue.R',
+            'scripts/updater/workflow_04_build_resolution_queue.R'
+          )
+          for (f in exact_abstract_files) {
+            x <- paste(readLines(f,warn=FALSE),collapse='\n')
+            stopifnot(!grepl('r\\$abstract\\b',x,perl=TRUE))
+          }
 
           stopifnot(grepl('title_gained_ids',prep,fixed=TRUE))
           stopifnot(grepl('abstract_gained_ids',prep,fixed=TRUE))
