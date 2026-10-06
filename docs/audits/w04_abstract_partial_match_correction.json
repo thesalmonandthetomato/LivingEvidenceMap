@@ -1,0 +1,535 @@
+{
+  "schema": "living-evidence-map-w04-partial-abstract-correction-v1",
+  "status": "PASS",
+  "audit": {
+    "affected_records": 3589,
+    "corrected_model_decision_changes": 326,
+    "changed_to_retain": 37,
+    "changed_to_exclude": 57,
+    "changed_to_uncertain": 232,
+    "corrected_model_resolved_prior_uncertain": 49,
+    "preexisting_completed_human_decisions": 103,
+    "preexisting_human_decisions_applied": 78,
+    "preexisting_human_decisions_not_needed_after_corrected_model": 25,
+    "remaining_human_review": 276
+  },
+  "applied_human": [
+    {
+      "record_id": "work-98063184ce9cf5fe",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-955f7921afc0ec00",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-94fba3961864090f",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-91108d8e0520f9c2",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-90bf9f4fb89376c2",
+      "decision": "retain",
+      "affected": true
+    },
+    {
+      "record_id": "work-8f0b1b9e18082bba",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-8d23223d4a394bdf",
+      "decision": "retain",
+      "affected": false
+    },
+    {
+      "record_id": "work-8cc7cd682834b94a",
+      "decision": "retain",
+      "affected": false
+    },
+    {
+      "record_id": "work-88cb8e8ae3477373",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-8372c6e4c2d49326",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-834441ad29a93249",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-7d05746ab7c989f3",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-768f64dc076f65fd",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-767a1ffb66a186d1",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-75ff924a74648e55",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-7384b053e35215e8",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-72d8210d99d4484e",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-72b61e92f320c1d3",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-6ee8eab793e863fe",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-6ccaa4f964da0b5d",
+      "decision": "retain",
+      "affected": true
+    },
+    {
+      "record_id": "work-6be9de87b69cf808",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-6bb53e2d10e40030",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-6a26a42ffce668f4",
+      "decision": "retain",
+      "affected": true
+    },
+    {
+      "record_id": "work-6a0a9fbb82230bf7",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-69cc83c7eccdb19c",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-69afbd1912e31206",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-699c9d5424a85826",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-695678ef39d50e30",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-69229648dda8e1d9",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-650d14b11f089b08",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-63ded6fd6466c557",
+      "decision": "retain",
+      "affected": false
+    },
+    {
+      "record_id": "work-63c1ddc57711d7fa",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-5f350f240a52d6ad",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-602cce523a27e483",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-5db3ecb67f9627bd",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-5a389ef71284025c",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-58b2d1f2f6e99b17",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-5897dbb5b4c496eb",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-581eb0a68d515e49",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-4d1e94fe17ea418e",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-4ccd16ba239e4080",
+      "decision": "retain",
+      "affected": false
+    },
+    {
+      "record_id": "work-4bc7d59ce16ffd10",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-4b406cc138655530",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-4b23466171b20733",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-4997907c4783d632",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-49127ab4ba7668b8",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-4824e430ed04df25",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-44ffa30a45442af5",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-3ee8747bf767ad92",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-37fada811cfc2fc1",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-34ab5714cee44d9e",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-3036ab462ec9c966",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-2ff310dcd9bfbb66",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-29dda15296375705",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-28eb17049fbb0f20",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-255f4f7a081c448f",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-24be42d4c18b1298",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-2347777298cc41c9",
+      "decision": "retain",
+      "affected": false
+    },
+    {
+      "record_id": "work-1f6798214ee0af5b",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-1e21d3b72f337c4c",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-1d1fb287bb83b158",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-1ccb5d2acc438769",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-199ef2c88924b30b",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-1876b9372e3dae4e",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-180731ccddbea234",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-176fc0f9fc2f67a2",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-1707ae9ebbebab3a",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-154f3a9a70353bf7",
+      "decision": "retain",
+      "affected": true
+    },
+    {
+      "record_id": "work-0d24f7b846fcccaa",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-09e7b6af30121b87",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-0823bbcdcace65be",
+      "decision": "retain",
+      "affected": false
+    },
+    {
+      "record_id": "work-075f999a3675d452",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-04e218de9f28eb86",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-04dcadff10c52890",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-03824dd8b07044be",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-029166c799e5dec1",
+      "decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-01efff0483ab4916",
+      "decision": "exclude",
+      "affected": false
+    },
+    {
+      "record_id": "work-01a28658495f96d9",
+      "decision": "exclude",
+      "affected": false
+    }
+  ],
+  "skipped_human": [
+    {
+      "record_id": "work-97ce186cb87e3a61",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-879cbeebf67f238f",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-849695b74e956cde",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-846614315d8250dc",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-7af04f0179ed8784",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-706ca50132cb1a65",
+      "model_decision": "retain",
+      "affected": true
+    },
+    {
+      "record_id": "work-6ddaa16410a4fde3",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-690684052c944eff",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-60c76cbb24a05350",
+      "model_decision": "retain",
+      "affected": true
+    },
+    {
+      "record_id": "work-5ecd37f125e41a7b",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-5eab1038c4e7c909",
+      "model_decision": "retain",
+      "affected": true
+    },
+    {
+      "record_id": "work-5e61bc2158469ef3",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-5d94206e1c2de981",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-5ab175beb72de18c",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-5557729d8ccaf670",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-3a16d17a62f1e761",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-3406af2b19d76430",
+      "model_decision": "retain",
+      "affected": true
+    },
+    {
+      "record_id": "work-321b96a06ffccb6d",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-2e743709348ef2dc",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-1bc2a22354e782df",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-15ae4ff256958944",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-0becee0d230df4b9",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-0baa8ebe953be288",
+      "model_decision": "exclude",
+      "affected": true
+    },
+    {
+      "record_id": "work-0914f1a1cfb2c9c2",
+      "model_decision": "retain",
+      "affected": true
+    },
+    {
+      "record_id": "work-00387c51f56dae73",
+      "model_decision": "exclude",
+      "affected": true
+    }
+  ]
+}
