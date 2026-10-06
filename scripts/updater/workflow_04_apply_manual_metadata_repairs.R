@@ -24,7 +24,7 @@ for(i in seq_along(repairs)){
   can_doi<-norm_doi(can$doi%||%r$doi); rep_doi<-norm_doi(p$doi)
   if(!nzchar(can_doi)||!identical(can_doi,rep_doi))stop(sprintf("DOI mismatch for repair %s",rid),call.=FALSE)
 
-  before_title<-scalar(can$title%||%r$title); before_abstract<-scalar(can$abstract%||%r$abstract)
+  before_title<-scalar(can$title%||%r$title); before_abstract<-scalar(can$abstract%||%r[["abstract"]])
   new_title<-scalar(p$title); new_abstract<-scalar(p$abstract)
   title_added<-nzchar(new_title)&&!nzchar(before_title)
   abstract_added<-nzchar(new_abstract)&&!nzchar(before_abstract)
