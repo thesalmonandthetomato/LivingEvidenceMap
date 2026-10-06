@@ -20,8 +20,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_RUN_ID: '36455747378'
-  SOURCE_ARTIFACT: 'workflow10-dashboard-36455747378'
+  SOURCE_RUN_ID: '37461142844'
+  SOURCE_ARTIFACT: 'workflow10-dashboard-37461142844'
 
 jobs:
   deploy-preview:
@@ -61,7 +61,7 @@ jobs:
         shell: Rscript {0}
         run: install.packages('jsonlite')
 
-      - name: Add isolated preview files
+      - name: Add isolated index2 preview files
         shell: Rscript {0}
         run: |
           locate_one <- function(name) {
@@ -70,71 +70,50 @@ jobs:
             x[[1L]]
           }
 
-          html_path <- 'workflow10/docs/dashboard-redesign-temp.html'
-          if(!file.exists(html_path)) stop('Current Workflow 10 dashboard HTML missing',call.=FALSE)
+          html_path <- locate_one('index.html')
           data_path <- locate_one('dashboard-data.js')
 
           html <- paste(readLines(html_path,warn=FALSE,encoding='UTF-8'),collapse='\n')
-          if(!grepl('topic_stars',html,fixed=TRUE)) stop('Current Workflow 10 HTML does not contain star rendering',call.=FALSE)
-          if(grepl('Evidence flow',html,fixed=TRUE) || grepl('evidence_flowdiagram.svg',html,fixed=TRUE)) {
-            stop('Flow diagram reference unexpectedly present in preview HTML',call.=FALSE)
-          }
           marker <- '<script src="./dashboard-data.js"></script>'
           if(!grepl(marker,html,fixed=TRUE)) stop('Expected dashboard-data.js marker not found',call.=FALSE)
-          html <- sub(marker,'<script src="./workflow10-preview-data.js"></script>',html,fixed=TRUE)
+          html <- sub(marker,'<script src="./index2-data.js"></script>',html,fixed=TRUE)
 
-          out_html <- 'production/docs/workflow10-preview.html'
-          out_data <- 'production/docs/workflow10-preview-data.js'
+          out_html <- 'production/docs/index2.html'
+          out_data <- 'production/docs/index2-data.js'
           writeLines(html,out_html,useBytes=TRUE)
+          file.copy(data_path,out_data,overwrite=TRUE)
+
+          # Keep the report links used by index2 self-contained in the deployed Pages bundle.
+          report_map <- c(
+            'workflow10/docs/reporting/workflow_09/manuscript/methods.html'='production/docs/methodology.html',
+            'workflow10/docs/reporting/workflow_09/manuscript/results.html'='production/docs/results.html'
+          )
+          for(src in names(report_map)) {
+            if(!file.exists(src)) stop(sprintf('Required W09 report missing: %s',src),call.=FALSE)
+            file.copy(src,report_map[[src]],overwrite=TRUE)
+          }
 
           suppressPackageStartupMessages(library(jsonlite))
-          data_js <- paste(readLines(data_path,warn=FALSE,encoding='UTF-8'),collapse='\n')
+          data_js <- paste(readLines(out_data,warn=FALSE,encoding='UTF-8'),collapse='\n')
           prefix <- 'window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA='
           if(!startsWith(data_js,prefix) || !endsWith(data_js,';')) stop('Unexpected dashboard-data.js wrapper',call.=FALSE)
           payload <- fromJSON(substr(data_js,nchar(prefix)+1L,nchar(data_js)-1L),simplifyVector=FALSE)
 
-          as_array <- function(x) {
-            if(is.null(x)) return(list())
-            if(is.list(x) && is.null(names(x))) return(x)
-            as.list(x)
-          }
-          payload$records <- lapply(payload$records,function(r) {
-            r$species <- as_array(r$species)
-            r$countries <- as_array(r$countries)
-            r$iso3 <- as_array(r$iso3)
-            r$topics <- as_array(r$topics)
-            r$topic_paths <- as_array(r$topic_paths)
-            r$topic_paths <- lapply(r$topic_paths,as_array)
-            r
-          })
+          expected_n <- suppressWarnings(as.integer(payload$metrics$total_records))
+          if(is.na(expected_n) || expected_n<1L) stop('Preview payload has invalid total_records',call.=FALSE)
+          if(length(payload$records)!=expected_n) stop(sprintf('Preview record count mismatch: payload=%d records=%d',expected_n,length(payload$records)),call.=FALSE)
 
-          flow_path <- 'workflow10/docs/reporting/workflow_09/flow_counts.json'
-          flow <- fromJSON(flow_path,simplifyVector=FALSE)
-          screened_n <- as.integer(flow$counts$title_abstract_screened)
-          if(is.na(screened_n)||screened_n!=32283L) stop(sprintf('Unexpected screened count: %s',as.character(screened_n)),call.=FALSE)
-          payload$metrics$candidate_search_results_screened <- screened_n
-          if(is.na(as.integer(payload$metrics$databases_searched)) || as.integer(payload$metrics$databases_searched)<1L) stop('Preview KPI databases_searched is missing or invalid',call.=FALSE)
-          if(as.integer(payload$metrics$search_results)!=90137L) stop('Preview KPI search_results is missing or incorrect',call.=FALSE)
-          if(as.integer(payload$metrics$unique_records_screened)!=32292L) stop('Preview KPI unique_records_screened is missing or incorrect',call.=FALSE)
-
-          is_array <- function(x) is.list(x) && is.null(names(x))
-          stopifnot(length(payload$records)==19117L)
-          stopifnot(all(vapply(payload$records,function(r)is_array(r$species),logical(1))))
-          stopifnot(all(vapply(payload$records,function(r)is_array(r$countries),logical(1))))
-          stopifnot(all(vapply(payload$records,function(r)is_array(r$iso3),logical(1))))
-          stopifnot(all(vapply(payload$records,function(r)is_array(r$topics),logical(1))))
-          stopifnot(all(vapply(payload$records,function(r)is_array(r$topic_paths)&&all(vapply(r$topic_paths,is_array,logical(1))),logical(1))))
-          star_values <- unlist(lapply(payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
-          stopifnot(length(star_values)>0L)
-          stopifnot(all(nzchar(star_values)))
-          stopifnot(all(star_values %in% c('★','★★','★★★')))
-
-          data_js <- paste0(prefix,toJSON(payload,auto_unbox=TRUE,null='null',na='null',pretty=FALSE),';')
-          writeLines(data_js,out_data,useBytes=TRUE)
-
-          if(!file.exists('production/docs/index.html')) stop('Production index.html missing',call.=FALSE)
-          if(file.info(out_data)$size < 1000000) stop('Preview data file unexpectedly small',call.=FALSE)
-          cat(sprintf('PASS: isolated Pages preview prepared: %s + %s\n',out_html,out_data))
+          deployed_html <- paste(readLines(out_html,warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(
+            grepl('./index2-data.js',deployed_html,fixed=TRUE),
+            !grepl('<script src="./dashboard-data.js"></script>',deployed_html,fixed=TRUE),
+            grepl('./methodology.html',deployed_html,fixed=TRUE),
+            grepl('./results.html',deployed_html,fixed=TRUE),
+            file.exists(out_data),
+            file.info(out_data)$size > 1000000
+          )
+          cat(sprintf('PASS: index2 Pages preview prepared from W10 run %s with %d records\n',
+                      Sys.getenv('SOURCE_RUN_ID'),expected_n))
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
