@@ -288,6 +288,9 @@ jobs:
           echo "PASS: frozen release baseline resolved for W06/W07"
 
   handoff-w06:
+    permissions:
+      contents: write
+      actions: write
     needs: [species, prepare-w06-handoff]
     if: ${{ needs.species.result == 'success' && needs.prepare-w06-handoff.result == 'success' && inputs.publish == true }}
     uses: ./.github/workflows/workflow_06_production.yml
