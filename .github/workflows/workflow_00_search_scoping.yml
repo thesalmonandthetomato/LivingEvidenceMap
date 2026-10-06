@@ -58,7 +58,7 @@ jobs:
 
       - name: Validate Boolean scoping search string
         env:
-          SEARCH_STRING: ${{ inputs.search_string_path }}
+          SEARCH_STRING: ${{ inputs.search_string_path || 'user_input/scoping_search_string.txt' }}
         shell: bash
         run: |
           set -euo pipefail
