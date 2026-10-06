@@ -89,8 +89,9 @@ terms_lookup <- function(ids, include) {
   if (!length(ids)) return(list(total = 0L, data = list()))
   if (length(ids) > 500L) stop("terms_lookup received >500 IDs", call. = FALSE)
 
+  quoted <- paste(sprintf('"%s"', ids), collapse = " OR ")
   payload <- list(
-    query = list(terms = list(lens_id = unname(ids))),
+    query = sprintf("lens_id:(%s)", quoted),
     size = page_size,
     include = include
   )
