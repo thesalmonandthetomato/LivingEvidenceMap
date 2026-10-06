@@ -583,6 +583,9 @@ jobs:
           echo "PASS: verified complete W07 -> W08 pointer contract"
 
   handoff-w08:
+    permissions:
+      contents: write
+      actions: write
     needs: prepare-w08-handoff
     uses: ./.github/workflows/workflow_08_production.yml
     with:
