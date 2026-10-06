@@ -68,7 +68,7 @@ authoritative_w08 <- function(){
 
 published_release_baseline <- function(){
   root <- "docs/reporting/workflow_09/data/workflow_inputs"
-  stages <- c("W01","W02","W03","W04","W05","W06","W07","W08")
+  stages <- c("W00","W01","W02","W03","W04","W05","W06","W07","W08")
   summaries <- setNames(lapply(stages,function(stage){
     p <- file.path(root,paste0(tolower(stage),"_summary.json"))
     if(!file.exists(p)) stop("Published-release baseline summary missing: ",p,call.=FALSE)
@@ -77,8 +77,8 @@ published_release_baseline <- function(){
       stop("Published-release baseline summary is not complete: ",p,call.=FALSE)
     }
     pointer <- clean(x$pointer_path)
-    if(!nzchar(pointer) || !file.exists(pointer)) stop("Published-release baseline pointer missing: ",pointer,call.=FALSE)
-    list(run_id=clean(x$source_run_id),pointer=pointer,update_id=clean(x$update_id))
+    if(stage != "W00" && (!nzchar(pointer) || !file.exists(pointer))) stop("Published-release baseline pointer missing: ",pointer,call.=FALSE)
+    list(run_id=clean(x$source_run_id),pointer=pointer,update_id=clean(x$update_id),metrics=x$metrics)
   }),stages)
 
   auth <- authoritative_w08()
@@ -372,14 +372,18 @@ if(stage=="W04"){
 
 if(stage=="W05"){
   if(nzchar(pointer_path)){
-    if(!file.exists(pointer_path)) stop("W05 pointer not found: ",pointer_path,call.=FALSE)
-    px<-fromJSON(pointer_path,simplifyVector=FALSE)
+    ptr<-pointer_path
+    if(!file.exists(ptr)) stop("W05 pointer not found: ",ptr,call.=FALSE)
+    px<-fromJSON(ptr,simplifyVector=FALSE)
     run_id<-as.character(px$source_github_run_id)
   } else {
     row<-latest_row("docs/workflow05/zenodo_registry.csv");run_id<-as.character(row$source_github_run_id[[1L]])
+    ptr<-sprintf("docs/workflow05/zenodo/run-%s.json",run_id)
+    px<-fromJSON(ptr,simplifyVector=FALSE)
   }
+  s$counts$species_records<-as.integer(px$records)
   s<-set_run(s,"W05",run_id,6L,7L,"Species coding complete; awaiting geography coding")
-  save_status(s);cat("PASS: W05 live progress updated\n");quit(status=0)
+  save_status(s);cat(sprintf("PASS: W05 current-run species records = %d\n",s$counts$species_records));quit(status=0)
 }
 
 if(stage=="W06"){
