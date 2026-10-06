@@ -24,19 +24,20 @@
     "canonical_records": 21493,
     "canonical_sha256": "96a854952aecf3a562fadf603670f650fa26ba9974c819e4b98f9c4dc4f6de20",
     "previous_counts": {
-      "deduplicated_records": [],
-      "enriched_records": [],
-      "retraction_exclusions": [],
-      "screened_include": [],
-      "screened_exclude": [],
-      "species_records": [],
+      "search_results": 118527,
+      "deduplicated_records": 47094,
+      "enriched_records": 2218,
+      "retraction_exclusions": 12,
+      "screened_include": 21819,
+      "screened_exclude": 25263,
+      "species_records": 21819,
       "geography": {
-        "with": [],
-        "without": []
+        "with": 8923,
+        "without": 12570
       },
       "topics": {
-        "with": [],
-        "without": []
+        "with": 21246,
+        "without": 247
       }
     }
   },
