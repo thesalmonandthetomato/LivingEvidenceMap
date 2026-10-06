@@ -1,18 +1,18 @@
 {
   "schema": "living-evidence-map-workflow09-stage-summary-v1",
   "stage": "W07",
-  "source_run_id": "37153534771",
-  "update_id": "w01-run-36971418284",
-  "generated_at_utc": "2026-10-04T17:36:28Z",
-  "pointer_path": "docs/workflow07/zenodo/run-37153534771.json",
-  "pointer_sha256": "35a955e80727abe64c01d7961770f836415e63759351a19e19ea5e8cfec2f9e4",
+  "source_run_id": "37515511948",
+  "update_id": "w00-run-37346236893",
+  "generated_at_utc": "2026-10-06T21:28:59Z",
+  "pointer_path": "docs/workflow07/zenodo/run-37515511948.json",
+  "pointer_sha256": "6ffa309df102445f7c2bb78b2348fff0fe6947f94db5d28bef77af05086b132c",
   "status": "complete",
   "metrics": {
-    "records": 21819,
-    "raw_topic_assignments": 61939,
-    "zero_topic_records": 385,
-    "included_uncoded_records": 234,
-    "late_automatic_exclusions": 131,
-    "human_adjudication_records": 138
+    "records": 23371,
+    "raw_topic_assignments": 65308,
+    "zero_topic_records": 471,
+    "included_uncoded_records": 292,
+    "late_automatic_exclusions": 140,
+    "human_adjudication_records": 39
   }
 }

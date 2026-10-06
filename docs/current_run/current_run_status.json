@@ -3,7 +3,7 @@
   "update_id": "w00-run-37346236893",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-05T17:20:08Z",
-  "last_updated_at_utc": "2026-10-06T19:31:20Z",
+  "last_updated_at_utc": "2026-10-06T21:28:56Z",
   "baseline": {
     "release_update_id": "w01-run-36971418284",
     "workflow01_source_run_id": "36971418284",
@@ -117,8 +117,8 @@
       "without": 13624
     },
     "topics": {
-      "with": [],
-      "without": []
+      "with": 22900,
+      "without": 471
     }
   },
   "progress": {
@@ -144,10 +144,10 @@
       "status": "complete"
     },
     "W07": {
-      "status": "active"
+      "status": "complete"
     },
     "W08": {
-      "status": "pending"
+      "status": "active"
     },
     "W09": {
       "status": "pending"
@@ -155,10 +155,10 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W06",
-    "completed_through": 7,
-    "active_position": 8,
-    "status_label": "Geography coding complete; awaiting topic coding"
+    "current_stage": "W07",
+    "completed_through": 8,
+    "active_position": 9,
+    "status_label": "Topic coding complete; awaiting final adjudication"
   },
   "workflow_runs": {
     "W00": "37346236893",
@@ -167,6 +167,7 @@
     "W03": "37385439517",
     "W04": "37456188910",
     "W05": "37511638503",
-    "W06": "37515511948"
+    "W06": "37515511948",
+    "W07": "37515511948"
   }
 }
