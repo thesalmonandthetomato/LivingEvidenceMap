@@ -1,6 +1,7 @@
 name: Reporting - Current run live status
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - workflow01-final-architecture
@@ -16,6 +17,7 @@ on:
       - 'docs/workflow06/zenodo_registry.csv'
       - 'docs/workflow07/zenodo_registry.csv'
       - 'docs/workflow08/zenodo_registry.csv'
+      - '.github/workflows/workflow_current_run_live_status.yml'
 
 permissions:
   contents: write
