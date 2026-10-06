@@ -6,7 +6,7 @@
   "affected_all_canonical": 3589,
   "affected_workflow04_eligible": 3589,
   "affected_present_in_w04_layer": 3589,
-  "affected_screened_in_current_run": 0,
+  "affected_screened_in_current_run": 1382,
   "affected_decision_counts": {
     "exclude": 2200,
     "retain": 1260,
@@ -21,10 +21,13 @@
     "terra_oneoff_adjudication_after_luna_unresolved": 88
   },
   "usage": {
-    "calls": 0,
-    "input_tokens": 0,
-    "cached_input_tokens": 0,
-    "output_tokens": 0,
+    "calls": 7226,
+    "input_tokens": 15708818,
+    "cached_input_tokens": 14871038,
+    "output_tokens": 650133,
+    "avg_input_tokens_per_call": 2173.93,
+    "avg_cached_input_tokens_per_call": 2057.9903,
+    "avg_output_tokens_per_call": 89.9714,
     "affected_calls_if_two_passes": 7178,
     "affected_calls_if_three_passes": 10767
   },
