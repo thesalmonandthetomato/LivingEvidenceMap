@@ -94,7 +94,7 @@ keywords_text <- function(rec) {
 # Build manifestation -> canonical mapping from the authoritative included corpus.
 canonical_lines <- readLines(canonical_path, warn = FALSE, encoding = "UTF-8")
 canonical_lines <- canonical_lines[nzchar(trimws(canonical_lines))]
-lens_to_canonical <- character()
+lens_to_canonical <- new.env(hash = TRUE, parent = emptyenv())
 canonical_ids <- character()
 for (line in canonical_lines) {
   rec <- fromJSON(line, simplifyVector = FALSE)
@@ -106,7 +106,7 @@ for (line in canonical_lines) {
     vals <- as.character(unlist(refs, recursive = TRUE, use.names = FALSE))
     lids <- sub("^lens:", "", vals[startsWith(vals, "lens:")])
     if (length(lids)) {
-      for (lid in lids) lens_to_canonical[[lid]] <- cid
+      for (lid in lids) assign(lid, cid, envir = lens_to_canonical)
     }
   }
 }
@@ -121,7 +121,7 @@ for (f in seed_files) {
   recs <- read_jsonl(f)
   for (rec in recs) {
     seed_lens <- scalar(rec$lens_id)
-    seed_canonical <- lens_to_canonical[[seed_lens]] %||% ""
+    seed_canonical <- if (exists(seed_lens, envir = lens_to_canonical, inherits = FALSE)) get(seed_lens, envir = lens_to_canonical, inherits = FALSE) else ""
     if (!nzchar(seed_lens) || !nzchar(seed_canonical)) next
 
     forward <- as_ids(rec$scholarly_citations)
@@ -164,6 +164,10 @@ write.csv(canonical_edges, file.path(output_dir, "citation_edges_canonical_level
 # Read rich/available metadata checkpoints. Prefer all_metadata_records when present.
 metadata_files <- list.files(metadata_root, pattern = "all_metadata_records\\.jsonl$",
                              recursive = TRUE, full.names = TRUE)
+if (!length(metadata_files)) {
+  metadata_files <- list.files(metadata_root, pattern = "candidate_lens_metadata_full\\.jsonl$",
+                               recursive = TRUE, full.names = TRUE)
+}
 if (!length(metadata_files)) {
   metadata_files <- list.files(metadata_root, pattern = "candidate_records\\.jsonl$",
                                recursive = TRUE, full.names = TRUE)
