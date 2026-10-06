@@ -458,9 +458,30 @@ if(stage=="W09"){
 }
 
 if(stage=="W10"){
+  current_stage <- clean((s$progress %||% list())$current_stage)
+  completed_now <- suppressWarnings(as.integer((s$progress %||% list())$completed_through %||% NA_integer_))
+
+  # W10 is also run independently for dashboard validation/preview work. Such
+  # runs must never jump an in-progress update from an earlier workflow to
+  # "complete". Only the sequential W09 -> W10 production handoff may advance
+  # live current-run status.
+  eligible_w10 <- current_stage %in% c("W09","W10") &&
+    !is.na(completed_now) && completed_now >= 10L
+  if(!eligible_w10){
+    cat(sprintf(
+      "No-op: W10 status update ignored because current run is at %s (completed_through=%s), not the W09/W10 handoff.\n",
+      if(nzchar(current_stage)) current_stage else "<unknown>",
+      if(is.na(completed_now)) "NA" else as.character(completed_now)
+    ))
+    quit(status=0)
+  }
+
   if(stage_status=="start"){
     s<-set_run(s,"W10",Sys.getenv("GITHUB_RUN_ID",""),10L,11L,"Report complete; dashboard build in progress")
     save_status(s);cat("PASS: W10 current-run progress started\n");quit(status=0)
+  }
+  if(!identical(current_stage,"W10")){
+    stop("W10 completion refused because current-run status was not first marked W10 active",call.=FALSE)
   }
   s<-set_run(s,"W10",Sys.getenv("GITHUB_RUN_ID",""),11L,NULL,"Current update complete")
   save_status(s);cat("PASS: W10 current-run progress complete\n");quit(status=0)
