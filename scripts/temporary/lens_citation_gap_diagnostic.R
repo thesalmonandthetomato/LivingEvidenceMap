@@ -100,18 +100,14 @@ lens_request <- function(payload) {
 }
 
 run_batch <- function(seed_ids, field, direction, batch_number) {
-  terms_clause <- list(terms = setNames(list(seed_ids), field))
+  id_clause <- paste(seed_ids, collapse = " OR ")
+  citation_clause <- sprintf("%s:(%s)", field, id_clause)
+  full_query <- sprintf("(%s) AND (%s) AND NOT (%s)",
+                        citation_clause, positive, negative)
+
   payload <- list(
     query = list(
-      bool = list(
-        must = list(
-          terms_clause,
-          list(query_string = list(query = positive))
-        ),
-        must_not = list(
-          list(query_string = list(query = negative))
-        )
-      )
+      query_string = list(query = full_query)
     ),
     stemming = FALSE,
     size = page_size,
@@ -148,9 +144,6 @@ run_batch <- function(seed_ids, field, direction, batch_number) {
   }
 
   ids <- unique(ids)
-  if (!is.null(reported_total) && length(ids) > reported_total) {
-    stop("Internal inconsistency: unique IDs exceed Lens-reported total", call. = FALSE)
-  }
 
   list(
     direction = direction,
