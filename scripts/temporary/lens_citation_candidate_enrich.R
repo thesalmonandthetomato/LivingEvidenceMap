@@ -88,6 +88,7 @@ if (length(records)) {
   records <- records[!duplicated(lids)]
 }
 write_jsonl(records, file.path(output_dir, "candidate_lens_metadata_full.jsonl"))
+writeLines(ids, file.path(output_dir, "candidate_ids.txt"))
 returned <- if (length(records)) vapply(records, function(x) as.character(x$lens_id %||% ""), character(1)) else character()
 writeLines(setdiff(ids, returned), file.path(output_dir, "candidate_ids_missing_from_lens.txt"))
 
