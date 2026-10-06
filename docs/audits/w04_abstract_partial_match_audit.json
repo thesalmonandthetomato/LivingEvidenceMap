@@ -1,0 +1,173 @@
+{
+  "schema": "living-evidence-map-w04-abstract-partial-match-audit-v1",
+  "status": "PASS",
+  "canonical_records": 50430,
+  "workflow04_eligible_records": 50418,
+  "affected_all_canonical": 3589,
+  "affected_workflow04_eligible": 3589,
+  "affected_present_in_w04_layer": 3589,
+  "affected_screened_in_current_run": 0,
+  "affected_decision_counts": {
+    "exclude": 2200,
+    "retain": 1260,
+    "uncertain": 129
+  },
+  "affected_decision_origin_counts": {
+    "historical_exclude_authoritative": 193,
+    "historical_fallback_after_luna_unresolved": 6,
+    "human_adjudication_after_luna_uncertain": 1,
+    "human_rule_adjudication_after_luna_terra_uncertain": 118,
+    "luna_consensus": 3183,
+    "terra_oneoff_adjudication_after_luna_unresolved": 88
+  },
+  "usage": {
+    "calls": 0,
+    "input_tokens": 0,
+    "cached_input_tokens": 0,
+    "output_tokens": 0,
+    "affected_calls_if_two_passes": 7178,
+    "affected_calls_if_three_passes": 10767
+  },
+  "sample": [
+    {
+      "record_id": "work-0025d8ef83979b1e",
+      "title": "Research Items",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-002e6725711ee7c5",
+      "title": "Etiology and prevalence of skeletal deformities in farmed juvenile rainbow trout (Oncorhynchus mykiss)",
+      "abstract_enrichment": "pending_workflow02; 2",
+      "current_w04_decision": "retain",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-003382b29d19b7d0",
+      "title": "Effect of trout farming activity on the concentration of total coliforms and<i> Escherichia<\/i><i> coli<\/i> in waters of the upper Savegre river basin, Costa Rica",
+      "abstract_enrichment": "pending_workflow02; 2",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-00387c51f56dae73",
+      "title": "GENETIC EFFECTS OF HATCHERY REARING IN ATLANTIC SALMON",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "uncertain",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-00491ebf5bccd843",
+      "title": "Licensing the Commercial Salmon Fishery",
+      "abstract_enrichment": "pending_workflow02; 2",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "historical_exclude_authoritative"
+    },
+    {
+      "record_id": "work-005e9e167157802d",
+      "title": "Exposure to formaldehyde among fish hatchery workers",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-0061e4224703a813",
+      "title": "Salmon",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "retain",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-006d1ca53840a819",
+      "title": "STRUCTURE AND BIOMASS OF PHYTOPLANKTON",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-006fbd11c4126e1e",
+      "title": "A REVIEW OF COMMERCIAL FISHERIES AND THE STELLER SEA LION (EUMETOPIAS-JUBATUS) - THE CONFLICT ARENA",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-007cd6a1e75b7100",
+      "title": "Maternal Fish Intake and Infant Neurodevelopment: Causality or a Red Herring?",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-007dd21fd95154e4",
+      "title": "Utility of microsatellite loci for detecting reduction of variation in reared aquaculture strains compared with wild progenitors and also as genetic \"tags\" in breeding programmes: evidence from abalone, halibut and salmon",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "retain",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-008e61fdc10a0671",
+      "title": "The development of novel prophylaxis from microbes and plant sources for disease control in aquaculture",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-00c9b9246a4b9e5e",
+      "title": "Northern Getaway: What ecotourism advocates say about the plan to divide BC with a pipeline",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-00d4691af803e25b",
+      "title": "Study on prevention and health guidelines pesticide accidents in the Canton Montalvo, Province of River, Ecuador",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-00fa2dc407cd0787",
+      "title": "K-C selling tract to land groups",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-00fd51d827abed57",
+      "title": "Advances in Aquaculture and Fisheries Research Report of a California Sea Grant Symposium",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-010ba441fc696e0d",
+      "title": "The effects of cage culture of rainbow trout in South Africa on the water quality of three shallow impoundments with long retention times",
+      "abstract_enrichment": "pending_workflow02; 3",
+      "current_w04_decision": "retain",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-0126999e96be1fe0",
+      "title": "North Alaska Peninsula Commercial Salmon Annual Management Report, 2006",
+      "abstract_enrichment": "pending_workflow02; 2",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "historical_exclude_authoritative"
+    },
+    {
+      "record_id": "work-0144e1130cc0699c",
+      "title": "Development of European inland fish culture and domestication of new species",
+      "abstract_enrichment": "pending_workflow02; 1",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "luna_consensus"
+    },
+    {
+      "record_id": "work-014d20e400a2e827",
+      "title": "Ecotoxicity of the Insecticide Fenitrothion and its Commercial Preparation To Salmonids",
+      "abstract_enrichment": "pending_workflow02; 4",
+      "current_w04_decision": "exclude",
+      "current_w04_origin": "historical_exclude_authoritative"
+    }
+  ]
+}
