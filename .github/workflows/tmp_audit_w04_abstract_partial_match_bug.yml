@@ -1,0 +1,92 @@
+name: Temporary audit W04 abstract partial-match bug
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_audit_w04_abstract_partial_match_bug.yml'
+      - 'scripts/updater/tmp_audit_w04_abstract_partial_match.R'
+      - 'scripts/updater/workflow_04_prepare_incremental.R'
+      - 'scripts/updater/workflow_04_luna_consensus.R'
+      - 'scripts/updater/workflow_04_build_human_validation_queue.R'
+      - 'scripts/updater/workflow_04_build_resolution_queue.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install audit dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Validate exact abstract access fix
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            "scripts/updater/workflow_04_prepare_incremental.R",
+            "scripts/updater/workflow_04_luna_consensus.R",
+            "scripts/updater/workflow_04_build_human_validation_queue.R",
+            "scripts/updater/workflow_04_build_resolution_queue.R"
+          )
+          for (f in files) {
+            parse(file=f)
+            x <- paste(readLines(f,warn=FALSE),collapse="\n")
+            if (grepl("r\\$abstract\\b",x,perl=TRUE)) stop("Unsafe partial abstract access remains in ",f)
+            if (!grepl('r\\[\\["abstract"\\]\\]',x,perl=TRUE)) stop("Exact abstract fallback missing in ",f)
+          }
+          parse(file="scripts/updater/tmp_audit_w04_abstract_partial_match.R")
+          cat("PASS: production W04 abstract lookups are exact\n")
+
+      - name: Download current W04 production artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit_inputs/prepared audit_inputs/production
+          gh run download 37419309076 --repo "$GITHUB_REPOSITORY" --name workflow04-prepared-37419309076 --dir audit_inputs/prepared
+          gh run download 37419309076 --repo "$GITHUB_REPOSITORY" --name workflow04-production-37419309076 --dir audit_inputs/production
+          echo "Prepared files:"
+          find audit_inputs/prepared -type f | sort | head -200
+          echo "Production files:"
+          find audit_inputs/production -type f | sort | head -300
+
+      - name: Audit affected records and observed token usage
+        shell: bash
+        run: |
+          set -euo pipefail
+          CAN=$(find audit_inputs/prepared -type f -name canonical_lean.jsonl -print -quit)
+          W03=$(find audit_inputs/prepared -type f -name publication_status.jsonl -print -quit)
+          LAYER=$(find audit_inputs/production -type f -name workflow04_final_screening_layer.jsonl -print -quit || true)
+          if [ -z "$LAYER" ]; then
+            LAYER=$(find audit_inputs/production -type f -name workflow04_merged_layer.jsonl -print -quit || true)
+          fi
+          test -n "$CAN"
+          test -n "$W03"
+          ARGS=(--canonical "$CAN" --w03 "$W03" --usage-dir audit_inputs/production --output outputs/w04_abstract_partial_match_audit.json --affected-ids outputs/w04_abstract_partial_match_affected_ids.txt)
+          if [ -n "$LAYER" ]; then ARGS+=(--w04-layer "$LAYER"); fi
+          Rscript scripts/updater/tmp_audit_w04_abstract_partial_match.R "${ARGS[@]}"
+          cat outputs/w04_abstract_partial_match_audit.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w04-abstract-partial-match-audit
+          path: |
+            outputs/w04_abstract_partial_match_audit.json
+            outputs/w04_abstract_partial_match_affected_ids.txt
+          retention-days: 30
