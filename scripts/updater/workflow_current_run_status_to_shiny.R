@@ -44,6 +44,7 @@ cmd <- c(
   "--retracted-records",val(s$counts$retraction_exclusions),
   "--screened-include",val(s$counts$screened_include),
   "--screened-exclude",val(s$counts$screened_exclude),
+  "--species-records",val(s$counts$species_records),
   "--geography-with",val(s$counts$geography$with),
   "--geography-without",val(s$counts$geography$without),
   "--topic-with",val(s$counts$topics$with),
