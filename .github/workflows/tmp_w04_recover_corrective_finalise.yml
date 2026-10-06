@@ -47,9 +47,12 @@ jobs:
           test -s prepared/inputs/current/canonical_lean.jsonl
           test -s prepared/inputs/current/publication_status.jsonl
           test -s prepared/outputs/workflow04_prepare/prompt_provenance.json
-          test -s source_final/workflow04_final/workflow04_final_screening_layer.jsonl
-          test -s source_final/workflow04_final/summary.json
+          test -s source_final/workflow04_final_screening_layer.jsonl
+          test -s source_final/summary.json
           test -s corrected_consensus/workflow04_consensus_layer.jsonl
+          echo "Prepared artefact files:"; find prepared -maxdepth 4 -type f | sort
+          echo "Source artefact files:"; find source_final -maxdepth 2 -type f | sort
+          echo "Consensus artefact files:"; find corrected_consensus -maxdepth 2 -type f | sort
           test "$(wc -l < corrected_consensus/workflow04_consensus_layer.jsonl)" -eq 3589
 
       - name: Prepare Google credential
@@ -76,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow04_final
-          Rscript scripts/updater/tmp_w04_merge_partial_abstract_correction.R             --canonical prepared/inputs/current/canonical_lean.jsonl             --w03 prepared/inputs/current/publication_status.jsonl             --full-layer source_final/workflow04_final/workflow04_final_screening_layer.jsonl             --corrected-layer corrected_consensus/workflow04_consensus_layer.jsonl             --affected-ids docs/audits/w04_abstract_partial_match_affected_ids.txt             --completed-decisions outputs/current_decisions/completed.jsonl             --source-summary source_final/workflow04_final/summary.json             --output-dir outputs/workflow04_final
+          Rscript scripts/updater/tmp_w04_merge_partial_abstract_correction.R             --canonical prepared/inputs/current/canonical_lean.jsonl             --w03 prepared/inputs/current/publication_status.jsonl             --full-layer source_final/workflow04_final_screening_layer.jsonl             --corrected-layer corrected_consensus/workflow04_consensus_layer.jsonl             --affected-ids docs/audits/w04_abstract_partial_match_affected_ids.txt             --completed-decisions outputs/current_decisions/completed.jsonl             --source-summary source_final/summary.json             --output-dir outputs/workflow04_final
           cp prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json
           cat outputs/workflow04_final/partial_abstract_correction_report.json
 
