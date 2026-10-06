@@ -446,6 +446,9 @@ jobs:
           if-no-files-found: error
 
   handoff-w07:
+    permissions:
+      contents: write
+      actions: write
     needs: finalise
     if: ${{ needs.finalise.result == 'success' && inputs.publish == true }}
     uses: ./.github/workflows/workflow_07_production.yml
