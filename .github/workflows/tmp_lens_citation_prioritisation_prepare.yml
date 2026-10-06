@@ -1,0 +1,102 @@
+name: Temporary prepare Lens citation prioritisation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Completed full Lens citation-harvest run ID"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp-lens-citation-gap-test
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependency
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+
+      - name: Parse preparation script
+        shell: Rscript {0}
+        run: |
+          parse(file="scripts/temporary/lens_citation_prioritisation_prepare.R")
+          cat("PASS: prioritisation preparation script parses\n")
+
+      - name: Download authoritative W08 included corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w08
+          gh api             -H "Accept: application/vnd.github+json"             /repos/${GITHUB_REPOSITORY}/actions/artifacts/11315532812/zip             > /tmp/w08.zip
+          unzip -q /tmp/w08.zip -d /tmp/w08
+          test -s /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl
+
+      - name: Download seed checkpoints from source run
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.source_run_id }}
+          pattern: lens-seed-batch-*
+          path: checkpoints/seeds
+          merge-multiple: false
+
+      - name: Download metadata checkpoints from source run
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.source_run_id }}
+          pattern: lens-metadata-chunk-*
+          path: checkpoints/metadata
+          merge-multiple: false
+
+      - name: Build citation-connectivity ranking and ingestion bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/prioritisation
+          Rscript scripts/temporary/lens_citation_prioritisation_prepare.R             --canonical /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl             --seed-root checkpoints/seeds             --metadata-root checkpoints/metadata             --output-dir outputs/prioritisation
+
+      - name: Verify no W04 screening occurred
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"workflow04_api_called": false' outputs/prioritisation/manifest.json
+          grep -q '"screening_status": "NOT_SCREENED"' outputs/prioritisation/manifest.json
+          echo "PASS: preparation only; W04 API screening not invoked"
+
+      - name: Publish preparation summary
+        shell: bash
+        run: |
+          echo '### Lens citation prioritisation preparation' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No W04/OpenAI screening was invoked.' >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~json' >> "$GITHUB_STEP_SUMMARY"
+          cat outputs/prioritisation/manifest.json >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload prioritisation bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-citation-prioritisation-${{ inputs.source_run_id }}
+          path: outputs/prioritisation/
+          retention-days: 30
+          if-no-files-found: error
