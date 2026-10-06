@@ -38,6 +38,7 @@ cmd <- c(
   "--last-search-date",val(s$search$search_date),
   "--canonical-existing",val(s$baseline$canonical_records),
   "--search-results-total",val(s$counts$search_results),
+  "--search-results-update",val(s$search$search_results),
   "--deduplicated-records",val(s$counts$deduplicated_records),
   "--enriched-records",val(s$counts$enriched_records),
   "--retracted-records",val(s$counts$retraction_exclusions),
