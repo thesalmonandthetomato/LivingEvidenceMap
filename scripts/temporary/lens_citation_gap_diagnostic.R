@@ -166,7 +166,7 @@ seed_info <- extract_lens_ids(canonical_path)
 all_seed_ids <- sort(seed_info$ids)
 if (!length(all_seed_ids)) stop("No Lens IDs found in W08 manifestation_refs", call. = FALSE)
 
-expected <- 15603L
+expected <- 16716L
 if (length(all_seed_ids) != expected) {
   stop(sprintf("Seed guard failed: expected %d included Lens IDs, found %d",
                expected, length(all_seed_ids)), call. = FALSE)
