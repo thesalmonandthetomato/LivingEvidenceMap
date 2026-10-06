@@ -1,0 +1,167 @@
+name: TEMP recover corrective W04 finalise
+
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/tmp_w04_recover_corrective_finalise.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  FAILED_RUN_ID: '37451377621'
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+
+jobs:
+  finalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','googlesheets4','readr'))
+
+      - name: Download successful corrective artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prepared source_final corrected_consensus
+          gh run download "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow04-prepared-$FAILED_RUN_ID" --dir prepared
+          gh run download "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "w04-correction-source-$FAILED_RUN_ID" --dir source_final
+          gh run download "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "w04-correction-consensus-$FAILED_RUN_ID" --dir corrected_consensus
+          test -s prepared/inputs/current/canonical_lean.jsonl
+          test -s prepared/inputs/current/publication_status.jsonl
+          test -s prepared/outputs/workflow04_prepare/prompt_provenance.json
+          test -s source_final/workflow04_final/workflow04_final_screening_layer.jsonl
+          test -s source_final/workflow04_final/summary.json
+          test -s corrected_consensus/workflow04_consensus_layer.jsonl
+          test "$(wc -l < corrected_consensus/workflow04_consensus_layer.jsonl)" -eq 3589
+
+      - name: Prepare Google credential
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Capture completed decisions from current W04 queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/current_decisions
+          Rscript scripts/updater/tmp_w04_export_partial_completed_decisions.R             --sheet-id "$LEM_GOOGLE_SHEET_ID"             --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"             --output outputs/current_decisions/completed.jsonl             --manifest outputs/current_decisions/manifest.json
+          cat outputs/current_decisions/manifest.json
+
+      - name: Merge corrected records into complete W04 layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow04_final
+          Rscript scripts/updater/tmp_w04_merge_partial_abstract_correction.R             --canonical prepared/inputs/current/canonical_lean.jsonl             --w03 prepared/inputs/current/publication_status.jsonl             --full-layer source_final/workflow04_final/workflow04_final_screening_layer.jsonl             --corrected-layer corrected_consensus/workflow04_consensus_layer.jsonl             --affected-ids docs/audits/w04_abstract_partial_match_affected_ids.txt             --completed-decisions outputs/current_decisions/completed.jsonl             --source-summary source_final/workflow04_final/summary.json             --output-dir outputs/workflow04_final
+          cp prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json
+          cat outputs/workflow04_final/partial_abstract_correction_report.json
+
+      - name: Inspect corrected status
+        id: status
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(x$status)')
+          UNRESOLVED=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(as.integer(x$unresolved))')
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "unresolved=$UNRESOLVED" >> "$GITHUB_OUTPUT"
+          echo "Corrected W04 status=$STATUS unresolved=$UNRESOLVED"
+
+      - name: Build corrected Shiny resolution queue
+        if: ${{ steps.status.outputs.status == 'HUMAN_REVIEW_REQUIRED' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow04_resolution
+          Rscript scripts/updater/workflow_04_build_resolution_queue.R             --canonical prepared/inputs/current/canonical_lean.jsonl             --human-review outputs/workflow04_final/workflow04_human_review_queue.jsonl             --output-dir outputs/workflow04_resolution             --source-run-id "$GITHUB_RUN_ID"
+
+      - name: Publish corrected queue to Shiny
+        if: ${{ steps.status.outputs.status == 'HUMAN_REVIEW_REQUIRED' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R             --queue outputs/workflow04_resolution/workflow04_resolution_queue.jsonl             --manifest outputs/workflow04_resolution/workflow04_resolution_queue_manifest.json             --highlight-terms user_input/workflow04_screening_highlight_terms.csv             --sheet-id "$LEM_GOOGLE_SHEET_ID"             --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"             --queue-tab queue_w04_resolution_active             --receipt outputs/workflow04_resolution/shiny_publish_receipt.json
+          BATCH_ID=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$batch_id)')
+          QUEUE_SHA=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$queue_sha256)')
+          Rscript scripts/updater/workflow_shiny_batch_status.R             --stage "04" --batch-id "$BATCH_ID" --queue-sha256 "$QUEUE_SHA"             --status published --sheet-id "$LEM_GOOGLE_SHEET_ID"             --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"             --workflow-run-id "$GITHUB_RUN_ID" --source-run-id "$GITHUB_RUN_ID"             --message "Corrective W04 abstract partial-match rescreen; prior completed human decisions preserved where still required."
+
+      - name: Persist correction audit summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/audits
+          cp outputs/workflow04_final/partial_abstract_correction_report.json docs/audits/w04_abstract_partial_match_correction.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/audits/w04_abstract_partial_match_correction.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Record W04 abstract correction results [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload resume-compatible prepared state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-prepared-${{ github.run_id }}
+          path: |
+            prepared/inputs/current/canonical_lean.jsonl
+            prepared/inputs/current/publication_status.jsonl
+            prepared/outputs/workflow04_prepare/prompt_provenance.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload corrected W04 production state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-production-${{ github.run_id }}
+          path: |
+            outputs/workflow04_final/
+            outputs/workflow04_resolution/
+            outputs/current_decisions/
+          retention-days: 90
+          if-no-files-found: error
+
+  cleanup:
+    needs: finalise
+    if: ${{ needs.finalise.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 2
+      - name: Remove temporary corrective implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          git rm -f .github/workflows/tmp_w04_correct_abstract_partial_match.yml             .github/workflows/tmp_w04_recover_corrective_finalise.yml             scripts/updater/tmp_w04_export_partial_completed_decisions.R             scripts/updater/tmp_w04_merge_partial_abstract_correction.R
+          git commit -m "Remove temporary W04 abstract correction workflows [skip ci]"
+          git push origin HEAD:workflow01-final-architecture
