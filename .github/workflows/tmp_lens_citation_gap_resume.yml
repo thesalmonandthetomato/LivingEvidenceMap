@@ -1,0 +1,201 @@
+name: Temporary resume Lens citation harvest from checkpoints
+
+on:
+  push:
+    branches:
+      - tmp-lens-citation-gap-test
+    paths:
+      - ".github/workflows/tmp_lens_citation_gap_resume.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    name: Global neighbour deduplication
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp-lens-citation-gap-test
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2", "jsonlite"))
+
+      - name: Download all 34 seed checkpoints from failed source run
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 37505173571
+          pattern: lens-seed-batch-*
+          path: checkpoints/seeds
+          merge-multiple: false
+
+      - name: Verify all seed checkpoints recovered
+        shell: bash
+        run: |
+          set -euo pipefail
+          N=$(find checkpoints/seeds -type f -name seed_records.jsonl | wc -l)
+          test "$N" -eq 34
+          echo "PASS: recovered all 34 seed checkpoints"
+
+      - name: Combine and globally deduplicate neighbours
+        run: |
+          set -euo pipefail
+          Rscript scripts/temporary/lens_citation_checkpointed.R             --stage prepare             --output-dir outputs/index             --checkpoint-root checkpoints/seeds             --chunk-size 5000
+
+      - name: Export metadata matrix
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          MATRIX="$(tr -d '\n\r' < outputs/index/matrix.json)"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "Metadata chunk matrix: $MATRIX"
+
+      - name: Upload global neighbour index checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-neighbour-index-resumed
+          path: outputs/index/
+          retention-days: 14
+          if-no-files-found: error
+
+  metadata:
+    name: Metadata chunk ${{ matrix.chunk }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        chunk: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp-lens-citation-gap-test
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2", "jsonlite"))
+
+      - name: Download neighbour index checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: lens-neighbour-index-resumed
+          path: checkpoints/index
+
+      - name: Retrieve metadata and apply gap filter
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "outputs/metadata_${{ matrix.chunk }}"
+          Rscript scripts/temporary/lens_citation_checkpointed.R             --stage metadata             --output-dir "outputs/metadata_${{ matrix.chunk }}"             --checkpoint-root checkpoints/index             --chunk-number "${{ matrix.chunk }}"             --chunk-size 5000
+
+      - name: Upload metadata checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-metadata-chunk-resumed-${{ matrix.chunk }}
+          path: outputs/metadata_${{ matrix.chunk }}/
+          retention-days: 14
+          if-no-files-found: error
+
+  finalise:
+    name: Final deduplicated candidate set
+    needs: [prepare, metadata]
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp-lens-citation-gap-test
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2", "jsonlite"))
+
+      - name: Download authoritative W08 included corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w08
+          gh api             -H "Accept: application/vnd.github+json"             /repos/${GITHUB_REPOSITORY}/actions/artifacts/11315532812/zip             > /tmp/w08.zip
+          unzip -q /tmp/w08.zip -d /tmp/w08
+          test -s /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl
+
+      - name: Download neighbour index
+        uses: actions/download-artifact@v4
+        with:
+          name: lens-neighbour-index-resumed
+          path: checkpoints/index
+
+      - name: Download all metadata checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          pattern: lens-metadata-chunk-resumed-*
+          path: checkpoints/metadata
+          merge-multiple: false
+
+      - name: Build final candidate set
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p checkpoints/all
+          cp -R checkpoints/index/. checkpoints/all/
+          cp -R checkpoints/metadata/. checkpoints/all/
+          Rscript scripts/temporary/lens_citation_checkpointed.R             --stage finalise             --canonical /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl             --output-dir outputs/final             --checkpoint-root checkpoints/all
+
+      - name: Publish final summary
+        shell: bash
+        run: |
+          echo '### Full Lens citation-gap harvest (resumed)' >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~json' >> "$GITHUB_STEP_SUMMARY"
+          cat outputs/final/summary.json >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload final results
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-citation-gap-final-resumed
+          path: outputs/final/
+          retention-days: 30
+          if-no-files-found: error
