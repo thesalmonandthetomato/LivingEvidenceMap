@@ -1,0 +1,29 @@
+name: TEMP resume W06 after W05 handoff dependency failure
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_resume_w06_after_w05_37511638503.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  continue-w06:
+    permissions:
+      contents: write
+      actions: write
+    uses: ./.github/workflows/workflow_06_production.yml
+    with:
+      workflow04_pointer_path: 'docs/workflow04/zenodo/run-37456188910.json'
+      workflow05_pointer_path: 'docs/workflow05/zenodo/run-37511638503.json'
+      lean_pointer_path: 'docs/compaction/zenodo/run-37381023181.json'
+      prior_workflow06_pointer_path: 'docs/workflow06/zenodo/run-37114864202.json'
+      prior_workflow04_pointer_path: 'docs/workflow04/zenodo/run-37051672356.json'
+      prior_lean_pointer_path: 'docs/compaction/zenodo/run-37016080508.json'
+      prior_workflow07_pointer_path: 'docs/workflow07/zenodo/run-37153534771.json'
+      publish: true
+    secrets: inherit
