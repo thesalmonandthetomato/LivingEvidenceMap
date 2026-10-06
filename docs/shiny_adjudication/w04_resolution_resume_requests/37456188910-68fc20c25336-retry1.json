@@ -1,0 +1,6 @@
+{
+  "source_run_id": "37456188910",
+  "batch_id": "w04-resolution-37456188910-68fc20c25336",
+  "queue_sha256": "68fc20c25336ef8859ea5b33eeec83802eec2c7804c36307f8fb6618eb641cf4",
+  "requested_reason": "Retry W04 resume after fixing reusable-workflow permission escalation; continue automatically through W05-W08."
+}
