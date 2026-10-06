@@ -170,7 +170,7 @@ jobs:
 
   merge:
     needs: [prepare, count]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.count.result == 'success' }}
+    if: ${{ always() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -219,14 +219,43 @@ jobs:
             'lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',
             names(e$sources),'cab_abstracts','proquest_dissertations'
           )
-          rows <- rows[order(match(rows$source_slug, order_slugs), rows$source),,drop=FALSE]
+          labels <- c(
+            lens='Lens',
+            scopus='Scopus',
+            openalex='OpenAlex',
+            agricola='AGRICOLA',
+            pubmed='PubMed/MEDLINE',
+            ethos='EThOS',
+            cba='Chinese Biological Abstracts',
+            epmc_preprints='Europe PMC preprints',
+            wos='Web of Science Core Collection',
+            setNames(vapply(e$sources,function(x) as.character(x$display_name),character(1)),names(e$sources)),
+            cab_abstracts='CAB Abstracts',
+            proquest_dissertations='ProQuest Dissertations & Theses Global'
+          )
+          missing <- setdiff(order_slugs, as.character(rows$source_slug))
+          if (length(missing)) {
+            rows <- rbind(
+              rows,
+              data.frame(
+                source=unname(labels[missing]),
+                access_mode='Count job failed before producing an artefact',
+                search_date=format(Sys.Date(),'%Y-%m-%d'),
+                hits=NA_integer_,
+                status='Failed',
+                source_slug=missing,
+                stringsAsFactors=FALSE
+              )
+            )
+          }
+          rows <- rows[match(order_slugs, rows$source_slug),,drop=FALSE]
           rownames(rows) <- NULL
           dir.create('outputs/workflow00_search_scope', recursive=TRUE, showWarnings=FALSE)
           write.csv(rows, 'outputs/workflow00_search_scope/search_scope_counts.csv', row.names=FALSE, na='')
           out <- list(
             schema='living-evidence-map-workflow00-search-scoping-v1',
             workflow='00_search_scoping',
-            status='success',
+            status=if(any(tolower(rows$status)=='failed' | grepl('fail|error',tolower(rows$status)))) 'partial_failure' else 'success',
             counted_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'),
             search_date=format(Sys.Date(),'%Y-%m-%d'),
             search_input_path=plan$input_path,
