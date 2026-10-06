@@ -109,6 +109,7 @@ published_release_baseline <- function(){
     canonical_records=auth$records,
     canonical_sha256=auth$sha256,
     previous_counts=list(
+      search_results=as.integer(summaries$W00$metrics$search_results),
       deduplicated_records=as.integer(summaries$W01$metrics$canonical_records),
       enriched_records=as.integer(summaries$W02$metrics$enriched_records),
       retraction_exclusions=as.integer(summaries$W03$metrics$retraction_exclusions),
@@ -204,7 +205,10 @@ if(stage=="W00"){
   parent<-if(nzchar(w00_run_id)) w00_run_id else names(sort(table(parents),decreasing=TRUE))[[1L]]
   recs<-recs[parents==parent]
   baseline<-published_release_baseline()
-  total<-sum(vapply(recs,function(z)as.integer(z$reported_search_results),integer(1)))
+  update_total<-sum(vapply(recs,function(z)as.integer(z$reported_search_results),integer(1)))
+  prior_total<-as.integer(baseline$previous_counts$search_results)
+  if(is.na(prior_total) || prior_total < 0L) stop("Published-release W00 baseline search-results total is invalid",call.=FALSE)
+  total<-prior_total + update_total
   dates<-as.Date(substr(vapply(recs,function(z)as.character(z$recorded_at_utc),character(1)),1,10))
   src<-setNames(lapply(recs,function(z)list(
     reported_search_results=as.integer(z$reported_search_results),
@@ -218,7 +222,7 @@ if(stage=="W00"){
     last_updated_at_utc=NULL,
     baseline=baseline,
     search=list(workflow00_run_id=parent,search_date=as.character(max(dates,na.rm=TRUE)),
-                search_results=total,sources=src),
+                search_results=update_total,sources=src),
     cohort=list(record_ids_path=ids_path,record_ids_sha256=NULL,deduplicated_records=NULL),
     counts=list(
       search_results=total,
@@ -238,7 +242,7 @@ if(stage=="W00"){
   s$progress$status_label<-"Search complete; awaiting deduplication"
   if(file.exists(ids_path)) unlink(ids_path)
   save_status(s)
-  cat(sprintf("PASS: W00 live status initialised for %s with %d search results\n",parent,total))
+  cat(sprintf("PASS: W00 live status initialised for %s with %d cumulative search results (+%d this update)\n",parent,total,update_total))
   quit(status=0)
 }
 
