@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Workflow 10 is the public presentation endpoint of the LivingEvidenceMap pipeline. It restores the latest authoritative Workflow 08 included-only canonical evidence base after successful Workflow 09 publication, validates its provenance, and projects it into a static browser-based dashboard.
+Workflow 10 is the final presentation and output-cataloguing endpoint of the LivingEvidenceMap pipeline. It restores the latest authoritative Workflow 08 included-only canonical evidence base after successful Workflow 09 publication, validates its provenance, projects it into a static browser-based dashboard, and writes an internal repository-only output registry archived by search date.
 
 Workflow 10 does not modify deduplication, screening, species, geography or topic decisions. The Workflow 08 canonical JSONL remains the authoritative record-level analytical dataset, while Workflow 09 remains the authoritative reporting and manuscript layer.
 
@@ -65,6 +65,18 @@ This document serves two purposes:
                          v
               [public presentation]
 
+In parallel after validation:
+             [internal output registry]
+                         |
+                         v
+ [internal/output_registry/archive/YYYY-MM-DD/]
+                         |
+          +--------------+--------------+
+          |              |              |
+          v              v              v
+       HTML            JSON            CSV
+        + manifest/checksums + Zenodo catalogue
+
 Retained restoration path only:
 [dashboard-search-trial.html + workflow_10_build_search_trial.R]
                          |
@@ -92,6 +104,8 @@ Retained restoration path only:
 | `docs/reporting/.run_workflow10_dashboard` | Dedicated W09→W10 provenance trigger. Its update is the production handoff event from successful W09 publication to W10. |
 | `scripts/updater/workflow_current_run_status_observer.R` | Tracks W09 and W10 start/completion states for the current-run progress display. |
 | `scripts/updater/workflow_current_run_status_to_shiny.R` | Writes the current-run status to the Shiny backing store. |
+| `scripts/reporting/workflow_10_build_internal_output_registry.R` | Builds the internal output registry from current-run search provenance, workflow Zenodo registries, reporting outputs, codebooks and W10 artefacts. Enforces restricted Zenodo visibility and writes dated HTML/JSON/CSV plus a checksum manifest. |
+| `internal/output_registry/archive/YYYY-MM-DD/` | Durable repository archive of the internal output registry for each search date. Stored outside `docs/` so it is not part of the public dashboard deployment bundle. |
 
 ## Inputs and methodological rules
 
@@ -332,7 +346,35 @@ The W10 workflow requires the final HTML to retain:
 
 It also requires search/download-specific UI and artefacts to be absent.
 
-### 9. Upload the W10 artefact
+### 9. Build and archive the internal output registry
+
+After the dashboard has passed validation, W10 generates an internal registry under:
+
+`internal/output_registry/archive/YYYY-MM-DD/`
+
+where the directory name is the current search date.
+
+The registry contains:
+
+- database/source search dates and result counts;
+- Workflow 00–08 Zenodo records;
+- stage descriptions, source run IDs, archive state and publication timestamps;
+- Zenodo DOIs displayed as the DOI string itself, for example `10.5281/zenodo.23117851`, with the DOI resolver as the hyperlink target;
+- reports, RIS exports, figures, codebooks, validation outputs and compact workflow-reporting inputs;
+- W10 build artefacts;
+- file sizes; and
+- SHA-256 checksums.
+
+The registry consists of:
+
+- `output-registry.html`;
+- `output-registry.json`;
+- `output-registry-files.csv`; and
+- `manifest.json`.
+
+This archive is internal to the repository and is not included in the Pages/public-dashboard artefact. All workflow Zenodo deposits are expected to be restricted. The registry builder fails if it encounters a workflow Zenodo record whose visibility is not `restricted`. W10 does not create or advertise a separate public-release Zenodo record.
+
+### 10. Upload the W10 artefact
 
 The production W10 artefact contains only:
 
@@ -348,13 +390,13 @@ It does not upload:
 - a search-trial manifest; or
 - a separate browser-generated RIS database.
 
-### 10. Mark W10 complete
+### 11. Mark W10 complete
 
 After successful W10 validation and artefact upload, the current-run status is updated so W10 is complete and no workflow remains active.
 
 The resulting status metadata are committed back to the workflow branch.
 
-### 11. Static Pages deployment
+### 12. Static Pages deployment
 
 W10 is designed for static GitHub Pages deployment and requires no application server.
 
@@ -390,6 +432,9 @@ Each W10 run validates or records:
 - database-table presence;
 - search/RIS/index absence;
 - uploaded artefact composition;
+- internal output-registry search date;
+- internal registry file checksums;
+- Workflow 00–08 Zenodo DOI, state, source run and restricted visibility;
 - current-run W10 start/completion state; and
 - Git commit associated with the build.
 
@@ -397,8 +442,9 @@ Current validation milestones are:
 
 - restored database-table production W10: run **37278806375**;
 - W10 hardening without release-specific gates: run **37280449723**;
-- explicit W09→W10 trigger validation: run **37280725369**; and
-- W09 Methods/Results plus W10 `index2` Pages preview: run **37280303397**.
+- explicit W09→W10 trigger validation: run **37280725369**;
+- W09 Methods/Results plus W10 `index2` Pages preview: run **37280303397**; and
+- dated internal output-registry generation, validation and repository archival: run **37461142844**.
 
 ## Storage and archival model
 
@@ -412,8 +458,9 @@ The workflow branch retains:
 - presentation metadata and lookup files;
 - the dedicated W09→W10 trigger record;
 - the preserved manual search/download restoration implementation;
-- W10 methodological documentation; and
-- W10 status documentation.
+- W10 methodological documentation;
+- W10 status documentation; and
+- dated internal output registries under `internal/output_registry/archive/YYYY-MM-DD/`.
 
 The public database table remains part of the production interface.
 
@@ -428,11 +475,13 @@ The artefact is an operational/publication bundle, not the authoritative analyti
 
 The full restored canonical JSONL and internal full-abstract dashboard projection remain runner-only.
 
-### Durable external archive
+### Durable archives
 
-Workflow 10 creates no separate evidence archive.
+Workflow 10 creates no separate Zenodo evidence archive.
 
 The authoritative analytical dataset remains the restricted Workflow 08 Zenodo canonical archive. W10 is fully regenerable from that canonical state, the validated W09 reporting handoff and the version-controlled W10 implementation.
+
+W10 does, however, create a durable **internal repository archive** of output registries, keyed by search date. This catalogue is provenance/documentation metadata rather than a replacement analytical dataset. It is intentionally excluded from the public Pages bundle.
 
 ## Downstream handoff
 
@@ -481,9 +530,13 @@ Workflow 10 is considered complete and validated when:
 - no full abstract field is exposed in the public payload;
 - no search panel, abstract index or W10-generated RIS download is produced;
 - the W10 artefact contains only the validated public HTML and JavaScript payload;
+- the internal output registry is generated under the search-date archive directory;
+- all workflow Zenodo records listed in the registry are restricted;
+- DOI display text uses the DOI itself rather than a generic label;
+- the internal registry is not included in the Pages/public-dashboard artefact;
 - W10 start and completion are reflected in current-run status; and
 - static Pages deployment succeeds.
 
-These conditions have been validated for the current release. Run **37278806375** validated the restored database-table architecture, run **37280449723** validated the hardened dynamic W10 workflow, and run **37280725369** validated the dedicated automatic W09→W10 handoff.
+These conditions have been validated for the current release. Run **37278806375** validated the restored database-table architecture, run **37280449723** validated the hardened dynamic W10 workflow, run **37280725369** validated the dedicated automatic W09→W10 handoff, and run **37461142844** validated the internal dated output-registry build and archival step.
 
 **Workflow 10 status: complete, validated and locked on `workflow01-final-architecture` pending final integration to `main`.**
