@@ -1,0 +1,344 @@
+name: Temporary OpenAlex-only citation gap functional test
+
+on:
+  workflow_dispatch:
+    inputs:
+      seed_limit:
+        description: "Number of OpenAlex-only canonical records to test; use all only when explicitly authorised"
+        required: true
+        default: "20"
+        type: string
+      canonical_artifact_id:
+        description: "Artifact containing authoritative W08 canonical JSONL"
+        required: true
+        default: "11315532812"
+        type: string
+      lens_candidate_artifact_id:
+        description: "Successful Lens citation-gap final artifact"
+        required: true
+        default: "11443179563"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  seed-index:
+    name: Build OpenAlex-only seed index
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      openalex_only_n: ${{ steps.matrix.outputs.openalex_only_n }}
+      selected_n: ${{ steps.matrix.outputs.selected_n }}
+
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp-lens-citation-gap-test
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite"))
+
+      - name: Download authoritative W08 included corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ inputs.canonical_artifact_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w08
+          gh api -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"             > /tmp/w08.zip
+          unzip -q /tmp/w08.zip -d /tmp/w08
+          test -s /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl
+
+      - name: Build current OpenAlex-only seed set
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/temporary/openalex_citation_gap_checkpointed.R             --stage seed-index             --canonical /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl             --output-dir outputs/openalex_seed_index             --seed-limit "${{ inputs.seed_limit }}"             --seed-chunk-size 100
+
+      - name: Export matrices and counts
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          MATRIX="$(tr -d '\n\r' < outputs/openalex_seed_index/matrix.json)"
+          OPENALEX_ONLY_N="$(jq -r '.openalex_only_canonical_records' outputs/openalex_seed_index/summary.json)"
+          SELECTED_N="$(jq -r '.selected_canonical_records' outputs/openalex_seed_index/summary.json)"
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          echo "openalex_only_n=${OPENALEX_ONLY_N}" >> "$GITHUB_OUTPUT"
+          echo "selected_n=${SELECTED_N}" >> "$GITHUB_OUTPUT"
+          echo "Current OpenAlex-only canonical records: ${OPENALEX_ONLY_N}"
+          echo "Selected for this run: ${SELECTED_N}"
+
+      - name: Upload seed index
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-citation-seed-index-${{ github.run_id }}
+          path: outputs/openalex_seed_index/
+          retention-days: 30
+          if-no-files-found: error
+
+  chase:
+    name: Citation chase seed chunk ${{ matrix.chunk }}
+    needs: seed-index
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        chunk: ${{ fromJSON(needs.seed-index.outputs.matrix) }}
+
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp-lens-citation-gap-test
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite"))
+
+      - name: Download seed index
+        uses: actions/download-artifact@v4
+        with:
+          name: openalex-citation-seed-index-${{ github.run_id }}
+          path: checkpoints/seed_index
+
+      - name: Chase backward and forward citations
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "outputs/chase_${{ matrix.chunk }}"
+          Rscript scripts/temporary/openalex_citation_gap_checkpointed.R             --stage chase             --seed-root checkpoints/seed_index             --output-dir "outputs/chase_${{ matrix.chunk }}"             --seed-chunk-number "${{ matrix.chunk }}"             --seed-chunk-size 100             --forward-seed-group-size 50
+
+      - name: Upload citation checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-citation-chase-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/chase_${{ matrix.chunk }}/
+          retention-days: 30
+          if-no-files-found: error
+
+  prepare-neighbours:
+    name: Deduplicate OpenAlex neighbours
+    needs: [seed-index, chase]
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp-lens-citation-gap-test
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite"))
+
+      - name: Download all citation checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          pattern: openalex-citation-chase-*-${{ github.run_id }}
+          path: checkpoints/chase
+          merge-multiple: false
+
+      - name: Global neighbour deduplication
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/temporary/openalex_citation_gap_checkpointed.R             --stage prepare             --seed-root checkpoints/chase             --output-dir outputs/openalex_neighbour_index             --metadata-chunk-size 5000
+
+      - name: Export metadata matrix
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          MATRIX="$(tr -d '\n\r' < outputs/openalex_neighbour_index/matrix.json)"
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload neighbour index
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-neighbour-index-${{ github.run_id }}
+          path: outputs/openalex_neighbour_index/
+          retention-days: 30
+          if-no-files-found: error
+
+  metadata:
+    name: OpenAlex metadata chunk ${{ matrix.chunk }}
+    needs: prepare-neighbours
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        chunk: ${{ fromJSON(needs.prepare-neighbours.outputs.matrix) }}
+
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp-lens-citation-gap-test
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite"))
+
+      - name: Download neighbour index
+        uses: actions/download-artifact@v4
+        with:
+          name: openalex-neighbour-index-${{ github.run_id }}
+          path: checkpoints/neighbour_index
+
+      - name: Retrieve neighbour metadata and apply identical gap filter
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "outputs/metadata_${{ matrix.chunk }}"
+          Rscript scripts/temporary/openalex_citation_gap_checkpointed.R             --stage metadata             --metadata-root checkpoints/neighbour_index             --output-dir "outputs/metadata_${{ matrix.chunk }}"             --metadata-chunk-number "${{ matrix.chunk }}"             --metadata-chunk-size 5000
+
+      - name: Upload metadata checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-metadata-${{ matrix.chunk }}-${{ github.run_id }}
+          path: outputs/metadata_${{ matrix.chunk }}/
+          retention-days: 30
+          if-no-files-found: error
+
+  finalise:
+    name: Cross-source deduplication
+    needs: [seed-index, prepare-neighbours, metadata]
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp-lens-citation-gap-test
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite"))
+
+      - name: Download authoritative W08 included corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ inputs.canonical_artifact_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w08
+          gh api -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"             > /tmp/w08.zip
+          unzip -q /tmp/w08.zip -d /tmp/w08
+          test -s /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl
+
+      - name: Download successful Lens candidate set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ inputs.lens_candidate_artifact_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/lens
+          gh api -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"             > /tmp/lens.zip
+          unzip -q /tmp/lens.zip -d /tmp/lens
+          LENS_FILE="$(find /tmp/lens -type f -name candidate_records_deduplicated.jsonl -print -quit)"
+          test -n "$LENS_FILE"
+          cp "$LENS_FILE" /tmp/lens_candidates.jsonl
+
+      - name: Download citation edges
+        uses: actions/download-artifact@v4
+        with:
+          name: openalex-neighbour-index-${{ github.run_id }}
+          path: checkpoints/neighbour_index
+
+      - name: Download metadata checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          pattern: openalex-metadata-*-${{ github.run_id }}
+          path: checkpoints/metadata
+          merge-multiple: false
+
+      - name: Finalise and deduplicate against Lens
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/temporary/openalex_citation_gap_checkpointed.R             --stage finalise             --canonical /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl             --seed-root checkpoints/neighbour_index             --metadata-root checkpoints/metadata             --lens-candidates /tmp/lens_candidates.jsonl             --output-dir outputs/final
+
+      - name: Confirm no OpenAI use
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(jq -r '.openai_api_called' outputs/final/summary.json)" = "false"
+          echo "PASS: no OpenAI screening/API calls performed."
+
+      - name: Publish test summary
+        shell: bash
+        run: |
+          echo '### OpenAlex-only citation-gap functional test' >> "$GITHUB_STEP_SUMMARY"
+          echo "Current OpenAlex-only canonical records: ${{ needs.seed-index.outputs.openalex_only_n }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Canonical records selected for this test: ${{ needs.seed-index.outputs.selected_n }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~json' >> "$GITHUB_STEP_SUMMARY"
+          cat outputs/final/summary.json >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload functional-test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: openalex-citation-gap-functional-test-${{ github.run_id }}
+          path: outputs/final/
+          retention-days: 30
+          if-no-files-found: error
