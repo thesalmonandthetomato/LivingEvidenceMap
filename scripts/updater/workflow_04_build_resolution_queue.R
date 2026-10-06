@@ -50,7 +50,7 @@ cases<-lapply(seq_along(review),function(i){
       volume=first_nonempty(c$volume,r$volume),
       pages=first_nonempty(c$pages,c$page,r$pages,r$page),
       doi=first_nonempty(c$doi,r$doi),
-      abstract=first_nonempty(c$abstract,r$abstract),
+      abstract=first_nonempty(c$abstract,r[["abstract"]]),
       keywords=first_nonempty(c$keywords,r$keywords)
     ),
     screening=review[[i]]$screening
