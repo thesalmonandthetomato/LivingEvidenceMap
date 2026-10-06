@@ -5,6 +5,7 @@ suppressPackageStartupMessages({
 })
 
 args <- commandArgs(trailingOnly = TRUE)
+`%||%` <- function(x, y) if (is.null(x)) y else x
 arg <- function(flag, default = NULL) {
   i <- match(flag, args)
   if (is.na(i)) return(default)
