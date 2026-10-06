@@ -21,7 +21,16 @@
     "terra_oneoff_adjudication_after_luna_unresolved": 88
   },
   "usage": {
+    "screened_records": 3449,
     "calls": 7226,
+    "pass_counts": {
+      "1": 3449,
+      "2": 3449,
+      "3": 328
+    },
+    "model_counts": {
+      "gpt-5.6-luna": 7226
+    },
     "input_tokens": 15708818,
     "cached_input_tokens": 14871038,
     "output_tokens": 650133,
