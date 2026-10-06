@@ -13,6 +13,7 @@ on:
       - tmp-lens-citation-gap-test
     paths:
       - ".github/workflows/tmp_lens_citation_gap_diagnostic.yml"
+      - "scripts/temporary/lens_citation_gap_diagnostic.R"
 
 permissions:
   contents: read
