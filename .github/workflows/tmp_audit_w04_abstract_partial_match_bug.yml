@@ -58,16 +58,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p audit_inputs/prepared audit_inputs/production audit_inputs/consensus
+          mkdir -p audit_inputs/prepared audit_inputs/production audit_inputs/consensus audit_inputs/shards
           gh run download 37419309076 --repo "$GITHUB_REPOSITORY" --name workflow04-prepared-37419309076 --dir audit_inputs/prepared
           gh run download 37419309076 --repo "$GITHUB_REPOSITORY" --name workflow04-production-37419309076 --dir audit_inputs/production
           gh run download 37419309076 --repo "$GITHUB_REPOSITORY" --name workflow04-new-consensus-37419309076 --dir audit_inputs/consensus
+          for i in 1 2 3 4 5 6 7 8; do
+            gh run download 37419309076 --repo "$GITHUB_REPOSITORY" --name "workflow04-incremental-shard-$i-37419309076" --dir "audit_inputs/shards/$i"
+          done
           echo "Prepared files:"
           find audit_inputs/prepared -type f | sort | head -200
           echo "Production files:"
           find audit_inputs/production -type f | sort | head -300
           echo "Consensus files:"
           find audit_inputs/consensus -type f | sort | head -300
+          echo "Shard files:"
+          find audit_inputs/shards -type f | sort | head -500
 
       - name: Audit affected records and observed token usage
         shell: bash
@@ -81,7 +86,7 @@ jobs:
           fi
           test -n "$CAN"
           test -n "$W03"
-          ARGS=(--canonical "$CAN" --w03 "$W03" --usage-dir audit_inputs/consensus --output outputs/w04_abstract_partial_match_audit.json --affected-ids outputs/w04_abstract_partial_match_affected_ids.txt)
+          ARGS=(--canonical "$CAN" --w03 "$W03" --usage-dir audit_inputs/shards --output outputs/w04_abstract_partial_match_audit.json --affected-ids outputs/w04_abstract_partial_match_affected_ids.txt)
           if [ -n "$LAYER" ]; then ARGS+=(--w04-layer "$LAYER"); fi
           Rscript scripts/updater/tmp_audit_w04_abstract_partial_match.R "${ARGS[@]}"
           cat outputs/w04_abstract_partial_match_audit.json
