@@ -1,0 +1,798 @@
+{
+  "schema": "living-evidence-map-internal-output-registry-v1",
+  "generated_at_utc": "2026-10-06T12:15:31Z",
+  "search_date": "2026-10-05",
+  "update_id": "w00-run-37346236893",
+  "note": "Internal repository registry. Not intended for publication.",
+  "zenodo_policy": "All workflow Zenodo deposits listed here are restricted.",
+  "database_searches": [
+    {
+      "database": "AGRICOLA",
+      "code": "agricola",
+      "search_date": "2026-09-23",
+      "results": 2744
+    },
+    {
+      "database": "CAB Abstracts",
+      "code": "cab",
+      "search_date": "2026-09-30",
+      "results": 26816
+    },
+    {
+      "database": "OpenAlex",
+      "code": "openalex",
+      "search_date": "2026-09-23",
+      "results": 28134
+    },
+    {
+      "database": "ProQuest/PQD&T",
+      "code": "proquest",
+      "search_date": "2026-09-30",
+      "results": 1574
+    },
+    {
+      "database": "Scopus",
+      "code": "scopus",
+      "search_date": "2026-09-23",
+      "results": 19948
+    },
+    {
+      "database": "The Lens",
+      "code": "lens",
+      "search_date": "2026-09-23",
+      "results": 24135
+    },
+    {
+      "database": "WoSCC",
+      "code": "wos",
+      "search_date": "2026-09-23",
+      "results": 15176
+    }
+  ],
+  "zenodo_records": [
+    {
+      "stage": "W00",
+      "description": "Database-search archives and search provenance",
+      "state": "full",
+      "doi": "10.5281/zenodo.22921060",
+      "record_url": "https://zenodo.org/records/22921060",
+      "visibility": "restricted",
+      "source_run_id": "35730574878",
+      "published_at_utc": "2026-09-23T20:47:03Z"
+    },
+    {
+      "stage": "W00",
+      "description": "Database-search archives and search provenance",
+      "state": "full",
+      "doi": "10.5281/zenodo.22925311",
+      "record_url": "https://zenodo.org/records/22925311",
+      "visibility": "restricted",
+      "source_run_id": "35731899007",
+      "published_at_utc": "2026-09-23T20:47:16Z"
+    },
+    {
+      "stage": "W00",
+      "description": "Database-search archives and search provenance",
+      "state": "full",
+      "doi": "10.5281/zenodo.22920797",
+      "record_url": "https://zenodo.org/records/22920797",
+      "visibility": "restricted",
+      "source_run_id": "35735412308",
+      "published_at_utc": "2026-09-23T15:26:10Z"
+    },
+    {
+      "stage": "W00",
+      "description": "Database-search archives and search provenance",
+      "state": "full",
+      "doi": "10.5281/zenodo.23165151",
+      "record_url": "https://zenodo.org/records/23165151",
+      "visibility": "restricted",
+      "source_run_id": "37326710853",
+      "published_at_utc": "2026-10-05T14:51:52Z"
+    },
+    {
+      "stage": "W00",
+      "description": "Database-search archives and search provenance",
+      "state": "full",
+      "doi": "10.5281/zenodo.23168156",
+      "record_url": "https://zenodo.org/records/23168156",
+      "visibility": "restricted",
+      "source_run_id": "37346236893",
+      "published_at_utc": "2026-10-05T17:20:05Z"
+    },
+    {
+      "stage": "W01",
+      "description": "Deduplication state and canonical record set",
+      "state": "pre_adjudication",
+      "doi": "10.5281/zenodo.22932524",
+      "record_url": "https://zenodo.org/records/22932524",
+      "visibility": "restricted",
+      "source_run_id": "35964195676",
+      "published_at_utc": "2026-09-24T06:49:37Z"
+    },
+    {
+      "stage": "W01",
+      "description": "Deduplication state and canonical record set",
+      "state": "final",
+      "doi": "10.5281/zenodo.22953437",
+      "record_url": "https://zenodo.org/records/22953437",
+      "visibility": "restricted",
+      "source_run_id": "36103542054",
+      "published_at_utc": "2026-09-25T07:16:18Z"
+    },
+    {
+      "stage": "W01",
+      "description": "Deduplication state and canonical record set",
+      "state": "delta",
+      "doi": "10.5281/zenodo.22958748",
+      "record_url": "https://zenodo.org/records/22958748",
+      "visibility": "restricted",
+      "source_run_id": "36128255337",
+      "published_at_utc": "2026-09-25T12:07:04Z"
+    },
+    {
+      "stage": "W01",
+      "description": "Deduplication state and canonical record set",
+      "state": "delta",
+      "doi": "10.5281/zenodo.23096518",
+      "record_url": "https://zenodo.org/records/23096518",
+      "visibility": "restricted",
+      "source_run_id": "36971418284",
+      "published_at_utc": "2026-10-02T06:30:47Z"
+    },
+    {
+      "stage": "W01",
+      "description": "Deduplication state and canonical record set",
+      "state": "delta",
+      "doi": "10.5281/zenodo.23172862",
+      "record_url": "https://zenodo.org/records/23172862",
+      "visibility": "restricted",
+      "source_run_id": "37373748707",
+      "published_at_utc": "2026-10-05T22:12:01Z"
+    },
+    {
+      "stage": "W02",
+      "description": "Bibliographic enrichment patch/state",
+      "state": "enrichment_patch",
+      "doi": "10.5281/zenodo.22960664",
+      "record_url": "https://zenodo.org/records/22960664",
+      "visibility": "restricted",
+      "source_run_id": "36137804187",
+      "published_at_utc": "2026-09-25T14:01:15Z"
+    },
+    {
+      "stage": "W02",
+      "description": "Bibliographic enrichment patch/state",
+      "state": "canonical_correction_patch",
+      "doi": "10.5281/zenodo.22963024",
+      "record_url": "https://zenodo.org/records/22963024",
+      "visibility": "restricted",
+      "source_run_id": "36159140553",
+      "published_at_utc": "2026-09-25T16:19:02Z"
+    },
+    {
+      "stage": "W02",
+      "description": "Bibliographic enrichment patch/state",
+      "state": "enrichment_patch",
+      "doi": "10.5281/zenodo.23066757",
+      "record_url": "https://zenodo.org/records/23066757",
+      "visibility": "restricted",
+      "source_run_id": "36725200424",
+      "published_at_utc": "2026-09-30T17:13:18Z"
+    },
+    {
+      "stage": "W02",
+      "description": "Bibliographic enrichment patch/state",
+      "state": "enrichment_patch",
+      "doi": "10.5281/zenodo.23104611",
+      "record_url": "https://zenodo.org/records/23104611",
+      "visibility": "restricted",
+      "source_run_id": "37016080508",
+      "published_at_utc": "2026-10-02T14:18:03Z"
+    },
+    {
+      "stage": "W02",
+      "description": "Bibliographic enrichment patch/state",
+      "state": "enrichment_patch",
+      "doi": "10.5281/zenodo.23173268",
+      "record_url": "https://zenodo.org/records/23173268",
+      "visibility": "restricted",
+      "source_run_id": "37381023181",
+      "published_at_utc": "2026-10-05T22:44:34Z"
+    },
+    {
+      "stage": "W03",
+      "description": "Retraction and publication-status assessment",
+      "state": "",
+      "doi": "10.5281/zenodo.22965938",
+      "record_url": "https://zenodo.org/records/22965938",
+      "visibility": "restricted",
+      "source_run_id": "36172718538",
+      "published_at_utc": "2026-09-25T18:55:05Z"
+    },
+    {
+      "stage": "W03",
+      "description": "Retraction and publication-status assessment",
+      "state": "",
+      "doi": "10.5281/zenodo.23105974",
+      "record_url": "https://zenodo.org/records/23105974",
+      "visibility": "restricted",
+      "source_run_id": "37024164176",
+      "published_at_utc": "2026-10-02T15:40:17Z"
+    },
+    {
+      "stage": "W03",
+      "description": "Retraction and publication-status assessment",
+      "state": "",
+      "doi": "10.5281/zenodo.23173931",
+      "record_url": "https://zenodo.org/records/23173931",
+      "visibility": "restricted",
+      "source_run_id": "37385439517",
+      "published_at_utc": "2026-10-05T23:22:00Z"
+    },
+    {
+      "stage": "W04",
+      "description": "Title/abstract relevance-screening state",
+      "state": "",
+      "doi": "10.5281/zenodo.22973914",
+      "record_url": "https://zenodo.org/records/22973914",
+      "visibility": "restricted",
+      "source_run_id": "36227737500",
+      "published_at_utc": "2026-09-26T08:03:33Z"
+    },
+    {
+      "stage": "W04",
+      "description": "Title/abstract relevance-screening state",
+      "state": "",
+      "doi": "10.5281/zenodo.23117851",
+      "record_url": "https://zenodo.org/records/23117851",
+      "visibility": "restricted",
+      "source_run_id": "37051672356",
+      "published_at_utc": "2026-10-03T08:24:48Z"
+    },
+    {
+      "stage": "W05",
+      "description": "Deterministic species annotation state",
+      "state": "",
+      "doi": "10.5281/zenodo.22982751",
+      "record_url": "https://zenodo.org/records/22982751",
+      "visibility": "restricted",
+      "source_run_id": "36268840588",
+      "published_at_utc": "2026-09-26T20:32:22Z"
+    },
+    {
+      "stage": "W05",
+      "description": "Deterministic species annotation state",
+      "state": "",
+      "doi": "10.5281/zenodo.23118205",
+      "record_url": "https://zenodo.org/records/23118205",
+      "visibility": "restricted",
+      "source_run_id": "37110114836",
+      "published_at_utc": "2026-10-03T08:52:23Z"
+    },
+    {
+      "stage": "W06",
+      "description": "Geographic annotation state",
+      "state": "",
+      "doi": "10.5281/zenodo.22983049",
+      "record_url": "https://zenodo.org/records/22983049",
+      "visibility": "restricted",
+      "source_run_id": "36265092530",
+      "published_at_utc": "2026-09-26T21:02:43Z"
+    },
+    {
+      "stage": "W06",
+      "description": "Geographic annotation state",
+      "state": "",
+      "doi": "10.5281/zenodo.23119991",
+      "record_url": "https://zenodo.org/records/23119991",
+      "visibility": "restricted",
+      "source_run_id": "37114864202",
+      "published_at_utc": "2026-10-03T11:08:20Z"
+    },
+    {
+      "stage": "W07",
+      "description": "Topic annotation state",
+      "state": "",
+      "doi": "10.5281/zenodo.23070343",
+      "record_url": "https://zenodo.org/records/23070343",
+      "visibility": "restricted",
+      "source_run_id": "36772700615",
+      "published_at_utc": "2026-09-30T20:38:17Z"
+    },
+    {
+      "stage": "W07",
+      "description": "Topic annotation state",
+      "state": "",
+      "doi": "10.5281/zenodo.23131972",
+      "record_url": "https://zenodo.org/records/23131972",
+      "visibility": "restricted",
+      "source_run_id": "37153534771",
+      "published_at_utc": "2026-10-04T05:36:33Z"
+    },
+    {
+      "stage": "W08",
+      "description": "Final adjudicated canonical evidence-map state",
+      "state": "superseded",
+      "doi": "10.5281/zenodo.22998606",
+      "record_url": "https://doi.org/10.5281/zenodo.22998606",
+      "visibility": "restricted",
+      "source_run_id": "36328298079",
+      "published_at_utc": "2026-09-27T15:16:12Z"
+    },
+    {
+      "stage": "W08",
+      "description": "Final adjudicated canonical evidence-map state",
+      "state": "superseded",
+      "doi": "10.5281/zenodo.22998934",
+      "record_url": "https://doi.org/10.5281/zenodo.22998934",
+      "visibility": "restricted",
+      "source_run_id": "36329841121",
+      "published_at_utc": "2026-09-27T15:39:33Z"
+    },
+    {
+      "stage": "W08",
+      "description": "Final adjudicated canonical evidence-map state",
+      "state": "superseded",
+      "doi": "10.5281/zenodo.23020526",
+      "record_url": "https://doi.org/10.5281/zenodo.23020526",
+      "visibility": "restricted",
+      "source_run_id": "36442875006",
+      "published_at_utc": "2026-09-28T16:51:01Z"
+    },
+    {
+      "stage": "W08",
+      "description": "Final adjudicated canonical evidence-map state",
+      "state": "superseded",
+      "doi": "10.5281/zenodo.23138991",
+      "record_url": "https://doi.org/10.5281/zenodo.23138991",
+      "visibility": "restricted",
+      "source_run_id": "37211675882",
+      "published_at_utc": "2026-10-04T15:20:03Z"
+    },
+    {
+      "stage": "W08",
+      "description": "Final adjudicated canonical evidence-map state",
+      "state": "authoritative",
+      "doi": "10.5281/zenodo.23145712",
+      "record_url": "https://doi.org/10.5281/zenodo.23145712",
+      "visibility": "restricted",
+      "source_run_id": "37234697766",
+      "published_at_utc": "2026-10-04T21:24:22Z"
+    }
+  ],
+  "files": [
+    {
+      "category": "Data",
+      "path": "docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris",
+      "description": "RIS export of the final canonical included-record set",
+      "format": "RIS",
+      "bytes": 52298264,
+      "sha256": "355f4f8de335fbea070d9cd596faeb0195513b743e288bc626ebe14755695190"
+    },
+    {
+      "category": "Data",
+      "path": "docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris.manifest.json",
+      "description": "Manifest and checksum for the final RIS export",
+      "format": "JSON",
+      "bytes": 831,
+      "sha256": "6529788f5c56350c9ef7d21db3849a701e8df92625b3cb70569fb8ee419041e6"
+    },
+    {
+      "category": "Report",
+      "path": "docs/reporting/workflow_09/manuscript/methods.html",
+      "description": "Rendered methods report",
+      "format": "HTML",
+      "bytes": 943332,
+      "sha256": "bb8ef97c902dd81f5d69af0e0eb045d53de3171c3dd7ea1b5b61c4d8d90eaa27"
+    },
+    {
+      "category": "Report",
+      "path": "docs/reporting/workflow_09/manuscript/methods.pdf",
+      "description": "PDF methods report",
+      "format": "PDF",
+      "bytes": 117655,
+      "sha256": "1122b8a97b5c7f0959f1d7ba687e46b6422fabbc6e9bfbf2ca057e8e631ff39b"
+    },
+    {
+      "category": "Report",
+      "path": "docs/reporting/workflow_09/manuscript/results.html",
+      "description": "Rendered results report",
+      "format": "HTML",
+      "bytes": 10962602,
+      "sha256": "04b25a670dfd2467cdebf7476c044e688f98b944d27227070f2f4bbc91c3f232"
+    },
+    {
+      "category": "Report",
+      "path": "docs/reporting/workflow_09/manuscript/results.pdf",
+      "description": "PDF results report",
+      "format": "PDF",
+      "bytes": 2521564,
+      "sha256": "74d27444ddb85d1290fe925671e9b219a7ed0efcad0404fec9cb813d234c3182"
+    },
+    {
+      "category": "Metadata",
+      "path": "docs/reporting/workflow_09/flow_counts.json",
+      "description": "Workflow flow counts used for reporting",
+      "format": "JSON",
+      "bytes": 2444,
+      "sha256": "a619ce281f451db1c28692eb0ce2c53e60e07e928e436e43fd77bc4013541a76"
+    },
+    {
+      "category": "Metadata",
+      "path": "docs/reporting/workflow_09/flow_human_validation.csv",
+      "description": "Human-validation flow summary",
+      "format": "CSV",
+      "bytes": 6431,
+      "sha256": "23cbbffd2a630f856f28d91418fef4918b7cdf5a251b80432cadfac054d83e3c"
+    },
+    {
+      "category": "Validation",
+      "path": "docs/reporting/workflow_09/data/human_validation/human_validation_summary.json",
+      "description": "Human/model validation summary",
+      "format": "JSON",
+      "bytes": 835,
+      "sha256": "2bf0c2f5d70fb9eca83e562db8323f41a899bf7a794f637df8096748fa5b43ff"
+    },
+    {
+      "category": "Validation",
+      "path": "docs/reporting/workflow_09/data/human_validation/model_validation_history.csv",
+      "description": "Model validation history",
+      "format": "CSV",
+      "bytes": 294,
+      "sha256": "d53309fb0af1f08bb0ce9625127f960aa473525c6ffdcfea69a88491e5ca72d0"
+    },
+    {
+      "category": "Validation",
+      "path": "docs/reporting/workflow_09/data/human_validation/human_consistency_history.csv",
+      "description": "Human consistency history",
+      "format": "CSV",
+      "bytes": 375,
+      "sha256": "fa98be23e3757a55efb1b8275d7eb66e57bb402870a59f8b5d3c288eea0cfa66"
+    },
+    {
+      "category": "Validation",
+      "path": "docs/reporting/workflow_09/data/human_validation/human_consistency_cumulative.csv",
+      "description": "Cumulative human consistency statistics",
+      "format": "CSV",
+      "bytes": 109,
+      "sha256": "0d6de22644de49f51b01afd9a09fb7775625d2659d003551203b2a7783c7a7c7"
+    },
+    {
+      "category": "Codebook",
+      "path": "user_input/workflow04_screening_highlight_terms.csv",
+      "description": "W04 screening highlight-term configuration",
+      "format": "CSV",
+      "bytes": 3050,
+      "sha256": "901dcded3fb117299db3c182531a496da7a7e62716497803d3b91d9f5caab0e8"
+    },
+    {
+      "category": "Codebook",
+      "path": "user_input/workflow05_deterministic_concepts.csv",
+      "description": "Deterministic W05 concept definitions",
+      "format": "CSV",
+      "bytes": 2579,
+      "sha256": "e86468bf2972da16987bc0b1b4c0cb106e5f4de7229de1399e82ca79ba3b8059"
+    },
+    {
+      "category": "Codebook",
+      "path": "user_input/workflow05_species_dictionary_reference.csv",
+      "description": "Species dictionary reference",
+      "format": "CSV",
+      "bytes": 15272,
+      "sha256": "11fb9468cd64d91e7053f6443eb7e801afe6c0c0ea00c6f929f96571c4d72eaa"
+    },
+    {
+      "category": "Codebook",
+      "path": "user_input/workflow07_topic_ontology.csv",
+      "description": "Topic ontology used for W07/W08 coding",
+      "format": "CSV",
+      "bytes": 134574,
+      "sha256": "4ad41f90e35099fdf5f0eb463c86d9245d07b357940804a4faa090eba452f798"
+    },
+    {
+      "category": "Dashboard",
+      "path": "docs/index.html",
+      "description": "Dashboard HTML source",
+      "format": "HTML",
+      "bytes": 59090,
+      "sha256": "c06d58c66b4b367635c599805253e6b345fcc1381dd171197d277281cb4cd8c0"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_01_flow_diagram.pdf",
+      "description": "Workflow 09 figure: figure_01_flow_diagram.pdf",
+      "format": "PDF",
+      "bytes": 26292,
+      "sha256": "da5b9bab2cd0154d59323bd2bc14e12a87c654b26d7b82b6aece964b5e2166a9"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_02_database_unique_contribution.pdf",
+      "description": "Workflow 09 figure: figure_02_database_unique_contribution.pdf",
+      "format": "PDF",
+      "bytes": 4774,
+      "sha256": "6bd5cff44f0425bdee91f4c9bdd818e124b769f00da9e7265fc438a278345434"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_03_database_overlap.pdf",
+      "description": "Workflow 09 figure: figure_03_database_overlap.pdf",
+      "format": "PDF",
+      "bytes": 29771,
+      "sha256": "9f8705243200014f6d5f2c5a962a3fc4479034d78be7965919037483c2c76d43"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_04_publication_year_species.pdf",
+      "description": "Workflow 09 figure: figure_04_publication_year_species.pdf",
+      "format": "PDF",
+      "bytes": 29572,
+      "sha256": "4e2bfb31cdfb00afd4ceeb778032ed505e0e29e14b695ea7faa4c9d706cbd458"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_05_publication_year_topics.pdf",
+      "description": "Workflow 09 figure: figure_05_publication_year_topics.pdf",
+      "format": "PDF",
+      "bytes": 27038,
+      "sha256": "4db87013c18fc702718abc60dd4f3a191c76ffcfee3fa8a206f3bb38cdb162df"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_06_country_choropleth.pdf",
+      "description": "Workflow 09 figure: figure_06_country_choropleth.pdf",
+      "format": "PDF",
+      "bytes": 637264,
+      "sha256": "53e7d2d87bb2f1cfc61125bb5073e6ffcaf53f33c0ca0923060ae5b39aee1186"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_07_country_species.pdf",
+      "description": "Workflow 09 figure: figure_07_country_species.pdf",
+      "format": "PDF",
+      "bytes": 25839,
+      "sha256": "1eba5958e4f88bcb9c1965106de94307930eaf007dd5d66f2ecc544d1a89980c"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_08_top_level_topics.pdf",
+      "description": "Workflow 09 figure: figure_08_top_level_topics.pdf",
+      "format": "PDF",
+      "bytes": 25116,
+      "sha256": "91091b2b7db18f74e11bbf8e513a24a79f5a1a59ed8f26647f1283ea9528f115"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_09_production.pdf",
+      "description": "Workflow 09 figure: figure_09_production.pdf",
+      "format": "PDF",
+      "bytes": 34788,
+      "sha256": "a24f2f7db10773ab77be88a1d1d48856cc893ab2a3edf740a06922976e007467"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_10_environment.pdf",
+      "description": "Workflow 09 figure: figure_10_environment.pdf",
+      "format": "PDF",
+      "bytes": 32906,
+      "sha256": "05e7d39fbcc81c60106a84943d1bc7877137baa9de7422fa1a9fc8fe65702fa5"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_11_methods.pdf",
+      "description": "Workflow 09 figure: figure_11_methods.pdf",
+      "format": "PDF",
+      "bytes": 23997,
+      "sha256": "dfcb889bd95c8b21de5e34aed74d2732addc05a4bf2acec9d0f904522345ff8e"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_12_industry_and_governance.pdf",
+      "description": "Workflow 09 figure: figure_12_industry_and_governance.pdf",
+      "format": "PDF",
+      "bytes": 25519,
+      "sha256": "6cd05f4b6f69ff0b3a0798aa4bd4c598025325857b7166c1a22d7f1c794bb2c7"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_13_product.pdf",
+      "description": "Workflow 09 figure: figure_13_product.pdf",
+      "format": "PDF",
+      "bytes": 25678,
+      "sha256": "c9b0a0a4bfe7a43e20de699cabb23c80289ff61ca78f3247792857f6d25ff6b5"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_14_people_and_society.pdf",
+      "description": "Workflow 09 figure: figure_14_people_and_society.pdf",
+      "format": "PDF",
+      "bytes": 26089,
+      "sha256": "6a1df0a98accb999c5f412f0c5d50a1ec72403ab65a382fc773bcc70f1ac5208"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_15_inputs_and_resources.pdf",
+      "description": "Workflow 09 figure: figure_15_inputs_and_resources.pdf",
+      "format": "PDF",
+      "bytes": 24667,
+      "sha256": "fe3f8a80e9c09e23af384ec24b5700fe5d304487f5733a685014003f0d910d81"
+    },
+    {
+      "category": "Figure",
+      "path": "docs/reporting/workflow_09/figures/figure_16_umbrella_review.pdf",
+      "description": "Workflow 09 figure: figure_16_umbrella_review.pdf",
+      "format": "PDF",
+      "bytes": 33087,
+      "sha256": "f94291f396fa7ddf037bf9af5a1f99c3a6ab9ea5f6dc6d159a42c2c7148b7cd4"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/manifest.json",
+      "description": "Compact workflow reporting input: manifest.json",
+      "format": "JSON",
+      "bytes": 3582,
+      "sha256": "6c06a8eb3cac097af22feb741761f31242437b1f6502cb38d8f07b860779dcb9"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w00_summary.json",
+      "description": "Compact workflow reporting input: w00_summary.json",
+      "format": "JSON",
+      "bytes": 371,
+      "sha256": "c0aa2d368b43d8941c140d388b4bba2b5763aa8c409fb5171d3f6a1b6f9b42f7"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w01_source_intersections.csv",
+      "description": "Compact workflow reporting input: w01_source_intersections.csv",
+      "format": "CSV",
+      "bytes": 1788,
+      "sha256": "ac03f925d0eec2e7d166c268e88ca492f90386e2f9b50f3bf8737f4c5e42fb7d"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w01_source_manifest.json",
+      "description": "Compact workflow reporting input: w01_source_manifest.json",
+      "format": "JSON",
+      "bytes": 794,
+      "sha256": "2edfc98c3989a77ee02ea23b026da08a46da8e49831aac64041f534bf68a582f"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w01_source_membership.csv",
+      "description": "Compact workflow reporting input: w01_source_membership.csv",
+      "format": "CSV",
+      "bytes": 1917413,
+      "sha256": "7d2e20feda6401c78c41492d4d9e4a387b34def532b197b2b2481d3a2be996a0"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w01_source_summary.csv",
+      "description": "Compact workflow reporting input: w01_source_summary.csv",
+      "format": "CSV",
+      "bytes": 389,
+      "sha256": "51aade68ac6c21f112be5e4b4288ac3e9d6f5b2bd907f80c682be0d8f3191960"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w01_summary.json",
+      "description": "Compact workflow reporting input: w01_summary.json",
+      "format": "JSON",
+      "bytes": 595,
+      "sha256": "f3fabf727c3403537de811194130f9bd44e7ac73a38576f38cb7982b78a431ba"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w02_summary.json",
+      "description": "Compact workflow reporting input: w02_summary.json",
+      "format": "JSON",
+      "bytes": 675,
+      "sha256": "694351bb7103c9e5e1c2383ea23b8876097c7f5baeadf2d7a44173849d76c79a"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w03_summary.json",
+      "description": "Compact workflow reporting input: w03_summary.json",
+      "format": "JSON",
+      "bytes": 636,
+      "sha256": "726f71c34e2a494cccdb2bec9813ba1112627290fab934fbc0061a0db6468b17"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w04_summary.json",
+      "description": "Compact workflow reporting input: w04_summary.json",
+      "format": "JSON",
+      "bytes": 487,
+      "sha256": "84bc04436dd6af96cf25fc43dd040ef870983bc00834cf367e7225840bdc87a1"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w05_summary.json",
+      "description": "Compact workflow reporting input: w05_summary.json",
+      "format": "JSON",
+      "bytes": 473,
+      "sha256": "578cf6ad36a3462b1f884e841de7b6044e9a99b2de2e62b57d22f35e3049ef22"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w06_summary.json",
+      "description": "Compact workflow reporting input: w06_summary.json",
+      "format": "JSON",
+      "bytes": 543,
+      "sha256": "115d50a30571316b973292e9d28eb430ca600a75233dbd54d6a42161082c3ed9"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w07_summary.json",
+      "description": "Compact workflow reporting input: w07_summary.json",
+      "format": "JSON",
+      "bytes": 601,
+      "sha256": "d6d08f4bb4533ab3e8d3ff6382101bad4b7898e399c84db49c57840a2462e1ed"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w08_source_intersections.csv",
+      "description": "Compact workflow reporting input: w08_source_intersections.csv",
+      "format": "CSV",
+      "bytes": 1678,
+      "sha256": "7eadfafa3bec8dfc9adee94bbd9139f13b2d3f3cdfd46e7df50fe2d7daa1751f"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w08_source_manifest.json",
+      "description": "Compact workflow reporting input: w08_source_manifest.json",
+      "format": "JSON",
+      "bytes": 794,
+      "sha256": "0efa3def0a8fec7adb3ca61c260f4ba065a2ffd569f190e9cec9c4ca47040b85"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w08_source_summary.csv",
+      "description": "Compact workflow reporting input: w08_source_summary.csv",
+      "format": "CSV",
+      "bytes": 369,
+      "sha256": "b7e2438a64ba413657198f9f15d731e3df114b32ae035ff82552147f981d8f38"
+    },
+    {
+      "category": "Workflow metadata",
+      "path": "docs/reporting/workflow_09/data/workflow_inputs/w08_summary.json",
+      "description": "Compact workflow reporting input: w08_summary.json",
+      "format": "JSON",
+      "bytes": 833,
+      "sha256": "d94f14cb882d98af8edad9fd710de186691b37daf9a9b42f3b7d3754bfc725b4"
+    },
+    {
+      "category": "W10 build artefact",
+      "path": "outputs/workflow10/living_evidence_map-internal.csv",
+      "description": "W10 internal dashboard source table",
+      "format": "CSV",
+      "bytes": 45738143,
+      "sha256": "ee9d6ca128d0c120376e3fef1645f6958a22e311269e8ff9b6fa334f052d6a5b"
+    },
+    {
+      "category": "W10 build artefact",
+      "path": "outputs/workflow10/dashboard-internal-data.js",
+      "description": "W10 internal dashboard data payload",
+      "format": "JS",
+      "bytes": 69638051,
+      "sha256": "f2b64ba589afcac9228a4b4b2d54ad3b3e4d3610bc60c31e27a55dbad024ded9"
+    },
+    {
+      "category": "W10 build artefact",
+      "path": "outputs/workflow10/dashboard-data.js",
+      "description": "W10 public-projection dashboard data payload",
+      "format": "JS",
+      "bytes": 39842682,
+      "sha256": "1fa35f8f59a21e9932dbc69c86ed5b39867ddab5bee9209ce71b7f6b9a84b290"
+    },
+    {
+      "category": "W10 build artefact",
+      "path": "outputs/workflow10/index.html",
+      "description": "W10 dashboard HTML build",
+      "format": "HTML",
+      "bytes": 59090,
+      "sha256": "c06d58c66b4b367635c599805253e6b345fcc1381dd171197d277281cb4cd8c0"
+    }
+  ]
+}
