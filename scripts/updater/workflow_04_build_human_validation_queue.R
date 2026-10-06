@@ -64,7 +64,7 @@ screen_view <- function(r) {
   c <- r$canonical %||% list()
   list(
     title = first_nonempty(c$title,r$title),
-    abstract = first_nonempty(c$abstract,r$abstract),
+    abstract = first_nonempty(c$abstract,r[["abstract"]]),
     authors = first_nonempty(c$authors,c$author,r$authors,r$author),
     year = first_nonempty(c$year,c$publication_year,c$cover_date,r$year,r$publication_year),
     journal = first_nonempty(c$source_title,c$journal,r$source_title,r$journal),
