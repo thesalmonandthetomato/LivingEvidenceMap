@@ -21,7 +21,19 @@ fmt_hits <- function(x) {
 }
 counts$Hits <- fmt_hits(counts$hits)
 report_table <- counts[, c("source", "search_date", "Hits", "status")]
-names(report_table) <- c("Search source", "Search date", "Hits", "Status")
+names(report_table) <- c("Database", "Search date", "Hits", "Status")
+total_hits <- sum(suppressWarnings(as.integer(counts$hits)), na.rm = TRUE)
+report_table <- rbind(
+  report_table,
+  data.frame(
+    Database = "Total",
+    `Search date` = "",
+    Hits = format(total_hits, big.mark = ",", scientific = FALSE),
+    Status = "",
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+)
 ```
 
 This report records a **count-only scoping search**. No bibliographic search-result records or raw API responses were retained.
@@ -49,4 +61,4 @@ knitr::kable(
 )
 ```
 
-CAB Abstracts and ProQuest Dissertations & Theses Global are manual-ingest Workflow 00 sources. Their rows report the validated result totals recorded in the current W00 source registries rather than live API counts.
+Only live-searchable databases/APIs are included in this scoping report. Manual-only sources are excluded.
