@@ -109,7 +109,6 @@ run_batch <- function(seed_ids, field, direction, batch_number) {
     query = list(
       query_string = list(query = full_query)
     ),
-    stemming = FALSE,
     size = page_size,
     scroll = scroll_ttl,
     include = c("lens_id")
