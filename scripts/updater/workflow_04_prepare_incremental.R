@@ -47,7 +47,7 @@ screening_view <- function(r){
   c<-r$canonical %||% list()
   list(
     title=first_nonempty(c$title,r$title),
-    abstract=first_nonempty(c$abstract,r$abstract),
+    abstract=first_nonempty(c$abstract,r[["abstract"]]),
     keywords=first_nonempty(c$keywords,r$keywords),
     journal_source_title=first_nonempty(c$source_title,c$journal,r$source_title,r$journal),
     affiliations=first_nonempty(c$affiliations,r$affiliations),
