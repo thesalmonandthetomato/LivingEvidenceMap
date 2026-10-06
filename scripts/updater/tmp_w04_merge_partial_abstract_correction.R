@@ -30,7 +30,7 @@ w03<-readj(w03_path)
 full<-readj(full_layer_path)
 corrected<-readj(corrected_layer_path)
 completed<-readj(completed_decisions_path)
-src<-fromJSON(source_summary_path,simplifyVector=FALSE)
+src<-fromJSON(paste(readLines(source_summary_path,warn=FALSE,encoding="UTF-8"),collapse="\n"),simplifyVector=FALSE)
 affected<-trimws(readLines(affected_ids_path,warn=FALSE,encoding="UTF-8"));affected<-sort(unique(affected[nzchar(affected)]))
 
 cids<-vapply(canonical,rid_can,character(1))
