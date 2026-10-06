@@ -60,15 +60,15 @@ for(i in seq_len(nrow(active))){
           rationale=as.character(active$rationale[[i]]),reviewer=as.character(active$reviewer[[i]]),
           adjudicated_at_utc=as.character(active$resolved_at_utc[[i]]))
   if(!is.null(edit)){
-    edited_abstract<-trimws(as.character(edit$abstract %||% ""))
+    edited_abstract<-trimws(as.character(if(is.null(edit$abstract)) "" else edit$abstract))
     if(!nzchar(edited_abstract))stop(sprintf("Saved W04 abstract edit is empty for %s",case_id),call.=FALSE)
-    if(!identical(as.character(edit$record_id %||% ""),as.character(active$record_id[[i]]))) {
+    if(!identical(as.character(if(is.null(edit$record_id)) "" else edit$record_id),as.character(active$record_id[[i]]))) {
       stop(sprintf("W04 abstract edit record mismatch for %s",case_id),call.=FALSE)
     }
     z$edited_abstract<-edited_abstract
-    z$abstract_edit_reviewer<-as.character(edit$reviewer %||% "")
-    z$abstract_edit_saved_at_utc<-as.character(edit$saved_at_utc %||% "")
-    z$abstract_edit_id<-as.character(edit$edit_id %||% "")
+    z$abstract_edit_reviewer<-as.character(if(is.null(edit$reviewer)) "" else edit$reviewer)
+    z$abstract_edit_saved_at_utc<-as.character(if(is.null(edit$saved_at_utc)) "" else edit$saved_at_utc)
+    z$abstract_edit_id<-as.character(if(is.null(edit$edit_id)) "" else edit$edit_id)
   }
   writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null"),con,useBytes=TRUE)
 }
