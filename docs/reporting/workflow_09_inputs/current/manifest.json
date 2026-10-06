@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-input-manifest-v1",
-  "generated_at_utc": "2026-10-06T18:55:41Z",
+  "generated_at_utc": "2026-10-06T19:31:23Z",
   "stages": [
     {
       "stage": "W00",
@@ -34,7 +34,7 @@
     },
     {
       "stage": "W06",
-      "source_run_id": "37114864202",
+      "source_run_id": "37515511948",
       "file": "w06_summary.json"
     },
     {
@@ -102,7 +102,7 @@
     {
       "file": "w06_summary.json",
       "bytes": 543,
-      "sha256": "115d50a30571316b973292e9d28eb430ca600a75233dbd54d6a42161082c3ed9"
+      "sha256": "9d89b09a7b9e86d2cb333a8acf0236b6d96f4e5eb03cb95599195de5ddbad3be"
     },
     {
       "file": "w07_summary.json",
