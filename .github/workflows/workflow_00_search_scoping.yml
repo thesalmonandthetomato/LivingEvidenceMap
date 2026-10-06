@@ -90,8 +90,7 @@ jobs:
           e <- fromJSON('config/workflow00_ebsco_sources.json', simplifyVector=FALSE)
           sources <- c(
             'lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',
-            names(e$sources),
-            'cab_abstracts','proquest_dissertations'
+            names(e$sources)
           )
           cat(sprintf('sources=%s\n', toJSON(sources, auto_unbox=FALSE)), file=Sys.getenv('GITHUB_OUTPUT'), append=TRUE)
           cat(sprintf('PASS: %d database/source count jobs configured\n', length(sources)))
@@ -217,7 +216,7 @@ jobs:
           e <- fromJSON('config/workflow00_ebsco_sources.json', simplifyVector=FALSE)
           order_slugs <- c(
             'lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',
-            names(e$sources),'cab_abstracts','proquest_dissertations'
+            names(e$sources)
           )
           labels <- c(
             lens='Lens',
@@ -229,9 +228,7 @@ jobs:
             cba='Chinese Biological Abstracts',
             epmc_preprints='Europe PMC preprints',
             wos='Web of Science Core Collection',
-            setNames(vapply(e$sources,function(x) as.character(x$display_name),character(1)),names(e$sources)),
-            cab_abstracts='CAB Abstracts',
-            proquest_dissertations='ProQuest Dissertations & Theses Global'
+            setNames(vapply(e$sources,function(x) as.character(x$display_name),character(1)),names(e$sources))
           )
           missing <- setdiff(order_slugs, as.character(rows$source_slug))
           if (length(missing)) {
