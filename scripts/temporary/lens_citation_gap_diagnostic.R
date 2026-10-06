@@ -105,6 +105,15 @@ as_ids <- function(x) {
   unique(vals[nzchar(vals)])
 }
 
+reference_lens_ids <- function(x) {
+  if (is.null(x) || !length(x)) return(character())
+  vals <- vapply(x, function(ref) {
+    if (is.list(ref)) as.character(ref$lens_id %||% "") else as.character(ref)
+  }, character(1))
+  vals <- trimws(vals)
+  unique(vals[nzchar(vals)])
+}
+
 record_text <- function(rec) {
   kw <- rec$keywords
   if (is.list(kw)) kw <- unlist(kw, recursive = TRUE, use.names = FALSE)
@@ -161,7 +170,7 @@ for (j in seq_along(batch_index)) {
                   j, length(seed_ids), length(dat)))
 
   for (rec in dat) {
-    backward_neighbours <- c(backward_neighbours, as_ids(rec$references))
+    backward_neighbours <- c(backward_neighbours, reference_lens_ids(rec$references))
     forward_neighbours <- c(forward_neighbours, as_ids(rec$scholarly_citations))
   }
 }
@@ -215,7 +224,7 @@ writeLines(either_candidates, file.path(output_dir, "either_direction_unique_can
 
 summary <- list(
   schema = "living-evidence-map-lens-citation-gap-diagnostic-v2",
-  method = "citationchaser-style two-stage Lens terms lookup plus local text filter",
+  method = "citationchaser-style two-stage Lens ID lookup plus local text filter",
   canonical_records = seed_info$canonical_records,
   included_lens_manifestation_ids = length(all_seed_ids),
   seed_batch_size = batch_size,
