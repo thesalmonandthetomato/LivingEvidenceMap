@@ -28,6 +28,7 @@ enriched_records <- blank_to_na(arg("--enriched-records",""))
 retracted_records <- blank_to_na(arg("--retracted-records",""))
 screened_include <- blank_to_na(arg("--screened-include",""))
 screened_exclude <- blank_to_na(arg("--screened-exclude",""))
+species_records <- blank_to_na(arg("--species-records",""))
 geography_with <- blank_to_na(arg("--geography-with",""))
 geography_without <- blank_to_na(arg("--geography-without",""))
 topic_with <- blank_to_na(arg("--topic-with",""))
@@ -47,7 +48,7 @@ cols <- c(
   "event_id","update_id","event_at_utc","stage","workflow_run_id",
   "last_search_date","canonical_existing","search_results_total","search_results_update",
   "deduplicated_records","enriched_records","retracted_records",
-  "screened_include","screened_exclude",
+  "screened_include","screened_exclude","species_records",
   "geography_with","geography_without","topic_with","topic_without",
   "completed_through","active_workflow","status_label"
 )
@@ -85,6 +86,7 @@ incoming <- list(
   retracted_records=retracted_records,
   screened_include=screened_include,
   screened_exclude=screened_exclude,
+  species_records=species_records,
   geography_with=geography_with,
   geography_without=geography_without,
   topic_with=topic_with,
@@ -117,6 +119,7 @@ row <- data.frame(
   retracted_records=value("retracted_records"),
   screened_include=value("screened_include"),
   screened_exclude=value("screened_exclude"),
+  species_records=value("species_records"),
   geography_with=value("geography_with"),
   geography_without=value("geography_without"),
   topic_with=value("topic_with"),
