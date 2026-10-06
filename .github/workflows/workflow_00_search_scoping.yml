@@ -236,7 +236,20 @@ jobs:
               )
             )
           }
-          rows <- rows[match(order_slugs, rows$source_slug),,drop=FALSE]
+          platform <- c(
+            lens='Lens',
+            scopus='Scopus',
+            openalex='OpenAlex',
+            agricola='Europe PMC',
+            pubmed='Europe PMC',
+            ethos='Europe PMC',
+            cba='Europe PMC',
+            epmc_preprints='Europe PMC',
+            wos='Web of Science',
+            setNames(rep('EBSCO',length(e$sources)),names(e$sources))
+          )
+          rows$source <- sprintf('%s, via %s', unname(labels[rows$source_slug]), unname(platform[rows$source_slug]))
+          rows <- rows[order(tolower(rows$source)),,drop=FALSE]
           rownames(rows) <- NULL
           dir.create('outputs/workflow00_search_scope', recursive=TRUE, showWarnings=FALSE)
           write.csv(rows, 'outputs/workflow00_search_scope/search_scope_counts.csv', row.names=FALSE, na='')
