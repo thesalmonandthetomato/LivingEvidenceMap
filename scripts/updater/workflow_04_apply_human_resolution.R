@@ -8,7 +8,7 @@ if(any(vapply(list(layer_path,canonical_path,decisions_path,source_summary_path,
 scalar<-function(x){if(is.null(x)||!length(x))return("");z<-as.character(x[[1L]]);if(is.na(z))"" else trimws(z)}
 readj<-function(p){x<-readLines(p,warn=FALSE,encoding="UTF-8");x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
 writej<-function(rows,p){con<-file(p,"wt",encoding="UTF-8");on.exit(close(con));for(z in rows)writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null",digits=NA),con,useBytes=TRUE)}
-layer<-readj(layer_path);canonical<-readj(canonical_path);decisions<-readj(decisions_path);src<-fromJSON(source_summary_path,simplifyVector=FALSE)
+layer<-readj(layer_path);canonical<-readj(canonical_path);decisions<-readj(decisions_path);src<-fromJSON(paste(readLines(source_summary_path,warn=FALSE,encoding="UTF-8"),collapse="\n"),simplifyVector=FALSE)
 ids<-vapply(layer,function(z)scalar(z$record_id),character(1));if(any(!nzchar(ids))||anyDuplicated(ids))stop("Source W04 layer identity invariant failed",call.=FALSE)
 uncertain_ids<-ids[vapply(layer,function(z)identical(scalar((z$screening%||%list())$decision),"uncertain"),logical(1))]
 dids<-vapply(decisions,function(z)scalar(z$record_id),character(1));if(any(!nzchar(dids))||anyDuplicated(dids))stop("Human resolution decision identity invariant failed",call.=FALSE)
@@ -30,6 +30,25 @@ for(i in seq_along(layer)){
 final_dec<-vapply(layer,function(z)scalar((z$screening%||%list())$decision),character(1))
 if(any(!final_dec%in%c("retain","exclude")))stop("Human-resolved W04 layer still contains non-substantive decisions",call.=FALSE)
 cids<-vapply(canonical,function(r)scalar((r$identity%||%list())$record_id),character(1));if(any(!nzchar(cids))||anyDuplicated(cids))stop("Canonical identity invariant failed",call.=FALSE)
+
+abstract_edit_n<-0L
+for(d in decisions){
+  edited<-scalar(d$edited_abstract)
+  if(!nzchar(edited))next
+  id<-scalar(d$record_id)
+  j<-match(id,cids)
+  if(is.na(j))stop(sprintf("W04 abstract edit refers to unknown canonical record: %s",id),call.=FALSE)
+  if(is.null(canonical[[j]]$canonical) || !is.list(canonical[[j]]$canonical)) canonical[[j]]$canonical<-list()
+  canonical[[j]]$canonical[["abstract"]]<-edited
+  if(is.null(canonical[[j]]$abstract_enrichment) || !is.list(canonical[[j]]$abstract_enrichment)) canonical[[j]]$abstract_enrichment<-list()
+  canonical[[j]]$abstract_enrichment$human_w04_resolution_edit<-list(
+    source="human_w04_model_uncertainty_resolution",
+    reviewer=scalar(d$abstract_edit_reviewer),
+    saved_at_utc=scalar(d$abstract_edit_saved_at_utc),
+    edit_id=scalar(d$abstract_edit_id)
+  )
+  abstract_edit_n<-abstract_edit_n+1L
+}
 cmap<-setNames(canonical,cids)
 included_ids<-ids[final_dec=="retain"];excluded_ids<-ids[final_dec=="exclude"]
 if(length(setdiff(ids,cids)))stop("W04 layer contains IDs absent from canonical",call.=FALSE)
@@ -52,6 +71,7 @@ summary<-list(
  included_record_ids_sha256=digest(file=file.path(output_dir,"workflow04_included_record_ids.txt"),algo="sha256",serialize=FALSE),
  excluded_record_ids_sha256=digest(file=file.path(output_dir,"workflow04_excluded_record_ids.txt"),algo="sha256",serialize=FALSE),
  human_resolution_records=length(decisions),
+ human_abstract_edits=abstract_edit_n,
  generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),file.path(output_dir,"summary.json"),useBytes=TRUE)
