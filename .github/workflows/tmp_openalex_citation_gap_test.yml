@@ -1,11 +1,6 @@
 name: Temporary OpenAlex-only citation gap functional test
 
 on:
-  push:
-    branches:
-      - tmp-lens-citation-gap-test
-    paths:
-      - ".github/workflows/tmp_openalex_citation_gap_test.yml"
   workflow_dispatch:
     inputs:
       seed_limit:
