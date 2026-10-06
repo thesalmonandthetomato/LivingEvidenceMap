@@ -1,4 +1,5 @@
 name: Workflow 00 - Count-only search scoping
+run-name: W00 scope ${{ inputs.request_id }}
 
 on:
   workflow_dispatch:
@@ -7,6 +8,11 @@ on:
         description: 'Repository path to plain-text Boolean scoping search string'
         required: true
         default: 'user_input/scoping_search_string.txt'
+        type: string
+      request_id:
+        description: 'Optional caller identifier used to match this run from the Shiny app'
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -17,10 +23,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  scope:
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 10
+    outputs:
+      sources: ${{ steps.sources.outputs.sources }}
     steps:
       - name: Checkout Workflow 00 implementation
         uses: actions/checkout@v4
@@ -34,12 +41,9 @@ jobs:
           r-version: release
           use-public-rspm: true
 
-      - name: Set up Pandoc
-        uses: r-lib/actions/setup-pandoc@v2
-
-      - name: Install R dependencies
+      - name: Install preparation dependencies
         shell: Rscript {0}
-        run: install.packages(c('httr2','jsonlite','xml2','rmarkdown','knitr'))
+        run: install.packages('jsonlite')
 
       - name: Parse scoping implementation
         shell: Rscript {0}
@@ -74,7 +78,61 @@ jobs:
           }
           cat(sprintf('PASS: scoping plan contains all %d configured EBSCO databases\n', length(expected)))
 
-      - name: Run count-only API searches
+      - name: Build database matrix
+        id: sources
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          e <- fromJSON('config/workflow00_ebsco_sources.json', simplifyVector=FALSE)
+          sources <- c(
+            'lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',
+            names(e$sources),
+            'cab_abstracts','proquest_dissertations'
+          )
+          cat(sprintf('sources=%s\n', toJSON(sources, auto_unbox=FALSE)), file=Sys.getenv('GITHUB_OUTPUT'), append=TRUE)
+          cat(sprintf('PASS: %d database/source count jobs configured\n', length(sources)))
+
+      - name: Upload validated scoping plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-scope-plan-${{ github.run_id }}
+          path: outputs/workflow00_search_scope/plan/search_plan.json
+          retention-days: 7
+          if-no-files-found: error
+
+  count:
+    name: count / ${{ matrix.source }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        source: ${{ fromJSON(needs.prepare.outputs.sources) }}
+    steps:
+      - name: Checkout Workflow 00 implementation
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install count dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','xml2'))
+
+      - name: Download validated scoping plan
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow00-scope-plan-${{ github.run_id }}
+          path: outputs/workflow00_search_scope/plan
+
+      - name: Count ${{ matrix.source }}
         env:
           LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
           SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
@@ -87,12 +145,105 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p outputs/workflow00_search_scope/counts
           Rscript scripts/updater/workflow_00_search_scope_counts.R \
             --plan outputs/workflow00_search_scope/plan/search_plan.json \
             --lens-config config/lens_search.json \
             --ebsco-config config/workflow00_ebsco_sources.json \
-            --output-csv outputs/workflow00_search_scope/search_scope_counts.csv \
-            --output-json outputs/workflow00_search_scope/search_scope_counts.json
+            --source "${{ matrix.source }}" \
+            --output-csv "outputs/workflow00_search_scope/counts/${{ matrix.source }}.csv" \
+            --output-json "outputs/workflow00_search_scope/counts/${{ matrix.source }}.json"
+
+      - name: Upload ${{ matrix.source }} count
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-scope-count-${{ matrix.source }}-${{ github.run_id }}
+          path: |
+            outputs/workflow00_search_scope/counts/${{ matrix.source }}.csv
+            outputs/workflow00_search_scope/counts/${{ matrix.source }}.json
+          retention-days: 7
+          if-no-files-found: error
+
+  merge:
+    needs: [prepare, count]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.count.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Workflow 00 implementation
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Set up Pandoc
+        uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Install report dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','rmarkdown','knitr'))
+
+      - name: Download validated scoping plan
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow00-scope-plan-${{ github.run_id }}
+          path: outputs/workflow00_search_scope/plan
+
+      - name: Download all database counts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow00-scope-count-*-${{ github.run_id }}
+          path: outputs/workflow00_search_scope/counts
+          merge-multiple: true
+
+      - name: Merge database counts
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          plan <- fromJSON('outputs/workflow00_search_scope/plan/search_plan.json', simplifyVector=FALSE)
+          files <- list.files('outputs/workflow00_search_scope/counts', pattern='\\.csv$', full.names=TRUE)
+          if (!length(files)) stop('No database count outputs were downloaded', call.=FALSE)
+          rows <- do.call(rbind, lapply(files, function(p) read.csv(p, stringsAsFactors=FALSE, na.strings='')))
+          e <- fromJSON('config/workflow00_ebsco_sources.json', simplifyVector=FALSE)
+          order_slugs <- c(
+            'lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',
+            names(e$sources),'cab_abstracts','proquest_dissertations'
+          )
+          rows <- rows[order(match(rows$source_slug, order_slugs), rows$source),,drop=FALSE]
+          rownames(rows) <- NULL
+          dir.create('outputs/workflow00_search_scope', recursive=TRUE, showWarnings=FALSE)
+          write.csv(rows, 'outputs/workflow00_search_scope/search_scope_counts.csv', row.names=FALSE, na='')
+          out <- list(
+            schema='living-evidence-map-workflow00-search-scoping-v1',
+            workflow='00_search_scoping',
+            status='success',
+            counted_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'),
+            search_date=format(Sys.Date(),'%Y-%m-%d'),
+            search_input_path=plan$input_path,
+            original_search_string=plan$original_search_string,
+            normalised_search_string=plan$normalised_search_string,
+            boolean_validation=plan$validation,
+            source_queries=plan$source_queries,
+            result_policy='Counts only. No search-result records or raw API responses are written to disk.',
+            counts=lapply(seq_len(nrow(rows)), function(i) list(
+              source=rows$source[[i]],
+              source_slug=rows$source_slug[[i]],
+              access_mode=rows$access_mode[[i]],
+              search_date=rows$search_date[[i]],
+              hits=if(is.na(rows$hits[[i]])) NULL else as.integer(rows$hits[[i]]),
+              status=rows$status[[i]]
+            ))
+          )
+          writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'outputs/workflow00_search_scope/search_scope_counts.json',
+                     useBytes=TRUE)
+          cat(sprintf('PASS: merged %d database/source count rows\n', nrow(rows)))
 
       - name: Render short R Markdown scoping report
         shell: Rscript {0}
