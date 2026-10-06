@@ -1,0 +1,58 @@
+{
+  "schema": "living-evidence-map-workflow05-species-archive-v1",
+  "workflow": "05",
+  "state": "deterministic_species_coding",
+  "source_github_run_id": "37511638503",
+  "source_github_commit": "ec20c90725f5dd9b4a842047b75e8b716baa1f1f",
+  "publication_github_run_id": "37511638503",
+  "source_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/37511638503",
+  "repository": "thesalmonandthetomato/LivingEvidenceMap",
+  "upstream_workflow04_zenodo_record_id": "23195313",
+  "upstream_workflow04_final_screening_layer_sha256": "7b22bd3ed00867b52ba598d7f253eedf4e27f5b56ad5e85ce1be3a1ca6b95797",
+  "records": 23371,
+  "coded_records": 23124,
+  "none_records": 247,
+  "species_matches": 94630,
+  "concept_rows": 9,
+  "concept_schema": ["coding", "entity", "terms"],
+  "entity_value": "farmed species",
+  "generic_code": "UNSPEC_SALMON",
+  "none_code": "NONE",
+  "workflow05_coding_config_sha256": "ddb09cb9621c957283d9e0a68d51e098b7ef9ef5e8beec7ead8f73ca5e409010",
+  "workflow05_species_layer_sha256": "e54f78d7e0002fb0142add431e2e7873ac1c3c7d48919286425d7fd784f02f73",
+  "species_codes_long_sha256": "e73e608b3ac7e461c454c32896eda6acb648d36044d96c03cc3348a3e4fa31d3",
+  "species_matches_sha256": "6fe44c81af7923725f8e2653f25d2e3db6347e1c32d4b3e4f357f35ae8e870d4",
+  "species_record_counts_sha256": "3556cd0384ca6f18dad3e507de6a237cc52c0a738ab0b083d9c1226270e17c55",
+  "workflow05_run_manifest_sha256": "7fd5d280bdc266b0d7a0126e528c5374c54c8d42039b3e3e4ccc2e9bb7d8a478",
+  "deterministic_concepts_sha256": "e86468bf2972da16987bc0b1b4c0cb106e5f4de7229de1399e82ca79ba3b8059",
+  "file_visibility": "restricted",
+  "files": {
+    "state_archive": {
+      "filename": "LivingEvidenceMap_workflow05_run-37511638503_species_state.tar.gz",
+      "bytes": 1722321,
+      "sha256": "2137ab6a11b8818ce8ced234650575b07a5c686325bf341b3efa1ad6448ccacb"
+    }
+  },
+  "status": "published",
+  "zenodo_record_id": "23195813",
+  "zenodo_deposition_id": "23195813",
+  "doi": "10.5281/zenodo.23195813",
+  "record_url": "https://zenodo.org/records/23195813",
+  "visibility": "restricted",
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow05_run-37511638503_species_state.tar.gz",
+      "bytes": 1722321,
+      "sha256": "2137ab6a11b8818ce8ced234650575b07a5c686325bf341b3efa1ad6448ccacb",
+      "zenodo_checksum": "md5:8931d38b8d571314c9f52e75a2a24f7e"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow05_run-37511638503_manifest.json",
+      "bytes": 1890,
+      "sha256": "6180461348be17a56f003523d5158927e1a4aafacf7d7bb589295440927d8059",
+      "zenodo_checksum": "md5:aaa7659a86e0a05a96f68c2ae9b9cafc"
+    }
+  ],
+  "manifest_sha256": "6180461348be17a56f003523d5158927e1a4aafacf7d7bb589295440927d8059",
+  "published_at_utc": "2026-10-06T18:55:34Z"
+}
