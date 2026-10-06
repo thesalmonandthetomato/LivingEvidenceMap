@@ -50,11 +50,12 @@ jobs:
         run: install.packages('jsonlite')
 
       - name: Parse scoping implementation
-        shell: Rscript {0}
+        shell: bash
         run: |
-          parse(file='scripts/updater/workflow_00_validate_scoping_search.R')
-          parse(file='scripts/updater/workflow_00_search_scope_counts.R')
-          cat('PASS: Workflow 00 scoping scripts parse\n')
+          set -euo pipefail
+          Rscript -e "parse(file='scripts/updater/workflow_00_validate_scoping_search.R'); parse(file='scripts/updater/workflow_00_search_scope_counts.R'); cat('PASS: R scoping scripts parse\\n')"
+          python3 -m py_compile scripts/updater/workflow_00_search_scope_counts.py
+          echo 'PASS: lightweight Python scoping counter parses'
 
       - name: Validate Boolean scoping search string
         env:
@@ -119,16 +120,6 @@ jobs:
           ref: workflow01-final-architecture
           persist-credentials: false
 
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: release
-          use-public-rspm: true
-
-      - name: Install count dependencies
-        shell: Rscript {0}
-        run: install.packages(c('httr2','jsonlite','xml2'))
-
       - name: Download validated scoping plan
         uses: actions/download-artifact@v4
         with:
@@ -149,7 +140,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow00_search_scope/counts
-          Rscript scripts/updater/workflow_00_search_scope_counts.R \
+          python3 scripts/updater/workflow_00_search_scope_counts.py \
             --plan outputs/workflow00_search_scope/plan/search_plan.json \
             --lens-config config/lens_search.json \
             --ebsco-config config/workflow00_ebsco_sources.json \
