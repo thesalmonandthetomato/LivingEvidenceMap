@@ -4,7 +4,7 @@ args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 batch_id<-arg("--batch-id");queue_sha<-tolower(arg("--queue-sha256",""));source_run_id<-arg("--source-run-id")
 sheet_id<-arg("--sheet-id");credential<-arg("--credential");output<-arg("--output");manifest_out<-arg("--manifest")
-queue_tab<-arg("--queue-tab","queue_w04_resolution_active");decision_tab<-arg("--decision-tab","decisions_w04_resolution")
+queue_tab<-arg("--queue-tab","queue_w04_resolution_active");decision_tab<-arg("--decision-tab","decisions_w04_resolution");abstract_edit_tab<-arg("--abstract-edit-tab","w04_resolution_abstract_edits")
 if(any(vapply(list(batch_id,queue_sha,source_run_id,sheet_id,credential,output,manifest_out),is.null,logical(1))))stop("Required W04 resolution export argument missing",call.=FALSE)
 if(!grepl("^[0-9a-f]{64}$",queue_sha))stop("Invalid queue SHA",call.=FALSE)
 gs4_auth(path=credential,cache=FALSE)
@@ -21,6 +21,24 @@ if(tolower(digest(reconstructed,algo="sha256",serialize=FALSE))!=queue_sha)stop(
 cases<-lapply(q$case_json,fromJSON,simplifyVector=FALSE)
 record_ids<-vapply(cases,function(z)as.character(z$record_id),character(1))
 
+tabs<-sheet_names(sheet_id)
+abstract_edits<-list()
+if(abstract_edit_tab %in% tabs){
+  e<-read_sheet(sheet_id,sheet=abstract_edit_tab,col_types="c")
+  needed_e<-c("edit_id","review_case_id","record_id","abstract","reviewer","saved_at_utc","queue_sha256","supersedes_edit_id")
+  if(!all(needed_e%in%names(e)))stop("W04 abstract-edit sheet missing required columns",call.=FALSE)
+  e<-e[tolower(as.character(e$queue_sha256))==queue_sha,,drop=FALSE]
+  if(nrow(e)){
+    e<-e[order(as.character(e$saved_at_utc),seq_len(nrow(e)),decreasing=TRUE),,drop=FALSE]
+    e<-e[!duplicated(as.character(e$review_case_id)),,drop=FALSE]
+    e<-e[as.character(e$review_case_id)%in%as.character(q$review_case_id),,drop=FALSE]
+    abstract_edits<-setNames(
+      lapply(seq_len(nrow(e)),function(i)as.list(e[i,,drop=FALSE])),
+      as.character(e$review_case_id)
+    )
+  }
+}
+
 d<-read_sheet(sheet_id,sheet=decision_tab,col_types="c")
 needed<-c("decision_id","review_case_id","record_id","decision","rationale","reviewer","resolved_at_utc","queue_sha256")
 if(!all(needed%in%names(d)))stop("W04 decision sheet missing required columns",call.=FALSE)
@@ -36,9 +54,22 @@ if(!identical(as.character(active$record_id),record_ids))stop("W04 resolution de
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
 con<-file(output,"wt",encoding="UTF-8");on.exit(close(con),add=TRUE)
 for(i in seq_len(nrow(active))){
+  case_id<-as.character(active$review_case_id[[i]])
+  edit<-abstract_edits[[case_id]]
   z<-list(record_id=as.character(active$record_id[[i]]),decision=as.character(active$decision[[i]]),
           rationale=as.character(active$rationale[[i]]),reviewer=as.character(active$reviewer[[i]]),
           adjudicated_at_utc=as.character(active$resolved_at_utc[[i]]))
+  if(!is.null(edit)){
+    edited_abstract<-trimws(as.character(edit$abstract %||% ""))
+    if(!nzchar(edited_abstract))stop(sprintf("Saved W04 abstract edit is empty for %s",case_id),call.=FALSE)
+    if(!identical(as.character(edit$record_id %||% ""),as.character(active$record_id[[i]]))) {
+      stop(sprintf("W04 abstract edit record mismatch for %s",case_id),call.=FALSE)
+    }
+    z$edited_abstract<-edited_abstract
+    z$abstract_edit_reviewer<-as.character(edit$reviewer %||% "")
+    z$abstract_edit_saved_at_utc<-as.character(edit$saved_at_utc %||% "")
+    z$abstract_edit_id<-as.character(edit$edit_id %||% "")
+  }
   writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null"),con,useBytes=TRUE)
 }
 close(con);on.exit(NULL,add=FALSE)
