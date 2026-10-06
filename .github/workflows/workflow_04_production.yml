@@ -646,6 +646,9 @@ jobs:
           if-no-files-found: error
 
   handoff-w05:
+    permissions:
+      contents: write
+      actions: write
     needs: finalise
     if: ${{ needs.finalise.result == 'success' && needs.finalise.outputs.status == 'PASS' && inputs.publish == true }}
     uses: ./.github/workflows/workflow_05_production.yml
