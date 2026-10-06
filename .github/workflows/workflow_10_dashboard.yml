@@ -9,6 +9,7 @@ on:
       - 'docs/reporting/.run_workflow10_dashboard'
       - 'R/workflow_10_dashboard_from_canonical_jsonl.R'
       - 'R/workflow_10_make_public_dashboard.R'
+      - 'scripts/reporting/workflow_10_build_internal_output_registry.R'
       - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
       - 'docs/index.html'
       - 'docs/dashboard-topic-definitions.json'
@@ -71,6 +72,7 @@ jobs:
           parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
           parse(file='R/workflow_10_dashboard_from_canonical_jsonl.R')
           parse(file='R/workflow_10_make_public_dashboard.R')
+          parse(file='scripts/reporting/workflow_10_build_internal_output_registry.R')
           cat('PASS: Workflow 10 scripts parse\n')
 
       - name: Resolve authoritative Workflow 08 pointer
@@ -224,6 +226,62 @@ jobs:
             'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
             pointer$zenodo_record_id,nrow(csv),length(stars)
           ))
+
+      - name: Build internal output registry archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow_10_build_internal_output_registry.R \
+            --status docs/current_run/current_run_status.json \
+            --flow docs/reporting/workflow_09/flow_counts.json \
+            --w10-dir outputs/workflow10 \
+            --output-root internal/output_registry/archive
+
+          SEARCH_DATE="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$search$search_date)')"
+          REG_DIR="internal/output_registry/archive/$SEARCH_DATE"
+          test -s "$REG_DIR/output-registry.html"
+          test -s "$REG_DIR/output-registry.json"
+          test -s "$REG_DIR/output-registry-files.csv"
+          test -s "$REG_DIR/manifest.json"
+
+          Rscript - <<'RS'
+          library(jsonlite)
+          status <- fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE)
+          d <- status$search$search_date
+          p <- file.path("internal/output_registry/archive",d,"output-registry.json")
+          x <- fromJSON(p,simplifyVector=FALSE)
+          stopifnot(
+            identical(x$schema,"living-evidence-map-internal-output-registry-v1"),
+            identical(x$search_date,d),
+            length(x$zenodo_records) > 0L,
+            all(vapply(x$zenodo_records,function(z)identical(z$visibility,"restricted"),logical(1)))
+          )
+          h <- paste(readLines(file.path("internal/output_registry/archive",d,"output-registry.html"),warn=FALSE),collapse="\n")
+          stopifnot(
+            grepl("INTERNAL · REPOSITORY ONLY",h,fixed=TRUE),
+            !grepl("Public release",h,fixed=TRUE),
+            !grepl(">Zenodo record / DOI<",h,fixed=TRUE),
+            grepl("https://doi.org/10.5281/zenodo.",h,fixed=TRUE)
+          )
+          cat("PASS: internal W10 output registry contract\n")
+          RS
+
+      - name: Commit internal output registry archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          SEARCH_DATE="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$search$search_date)')"
+          REG_DIR="internal/output_registry/archive/$SEARCH_DATE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$REG_DIR"
+          if git diff --cached --quiet; then
+            echo "Internal output registry for $SEARCH_DATE is already current."
+          else
+            git commit -m "Archive internal output registry for $SEARCH_DATE [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
 
       - name: Upload Workflow 10 dashboard artefact
         uses: actions/upload-artifact@v4
