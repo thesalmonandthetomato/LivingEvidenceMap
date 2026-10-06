@@ -22,6 +22,7 @@ workflow_run_id <- arg("--workflow-run-id",Sys.getenv("GITHUB_RUN_ID",""))
 last_search_date <- blank_to_na(arg("--last-search-date",""))
 canonical_existing <- blank_to_na(arg("--canonical-existing",""))
 search_results_total <- blank_to_na(arg("--search-results-total",""))
+search_results_update <- blank_to_na(arg("--search-results-update",""))
 deduplicated_records <- blank_to_na(arg("--deduplicated-records",""))
 enriched_records <- blank_to_na(arg("--enriched-records",""))
 retracted_records <- blank_to_na(arg("--retracted-records",""))
@@ -44,7 +45,7 @@ if(is.null(sheet_id)||!nzchar(sheet_id)||is.null(credential)||!file.exists(crede
 
 cols <- c(
   "event_id","update_id","event_at_utc","stage","workflow_run_id",
-  "last_search_date","canonical_existing","search_results_total",
+  "last_search_date","canonical_existing","search_results_total","search_results_update",
   "deduplicated_records","enriched_records","retracted_records",
   "screened_include","screened_exclude",
   "geography_with","geography_without","topic_with","topic_without",
@@ -78,6 +79,7 @@ incoming <- list(
   last_search_date=last_search_date,
   canonical_existing=canonical_existing,
   search_results_total=search_results_total,
+  search_results_update=search_results_update,
   deduplicated_records=deduplicated_records,
   enriched_records=enriched_records,
   retracted_records=retracted_records,
@@ -109,6 +111,7 @@ row <- data.frame(
   last_search_date=value("last_search_date"),
   canonical_existing=value("canonical_existing"),
   search_results_total=value("search_results_total"),
+  search_results_update=value("search_results_update"),
   deduplicated_records=value("deduplicated_records"),
   enriched_records=value("enriched_records"),
   retracted_records=value("retracted_records"),
