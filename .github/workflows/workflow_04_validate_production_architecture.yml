@@ -105,6 +105,14 @@ jobs:
           }
 
           stopifnot(grepl('title_gained_ids',prep,fixed=TRUE))
+          export_resolution <- paste(readLines('scripts/updater/workflow_04_export_shiny_resolution_decisions.R',warn=FALSE),collapse='\n')
+          apply_resolution <- paste(readLines('scripts/updater/workflow_04_apply_human_resolution.R',warn=FALSE),collapse='\n')
+          stopifnot(grepl('w04_resolution_abstract_edits',export_resolution,fixed=TRUE))
+          stopifnot(grepl('edited_abstract',export_resolution,fixed=TRUE))
+          stopifnot(grepl('edited_abstract',apply_resolution,fixed=TRUE))
+          stopifnot(grepl('human_w04_resolution_edit',apply_resolution,fixed=TRUE))
+          stopifnot(grepl('human_abstract_edits',apply_resolution,fixed=TRUE))
+
           stopifnot(grepl('abstract_gained_ids',prep,fixed=TRUE))
           stopifnot(grepl('rescreen_existing_ids',prep,fixed=TRUE))
           stopifnot(grepl('screening_input_sha256',prep,fixed=TRUE))
