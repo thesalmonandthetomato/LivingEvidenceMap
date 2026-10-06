@@ -19,6 +19,7 @@ lens_config_path <- arg("--lens-config", "config/lens_search.json")
 ebsco_config_path <- arg("--ebsco-config", "config/workflow00_ebsco_sources.json")
 output_csv <- arg("--output-csv")
 output_json <- arg("--output-json")
+source_filter <- trimws(as.character(arg("--source", "")))
 if (any(vapply(list(plan_path, output_csv, output_json), is.null, logical(1)))) {
   stop("Required: --plan --output-csv --output-json", call. = FALSE)
 }
@@ -196,66 +197,77 @@ safe_count <- function(label, fun) {
   })
 }
 
-lens_r <- safe_count("Lens", function() count_lens(as.character(q$lens)))
-scopus_r <- safe_count("Scopus", function() count_scopus(as.character(q$scopus)))
-openalex_r <- safe_count("OpenAlex", function() count_openalex(as.character(q$openalex)))
-agricola_r <- safe_count("AGRICOLA", function() count_europe_pmc(as.character(q$agricola),"AGRICOLA/Europe PMC"))
-pubmed_r <- safe_count("PubMed/MEDLINE", function() count_europe_pmc(as.character(q$pubmed),"PubMed/MEDLINE via Europe PMC"))
-ethos_r <- safe_count("EThOS", function() count_europe_pmc(as.character(q$ethos),"EThOS via Europe PMC"))
-cba_r <- safe_count("Chinese Biological Abstracts", function() count_europe_pmc(as.character(q$cba),"Chinese Biological Abstracts via Europe PMC"))
-preprints_r <- safe_count("Europe PMC preprints", function() count_europe_pmc(as.character(q$epmc_preprints),"Europe PMC preprints"))
-wos_r <- safe_count("Web of Science", function() count_wos(as.character(q$wos)))
-
-ebsco_results <- lapply(ebsco_sources,function(src) {
-  label <- as.character(ebsco_cfg$sources[[src]]$display_name)
-  safe_count(label,function() count_ebsco(src,as.character(q[[src]])))
-})
-names(ebsco_results) <- ebsco_sources
-
 read_manual_reported <- function(path) {
   if (!file.exists(path)) return(NA_integer_)
   x <- fromJSON(path, simplifyVector=FALSE)
   suppressWarnings(as.integer(x$search$reported_results))
 }
-cab_n <- read_manual_reported("user_input/workflow00_ris_cab_abstracts_2026-09-30.json")
-proquest_n <- read_manual_reported("user_input/workflow00_ris_proquest_2026-09-30.json")
 
-rows <- data.frame(
-  source = c(
-    "Lens",
-    "Scopus",
-    "OpenAlex",
-    "AGRICOLA",
-    "PubMed/MEDLINE",
-    "EThOS",
-    "Chinese Biological Abstracts",
-    "Europe PMC preprints",
-    "Web of Science Core Collection",
-    vapply(ebsco_sources,function(src) as.character(ebsco_cfg$sources[[src]]$display_name),character(1)),
-    "CAB Abstracts",
-    "ProQuest Dissertations & Theses Global"
-  ),
-  access_mode = c(
-    rep("API count", 9 + length(ebsco_sources)),
-    "Manual W00 registry count",
-    "Manual W00 registry count"
-  ),
-  search_date = c(rep(search_date, 9 + length(ebsco_sources)), "2026-09-30", "2026-09-30"),
-  hits = c(
-    lens_r$hits, scopus_r$hits, openalex_r$hits, agricola_r$hits, pubmed_r$hits,
-    ethos_r$hits, cba_r$hits, preprints_r$hits, wos_r$hits,
-    vapply(ebsco_results,function(x) if(is.null(x$hits)) NA_integer_ else as.integer(x$hits),integer(1)),
-    cab_n, proquest_n
-  ),
-  status = c(
-    lens_r$status, scopus_r$status, openalex_r$status, agricola_r$status, pubmed_r$status,
-    ethos_r$status, cba_r$status, preprints_r$status, wos_r$status,
-    vapply(ebsco_results,function(x) as.character(x$status),character(1)),
-    "validated W00 manual-search reported count",
-    "validated W00 manual-search reported count"
-  ),
-  stringsAsFactors = FALSE
+source_catalogue <- c(
+  "lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos",
+  ebsco_sources,
+  "cab_abstracts","proquest_dissertations"
 )
+if (nzchar(source_filter) && !source_filter %in% source_catalogue) {
+  stop(sprintf("Unknown scoping source: %s", source_filter), call.=FALSE)
+}
+selected_sources <- if (nzchar(source_filter)) source_filter else source_catalogue
+
+count_one <- function(src) {
+  if (identical(src,"lens")) {
+    r <- safe_count("Lens", function() count_lens(as.character(q$lens)))
+    return(data.frame(source="Lens",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"scopus")) {
+    r <- safe_count("Scopus", function() count_scopus(as.character(q$scopus)))
+    return(data.frame(source="Scopus",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"openalex")) {
+    r <- safe_count("OpenAlex", function() count_openalex(as.character(q$openalex)))
+    return(data.frame(source="OpenAlex",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"agricola")) {
+    r <- safe_count("AGRICOLA", function() count_europe_pmc(as.character(q$agricola),"AGRICOLA/Europe PMC"))
+    return(data.frame(source="AGRICOLA",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"pubmed")) {
+    r <- safe_count("PubMed/MEDLINE", function() count_europe_pmc(as.character(q$pubmed),"PubMed/MEDLINE via Europe PMC"))
+    return(data.frame(source="PubMed/MEDLINE",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"ethos")) {
+    r <- safe_count("EThOS", function() count_europe_pmc(as.character(q$ethos),"EThOS via Europe PMC"))
+    return(data.frame(source="EThOS",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"cba")) {
+    r <- safe_count("Chinese Biological Abstracts", function() count_europe_pmc(as.character(q$cba),"Chinese Biological Abstracts via Europe PMC"))
+    return(data.frame(source="Chinese Biological Abstracts",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"epmc_preprints")) {
+    r <- safe_count("Europe PMC preprints", function() count_europe_pmc(as.character(q$epmc_preprints),"Europe PMC preprints"))
+    return(data.frame(source="Europe PMC preprints",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"wos")) {
+    r <- safe_count("Web of Science", function() count_wos(as.character(q$wos)))
+    return(data.frame(source="Web of Science Core Collection",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (src %in% ebsco_sources) {
+    label <- as.character(ebsco_cfg$sources[[src]]$display_name)
+    r <- safe_count(label,function() count_ebsco(src,as.character(q[[src]])))
+    return(data.frame(source=label,access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"cab_abstracts")) {
+    n <- read_manual_reported("user_input/workflow00_ris_cab_abstracts_2026-09-30.json")
+    return(data.frame(source="CAB Abstracts",access_mode="Manual W00 registry count",search_date="2026-09-30",hits=n,status="validated W00 manual-search reported count",source_slug=src,stringsAsFactors=FALSE))
+  }
+  if (identical(src,"proquest_dissertations")) {
+    n <- read_manual_reported("user_input/workflow00_ris_proquest_2026-09-30.json")
+    return(data.frame(source="ProQuest Dissertations & Theses Global",access_mode="Manual W00 registry count",search_date="2026-09-30",hits=n,status="validated W00 manual-search reported count",source_slug=src,stringsAsFactors=FALSE))
+  }
+  stop(sprintf("Unhandled scoping source: %s",src),call.=FALSE)
+}
+
+rows <- do.call(rbind,lapply(selected_sources,count_one))
+row.names(rows) <- NULL
 
 dir.create(dirname(output_csv), recursive = TRUE, showWarnings = FALSE)
 write.csv(rows, output_csv, row.names = FALSE, na = "")
@@ -275,6 +287,7 @@ out <- list(
   counts = lapply(seq_len(nrow(rows)), function(i) {
     list(
       source = rows$source[[i]],
+      source_slug = rows$source_slug[[i]],
       access_mode = rows$access_mode[[i]],
       search_date = rows$search_date[[i]],
       hits = if (is.na(rows$hits[[i]])) NULL else as.integer(rows$hits[[i]]),
