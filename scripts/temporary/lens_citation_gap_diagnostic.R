@@ -33,16 +33,13 @@ if (!nzchar(token)) stop("LENS_API_TOKEN is required", call. = FALSE)
 
 api <- "https://api.lens.org/scholarly/search"
 page_size <- 500L
-scroll_ttl <- "1m"
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+`%||%` <- function(x, y) if (is.null(x)) y else x
 
-salmon_terms <- 'salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout"'
-farm_terms <- 'farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*'
-positive <- sprintf("(title:(%s) OR abstract:(%s) OR keyword:(%s))",
-                    salmon_terms, salmon_terms, salmon_terms)
-negative <- sprintf("(title:(%s) OR abstract:(%s) OR keyword:(%s))",
-                    farm_terms, farm_terms, farm_terms)
-text_query <- sprintf("(%s) AND NOT (%s)", positive, negative)
+# Literal local equivalents of the production W00 Lens terms, applied only to
+# title, abstract and keywords after citation neighbours have been retrieved.
+salmon_regex <- "(?i)(\\bsalmon\\b|\\bsalmonid[A-Za-z0-9_-]*\\b|\\bSalmo\\b|\\bOncorhynchus\\b|\\brainbow\\s+trout\\b)"
+farm_regex <- "(?i)(\\bfarm[A-Za-z0-9_-]*\\b|\\bcage[A-Za-z0-9_-]*\\b|\\bpens\\b|\\bpenned\\b|\\bpen\\b|\\baquacultur[A-Za-z0-9_-]*\\b|\\bcommercial[A-Za-z0-9_-]*\\b)"
 
 extract_lens_ids <- function(path) {
   con <- file(path, open = "rt", encoding = "UTF-8")
@@ -57,112 +54,75 @@ extract_lens_ids <- function(path) {
       rec <- fromJSON(line, simplifyVector = FALSE)
       refs <- rec$manifestation_refs
       if (!is.null(refs) && length(refs)) {
-        refs <- as.character(unlist(refs, use.names = FALSE))
+        refs <- as.character(unlist(refs, recursive = TRUE, use.names = FALSE))
         z <- refs[startsWith(refs, "lens:")]
         if (length(z)) ids <- c(ids, sub("^lens:", "", z))
       }
       n <- n + 1L
     }
   }
-  ids <- unique(ids[nzchar(ids)])
-  list(ids = ids, canonical_records = n)
+  list(ids = sort(unique(ids[nzchar(ids)])), canonical_records = n)
 }
 
 lens_request <- function(payload) {
-  last_error <- NULL
-  for (attempt in seq_len(6L)) {
-    req <- request(api) |>
-      req_headers(
-        Authorization = paste("Bearer", token),
-        `Content-Type` = "application/json",
-        Accept = "application/json"
-      ) |>
-      req_body_json(payload, auto_unbox = TRUE) |>
-      req_error(is_error = function(resp) FALSE)
-    resp <- tryCatch(req_perform(req), error = identity)
-    if (!inherits(resp, "error")) {
-      status <- resp_status(resp)
-      if (status < 400L) return(resp_body_json(resp, simplifyVector = FALSE))
-      retryable <- status == 429L || status >= 500L
-      last_error <- sprintf("Lens HTTP %s", status)
-      if (!retryable) stop(last_error, call. = FALSE)
-    } else {
-      last_error <- conditionMessage(resp)
-    }
-    if (attempt < 6L) {
-      delay <- min(60, 2^(attempt - 1L))
-      message(sprintf("Lens request attempt %d failed (%s); retrying in %ss",
-                      attempt, last_error, delay))
-      Sys.sleep(delay)
-    }
+  req <- request(api) |>
+    req_headers(
+      Authorization = paste("Bearer", token),
+      `Content-Type` = "application/json",
+      Accept = "application/json"
+    ) |>
+    req_body_json(payload, auto_unbox = TRUE) |>
+    req_error(is_error = function(resp) FALSE)
+
+  resp <- req_perform(req)
+  status <- resp_status(resp)
+  if (status >= 400L) {
+    body <- tryCatch(resp_body_string(resp), error = function(e) "")
+    stop(sprintf("Lens HTTP %d%s", status,
+                 if (nzchar(body)) paste0(": ", body) else ""),
+         call. = FALSE)
   }
-  stop(sprintf("Lens request failed after 6 attempts: %s", last_error), call. = FALSE)
+  resp_body_json(resp, simplifyVector = FALSE)
 }
 
-run_batch <- function(seed_ids, field, direction, batch_number) {
-  id_clause <- paste(seed_ids, collapse = " OR ")
-  citation_clause <- sprintf("%s:(%s)", field, id_clause)
-  full_query <- sprintf("(%s) AND (%s) AND NOT (%s)",
-                        citation_clause, positive, negative)
+terms_lookup <- function(ids, include) {
+  if (!length(ids)) return(list(total = 0L, data = list()))
+  if (length(ids) > 500L) stop("terms_lookup received >500 IDs", call. = FALSE)
 
   payload <- list(
-    query = list(
-      query_string = list(query = full_query)
-    ),
+    query = list(terms = list(lens_id = unname(ids))),
     size = page_size,
-    scroll = scroll_ttl,
-    include = c("lens_id")
+    include = include
   )
+  lens_request(payload)
+}
 
-  ids <- character()
-  raw_retrieved <- 0L
-  reported_total <- NULL
-  pages <- 0L
+as_ids <- function(x) {
+  if (is.null(x) || !length(x)) return(character())
+  vals <- as.character(unlist(x, recursive = TRUE, use.names = FALSE))
+  vals <- trimws(vals)
+  unique(vals[nzchar(vals)])
+}
 
-  repeat {
-    body <- lens_request(payload)
-    pages <- pages + 1L
-    if (is.null(reported_total)) {
-      reported_total <- as.integer(body$total %||% 0L)
-      message(sprintf("%s batch %d: Lens reported %d matching works",
-                      direction, batch_number, reported_total))
-    }
-    dat <- body$data %||% list()
-    raw_retrieved <- raw_retrieved + length(dat)
-    if (length(dat)) {
-      batch_ids <- vapply(dat, function(x) as.character(x$lens_id %||% ""), character(1))
-      ids <- c(ids, batch_ids[nzchar(batch_ids)])
-    }
-    if (!length(dat) || raw_retrieved >= reported_total) break
-    scroll_id <- as.character(body$scroll_id %||% "")
-    if (!nzchar(scroll_id)) {
-      stop(sprintf("%s batch %d: missing scroll_id before all results were retrieved",
-                   direction, batch_number), call. = FALSE)
-    }
-    payload <- list(scroll_id = scroll_id, scroll = scroll_ttl, include = c("lens_id"))
-  }
-
-  ids <- unique(ids)
-
-  list(
-    direction = direction,
-    batch = batch_number,
-    seed_count = length(seed_ids),
-    field = field,
-    reported_total = reported_total,
-    raw_retrieved = raw_retrieved,
-    unique_ids_retrieved = length(ids),
-    pages = pages,
-    ids = ids
+record_text <- function(rec) {
+  kw <- rec$keywords
+  if (is.list(kw)) kw <- unlist(kw, recursive = TRUE, use.names = FALSE)
+  paste(
+    as.character(rec$title %||% ""),
+    as.character(rec$abstract %||% ""),
+    paste(as.character(kw %||% character()), collapse = " "),
+    sep = "\n"
   )
 }
 
-`%||%` <- function(x, y) if (is.null(x)) y else x
+passes_gap_filter <- function(rec) {
+  txt <- record_text(rec)
+  grepl(salmon_regex, txt, perl = TRUE) &&
+    !grepl(farm_regex, txt, perl = TRUE)
+}
 
 seed_info <- extract_lens_ids(canonical_path)
-all_seed_ids <- sort(seed_info$ids)
-if (!length(all_seed_ids)) stop("No Lens IDs found in W08 manifestation_refs", call. = FALSE)
-
+all_seed_ids <- seed_info$ids
 expected <- 16716L
 if (length(all_seed_ids) != expected) {
   stop(sprintf("Seed guard failed: expected %d included Lens IDs, found %d",
@@ -171,93 +131,111 @@ if (length(all_seed_ids) != expected) {
 
 batch_index <- split(seq_along(all_seed_ids),
                      ceiling(seq_along(all_seed_ids) / batch_size))
+total_batches <- length(batch_index)
 if (max_batches > 0L) {
-  batch_index <- batch_index[seq_len(min(max_batches, length(batch_index)))]
+  batch_index <- batch_index[seq_len(min(max_batches, total_batches))]
 }
 
 message(sprintf("Canonical included records: %d", seed_info$canonical_records))
-message(sprintf("Included Lens IDs: %d", length(all_seed_ids)))
-message(sprintf("Batch size: %d; batches to run: %d of %d",
-                batch_size, length(batch_index), ceiling(length(all_seed_ids) / batch_size)))
+message(sprintf("Included Lens manifestation IDs: %d", length(all_seed_ids)))
+message(sprintf("Seed batch size: %d; seed batches to run: %d of %d",
+                batch_size, length(batch_index), total_batches))
 
-directions <- list(
-  forward = "reference.lens_id",
-  backward = "referenced_by"
-)
+forward_neighbours <- character()
+backward_neighbours <- character()
+seed_rows_returned <- 0L
+seed_queries <- 0L
 
-results <- list()
-for (direction in names(directions)) {
-  field <- directions[[direction]]
-  for (j in seq_along(batch_index)) {
-    idx <- batch_index[[j]]
-    z <- run_batch(all_seed_ids[idx], field, direction, j)
-    results[[length(results) + 1L]] <- z
-    writeLines(z$ids,
-               file.path(output_dir, sprintf("%s_batch_%02d_ids.txt", direction, j)))
-    write_json(
-      z[setdiff(names(z), "ids")],
-      file.path(output_dir, sprintf("%s_batch_%02d_summary.json", direction, j)),
-      auto_unbox = TRUE, pretty = TRUE, na = "null"
-    )
+for (j in seq_along(batch_index)) {
+  seed_ids <- all_seed_ids[batch_index[[j]]]
+  body <- terms_lookup(
+    seed_ids,
+    c("lens_id", "references", "scholarly_citations")
+  )
+  seed_queries <- seed_queries + 1L
+  dat <- body$data %||% list()
+  seed_rows_returned <- seed_rows_returned + length(dat)
+
+  message(sprintf("Seed batch %d: requested %d IDs; Lens returned %d seed records",
+                  j, length(seed_ids), length(dat)))
+
+  for (rec in dat) {
+    backward_neighbours <- c(backward_neighbours, as_ids(rec$references))
+    forward_neighbours <- c(forward_neighbours, as_ids(rec$scholarly_citations))
   }
 }
 
-forward_ids_raw <- unique(unlist(lapply(results[vapply(results, function(x) x$direction == "forward", logical(1))],
-                                        function(x) x$ids), use.names = FALSE))
-backward_ids_raw <- unique(unlist(lapply(results[vapply(results, function(x) x$direction == "backward", logical(1))],
-                                         function(x) x$ids), use.names = FALSE))
+forward_neighbours <- sort(unique(forward_neighbours))
+backward_neighbours <- sort(unique(backward_neighbours))
 
-forward_overlap <- intersect(forward_ids_raw, all_seed_ids)
-backward_overlap <- intersect(backward_ids_raw, all_seed_ids)
-forward_ids <- setdiff(forward_ids_raw, all_seed_ids)
-backward_ids <- setdiff(backward_ids_raw, all_seed_ids)
-both_ids <- intersect(forward_ids, backward_ids)
-either_ids <- union(forward_ids, backward_ids)
+message(sprintf("Raw unique citation neighbours from selected seed batches: forward=%d backward=%d",
+                length(forward_neighbours), length(backward_neighbours)))
 
-writeLines(sort(forward_ids), file.path(output_dir, "forward_unique_candidate_ids.txt"))
-writeLines(sort(backward_ids), file.path(output_dir, "backward_unique_candidate_ids.txt"))
-writeLines(sort(both_ids), file.path(output_dir, "both_directions_candidate_ids.txt"))
-writeLines(sort(either_ids), file.path(output_dir, "either_direction_unique_candidate_ids.txt"))
+all_neighbours <- sort(unique(c(forward_neighbours, backward_neighbours)))
+metadata_groups <- split(seq_along(all_neighbours),
+                         ceiling(seq_along(all_neighbours) / 500L))
 
-batch_rows <- lapply(results, function(x) {
-  data.frame(
-    direction = x$direction,
-    batch = x$batch,
-    seed_count = x$seed_count,
-    query_field = x$field,
-    reported_total = x$reported_total,
-    raw_retrieved = x$raw_retrieved,
-    unique_ids_retrieved = x$unique_ids_retrieved,
-    pages = x$pages,
-    stringsAsFactors = FALSE
-  )
-})
-write.csv(do.call(rbind, batch_rows),
-          file.path(output_dir, "batch_summary.csv"), row.names = FALSE)
+candidate_ids <- character()
+metadata_queries <- 0L
+metadata_records_returned <- 0L
+
+for (k in seq_along(metadata_groups)) {
+  ids <- all_neighbours[metadata_groups[[k]]]
+  body <- terms_lookup(ids, c("lens_id", "title", "abstract", "keywords"))
+  metadata_queries <- metadata_queries + 1L
+  dat <- body$data %||% list()
+  metadata_records_returned <- metadata_records_returned + length(dat)
+
+  if (length(dat)) {
+    keep <- vapply(dat, passes_gap_filter, logical(1))
+    if (any(keep)) {
+      candidate_ids <- c(
+        candidate_ids,
+        vapply(dat[keep], function(x) as.character(x$lens_id %||% ""), character(1))
+      )
+    }
+  }
+}
+
+candidate_ids <- sort(unique(candidate_ids[nzchar(candidate_ids)]))
+
+# Defensive removal of any already-included Lens IDs.
+candidate_ids <- setdiff(candidate_ids, all_seed_ids)
+
+forward_candidates <- sort(intersect(candidate_ids, forward_neighbours))
+backward_candidates <- sort(intersect(candidate_ids, backward_neighbours))
+both_candidates <- sort(intersect(forward_candidates, backward_candidates))
+either_candidates <- sort(unique(c(forward_candidates, backward_candidates)))
+
+writeLines(forward_candidates, file.path(output_dir, "forward_unique_candidate_ids.txt"))
+writeLines(backward_candidates, file.path(output_dir, "backward_unique_candidate_ids.txt"))
+writeLines(both_candidates, file.path(output_dir, "both_directions_candidate_ids.txt"))
+writeLines(either_candidates, file.path(output_dir, "either_direction_unique_candidate_ids.txt"))
 
 summary <- list(
-  schema = "living-evidence-map-lens-citation-gap-diagnostic-v1",
+  schema = "living-evidence-map-lens-citation-gap-diagnostic-v2",
+  method = "citationchaser-style two-stage Lens terms lookup plus local text filter",
   canonical_records = seed_info$canonical_records,
-  included_lens_ids = length(all_seed_ids),
-  batch_size = batch_size,
-  total_possible_batches_per_direction = ceiling(length(all_seed_ids) / batch_size),
-  batches_run_per_direction = length(batch_index),
-  primary_queries_run = length(results),
-  text_scope = c("title", "abstract", "keyword"),
-  salmon_terms = salmon_terms,
-  excluded_farming_terms = farm_terms,
-  query_string = text_query,
-  forward_query_field = "reference.lens_id",
-  backward_query_field = "referenced_by",
-  forward_unique_before_included_id_safeguard = length(forward_ids_raw),
-  backward_unique_before_included_id_safeguard = length(backward_ids_raw),
-  forward_included_ids_removed = length(forward_overlap),
-  backward_included_ids_removed = length(backward_overlap),
-  forward_unique_candidates = length(forward_ids),
-  backward_unique_candidates = length(backward_ids),
-  candidates_in_both_directions = length(both_ids),
-  either_direction_unique_candidates = length(either_ids)
+  included_lens_manifestation_ids = length(all_seed_ids),
+  seed_batch_size = batch_size,
+  total_seed_batches_available = total_batches,
+  seed_batches_run = length(batch_index),
+  seed_queries = seed_queries,
+  seed_rows_returned = seed_rows_returned,
+  unique_forward_neighbour_ids = length(forward_neighbours),
+  unique_backward_neighbour_ids = length(backward_neighbours),
+  unique_neighbour_ids_either_direction = length(all_neighbours),
+  metadata_queries = metadata_queries,
+  metadata_records_returned = metadata_records_returned,
+  text_scope = c("title", "abstract", "keywords"),
+  salmon_terms = c("salmon", "salmonid*", "Salmo", "Oncorhynchus", "rainbow trout"),
+  excluded_farming_terms = c("farm*", "cage*", "pens", "penned", "pen", "aquacultur*", "commercial*"),
+  forward_unique_candidates = length(forward_candidates),
+  backward_unique_candidates = length(backward_candidates),
+  candidates_in_both_directions = length(both_candidates),
+  either_direction_unique_candidates = length(either_candidates)
 )
+
 write_json(summary, file.path(output_dir, "summary.json"),
            auto_unbox = TRUE, pretty = TRUE, na = "null")
 cat(toJSON(summary, auto_unbox = TRUE, pretty = TRUE, na = "null"), "\n")
