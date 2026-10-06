@@ -1,6 +1,11 @@
 name: Temporary OpenAlex-only citation gap functional test
 
 on:
+  push:
+    branches:
+      - tmp-lens-citation-gap-test
+    paths:
+      - ".github/workflows/tmp_openalex_citation_gap_test.yml"
   workflow_dispatch:
     inputs:
       seed_limit:
@@ -53,7 +58,7 @@ jobs:
       - name: Download authoritative W08 included corpus
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_ID: ${{ inputs.canonical_artifact_id }}
+          ARTIFACT_ID: ${{ inputs.canonical_artifact_id || '11315532812' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -66,7 +71,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/temporary/openalex_citation_gap_checkpointed.R             --stage seed-index             --canonical /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl             --output-dir outputs/openalex_seed_index             --seed-limit "${{ inputs.seed_limit }}"             --seed-chunk-size 100
+          Rscript scripts/temporary/openalex_citation_gap_checkpointed.R             --stage seed-index             --canonical /tmp/w08/workflow08/living_evidence_map_canonical_final.jsonl             --output-dir outputs/openalex_seed_index             --seed-limit "${{ inputs.seed_limit || '20' }}"             --seed-chunk-size 100
 
       - name: Export matrices and counts
         id: matrix
@@ -276,7 +281,7 @@ jobs:
       - name: Download authoritative W08 included corpus
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_ID: ${{ inputs.canonical_artifact_id }}
+          ARTIFACT_ID: ${{ inputs.canonical_artifact_id || '11315532812' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -288,7 +293,7 @@ jobs:
       - name: Download successful Lens candidate set
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_ID: ${{ inputs.lens_candidate_artifact_id }}
+          ARTIFACT_ID: ${{ inputs.lens_candidate_artifact_id || '11443179563' }}
         shell: bash
         run: |
           set -euo pipefail
