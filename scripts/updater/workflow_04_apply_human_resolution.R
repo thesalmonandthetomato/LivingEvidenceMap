@@ -6,6 +6,28 @@ layer_path<-arg("--source-layer");canonical_path<-arg("--canonical");decisions_p
 if(any(vapply(list(layer_path,canonical_path,decisions_path,source_summary_path,output_dir),is.null,logical(1))))stop("Required W04 human-resolution argument missing",call.=FALSE)
 `%||%`<-function(x,y)if(is.null(x))y else x
 scalar<-function(x){if(is.null(x)||!length(x))return("");z<-as.character(x[[1L]]);if(is.na(z))"" else trimws(z)}
+textify<-function(x){
+  if(is.null(x))return("")
+  if(is.character(x))return(paste(x[nzchar(x)],collapse="; "))
+  if(is.atomic(x))return(paste(as.character(x),collapse="; "))
+  if(is.list(x))return(paste(Filter(nzchar,vapply(x,textify,character(1))),collapse="; "))
+  as.character(x)
+}
+first_nonempty<-function(...){for(x in list(...)){z<-textify(x);if(nzchar(trimws(z)))return(trimws(z))};""}
+screening_view<-function(r){
+  c<-r$canonical%||%list()
+  list(
+    title=first_nonempty(c$title,r$title),
+    abstract=first_nonempty(c$abstract,r[["abstract"]]),
+    keywords=first_nonempty(c$keywords,r$keywords),
+    journal_source_title=first_nonempty(c$source_title,c$journal,r$source_title,r$journal),
+    affiliations=first_nonempty(c$affiliations,r$affiliations),
+    funding=first_nonempty(c$funding,c$funders,r$funding,r$funders)
+  )
+}
+screening_fingerprint<-function(r){
+  digest(toJSON(screening_view(r),auto_unbox=TRUE,null="null",na="null",digits=NA),algo="sha256",serialize=FALSE)
+}
 readj<-function(p){x<-readLines(p,warn=FALSE,encoding="UTF-8");x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
 writej<-function(rows,p){con<-file(p,"wt",encoding="UTF-8");on.exit(close(con));for(z in rows)writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null",digits=NA),con,useBytes=TRUE)}
 layer<-readj(layer_path);canonical<-readj(canonical_path);decisions<-readj(decisions_path);src<-fromJSON(paste(readLines(source_summary_path,warn=FALSE,encoding="UTF-8"),collapse="\n"),simplifyVector=FALSE)
@@ -37,7 +59,9 @@ for(d in decisions){
   if(!nzchar(edited))next
   id<-scalar(d$record_id)
   j<-match(id,cids)
+  li<-match(id,ids)
   if(is.na(j))stop(sprintf("W04 abstract edit refers to unknown canonical record: %s",id),call.=FALSE)
+  if(is.na(li))stop(sprintf("W04 abstract edit refers to record absent from screening layer: %s",id),call.=FALSE)
   if(is.null(canonical[[j]]$canonical) || !is.list(canonical[[j]]$canonical)) canonical[[j]]$canonical<-list()
   canonical[[j]]$canonical[["abstract"]]<-edited
   if(is.null(canonical[[j]]$abstract_enrichment) || !is.list(canonical[[j]]$abstract_enrichment)) canonical[[j]]$abstract_enrichment<-list()
@@ -46,6 +70,22 @@ for(d in decisions){
     reviewer=scalar(d$abstract_edit_reviewer),
     saved_at_utc=scalar(d$abstract_edit_saved_at_utc),
     edit_id=scalar(d$abstract_edit_id)
+  )
+
+  # The human decision is made against the edited abstract. Persist the
+  # post-edit fingerprint in the companion screening layer so a future update
+  # compares against the bibliographic state actually adjudicated by the human.
+  if(is.null(layer[[li]]$screening) || !is.list(layer[[li]]$screening)) layer[[li]]$screening<-list()
+  view<-screening_view(canonical[[j]])
+  old_fp<-scalar(layer[[li]]$screening$screening_input_sha256)
+  new_fp<-screening_fingerprint(canonical[[j]])
+  layer[[li]]$screening$screening_input_sha256<-new_fp
+  layer[[li]]$screening$input_title_present<-nzchar(trimws(view$title))
+  layer[[li]]$screening$input_abstract_present<-nzchar(trimws(view$abstract))
+  layer[[li]]$screening$human_edit_fingerprint_refresh<-list(
+    prior_screening_input_sha256=if(nzchar(old_fp))old_fp else NULL,
+    refreshed_screening_input_sha256=new_fp,
+    reason="human_w04_abstract_edit"
   )
   abstract_edit_n<-abstract_edit_n+1L
 }
