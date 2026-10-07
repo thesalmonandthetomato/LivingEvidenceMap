@@ -176,12 +176,9 @@ jobs:
           r-version: release
           use-public-rspm: true
 
-      - name: Set up Pandoc
-        uses: r-lib/actions/setup-pandoc@v2
-
-      - name: Install report dependencies
+      - name: Install report dependency
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','rmarkdown','knitr'))
+        run: install.packages('jsonlite')
 
       - name: Download validated scoping plan
         uses: actions/download-artifact@v4
@@ -210,7 +207,7 @@ jobs:
             names(e$sources)
           )
           labels <- c(
-            lens='Lens',
+            lens='The Lens',
             scopus='Scopus',
             openalex='OpenAlex',
             agricola='AGRICOLA',
@@ -237,7 +234,7 @@ jobs:
             )
           }
           platform <- c(
-            lens='Lens',
+            lens='The Lens',
             scopus='Scopus',
             openalex='OpenAlex',
             agricola='Europe PMC',
@@ -279,24 +276,14 @@ jobs:
                      useBytes=TRUE)
           cat(sprintf('PASS: merged %d database/source count rows\n', nrow(rows)))
 
-      - name: Render short R Markdown scoping report
-        shell: Rscript {0}
+      - name: Render lightweight PDF scoping report
+        shell: bash
         run: |
-          rmarkdown::render(
-            'docs/reporting/workflow_00/search_scoping_report.Rmd',
-            output_file = 'search_scoping_report.html',
-            output_dir = normalizePath('outputs/workflow00_search_scope', mustWork = TRUE),
-            params = list(
-              counts_csv = file.path(Sys.getenv('GITHUB_WORKSPACE'),'outputs/workflow00_search_scope/search_scope_counts.csv'),
-              counts_json = file.path(Sys.getenv('GITHUB_WORKSPACE'),'outputs/workflow00_search_scope/search_scope_counts.json')
-            ),
-            quiet = TRUE
-          )
-          file.copy(
-            'docs/reporting/workflow_00/search_scoping_report.Rmd',
-            'outputs/workflow00_search_scope/search_scoping_report.Rmd',
-            overwrite = TRUE
-          )
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_render_scoping_report.R \
+            --counts outputs/workflow00_search_scope/search_scope_counts.csv \
+            --meta outputs/workflow00_search_scope/search_scope_counts.json \
+            --output outputs/workflow00_search_scope/search_scoping_report.pdf
 
       - name: Add counts to Actions summary
         shell: Rscript {0}
@@ -321,8 +308,7 @@ jobs:
           test -s outputs/workflow00_search_scope/plan/search_plan.json
           test -s outputs/workflow00_search_scope/search_scope_counts.csv
           test -s outputs/workflow00_search_scope/search_scope_counts.json
-          test -s outputs/workflow00_search_scope/search_scoping_report.Rmd
-          test -s outputs/workflow00_search_scope/search_scoping_report.html
+          test -s outputs/workflow00_search_scope/search_scoping_report.pdf
           if find outputs/workflow00_search_scope -type f \( -name '*.ris' -o -name 'records.jsonl' -o -path '*/raw/*' \) -print -quit | grep -q .; then
             echo 'Count-only contract violated: search-result material was written.' >&2
             exit 1
@@ -337,7 +323,6 @@ jobs:
             outputs/workflow00_search_scope/plan/search_plan.json
             outputs/workflow00_search_scope/search_scope_counts.csv
             outputs/workflow00_search_scope/search_scope_counts.json
-            outputs/workflow00_search_scope/search_scoping_report.Rmd
-            outputs/workflow00_search_scope/search_scoping_report.html
+            outputs/workflow00_search_scope/search_scoping_report.pdf
           retention-days: 90
           if-no-files-found: error
