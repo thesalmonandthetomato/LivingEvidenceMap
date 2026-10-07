@@ -122,7 +122,7 @@ read_all_lines <- function(pattern) {
   sort(unique(trimws(vals[nzchar(trimws(vals))])))
 }
 
-salmon_regex <- "(?i)(\\bsalmon\\b|\\bsalmonid[A-Za-z0-9_-]*\\b|\\bSalmo\\b|\\bOncorhynchus\\b|\\brainbow\\s+trout\\b)"
+salmon_regex <- "(?i)(\\bsalmon\\b|\\bSalmo\\b|\\bOncorhynchus\\b|\\brainbow\\s+trout\\b)"
 farm_regex <- "(?i)(\\bfarm[A-Za-z0-9_-]*\\b|\\bcage[A-Za-z0-9_-]*\\b|\\bpens\\b|\\bpenned\\b|\\bpen\\b|\\baquacultur[A-Za-z0-9_-]*\\b|\\bcommercial[A-Za-z0-9_-]*\\b)"
 
 record_text <- function(rec) {
@@ -334,7 +334,7 @@ if (stage == "finalise") {
     canonical_records = seed_info$canonical_records,
     included_lens_manifestation_ids = length(included_ids),
     text_scope = c("title", "abstract", "keywords"),
-    salmon_terms = c("salmon", "salmonid*", "Salmo", "Oncorhynchus", "rainbow trout"),
+    salmon_terms = c("salmon", "Salmo", "Oncorhynchus", "rainbow trout"),
     excluded_farming_terms = c("farm*", "cage*", "pens", "penned", "pen", "aquacultur*", "commercial*"),
     forward_unique_candidates = length(forward_candidates),
     backward_unique_candidates = length(backward_candidates),
