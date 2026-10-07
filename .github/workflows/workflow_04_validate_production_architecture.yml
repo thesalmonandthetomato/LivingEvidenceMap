@@ -10,6 +10,7 @@ on:
       - '.github/workflows/workflow_04_validate_production_architecture.yml'
       - 'scripts/updater/workflow_04_prepare_incremental.R'
       - 'tests/test_workflow04_changed_input_rescreen.R'
+      - 'tests/test_workflow04_human_edit_fingerprint.R'
       - 'scripts/updater/workflow_04_apply_manual_metadata_repairs.R'
       - 'scripts/updater/workflow_04_build_human_validation_queue.R'
       - 'scripts/updater/workflow_04_luna_consensus.R'
@@ -130,3 +131,7 @@ jobs:
       - name: Validate changed-input rescreen regression
         shell: Rscript {0}
         run: source('tests/test_workflow04_changed_input_rescreen.R')
+
+      - name: Validate human abstract-edit fingerprint refresh
+        shell: Rscript {0}
+        run: source('tests/test_workflow04_human_edit_fingerprint.R')
