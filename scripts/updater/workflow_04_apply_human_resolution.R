@@ -54,6 +54,7 @@ if(any(!final_dec%in%c("retain","exclude")))stop("Human-resolved W04 layer still
 cids<-vapply(canonical,function(r)scalar((r$identity%||%list())$record_id),character(1));if(any(!nzchar(cids))||anyDuplicated(cids))stop("Canonical identity invariant failed",call.=FALSE)
 
 abstract_edit_n<-0L
+human_abstract_corrections<-list()
 for(d in decisions){
   edited<-scalar(d$edited_abstract)
   if(!nzchar(edited))next
@@ -87,6 +88,23 @@ for(d in decisions){
     refreshed_screening_input_sha256=new_fp,
     reason="human_w04_abstract_edit"
   )
+
+  # Persist every human-entered abstract correction, including corrections on
+  # records ultimately excluded at W04. Use DOI and title as stable recovery
+  # identities because corrected W01 clustering can legitimately change work_id.
+  cc<-canonical[[j]]$canonical%||%list()
+  human_abstract_corrections[[length(human_abstract_corrections)+1L]]<-list(
+    schema="living-evidence-map-w04-human-abstract-correction-v1",
+    record_id_at_edit=id,
+    decision=scalar(d$decision),
+    doi=if(nzchar(scalar(cc$doi)))scalar(cc$doi) else NULL,
+    title=first_nonempty(cc$title,canonical[[j]]$title),
+    edited_abstract=edited,
+    abstract_edit_id=scalar(d$abstract_edit_id),
+    abstract_edit_reviewer=scalar(d$abstract_edit_reviewer),
+    abstract_edit_saved_at_utc=scalar(d$abstract_edit_saved_at_utc),
+    screening_input_sha256_after_edit=new_fp
+  )
   abstract_edit_n<-abstract_edit_n+1L
 }
 cmap<-setNames(canonical,cids)
@@ -94,6 +112,7 @@ included_ids<-ids[final_dec=="retain"];excluded_ids<-ids[final_dec=="exclude"]
 if(length(setdiff(ids,cids)))stop("W04 layer contains IDs absent from canonical",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 writej(layer,file.path(output_dir,"workflow04_final_screening_layer.jsonl"))
+writej(human_abstract_corrections,file.path(output_dir,"workflow04_human_abstract_corrections.jsonl"))
 file.create(file.path(output_dir,"workflow04_human_review_queue.jsonl"))
 writeLines(included_ids,file.path(output_dir,"workflow04_included_record_ids.txt"),useBytes=TRUE)
 writeLines(excluded_ids,file.path(output_dir,"workflow04_excluded_record_ids.txt"),useBytes=TRUE)
@@ -112,6 +131,7 @@ summary<-list(
  excluded_record_ids_sha256=digest(file=file.path(output_dir,"workflow04_excluded_record_ids.txt"),algo="sha256",serialize=FALSE),
  human_resolution_records=length(decisions),
  human_abstract_edits=abstract_edit_n,
+ human_abstract_corrections_sha256=digest(file=file.path(output_dir,"workflow04_human_abstract_corrections.jsonl"),algo="sha256",serialize=FALSE),
  generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),file.path(output_dir,"summary.json"),useBytes=TRUE)
