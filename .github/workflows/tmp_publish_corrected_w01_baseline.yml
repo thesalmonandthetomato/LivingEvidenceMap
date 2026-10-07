@@ -1,0 +1,229 @@
+name: TEMP publish corrected W01 full baseline
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_publish_corrected_w01_baseline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: workflow01-integrity-repair-publication
+  cancel-in-progress: false
+
+env:
+  WORKFLOW01_BRANCH: workflow01-final-architecture
+  VALIDATED_RUN_ID: '37608813159'
+  VALIDATED_ARTIFACT: 'w01-integrity-reconstruction-37608813159'
+  CURRENT_CORRUPT_POINTER: 'docs/deduplication/zenodo/run-37373748707.json'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2'))
+
+      - name: Restore validated corrected W01 candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf validated previous_state zenodo_stage outputs/zenodo verification_restore
+          mkdir -p validated
+          gh run download "$VALIDATED_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$VALIDATED_ARTIFACT" --dir validated
+          test -s validated/final/final_pair_decisions.csv
+          test -s validated/final/manifestation_cluster_map.csv
+          test -s validated/final/summary.json
+          test -s validated/final/explicit_cluster_split_audit.jsonl
+          test -s validated/canonical/records.jsonl
+          test -s validated/canonical/canonical_manifest.json
+          test -s validated/integrity_audit/audit_summary.json
+
+      - name: Reverify passed repair invariants before publication
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(data.table);library(jsonlite);library(digest)})
+          a <- fromJSON('validated/integrity_audit/audit_summary.json')
+          stopifnot(a$status == 'PASS')
+          stopifnot(a$manifestations == 135566L)
+          stopifnot(a$repaired_clusters == 50440L)
+          stopifnot(a$repaired_canonical_records == 50440L)
+          stopifnot(a$retired_current_work_ids == 503L)
+          stopifnot(a$new_corrected_work_ids == 513L)
+          m <- fread('validated/final/manifestation_cluster_map.csv')
+          stopifnot(nrow(m) == 135566L, uniqueN(m$cluster_id) == 50440L)
+          cm <- fromJSON('validated/canonical/canonical_manifest.json')
+          stopifnot(cm$source_manifestations == 135566L, cm$records == 50440L)
+          stopifnot(digest(file='validated/canonical/records.jsonl',algo='sha256',serialize=FALSE) == cm$canonical_jsonl_sha256)
+          splits <- readLines('validated/final/explicit_cluster_split_audit.jsonl',warn=FALSE)
+          splits <- splits[nzchar(trimws(splits))]
+          stopifnot(length(splits) == 6L)
+          cat('PASS: validated corrected W01 candidate reverified before publication\n')
+
+      - name: Restore current published W01 seed and provenance
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$CURRENT_CORRUPT_POINTER" \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root previous_state
+          test -d previous_state/workflow01_seed
+          test -s previous_state/workflow01_full_five_source/summary.json
+          test -d previous_state/provenance
+
+      - name: Stage complete corrected baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p zenodo_stage/{workflow01_seed,workflow01_full_five_source,canonical,reports,provenance}
+          cp -a previous_state/workflow01_seed/. zenodo_stage/workflow01_seed/
+          cp -a validated/final/. zenodo_stage/workflow01_full_five_source/
+          cp -a validated/canonical/. zenodo_stage/canonical/
+          cp -a previous_state/provenance/. zenodo_stage/provenance/ || true
+          cp validated/integrity_audit/* zenodo_stage/provenance/
+          cp config/workflow01_explicit_cluster_splits.json zenodo_stage/provenance/
+
+          # The reconstruction summary contains the corrected scientific state.
+          # Carry forward only unchanged historical workload metrics required by
+          # the durable-state archive schema.
+          Rscript - <<'RS'
+          library(jsonlite)
+          fin <- fromJSON('zenodo_stage/workflow01_full_five_source/summary.json',simplifyVector=FALSE)
+          prev <- fromJSON('previous_state/workflow01_full_five_source/summary.json',simplifyVector=FALSE)
+          for(nm in c('preserved_pair_decisions','incremental_candidate_rows',
+                      'incremental_pair_decisions','exact_duplicate_candidate_rows_removed',
+                      'manual_review_pairs')){
+            if(is.null(fin[[nm]])) fin[[nm]] <- prev[[nm]]
+          }
+          stopifnot(as.integer(fin$source_manifestations)==135566L)
+          stopifnot(as.integer(fin$clusters)==50440L)
+          stopifnot(as.integer(fin$explicit_cluster_split_corrections)==6L)
+          writeLines(toJSON(fin,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'zenodo_stage/workflow01_full_five_source/summary.json')
+          RS
+
+          Rscript scripts/updater/workflow_01_write_run_report.R \
+            --summary zenodo_stage/workflow01_full_five_source/summary.json \
+            --canonical-manifest zenodo_stage/canonical/canonical_manifest.json \
+            --run-id "$VALIDATED_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --out-md "zenodo_stage/reports/run-$VALIDATED_RUN_ID.md" \
+            --out-json "zenodo_stage/reports/run-$VALIDATED_RUN_ID.json"
+
+      - name: Validate staged baseline before upload
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(data.table);library(jsonlite);library(digest)})
+          m <- fread('zenodo_stage/workflow01_full_five_source/manifestation_cluster_map.csv')
+          p <- fread('zenodo_stage/workflow01_full_five_source/final_pair_decisions.csv')
+          s <- fromJSON('zenodo_stage/workflow01_full_five_source/summary.json')
+          c <- fromJSON('zenodo_stage/canonical/canonical_manifest.json')
+          stopifnot(nrow(m)==135566L, uniqueN(m$cluster_id)==50440L)
+          stopifnot(s$clusters==50440L, s$explicit_cluster_split_corrections==6L)
+          stopifnot(c$records==50440L, c$source_manifestations==135566L)
+          stopifnot(digest(file='zenodo_stage/canonical/records.jsonl',algo='sha256',serialize=FALSE)==c$canonical_jsonl_sha256)
+          stopifnot(!anyDuplicated(p$pair_key))
+          cat('PASS: complete corrected W01 baseline staged for restricted publication\n')
+
+      - name: Publish corrected W01 full baseline to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/zenodo
+          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \
+            --staging-root zenodo_stage \
+            --run-id "$VALIDATED_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --state final \
+            --output-dir outputs/zenodo
+
+      - name: Register corrected W01 baseline locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_update_zenodo_registry.R \
+            --receipt outputs/zenodo/zenodo_receipt.json \
+            --registry docs/deduplication/zenodo_registry.csv \
+            --pointer-dir docs/deduplication/zenodo
+          test -s "docs/deduplication/zenodo/run-$VALIDATED_RUN_ID.json"
+
+      - name: Restore newly published baseline and verify exact state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_state_from_zenodo.R \
+            --pointer "docs/deduplication/zenodo/run-$VALIDATED_RUN_ID.json" \
+            --output-root verification_restore
+          cmp validated/final/final_pair_decisions.csv verification_restore/workflow01_full_five_source/final_pair_decisions.csv
+          cmp validated/final/manifestation_cluster_map.csv verification_restore/workflow01_full_five_source/manifestation_cluster_map.csv
+          cmp validated/canonical/records.jsonl verification_restore/canonical/records.jsonl
+          Rscript -e "library(jsonlite);library(digest);x<-fromJSON('docs/deduplication/zenodo/run-$VALIDATED_RUN_ID.json');stopifnot(x$status=='published',x$state=='final',x$visibility=='restricted',x$canonical_records==50440L);cat('PASS: newly published corrected W01 baseline restored byte-identically\n')"
+
+      - name: Write final registered run report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/deduplication/runs
+          Rscript scripts/updater/workflow_01_write_run_report.R \
+            --summary zenodo_stage/workflow01_full_five_source/summary.json \
+            --canonical-manifest zenodo_stage/canonical/canonical_manifest.json \
+            --zenodo-receipt outputs/zenodo/zenodo_receipt.json \
+            --run-id "$VALIDATED_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --out-md "docs/deduplication/runs/run-$VALIDATED_RUN_ID.md" \
+            --out-json "docs/deduplication/runs/run-$VALIDATED_RUN_ID.json"
+
+      - name: Commit lightweight corrected W01 provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/deduplication/zenodo_registry.csv \
+                  "docs/deduplication/zenodo/run-$VALIDATED_RUN_ID.json" \
+                  "docs/deduplication/runs/run-$VALIDATED_RUN_ID.md" \
+                  "docs/deduplication/runs/run-$VALIDATED_RUN_ID.json"
+          git commit -m "Register corrected Workflow 01 baseline $VALIDATED_RUN_ID"
+          git pull --rebase origin "$WORKFLOW01_BRANCH"
+          git push origin HEAD:"$WORKFLOW01_BRANCH"
+
+      - name: Upload publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: corrected-w01-baseline-publication-${{ github.run_id }}
+          path: |
+            outputs/zenodo/
+            docs/deduplication/zenodo/run-${{ env.VALIDATED_RUN_ID }}.json
+            docs/deduplication/runs/run-${{ env.VALIDATED_RUN_ID }}.*
+          retention-days: 30
+          if-no-files-found: warn
