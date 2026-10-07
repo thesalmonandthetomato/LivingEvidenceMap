@@ -25,7 +25,6 @@ Citation neighbours are globally deduplicated before metadata retrieval.
 Citation neighbours are retained as citation-gap candidates when title, abstract or keywords contain at least one production salmon term:
 
 - salmon
-- salmonid*
 - Salmo
 - Oncorhynchus
 - "rainbow trout"
