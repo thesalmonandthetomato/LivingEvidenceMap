@@ -132,15 +132,15 @@ if(length(bootstrap_ids)){
   }
 }
 
-# Existing substantive decisions remain durable for ordinary metadata edits.
-# The exception is a scientific-input gain: a title or abstract that was absent
-# when the prior decision was made and is now present. Those records are
-# re-screened automatically, irrespective of whether the gain came from W01
-# reclustering/source reconciliation, W02 enrichment, or an explicit repair.
+# A prior screening decision is reusable only when the complete scientific
+# screening-input fingerprint is unchanged. Any change to title, abstract,
+# keywords, journal/source title, affiliations or funding invalidates reuse and
+# requires fresh screening. Missing-to-present title/abstract gains remain
+# labelled separately for audit reporting.
 changed_ids <- known[current_fp[known] != prior_fp[known]]
 title_gained_ids <- known[!prior_title_present[known] & current_title_present[known]]
 abstract_gained_ids <- known[!prior_abstract_present[known] & current_abstract_present[known]]
-refresh_ids <- sort(unique(c(title_gained_ids,abstract_gained_ids)))
+refresh_ids <- sort(unique(changed_ids))
 force_ids <- character()
 if(nzchar(force_rescreen_path)){
   force_ids <- trimws(readLines(force_rescreen_path,warn=FALSE,encoding="UTF-8"))
@@ -189,6 +189,7 @@ refresh_reason <- function(id){
   if(tg)return("missing_title_now_present")
   if(ag)return("missing_abstract_now_present")
   if(id %in% force_ids)return("explicit_repair_rescreen")
+  if(id %in% changed_ids)return("screening_input_changed")
   "new_record_id"
 }
 reason_rows <- data.frame(
@@ -229,7 +230,7 @@ manifest <- list(
   existing_records_abstract_gained=length(abstract_gained_ids),
   existing_records_title_and_abstract_gained=length(intersect(title_gained_ids,abstract_gained_ids)),
   existing_records_refreshed=length(refresh_ids),
-  scientific_input_refresh_rule="missing_to_present_title_or_abstract_only",
+  scientific_input_refresh_rule="any_screening_input_fingerprint_change",
   changed_screening_input=length(changed_ids),
   changed_screening_input_reused=length(setdiff(changed_ids,rescreen_existing_ids)),
   rescreen_existing_decisions=length(rescreen_existing_ids)>0L,
@@ -242,5 +243,5 @@ manifest <- list(
   generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(output_dir,"prepare_manifest.json"),useBytes=TRUE)
-cat(sprintf("PASS: W04 %s preparation: eligible=%d reuse=%d screen=%d (new=%d missing-to-present=%d explicit-repair-rescreen=%d metadata-changed=%d)\n",
+cat(sprintf("PASS: W04 %s preparation: eligible=%d reuse=%d screen=%d (new=%d changed-input=%d explicit-repair-rescreen=%d metadata-changed=%d)\n",
             mode,length(eligible_ids),length(reuse_ids),length(queue_ids),length(new_ids),length(refresh_ids),length(force_ids),length(changed_ids)))
