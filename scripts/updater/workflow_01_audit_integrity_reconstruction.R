@@ -27,7 +27,7 @@ setkey(cur,key);setkey(rep,key)
 keys<-sort(cur$key)
 a<-cur[J(keys)];b<-rep[J(keys)]
 chg<-data.table(
- key=keys,
+ manifestation_key=keys,
  source=a$source,source_record_id=a$source_record_id,
  current_cluster_id=a$cluster_id,repaired_cluster_id=b$cluster_id,
  changed=as.character(a$cluster_id)!=as.character(b$cluster_id)
