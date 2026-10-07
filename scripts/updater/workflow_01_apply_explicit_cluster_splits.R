@@ -80,24 +80,44 @@ for(ci in seq_along(corrections)){
   if(anyDuplicated(expected_keys)) stop(sprintf("%s assigns one manifestation to multiple groups",old_id),call.=FALSE)
   all_expected_keys <- c(all_expected_keys,expected_keys)
 
-  actual <- map[cluster_id==old_id]
-  if(!nrow(actual)) stop(sprintf("Explicit split target %s is absent from cluster map",old_id),call.=FALSE)
-  actual_keys <- actual$identity_key
-  if(!setequal(actual_keys,expected_keys)) {
-    stop(sprintf(
-      paste0("Explicit split target %s membership changed; refusing correction. ",
-             "Expected %d manifestations, found %d; missing=%s; unexpected=%s"),
-      old_id,length(expected_keys),length(actual_keys),
-      paste(setdiff(expected_keys,actual_keys),collapse=","),
-      paste(setdiff(actual_keys,expected_keys),collapse=",")
-    ),call.=FALSE)
+  target_ids <- setNames(character(length(group_names)),group_names)
+  for(gname in group_names){
+    keys <- sort(expected_by_group[[gname]])
+    if(gname==preserve_group){
+      target_ids[[gname]] <- old_id
+    } else {
+      digest_keys <- sub("::",":",keys,fixed=TRUE)
+      target_ids[[gname]] <- paste0("work-",substr(digest(paste(sort(digest_keys),collapse="|"),algo="sha256",serialize=FALSE),1,16))
+    }
   }
 
-  key_to_group <- unlist(lapply(names(expected_by_group),function(g)setNames(rep(g,length(expected_by_group[[g]])),expected_by_group[[g]])))
-  idx_to_group <- setNames(unname(key_to_group[actual$identity_key]),as.character(actual$idx))
+  present <- map[identity_key %in% expected_keys]
+  if(nrow(present)!=length(expected_keys) || !setequal(present$identity_key,expected_keys)) {
+    stop(sprintf("%s explicit split members are not all present exactly once",old_id),call.=FALSE)
+  }
 
-  in_cluster <- pairs$record_i %in% actual$idx & pairs$record_j %in% actual$idx
-  row_ids <- which(in_cluster)
+  initial_state <- setequal(map[cluster_id==old_id,identity_key],expected_keys)
+  already_state <- TRUE
+  for(gname in group_names){
+    cid <- target_ids[[gname]]
+    keys <- expected_by_group[[gname]]
+    if(!setequal(map[cluster_id==cid,identity_key],keys)) already_state <- FALSE
+  }
+  if(!initial_state && !already_state){
+    current <- present[,.(identity_key,cluster_id)]
+    stop(sprintf(
+      "Explicit split target %s is neither the known unsplit state nor the known corrected state: %s",
+      old_id,
+      paste(sprintf("%s=%s",current$identity_key,current$cluster_id),collapse=";")
+    ),call.=FALSE)
+  }
+  state_before <- if(initial_state) "unsplit" else "already_applied"
+
+  key_to_group <- unlist(lapply(names(expected_by_group),function(g)setNames(rep(g,length(expected_by_group[[g]])),expected_by_group[[g]])))
+  idx_to_group <- setNames(unname(key_to_group[present$identity_key]),as.character(present$idx))
+
+  in_scope <- pairs$record_i %in% present$idx & pairs$record_j %in% present$idx
+  row_ids <- which(in_scope)
   cross <- row_ids[
     unname(idx_to_group[as.character(pairs$record_i[row_ids])]) !=
     unname(idx_to_group[as.character(pairs$record_j[row_ids])])
@@ -125,27 +145,23 @@ for(ci in seq_along(corrections)){
     )]
   }
 
-  new_ids <- list()
+  new_ids <- as.list(target_ids)
   for(gname in group_names){
     keys <- sort(expected_by_group[[gname]])
-    rows <- map[identity_key %in% keys]
-    if(gname==preserve_group){
-      cid <- old_id
-      origin <- "preserved"
-    } else {
-      digest_keys <- sub("::",":",keys,fixed=TRUE)
-      cid <- paste0("work-",substr(digest(paste(sort(digest_keys),collapse="|"),algo="sha256",serialize=FALSE),1,16))
-      origin <- "new"
+    cid <- target_ids[[gname]]
+    origin <- if(gname==preserve_group) "preserved" else "new"
+    existing_cid_keys <- map[cluster_id==cid,identity_key]
+    if(length(existing_cid_keys) && !setequal(existing_cid_keys,keys) && !initial_state) {
+      stop(sprintf("Generated split work ID %s is occupied by unexpected manifestations",cid),call.=FALSE)
     }
-    if(cid!=old_id && cid %in% map$cluster_id) {
-      stop(sprintf("Generated split work ID %s already exists outside %s",cid,old_id),call.=FALSE)
+    if(initial_state && cid!=old_id && length(existing_cid_keys)) {
+      stop(sprintf("Generated split work ID %s already exists before correction",cid),call.=FALSE)
     }
     map[identity_key %in% keys,`:=`(
       cluster_id=cid,
       cluster_size=length(keys),
       cluster_id_origin=origin
     )]
-    new_ids[[gname]] <- cid
     split_rows[[length(split_rows)+1L]] <- data.table(
       previous_cluster_id=old_id,
       correction_group=gname,
@@ -159,7 +175,8 @@ for(ci in seq_along(corrections)){
   audit[[length(audit)+1L]] <- list(
     previous_cluster_id=old_id,
     reason=as.character(corr$reason),
-    original_member_count=nrow(actual),
+    original_member_count=length(expected_keys),
+    state_before=state_before,
     resulting_cluster_count=length(group_names),
     preserve_group=preserve_group,
     resulting_cluster_ids=new_ids,
