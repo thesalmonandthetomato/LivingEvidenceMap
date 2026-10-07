@@ -567,6 +567,7 @@ jobs:
             --adjudications outputs/adjudication/merged/all_adjudications.jsonl \
             --review-package outputs/adjudication/human_review_package \
             --pre-summary outputs/workflow01_pre_adjudication/summary.json \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
             --previous-pointer "${{ inputs.previous_workflow01_pointer_path }}" \
             --workflow00-pointer "workflow00_registry/${{ inputs.workflow00_pointer_path }}" \
             --output-dir outputs/pending_checkpoint \
