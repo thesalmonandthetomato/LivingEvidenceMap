@@ -139,7 +139,7 @@ jobs:
               if(!nzchar(trimws(line))) next
               z <- fromJSON(line,simplifyVector=FALSE)
               rid <- as.character(z$identity$record_id)
-              if(!is.null(want[[rid]])){
+              if(rid %in% names(want)){
                 writeLines(line,output,useBytes=TRUE)
                 n <- n+1L
               }
