@@ -15,7 +15,7 @@ jobs:
   resume-w08:
     uses: ./.github/workflows/workflow_08_production.yml
     with:
-      execution_ref: e933414ba95a16740839c88bbf1397319a1396b9
+      execution_ref: e12afc6a6b06b68527abb1cdf3b785f25b4e52cd
       lean_pointer_path: docs/compaction/zenodo/run-37381023181.json
       workflow03_pointer_path: docs/publication_status/zenodo/run-37385439517.json
       workflow04_pointer_path: docs/workflow04/zenodo/run-37456188910.json
