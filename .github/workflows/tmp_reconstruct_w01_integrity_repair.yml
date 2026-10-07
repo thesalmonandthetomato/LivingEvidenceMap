@@ -7,6 +7,9 @@ on:
     paths:
       - '.github/workflows/tmp_reconstruct_w01_integrity_repair.yml'
       - 'scripts/updater/workflow_01_prepare_integrity_repair_checkpoint.R'
+      - 'scripts/updater/workflow_01_apply_adjudications_and_recluster.R'
+      - 'scripts/updater/workflow_01_audit_integrity_reconstruction.R'
+      - 'config/workflow01_explicit_cluster_splits.json'
   workflow_dispatch:
 
 permissions:
@@ -170,9 +173,36 @@ jobs:
             --current-canonical current_corrupt_state/canonical/records.jsonl \
             --repaired-canonical outputs/canonical/records.jsonl \
             --output-dir outputs/integrity_audit \
-            --expected-clusters 50430 \
-            --expected-affected-current-ids 9922 \
-            --expected-retired-ids 503
+            --expected-clusters 50440 \
+            --expected-retired-ids 503 \
+            --expected-new-ids 513
+
+      - name: Validate integrated explicit split provenance
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(data.table);library(jsonlite)})
+          m <- fread("outputs/final/manifestation_cluster_map.csv")
+          stopifnot(nrow(m)==135566L, uniqueN(m$cluster_id)==50440L)
+          s <- fromJSON("outputs/final/summary.json",simplifyVector=FALSE)
+          stopifnot(as.integer(s$explicit_cluster_split_corrections)==6L)
+          a <- readLines("outputs/final/explicit_cluster_split_audit.jsonl",warn=FALSE)
+          a <- a[nzchar(trimws(a))]
+          stopifnot(length(a)==6L)
+          cfg <- fromJSON("config/workflow01_explicit_cluster_splits.json",simplifyVector=FALSE)
+          target_ids <- character()
+          for(corr in cfg$corrections){
+            for(g in corr$groups){
+              keys <- vapply(g$members,function(x)paste(x$source,x$source_record_id,sep=":"),character(1))
+              cid <- if(identical(g$group,corr$preserve_group)) as.character(corr$previous_cluster_id) else paste0("work-",substr(digest::digest(paste(sort(keys),collapse="|"),algo="sha256",serialize=FALSE),1,16))
+              target_ids <- c(target_ids,cid)
+            }
+          }
+          aliases <- fread("outputs/final/cluster_id_aliases.csv")
+          if(nrow(aliases)) stopifnot(!any(aliases$retired_cluster_id %in% target_ids))
+          can <- readLines("outputs/canonical/records.jsonl",warn=FALSE)
+          can <- can[nzchar(trimws(can))]
+          stopifnot(length(can)==50440L)
+          cat("PASS: integrated W01 split provenance and stable-ID invariants validated\n")
 
       - name: Upload corrected W01 candidate only
         if: always()
