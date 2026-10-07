@@ -1,0 +1,506 @@
+name: TEMP run exact W04 integrity repair
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w04_integrity_repair_exact.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  CURRENT_LEAN_POINTER: 'docs/compaction/zenodo/run-37648955012.json'
+  CURRENT_W03_POINTER: 'docs/publication_status/zenodo/run-37654051293.json'
+  PRIOR_W04_POINTER: 'docs/workflow04/zenodo/run-37456188910.json'
+  PRIOR_LEAN_POINTER: 'docs/compaction/zenodo/run-37381023181.json'
+  HUMAN_CORRECTIONS_POINTER: 'docs/workflow04/human_abstract_corrections/run-37511638503.json'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      queue_n: ${{ steps.exact.outputs.queue_n }}
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','stringi'))
+
+      - name: Restore corrected current and prior W04 inputs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs outputs
+          mkdir -p inputs/current inputs/prior_w04 inputs/prior_canonical inputs/human_corrections
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R             --pointer "$CURRENT_LEAN_POINTER" --output-dir inputs/current/canonical
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R             --pointer "$CURRENT_W03_POINTER" --output-dir inputs/current/w03
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer "$PRIOR_W04_POINTER" --output-dir inputs/prior_w04
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R             --pointer "$PRIOR_LEAN_POINTER" --output-dir inputs/prior_canonical
+          cp "$(find inputs/current/canonical -type f -name canonical_lean.jsonl -print -quit)" inputs/current/canonical_lean.raw.jsonl
+          cp "$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)" inputs/current/publication_status.jsonl
+          cp "$(find inputs/prior_w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)" inputs/prior_workflow04_layer.jsonl
+          cp "$(find inputs/prior_canonical -type f -name canonical_lean.jsonl -print -quit)" inputs/prior_canonical_lean.jsonl
+          test -s inputs/current/canonical_lean.raw.jsonl
+          test -s inputs/current/publication_status.jsonl
+          test -s inputs/prior_workflow04_layer.jsonl
+          test -s inputs/prior_canonical_lean.jsonl
+
+      - name: Restore protected human abstract corrections
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite); library(httr2); library(digest)
+          p <- fromJSON(Sys.getenv('HUMAN_CORRECTIONS_POINTER'),simplifyVector=FALSE)
+          stopifnot(p$status=='published',p$visibility=='restricted',as.integer(p$corrections)==157L)
+          token <- Sys.getenv('ZENODO_ACCESS_TOKEN'); stopifnot(nzchar(token))
+          dep <- request(paste0('https://zenodo.org/api/deposit/depositions/',p$zenodo_record_id)) |>
+            req_headers(Authorization=paste('Bearer',token)) |> req_timeout(120) |>
+            req_perform() |> resp_body_json(simplifyVector=FALSE)
+          stopifnot(isTRUE(dep$submitted))
+          bucket <- sub('/$','',as.character(dep$links$bucket))
+          fn <- 'workflow04_human_abstract_corrections.jsonl'
+          dest <- file.path('inputs/human_corrections',fn)
+          resp <- request(paste0(bucket,'/',URLencode(fn,reserved=TRUE))) |>
+            req_method('GET') |> req_headers(Authorization=paste('Bearer',token)) |>
+            req_timeout(600) |> req_error(is_error=function(resp)FALSE) |> req_perform(path=dest)
+          stopifnot(resp_status(resp)==200L)
+          sha <- digest(file=dest,algo='sha256',serialize=FALSE)
+          stopifnot(tolower(sha)==tolower(as.character(p$corrections_sha256)))
+          cat('PASS: restored 157 protected W04 human abstract corrections\n')
+
+      - name: Overlay the 157 human-entered abstracts
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          scalar <- function(x){if(is.null(x)||!length(x))return('');z<-as.character(x[[1L]]);if(is.na(z))'' else trimws(gsub('[[:space:]]+',' ',z))}
+          norm_doi <- function(x){z<-tolower(scalar(x));if(!nzchar(z))return('');z<-sub('^https?://(dx\\.)?doi\\.org/','',z,perl=TRUE);z<-sub('^doi:\\s*','',z,perl=TRUE);z<-sub('[?#].*$','',z,perl=TRUE);z<-sub('\\.(html?|pdf|xml)$','',z,perl=TRUE,ignore.case=TRUE);sub('[.,;:]+$','',z,perl=TRUE)}
+          norm_title <- function(x)tolower(trimws(gsub('[[:space:]]+',' ',scalar(x))))
+          readjl <- function(p){x<-readLines(p,warn=FALSE,encoding='UTF-8');x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
+          recs <- readjl('inputs/current/canonical_lean.raw.jsonl')
+          corr <- readjl('inputs/human_corrections/workflow04_human_abstract_corrections.jsonl')
+          stopifnot(length(recs)==50440L,length(corr)==157L)
+          ids <- vapply(recs,function(r)scalar((r$identity%||%list())$record_id),character(1))
+          dois <- vapply(recs,function(r)norm_doi((r$canonical%||%list())$doi),character(1))
+          titles <- vapply(recs,function(r){c<-r$canonical%||%list();norm_title(c$title%||%r$title)},character(1))
+          stopifnot(!anyDuplicated(ids),all(nzchar(ids)))
+          id_map <- setNames(seq_along(ids),ids)
+          doi_groups <- split(which(nzchar(dois)),dois[nzchar(dois)])
+          title_groups <- split(which(nzchar(titles)),titles[nzchar(titles)])
+          audit <- list(); matched <- character()
+          for(i in seq_along(corr)){
+            p<-corr[[i]]; nd<-scalar(p$doi_normalized); nt<-scalar(p$title_normalized); oldid<-scalar(p$record_id_at_edit)
+            j<-NULL; basis<-NULL
+            if(nzchar(oldid)&&oldid%in%names(id_map)){
+              k<-id_map[[oldid]]
+              if((!nzchar(nd)||identical(dois[[k]],nd)) || (!nzchar(nt)||identical(titles[[k]],nt))){j<-k;basis<-'record_id_at_edit'}
+            }
+            if(is.null(j)&&nzchar(nd)){
+              hs<-doi_groups[[nd]]
+              if(length(hs)==1L){j<-hs[[1L]];basis<-'doi'}
+              else if(length(hs)>1L&&nzchar(nt)){th<-hs[titles[hs]==nt];if(length(th)==1L){j<-th[[1L]];basis<-'doi+title'}}
+            }
+            if(is.null(j)&&nzchar(nt)){hs<-title_groups[[nt]];if(length(hs)==1L){j<-hs[[1L]];basis<-'title'}}
+            if(is.null(j)||length(j)!=1L)stop(sprintf('Correction %d does not resolve uniquely',i),call.=FALSE)
+            id<-ids[[j]]; new_abs<-scalar(p$edited_abstract); stopifnot(nzchar(new_abs))
+            r<-recs[[j]]; can<-r$canonical%||%list()
+            can$abstract<-new_abs
+            prov<-can$field_provenance%||%list()
+            prov$abstract_human_w04<-list(source='workflow04_human_abstract_correction',source_w04_resume_run_id=as.character(p$source_w04_resume_run_id),identity_basis=basis)
+            can$field_provenance<-prov; r$canonical<-can; recs[[j]]<-r
+            matched<-c(matched,id)
+            audit[[length(audit)+1L]]<-list(current_record_id=id,record_id_at_edit=oldid,identity_basis=basis)
+          }
+          stopifnot(length(matched)==157L,!anyDuplicated(matched))
+          out<-file('inputs/current/canonical_lean.jsonl','wt',encoding='UTF-8')
+          for(r in recs)writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),out,useBytes=TRUE)
+          close(out)
+          dir.create('outputs/human_overlay',recursive=TRUE,showWarnings=FALSE)
+          con<-file('outputs/human_overlay/audit.jsonl','wt',encoding='UTF-8')
+          for(a in audit)writeLines(toJSON(a,auto_unbox=TRUE),con,useBytes=TRUE)
+          close(con)
+          cat('PASS: overlaid all 157 protected human abstracts\n')
+
+      - name: Run production W04 preparation
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_prepare_incremental.R             --canonical inputs/current/canonical_lean.jsonl             --workflow03-status inputs/current/publication_status.jsonl             --prior-workflow04 inputs/prior_workflow04_layer.jsonl             --prior-canonical inputs/prior_canonical_lean.jsonl             --output-dir outputs/workflow04_prepare
+
+      - name: Reclassify abstract-only human corrections to reuse
+        id: exact
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(digest)})
+          `%||%`<-function(x,y)if(is.null(x))y else x
+          scalar<-function(x){if(is.null(x)||!length(x))return('');z<-as.character(x[[1L]]);if(is.na(z))'' else trimws(gsub('[[:space:]]+',' ',z))}
+          textify<-function(x){if(is.null(x))return('');if(is.character(x))return(paste(x[nzchar(x)],collapse='; '));if(is.atomic(x))return(paste(as.character(x),collapse='; '));if(is.list(x))return(paste(Filter(nzchar,vapply(x,textify,character(1))),collapse='; '));as.character(x)}
+          first_nonempty<-function(...){for(x in list(...)){z<-textify(x);if(nzchar(trimws(z)))return(trimws(z))};''}
+          norm_doi<-function(x){z<-tolower(scalar(x));if(!nzchar(z))return('');z<-sub('^https?://(dx\\.)?doi\\.org/','',z,perl=TRUE);z<-sub('^doi:\\s*','',z,perl=TRUE);z<-sub('[?#].*$','',z,perl=TRUE);z<-sub('\\.(html?|pdf|xml)$','',z,perl=TRUE,ignore.case=TRUE);sub('[.,;:]+$','',z,perl=TRUE)}
+          norm_title<-function(x)tolower(trimws(gsub('[[:space:]]+',' ',scalar(x))))
+          readjl<-function(p){x<-readLines(p,warn=FALSE,encoding='UTF-8');x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
+          writejl<-function(rows,p){con<-file(p,'wt',encoding='UTF-8');on.exit(close(con));if(length(rows))for(r in rows)writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con,useBytes=TRUE)}
+          rid<-function(r)scalar((r$identity%||%list())$record_id)
+          view_nonabs<-function(r){c<-r$canonical%||%list();list(title=first_nonempty(c$title,r$title),keywords=first_nonempty(c$keywords,r$keywords),journal_source_title=first_nonempty(c$source_title,c$journal,r$source_title,r$journal),affiliations=first_nonempty(c$affiliations,r$affiliations),funding=first_nonempty(c$funding,c$funders,r$funding,r$funders))}
+          view_full<-function(r){c<-r$canonical%||%list();list(title=first_nonempty(c$title,r$title),abstract=first_nonempty(c$abstract,r[['abstract']]),keywords=first_nonempty(c$keywords,r$keywords),journal_source_title=first_nonempty(c$source_title,c$journal,r$source_title,r$journal),affiliations=first_nonempty(c$affiliations,r$affiliations),funding=first_nonempty(c$funding,c$funders,r$funding,r$funders))}
+          fingerprint<-function(r)digest(toJSON(view_full(r),auto_unbox=TRUE,null='null',na='null',digits=NA),algo='sha256',serialize=FALSE)
+
+          prior<-readjl('inputs/prior_canonical_lean.jsonl')
+          current<-readjl('inputs/current/canonical_lean.jsonl')
+          corr<-readjl('inputs/human_corrections/workflow04_human_abstract_corrections.jsonl')
+          prior_layer<-readjl('inputs/prior_workflow04_layer.jsonl')
+          queue_can<-readjl('outputs/workflow04_prepare/screen_queue_canonical.jsonl')
+          queue_w03<-readjl('outputs/workflow04_prepare/screen_queue_workflow03.jsonl')
+          reuse<-readjl('outputs/workflow04_prepare/reused_workflow04_layer.jsonl')
+
+          pids<-vapply(prior,rid,character(1)); cids<-vapply(current,rid,character(1))
+          pmap<-setNames(prior,pids); cmap<-setNames(current,cids)
+          lmap<-setNames(prior_layer,vapply(prior_layer,function(r)scalar(r$record_id),character(1)))
+          cdois<-vapply(current,function(r)norm_doi((r$canonical%||%list())$doi),character(1))
+          ctitles<-vapply(current,function(r){c<-r$canonical%||%list();norm_title(c$title%||%r$title)},character(1))
+          doi_groups<-split(which(nzchar(cdois)),cdois[nzchar(cdois)])
+          title_groups<-split(which(nzchar(ctitles)),ctitles[nzchar(ctitles)])
+
+          safe_rows<-list(); audit<-list()
+          for(i in seq_along(corr)){
+            z<-corr[[i]]; oldid<-scalar(z$record_id_at_edit); nd<-scalar(z$doi_normalized); nt<-scalar(z$title_normalized)
+            newidx<-NULL; basis<-''
+            if(oldid%in%cids){
+              k<-match(oldid,cids)
+              if((!nzchar(nd)||cdois[k]==nd)||(!nzchar(nt)||ctitles[k]==nt)){newidx<-k;basis<-'record_id_at_edit'}
+            }
+            if(is.null(newidx)&&nzchar(nd)){
+              hs<-doi_groups[[nd]]
+              if(length(hs)==1L){newidx<-hs[[1L]];basis<-'doi'}
+              else if(length(hs)>1L&&nzchar(nt)){th<-hs[ctitles[hs]==nt];if(length(th)==1L){newidx<-th[[1L]];basis<-'doi+title'}}
+            }
+            if(is.null(newidx)&&nzchar(nt)){hs<-title_groups[[nt]];if(length(hs)==1L){newidx<-hs[[1L]];basis<-'title'}}
+            stopifnot(length(newidx)==1L)
+            newid<-cids[[newidx]]
+            oldr<-pmap[[oldid]]
+            old_exists<-!is.null(oldr)
+            other_same<-old_exists && identical(view_nonabs(oldr),view_nonabs(current[[newidx]]))
+            safe<-isTRUE(other_same)
+            if(safe){
+              prow<-lmap[[oldid]]
+              if(is.null(prow))stop(sprintf('No prior W04 decision for safe correction %s',oldid),call.=FALSE)
+              d<-scalar((prow$screening%||%list())$decision)
+              if(!d%in%c('retain','exclude'))stop(sprintf('Safe correction prior W04 decision is not substantive: %s',oldid),call.=FALSE)
+              oldfp<-scalar((prow$screening%||%list())$screening_input_sha256)
+              prow$record_id<-newid
+              if(is.null(prow$screening)||!is.list(prow$screening))prow$screening<-list()
+              prow$screening$screening_input_sha256<-fingerprint(current[[newidx]])
+              vv<-view_full(current[[newidx]])
+              prow$screening$input_title_present<-nzchar(trimws(vv$title))
+              prow$screening$input_abstract_present<-nzchar(trimws(vv$abstract))
+              prow$screening$reuse<-list(
+                reused=TRUE,
+                basis='protected_human_abstract_previously_adjudicated_nonabstract_inputs_unchanged',
+                prior_record_id=oldid,
+                prior_screening_input_sha256=if(nzchar(oldfp))oldfp else NULL,
+                current_screening_input_sha256=prow$screening$screening_input_sha256,
+                screening_input_changed=FALSE
+              )
+              safe_rows[[length(safe_rows)+1L]]<-prow
+            }
+            audit[[length(audit)+1L]]<-data.frame(old_record_id=oldid,new_record_id=newid,identity_basis=basis,old_canonical_exists=old_exists,non_abstract_screening_fields_unchanged=other_same,safe_to_preserve_human_w04_decision=safe,stringsAsFactors=FALSE)
+          }
+
+          adf<-do.call(rbind,audit)
+          safe_ids<-unique(adf$new_record_id[adf$safe_to_preserve_human_w04_decision])
+          genuine_ids<-unique(adf$new_record_id[!adf$safe_to_preserve_human_w04_decision])
+          stopifnot(nrow(adf)==157L,length(safe_ids)==156L,length(genuine_ids)==1L)
+
+          qids<-vapply(queue_can,rid,character(1))
+          stopifnot(length(qids)==3264L,all(safe_ids%in%qids))
+          keep<-!qids%in%safe_ids
+          queue_can<-queue_can[keep]
+          qwids<-vapply(queue_w03,function(r)scalar(r$record_id),character(1))
+          queue_w03<-queue_w03[qwids%in%vapply(queue_can,rid,character(1))]
+          stopifnot(length(queue_can)==3108L,length(queue_w03)==3108L)
+
+          reuse_ids<-if(length(reuse))vapply(reuse,function(r)scalar(r$record_id),character(1))else character()
+          add_ids<-vapply(safe_rows,function(r)scalar(r$record_id),character(1))
+          stopifnot(!anyDuplicated(add_ids),!length(intersect(reuse_ids,add_ids)))
+          reuse<-c(reuse,safe_rows)
+          reuse<-reuse[order(vapply(reuse,function(r)scalar(r$record_id),character(1)))]
+          stopifnot(length(reuse)==47319L)
+
+          writejl(queue_can,'outputs/workflow04_prepare/screen_queue_canonical.jsonl')
+          writejl(queue_w03,'outputs/workflow04_prepare/screen_queue_workflow03.jsonl')
+          writejl(reuse,'outputs/workflow04_prepare/reused_workflow04_layer.jsonl')
+          writeLines(sort(vapply(queue_can,rid,character(1))),'outputs/workflow04_prepare/screen_queue_record_ids.txt',useBytes=TRUE)
+          writeLines(sort(vapply(reuse,function(r)scalar(r$record_id),character(1))),'outputs/workflow04_prepare/reused_record_ids.txt',useBytes=TRUE)
+
+          qm<-read.csv('outputs/workflow04_prepare/screen_queue_manifest.csv',stringsAsFactors=FALSE,check.names=FALSE)
+          qm<-qm[!qm$record_id%in%safe_ids,,drop=FALSE]
+          stopifnot(nrow(qm)==3108L)
+          write.csv(qm,'outputs/workflow04_prepare/screen_queue_manifest.csv',row.names=FALSE,na='')
+
+          rr<-read.csv('outputs/workflow04_prepare/scientific_input_refresh_records.csv',stringsAsFactors=FALSE,check.names=FALSE)
+          rr<-rr[!rr$record_id%in%safe_ids,,drop=FALSE]
+          stopifnot(nrow(rr)==2596L)
+          write.csv(rr,'outputs/workflow04_prepare/scientific_input_refresh_records.csv',row.names=FALSE,na='')
+
+          m<-fromJSON('outputs/workflow04_prepare/prepare_manifest.json',simplifyVector=FALSE)
+          stopifnot(as.integer(m$screen_queue_records)==3264L,as.integer(m$new_record_ids)==512L,as.integer(m$existing_records_refreshed)==2752L)
+          m$raw_screen_queue_records<-as.integer(m$screen_queue_records)
+          m$raw_reusable_records<-as.integer(m$reusable_records)
+          m$raw_changed_screening_input<-as.integer(m$changed_screening_input)
+          m$human_correction_audited<-157L
+          m$human_correction_safe_reuse<-156L
+          m$human_correction_genuine_rescreen<-1L
+          m$reusable_records<-length(reuse)
+          m$screen_queue_records<-length(queue_can)
+          m$existing_records_refreshed<-nrow(rr)
+          m$changed_screening_input<-nrow(rr)
+          if('prior_title_present'%in%names(rr)&&'current_title_present'%in%names(rr))m$existing_records_title_gained<-sum(!rr$prior_title_present & rr$current_title_present)
+          if('prior_abstract_present'%in%names(rr)&&'current_abstract_present'%in%names(rr))m$existing_records_abstract_gained<-sum(!rr$prior_abstract_present & rr$current_abstract_present)
+          if(all(c('prior_title_present','current_title_present','prior_abstract_present','current_abstract_present')%in%names(rr)))m$existing_records_title_and_abstract_gained<-sum(!rr$prior_title_present & rr$current_title_present & !rr$prior_abstract_present & rr$current_abstract_present)
+          m$changed_screening_input_reused<-0L
+          m$rescreen_existing_decisions<-TRUE
+          m$human_correction_reuse_rule<-'reuse prior human W04 decision only when all five non-abstract screening fields are unchanged after protected human abstract is restored'
+          stopifnot(as.integer(m$screen_queue_records)==3108L,as.integer(m$reusable_records)==47319L,as.integer(m$new_record_ids)+as.integer(m$existing_records_refreshed)==3108L)
+          writeLines(toJSON(m,auto_unbox=TRUE,pretty=TRUE,null='null',na='null',digits=NA),'outputs/workflow04_prepare/prepare_manifest.json',useBytes=TRUE)
+
+          dir.create('outputs/human_correction_exact_audit',recursive=TRUE,showWarnings=FALSE)
+          write.csv(adf,'outputs/human_correction_exact_audit/audit.csv',row.names=FALSE,na='')
+          s<-list(status='PASS',audited=157L,safe_reuse=156L,genuine_rescreen=1L,raw_queue=3264L,exact_queue=3108L,reuse=47319L,new_ids=512L,changed_existing=2596L)
+          writeLines(toJSON(s,auto_unbox=TRUE,pretty=TRUE),'outputs/human_correction_exact_audit/summary.json')
+          cat('PASS: exact W04 queue = 3108 = 512 new + 2596 changed existing; reusable = 47319\n')
+          cat('queue_n=3108\n',file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
+
+      - name: Freeze production screening prompt provenance
+        shell: Rscript {0}
+        run: |
+          library(jsonlite); library(digest)
+          cfg<-fromJSON('user_input/workflow04_screening_config.json',simplifyVector=FALSE)
+          prompt<-paste(readLines(cfg$prompt_path,warn=FALSE,encoding='UTF-8'),collapse='\n')
+          sha<-digest(prompt,algo='sha256',serialize=FALSE)
+          stopifnot(identical(sha,as.character(cfg$expected_prompt_sha256)))
+          p<-list(schema='living-evidence-map-workflow04-prompt-provenance-v1',prompt_path=cfg$prompt_path,prompt_version=cfg$prompt_version,prompt_sha256=sha,source_github_run_id=Sys.getenv('GITHUB_RUN_ID'),source_github_sha=Sys.getenv('GITHUB_SHA'))
+          writeLines(toJSON(p,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/workflow04_prepare/prompt_provenance.json')
+          cat('PASS: production W04 prompt provenance frozen\n')
+
+      - name: Upload exact prepared W04 state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-exact-repair-prepared-${{ github.run_id }}
+          path: |
+            inputs/current/canonical_lean.jsonl
+            inputs/current/publication_status.jsonl
+            inputs/human_corrections/workflow04_human_abstract_corrections.jsonl
+            outputs/workflow04_prepare/
+            outputs/human_correction_exact_audit/
+            outputs/human_overlay/
+          retention-days: 30
+          if-no-files-found: error
+
+  screen:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.queue_n == '3108' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1,2,3,4,5,6,7,8]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install screening dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest','stringi'))
+
+      - name: Download exact prepared W04 state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-exact-repair-prepared-${{ github.run_id }}
+          path: prepared
+
+      - name: Screen exact repair queue shard
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/shard-${{ matrix.shard }}
+          Rscript scripts/updater/workflow_04_luna_consensus.R             --canonical prepared/outputs/workflow04_prepare/screen_queue_canonical.jsonl             --workflow03-status prepared/outputs/workflow04_prepare/screen_queue_workflow03.jsonl             --screening-config user_input/workflow04_screening_config.json             --output-dir outputs/shard-${{ matrix.shard }}             --model gpt-5.6-luna             --shard-index ${{ matrix.shard }}             --shard-count 8             --checkpoint-every 25
+
+      - name: Upload shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-exact-repair-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: outputs/shard-${{ matrix.shard }}/
+          retention-days: 90
+          if-no-files-found: warn
+
+  merge-new:
+    needs: [prepare,screen]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.screen.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install merge dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download shard outputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow04-exact-repair-shard-*-${{ github.run_id }}
+          path: shards
+          merge-multiple: false
+
+      - name: Merge production consensus
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_merge_consensus.R             --input-root shards             --output-dir outputs/workflow04_new_consensus             --expected-shards 8
+
+      - name: Upload merged consensus
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-exact-repair-consensus-${{ github.run_id }}
+          path: outputs/workflow04_new_consensus/
+          retention-days: 90
+          if-no-files-found: error
+
+  finalise:
+    needs: [prepare,merge-new]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.merge-new.result == 'success' }}
+    outputs:
+      status: ${{ steps.status.outputs.status }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install finalisation dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Download prepared and consensus state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-exact-repair-prepared-${{ github.run_id }}
+          path: prepared
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: workflow04-exact-repair-consensus-${{ github.run_id }}
+          path: consensus
+
+      - name: Build complete corrected W04 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_merge_incremental.R             --canonical prepared/inputs/current/canonical_lean.jsonl             --workflow03-status prepared/inputs/current/publication_status.jsonl             --reused-layer prepared/outputs/workflow04_prepare/reused_workflow04_layer.jsonl             --new-consensus consensus/workflow04_consensus_layer.jsonl             --prepare-manifest prepared/outputs/workflow04_prepare/prepare_manifest.json             --output-dir outputs/workflow04_final
+          cp prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json
+          cp prepared/inputs/human_corrections/workflow04_human_abstract_corrections.jsonl outputs/workflow04_final/workflow04_human_abstract_corrections.jsonl
+
+      - name: Inspect final W04 status
+        id: status
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(as.character(x$status))')"
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(sprintf("W04 RESULT: status=%s eligible=%d reused=%d screened=%d retained=%d excluded=%d unresolved=%d\n",x$status,x$workflow03_eligible,x$reused_records,x$newly_screened_records,x$final_retain,x$final_exclude,x$unresolved))'
+
+      - name: Build unresolved queue artefact only
+        if: ${{ steps.status.outputs.status == 'HUMAN_REVIEW_REQUIRED' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow04_resolution
+          Rscript scripts/updater/workflow_04_build_resolution_queue.R             --canonical prepared/inputs/current/canonical_lean.jsonl             --human-review outputs/workflow04_final/workflow04_human_review_queue.jsonl             --output-dir outputs/workflow04_resolution             --source-run-id "$GITHUB_RUN_ID"
+          echo "HUMAN_REVIEW_REQUIRED: queue preserved as artefact only; Shiny backend was NOT modified."
+
+      - name: Publish corrected W04 state when fully resolved
+        if: ${{ steps.status.outputs.status == 'PASS' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LEAN_SHA="$(Rscript -e 'cat(digest::digest(file="prepared/inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
+          W03_SHA="$(Rscript -e 'cat(digest::digest(file="prepared/inputs/current/publication_status.jsonl",algo="sha256",serialize=FALSE))')"
+          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/prompt_provenance.json",simplifyVector=FALSE);cat(x$prompt_sha256)')"
+          mkdir -p outputs/workflow04_zenodo
+          Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R             --state-dir outputs/workflow04_final             --source-run-id "$GITHUB_RUN_ID"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow04_zenodo             --upstream-lean-sha256 "$LEAN_SHA"             --upstream-workflow03-sha256 "$W03_SHA"             --prompt-sha256 "$PROMPT_SHA"
+
+      - name: Register corrected W04 state when fully resolved
+        if: ${{ steps.status.outputs.status == 'PASS' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_04_update_zenodo_registry.R             --receipt outputs/workflow04_zenodo/zenodo_receipt.json             --registry docs/workflow04/zenodo_registry.csv             --pointer-dir docs/workflow04/zenodo
+          git add docs/workflow04/zenodo_registry.csv docs/workflow04/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register corrected Workflow 04 integrity repair $GITHUB_RUN_ID [skip ci]"
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload corrected W04 result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-exact-repair-final-${{ github.run_id }}
+          path: |
+            outputs/workflow04_final/
+            outputs/workflow04_resolution/
+            outputs/workflow04_zenodo/
+          retention-days: 90
+          if-no-files-found: error
