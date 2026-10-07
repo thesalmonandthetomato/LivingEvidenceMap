@@ -3,6 +3,7 @@
 suppressPackageStartupMessages({
   library(jsonlite)
   library(digest)
+  library(data.table)
 })
 
 
@@ -22,12 +23,13 @@ incremental_rescore <- arg("--incremental-rescore")
 adjudications <- arg("--adjudications")
 review_package <- arg("--review-package")
 pre_summary <- arg("--pre-summary")
+metadata_path <- arg("--metadata")
 previous_pointer <- arg("--previous-pointer")
 workflow00_pointer <- arg("--workflow00-pointer")
 output_dir <- arg("--output-dir")
 run_id <- arg("--run-id")
 required <- list(previous_root,current_seed_root,incremental_rescore,adjudications,review_package,
-                 pre_summary,previous_pointer,workflow00_pointer,output_dir,run_id)
+                 pre_summary,metadata_path,previous_pointer,workflow00_pointer,output_dir,run_id)
 if(any(vapply(required,is.null,logical(1)))) stop("Missing required checkpoint argument",call.=FALSE)
 
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
@@ -68,6 +70,32 @@ if(!setequal(source_order,current_sources)) {
     paste(setdiff(current_sources,source_order),collapse=",")
   ),call.=FALSE)
 }
+
+
+# Fingerprint the exact numeric-index -> immutable source identity mapping used
+# by deduplication. Resume must reproduce this mapping byte-for-byte before any
+# stored record_i/record_j pair decision is allowed to run.
+if(!file.exists(metadata_path)) stop("Deduplication metadata file not found",call.=FALSE)
+idx_meta <- fread(
+  metadata_path,
+  select=c("idx","source","source_record_id"),
+  na.strings=c("","NA")
+)
+if(!identical(as.integer(idx_meta$idx),seq_len(nrow(idx_meta)))) {
+  stop("Deduplication metadata idx must be contiguous 1..N",call.=FALSE)
+}
+if(any(is.na(idx_meta$source)) || any(is.na(idx_meta$source_record_id)) ||
+   any(!nzchar(idx_meta$source)) || any(!nzchar(idx_meta$source_record_id))) {
+  stop("Deduplication metadata contains missing source identity",call.=FALSE)
+}
+if(anyDuplicated(paste(idx_meta$source,idx_meta$source_record_id,sep="::"))) {
+  stop("Deduplication metadata contains duplicate immutable source identity",call.=FALSE)
+}
+index_identity_text <- paste(
+  paste(idx_meta$idx,idx_meta$source,idx_meta$source_record_id,sep="\t"),
+  collapse="\n"
+)
+index_identity_sha256 <- digest(index_identity_text,algo="sha256",serialize=FALSE)
 
 previous_seed_root <- file.path(previous_root,"workflow01_seed")
 previous_files <- if(dir.exists(previous_seed_root)) list.files(previous_seed_root,pattern=source_pattern,full.names=TRUE) else character()
@@ -125,6 +153,11 @@ manifest <- list(
   new_source_manifestations_by_source=source_counts,
   source_order=unname(source_order),
   source_files=source_files,
+  dedup_index_identity=list(
+    rows=nrow(idx_meta),
+    sha256=index_identity_sha256,
+    key="idx\\tsource\\tsource_record_id"
+  ),
   pending_human_cases=as.integer(review_manifest$pending_count),
   queue_sha256=as.character(review_manifest$queue_sha256),
   files=list(
