@@ -1,0 +1,27 @@
+{
+  "schema": "living-evidence-map-w04-human-abstract-corrections-pointer-v1",
+  "status": "published",
+  "source_w04_resume_run_id": "37511638503",
+  "corrections": 157,
+  "with_doi": 103,
+  "title_fallback": 54,
+  "identity_rule": "normalized DOI first; otherwise unique normalized title",
+  "corrections_sha256": "7613916248f03d0fe18ab57ef29b41d893c10115c61bf7cff4d0815e3e888062",
+  "zenodo_record_id": "23207099",
+  "doi": "10.5281/zenodo.23207099",
+  "record_url": "https://zenodo.org/records/23207099",
+  "visibility": "restricted",
+  "files": {
+    "workflow04_human_abstract_corrections.jsonl": {
+      "bytes": 311692,
+      "sha256": "7613916248f03d0fe18ab57ef29b41d893c10115c61bf7cff4d0815e3e888062",
+      "zenodo_checksum": "md5:834e9a4aca71029d46a4e73b5c1d1485"
+    },
+    "workflow04_human_abstract_corrections_manifest.json": {
+      "bytes": 415,
+      "sha256": "0d2f84e5878dca5d908f1761cfd2790c3b861a1e9200b26e8f7e66d5625bd11f",
+      "zenodo_checksum": "md5:21c9d71288dd203799551fee9b3075ed"
+    }
+  },
+  "published_at_utc": "2026-10-07T08:15:12Z"
+}
