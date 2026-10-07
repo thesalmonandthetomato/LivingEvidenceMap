@@ -1,0 +1,218 @@
+name: TEMP targeted W03 integrity repair
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w03_integrity_repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: workflow03-integrity-repair
+  cancel-in-progress: false
+
+env:
+  LEAN_POINTER: 'docs/compaction/zenodo/run-37648955012.json'
+  PREV_W03_POINTER: 'docs/publication_status/zenodo/run-37385439517.json'
+  PREFLIGHT_RUN_ID: '37644136220'
+  PREFLIGHT_ARTIFACT: 'w02-integrity-repair-preflight-37644136220'
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','data.table'))
+
+      - name: Restore current lean canonical and prior W03
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf current_lean previous_w03 preflight outputs
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer "$LEAN_POINTER" \
+            --output-dir current_lean
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
+            --pointer "$PREV_W03_POINTER" \
+            --output-dir previous_w03
+          test -s current_lean/canonical_lean.jsonl
+          test -s previous_w03/publication_status.jsonl
+
+      - name: Restore exact current repair cohort
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preflight
+          gh run download "$PREFLIGHT_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$PREFLIGHT_ARTIFACT" --dir preflight
+          test -s preflight/preflight/current_repair_cohort_ids.txt
+          test "$(grep -c . preflight/preflight/current_repair_cohort_ids.txt)" -eq 9885
+
+      - name: Extract affected current W03 input
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          ids<-readLines('preflight/preflight/current_repair_cohort_ids.txt',warn=FALSE)
+          ids<-ids[nzchar(trimws(ids))]
+          want<-setNames(rep(TRUE,length(ids)),ids)
+          dir.create('outputs/current',recursive=TRUE,showWarnings=FALSE)
+          a<-file('current_lean/canonical_lean.jsonl','rt',encoding='UTF-8')
+          b<-file('outputs/current/affected_lean.jsonl','wt',encoding='UTF-8')
+          n<-0L
+          repeat{
+            lines<-readLines(a,n=250L,warn=FALSE);if(!length(lines))break
+            for(line in lines){
+              if(!nzchar(trimws(line)))next
+              z<-fromJSON(line,simplifyVector=FALSE)
+              id<-as.character(z$identity$record_id)
+              if(id %in% names(want)){writeLines(line,b,useBytes=TRUE);n<-n+1L}
+            }
+          }
+          close(a);close(b)
+          stopifnot(n==9885L)
+          cat('PASS: extracted 9885 affected current records for W03 recomputation\n')
+
+      - name: Recompute publication status for affected cohort
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/recomputed
+          Rscript scripts/updater/workflow_03_publication_status.R \
+            --input outputs/current/affected_lean.jsonl \
+            --output outputs/recomputed/publication_status.jsonl \
+            --audit outputs/recomputed/api_audit.jsonl \
+            --report outputs/recomputed/report.json \
+            --limit 0 \
+            --batch-size 100
+
+      - name: Merge prior unaffected W03 state with recomputed cohort
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          readjl<-function(p){x<-readLines(p,warn=FALSE);x<-x[nzchar(trimws(x))];lapply(x,fromJSON,simplifyVector=FALSE)}
+          cur_lines<-readLines('current_lean/canonical_lean.jsonl',warn=FALSE)
+          cur_lines<-cur_lines[nzchar(trimws(cur_lines))]
+          cur_ids<-vapply(cur_lines,function(z)as.character(fromJSON(z,simplifyVector=FALSE)$identity$record_id),character(1))
+          stopifnot(length(cur_ids)==50440L,!anyDuplicated(cur_ids))
+          repair_ids<-readLines('preflight/preflight/current_repair_cohort_ids.txt',warn=FALSE)
+          repair_ids<-repair_ids[nzchar(trimws(repair_ids))]
+          repair_set<-setNames(rep(TRUE,length(repair_ids)),repair_ids)
+
+          prior<-readjl('previous_w03/publication_status.jsonl')
+          prior_map<-setNames(prior,vapply(prior,function(x)as.character(x$record_id),character(1)))
+          recalc<-readjl('outputs/recomputed/publication_status.jsonl')
+          recalc_map<-setNames(recalc,vapply(recalc,function(x)as.character(x$record_id),character(1)))
+          stopifnot(length(recalc_map)==9885L,setequal(names(recalc_map),repair_ids))
+
+          dir.create('outputs/final',recursive=TRUE,showWarnings=FALSE)
+          out<-file('outputs/final/publication_status.jsonl','wt',encoding='UTF-8')
+          codes<-setNames(integer(6),c('retracted','withdrawn','expression_of_concern','warning','corrected','normal'))
+          excluded<-0L;conflicts<-0L;multi<-0L;found<-0L;notfound<-0L;unavail<-0L;tech<-0L
+          reused<-0L;recomputed<-0L
+          for(id in cur_ids){
+            z<-if(id %in% names(repair_set)){recomputed<-recomputed+1L;recalc_map[[id]]}else{reused<-reused+1L;prior_map[[id]]}
+            if(is.null(z)) stop(sprintf('No W03 state available for current record %s',id),call.=FALSE)
+            ps<-z$publication_status
+            code<-as.character(ps$code)
+            if(!(code %in% names(codes))) stop(sprintf('Unexpected W03 code %s',code),call.=FALSE)
+            codes[[code]]<-codes[[code]]+1L
+            if(isTRUE(ps$exclude_from_workflow04)) excluded<-excluded+1L
+            if(isTRUE(ps$evidence_conflict)) conflicts<-conflicts+1L
+            if(isTRUE(ps$multiple_positive_signals)) multi<-multi+1L
+            st<-as.character((ps$lookup %||% list())$status %||% 'unavailable')
+            if(st=='found') found<-found+1L else if(st=='not_found') notfound<-notfound+1L else {unavail<-unavail+1L;if(grepl('^http_',st))tech<-tech+1L}
+            writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),out,useBytes=TRUE)
+          }
+          close(out)
+          stopifnot(recomputed==9885L,reused==40555L,conflicts==0L,tech==0L)
+          report<-list(
+            schema='living-evidence-map-workflow03-publication-status-v1',
+            status='PASS',
+            input_sha256=digest(file='current_lean/canonical_lean.jsonl',algo='sha256',serialize=FALSE),
+            records_scanned=50440L,
+            full_input_requested=TRUE,
+            code_counts=as.list(codes),
+            exclude_from_workflow04=excluded,
+            evidence_conflicts=conflicts,
+            multiple_positive_signals=multi,
+            openalex_lookup=list(found=found,not_found=notfound,unavailable_or_error=unavail,technical_errors=tech),
+            output_sha256=digest(file='outputs/final/publication_status.jsonl',algo='sha256',serialize=FALSE),
+            checked_at=format(Sys.Date(),'%Y-%m-%d'),
+            integrity_repair=list(recomputed_records=recomputed,reused_prior_records=reused)
+          )
+          writeLines(toJSON(report,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'outputs/final/report.json')
+          file.copy('outputs/recomputed/api_audit.jsonl','outputs/final/api_audit.jsonl',overwrite=TRUE)
+          cat(sprintf('PASS: rebuilt full W03 layer: %d recomputed + %d reused = 50440\n',recomputed,reused))
+
+      - name: Publish corrected W03 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/zenodo
+          LEAN_SHA="$(P="$LEAN_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"));cat(x$lean_canonical_sha256)')"
+          Rscript scripts/updater/workflow_03_archive_state_to_zenodo.R \
+            --state-dir outputs/final \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/zenodo \
+            --upstream-lean-sha256 "$LEAN_SHA" \
+            --expected-records 50440
+
+      - name: Register corrected W03 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_03_update_zenodo_registry.R \
+            --receipt outputs/zenodo/zenodo_receipt.json \
+            --registry docs/publication_status/zenodo_registry.csv \
+            --pointer-dir docs/publication_status/zenodo
+          test -s docs/publication_status/zenodo/run-"$GITHUB_RUN_ID".json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/publication_status/zenodo_registry.csv docs/publication_status/zenodo/run-"$GITHUB_RUN_ID".json
+          git commit -m "Register targeted W03 integrity repair $GITHUB_RUN_ID"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
+
+      - name: Upload W03 repair audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w03-integrity-repair-${{ github.run_id }}
+          path: |
+            outputs/recomputed/report.json
+            outputs/final/report.json
+            outputs/zenodo/zenodo_receipt.json
+          retention-days: 30
+          if-no-files-found: warn
