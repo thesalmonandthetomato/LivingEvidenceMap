@@ -22,6 +22,18 @@ clean<-function(x){
   if(is.na(s)||!nzchar(s)) NULL else s
 }
 missing<-function(x) is.null(clean(x))
+norm_doi<-function(x){
+  z<-clean(x)
+  if(is.null(z)) return(NULL)
+  z<-tolower(z)
+  z<-sub("^https?://(dx\\.)?doi\\.org/","",z,perl=TRUE)
+  z<-sub("^doi:\\s*","",z,perl=TRUE)
+  z<-sub("[?#].*$","",z,perl=TRUE)
+  z<-sub("/full/html?$","",z,perl=TRUE,ignore.case=TRUE)
+  z<-sub("\\.(html?|pdf|xml)$","",z,perl=TRUE,ignore.case=TRUE)
+  z<-sub("[.,;:]+$","",z,perl=TRUE)
+  if(!nzchar(z)) NULL else z
+}
 field_missing<-function(field,x){
   if(identical(field,"author_keywords")){
     if(is.null(x)||!length(x)) return(TRUE)
@@ -42,7 +54,7 @@ pmap<-setNames(patches,ids)
 dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
 pin<-file(input_path,"rt",encoding="UTF-8");pout<-file(output_path,"wt",encoding="UTF-8")
 on.exit({try(close(pin),silent=TRUE);try(close(pout),silent=TRUE)},add=TRUE)
-seen<-character(); applied_fields<-0L; conflicts<-list(); records<-0L
+seen<-character(); applied_fields<-0L; conflicts<-list(); stale_patches<-list(); records<-0L
 repeat{
   line<-readLines(pin,n=1L,warn=FALSE)
   if(!length(line)) break
@@ -55,6 +67,30 @@ repeat{
   if(!is.null(p)){
     seen<-c(seen,rid)
     if(is.null(r$canonical)) r$canonical<-list()
+
+    patch_doi<-norm_doi(p$input_doi)
+    current_doi<-norm_doi(r$canonical$doi)
+    doi_compatible<-!is.null(patch_doi) && !is.null(current_doi) && identical(patch_doi,current_doi)
+    if(!doi_compatible){
+      stale<-list(
+        record_id=rid,
+        patch_input_doi=p$input_doi,
+        current_doi=r$canonical$doi,
+        reason=if(is.null(patch_doi))"patch_missing_input_doi" else if(is.null(current_doi))"current_record_missing_doi" else "input_doi_changed"
+      )
+      stale_patches[[length(stale_patches)+1L]]<-stale
+      if(mode=="exact"){
+        stop(sprintf(
+          "Exact patch identity conflict for %s: patch DOI=%s current DOI=%s",
+          rid,
+          clean(p$input_doi)%||%"<missing>",
+          clean(r$canonical$doi)%||%"<missing>"
+        ),call.=FALSE)
+      }
+      writeLines(toJSON(r,auto_unbox=TRUE,null="null",na="null",digits=NA),pout,useBytes=TRUE)
+      next
+    }
+
     for(field in c("title","abstract","author_keywords")){
       z<-p[[field]]
       if(is.null(z)) next
@@ -89,9 +125,11 @@ report<-list(
   missing_patch_record_ids=missing_patch_ids,
   applied_fields=applied_fields,
   conflicts=conflicts,
+  stale_patch_records=length(stale_patches),
+  stale_patches=stale_patches,
   completed_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 dir.create(dirname(report_path),recursive=TRUE,showWarnings=FALSE)
 writeLines(toJSON(report,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),report_path,useBytes=TRUE)
-cat(sprintf("PASS: applied Workflow 02 patch to %d records; matched %d patch records; %d field conflicts\n",
-            records,length(unique(seen)),length(conflicts)))
+cat(sprintf("PASS: applied Workflow 02 patch to %d records; matched %d patch records; %d field conflicts; %d stale patches skipped\n",
+            records,length(unique(seen)),length(conflicts),length(stale_patches)))
