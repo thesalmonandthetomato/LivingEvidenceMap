@@ -1,0 +1,102 @@
+name: TEMP preserve W04 human abstract corrections
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_preserve_w04_human_abstract_corrections.yml'
+      - 'scripts/updater/workflow_04_build_human_abstract_corrections.R'
+      - 'scripts/updater/workflow_04_archive_human_abstract_corrections.R'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  preserve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Restore current W04 correction sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs outputs
+          mkdir -p inputs/prepared inputs/resume outputs
+          gh run download 37456188910 --repo "$GITHUB_REPOSITORY" \
+            --name workflow04-prepared-37456188910 --dir inputs/prepared
+          gh run download 37511638503 --repo "$GITHUB_REPOSITORY" \
+            --name workflow04-shiny-resume-37511638503 --dir inputs/resume
+          CAN=$(find inputs/prepared -type f -path '*/inputs/current/canonical_lean.jsonl' -print -quit)
+          DEC=$(find inputs/resume -type f -name human_resolution_decisions.jsonl -print -quit)
+          test -n "$CAN"; test -n "$DEC"
+          cp "$CAN" inputs/canonical_lean.jsonl
+          cp "$DEC" inputs/human_resolution_decisions.jsonl
+
+      - name: Build DOI/title-keyed correction bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_build_human_abstract_corrections.R \
+            --decisions inputs/human_resolution_decisions.jsonl \
+            --canonical inputs/canonical_lean.jsonl \
+            --output outputs/workflow04_human_abstract_corrections.jsonl \
+            --manifest outputs/workflow04_human_abstract_corrections_manifest.json \
+            --source-run-id 37511638503
+
+      - name: Publish protected correction bundle
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_archive_human_abstract_corrections.R \
+            --corrections outputs/workflow04_human_abstract_corrections.jsonl \
+            --manifest outputs/workflow04_human_abstract_corrections_manifest.json \
+            --output outputs/zenodo_receipt.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-run-id 37511638503
+
+      - name: Register protected correction bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/workflow04/human_abstract_corrections
+          cp outputs/zenodo_receipt.json docs/workflow04/human_abstract_corrections/run-37511638503.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/workflow04/human_abstract_corrections/run-37511638503.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Preserve W04 human abstract corrections [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload preservation audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w04-human-abstract-corrections-${{ github.run_id }}
+          path: |
+            outputs/workflow04_human_abstract_corrections_manifest.json
+            outputs/zenodo_receipt.json
+          retention-days: 90
+          if-no-files-found: warn
