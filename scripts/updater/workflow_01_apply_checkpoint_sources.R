@@ -54,10 +54,34 @@ source_counts_expected <- cm$new_source_manifestations_by_source
 if(is.null(source_counts_expected) || !length(source_counts_expected) || is.null(names(source_counts_expected))) {
   stop("Checkpoint manifest has no source manifestation counts",call.=FALSE)
 }
-sources <- sort(names(source_counts_expected))
+
+# Numeric deduplication indices are meaningful only for the exact ordered source
+# concatenation used when they were created. A legacy checkpoint without that
+# order is unsafe to reconstruct and must fail closed rather than guessing.
+sources <- as.character(unlist(cm$source_order %||% character(),use.names=FALSE))
+if(!length(sources)) {
+  stop(
+    "Checkpoint lacks authoritative source_order; refusing unsafe reconstruction of numeric deduplication indices",
+    call.=FALSE
+  )
+}
+if(any(!nzchar(sources)) || anyDuplicated(sources)) {
+  stop("Checkpoint source_order is empty or non-unique",call.=FALSE)
+}
+if(!setequal(sources,names(source_counts_expected))) {
+  stop(sprintf(
+    "Checkpoint source_order/count namespaces differ; missing=%s extra=%s",
+    paste(setdiff(names(source_counts_expected),sources),collapse=","),
+    paste(setdiff(sources,names(source_counts_expected)),collapse=",")
+  ),call.=FALSE)
+}
+
 source_files <- cm$source_files
 if(is.null(source_files) || !length(source_files)){
   source_files <- setNames(lapply(sources,function(src)paste0(src,"_records_for_deduplication.jsonl")),sources)
+}
+if(is.null(names(source_files)) || !setequal(names(source_files),sources)) {
+  stop("Checkpoint source_files namespaces do not match authoritative source_order",call.=FALSE)
 }
 
 previous_files <- if(dir.exists(previous_seed)) {
