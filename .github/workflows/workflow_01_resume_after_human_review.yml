@@ -226,6 +226,16 @@ jobs:
             --workflow01-run-id "$GITHUB_RUN_ID" \
             --validate-index-only true
 
+      - name: Verify reconstructed W01 dedup index identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/index_identity
+          Rscript scripts/updater/workflow_01_validate_index_identity.R \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --checkpoint-manifest "$CHECKPOINT_DIR/checkpoint_manifest.json" \
+            --output outputs/index_identity/validation.json
+
       - name: Reconstruct exact pre-adjudication pair state
         shell: bash
         run: |
@@ -457,6 +467,7 @@ jobs:
           path: |
             checkpoint_restore/checkpoint_restore_audit.json
             outputs/workflow01_union/source_inputs.json
+            outputs/index_identity/
             outputs/human_gate/
             outputs/final/summary.json
             outputs/final/cluster_id_aliases.csv
