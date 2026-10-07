@@ -1,0 +1,81 @@
+name: TEMP audit corrected W01 reconstruction
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_audit_w01_integrity_repair.yml'
+      - 'scripts/updater/workflow_01_audit_integrity_reconstruction.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2'))
+
+      - name: Restore corrected W01 candidate artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p corrected
+          gh run download 37592982155 --repo "$GITHUB_REPOSITORY" \
+            --name w01-integrity-reconstruction-37592982155 --dir corrected
+          test -s corrected/final/manifestation_cluster_map.csv
+          test -s corrected/canonical/records.jsonl
+
+      - name: Restore currently published corrupted W01
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-37373748707.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root current_corrupt_state
+
+      - name: Audit corrected reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/integrity_audit
+          Rscript scripts/updater/workflow_01_audit_integrity_reconstruction.R \
+            --current-map current_corrupt_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --repaired-map corrected/final/manifestation_cluster_map.csv \
+            --current-canonical current_corrupt_state/canonical/records.jsonl \
+            --repaired-canonical corrected/canonical/records.jsonl \
+            --output-dir outputs/integrity_audit \
+            --expected-clusters 50430 \
+            --expected-affected-current-ids 9922 \
+            --expected-retired-ids 503
+
+      - name: Upload audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-integrity-audit-${{ github.run_id }}
+          path: outputs/integrity_audit/
+          retention-days: 30
+          if-no-files-found: error
