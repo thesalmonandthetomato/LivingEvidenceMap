@@ -12,7 +12,6 @@ Citation neighbours are retained as candidates when the available title, abstrac
 
 1. contains at least one salmon term:
    - salmon
-   - salmonid*
    - Salmo
    - Oncorhynchus
    - "rainbow trout"
@@ -25,7 +24,7 @@ Citation neighbours are retained as candidates when the available title, abstrac
    - aquacultur*
    - commercial*
 
-The filter is applied locally after citation-neighbour retrieval. It is intentionally the same across providers where equivalent fields are available.
+The filter is applied locally after citation-neighbour retrieval. It is intentionally the same across providers where equivalent fields are available. `salmonid*` is deliberately not an eligible positive term: records mentioning only a generic salmonid concept cannot pass the later W05 species gate, which requires an identifiable salmon species.
 
 ## Lens canonical pattern
 
