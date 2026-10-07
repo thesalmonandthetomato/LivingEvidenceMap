@@ -9,6 +9,7 @@ on:
       - '.github/workflows/workflow_04_resume_after_shiny.yml'
       - '.github/workflows/workflow_04_validate_production_architecture.yml'
       - 'scripts/updater/workflow_04_prepare_incremental.R'
+      - 'tests/test_workflow04_changed_input_rescreen.R'
       - 'scripts/updater/workflow_04_apply_manual_metadata_repairs.R'
       - 'scripts/updater/workflow_04_build_human_validation_queue.R'
       - 'scripts/updater/workflow_04_luna_consensus.R'
@@ -116,6 +117,7 @@ jobs:
           stopifnot(grepl('abstract_gained_ids',prep,fixed=TRUE))
           stopifnot(grepl('rescreen_existing_ids',prep,fixed=TRUE))
           stopifnot(grepl('screening_input_sha256',prep,fixed=TRUE))
+          stopifnot(grepl('any_screening_input_fingerprint_change',prep,fixed=TRUE))
           stopifnot(grepl('HUMAN_REVIEW_REQUIRED',merge,fixed=TRUE))
           stopifnot(grepl('workflow04_included_canonical.jsonl',merge,fixed=TRUE))
 
@@ -124,3 +126,7 @@ jobs:
           stopifnot(grepl('workflow_05_production.yml',resume,fixed=TRUE))
           stopifnot(grepl('--status consumed',resume,fixed=TRUE))
           cat('PASS: W04 production is commit-pinned, freezes prompt provenance before screening, resumes from immutable source-run provenance, remains incrementally safe and hands off to W05\n')
+
+      - name: Validate changed-input rescreen regression
+        shell: Rscript {0}
+        run: source('tests/test_workflow04_changed_input_rescreen.R')
