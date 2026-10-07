@@ -19,7 +19,7 @@ counts <- read.csv(counts_path,stringsAsFactors=FALSE,na.strings="")
 meta <- fromJSON(meta_path,simplifyVector=FALSE)
 hits <- suppressWarnings(as.integer(counts$hits))
 status <- ifelse(grepl("fail|error",tolower(counts$status)),"Failed","Complete")
-fmt_hits <- ifelse(is.na(hits),"—",format(hits,big.mark=",",scientific=FALSE))
+fmt_hits <- ifelse(is.na(hits),"-",format(hits,big.mark=",",scientific=FALSE))
 total <- sum(hits,na.rm=TRUE)
 
 dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
@@ -46,7 +46,7 @@ graphics::text(0.06,0.91,sprintf("Scoping date: %s",format(as.Date(meta$search_d
 graphics::text(0.06,0.865,"This report records a count-only scoping search. No bibliographic records or raw API responses were retained.",adj=c(0,1),family="sans",cex=0.82)
 
 graphics::text(0.06,0.81,"Search string",adj=c(0,1),family="sans",font=2,cex=1.05)
-q <- as.character(meta$original_search_string %||% "")
+q <- as.character(if (is.null(meta$original_search_string)) "" else meta$original_search_string)
 q_lines <- unlist(strwrap(q,width=105),use.names=FALSE)
 y <- 0.775
 for (line in q_lines) {
