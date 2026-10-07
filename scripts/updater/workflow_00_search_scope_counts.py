@@ -145,7 +145,7 @@ def main():
         raise SystemExit(f"Search plan missing source query: {src}")
 
     label, fn = None, None
-    if src == "lens": label, fn = "Lens", lambda: count_lens(str(q[src]), a.lens_config)
+    if src == "lens": label, fn = "The Lens", lambda: count_lens(str(q[src]), a.lens_config)
     elif src == "scopus": label, fn = "Scopus", lambda: count_scopus(str(q[src]))
     elif src == "openalex": label, fn = "OpenAlex", lambda: count_openalex(str(q[src]))
     elif src == "agricola": label, fn = "AGRICOLA", lambda: count_epmc(str(q[src]), "AGRICOLA/Europe PMC")
