@@ -512,6 +512,7 @@ jobs:
           fi
 
       - name: Update current-run live status through W08
+        if: ${{ steps.human_gate.outputs.pause != 'true' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
