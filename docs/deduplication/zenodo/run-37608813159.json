@@ -1,0 +1,39 @@
+{
+  "status": "published",
+  "workflow": "01",
+  "state": "final",
+  "github_run_id": "37608813159",
+  "github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/37608813159",
+  "source_manifestations": 135566,
+  "preserved_pair_decisions": 1321873,
+  "incremental_candidate_rows": 266860,
+  "incremental_pair_decisions": 266860,
+  "exact_duplicate_candidate_rows_removed": 0,
+  "manual_review_pairs": 281,
+  "canonical_records": 50440,
+  "canonical_jsonl_sha256": "7934ea9d18e9cb090254bff6ae247eb403efa23cd3d0588608a8633667168fa1",
+  "canonical_jsonl_bytes": 618695621,
+  "zenodo_record_id": "23211736",
+  "zenodo_deposition_id": "23211736",
+  "doi": "10.5281/zenodo.23211736",
+  "record_url": "https://zenodo.org/records/23211736",
+  "title": "Living Evidence Map deduplication state | Workflow 01 run 37608813159 | final",
+  "visibility": "restricted",
+  "total_bytes": 455350819,
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow01_run-37608813159_final-state.tar.gz",
+      "bytes": 455349836,
+      "sha256": "46e5230d575c0eda1414e37e2d5adf9224e4e812bc25be599757664841d792d6",
+      "zenodo_checksum": "md5:1e6ad59b9f5017ecddb4549e5607b4d8"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow01_run-37608813159_manifest.json",
+      "bytes": 983,
+      "sha256": "31f010735b6d21e7a305cc938f0eb4e1a35469fae41284663f0dbaeafa598bed",
+      "zenodo_checksum": "md5:c26e2846019690dda53f25afe1c6292c"
+    }
+  ],
+  "manifest_sha256": "31f010735b6d21e7a305cc938f0eb4e1a35469fae41284663f0dbaeafa598bed",
+  "published_at_utc": "2026-10-07T12:00:29Z"
+}
