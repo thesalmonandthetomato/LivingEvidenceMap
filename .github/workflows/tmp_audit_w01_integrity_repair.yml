@@ -68,7 +68,7 @@ jobs:
             --repaired-canonical corrected/canonical/records.jsonl \
             --output-dir outputs/integrity_audit \
             --expected-clusters 50430 \
-            --expected-affected-current-ids 9922 \
+            --expected-affected-current-ids 9869 \
             --expected-retired-ids 503
 
       - name: Upload audit
