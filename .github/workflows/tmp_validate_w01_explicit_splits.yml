@@ -1,0 +1,109 @@
+name: TEMP validate six W01 explicit cluster splits
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_validate_w01_explicit_splits.yml'
+      - 'scripts/updater/workflow_01_apply_explicit_cluster_splits.R'
+      - 'config/workflow01_explicit_cluster_splits.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest'))
+
+      - name: Restore corrected W01 candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          gh run download 37592982155 --repo "$GITHUB_REPOSITORY" \
+            --name w01-integrity-reconstruction-37592982155 --dir candidate
+          test -s candidate/final/final_pair_decisions.csv
+          test -s candidate/final/manifestation_cluster_map.csv
+          test -s candidate/final/clusters.jsonl
+          test -s candidate/final/summary.json
+
+      - name: Apply explicit split corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/split
+          Rscript scripts/updater/workflow_01_apply_explicit_cluster_splits.R \
+            --pair-decisions candidate/final/final_pair_decisions.csv \
+            --cluster-map candidate/final/manifestation_cluster_map.csv \
+            --clusters candidate/final/clusters.jsonl \
+            --summary candidate/final/summary.json \
+            --corrections config/workflow01_explicit_cluster_splits.json \
+            --output-dir outputs/split
+
+      - name: Validate split state
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(data.table);library(jsonlite)})
+          m <- fread("outputs/split/manifestation_cluster_map.csv")
+          stopifnot(nrow(m)==135566L)
+          stopifnot(!anyDuplicated(m$idx))
+          stopifnot(!anyDuplicated(paste(m$source,m$source_record_id,sep="::")))
+          stopifnot(uniqueN(m$cluster_id)==50440L)
+          x <- fread("outputs/split/explicit_cluster_split_mapping.csv")
+          stopifnot(nrow(x)==16L)
+          stopifnot(uniqueN(x$previous_cluster_id)==6L)
+          stopifnot(sum(x$preserved_historical_id)==6L)
+          stopifnot(sum(!x$preserved_historical_id)==10L)
+          s <- fromJSON("outputs/split/summary.json")
+          stopifnot(s$explicit_cluster_split_corrections==6L)
+          stopifnot(s$explicit_cluster_split_added_work_ids==10L)
+          p <- fread("outputs/split/final_pair_decisions.csv")
+          cfg <- fromJSON("config/workflow01_explicit_cluster_splits.json",simplifyVector=FALSE)
+          for(corr in cfg$corrections){
+            groups <- list()
+            for(g in corr$groups){
+              keys <- vapply(g$members,function(z)paste(z$source,z$source_record_id,sep="::"),character(1))
+              idx <- m[paste(source,source_record_id,sep="::") %in% keys,idx]
+              groups[[g$group]] <- idx
+            }
+            gn <- names(groups)
+            if(length(gn)>1L) for(i in seq_len(length(gn)-1L)) for(j in (i+1L):length(gn)){
+              bad <- p[
+                rescored_classification=="duplicate" &
+                ((record_i %in% groups[[gn[[i]]]] & record_j %in% groups[[gn[[j]]]]) |
+                 (record_j %in% groups[[gn[[i]]]] & record_i %in% groups[[gn[[j]]]]))
+              ]
+              stopifnot(nrow(bad)==0L)
+            }
+          }
+          cat("PASS: six explicit false clusters split into 16 works; 50440 total W01 clusters\n")
+
+      - name: Upload validation artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-explicit-split-validation-${{ github.run_id }}
+          path: outputs/split/
+          retention-days: 30
+          if-no-files-found: error
