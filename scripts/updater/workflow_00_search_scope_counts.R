@@ -215,8 +215,8 @@ selected_sources <- if (nzchar(source_filter)) source_filter else source_catalog
 
 count_one <- function(src) {
   if (identical(src,"lens")) {
-    r <- safe_count("Lens", function() count_lens(as.character(q$lens)))
-    return(data.frame(source="Lens",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
+    r <- safe_count("The Lens", function() count_lens(as.character(q$lens)))
+    return(data.frame(source="The Lens",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
   }
   if (identical(src,"scopus")) {
     r <- safe_count("Scopus", function() count_scopus(as.character(q$scopus)))
