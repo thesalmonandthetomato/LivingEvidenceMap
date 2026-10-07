@@ -19,6 +19,7 @@ inc_path<-file.path(state_dir,"workflow04_included_record_ids.txt")
 exc_path<-file.path(state_dir,"workflow04_excluded_record_ids.txt")
 summary_path<-file.path(state_dir,"summary.json")
 agree_path<-file.path(state_dir,"workflow04_agreement_summary.json")
+human_abstract_path<-file.path(state_dir,"workflow04_human_abstract_corrections.jsonl")
 for(p in c(layer_path,inc_path,exc_path,summary_path))if(!file.exists(p))stop(sprintf("Missing Workflow 04 state file: %s",basename(p)),call.=FALSE)
 
 s<-fromJSON(summary_path,simplifyVector=FALSE)
@@ -39,6 +40,10 @@ inc_sha<-digest(file=inc_path,algo="sha256",serialize=FALSE)
 exc_sha<-digest(file=exc_path,algo="sha256",serialize=FALSE)
 summary_sha<-digest(file=summary_path,algo="sha256",serialize=FALSE)
 agree_sha<-if(file.exists(agree_path))digest(file=agree_path,algo="sha256",serialize=FALSE)else NULL
+human_abstract_sha<-if(file.exists(human_abstract_path))digest(file=human_abstract_path,algo="sha256",serialize=FALSE)else NULL
+human_abstract_n<-if(file.exists(human_abstract_path)){
+  z<-readLines(human_abstract_path,warn=FALSE,encoding="UTF-8");sum(nzchar(trimws(z)))
+}else 0L
 
 token<-Sys.getenv("ZENODO_ACCESS_TOKEN");if(!nzchar(token))stop("ZENODO_ACCESS_TOKEN is not set",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE);output_dir<-normalizePath(output_dir,mustWork=TRUE)
@@ -61,7 +66,9 @@ manifest<-list(
  upstream_lean_canonical_sha256=upstream_lean_sha,upstream_workflow03_publication_status_sha256=upstream_w03_sha,
  prompt_sha256=prompt_sha,records=eligible_n,retained=retain_n,excluded=exclude_n,unresolved=unresolved_n,inclusion_rate=if(eligible_n)retain_n/eligible_n else NA_real_,
  workflow04_final_screening_layer_sha256=layer_sha,included_record_ids_sha256=inc_sha,excluded_record_ids_sha256=exc_sha,
- summary_sha256=summary_sha,agreement_summary_sha256=agree_sha,file_visibility="restricted",
+ summary_sha256=summary_sha,agreement_summary_sha256=agree_sha,
+ human_abstract_corrections=human_abstract_n,human_abstract_corrections_sha256=human_abstract_sha,
+ file_visibility="restricted",
  files=list(state_archive=list(filename=archive_name,bytes=unname(file.info(archive_path)$size),sha256=digest(file=archive_path,algo="sha256",serialize=FALSE)))
 )
 manifest_name<-sprintf("LivingEvidenceMap_workflow04_run-%s_manifest.json",source_run_id)
