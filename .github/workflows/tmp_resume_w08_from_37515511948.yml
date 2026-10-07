@@ -1,0 +1,28 @@
+name: TEMP resume W08 from completed W07 run 37515511948
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_resume_w08_from_37515511948.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  resume-w08:
+    uses: ./.github/workflows/workflow_08_production.yml
+    with:
+      execution_ref: e933414ba95a16740839c88bbf1397319a1396b9
+      lean_pointer_path: docs/compaction/zenodo/run-37381023181.json
+      workflow03_pointer_path: docs/publication_status/zenodo/run-37385439517.json
+      workflow04_pointer_path: docs/workflow04/zenodo/run-37456188910.json
+      workflow05_pointer_path: docs/workflow05/zenodo/run-37511638503.json
+      workflow06_pointer_path: docs/workflow06/zenodo/run-37515511948.json
+      workflow07_pointer_path: docs/workflow07/zenodo/run-37515511948.json
+      prior_workflow08_pointer_path: docs/workflow08/zenodo/run-37234697766.json
+      new_decisions_path: ''
+      publish: true
+    secrets: inherit
