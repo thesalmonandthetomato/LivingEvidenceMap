@@ -13,6 +13,11 @@ on:
         required: true
         default: 'user_input/scoping_search_string.txt'
         type: string
+      search_string_b64:
+        description: 'Optional base64-encoded inline Boolean search string for temporary Shiny scoping'
+        required: false
+        default: ''
+        type: string
       request_id:
         description: 'Optional caller identifier used to match this run from the Shiny app'
         required: false
@@ -57,9 +62,43 @@ jobs:
           python3 -m py_compile scripts/updater/workflow_00_search_scope_counts.py
           echo 'PASS: lightweight Python scoping counter parses'
 
+      - name: Resolve scoping search input
+        id: scoping_input
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SEARCH_STRING_PATH: ${{ inputs.search_string_path || 'user_input/scoping_search_string.txt' }}
+          SEARCH_STRING_B64: ${{ inputs.search_string_b64 || '' }}
+          REQUEST_ID: ${{ inputs.request_id || github.event.head_commit.message }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/scoping_search_string.txt"
+          if [ -n "$SEARCH_STRING_B64" ]; then
+            printf '%s' "$SEARCH_STRING_B64" | base64 --decode > "$TARGET"
+            SOURCE_LABEL='inline workflow input'
+          elif [ "$EVENT_NAME" = "push" ]; then
+            MARKER="docs/shiny_scoping_requests/${REQUEST_ID}.json"
+            if [ -s "$MARKER" ] && jq -e '.search_string_b64 // empty' "$MARKER" >/dev/null; then
+              jq -r '.search_string_b64' "$MARKER" | base64 --decode > "$TARGET"
+              SOURCE_LABEL='Shiny request marker'
+            else
+              test -s "$SEARCH_STRING_PATH"
+              cp "$SEARCH_STRING_PATH" "$TARGET"
+              SOURCE_LABEL="$SEARCH_STRING_PATH"
+            fi
+          else
+            test -s "$SEARCH_STRING_PATH"
+            cp "$SEARCH_STRING_PATH" "$TARGET"
+            SOURCE_LABEL="$SEARCH_STRING_PATH"
+          fi
+          test -s "$TARGET"
+          echo "path=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "source_label=$SOURCE_LABEL" >> "$GITHUB_OUTPUT"
+          echo "PASS: resolved temporary scoping input from $SOURCE_LABEL"
+
       - name: Validate Boolean scoping search string
         env:
-          SEARCH_STRING: ${{ inputs.search_string_path || 'user_input/scoping_search_string.txt' }}
+          SEARCH_STRING: ${{ steps.scoping_input.outputs.path }}
         shell: bash
         run: |
           set -euo pipefail
