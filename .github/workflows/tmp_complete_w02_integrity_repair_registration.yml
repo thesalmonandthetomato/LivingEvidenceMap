@@ -1,0 +1,141 @@
+name: TEMP complete targeted W02 integrity repair registration
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_complete_w02_integrity_repair_registration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  REPAIR_RUN_ID: '37648955012'
+  REPAIR_ARTIFACT: 'w02-integrity-repair-37648955012'
+
+jobs:
+  complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout latest development branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Ensure checkout is current before local mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --rebase origin workflow01-final-architecture
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite'))
+
+      - name: Restore successful W02 repair publication receipts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf repair_artifact
+          mkdir -p repair_artifact
+          gh run download "$REPAIR_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$REPAIR_ARTIFACT" --dir repair_artifact
+          test -s repair_artifact/zenodo/zenodo_receipt.json
+          test -s repair_artifact/lean_zenodo/zenodo_receipt.json
+
+      - name: Validate existing W02 publication receipts
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          w2 <- fromJSON('repair_artifact/zenodo/zenodo_receipt.json',simplifyVector=FALSE)
+          lean <- fromJSON('repair_artifact/lean_zenodo/zenodo_receipt.json',simplifyVector=FALSE)
+          stopifnot(identical(w2$status,'published'))
+          stopifnot(identical(w2$workflow,'02'))
+          stopifnot(identical(w2$state,'enrichment_patch'))
+          stopifnot(as.character(w2$github_run_id)=='37648955012')
+          stopifnot(as.character(w2$zenodo_record_id)=='23218257')
+          stopifnot(as.integer(w2$cumulative_patch_records)==3301L)
+          stopifnot(identical(w2$visibility,'restricted'))
+          stopifnot(identical(w2$upstream_workflow01_canonical_sha256,
+            '7934ea9d18e9cb090254bff6ae247eb403efa23cd3d0588608a8633667168fa1'))
+
+          stopifnot(identical(lean$status,'published'))
+          stopifnot(identical(lean$workflow,'02'))
+          stopifnot(identical(lean$state,'post_w02_lean_canonical_checkpoint'))
+          stopifnot(as.character(lean$source_github_run_id)=='37648955012')
+          stopifnot(as.character(lean$zenodo_record_id)=='23218491')
+          stopifnot(as.integer(lean$canonical_records)==50440L)
+          stopifnot(as.integer(lean$manifestations)==135566L)
+          stopifnot(identical(lean$visibility,'restricted'))
+          cat('PASS: existing corrected W02 publications validated\n')
+
+      - name: Register existing corrected W02 publications
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_update_zenodo_registry.R \
+            --receipt repair_artifact/zenodo/zenodo_receipt.json \
+            --registry docs/enrichment/zenodo_registry.csv \
+            --pointer-dir docs/enrichment/zenodo
+
+          Rscript scripts/updater/workflow_02_update_lean_checkpoint_registry.R \
+            --receipt repair_artifact/lean_zenodo/zenodo_receipt.json \
+            --registry docs/compaction/zenodo_registry.csv \
+            --pointer-dir docs/compaction/zenodo
+
+          test -s docs/enrichment/zenodo/run-37648955012.json
+          test -s docs/compaction/zenodo/run-37648955012.json
+
+      - name: Validate registered pointers
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          w2 <- fromJSON('docs/enrichment/zenodo/run-37648955012.json')
+          lean <- fromJSON('docs/compaction/zenodo/run-37648955012.json')
+          stopifnot(w2$status=='published',w2$zenodo_record_id=='23218257',
+                    w2$cumulative_patch_records==3301L)
+          stopifnot(lean$status=='published',lean$zenodo_record_id=='23218491',
+                    lean$canonical_records==50440L,lean$manifestations==135566L)
+          cat('PASS: W02 repair pointers registered and validated\n')
+
+      - name: Commit corrected W02 provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/enrichment/zenodo_registry.csv \
+                  docs/enrichment/zenodo/run-37648955012.json \
+                  docs/compaction/zenodo_registry.csv \
+                  docs/compaction/zenodo/run-37648955012.json
+          if git diff --cached --quiet; then
+            echo "No provenance changes to commit."
+          else
+            git commit -m "Register targeted W02 integrity repair 37648955012"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Upload completion audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w02-integrity-repair-registration-${{ github.run_id }}
+          path: |
+            docs/enrichment/zenodo/run-37648955012.json
+            docs/compaction/zenodo/run-37648955012.json
+          retention-days: 30
+          if-no-files-found: warn
