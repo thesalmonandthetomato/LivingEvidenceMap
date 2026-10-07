@@ -1,0 +1,277 @@
+name: TEMP preflight W04 after integrity repair
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_preflight_w04_integrity_repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CURRENT_LEAN_POINTER: 'docs/compaction/zenodo/run-37648955012.json'
+  CURRENT_W03_POINTER: 'docs/publication_status/zenodo/run-37654051293.json'
+  PRIOR_W04_POINTER: 'docs/workflow04/zenodo/run-37456188910.json'
+  PRIOR_LEAN_POINTER: 'docs/compaction/zenodo/run-37381023181.json'
+  HUMAN_CORRECTIONS_POINTER: 'docs/workflow04/human_abstract_corrections/run-37511638503.json'
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','stringi'))
+
+      - name: Restore current corrected W02/W03 inputs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs outputs
+          mkdir -p inputs/current
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer "$CURRENT_LEAN_POINTER" \
+            --output-dir inputs/current/canonical
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
+            --pointer "$CURRENT_W03_POINTER" \
+            --output-dir inputs/current/w03
+          CAN=$(find inputs/current/canonical -type f -name canonical_lean.jsonl -print -quit)
+          STA=$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)
+          test -n "$CAN"; test -n "$STA"
+          cp "$CAN" inputs/current/canonical_lean.raw.jsonl
+          cp "$STA" inputs/current/publication_status.jsonl
+
+      - name: Restore prior authoritative W04 layer
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/prior_w04
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
+            --pointer "$PRIOR_W04_POINTER" \
+            --output-dir inputs/prior_w04
+          LAYER=$(find inputs/prior_w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)
+          test -n "$LAYER"
+          cp "$LAYER" inputs/prior_workflow04_layer.jsonl
+
+      - name: Download preserved human abstract corrections
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(httr2)
+          library(digest)
+          p <- fromJSON(Sys.getenv('HUMAN_CORRECTIONS_POINTER'),simplifyVector=FALSE)
+          stopifnot(p$status=='published',p$visibility=='restricted',as.integer(p$corrections)==157L)
+          token <- Sys.getenv('ZENODO_ACCESS_TOKEN')
+          stopifnot(nzchar(token))
+          dep <- request(paste0('https://zenodo.org/api/deposit/depositions/',p$zenodo_record_id)) |>
+            req_headers(Authorization=paste('Bearer',token)) |>
+            req_timeout(120) |> req_perform() |> resp_body_json(simplifyVector=FALSE)
+          stopifnot(isTRUE(dep$submitted))
+          bucket <- sub('/$','',as.character(dep$links$bucket))
+          dir.create('inputs/human_corrections',recursive=TRUE,showWarnings=FALSE)
+          for(fn in c('workflow04_human_abstract_corrections.jsonl',
+                      'workflow04_human_abstract_corrections_manifest.json')){
+            dest <- file.path('inputs/human_corrections',fn)
+            resp <- request(paste0(bucket,'/',URLencode(fn,reserved=TRUE))) |>
+              req_method('GET') |> req_headers(Authorization=paste('Bearer',token)) |>
+              req_timeout(600) |> req_error(is_error=function(resp)FALSE) |> req_perform(path=dest)
+            stopifnot(resp_status(resp)==200L)
+          }
+          sha <- digest(file='inputs/human_corrections/workflow04_human_abstract_corrections.jsonl',
+                        algo='sha256',serialize=FALSE)
+          stopifnot(tolower(sha)==tolower(as.character(p$corrections_sha256)))
+          cat('PASS: restored 157 preserved W04 human abstract corrections\n')
+
+      - name: Overlay preserved human abstracts by DOI/title identity
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          scalar <- function(x){
+            if(is.null(x)||!length(x)) return('')
+            z<-as.character(x[[1L]])
+            if(is.na(z)) '' else trimws(gsub('[[:space:]]+',' ',z))
+          }
+          norm_doi <- function(x){
+            z<-tolower(scalar(x));if(!nzchar(z))return('')
+            z<-sub('^https?://(dx\\.)?doi\\.org/','',z,perl=TRUE)
+            z<-sub('^doi:\\s*','',z,perl=TRUE);z<-sub('[?#].*$','',z,perl=TRUE)
+            z<-sub('\\.(html?|pdf|xml)$','',z,perl=TRUE,ignore.case=TRUE)
+            z<-sub('[.,;:]+$','',z,perl=TRUE);z
+          }
+          norm_title <- function(x) tolower(trimws(gsub('[[:space:]]+',' ',scalar(x))))
+          readjl <- function(p){
+            x<-readLines(p,warn=FALSE,encoding='UTF-8');x<-x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          recs <- readjl('inputs/current/canonical_lean.raw.jsonl')
+          corrections <- readjl('inputs/human_corrections/workflow04_human_abstract_corrections.jsonl')
+          stopifnot(length(recs)==50440L,length(corrections)==157L)
+          dois <- vapply(recs,function(r)norm_doi((r$canonical%||%list())$doi),character(1))
+          titles <- vapply(recs,function(r){
+            c<-r$canonical%||%list()
+            norm_title(c$title%||%r$title)
+          },character(1))
+          doi_tab <- table(dois[nzchar(dois)])
+          title_tab <- table(titles[nzchar(titles)])
+          unique_dois <- names(doi_tab)[doi_tab==1L]
+          unique_titles <- names(title_tab)[title_tab==1L]
+          doi_idx <- which(nzchar(dois) & dois %in% unique_dois)
+          title_idx <- which(nzchar(titles) & titles %in% unique_titles)
+          doi_map <- setNames(doi_idx,dois[doi_idx])
+          title_map <- setNames(title_idx,titles[title_idx])
+          matched <- character(); changed <- character(); identical_existing <- character()
+          audit <- list()
+          for(i in seq_along(corrections)){
+            p<-corrections[[i]]
+            nd<-scalar(p$doi_normalized);nt<-scalar(p$title_normalized)
+            j<-NULL;basis<-NULL
+            if(nzchar(nd)){
+              if(nd %in% names(doi_map)) j<-doi_map[[nd]]
+              basis<-'doi'
+            } else if(nzchar(nt)){
+              if(nt %in% names(title_map)) j<-title_map[[nt]]
+              basis<-'title'
+            }
+            if(is.null(j)||length(j)!=1L) stop(sprintf('Human abstract correction does not resolve uniquely: row %d',i),call.=FALSE)
+            r<-recs[[j]]
+            id<-scalar((r$identity%||%list())$record_id)
+            new_abs<-scalar(p$edited_abstract)
+            if(!nzchar(new_abs)) stop(sprintf('Correction row %d has empty edited abstract',i),call.=FALSE)
+            can<-r$canonical%||%list()
+            old_abs<-scalar(can$abstract%||%r[['abstract']])
+            same<-identical(old_abs,new_abs)
+            if(same){
+              identical_existing<-c(identical_existing,id)
+            } else {
+              can$abstract<-new_abs
+              prov<-can$field_provenance%||%list()
+              prov$abstract_human_w04<-list(
+                source='workflow04_human_abstract_correction',
+                source_w04_resume_run_id=as.character(p$source_w04_resume_run_id),
+                identity_basis=basis
+              )
+              can$field_provenance<-prov
+              r$canonical<-can
+              recs[[j]]<-r
+              changed<-c(changed,id)
+            }
+            matched<-c(matched,id)
+            audit[[length(audit)+1L]]<-list(
+              record_id=id,identity_basis=basis,
+              record_id_at_edit=scalar(p$record_id_at_edit),
+              abstract_changed=!same
+            )
+          }
+          stopifnot(length(matched)==157L,!anyDuplicated(matched))
+          dir.create('outputs/human_overlay',recursive=TRUE,showWarnings=FALSE)
+          out<-file('inputs/current/canonical_lean.jsonl','wt',encoding='UTF-8')
+          for(r in recs) writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),out,useBytes=TRUE)
+          close(out)
+          con<-file('outputs/human_overlay/audit.jsonl','wt',encoding='UTF-8')
+          for(a in audit) writeLines(toJSON(a,auto_unbox=TRUE),con,useBytes=TRUE)
+          close(con)
+          summary<-list(status='PASS',corrections=157L,matched_unique=157L,
+                        abstracts_overlaid=length(changed),
+                        already_identical=length(identical_existing))
+          writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),
+                     'outputs/human_overlay/summary.json')
+          cat(sprintf('PASS: matched all 157 human corrections; overlaid %d abstracts; %d already identical\n',
+                      length(changed),length(identical_existing)))
+
+      - name: Check whether prior W04 requires legacy canonical bootstrap
+        id: prior
+        shell: bash
+        run: |
+          set -euo pipefail
+          read NEED MFP MAV <<< "$(P=inputs/prior_workflow04_layer.jsonl Rscript -e '
+            library(jsonlite)
+            x<-readLines(Sys.getenv("P"),warn=FALSE);x<-x[nzchar(trimws(x))]
+            rows<-lapply(x,fromJSON,simplifyVector=FALSE)
+            fp<-sum(vapply(rows,function(r){s<-r$screening$screening_input_sha256;if(is.null(s)||!length(s))return(TRUE);!nzchar(trimws(as.character(s[[1L]])))},logical(1)))
+            av<-sum(vapply(rows,function(r){s<-r$screening;is.null(s$input_title_present)||is.null(s$input_abstract_present)},logical(1)))
+            cat(as.integer(fp>0L||av>0L),fp,av)
+          ')"
+          echo "Prior W04 missing fingerprints=$MFP availability=$MAV"
+          echo "need=$NEED" >> "$GITHUB_OUTPUT"
+
+      - name: Restore exact prior canonical only if required
+        if: ${{ steps.prior.outputs.need == '1' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/prior_canonical
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer "$PRIOR_LEAN_POINTER" \
+            --output-dir inputs/prior_canonical
+          P=$(find inputs/prior_canonical -type f -name canonical_lean.jsonl -print -quit)
+          test -n "$P"
+          cp "$P" inputs/prior_canonical_lean.jsonl
+
+      - name: Run production W04 prepare logic only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow04_prepare
+          ARGS=(
+            --canonical inputs/current/canonical_lean.jsonl
+            --workflow03-status inputs/current/publication_status.jsonl
+            --prior-workflow04 inputs/prior_workflow04_layer.jsonl
+            --output-dir outputs/workflow04_prepare
+          )
+          if [ -f inputs/prior_canonical_lean.jsonl ]; then
+            ARGS+=(--prior-canonical inputs/prior_canonical_lean.jsonl)
+          fi
+          Rscript scripts/updater/workflow_04_prepare_incremental.R "${ARGS[@]}"
+
+      - name: Validate and report exact W04 repair scope
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x<-fromJSON('outputs/workflow04_prepare/prepare_manifest.json')
+          stopifnot(x$status=='PASS',x$mode=='update')
+          stopifnot(x$canonical_records==50440L,x$workflow03_excluded==13L,x$workflow03_eligible==50427L)
+          stopifnot(x$changed_screening_input_reused==0L)
+          stopifnot(x$screen_queue_records==x$new_record_ids+x$existing_records_refreshed)
+          cat(sprintf('EXACT W04 QUEUE: %d records = %d new IDs + %d changed existing inputs; reuse=%d\n',
+                      x$screen_queue_records,x$new_record_ids,x$existing_records_refreshed,x$reusable_records))
+
+      - name: Upload W04 preflight
+        uses: actions/upload-artifact@v4
+        with:
+          name: w04-integrity-repair-preflight-${{ github.run_id }}
+          path: |
+            outputs/workflow04_prepare/prepare_manifest.json
+            outputs/workflow04_prepare/screen_queue_manifest.csv
+            outputs/workflow04_prepare/screen_queue_record_ids.txt
+            outputs/workflow04_prepare/scientific_input_refresh_records.csv
+            outputs/human_overlay/summary.json
+            outputs/human_overlay/audit.jsonl
+          retention-days: 30
+          if-no-files-found: error
