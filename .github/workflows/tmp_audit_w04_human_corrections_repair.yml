@@ -1,0 +1,166 @@
+name: TEMP audit W04 human corrections in repair queue
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_audit_w04_human_corrections_repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CURRENT_LEAN_POINTER: 'docs/compaction/zenodo/run-37648955012.json'
+  PRIOR_LEAN_POINTER: 'docs/compaction/zenodo/run-37381023181.json'
+  HUMAN_CORRECTIONS_POINTER: 'docs/workflow04/human_abstract_corrections/run-37511638503.json'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Restore prior and current lean canonical
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs outputs
+          mkdir -p inputs/prior inputs/current inputs/corrections outputs
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer "$PRIOR_LEAN_POINTER" --output-dir inputs/prior
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer "$CURRENT_LEAN_POINTER" --output-dir inputs/current
+          cp "$(find inputs/prior -name canonical_lean.jsonl -print -quit)" inputs/prior.jsonl
+          cp "$(find inputs/current -name canonical_lean.jsonl -print -quit)" inputs/current.jsonl
+
+      - name: Restore preserved corrections
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite);library(httr2);library(digest)
+          p<-fromJSON(Sys.getenv('HUMAN_CORRECTIONS_POINTER'),simplifyVector=FALSE)
+          token<-Sys.getenv('ZENODO_ACCESS_TOKEN')
+          dep<-request(paste0('https://zenodo.org/api/deposit/depositions/',p$zenodo_record_id)) |>
+            req_headers(Authorization=paste('Bearer',token)) |> req_timeout(120) |> req_perform() |>
+            resp_body_json(simplifyVector=FALSE)
+          bucket<-sub('/$','',as.character(dep$links$bucket))
+          fn<-'workflow04_human_abstract_corrections.jsonl'
+          dest<-file.path('inputs/corrections',fn)
+          resp<-request(paste0(bucket,'/',URLencode(fn,reserved=TRUE))) |> req_method('GET') |>
+            req_headers(Authorization=paste('Bearer',token)) |> req_timeout(600) |>
+            req_error(is_error=function(resp)FALSE) |> req_perform(path=dest)
+          stopifnot(resp_status(resp)==200L)
+          stopifnot(tolower(digest(file=dest,algo='sha256',serialize=FALSE))==
+                    tolower(as.character(p$corrections_sha256)))
+
+      - name: Compare non-abstract screening inputs for all 157 corrected records
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%`<-function(x,y)if(is.null(x))y else x
+          scalar<-function(x){if(is.null(x)||!length(x))return('');z<-as.character(x[[1L]]);if(is.na(z))'' else trimws(gsub('[[:space:]]+',' ',z))}
+          textify<-function(x){
+            if(is.null(x))return('')
+            if(is.character(x))return(paste(x[nzchar(x)],collapse='; '))
+            if(is.atomic(x))return(paste(as.character(x),collapse='; '))
+            if(is.list(x))return(paste(Filter(nzchar,vapply(x,textify,character(1))),collapse='; '))
+            as.character(x)
+          }
+          first_nonempty<-function(...){for(x in list(...)){z<-textify(x);if(nzchar(trimws(z)))return(trimws(z))};''}
+          norm_doi<-function(x){
+            z<-tolower(scalar(x));if(!nzchar(z))return('')
+            z<-sub('^https?://(dx\\.)?doi\\.org/','',z,perl=TRUE)
+            z<-sub('^doi:\\s*','',z,perl=TRUE);z<-sub('[?#].*$','',z,perl=TRUE)
+            z<-sub('\\.(html?|pdf|xml)$','',z,perl=TRUE,ignore.case=TRUE)
+            z<-sub('[.,;:]+$','',z,perl=TRUE);z
+          }
+          norm_title<-function(x)tolower(trimws(gsub('[[:space:]]+',' ',scalar(x))))
+          readjl<-function(p){x<-readLines(p,warn=FALSE);x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
+          view<-function(r){
+            c<-r$canonical%||%list()
+            list(
+              title=first_nonempty(c$title,r$title),
+              keywords=first_nonempty(c$keywords,r$keywords),
+              journal_source_title=first_nonempty(c$source_title,c$journal,r$source_title,r$journal),
+              affiliations=first_nonempty(c$affiliations,r$affiliations),
+              funding=first_nonempty(c$funding,c$funders,r$funding,r$funders)
+            )
+          }
+          prior<-readjl('inputs/prior.jsonl'); current<-readjl('inputs/current.jsonl'); corr<-readjl('inputs/corrections/workflow04_human_abstract_corrections.jsonl')
+          pids<-vapply(prior,function(r)scalar((r$identity%||%list())$record_id),character(1))
+          cids<-vapply(current,function(r)scalar((r$identity%||%list())$record_id),character(1))
+          pmap<-setNames(prior,pids); cmap<-setNames(current,cids)
+          cdois<-vapply(current,function(r)norm_doi((r$canonical%||%list())$doi),character(1))
+          ctitles<-vapply(current,function(r){c<-r$canonical%||%list();norm_title(c$title%||%r$title)},character(1))
+          doi_groups<-split(which(nzchar(cdois)),cdois[nzchar(cdois)])
+          title_groups<-split(which(nzchar(ctitles)),ctitles[nzchar(ctitles)])
+          rows<-list()
+          for(i in seq_along(corr)){
+            z<-corr[[i]];oldid<-scalar(z$record_id_at_edit);nd<-scalar(z$doi_normalized);nt<-scalar(z$title_normalized)
+            newidx<-NULL;basis<-''
+            if(oldid %in% cids){
+              k<-match(oldid,cids); if((!nzchar(nd)||cdois[k]==nd)||(!nzchar(nt)||ctitles[k]==nt)){newidx<-k;basis<-'record_id_at_edit'}
+            }
+            if(is.null(newidx)&&nzchar(nd)){
+              hs<-doi_groups[[nd]]
+              if(length(hs)==1L){newidx<-hs[[1L]];basis<-'doi'}
+              else if(length(hs)>1L&&nzchar(nt)){th<-hs[ctitles[hs]==nt];if(length(th)==1L){newidx<-th[[1L]];basis<-'doi+title'}}
+            }
+            if(is.null(newidx)&&nzchar(nt)){hs<-title_groups[[nt]];if(length(hs)==1L){newidx<-hs[[1L]];basis<-'title'}}
+            stopifnot(length(newidx)==1L)
+            newid<-cids[newidx]
+            oldr<-pmap[[oldid]]
+            # If the historical work ID retired, compare with its preserved edit-time title/DOI context;
+            # this case must remain in automated screening unless the old canonical row exists and all other fields agree.
+            old_exists<-!is.null(oldr)
+            other_same<-FALSE
+            if(old_exists) other_same<-identical(view(oldr),view(current[[newidx]]))
+            rows[[length(rows)+1L]]<-data.frame(
+              old_record_id=oldid,new_record_id=newid,identity_basis=basis,
+              old_id_still_current=oldid==newid,old_canonical_exists=old_exists,
+              non_abstract_screening_fields_unchanged=other_same,
+              stringsAsFactors=FALSE
+            )
+          }
+          d<-do.call(rbind,rows)
+          stopifnot(nrow(d)==157L)
+          safe<-d$old_canonical_exists & d$non_abstract_screening_fields_unchanged
+          d$safe_to_preserve_human_w04_decision<-safe
+          write.csv(d,'outputs/human_correction_reuse_audit.csv',row.names=FALSE)
+          s<-list(
+            status='PASS',corrections=157L,
+            safe_human_decision_reuse=sum(safe),
+            require_automated_rescreen=157L-sum(safe),
+            stable_ids=sum(d$old_id_still_current),
+            remapped_ids=sum(!d$old_id_still_current),
+            other_screening_fields_changed=sum(d$old_canonical_exists & !d$non_abstract_screening_fields_unchanged),
+            old_canonical_absent=sum(!d$old_canonical_exists)
+          )
+          writeLines(toJSON(s,auto_unbox=TRUE,pretty=TRUE),'outputs/summary.json')
+          print(s)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w04-human-correction-reuse-audit-${{ github.run_id }}
+          path: outputs/
+          retention-days: 30
+          if-no-files-found: error
