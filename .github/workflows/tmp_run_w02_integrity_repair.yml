@@ -1,0 +1,363 @@
+name: TEMP targeted W02 integrity repair
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w02_integrity_repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: workflow02-integrity-repair
+  cancel-in-progress: false
+
+env:
+  W01_POINTER: 'docs/deduplication/zenodo/run-37608813159.json'
+  PREV_W02_POINTER: 'docs/enrichment/zenodo/run-37381023181.json'
+  PREFLIGHT_RUN_ID: '37644136220'
+  PREFLIGHT_ARTIFACT: 'w02-integrity-repair-preflight-37644136220'
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','stringdist','data.table'))
+
+      - name: Restore corrected W01 and prior W02
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf w01 previous_w02 preflight outputs
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$W01_POINTER" \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root w01
+          Rscript scripts/updater/workflow_02_restore_state_from_zenodo.R \
+            --pointer "$PREV_W02_POINTER" \
+            --output-dir previous_w02
+          test -s w01/canonical/records.jsonl
+          P="$(find previous_w02 -name cumulative_patch.jsonl -type f -print -quit)"
+          test -n "$P"
+          cp "$P" previous_cumulative_patch.jsonl
+
+      - name: Restore passed W02 repair preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preflight
+          gh run download "$PREFLIGHT_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$PREFLIGHT_ARTIFACT" --dir preflight
+          test -s preflight/preflight/preflight_summary.json
+          test -s preflight/preflight/current_repair_cohort_ids.txt
+          test -s preflight/plan/batch-0001.txt
+          Rscript - <<'RS'
+          library(jsonlite)
+          x <- fromJSON('preflight/preflight/preflight_summary.json')
+          stopifnot(x$status=='PASS',x$current_repair_cohort_records==9885L,
+                    x$stale_previous_patches_skipped==7L,
+                    x$repair_cohort_due_api_records==11L,
+                    x$repair_cohort_batch_count==1L)
+          cat('PASS: W02 preflight gate restored: 11 due API records\n')
+          RS
+
+      - name: Filter prior W02 patch to corrected compatible IDs
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          clean <- function(x){
+            if(is.null(x)||!length(x)) return(NULL)
+            s<-trimws(gsub('[[:space:]]+',' ',as.character(x[[1L]])))
+            if(is.na(s)||!nzchar(s)) NULL else s
+          }
+          nd <- function(x){
+            z<-clean(x); if(is.null(z)) return(NULL)
+            z<-tolower(z); z<-sub('^https?://(dx\\.)?doi\\.org/','',z,perl=TRUE)
+            z<-sub('^doi:\\s*','',z,perl=TRUE); z<-sub('[?#].*$','',z,perl=TRUE)
+            z<-sub('/full/html?$','',z,perl=TRUE,ignore.case=TRUE)
+            z<-sub('\\.(html?|pdf|xml)$','',z,perl=TRUE,ignore.case=TRUE)
+            z<-sub('[.,;:]+$','',z,perl=TRUE); if(!nzchar(z)) NULL else z
+          }
+          readjl <- function(p){x<-readLines(p,warn=FALSE);x<-x[nzchar(trimws(x))];lapply(x,fromJSON,simplifyVector=FALSE)}
+          patches <- readjl('previous_cumulative_patch.jsonl')
+          pmap <- setNames(patches,vapply(patches,function(x)as.character(x$record_id),character(1)))
+          current <- new.env(parent=emptyenv())
+          con <- file('w01/canonical/records.jsonl','rt',encoding='UTF-8')
+          repeat {
+            lines<-readLines(con,n=250L,warn=FALSE); if(!length(lines)) break
+            for(line in lines){
+              if(!nzchar(trimws(line))) next
+              z<-fromJSON(line,simplifyVector=FALSE)
+              assign(as.character(z$identity$record_id),nd(z$canonical$doi),envir=current)
+            }
+          }
+          close(con)
+          keep <- list(); dropped_missing <- character(); dropped_stale <- character()
+          for(p in patches){
+            id <- as.character(p$record_id)
+            if(!exists(id,envir=current,inherits=FALSE)){dropped_missing<-c(dropped_missing,id);next}
+            cur <- get(id,envir=current,inherits=FALSE)
+            pd <- nd(p$input_doi)
+            if(is.null(pd)||is.null(cur)||!identical(pd,cur)){dropped_stale<-c(dropped_stale,id);next}
+            keep[[length(keep)+1L]] <- p
+          }
+          stopifnot(length(dropped_missing)==162L,length(dropped_stale)==7L,length(keep)==3290L)
+          out <- file('outputs_filtered_patch.jsonl','wt',encoding='UTF-8')
+          for(x in keep) writeLines(toJSON(x,auto_unbox=TRUE,null='null',na='null',digits=NA),out,useBytes=TRUE)
+          close(out)
+          dir.create('outputs/audit',recursive=TRUE,showWarnings=FALSE)
+          writeLines(sort(dropped_missing),'outputs/audit/dropped_retired_patch_ids.txt')
+          writeLines(sort(dropped_stale),'outputs/audit/dropped_stale_doi_patch_ids.txt')
+          writeLines(toJSON(list(status='PASS',prior=length(patches),kept=length(keep),
+                                  dropped_retired=length(dropped_missing),dropped_stale_doi=length(dropped_stale)),
+                            auto_unbox=TRUE,pretty=TRUE),
+                     'outputs/audit/patch_filter_summary.json')
+          cat('PASS: retained 3290 compatible prior W02 patches; dropped 162 retired + 7 stale DOI patches\n')
+
+      - name: Apply compatible prior W02 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/w02
+          Rscript scripts/updater/workflow_02_apply_patch.R \
+            --input w01/canonical/records.jsonl \
+            --patch outputs_filtered_patch.jsonl \
+            --output outputs/w02/input_with_previous_state.jsonl \
+            --report outputs/audit/prior_patch_application.json \
+            --mode fill_missing
+
+      - name: Extract exact 11-record due batch from rematerialised state
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          ids <- readLines('preflight/plan/batch-0001.txt',warn=FALSE)
+          ids <- ids[nzchar(trimws(ids))]
+          stopifnot(length(ids)==11L,!anyDuplicated(ids))
+          want <- setNames(rep(TRUE,length(ids)),ids)
+          input <- file('outputs/w02/input_with_previous_state.jsonl','rt',encoding='UTF-8')
+          output <- file('outputs/w02/due_11.jsonl','wt',encoding='UTF-8')
+          n<-0L
+          repeat{
+            lines<-readLines(input,n=250L,warn=FALSE);if(!length(lines))break
+            for(line in lines){
+              if(!nzchar(trimws(line)))next
+              z<-fromJSON(line,simplifyVector=FALSE)
+              id<-as.character(z$identity$record_id)
+              if(id %in% names(want)){writeLines(line,output,useBytes=TRUE);n<-n+1L}
+            }
+          }
+          close(input);close(output)
+          stopifnot(n==11L)
+          cat('PASS: extracted exact 11-record W02 repair batch\n')
+
+      - name: Enrich 11 due records with Europe PMC only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/batch
+          Rscript scripts/updater/workflow_02_metadata_enrichment.R \
+            --input outputs/w02/due_11.jsonl \
+            --output outputs/batch/enriched.jsonl \
+            --audit outputs/batch/enrichment_audit.jsonl \
+            --report outputs/batch/enrichment_report.json \
+            --progress-every 1 \
+            --delay 0.5 \
+            --max-rate-limit-wait 60 \
+            --scopus-rate-limit-trip 3 \
+            --skip-scopus true \
+            --enrich-author-keywords false \
+            --recheck-after-days 90
+
+          Rscript scripts/updater/workflow_02_build_patch.R \
+            --input outputs/w02/due_11.jsonl \
+            --enriched outputs/batch/enriched.jsonl \
+            --audit outputs/batch/enrichment_audit.jsonl \
+            --enrichment-report outputs/batch/enrichment_report.json \
+            --patch outputs/batch/current_patch.jsonl \
+            --retry-queue outputs/batch/retry_queue.jsonl \
+            --report outputs/batch/current_patch_report.json
+
+      - name: Check for W02 human-review blockers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/human_review
+          Rscript scripts/updater/workflow_02_build_human_review.R \
+            --input outputs/w02/due_11.jsonl \
+            --audit outputs/batch/enrichment_audit.jsonl \
+            --output-dir outputs/human_review \
+            --status outputs/human_review/status.json
+          Rscript - <<'RS'
+          library(jsonlite)
+          x<-fromJSON('outputs/human_review/status.json')
+          if(isTRUE(x$requires_human_review)) stop(sprintf('W02 repair produced %d human-review blocker(s); publication stopped',as.integer(x$blocking_cases)),call.=FALSE)
+          cat('PASS: no W02 human-review blockers\n')
+          RS
+
+      - name: Merge corrected W02 sparse state and reconstruct full canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/state
+          Rscript scripts/updater/workflow_02_merge_patches.R \
+            --previous outputs_filtered_patch.jsonl \
+            --current outputs/batch/current_patch.jsonl \
+            --output outputs/state/cumulative_patch.jsonl
+
+          Rscript scripts/updater/workflow_02_apply_patch.R \
+            --input w01/canonical/records.jsonl \
+            --patch outputs/state/cumulative_patch.jsonl \
+            --output outputs/w02/enriched.jsonl \
+            --report outputs/w02/cumulative_patch_replay.json \
+            --mode fill_missing
+
+          Rscript scripts/updater/workflow_02_inventory_state.R \
+            --input outputs/w02/enriched.jsonl \
+            --report outputs/state/final_inventory.json \
+            --missing-both-queue outputs/state/missing_both_queue.jsonl
+
+          cp outputs/batch/enrichment_audit.jsonl outputs/state/enrichment_audit.jsonl
+          cp outputs/batch/enrichment_report.json outputs/state/enrichment_report.json
+          cp outputs/batch/retry_queue.jsonl outputs/state/retry_queue.jsonl
+          cp outputs/w02/cumulative_patch_replay.json outputs/state/cumulative_patch_replay.json
+
+          W01_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W01_POINTER"));cat(x$canonical_jsonl_sha256)')"
+          W01_SHA="$W01_SHA" Rscript - <<'RS'
+          library(jsonlite);library(digest)
+          x<-list(schema='living-evidence-map-workflow02-state-manifest-v1',
+                  workflow='02',execution='targeted_integrity_repair',
+                  repairable_fields=c('title','abstract','author_keywords'),
+                  github_run_id=Sys.getenv('GITHUB_RUN_ID'),
+                  workflow01_pointer=Sys.getenv('W01_POINTER'),
+                  workflow01_canonical_sha256=Sys.getenv('W01_SHA'),
+                  previous_workflow02_pointer=Sys.getenv('PREV_W02_POINTER'),
+                  final_enriched_sha256=digest(file='outputs/w02/enriched.jsonl',algo='sha256',serialize=FALSE),
+                  integrity_repair_cohort_records=9885L,
+                  integrity_repair_api_records=11L,
+                  created_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'))
+          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/state/state_manifest.json')
+          RS
+
+          Rscript - <<'RS'
+          library(jsonlite)
+          lines<-readLines('outputs/w02/enriched.jsonl',warn=FALSE);lines<-lines[nzchar(trimws(lines))]
+          ids<-vapply(lines,function(z)as.character(fromJSON(z,simplifyVector=FALSE)$identity$record_id),character(1))
+          stopifnot(length(lines)==50440L,!anyDuplicated(ids))
+          p<-readLines('outputs/state/cumulative_patch.jsonl',warn=FALSE);p<-p[nzchar(trimws(p))]
+          stopifnot(length(p)>=3290L,length(p)<=3301L)
+          cat(sprintf('PASS: reconstructed full corrected W02 state: 50440 records, %d cumulative patches\n',length(p)))
+          RS
+
+      - name: Publish corrected W02 sparse state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/zenodo
+          W01_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W01_POINTER"));cat(x$canonical_jsonl_sha256)')"
+          Rscript scripts/updater/workflow_02_archive_state_to_zenodo.R \
+            --state-dir outputs/state \
+            --run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/zenodo \
+            --workflow01-canonical-sha256 "$W01_SHA" \
+            --previous-pointer "$PREV_W02_POINTER"
+
+      - name: Register W02 and build lean checkpoint
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_02_update_zenodo_registry.R \
+            --receipt outputs/zenodo/zenodo_receipt.json \
+            --registry docs/enrichment/zenodo_registry.csv \
+            --pointer-dir docs/enrichment/zenodo
+
+          mkdir -p outputs/lean outputs/lean_zenodo
+          ENRICHED_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/w02/enriched.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_02_compact_post_w02_canonical.R \
+            --input outputs/w02/enriched.jsonl \
+            --output outputs/lean/canonical_lean.jsonl \
+            --report outputs/lean/compaction_report.json \
+            --expected-input-sha256 "$ENRICHED_SHA"
+          LEAN_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/lean/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_02_archive_lean_checkpoint_to_zenodo.R \
+            --state-dir outputs/lean \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/lean_zenodo \
+            --input-canonical-sha256 "$ENRICHED_SHA" \
+            --lean-canonical-sha256 "$LEAN_SHA"
+          Rscript scripts/updater/workflow_02_update_lean_checkpoint_registry.R \
+            --receipt outputs/lean_zenodo/zenodo_receipt.json \
+            --registry docs/compaction/zenodo_registry.csv \
+            --pointer-dir docs/compaction/zenodo
+
+      - name: Verify published W02 pointers before commit
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          w2<-fromJSON(file.path('docs/enrichment/zenodo',paste0('run-',Sys.getenv('GITHUB_RUN_ID'),'.json')))
+          lean<-fromJSON(file.path('docs/compaction/zenodo',paste0('run-',Sys.getenv('GITHUB_RUN_ID'),'.json')))
+          stopifnot(w2$status=='published',w2$workflow=='02',w2$visibility=='restricted')
+          stopifnot(w2$upstream_workflow01_canonical_sha256=='7934ea9d18e9cb090254bff6ae247eb403efa23cd3d0588608a8633667168fa1')
+          stopifnot(lean$status=='published',lean$canonical_records==50440L,lean$manifestations==135566L)
+          cat('PASS: corrected W02 state and lean checkpoint publication receipts validated\n')
+
+      - name: Commit corrected W02 provenance only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          git add docs/enrichment/zenodo_registry.csv docs/enrichment/zenodo/run-"$GITHUB_RUN_ID".json \
+                  docs/compaction/zenodo_registry.csv docs/compaction/zenodo/run-"$GITHUB_RUN_ID".json
+          git commit -m "Register targeted W02 integrity repair $GITHUB_RUN_ID"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
+
+      - name: Upload repair audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w02-integrity-repair-${{ github.run_id }}
+          path: |
+            outputs/audit/
+            outputs/batch/current_patch_report.json
+            outputs/batch/enrichment_report.json
+            outputs/batch/retry_queue.jsonl
+            outputs/human_review/status.json
+            outputs/state/state_manifest.json
+            outputs/state/final_inventory.json
+            outputs/zenodo/zenodo_receipt.json
+            outputs/lean/compaction_report.json
+            outputs/lean_zenodo/zenodo_receipt.json
+          retention-days: 30
+          if-no-files-found: warn
