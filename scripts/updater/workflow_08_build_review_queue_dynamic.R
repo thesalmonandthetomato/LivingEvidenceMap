@@ -51,7 +51,14 @@ context<-ctx |> transmute(
   record_sequence=if("record_sequence"%in%names(ctx))as.integer(record_sequence)else seq_len(n()),
   record_id=as.character(record_id),
   title=clean_chr(title),
-  abstract=clean_chr(abstract)
+  abstract=clean_chr(abstract),
+  authors=if("authors"%in%names(ctx))clean_chr(authors)else "",
+  year=if("year"%in%names(ctx))clean_chr(year)else "",
+  journal=if("journal"%in%names(ctx))clean_chr(journal)else "",
+  volume=if("volume"%in%names(ctx))clean_chr(volume)else "",
+  pages=if("pages"%in%names(ctx))clean_chr(pages)else "",
+  doi=if("doi"%in%names(ctx))clean_chr(doi)else "",
+  keywords=if("keywords"%in%names(ctx))clean_chr(keywords)else ""
 )
 
 # W05 NONE means no eligible salmon species could be extracted. Under the
@@ -228,7 +235,20 @@ for(i in seq_len(nrow(w07q))){
 pending_ids<-context$record_id[lengths(issue_map[context$record_id])>0L]
 queue<-lapply(pending_ids,function(rid){
   z<-context[match(rid,context$record_id),,drop=FALSE]
-  list(record_id=rid,record_sequence=as.integer(z$record_sequence),title=z$title,abstract=z$abstract,issues=issue_map[[rid]])
+  list(
+    record_id=rid,
+    record_sequence=as.integer(z$record_sequence),
+    title=z$title,
+    abstract=z$abstract,
+    authors=z$authors,
+    year=z$year,
+    journal=z$journal,
+    volume=z$volume,
+    pages=z$pages,
+    doi=z$doi,
+    keywords=z$keywords,
+    issues=issue_map[[rid]]
+  )
 })
 
 queue_path<-file.path(out_dir,"workflow08_review_queue_current.jsonl")
