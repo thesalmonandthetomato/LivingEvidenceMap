@@ -48,6 +48,27 @@ current_sources <- sub(source_pattern,"",basename(current_files))
 if(anyDuplicated(current_sources)) stop("Current seed contains duplicate source namespaces",call.=FALSE)
 names(current_files) <- current_sources
 
+# The deduplication row index is defined by the ordered source-input manifest.
+# Never infer that order from filenames: list.files()/sort() may permute source
+# blocks and make historic numeric pair indices resolve to different records.
+source_inputs_path <- file.path(current_seed_root,"source_inputs.json")
+if(!file.exists(source_inputs_path)) stop("Current seed lacks authoritative source_inputs.json",call.=FALSE)
+source_inputs <- fromJSON(source_inputs_path,simplifyVector=FALSE)
+if(!identical(source_inputs$schema,"living-evidence-map-workflow01-source-inputs-v1")) {
+  stop("Unsupported current-seed source-input manifest schema",call.=FALSE)
+}
+source_order <- names(source_inputs$sources)
+if(is.null(source_order) || !length(source_order) || anyDuplicated(source_order)) {
+  stop("Current-seed source-input manifest lacks a unique ordered source list",call.=FALSE)
+}
+if(!setequal(source_order,current_sources)) {
+  stop(sprintf(
+    "Current-seed source files do not match authoritative source order; missing=%s extra=%s",
+    paste(setdiff(source_order,current_sources),collapse=","),
+    paste(setdiff(current_sources,source_order),collapse=",")
+  ),call.=FALSE)
+}
+
 previous_seed_root <- file.path(previous_root,"workflow01_seed")
 previous_files <- if(dir.exists(previous_seed_root)) list.files(previous_seed_root,pattern=source_pattern,full.names=TRUE) else character()
 previous_sources <- sub(source_pattern,"",basename(previous_files))
@@ -58,7 +79,7 @@ if(length(missing_current)) stop(sprintf("Checkpoint current seed dropped source
 
 source_counts <- list()
 source_files <- list()
-for(src in sort(current_sources)){
+for(src in source_order){
   prev <- if(src %in% previous_sources) previous_files[[src]] else NULL
   cur <- current_files[[src]]
   p <- if(is.null(prev)) character() else read_nonempty(prev)
@@ -102,6 +123,7 @@ manifest <- list(
   ),
   new_source_manifestations=sum(unlist(source_counts)),
   new_source_manifestations_by_source=source_counts,
+  source_order=unname(source_order),
   source_files=source_files,
   pending_human_cases=as.integer(review_manifest$pending_count),
   queue_sha256=as.character(review_manifest$queue_sha256),
