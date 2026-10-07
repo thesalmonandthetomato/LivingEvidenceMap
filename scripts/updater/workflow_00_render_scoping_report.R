@@ -24,8 +24,6 @@ total <- sum(hits,na.rm=TRUE)
 
 dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
 grDevices::pdf(output_path,width=8.27,height=11.69,onefile=TRUE,useDingbats=FALSE)
-on.exit(grDevices::dev.off(),add=TRUE)
-
 page_lines <- function(lines, mono=FALSE, cex=0.82, top=0.94, bottom=0.06, line_gap=0.027) {
   graphics::plot.new()
   y <- top
