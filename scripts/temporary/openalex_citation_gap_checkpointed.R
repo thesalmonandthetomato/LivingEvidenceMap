@@ -181,7 +181,7 @@ keyword_text <- function(rec) {
   }, character(1))
   paste(vals[nzchar(vals)], collapse = " ")
 }
-salmon_regex <- "(?i)(\\bsalmon\\b|\\bsalmonid[A-Za-z0-9_-]*\\b|\\bSalmo\\b|\\bOncorhynchus\\b|\\brainbow\\s+trout\\b)"
+salmon_regex <- "(?i)(\\bsalmon\\b|\\bSalmo\\b|\\bOncorhynchus\\b|\\brainbow\\s+trout\\b)"
 farm_regex <- "(?i)(\\bfarm[A-Za-z0-9_-]*\\b|\\bcage[A-Za-z0-9_-]*\\b|\\bpens\\b|\\bpenned\\b|\\bpen\\b|\\baquacultur[A-Za-z0-9_-]*\\b|\\bcommercial[A-Za-z0-9_-]*\\b)"
 record_text <- function(rec) paste(
   scalar(rec$display_name),
@@ -523,7 +523,7 @@ if (stage == "finalise") {
     schema = "openalex-only-plus-lens-citation-gap-final-v1",
     openalex_seed_rule = "included canonical records with OpenAlex manifestation(s) and no Lens manifestation",
     text_scope = c("title", "abstract", "keywords"),
-    salmon_terms = c("salmon", "salmonid*", "Salmo", "Oncorhynchus", "rainbow trout"),
+    salmon_terms = c("salmon", "Salmo", "Oncorhynchus", "rainbow trout"),
     excluded_farming_terms = c("farm*", "cage*", "pens", "penned", "pen", "aquacultur*", "commercial*"),
     lens_candidates_existing = length(lens_records),
     openalex_candidates_after_filter_and_included_removal = length(candidate_ids),
