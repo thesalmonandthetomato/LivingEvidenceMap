@@ -116,6 +116,7 @@ jobs:
             --human-integrity-manifest inputs/resume/outputs/human_gate/human_review_integrity.json \
             --data-quality-repairs inputs/resume/outputs/human_gate/normalised/data_quality_repairs.normalised.jsonl \
             --previous-cluster-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --explicit-cluster-splits config/workflow01_explicit_cluster_splits.json \
             --output-dir outputs/final
 
       - name: Preserve cumulative repair provenance
