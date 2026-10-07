@@ -99,6 +99,20 @@ jobs:
           }
           cat("PASS: six explicit false clusters split into 16 works; 50440 total W01 clusters\n")
 
+      - name: Reapply corrections to prove idempotence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/split_repeat
+          Rscript scripts/updater/workflow_01_apply_explicit_cluster_splits.R \
+            --pair-decisions outputs/split/final_pair_decisions.csv \
+            --cluster-map outputs/split/manifestation_cluster_map.csv \
+            --clusters outputs/split/clusters.jsonl \
+            --summary outputs/split/summary.json \
+            --corrections config/workflow01_explicit_cluster_splits.json \
+            --output-dir outputs/split_repeat
+          Rscript -e 'library(data.table);library(jsonlite);m<-fread("outputs/split_repeat/manifestation_cluster_map.csv");stopifnot(nrow(m)==135566L,uniqueN(m$cluster_id)==50440L);s<-fromJSON("outputs/split_repeat/summary.json");stopifnot(s$explicit_cluster_split_added_work_ids==0L);a<-readLines("outputs/split_repeat/explicit_cluster_split_audit.jsonl");stopifnot(length(a)==6L);z<-lapply(a,fromJSON);stopifnot(all(vapply(z,function(x)identical(x$state_before,"already_applied"),logical(1))));cat("PASS: explicit split corrections are idempotent\n")'
+
       - name: Upload validation artefact
         if: always()
         uses: actions/upload-artifact@v4
