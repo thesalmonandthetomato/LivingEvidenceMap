@@ -7,7 +7,6 @@ on:
     paths:
       - '.github/workflows/tmp_reconstruct_w01_integrity_repair.yml'
       - 'scripts/updater/workflow_01_prepare_integrity_repair_checkpoint.R'
-      - 'scripts/updater/workflow_01_audit_integrity_reconstruction.R'
   workflow_dispatch:
 
 permissions:
