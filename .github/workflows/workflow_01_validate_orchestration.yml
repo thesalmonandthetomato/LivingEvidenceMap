@@ -17,6 +17,8 @@ on:
       - 'scripts/updater/workflow_01_archive_pending_checkpoint_to_zenodo.R'
       - 'scripts/updater/workflow_01_restore_pending_checkpoint.R'
       - 'scripts/updater/workflow_01_apply_checkpoint_sources.R'
+      - 'scripts/updater/workflow_01_validate_index_identity.R'
+      - 'tests/test_workflow01_checkpoint_source_order.R'
       - 'scripts/updater/workflow_01_archive_delta_to_zenodo.R'
       - 'scripts/updater/workflow_01_build_canonical_jsonl.R'
       - 'scripts/updater/workflow_01_prepare_source_catalogue.R'
@@ -50,7 +52,7 @@ jobs:
 
       - name: Install orchestration validation dependencies
         shell: Rscript {0}
-        run: install.packages(c('yaml','jsonlite'))
+        run: install.packages(c('yaml','jsonlite','data.table','digest'))
 
       - name: Parse production YAML
         shell: Rscript {0}
@@ -110,6 +112,7 @@ jobs:
             'scripts/updater/workflow_01_archive_pending_checkpoint_to_zenodo.R',
             'scripts/updater/workflow_01_restore_pending_checkpoint.R',
             'scripts/updater/workflow_01_apply_checkpoint_sources.R',
+            'scripts/updater/workflow_01_validate_index_identity.R',
             'scripts/updater/workflow_01_archive_delta_to_zenodo.R',
             'scripts/updater/workflow_01_build_canonical_jsonl.R',
             'scripts/updater/workflow_01_prepare_source_catalogue.R',
@@ -124,3 +127,7 @@ jobs:
             parse(file=f)
             cat(sprintf('PASS R parse: %s\n', f))
           }
+
+      - name: Reproduce checkpoint source-order and index-identity regression
+        shell: Rscript {0}
+        run: source('tests/test_workflow01_checkpoint_source_order.R')
