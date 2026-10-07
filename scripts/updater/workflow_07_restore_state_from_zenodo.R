@@ -5,6 +5,7 @@ args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 pointer<-arg("--pointer");output_dir<-arg("--output-dir")
 if(is.null(pointer)||is.null(output_dir))stop("Required: --pointer --output-dir",call.=FALSE)
+if(!file.exists(pointer))stop(sprintf("Workflow 07 pointer not found: %s",pointer),call.=FALSE)
 x<-fromJSON(pointer,simplifyVector=FALSE)
 if(!identical(x$status,"published")||!identical(x$workflow,"07")||!identical(x$state,"topic_coding_and_qc"))stop("Invalid Workflow 07 pointer",call.=FALSE)
 token<-Sys.getenv("ZENODO_ACCESS_TOKEN");if(!nzchar(token))stop("ZENODO_ACCESS_TOKEN is not set",call.=FALSE)
