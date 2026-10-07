@@ -95,11 +95,16 @@ stopifnot(status==0L)
 
 final_can <- read_jsonl(file.path(out_dir,"workflow04_included_canonical.jsonl"))[[1L]]
 final_layer <- read_jsonl(file.path(out_dir,"workflow04_final_screening_layer.jsonl"))[[1L]]
+corrections <- read_jsonl(file.path(out_dir,"workflow04_human_abstract_corrections.jsonl"))
 stopifnot(
   identical(as.character(final_can$canonical$abstract),"Corrected abstract"),
   !identical(as.character(final_layer$screening$screening_input_sha256),old_fp),
   identical(as.character(final_layer$screening$screening_input_sha256),fp(final_can)),
-  identical(as.character(final_layer$screening$human_edit_fingerprint_refresh$reason),"human_w04_abstract_edit")
+  identical(as.character(final_layer$screening$human_edit_fingerprint_refresh$reason),"human_w04_abstract_edit"),
+  length(corrections)==1L,
+  identical(as.character(corrections[[1L]]$record_id_at_edit),"work-test"),
+  identical(as.character(corrections[[1L]]$title),"Test title"),
+  identical(as.character(corrections[[1L]]$edited_abstract),"Corrected abstract")
 )
 
 # Simulate the next update with unchanged post-human bibliographic content.
