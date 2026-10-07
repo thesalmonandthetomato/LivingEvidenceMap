@@ -1,0 +1,188 @@
+name: TEMP reconstruct corrected W01 integrity state
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_reconstruct_w01_integrity_repair.yml'
+      - 'scripts/updater/workflow_01_prepare_integrity_repair_checkpoint.R'
+      - 'scripts/updater/workflow_01_audit_integrity_reconstruction.R'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2'))
+
+      - name: Restore original W01 artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs previous_state current_corrupt_state outputs repair_checkpoint
+          mkdir -p inputs/original inputs/resume outputs
+          gh run download 37347666369 --repo "$GITHUB_REPOSITORY" \
+            --name workflow01-production-37347666369 --dir inputs/original
+          gh run download 37373748707 --repo "$GITHUB_REPOSITORY" \
+            --name workflow01-resume-37373748707 --dir inputs/resume
+          test -s inputs/original/workflow01_pre_adjudication/combined_pair_decisions.csv
+          test -s inputs/original/workflow01_pre_adjudication/manifestation_cluster_map.csv
+          test -s inputs/original/workflow01_union/source_inputs.json
+          test -s inputs/original/pending_checkpoint/checkpoint_manifest.json
+          test -s inputs/resume/outputs/human_gate/normalised/human_decisions.normalised.jsonl
+          test -s inputs/resume/outputs/human_gate/human_review_integrity.json
+
+      - name: Restore previous authoritative W01 baseline
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer inputs/original/pending_checkpoint/previous_workflow01_pointer.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root previous_state
+          test -s previous_state/workflow01_full_five_source/manifestation_cluster_map.csv
+          test -s previous_state/canonical/records.jsonl
+          test -d previous_state/workflow01_seed
+
+      - name: Repair checkpoint contract from original pre-adjudication identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a inputs/original/pending_checkpoint repair_checkpoint
+          Rscript scripts/updater/workflow_01_prepare_integrity_repair_checkpoint.R \
+            --checkpoint-manifest inputs/original/pending_checkpoint/checkpoint_manifest.json \
+            --source-manifest inputs/original/workflow01_union/source_inputs.json \
+            --pre-map inputs/original/workflow01_pre_adjudication/manifestation_cluster_map.csv \
+            --output repair_checkpoint/checkpoint_manifest.json
+
+      - name: Reconstruct source union in original authoritative order
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_apply_checkpoint_sources.R \
+            --previous-seed previous_state/workflow01_seed \
+            --checkpoint-dir repair_checkpoint \
+            --output-dir outputs/workflow01_union
+
+      - name: Rebuild and verify numeric manifestation identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow01_candidates outputs/index_identity
+          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
+            --old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --output-dir outputs/workflow01_candidates \
+            --score-n 1 \
+            --workflow01-run-id "$GITHUB_RUN_ID" \
+            --validate-index-only true
+          Rscript scripts/updater/workflow_01_validate_index_identity.R \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --checkpoint-manifest repair_checkpoint/checkpoint_manifest.json \
+            --output outputs/index_identity/validation.json
+
+      - name: Apply existing adjudications to original pre-adjudication state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/final
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
+            --combined-decisions inputs/original/workflow01_pre_adjudication/combined_pair_decisions.csv \
+            --manifestation-map inputs/original/workflow01_pre_adjudication/manifestation_cluster_map.csv \
+            --llm-adjudications inputs/original/pending_checkpoint/all_adjudications.jsonl \
+            --human-decisions inputs/resume/outputs/human_gate/normalised/human_decisions.normalised.jsonl \
+            --human-integrity-manifest inputs/resume/outputs/human_gate/human_review_integrity.json \
+            --data-quality-repairs inputs/resume/outputs/human_gate/normalised/data_quality_repairs.normalised.jsonl \
+            --previous-cluster-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --output-dir outputs/final
+
+      - name: Preserve cumulative repair provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv outputs/final/abstract_strip_actions.jsonl outputs/final/abstract_strip_actions.new.jsonl
+          Rscript scripts/updater/workflow_01_merge_cumulative_repairs.R \
+            --previous-repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --new-repairs inputs/resume/outputs/human_gate/normalised/data_quality_repairs.normalised.jsonl \
+            --previous-strips previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --new-strips outputs/final/abstract_strip_actions.new.jsonl \
+            --output-repairs outputs/final/cumulative_data_quality_repairs.jsonl \
+            --output-strips outputs/final/abstract_strip_actions.jsonl
+
+      - name: Build corrected W01 canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/canonical
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R \
+            --cluster-map outputs/final/manifestation_cluster_map.csv \
+            --strip-actions outputs/final/abstract_strip_actions.jsonl \
+            --data-quality-repairs outputs/final/cumulative_data_quality_repairs.jsonl \
+            --repair-audit outputs/canonical/data_quality_repair_application.jsonl \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
+            --run-id "integrity-repair-$GITHUB_RUN_ID" \
+            --output outputs/canonical/records.jsonl \
+            --manifest outputs/canonical/canonical_manifest.json
+
+      - name: Restore currently published corrupted W01 for comparison
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s docs/deduplication/zenodo/run-37373748707.json
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-37373748707.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root current_corrupt_state
+
+      - name: Audit corrected reconstruction against known incident scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/integrity_audit
+          Rscript scripts/updater/workflow_01_audit_integrity_reconstruction.R \
+            --current-map current_corrupt_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --repaired-map outputs/final/manifestation_cluster_map.csv \
+            --current-canonical current_corrupt_state/canonical/records.jsonl \
+            --repaired-canonical outputs/canonical/records.jsonl \
+            --output-dir outputs/integrity_audit \
+            --expected-clusters 50430 \
+            --expected-affected-current-ids 9922 \
+            --expected-retired-ids 503
+
+      - name: Upload corrected W01 candidate only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-integrity-reconstruction-${{ github.run_id }}
+          path: |
+            outputs/index_identity/
+            outputs/final/
+            outputs/canonical/
+            outputs/integrity_audit/
+          retention-days: 30
+          if-no-files-found: error
