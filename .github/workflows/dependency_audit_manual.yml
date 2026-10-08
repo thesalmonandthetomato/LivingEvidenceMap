@@ -36,6 +36,10 @@ jobs:
           Rscript -e 'parse(file="scripts/updater/audit_runtime_dependencies.R"); cat("PASS: R parser\\n")'
       - name: Build read-only dependency census
         run: Rscript scripts/updater/audit_runtime_dependencies.R . outputs/dependency_audit
+      - name: Audit W01-W10 execution and handoff contracts
+        run: |
+          Rscript -e 'parse(file="scripts/updater/audit_pipeline_execution_contracts.R")'
+          Rscript scripts/updater/audit_pipeline_execution_contracts.R . outputs/dependency_audit
       - name: Audit Shiny dependencies
         run: Rscript scripts/updater/audit_shiny_dependencies.R shiny_app outputs/dependency_audit
       - name: Install syscall tracer for diagnostic smoke test
@@ -122,6 +126,8 @@ jobs:
           test -s outputs/dependency_audit/dependency_edges.csv
           test -s outputs/dependency_audit/file_inventory.csv
           test -s outputs/dependency_audit/entry_points.csv
+          test -s outputs/dependency_audit/pipeline_execution_contracts.csv
+          test -s outputs/dependency_audit/pipeline_contract_summary.csv
           test -s outputs/dependency_audit/shiny_edges.csv
           test -s outputs/dependency_audit/shiny_inventory.csv
           test -s outputs/dependency_audit/review_queue.csv
