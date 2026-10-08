@@ -134,12 +134,16 @@ side_x <- 7.05
 # count and search date.
 n_source_cols <- if (nrow(source_meta) <= 10L) 2L else 3L
 n_source_rows <- ceiling(nrow(source_meta) / n_source_cols)
-# Align the database panel with the horizontal flow geometry: keep its left
-# edge aligned with the main left-hand column and narrow its right edge to align
-# exactly with the right edge of the side-column boxes below.
-source_panel_left <- main_x - process_box_w / 2
-source_panel_right <- side_x + process_box_w / 2
-source_panel_width <- source_panel_right - source_panel_left
+# Start from the horizontal flow geometry, then widen the database panel by
+# 10% symmetrically so long database names do not collide with the Hits and
+# Search date columns. Keep the panel centre unchanged so the title, dividers
+# and downstream arrow alignment remain stable.
+source_panel_left_base <- main_x - process_box_w / 2
+source_panel_right_base <- side_x + process_box_w / 2
+source_panel_center <- (source_panel_left_base + source_panel_right_base) / 2
+source_panel_width <- (source_panel_right_base - source_panel_left_base) * 1.10
+source_panel_left <- source_panel_center - source_panel_width / 2
+source_panel_right <- source_panel_center + source_panel_width / 2
 source_panel_bottom <- 11.55
 
 # Source-panel vertical spacing is deliberately derived from the number of rows.
