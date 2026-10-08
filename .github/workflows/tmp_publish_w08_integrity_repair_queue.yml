@@ -1,0 +1,144 @@
+name: TEMP publish corrected W08 integrity-repair queue
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_publish_w08_integrity_repair_queue.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+  SOURCE_RECON_RUN: '37766236861'
+  SOURCE_RECON_ARTIFACT: 'w08-integrity-reconciliation-preflight-37766236861'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest','googlesheets4'))
+
+      - name: Restore validated W08 reconciliation artefact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/reconciliation outputs
+          mkdir -p inputs/reconciliation outputs
+          gh run download "$SOURCE_RECON_RUN"             -n "$SOURCE_RECON_ARTIFACT"             -D inputs/reconciliation
+
+      - name: Enforce exact corrected W08 reconciliation
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          summary_path <- 'inputs/reconciliation/workflow08_reconciliation_summary.json'
+          pending_path <- 'inputs/reconciliation/workflow08_reuse/workflow08_pending_review_queue.jsonl'
+          reused_path <- 'inputs/reconciliation/workflow08_reuse/workflow08_reused_decisions.jsonl'
+          intake_path <- 'inputs/reconciliation/workflow08_intake/workflow08_review_queue_manifest.json'
+          stopifnot(file.exists(summary_path), file.exists(pending_path), file.exists(reused_path), file.exists(intake_path))
+          x <- fromJSON(summary_path,simplifyVector=FALSE)
+          stopifnot(
+            identical(as.integer(x$current_population),23255L),
+            identical(as.integer(x$current_issues),159L),
+            identical(as.integer(x$reused_issues),133L),
+            identical(as.integer(x$pending_issues),26L),
+            identical(as.integer(x$pending_review_records),26L),
+            identical(as.integer(x$new_issues),21L),
+            identical(as.integer(x$changed_issues),5L),
+            identical(as.integer(x$active_shiny_issue_decisions_captured),10L)
+          )
+          countj <- function(p){z<-readLines(p,warn=FALSE);sum(nzchar(trimws(z)))}
+          stopifnot(countj(pending_path)==26L, countj(reused_path)==133L)
+          cat(sprintf('PASS: locked corrected W08 state current=%d reused=%d pending=%d\n',
+                      x$current_issues,x$reused_issues,x$pending_issues))
+
+      - name: Verify reset backend is clean for W08
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(googlesheets4))
+          cred <- file.path(Sys.getenv('RUNNER_TEMP'),'lem-google-service-account.json')
+          writeLines(Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cred,useBytes=TRUE)
+          Sys.chmod(cred,'0600')
+          gs4_auth(path=cred,cache=FALSE)
+          tabs <- sheet_names(Sys.getenv('LEM_GOOGLE_SHEET_ID'))
+          forbidden <- intersect(c('queue_w08_active','decisions_w08'),tabs)
+          if(length(forbidden)) stop('W08 backend reset is not clean; still present: ',paste(forbidden,collapse=', '),call.=FALSE)
+          cat('PASS: W08 queue/decision tabs absent after backend reset\n')
+
+      - name: Publish corrected 26-record W08 queue
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+
+          Rscript scripts/updater/workflow_08_publish_shiny_queue.R             --queue inputs/reconciliation/workflow08_reuse/workflow08_pending_review_queue.jsonl             --species-config user_input/workflow05_coding_config.json             --ontology user_input/workflow07_topic_ontology.csv             --sheet-id "$LEM_GOOGLE_SHEET_ID"             --credential "$RUNNER_TEMP/lem-google-service-account.json"             --source-run-id "$GITHUB_RUN_ID"
+
+          META="$(LEM_CRED="$RUNNER_TEMP/lem-google-service-account.json" LEM_SHEET="$LEM_GOOGLE_SHEET_ID" Rscript -e 'suppressPackageStartupMessages(library(googlesheets4));gs4_auth(path=Sys.getenv("LEM_CRED"),cache=FALSE);x<-read_sheet(Sys.getenv("LEM_SHEET"),sheet="queue_w08_active",col_types="c");stopifnot(nrow(x)==26L);cat(paste(x$batch_id[[1]],x$queue_sha256[[1]],sep="|"))')"
+          BATCH_ID="${META%%|*}"
+          QUEUE_SHA="${META#*|}"
+
+          Rscript scripts/updater/workflow_shiny_batch_status.R             --stage "08"             --batch-id "$BATCH_ID"             --queue-sha256 "$QUEUE_SHA"             --status published             --sheet-id "$LEM_GOOGLE_SHEET_ID"             --credential "$RUNNER_TEMP/lem-google-service-account.json"             --source-run-id "$GITHUB_RUN_ID"
+
+          printf '%s\n' "$BATCH_ID" > outputs/batch_id.txt
+          printf '%s\n' "$QUEUE_SHA" > outputs/queue_sha256.txt
+
+      - name: Save integrity-repair W08 resume context
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x <- list(
+            schema='living-evidence-map-w08-integrity-repair-resume-v1',
+            source_reconciliation_run='37766236861',
+            publication_run=Sys.getenv('GITHUB_RUN_ID'),
+            lean_pointer_path='docs/compaction/zenodo/run-37648955012.json',
+            workflow03_pointer_path='docs/publication_status/zenodo/run-37654051293.json',
+            workflow04_pointer_path='docs/workflow04/zenodo/run-37679581307.json',
+            workflow05_pointer_path='docs/workflow05/zenodo/run-37739192921.json',
+            workflow06_pointer_path='docs/workflow06/zenodo/run-37744038306.json',
+            workflow07_pointer_path='docs/workflow07/zenodo/run-37751063787.json',
+            prior_workflow08_pointer_path='docs/workflow08/zenodo/run-37234697766.json',
+            reused_issues=133L,
+            pending_issues=26L,
+            batch_id=trimws(readLines('outputs/batch_id.txt',warn=FALSE)[1]),
+            queue_sha256=trimws(readLines('outputs/queue_sha256.txt',warn=FALSE)[1])
+          )
+          write_json(x,'outputs/w08_integrity_repair_resume_context.json',auto_unbox=TRUE,pretty=TRUE)
+          file.copy('inputs/reconciliation/workflow08_reuse/workflow08_reused_decisions.jsonl',
+                    'outputs/workflow08_reused_decisions.jsonl',overwrite=TRUE)
+          file.copy('inputs/reconciliation/workflow08_reuse/workflow08_pending_review_queue.jsonl',
+                    'outputs/workflow08_pending_review_queue.jsonl',overwrite=TRUE)
+          file.copy('inputs/reconciliation/workflow08_reconciliation_summary.json',
+                    'outputs/workflow08_reconciliation_summary.json',overwrite=TRUE)
+          cat('PASS: saved W08 repair resume context with 133 locked reused decisions and 26 pending issues\n')
+
+      - name: Upload W08 repair resume context
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08-integrity-repair-resume-${{ github.run_id }}
+          path: outputs/
+          retention-days: 30
+          if-no-files-found: error
