@@ -7,3 +7,4 @@ Runtime tracer isolated smoke validation.
 Validate opt-in W00 planning instrumentation and wrapper.
 Retry W00 wrapper smoke test with fixture script.
 Retry with non-colliding trace directory.
+Retry runtime wrapper after removing basename newline from trace label.
