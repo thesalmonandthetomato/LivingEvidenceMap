@@ -1,4 +1,5 @@
 name: TEMP preflight W08 integrity reconciliation
+# rerun after preserving W06 llm_error as character in W08 intake
 
 on:
   push:
