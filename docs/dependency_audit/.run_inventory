@@ -1,1 +1,2 @@
 Dependency audit trigger, observational only. 2026-10-08.
+Retry after YAML validation fix.
