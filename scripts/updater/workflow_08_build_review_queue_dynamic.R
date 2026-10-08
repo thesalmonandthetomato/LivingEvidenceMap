@@ -34,7 +34,7 @@ jac_set<-function(a,b){
 }
 
 w05<-read_csv(w05_path,show_col_types=FALSE,progress=FALSE)
-w06<-read_csv(w06_path,show_col_types=FALSE,progress=FALSE)
+w06<-read_csv(w06_path,col_types=cols(llm_error=col_character()),show_col_types=FALSE,progress=FALSE)
 ctx<-read_csv(w07_records_path,show_col_types=FALSE,progress=FALSE)
 w07q<-read_csv(w07_review_path,show_col_types=FALSE,progress=FALSE)
 w07s<-read_csv(w07_scores_path,show_col_types=FALSE,progress=FALSE)
