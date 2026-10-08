@@ -7,7 +7,7 @@ dir.create(out,recursive=TRUE,showWarnings=FALSE)
 if(!nzchar(Sys.which("strace")))stop("strace is unavailable; install it only in diagnostic job")
 log<-file.path(out,"strace.log")
 # File syscalls, child processes, no following of networks; do not publish raw syscall logs.
-status<-suppressWarnings(system2("strace",args=c("-f","-qq","-s","4096","-e","trace=%file","-o",shQuote(log),shQuote(cmd),vapply(cmdargs,shQuote,character(1))),stdout=FALSE,stderr=FALSE))
+status<-suppressWarnings(system2("strace",args=c("-f","-qq","-s","4096","-e","trace=%file","-o",shQuote(log),shQuote(cmd),vapply(cmdargs,shQuote,character(1))),stdout=if(identical(Sys.getenv("DEPENDENCY_TRACE_VERBOSE"),"true")) "" else FALSE,stderr=if(identical(Sys.getenv("DEPENDENCY_TRACE_VERBOSE"),"true")) "" else FALSE))
 lines<-readLines(log,warn=FALSE)
 root<-normalizePath(".",winslash="/",mustWork=TRUE)
 pattern <- '"([^"]+)"'
