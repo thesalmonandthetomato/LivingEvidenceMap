@@ -39,22 +39,10 @@ jobs:
           cred<-file.path(Sys.getenv('RUNNER_TEMP'),'lem-google-service-account.json')
           writeLines(Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cred,useBytes=TRUE);Sys.chmod(cred,'0600')
           gs4_auth(path=cred,cache=FALSE); sid<-Sys.getenv('LEM_GOOGLE_SHEET_ID')
-          tabs<-sheet_names(sid)
           q<-read_sheet(sid,sheet='queue_w08_active',col_types='c')
           d<-read_sheet(sid,sheet='decisions_w08',col_types='c')
           a<-read_sheet(sid,sheet='assignments',col_types='c')
-          required_user_cols<-c('user_id','email','display_name','role','active')
-          user_tab<-character()
-          for(tab in tabs){
-            hdr<-tryCatch(read_sheet(sid,sheet=tab,col_types='c',n_max=1),error=function(e)NULL)
-            if(!is.null(hdr) && all(required_user_cols %in% names(hdr))){
-              user_tab<-tab
-              break
-            }
-          }
-          if(!length(user_tab)) stop('No user-registry tab with required schema found')
-          u<-read_sheet(sid,sheet=user_tab[[1]],col_types='c')
-          cat('USER TAB=',user_tab[[1]],' rows=',nrow(u),' cols=',paste(names(u),collapse='|'),'\n',sep='')
+          cat('Using stored W08 reviewer IDs directly for display labels; no user-registry lookup is required for this diagnostic.\n')
 
           cases<-lapply(q$case_json,fromJSON,simplifyVector=FALSE)
           ids<-as.character(d$decision_id); supers<-as.character(d$supersedes_decision_id)
@@ -88,17 +76,9 @@ jobs:
             versions<-vapply(hits,function(x){z<-suppressWarnings(as.integer(x$version%||%1L));if(is.na(z))1L else z},integer(1))
             hits[[order(times,versions,seq_along(hits),decreasing=TRUE)[[1L]]]]
           }
-          find_user<-function(uid){
-            if(!nrow(u))return(NULL)
-            hit<-which(as.character(u$user_id)==uid)
-            if(!length(hit))return(NULL)
-            as.list(u[hit[[1]],,drop=FALSE])
-          }
           user_label<-function(uid){
             uid<-as.character(uid%||%'')
-            if(!nzchar(uid))return('')
-            z<-find_user(uid)
-            if(is.null(z))uid else as.character(z$display_name%||%uid)
+            if(!nzchar(uid))'' else uid
           }
           decision_label<-function(x){
             dd<-tolower(trimws(as.character(x$decision%||%'')))
