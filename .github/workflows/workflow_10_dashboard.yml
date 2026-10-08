@@ -307,6 +307,51 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      - name: Checkout public salmon evidence map repository
+        uses: actions/checkout@v4
+        with:
+          repository: thesalmonandthetomato/salmonevidencemap
+          ref: main
+          token: ${{ secrets.SALMON_EVIDENCE_MAP_PUBLISH_TOKEN }}
+          path: public-site
+          fetch-depth: 0
+
+      - name: Publish validated dashboard and reports to public repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ secrets.SALMON_EVIDENCE_MAP_PUBLISH_TOKEN }}"
+
+          test -s outputs/workflow10/index.html
+          test -s outputs/workflow10/dashboard-data.js
+          test -s docs/reporting/workflow_09/manuscript/methods.html
+          test -s docs/reporting/workflow_09/manuscript/results.html
+          test "$(wc -c < outputs/workflow10/dashboard-data.js)" -gt 40000000
+
+          cp outputs/workflow10/index.html public-site/index.html
+          cp outputs/workflow10/dashboard-data.js public-site/dashboard-data.js
+          cp docs/reporting/workflow_09/manuscript/methods.html public-site/methodology.html
+          cp docs/reporting/workflow_09/manuscript/results.html public-site/results.html
+          touch public-site/.nojekyll
+
+          grep -q './dashboard-data.js' public-site/index.html
+          grep -q './methodology.html' public-site/index.html
+          grep -q './results.html' public-site/index.html
+
+          cd public-site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html dashboard-data.js methodology.html results.html .nojekyll
+
+          if git diff --cached --quiet; then
+            echo "Public salmon evidence map is already current."
+            exit 0
+          fi
+
+          git commit -m "Publish Living Evidence Map W10 run ${GITHUB_RUN_ID}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
       - name: Mark current-run dashboard stage complete
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
