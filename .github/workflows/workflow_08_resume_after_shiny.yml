@@ -97,11 +97,595 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf source
           mkdir -p source
-          gh run download "$SOURCE_RUN_ID" \
+
+          if [ "$SOURCE_RUN_ID" = "37769335442" ]; then
+            mkdir -p source/repair source/reconciliation source/workflow08_reuse source/workflow08_intake
+
+            gh run download "$SOURCE_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "w08-integrity-repair-resume-$SOURCE_RUN_ID" \
+              --dir source/repair
+
+            gh run download "37766236861" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "w08-integrity-reconciliation-preflight-37766236861" \
+              --dir source/reconciliation
+
+            cp source/repair/w08_integrity_repair_resume_context.json source/workflow08_reuse/shiny_resume_context.json
+            cp source/repair/workflow08_pending_review_queue.jsonl source/workflow08_reuse/workflow08_pending_review_queue.jsonl
+            cp source/repair/workflow08_reused_decisions.jsonl source/workflow08_reuse/workflow08_reused_decisions.jsonl
+            cp source/reconciliation/workflow08_intake/workflow08_issue_index_current.csv source/workflow08_intake/workflow08_issue_index_current.csv
+
+            CTX_SOURCE="$(Rscript -e 'x<-jsonlite::fromJSON("source/workflow08_reuse/shiny_resume_context.json");cat(as.character(x$source_reconciliation_run))')"
+            test "$CTX_SOURCE" = "37766236861"
+            test "$(Rscript -e 'x<-jsonlite::fromJSON("source/workflow08_reuse/shiny_resume_context.json");cat(as.integer(x$reused_issues))')" = "133"
+            test "$(Rscript -e 'x<-jsonlite::fromJSON("source/workflow08_reuse/shiny_resume_context.json");cat(as.integer(x$pending_issues))')" = "26"
+            test "$(grep -cve '^[[:space:]]*
+      - name: Prepare Google credential
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Capture cumulative W08 Shiny decision history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/w08_resume
+          Rscript scripts/updater/workflow_08_capture_active_shiny_decisions.R \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --output outputs/w08_resume/active_decisions.jsonl \
+            --history-output outputs/w08_resume/historical_decisions.jsonl
+
+      - name: Export and validate completed W08 Shiny decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_export_shiny_decisions.R \
+            --queue source/workflow08_reuse/workflow08_pending_review_queue.jsonl \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA256" \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --fallback-decisions outputs/w08_resume/historical_decisions.jsonl \
+            --output outputs/w08_resume/fresh_decisions.jsonl \
+            --manifest outputs/w08_resume/shiny_export_manifest.json
+
+      - name: Build complete current W08 decision ledger
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(readr)})
+          readj <- function(p){
+            x<-readLines(p,warn=FALSE,encoding='UTF-8')
+            x<-x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          reused <- readj('source/workflow08_reuse/workflow08_reused_decisions.jsonl')
+          history <- readj('outputs/w08_resume/historical_decisions.jsonl')
+          fresh <- readj('outputs/w08_resume/fresh_decisions.jsonl')
+          candidates <- c(reused,history,fresh)
+
+          current <- read_csv('source/workflow08_intake/workflow08_issue_index_current.csv',show_col_types=FALSE,progress=FALSE)
+          current_keys <- as.character(current$review_key)
+          if(any(!nzchar(current_keys))||anyDuplicated(current_keys)) stop('Current W08 issue index invalid')
+          current_hash <- setNames(as.character(current$issue_state_sha256),current_keys)
+
+          # Prefer later candidate sources (fresh > historical > source reused),
+          # but only when the exact current issue-state fingerprint matches.
+          chosen <- list()
+          for(z in candidates){
+            key <- as.character(z$review_key)
+            h <- z$issue_state_sha256
+            h <- if(is.null(h)||!length(h)) '' else as.character(h[[1L]])
+            if(!nzchar(key)||!key%in%current_keys||!nzchar(h)) next
+            if(tolower(h)!=tolower(current_hash[[key]])) next
+            chosen[[key]] <- z
+          }
+          if(!setequal(names(chosen),current_keys)) {
+            missing <- setdiff(current_keys,names(chosen))
+            stop(sprintf('Complete W08 ledger is missing %d current issues after cumulative carry-forward: %s',
+                         length(missing),paste(head(missing,10),collapse=', ')))
+          }
+          rows <- unname(chosen[current_keys])
+          keys <- vapply(rows,function(z)as.character(z$review_key),character(1))
+          if(any(!nzchar(keys))||anyDuplicated(keys)) stop('Complete W08 ledger has duplicate/missing review_key')
+
+          dir.create('outputs/workflow08',recursive=TRUE,showWarnings=FALSE)
+          con<-file('outputs/workflow08/human_decisions_complete.jsonl','wt',encoding='UTF-8')
+          for(z in rows)writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con,useBytes=TRUE)
+          close(con)
+          cat(sprintf('PASS: complete W08 ledger contains %d issues\n',length(rows)))
+
+      - name: Restore exact current W03-W07 inputs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CTX=source/workflow08_reuse/shiny_resume_context.json
+          LEAN="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$lean_pointer_path)')"
+          W03="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow03_pointer_path)')"
+          W04="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow04_pointer_path)')"
+          W05="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow05_pointer_path)')"
+          W06="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow06_pointer_path)')"
+          W07="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow07_pointer_path)')"
+
+          mkdir -p inputs/current
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R --pointer "$LEAN" --output-dir inputs/current/lean
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R --pointer "$W03" --output-dir inputs/current/w03
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R --pointer "$W04" --output-dir inputs/current/w04
+          Rscript scripts/updater/workflow_05_restore_state_from_zenodo.R --pointer "$W05" --output-dir inputs/current/w05
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R --pointer "$W06" --output-dir inputs/current/w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R --pointer "$W07" --output-dir inputs/current/w07
+
+          cp "$(find inputs/current/lean -type f -name canonical_lean.jsonl -print -quit)" inputs/current/canonical_lean.jsonl
+          cp "$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)" inputs/current/publication_status.jsonl
+          cp "$(find inputs/current/w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)" inputs/current/workflow04_final_screening_layer.jsonl
+          cp "$(find inputs/current/w05 -type f -name workflow05_species_layer.csv -print -quit)" inputs/current/workflow05_species_layer.csv
+          cp "$(find inputs/current/w05 -type f -name species_matches.csv -print -quit)" inputs/current/species_matches.csv
+          cp "$(find inputs/current/w06 -type f -name workflow06_geography_layer.csv -print -quit)" inputs/current/workflow06_geography_layer.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_pathway_scores_retained.csv -print -quit)" inputs/current/workflow07_scores.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_record_qc.csv -print -quit)" inputs/current/workflow07_qc.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_late_automatic_exclusions.csv -print -quit)" inputs/current/workflow07_late.csv
+
+      - name: Assemble and partition definitive W08 canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_finalize_canonical_dynamic.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --w03 inputs/current/publication_status.jsonl \
+            --w04 inputs/current/workflow04_final_screening_layer.jsonl \
+            --w05 inputs/current/workflow05_species_layer.csv \
+            --w05-matches inputs/current/species_matches.csv \
+            --w06 inputs/current/workflow06_geography_layer.csv \
+            --w07-scores inputs/current/workflow07_scores.csv \
+            --w07-qc inputs/current/workflow07_qc.csv \
+            --w07-late-exclusions inputs/current/workflow07_late.csv \
+            --decisions outputs/workflow08/human_decisions_complete.jsonl \
+            --ontology user_input/workflow07_topic_ontology.csv \
+            --species-config user_input/workflow05_coding_config.json \
+            --output outputs/workflow08/post_adjudication_all.jsonl \
+            --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl \
+            --manifest outputs/workflow08/post_adjudication_manifest.json
+
+          Rscript scripts/updater/workflow_08_partition_final_outputs_dynamic.R \
+            --assembled outputs/workflow08/post_adjudication_all.jsonl \
+            --old-manifest outputs/workflow08/post_adjudication_manifest.json \
+            --canonical-output outputs/workflow08/living_evidence_map_canonical_final.jsonl \
+            --exclusions-output outputs/workflow08/workflow08_excluded_records.csv \
+            --manifest-output outputs/workflow08/workflow08_final_manifest.json
+
+          rm outputs/workflow08/post_adjudication_all.jsonl outputs/workflow08/post_adjudication_manifest.json
+
+      - name: Publish resumed W08 state to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow08_zenodo
+          CTX=source/workflow08_reuse/shiny_resume_context.json
+          PRIOR="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$prior_workflow08_pointer_path)')"
+          ARGS=(
+            --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl
+            --exclusions outputs/workflow08/workflow08_excluded_records.csv
+            --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl
+            --manifest outputs/workflow08/workflow08_final_manifest.json
+            --source-run-id "$GITHUB_RUN_ID"
+            --repository "$GITHUB_REPOSITORY"
+            --output-dir outputs/workflow08_zenodo
+          )
+          if [ "$PRIOR" != "none" ] && [ -n "$PRIOR" ]; then
+            SUPER_ID="$(P="$PRIOR" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(as.character(x$zenodo_record_id))')"
+            SUPER_DOI="$(P="$PRIOR" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(as.character(x$doi))')"
+            ARGS+=(--supersedes-record-id "$SUPER_ID" --supersedes-doi "$SUPER_DOI")
+          fi
+          Rscript scripts/updater/workflow_08_archive_to_zenodo.R "${ARGS[@]}"
+
+      - name: Register resumed W08 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "$WORKFLOW08_BRANCH"
+          mkdir -p docs/workflow08/zenodo
+          cp outputs/workflow08_zenodo/zenodo_receipt.json "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
+          if [ ! -f docs/workflow08/zenodo_registry.csv ]; then
+            echo 'source_run_id,zenodo_record_id,doi,canonical_sha256,exclusions_sha256,status,supersedes_zenodo_record_id,published_at_utc' > docs/workflow08/zenodo_registry.csv
+          fi
+          RECEIPT=outputs/workflow08_zenodo/zenodo_receipt.json REG=docs/workflow08/zenodo_registry.csv Rscript -e '
+            x<-jsonlite::fromJSON(Sys.getenv("RECEIPT"),simplifyVector=FALSE)
+            reg<-read.csv(Sys.getenv("REG"),stringsAsFactors=FALSE)
+            required<-c("source_run_id","zenodo_record_id","doi","canonical_sha256","exclusions_sha256","status","supersedes_zenodo_record_id","published_at_utc")
+            if(!all(required%in%names(reg)))stop("W08 registry schema incomplete")
+            reg$status[reg$status=="authoritative"]<-"superseded"
+            row<-data.frame(
+              source_run_id=as.character(x$source_github_run_id),
+              zenodo_record_id=as.character(x$zenodo_record_id),
+              doi=as.character(x$doi),
+              canonical_sha256=as.character(x$final_canonical_jsonl_sha256),
+              exclusions_sha256=as.character(x$excluded_records_csv_sha256),
+              status="authoritative",
+              supersedes_zenodo_record_id=if(is.null(x$supersedes_zenodo_record_id))"" else as.character(x$supersedes_zenodo_record_id),
+              published_at_utc=as.character(x$published_at_utc),
+              stringsAsFactors=FALSE
+            )
+            reg<-reg[as.character(reg$source_run_id)!=row$source_run_id,,drop=FALSE]
+            write.csv(rbind(reg[,required,drop=FALSE],row),Sys.getenv("REG"),row.names=FALSE,quote=FALSE)
+          '
+          git add docs/workflow08/zenodo_registry.csv "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
+          if ! git diff --cached --quiet; then
+            git commit -m "Register resumed Workflow 08 state $GITHUB_RUN_ID"
+            git push origin HEAD:"$WORKFLOW08_BRANCH"
+          fi
+
+      - name: Update current-run live status through W08
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W08
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id "$GITHUB_RUN_ID"
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
+            --stage W08 \
+            --run-id "$GITHUB_RUN_ID" \
+            --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W08 [skip ci]"
+            git pull --rebase origin "$WORKFLOW08_BRANCH"
+            git push origin HEAD:"$WORKFLOW08_BRANCH"
+          fi
+
+      - name: Acknowledge consumed W08 Shiny batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/workflow08/living_evidence_map_canonical_final.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "08" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA256" \
+            --status consumed \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --output-sha256 "$OUTPUT_SHA" \
+            --message "Workflow 08 Shiny decisions applied; final canonical state archived and registered."
+
+      - name: Trigger Workflow 09 publication package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run report_workflow09_figures.yml \
             --repo "$GITHUB_REPOSITORY" \
-            --name "workflow08-review-state-$SOURCE_RUN_ID" \
-            --dir source
+            --ref "$WORKFLOW08_BRANCH"
+          echo "PASS: triggered Workflow 09 after successful resumed W08 finalisation"
+
+      - name: Upload resumed W08 handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow08-shiny-resume-${{ github.run_id }}
+          path: |
+            outputs/w08_resume/
+            outputs/workflow08/
+            outputs/workflow08_zenodo/
+          retention-days: 90
+          if-no-files-found: error
+ source/workflow08_reuse/workflow08_pending_review_queue.jsonl)" = "26"
+            test "$(grep -cve '^[[:space:]]*
+      - name: Prepare Google credential
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Capture cumulative W08 Shiny decision history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/w08_resume
+          Rscript scripts/updater/workflow_08_capture_active_shiny_decisions.R \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --output outputs/w08_resume/active_decisions.jsonl \
+            --history-output outputs/w08_resume/historical_decisions.jsonl
+
+      - name: Export and validate completed W08 Shiny decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_export_shiny_decisions.R \
+            --queue source/workflow08_reuse/workflow08_pending_review_queue.jsonl \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA256" \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --fallback-decisions outputs/w08_resume/historical_decisions.jsonl \
+            --output outputs/w08_resume/fresh_decisions.jsonl \
+            --manifest outputs/w08_resume/shiny_export_manifest.json
+
+      - name: Build complete current W08 decision ledger
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(readr)})
+          readj <- function(p){
+            x<-readLines(p,warn=FALSE,encoding='UTF-8')
+            x<-x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          reused <- readj('source/workflow08_reuse/workflow08_reused_decisions.jsonl')
+          history <- readj('outputs/w08_resume/historical_decisions.jsonl')
+          fresh <- readj('outputs/w08_resume/fresh_decisions.jsonl')
+          candidates <- c(reused,history,fresh)
+
+          current <- read_csv('source/workflow08_intake/workflow08_issue_index_current.csv',show_col_types=FALSE,progress=FALSE)
+          current_keys <- as.character(current$review_key)
+          if(any(!nzchar(current_keys))||anyDuplicated(current_keys)) stop('Current W08 issue index invalid')
+          current_hash <- setNames(as.character(current$issue_state_sha256),current_keys)
+
+          # Prefer later candidate sources (fresh > historical > source reused),
+          # but only when the exact current issue-state fingerprint matches.
+          chosen <- list()
+          for(z in candidates){
+            key <- as.character(z$review_key)
+            h <- z$issue_state_sha256
+            h <- if(is.null(h)||!length(h)) '' else as.character(h[[1L]])
+            if(!nzchar(key)||!key%in%current_keys||!nzchar(h)) next
+            if(tolower(h)!=tolower(current_hash[[key]])) next
+            chosen[[key]] <- z
+          }
+          if(!setequal(names(chosen),current_keys)) {
+            missing <- setdiff(current_keys,names(chosen))
+            stop(sprintf('Complete W08 ledger is missing %d current issues after cumulative carry-forward: %s',
+                         length(missing),paste(head(missing,10),collapse=', ')))
+          }
+          rows <- unname(chosen[current_keys])
+          keys <- vapply(rows,function(z)as.character(z$review_key),character(1))
+          if(any(!nzchar(keys))||anyDuplicated(keys)) stop('Complete W08 ledger has duplicate/missing review_key')
+
+          dir.create('outputs/workflow08',recursive=TRUE,showWarnings=FALSE)
+          con<-file('outputs/workflow08/human_decisions_complete.jsonl','wt',encoding='UTF-8')
+          for(z in rows)writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con,useBytes=TRUE)
+          close(con)
+          cat(sprintf('PASS: complete W08 ledger contains %d issues\n',length(rows)))
+
+      - name: Restore exact current W03-W07 inputs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CTX=source/workflow08_reuse/shiny_resume_context.json
+          LEAN="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$lean_pointer_path)')"
+          W03="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow03_pointer_path)')"
+          W04="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow04_pointer_path)')"
+          W05="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow05_pointer_path)')"
+          W06="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow06_pointer_path)')"
+          W07="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$workflow07_pointer_path)')"
+
+          mkdir -p inputs/current
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R --pointer "$LEAN" --output-dir inputs/current/lean
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R --pointer "$W03" --output-dir inputs/current/w03
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R --pointer "$W04" --output-dir inputs/current/w04
+          Rscript scripts/updater/workflow_05_restore_state_from_zenodo.R --pointer "$W05" --output-dir inputs/current/w05
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R --pointer "$W06" --output-dir inputs/current/w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R --pointer "$W07" --output-dir inputs/current/w07
+
+          cp "$(find inputs/current/lean -type f -name canonical_lean.jsonl -print -quit)" inputs/current/canonical_lean.jsonl
+          cp "$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)" inputs/current/publication_status.jsonl
+          cp "$(find inputs/current/w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)" inputs/current/workflow04_final_screening_layer.jsonl
+          cp "$(find inputs/current/w05 -type f -name workflow05_species_layer.csv -print -quit)" inputs/current/workflow05_species_layer.csv
+          cp "$(find inputs/current/w05 -type f -name species_matches.csv -print -quit)" inputs/current/species_matches.csv
+          cp "$(find inputs/current/w06 -type f -name workflow06_geography_layer.csv -print -quit)" inputs/current/workflow06_geography_layer.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_pathway_scores_retained.csv -print -quit)" inputs/current/workflow07_scores.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_record_qc.csv -print -quit)" inputs/current/workflow07_qc.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_late_automatic_exclusions.csv -print -quit)" inputs/current/workflow07_late.csv
+
+      - name: Assemble and partition definitive W08 canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_finalize_canonical_dynamic.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --w03 inputs/current/publication_status.jsonl \
+            --w04 inputs/current/workflow04_final_screening_layer.jsonl \
+            --w05 inputs/current/workflow05_species_layer.csv \
+            --w05-matches inputs/current/species_matches.csv \
+            --w06 inputs/current/workflow06_geography_layer.csv \
+            --w07-scores inputs/current/workflow07_scores.csv \
+            --w07-qc inputs/current/workflow07_qc.csv \
+            --w07-late-exclusions inputs/current/workflow07_late.csv \
+            --decisions outputs/workflow08/human_decisions_complete.jsonl \
+            --ontology user_input/workflow07_topic_ontology.csv \
+            --species-config user_input/workflow05_coding_config.json \
+            --output outputs/workflow08/post_adjudication_all.jsonl \
+            --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl \
+            --manifest outputs/workflow08/post_adjudication_manifest.json
+
+          Rscript scripts/updater/workflow_08_partition_final_outputs_dynamic.R \
+            --assembled outputs/workflow08/post_adjudication_all.jsonl \
+            --old-manifest outputs/workflow08/post_adjudication_manifest.json \
+            --canonical-output outputs/workflow08/living_evidence_map_canonical_final.jsonl \
+            --exclusions-output outputs/workflow08/workflow08_excluded_records.csv \
+            --manifest-output outputs/workflow08/workflow08_final_manifest.json
+
+          rm outputs/workflow08/post_adjudication_all.jsonl outputs/workflow08/post_adjudication_manifest.json
+
+      - name: Publish resumed W08 state to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow08_zenodo
+          CTX=source/workflow08_reuse/shiny_resume_context.json
+          PRIOR="$(CTX="$CTX" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CTX"));cat(x$prior_workflow08_pointer_path)')"
+          ARGS=(
+            --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl
+            --exclusions outputs/workflow08/workflow08_excluded_records.csv
+            --ledger outputs/workflow08/workflow08_adjudication_ledger.jsonl
+            --manifest outputs/workflow08/workflow08_final_manifest.json
+            --source-run-id "$GITHUB_RUN_ID"
+            --repository "$GITHUB_REPOSITORY"
+            --output-dir outputs/workflow08_zenodo
+          )
+          if [ "$PRIOR" != "none" ] && [ -n "$PRIOR" ]; then
+            SUPER_ID="$(P="$PRIOR" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(as.character(x$zenodo_record_id))')"
+            SUPER_DOI="$(P="$PRIOR" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(as.character(x$doi))')"
+            ARGS+=(--supersedes-record-id "$SUPER_ID" --supersedes-doi "$SUPER_DOI")
+          fi
+          Rscript scripts/updater/workflow_08_archive_to_zenodo.R "${ARGS[@]}"
+
+      - name: Register resumed W08 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "$WORKFLOW08_BRANCH"
+          mkdir -p docs/workflow08/zenodo
+          cp outputs/workflow08_zenodo/zenodo_receipt.json "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
+          if [ ! -f docs/workflow08/zenodo_registry.csv ]; then
+            echo 'source_run_id,zenodo_record_id,doi,canonical_sha256,exclusions_sha256,status,supersedes_zenodo_record_id,published_at_utc' > docs/workflow08/zenodo_registry.csv
+          fi
+          RECEIPT=outputs/workflow08_zenodo/zenodo_receipt.json REG=docs/workflow08/zenodo_registry.csv Rscript -e '
+            x<-jsonlite::fromJSON(Sys.getenv("RECEIPT"),simplifyVector=FALSE)
+            reg<-read.csv(Sys.getenv("REG"),stringsAsFactors=FALSE)
+            required<-c("source_run_id","zenodo_record_id","doi","canonical_sha256","exclusions_sha256","status","supersedes_zenodo_record_id","published_at_utc")
+            if(!all(required%in%names(reg)))stop("W08 registry schema incomplete")
+            reg$status[reg$status=="authoritative"]<-"superseded"
+            row<-data.frame(
+              source_run_id=as.character(x$source_github_run_id),
+              zenodo_record_id=as.character(x$zenodo_record_id),
+              doi=as.character(x$doi),
+              canonical_sha256=as.character(x$final_canonical_jsonl_sha256),
+              exclusions_sha256=as.character(x$excluded_records_csv_sha256),
+              status="authoritative",
+              supersedes_zenodo_record_id=if(is.null(x$supersedes_zenodo_record_id))"" else as.character(x$supersedes_zenodo_record_id),
+              published_at_utc=as.character(x$published_at_utc),
+              stringsAsFactors=FALSE
+            )
+            reg<-reg[as.character(reg$source_run_id)!=row$source_run_id,,drop=FALSE]
+            write.csv(rbind(reg[,required,drop=FALSE],row),Sys.getenv("REG"),row.names=FALSE,quote=FALSE)
+          '
+          git add docs/workflow08/zenodo_registry.csv "docs/workflow08/zenodo/run-$GITHUB_RUN_ID.json"
+          if ! git diff --cached --quiet; then
+            git commit -m "Register resumed Workflow 08 state $GITHUB_RUN_ID"
+            git push origin HEAD:"$WORKFLOW08_BRANCH"
+          fi
+
+      - name: Update current-run live status through W08
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W08
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id "$GITHUB_RUN_ID"
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
+            --stage W08 \
+            --run-id "$GITHUB_RUN_ID" \
+            --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W08 [skip ci]"
+            git pull --rebase origin "$WORKFLOW08_BRANCH"
+            git push origin HEAD:"$WORKFLOW08_BRANCH"
+          fi
+
+      - name: Acknowledge consumed W08 Shiny batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/workflow08/living_evidence_map_canonical_final.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "08" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA256" \
+            --status consumed \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --output-sha256 "$OUTPUT_SHA" \
+            --message "Workflow 08 Shiny decisions applied; final canonical state archived and registered."
+
+      - name: Trigger Workflow 09 publication package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run report_workflow09_figures.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$WORKFLOW08_BRANCH"
+          echo "PASS: triggered Workflow 09 after successful resumed W08 finalisation"
+
+      - name: Upload resumed W08 handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow08-shiny-resume-${{ github.run_id }}
+          path: |
+            outputs/w08_resume/
+            outputs/workflow08/
+            outputs/workflow08_zenodo/
+          retention-days: 90
+          if-no-files-found: error
+ source/workflow08_reuse/workflow08_reused_decisions.jsonl)" = "133"
+            echo "PASS: restored integrity-repair W08 source state from immutable artefacts"
+          else
+            gh run download "$SOURCE_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "workflow08-review-state-$SOURCE_RUN_ID" \
+              --dir source
+          fi
+
           test -s source/workflow08_reuse/shiny_resume_context.json
           test -s source/workflow08_reuse/workflow08_pending_review_queue.jsonl
           test -f source/workflow08_reuse/workflow08_reused_decisions.jsonl
