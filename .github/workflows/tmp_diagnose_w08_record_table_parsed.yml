@@ -1,0 +1,89 @@
+name: TEMP diagnose parsed W08 record-table data
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_diagnose_w08_record_table_parsed.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','googlesheets4','digest'))
+      - name: Diagnose parsed W08 case and decision shapes
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(googlesheets4);library(jsonlite);library(digest)})
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          cred<-file.path(Sys.getenv('RUNNER_TEMP'),'lem-google-service-account.json')
+          writeLines(Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cred,useBytes=TRUE)
+          Sys.chmod(cred,'0600'); gs4_auth(path=cred,cache=FALSE)
+          sid<-Sys.getenv('LEM_GOOGLE_SHEET_ID')
+          q<-read_sheet(sid,sheet='queue_w08_active',col_types='c')
+          d<-read_sheet(sid,sheet='decisions_w08',col_types='c')
+          cases<-lapply(q$case_json,fromJSON,simplifyVector=FALSE)
+
+          scalar_check<-function(x,label,i){
+            if(is.null(x)) return(invisible(TRUE))
+            y<-as.character(x)
+            if(length(y)!=1L) stop(sprintf('case %d %s has length %d class=%s',i,label,length(y),paste(class(x),collapse='/')))
+            invisible(TRUE)
+          }
+          bad<-character()
+          for(i in seq_along(cases)){
+            z<-cases[[i]]
+            for(nm in c('record_id','work_id','title','year','doi','abstract')){
+              e<-tryCatch({scalar_check(z[[nm]],nm,i);NULL},error=function(e)e)
+              if(inherits(e,'error')) bad<-c(bad,conditionMessage(e))
+            }
+            if(i<=3L){
+              cat(sprintf('CASE %d names=%s\n',i,paste(names(z),collapse='|')))
+              for(nm in c('record_id','work_id','title','year','doi','abstract')){
+                x<-z[[nm]]
+                cat(sprintf('  %s class=%s len=%d sample=%s\n',nm,paste(class(x),collapse='/'),length(x),
+                            substr(paste(as.character(x),collapse=' || '),1,180)))
+              }
+            }
+          }
+          cat(sprintf('PARSED CASE scalar problems=%d\n',length(bad)))
+          if(length(bad)) cat(paste('PROBLEM',bad,sep=': ',collapse='\n'),'\n')
+
+          # Reconstruct active decision chain: rows superseded by a later row are inactive.
+          ids<-as.character(d$decision_id); supers<-as.character(d$supersedes_decision_id)
+          inactive<-unique(supers[nzchar(supers)])
+          active<-d[!ids %in% inactive,,drop=FALSE]
+          active<-active[tolower(as.character(active$queue_sha256))==tolower(as.character(q$queue_sha256[[1]])),,drop=FALSE]
+          cat(sprintf('ACTIVE chain rows=%d unique records=%d duplicate_records=%d\n',
+                      nrow(active),length(unique(active$record_id)),sum(duplicated(active$record_id))))
+          if(anyDuplicated(active$record_id)){
+            cat('DUPLICATE ACTIVE RECORDS: ',paste(unique(active$record_id[duplicated(active$record_id)]),collapse=', '),'\n')
+          }
+          for(i in seq_len(min(3,nrow(active)))){
+            x<-active[i,,drop=FALSE]
+            p<-fromJSON(as.character(x$issue_decisions_json[[1]]),simplifyVector=FALSE)
+            cat(sprintf('DEC %d record=%s reviewer=%s issues=%d resolved=%s\n',
+                        i,x$record_id[[1]],x$reviewer[[1]],length(p),x$resolved_at_utc[[1]]))
+          }
+          cat('PASS: parsed W08 record-table diagnostic complete\n')
