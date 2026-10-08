@@ -1,0 +1,18 @@
+name: TEMP run W08 integrity-repair resume
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w08_integrity_repair_resume.yml'
+  workflow_dispatch:
+
+jobs:
+  resume:
+    uses: ./.github/workflows/workflow_08_resume_after_shiny.yml
+    with:
+      source_run_id: '37769335442'
+      batch_id: 'w08-run-37769335442'
+      queue_sha256: '9a3ed1353cf2b2be227e387ef6ae58c533e3c19d677ad1899117dab8d461394c'
+    secrets: inherit
