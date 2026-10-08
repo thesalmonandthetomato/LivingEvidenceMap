@@ -3,6 +3,10 @@ name: Workflow 00 - Search orchestrator
 on:
   workflow_call:
     inputs:
+      trace_dependencies:
+        required: false
+        default: false
+        type: boolean
       run_type:
         required: true
         type: string
@@ -69,6 +73,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      trace_dependencies:
+        description: 'Record file access during W00 planning (diagnostic only)'
+        required: false
+        default: false
+        type: boolean
       run_type:
         description: 'Run mode'
         required: true
@@ -251,7 +260,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_00_resolve_source_selection.R \
+          bash scripts/updater/run_rscript_with_optional_trace.sh scripts/updater/workflow_00_resolve_source_selection.R \
             --run-type '${{ inputs.run_type }}' \
             --saved data/workflow00/source_selection.json \
             --output outputs/updater/workflow00_plan/source_selection.json \
@@ -262,11 +271,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+          bash scripts/updater/run_rscript_with_optional_trace.sh scripts/updater/workflow_00_search_orchestrator.R \
             --run-type '${{ inputs.run_type }}' \
             --additional-search-term '${{ inputs.additional_search_term }}' \
             --config user_input/workflow00_search_strategy.json \
             --output-dir outputs/updater/workflow00_plan
+
+      - name: Upload W00 planning file-access traces
+        if: always() && inputs.trace_dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: w00-planning-file-access-${{ github.run_id }}
+          path: outputs/dependency_trace/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Record selected databases
         shell: Rscript {0}
