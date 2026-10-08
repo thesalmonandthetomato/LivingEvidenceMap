@@ -14,5 +14,5 @@ if [[ $# -lt 1 ]]; then
 fi
 trace_dir="${DEPENDENCY_TRACE_DIR:-outputs/dependency_trace}"
 mkdir -p "$trace_dir"
-script_label="$(basename "$1" | tr -c '[:alnum:]_.-' '_')"
+script_label="$(basename -- "$1" | tr -c '[:alnum:]_.-' '_')"
 Rscript scripts/updater/trace_file_access.R "$trace_dir/$script_label" -- Rscript "$@"
