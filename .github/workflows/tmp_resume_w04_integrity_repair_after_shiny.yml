@@ -1,0 +1,197 @@
+name: TEMP resume corrected W04 integrity repair after Shiny
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_resume_w04_integrity_repair_after_shiny.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  SOURCE_RUN_ID: '37679581307'
+  BATCH_ID: 'w04-resolution-37679581307-d652a5d17e65'
+  QUEUE_SHA256: 'd652a5d17e656f9ccd5debf8a4f67d99aff540b98c7039851b51e2b73ec3ef75'
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+
+jobs:
+  resume-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','googlesheets4'))
+
+      - name: Download immutable corrected W04 repair artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf source outputs
+          mkdir -p source/final source/prepared outputs/w04_resume outputs/workflow04_final
+          gh run download "$SOURCE_RUN_ID"             --repo "$GITHUB_REPOSITORY"             --name "workflow04-exact-repair-final-$SOURCE_RUN_ID"             --dir source/final
+          gh run download "$SOURCE_RUN_ID"             --repo "$GITHUB_REPOSITORY"             --name "workflow04-exact-repair-prepared-$SOURCE_RUN_ID"             --dir source/prepared
+
+          test -s source/final/workflow04_final/workflow04_final_screening_layer.jsonl
+          test -s source/final/workflow04_final/workflow04_human_review_queue.jsonl
+          test -s source/final/workflow04_final/summary.json
+          test -s source/prepared/inputs/current/canonical_lean.jsonl
+          test -s source/prepared/inputs/current/publication_status.jsonl
+          test -s source/prepared/inputs/human_corrections/workflow04_human_abstract_corrections.jsonl
+          test -s source/prepared/outputs/workflow04_prepare/prompt_provenance.json
+
+          N="$(grep -cve '^[[:space:]]*$' source/final/workflow04_final/workflow04_human_review_queue.jsonl)"
+          test "$N" -eq 52
+          OLDN="$(grep -cve '^[[:space:]]*$' source/prepared/inputs/human_corrections/workflow04_human_abstract_corrections.jsonl)"
+          test "$OLDN" -eq 157
+          echo "PASS: restored exact corrected W04 repair state; unresolved=52 protected_prior_abstracts=157"
+
+      - name: Prepare Google credential
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "GOOGLE_CREDENTIAL=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Export exact 52 completed W04 decisions from Shiny
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_export_shiny_resolution_decisions.R             --batch-id "$BATCH_ID"             --queue-sha256 "$QUEUE_SHA256"             --source-run-id "$SOURCE_RUN_ID"             --sheet-id "$LEM_GOOGLE_SHEET_ID"             --credential "$GOOGLE_CREDENTIAL"             --output outputs/w04_resume/human_resolution_decisions.jsonl             --manifest outputs/w04_resume/export_manifest.json
+
+          N="$(grep -cve '^[[:space:]]*$' outputs/w04_resume/human_resolution_decisions.jsonl)"
+          test "$N" -eq 52
+          echo "PASS: exported all 52 exact returned W04 decisions"
+
+      - name: Apply human resolutions without rerunning screening
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_apply_human_resolution.R             --source-layer source/final/workflow04_final/workflow04_final_screening_layer.jsonl             --canonical source/prepared/inputs/current/canonical_lean.jsonl             --decisions outputs/w04_resume/human_resolution_decisions.jsonl             --source-summary source/final/workflow04_final/summary.json             --output-dir outputs/workflow04_final
+
+          STATUS="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(x$status)')"
+          UNRES="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(as.integer(x$unresolved))')"
+          HN="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(as.integer(x$human_resolution_records))')"
+          test "$STATUS" = "PASS"
+          test "$UNRES" -eq 0
+          test "$HN" -eq 52
+          cp source/prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json
+          echo "PASS: applied 52 human decisions; corrected W04 unresolved=0"
+
+      - name: Preserve complete human abstract correction history
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          scalar <- function(x){if(is.null(x)||!length(x))return('');z<-as.character(x[[1L]]);if(is.na(z))'' else trimws(gsub('[[:space:]]+',' ',z))}
+          norm_doi <- function(x){z<-tolower(scalar(x));if(!nzchar(z))return('');z<-sub('^https?://(dx\\.)?doi\\.org/','',z,perl=TRUE);z<-sub('^doi:\\s*','',z,perl=TRUE);z<-sub('[?#].*$','',z,perl=TRUE);z<-sub('\\.(html?|pdf|xml)$','',z,perl=TRUE,ignore.case=TRUE);sub('[.,;:]+$','',z,perl=TRUE)}
+          norm_title <- function(x)tolower(trimws(gsub('[[:space:]]+',' ',scalar(x))))
+          readjl <- function(p){if(!file.exists(p))return(list());x<-readLines(p,warn=FALSE,encoding='UTF-8');x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
+          writejl <- function(rows,p){con<-file(p,'wt',encoding='UTF-8');on.exit(close(con));if(length(rows))for(r in rows)writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),con,useBytes=TRUE)}
+          current <- readjl('source/prepared/inputs/current/canonical_lean.jsonl')
+          old <- readjl('source/prepared/inputs/human_corrections/workflow04_human_abstract_corrections.jsonl')
+          new <- readjl('outputs/workflow04_final/workflow04_human_abstract_corrections.jsonl')
+          ids <- vapply(current,function(r)scalar((r$identity%||%list())$record_id),character(1))
+          dois <- vapply(current,function(r)norm_doi((r$canonical%||%list())$doi),character(1))
+          titles <- vapply(current,function(r){c<-r$canonical%||%list();norm_title(c$title%||%r$title)},character(1))
+          doi_groups <- split(which(nzchar(dois)),dois[nzchar(dois)])
+          title_groups <- split(which(nzchar(titles)),titles[nzchar(titles)])
+          resolve <- function(z){
+            rid<-scalar(z$record_id_at_edit)
+            nd<-scalar(z$doi_normalized); if(!nzchar(nd))nd<-norm_doi(z$doi)
+            nt<-scalar(z$title_normalized); if(!nzchar(nt))nt<-norm_title(z$title)
+            if(nzchar(rid)&&rid%in%ids)return(rid)
+            if(nzchar(nd)){h<-doi_groups[[nd]];if(length(h)==1L)return(ids[[h]])}
+            if(nzchar(nt)){h<-title_groups[[nt]];if(length(h)==1L)return(ids[[h]])}
+            stop(sprintf('Human abstract correction cannot be uniquely resolved: record_id_at_edit=%s doi=%s title=%s',rid,nd,nt),call.=FALSE)
+          }
+          combined <- c(old,new)
+          keys <- vapply(combined,resolve,character(1))
+          keep <- !duplicated(keys,fromLast=TRUE)
+          merged <- combined[keep]
+          merged_keys <- keys[keep]
+          ord <- order(merged_keys)
+          merged <- merged[ord]
+          writejl(merged,'outputs/workflow04_final/workflow04_human_abstract_corrections.jsonl')
+          cat(sprintf('PASS: preserved complete W04 human-abstract correction history: prior=%d new=%d combined_unique=%d\n',length(old),length(new),length(merged)))
+          if(length(merged)<157L)stop('Combined correction history unexpectedly shrank below protected baseline',call.=FALSE)
+
+      - name: Refresh W04 summary hashes after correction-history merge
+        shell: Rscript {0}
+        run: |
+          library(jsonlite);library(digest)
+          p<-'outputs/workflow04_final/summary.json'
+          x<-fromJSON(p,simplifyVector=FALSE)
+          x$human_abstract_corrections_sha256<-digest(file='outputs/workflow04_final/workflow04_human_abstract_corrections.jsonl',algo='sha256',serialize=FALSE)
+          z<-readLines('outputs/workflow04_final/workflow04_human_abstract_corrections.jsonl',warn=FALSE)
+          x$human_abstract_corrections_records<-sum(nzchar(trimws(z)))
+          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null',na='null'),'outputs/workflow04_final/summary.json')
+          cat(sprintf('PASS: final W04 correction bundle records=%d\n',x$human_abstract_corrections_records))
+
+      - name: Publish corrected resolved W04 state to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CAN_SHA="$(Rscript -e 'cat(digest::digest(file="source/prepared/inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
+          W03_SHA="$(Rscript -e 'cat(digest::digest(file="source/prepared/inputs/current/publication_status.jsonl",algo="sha256",serialize=FALSE))')"
+          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("source/prepared/outputs/workflow04_prepare/prompt_provenance.json",simplifyVector=FALSE);stopifnot(grepl("^[0-9a-f]{64}$",x$prompt_sha256));cat(x$prompt_sha256)')"
+          mkdir -p outputs/workflow04_zenodo
+          Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R             --state-dir outputs/workflow04_final             --source-run-id "$SOURCE_RUN_ID"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow04_zenodo             --upstream-lean-sha256 "$CAN_SHA"             --upstream-workflow03-sha256 "$W03_SHA"             --prompt-sha256 "$PROMPT_SHA"
+
+      - name: Register corrected resolved W04 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_04_update_zenodo_registry.R             --receipt outputs/workflow04_zenodo/zenodo_receipt.json             --registry docs/workflow04/zenodo_registry.csv             --pointer-dir docs/workflow04/zenodo
+          git add docs/workflow04/zenodo_registry.csv docs/workflow04/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register corrected resolved W04 integrity repair $SOURCE_RUN_ID [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+      - name: Mark exact Shiny W04 batch consumed
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/workflow04_final/workflow04_final_screening_layer.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R             --stage "04"             --batch-id "$BATCH_ID"             --queue-sha256 "$QUEUE_SHA256"             --status consumed             --sheet-id "$LEM_GOOGLE_SHEET_ID"             --credential "$GOOGLE_CREDENTIAL"             --workflow-run-id "$GITHUB_RUN_ID"             --source-run-id "$SOURCE_RUN_ID"             --output-sha256 "$OUTPUT_SHA"             --message "Corrected W04 integrity-repair human decisions applied and resolved W04 state archived/registered. No downstream handoff or backend reset performed."
+
+      - name: Upload resolved W04 repair handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-integrity-repair-resolved-${{ github.run_id }}
+          path: |
+            outputs/w04_resume/
+            outputs/workflow04_final/
+            outputs/workflow04_zenodo/
+          retention-days: 90
+          if-no-files-found: error
