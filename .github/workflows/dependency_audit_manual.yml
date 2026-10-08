@@ -73,6 +73,7 @@ jobs:
         env:
           DEPENDENCY_TRACE: 'true'
           DEPENDENCY_TRACE_DIR: outputs/w00_planning_trace
+          DEPENDENCY_TRACE_VERBOSE: 'true'
           W00_GROUP_CORE_MULTIDISCIPLINARY: 'true'
           W00_GROUP_HEALTH_MEDICINE: 'false'
           W00_GROUP_ENVIRONMENT_AGRICULTURE: 'false'
@@ -88,6 +89,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/dependency_audit/w00_plan
+          DEPENDENCY_TRACE=false bash scripts/updater/run_rscript_with_optional_trace.sh scripts/updater/workflow_00_resolve_source_selection.R \
+            --run-type expansion \
+            --saved data/workflow00/source_selection.json \
+            --output outputs/dependency_audit/w00_plan/baseline_source_selection.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --group-config config/workflow00_source_groups.json
           bash scripts/updater/run_rscript_with_optional_trace.sh scripts/updater/workflow_00_resolve_source_selection.R \
             --run-type expansion \
             --saved data/workflow00/source_selection.json \
