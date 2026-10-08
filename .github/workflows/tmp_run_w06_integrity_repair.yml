@@ -96,7 +96,6 @@ jobs:
           Rscript scripts/updater/workflow_06_prepare_current_inputs.R             --input inputs/current/retained_canonical.jsonl             --output-dir outputs/workflow06_current
 
       - name: Restore prior W06 state
-        if: ${{ inputs.prior_workflow06_pointer_path != 'none' && inputs.prior_workflow06_pointer_path != '' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           PRIOR_W06: docs/workflow06/zenodo/run-37515511948.json
