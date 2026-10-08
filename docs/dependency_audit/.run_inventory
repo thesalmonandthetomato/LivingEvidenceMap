@@ -10,3 +10,4 @@ Retry with non-colliding trace directory.
 Retry runtime wrapper after removing basename newline from trace label.
 Trace W00 expansion planning without invoking APIs.
 Diagnostic rerun with baseline and visible subprocess errors.
+Retry W00 planning with jsonlite prerequisite installed.
