@@ -3,6 +3,10 @@ name: Workflow 01 - Production deduplication and canonicalisation
 on:
   workflow_call:
     inputs:
+      trace_dependencies:
+        required: false
+        default: false
+        type: boolean
       workflow00_pointer_path:
         required: true
         type: string
@@ -23,6 +27,11 @@ on:
         type: number
   workflow_dispatch:
     inputs:
+      trace_dependencies:
+        description: 'Opt-in W01 input restoration file access tracing'
+        required: false
+        default: false
+        type: boolean
       workflow00_pointer_path:
         description: 'Workflow 00 state or archive pointer path on workflow01-final-architecture'
         required: true
@@ -109,14 +118,25 @@ jobs:
           fi
           echo "W00_SOURCES=$SOURCES" >> "$GITHUB_ENV"
 
+      - name: Install tracing utility if requested
+        if: inputs.trace_dependencies
+        run: |
+          set -euo pipefail
+          if ! command -v strace >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq strace
+          fi
       - name: Restore latest Workflow 01 state from baseline plus deltas
+        env:
+          DEPENDENCY_TRACE: ${{ inputs.trace_dependencies }}
+          DEPENDENCY_TRACE_DIR: outputs/w01_dependency_trace
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           PREV_W01_POINTER: ${{ inputs.previous_workflow01_pointer_path }}
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_01_restore_current_state.R \
+          bash scripts/updater/run_rscript_with_optional_trace.sh scripts/updater/workflow_01_restore_current_state.R \
             --pointer "$PREV_W01_POINTER" \
             --pointer-dir docs/deduplication/zenodo \
             --output-root previous_state
@@ -129,6 +149,15 @@ jobs:
           for seed in "${seed_files[@]}"; do
             test -s "$seed"
           done
+
+      - name: Upload W01 restore trace if enabled
+        if: always() && inputs.trace_dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-restore-file-access-${{ github.run_id }}
+          path: outputs/w01_dependency_trace/
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Restore current Workflow 00 source subset
         env:
