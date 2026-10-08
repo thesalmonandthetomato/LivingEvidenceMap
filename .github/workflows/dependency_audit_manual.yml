@@ -35,6 +35,8 @@ jobs:
           set -euo pipefail
           test -s outputs/dependency_audit/dependency_edges.csv
           test -s outputs/dependency_audit/file_inventory.csv
+          test -s outputs/dependency_audit/entry_points.csv
+          test -s outputs/dependency_audit/review_queue.csv
           test -s outputs/dependency_audit/README.txt
           grep -q 'Do not delete files' outputs/dependency_audit/README.txt
       - name: Upload dependency report
