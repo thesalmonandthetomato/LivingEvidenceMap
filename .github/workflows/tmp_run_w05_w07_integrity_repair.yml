@@ -24,17 +24,7 @@ env:
   EXPECTED_REPAIR_RECORDS: '1775'
 
 jobs:
-  w05:
-    uses: ./.github/workflows/workflow_05_production.yml
-    with:
-      workflow04_pointer_path: docs/workflow04/zenodo/run-37679581307.json
-      lean_pointer_path: docs/compaction/zenodo/run-37648955012.json
-      publish: false
-    secrets: inherit
-
   publish-w05:
-    needs: w05
-    if: ${{ needs.w05.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       pointer_path: ${{ steps.pointer.outputs.pointer_path }}
@@ -49,32 +39,71 @@ jobs:
           r-version: release
           use-public-rspm: true
 
-      - name: Install publication dependencies
+      - name: Install W05 and publication dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2'))
+        run: install.packages(c('digest','dplyr','jsonlite','readr','tibble','testthat','httr2'))
 
-      - name: Download deterministic W05 result
-        uses: actions/download-artifact@v4
-        with:
-          name: workflow05-species-coding-${{ github.run_id }}
-          path: w05
-
-      - name: Validate and publish corrected W05 state
+      - name: Restore corrected W04 retained corpus
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          STATE="$(find w05 -type d -name workflow05_state -print -quit)"
-          test -n "$STATE"
-          test -s "$STATE/workflow05_species_layer.csv"
-          N="$(Rscript -e 'x<-read.csv(commandArgs(TRUE)[1],stringsAsFactors=FALSE);cat(nrow(x))' "$STATE/workflow05_species_layer.csv")"
+          rm -rf inputs/w04 outputs/workflow05_species_coding outputs/workflow05_state
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R \
+            --pointer "$CURRENT_W04_POINTER" \
+            --output-dir inputs/w04
+          CAN="$(find inputs/w04 -type f -name workflow04_included_canonical.jsonl -print -quit)"
+          test -n "$CAN"
+          cp "$CAN" inputs/retained_canonical.jsonl
+          N="$(grep -cve '^[[:space:]]*$' inputs/retained_canonical.jsonl)"
           test "$N" -eq "$EXPECTED_CURRENT_RECORDS"
+          echo "PASS: restored $N corrected W04-retained records"
 
+      - name: Recompute deterministic W05 species state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_05_species_coding.R \
+            --input inputs/retained_canonical.jsonl \
+            --config user_input/workflow05_coding_config.json \
+            --dictionary user_input/workflow05_deterministic_concepts.csv \
+            --output-dir outputs/workflow05_species_coding \
+            --expected-records "$EXPECTED_CURRENT_RECORDS"
+
+          mkdir -p outputs/workflow05_state
+          Rscript -e '
+            library(readr)
+            x<-read_csv("outputs/workflow05_species_coding/workflow05_species_coded.csv",show_col_types=FALSE)
+            write_csv(x[,c("record_sequence","record_id","farmed_species_codes","farmed_species")],
+                      "outputs/workflow05_state/workflow05_species_layer.csv",na="")
+          '
+          cp outputs/workflow05_species_coding/species_codes_long.csv outputs/workflow05_state/
+          cp outputs/workflow05_species_coding/species_matches.csv outputs/workflow05_state/
+          cp outputs/workflow05_species_coding/species_record_counts.csv outputs/workflow05_state/
+          cp outputs/workflow05_species_coding/workflow05_manifest.json outputs/workflow05_state/
+          cp user_input/workflow05_deterministic_concepts.csv outputs/workflow05_state/deterministic_concepts.csv
+          cp user_input/workflow05_coding_config.json outputs/workflow05_state/workflow05_coding_config.json
+          echo "PASS: W05 deterministic state rebuilt without OpenAI"
+
+      - name: Publish corrected W05 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
           W04_RECORD="$(P="$CURRENT_W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$zenodo_record_id)')"
           W04_SHA="$(P="$CURRENT_W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$workflow04_final_screening_layer_sha256)')"
           mkdir -p outputs/workflow05_zenodo
-          Rscript scripts/updater/workflow_05_archive_state_to_zenodo.R             --state-dir "$STATE"             --source-run-id "$GITHUB_RUN_ID"             --source-commit "$(git rev-parse HEAD)"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow05_zenodo             --upstream-w04-record-id "$W04_RECORD"             --upstream-w04-layer-sha256 "$W04_SHA"
+          Rscript scripts/updater/workflow_05_archive_state_to_zenodo.R \
+            --state-dir outputs/workflow05_state \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --source-commit "$(git rev-parse HEAD)" \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow05_zenodo \
+            --upstream-w04-record-id "$W04_RECORD" \
+            --upstream-w04-layer-sha256 "$W04_SHA"
 
       - name: Register corrected W05 state only
         id: pointer
@@ -84,7 +113,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git pull --rebase origin workflow01-final-architecture
-          Rscript scripts/updater/workflow_05_update_zenodo_registry.R             --receipt outputs/workflow05_zenodo/zenodo_receipt.json             --registry docs/workflow05/zenodo_registry.csv             --pointer-dir docs/workflow05/zenodo
+          Rscript scripts/updater/workflow_05_update_zenodo_registry.R \
+            --receipt outputs/workflow05_zenodo/zenodo_receipt.json \
+            --registry docs/workflow05/zenodo_registry.csv \
+            --pointer-dir docs/workflow05/zenodo
           git add docs/workflow05/zenodo_registry.csv docs/workflow05/zenodo/
           if ! git diff --cached --quiet; then
             git commit -m "Register corrected W05 integrity repair $GITHUB_RUN_ID [skip ci]"
