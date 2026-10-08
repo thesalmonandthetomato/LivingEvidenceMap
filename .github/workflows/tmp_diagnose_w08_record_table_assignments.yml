@@ -1,0 +1,96 @@
+name: TEMP diagnose W08 record-table assignments
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_diagnose_w08_record_table_assignments.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','googlesheets4','digest'))
+      - name: Diagnose W08 assignments and effective rows
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(googlesheets4);library(jsonlite);library(digest)})
+          `%||%`<-function(x,y)if(is.null(x))y else x
+          cred<-file.path(Sys.getenv('RUNNER_TEMP'),'lem-google-service-account.json')
+          writeLines(Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cred,useBytes=TRUE);Sys.chmod(cred,'0600')
+          gs4_auth(path=cred,cache=FALSE);sid<-Sys.getenv('LEM_GOOGLE_SHEET_ID')
+          q<-read_sheet(sid,sheet='queue_w08_active',col_types='c')
+          d<-read_sheet(sid,sheet='decisions_w08',col_types='c')
+          a<-read_sheet(sid,sheet='assignments',col_types='c')
+          cat(sprintf('ASSIGNMENTS total=%d\n',nrow(a)))
+          aw<-a[as.character(a$workflow)=='08' & as.character(a$task_type)=='annotation' &
+                as.character(a$batch_id)==as.character(q$batch_id[[1]]),,drop=FALSE]
+          cat(sprintf('W08 assignments=%d active=%d cancelled=%d\n',nrow(aw),
+            sum(as.character(aw$status)!='cancelled'),sum(as.character(aw$status)=='cancelled')))
+          if(nrow(aw)) print(aw)
+
+          # active decisions following supersession
+          ids<-as.character(d$decision_id); supers<-as.character(d$supersedes_decision_id)
+          active<-d[!ids %in% unique(supers[nzchar(supers)]),,drop=FALSE]
+          active<-active[tolower(as.character(active$queue_sha256))==tolower(as.character(q$queue_sha256[[1]])),,drop=FALSE]
+
+          decision_resolves<-function(x)nzchar(trimws(as.character(x$issue_decisions_json%||%'')))
+          dec_case<-function(x)as.character(x$record_id%||%'')
+          dec_user<-function(x)as.character(x$reviewer%||%'')
+          events<-lapply(seq_len(nrow(active)),function(i)as.list(active[i,,drop=FALSE]))
+          assignments<-lapply(seq_len(nrow(aw)),function(i)as.list(aw[i,,drop=FALSE]))
+          active_asg<-Filter(function(x)!identical(as.character(x$status%||%''),'cancelled'),assignments)
+
+          # Mirror implicit-assignment logic used by record table.
+          existing<-assignments
+          keys<-if(length(existing))vapply(existing,function(x)paste(as.character(x$case_id),as.character(x$user_id),sep='|'),character(1))else character()
+          implicit<-list()
+          for(e in Filter(decision_resolves,events)){
+            cid<-dec_case(e);uid<-dec_user(e);key<-paste(cid,uid,sep='|')
+            if(!nzchar(cid)||!nzchar(uid)||key%in%keys)next
+            implicit[[length(implicit)+1L]]<-list(case_id=cid,user_id=uid,status='assigned')
+            keys<-c(keys,key)
+          }
+          cat(sprintf('Implicit assignments=%d\n',length(implicit)))
+          xs<-c(active_asg,implicit)
+          cat(sprintf('Effective assignment candidates=%d\n',length(xs)))
+          bad<-character()
+          for(i in seq_along(xs)){
+            e<-tryCatch({
+              x<-xs[[i]]
+              cid<-as.character(x$case_id%||%'');uid<-as.character(x$user_id%||%'')
+              if(length(cid)!=1L||length(uid)!=1L)stop(sprintf('assignment %d non-scalar id',i))
+              hits<-Filter(function(z)identical(dec_case(z),cid)&&decision_resolves(z),events)
+              if(length(hits)){
+                times<-vapply(hits,function(z)as.character(z$resolved_at_utc%||%''),character(1))
+                if(any(lengths(lapply(hits,function(z)z$resolved_at_utc%||%''))!=1L))stop(sprintf('assignment %d time non-scalar',i))
+                resolved<-hits[[order(times,seq_along(hits),decreasing=TRUE)[[1L]]]]
+                st<-if(identical(dec_user(resolved),uid))'complete' else 'resolved_elsewhere'
+              } else st<-'assigned'
+              invisible(st)
+            },error=function(e)e)
+            if(inherits(e,'error'))bad<-c(bad,conditionMessage(e))
+          }
+          cat(sprintf('EFFECTIVE problems=%d\n',length(bad)))
+          if(length(bad))cat(paste('PROBLEM',bad,sep=': ',collapse='\n'),'\n')
+          cat('PASS: W08 assignment diagnostic complete\n')
