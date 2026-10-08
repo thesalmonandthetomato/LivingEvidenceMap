@@ -68,6 +68,11 @@ jobs:
         shell: bash
         run: |
           ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/workflow_00_search_orchestrator.yml"); puts "YAML valid"'
+      - name: Install W00 planning R dependencies
+        shell: Rscript {0}
+        run: |
+          if (!requireNamespace("jsonlite", quietly=TRUE)) install.packages("jsonlite")
+          stopifnot(requireNamespace("jsonlite", quietly=TRUE))
       - name: Trace actual W00 planning without API searches
         shell: bash
         env:
