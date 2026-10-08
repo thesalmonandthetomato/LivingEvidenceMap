@@ -5,3 +5,4 @@ Retry after validation assertion correction.
 Run Shiny dependency graph integration check.
 Runtime tracer isolated smoke validation.
 Validate opt-in W00 planning instrumentation and wrapper.
+Retry W00 wrapper smoke test with fixture script.
