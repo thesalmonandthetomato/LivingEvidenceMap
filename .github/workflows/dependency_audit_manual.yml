@@ -68,6 +68,40 @@ jobs:
         shell: bash
         run: |
           ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/workflow_00_search_orchestrator.yml"); puts "YAML valid"'
+      - name: Trace actual W00 planning without API searches
+        shell: bash
+        env:
+          DEPENDENCY_TRACE: 'true'
+          DEPENDENCY_TRACE_DIR: outputs/w00_planning_trace
+          W00_GROUP_CORE_MULTIDISCIPLINARY: 'true'
+          W00_GROUP_HEALTH_MEDICINE: 'false'
+          W00_GROUP_ENVIRONMENT_AGRICULTURE: 'false'
+          W00_GROUP_SOCIAL_SCIENCES: 'false'
+          W00_GROUP_EDUCATION: 'false'
+          W00_GROUP_REGIONAL: 'false'
+          W00_GROUP_MEDIA_COMMUNICATION: 'false'
+          W00_GROUP_HUMANITIES: 'false'
+          W00_GROUP_SPORT_TOURISM: 'false'
+          W00_GROUP_GREY_PREPRINTS: 'false'
+          W00_ADDITIONAL_SOURCES: ''
+          W00_EXCLUDE_SOURCES: ''
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/dependency_audit/w00_plan
+          bash scripts/updater/run_rscript_with_optional_trace.sh scripts/updater/workflow_00_resolve_source_selection.R \
+            --run-type expansion \
+            --saved data/workflow00/source_selection.json \
+            --output outputs/dependency_audit/w00_plan/source_selection.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --group-config config/workflow00_source_groups.json
+          bash scripts/updater/run_rscript_with_optional_trace.sh scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type expansion \
+            --additional-search-term 'OR maricultur*' \
+            --config user_input/workflow00_search_strategy.json \
+            --output-dir outputs/dependency_audit/w00_plan
+          test -s outputs/w00_planning_trace/workflow_00_resolve_source_selection.R.trace/runtime_file_access.csv
+          test -s outputs/w00_planning_trace/workflow_00_search_orchestrator.R.trace/runtime_file_access.csv
+          cp outputs/w00_planning_trace/*/runtime_file_access.csv outputs/dependency_audit/ 2>/dev/null || true
       - name: Validate report files
         shell: bash
         run: |
