@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-input-manifest-v1",
-  "generated_at_utc": "2026-10-06T21:29:00Z",
+  "generated_at_utc": "2026-10-08T13:09:18Z",
   "stages": [
     {
       "stage": "W00",
@@ -9,42 +9,42 @@
     },
     {
       "stage": "W01",
-      "source_run_id": "37373748707",
+      "source_run_id": "37608813159",
       "file": "w01_summary.json"
     },
     {
       "stage": "W02",
-      "source_run_id": "37381023181",
+      "source_run_id": "37648955012",
       "file": "w02_summary.json"
     },
     {
       "stage": "W03",
-      "source_run_id": "37385439517",
+      "source_run_id": "37654051293",
       "file": "w03_summary.json"
     },
     {
       "stage": "W04",
-      "source_run_id": "37456188910",
+      "source_run_id": "37679581307",
       "file": "w04_summary.json"
     },
     {
       "stage": "W05",
-      "source_run_id": "37511638503",
+      "source_run_id": "37739192921",
       "file": "w05_summary.json"
     },
     {
       "stage": "W06",
-      "source_run_id": "37515511948",
+      "source_run_id": "37744038306",
       "file": "w06_summary.json"
     },
     {
       "stage": "W07",
-      "source_run_id": "37515511948",
+      "source_run_id": "37751063787",
       "file": "w07_summary.json"
     },
     {
       "stage": "W08",
-      "source_run_id": "37234697766",
+      "source_run_id": "37772061455",
       "file": "w08_summary.json"
     }
   ],
@@ -56,78 +56,78 @@
     },
     {
       "file": "w01_source_intersections.csv",
-      "bytes": 25870,
-      "sha256": "d8946b29803f2f4d5d9a27a6e34e95563d3001c076b8ad0456fe1382f2e1cb22"
+      "bytes": 24742,
+      "sha256": "b9a4a29e8387f2e18e8797d3e02e748a298647f9154e3ba8e8176765cc805d14"
     },
     {
       "file": "w01_source_manifest.json",
       "bytes": 796,
-      "sha256": "cbff7ce271d304ff6a6150a31dd39563583be320783cad5d44ad594ade88ec13"
+      "sha256": "995be3941d2d7111ebd71435e0aab67981c3b846d21069770a77dadc27b5df3e"
     },
     {
       "file": "w01_source_membership.csv",
-      "bytes": 2335825,
-      "sha256": "de90db069e41dd2a9f63bc43b5ae2959bd254af169c2e7cebb82ac5e57f007e9"
+      "bytes": 2336537,
+      "sha256": "f0c253356e3bf8cbbad1a6b50da03faaac0978d891ae2926dc279a55cd5c2236"
     },
     {
       "file": "w01_source_summary.csv",
-      "bytes": 1106,
-      "sha256": "9098440997ec6e036da0a79f4d8f64c404a949205cdf3abd4bbf48022213eab6"
+      "bytes": 1107,
+      "sha256": "1d94349cfb4ae76107beba6704e4abea68e813f0fe92750dc875bab2c66c114a"
     },
     {
       "file": "w01_summary.json",
       "bytes": 595,
-      "sha256": "8cff7cc1045ccaee34f15eec91c812a6b22c05aa3af643b46b3aeda1136386c7"
+      "sha256": "ffed7753eb405f73ed4eed65af2fd44333b3cafa53c60e3533027176d5153538"
     },
     {
       "file": "w02_summary.json",
       "bytes": 675,
-      "sha256": "fd19539dfee3b7df635655040eeeea31bae1f884e0f4db47ee005b8042b1eefa"
+      "sha256": "d170244f94f443ba2e42b44054d8b5a2a4e27c09397b41edcb2171c6b4ca8e55"
     },
     {
       "file": "w03_summary.json",
       "bytes": 636,
-      "sha256": "acc6861c78f6a0979eae8b429618868a51149ec68d9816a5041094b82e1a53fb"
+      "sha256": "49ae0ec69cf63991332b2e882192936c3a7edba71d468a90f64f0703e36be362"
     },
     {
       "file": "w04_summary.json",
       "bytes": 487,
-      "sha256": "fc5f22eddf58974dd21f3578930e59ef30858718cee0c711e3954d7b092ab011"
+      "sha256": "321cb8667ca33bf7e0e66ccaeacd4b7d06f107c8a73c6eff5e1bce01798e6ad0"
     },
     {
       "file": "w05_summary.json",
       "bytes": 473,
-      "sha256": "92cd4e3c6c2b61df9616d55082956783183c85ad4b467242bf834c9f1e2160af"
+      "sha256": "8cbb0fbfcd034f7f644c5af9a24118580e60ea95d934ec0b4098293272a8695a"
     },
     {
       "file": "w06_summary.json",
       "bytes": 543,
-      "sha256": "9d89b09a7b9e86d2cb333a8acf0236b6d96f4e5eb03cb95599195de5ddbad3be"
+      "sha256": "41dc16559e0df88e94ccda0427a45bf353223558794cc17c6f3d9a710ed46d75"
     },
     {
       "file": "w07_summary.json",
       "bytes": 600,
-      "sha256": "37302a11358a9593ebf630fd47cfad8d56457749825c6a0ab0bac82dc329565f"
+      "sha256": "3ae39b2a89eb9a1c9cdca67263ea066980641d87b0aab6f5501ea80c2c282f3d"
     },
     {
       "file": "w08_source_intersections.csv",
-      "bytes": 1678,
-      "sha256": "7eadfafa3bec8dfc9adee94bbd9139f13b2d3f3cdfd46e7df50fe2d7daa1751f"
+      "bytes": 20650,
+      "sha256": "69cd39ebf1002660948863b0cdb8b4366fd53df9a63a8378ea137a98807dd2b5"
     },
     {
       "file": "w08_source_manifest.json",
-      "bytes": 794,
-      "sha256": "0efa3def0a8fec7adb3ca61c260f4ba065a2ffd569f190e9cec9c4ca47040b85"
+      "bytes": 796,
+      "sha256": "eab951252cf57e353e428c32faaccdb4c5e9354daea8067415a5e8ce1d0206cb"
     },
     {
       "file": "w08_source_summary.csv",
-      "bytes": 369,
-      "sha256": "b7e2438a64ba413657198f9f15d731e3df114b32ae035ff82552147f981d8f38"
+      "bytes": 1076,
+      "sha256": "4057e26f5fa6f61e37a306fd2f3880c1cda61380f8b4bbc44323cd0dd76d007c"
     },
     {
       "file": "w08_summary.json",
       "bytes": 833,
-      "sha256": "d94f14cb882d98af8edad9fd710de186691b37daf9a9b42f3b7d3754bfc725b4"
+      "sha256": "bd5564c008c94e2cd2246696af084c829f08ec60d2090cc84efb7255485113cd"
     }
   ]
 }

@@ -1,16 +1,16 @@
 {
   "schema": "living-evidence-map-workflow09-source-snapshot-v2",
   "stage": "W01",
-  "source_run_id": "37373748707",
-  "canonical_records": 50430,
+  "source_run_id": "37608813159",
+  "canonical_records": 50440,
   "source_count": 19,
-  "intersection_count": 457,
-  "canonical_sha256": "b49a64c06c82018fa204cb0fb2ab783df5c78241114c0e5fc5cf75f7f9ee93c4",
+  "intersection_count": 439,
+  "canonical_sha256": "7934ea9d18e9cb090254bff6ae247eb403efa23cd3d0588608a8633667168fa1",
   "source_summary_file": "w01_source_summary.csv",
-  "source_summary_sha256": "9098440997ec6e036da0a79f4d8f64c404a949205cdf3abd4bbf48022213eab6",
+  "source_summary_sha256": "1d94349cfb4ae76107beba6704e4abea68e813f0fe92750dc875bab2c66c114a",
   "intersections_file": "w01_source_intersections.csv",
-  "intersections_sha256": "d8946b29803f2f4d5d9a27a6e34e95563d3001c076b8ad0456fe1382f2e1cb22",
+  "intersections_sha256": "b9a4a29e8387f2e18e8797d3e02e748a298647f9154e3ba8e8176765cc805d14",
   "w01_source_membership_file": "w01_source_membership.csv",
-  "w01_source_membership_sha256": "de90db069e41dd2a9f63bc43b5ae2959bd254af169c2e7cebb82ac5e57f007e9",
-  "generated_at_utc": "2026-10-05T22:12:56Z"
+  "w01_source_membership_sha256": "f0c253356e3bf8cbbad1a6b50da03faaac0978d891ae2926dc279a55cd5c2236",
+  "generated_at_utc": "2026-10-08T13:09:10Z"
 }

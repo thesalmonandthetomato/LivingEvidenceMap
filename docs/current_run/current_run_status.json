@@ -3,7 +3,7 @@
   "update_id": "w00-run-37346236893",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-05T17:20:08Z",
-  "last_updated_at_utc": "2026-10-07T00:47:14Z",
+  "last_updated_at_utc": "2026-10-08T13:08:41Z",
   "baseline": {
     "release_update_id": "w01-run-36971418284",
     "workflow01_source_run_id": "36971418284",
@@ -102,23 +102,23 @@
   },
   "cohort": {
     "record_ids_path": "docs/current_run/current_run_record_ids.txt",
-    "deduplicated_records": 50430
+    "deduplicated_records": 50440
   },
   "counts": {
     "search_results": 135566,
-    "deduplicated_records": 50430,
-    "enriched_records": 2224,
-    "retraction_exclusions": 12,
-    "screened_include": 23371,
-    "screened_exclude": 27047,
-    "species_records": 23371,
+    "deduplicated_records": 50440,
+    "enriched_records": 2101,
+    "retraction_exclusions": 13,
+    "screened_include": 23255,
+    "screened_exclude": 27172,
+    "species_records": 23255,
     "geography": {
-      "with": 9747,
-      "without": 13624
+      "with": 9499,
+      "without": 13353
     },
     "topics": {
-      "with": 22900,
-      "without": 471
+      "with": 22548,
+      "without": 304
     }
   },
   "progress": {
@@ -147,28 +147,28 @@
       "status": "complete"
     },
     "W08": {
-      "status": "active"
+      "status": "complete"
     },
     "W09": {
-      "status": "pending"
+      "status": "active"
     },
     "W10": {
       "status": "pending"
     },
     "current_stage": "W08",
-    "completed_through": 8,
-    "active_position": 9,
-    "status_label": "Final adjudication awaiting human review"
+    "completed_through": 9,
+    "active_position": 10,
+    "status_label": "Final adjudication complete; awaiting report build"
   },
   "workflow_runs": {
     "W00": "37346236893",
-    "W01": "37373748707",
-    "W02": "37381023181",
-    "W03": "37385439517",
-    "W04": "37456188910",
-    "W05": "37511638503",
-    "W06": "37515511948",
-    "W07": "37515511948",
-    "W08": "37553444492"
+    "W01": "37608813159",
+    "W02": "37648955012",
+    "W03": "37654051293",
+    "W04": "37679581307",
+    "W05": "37739192921",
+    "W06": "37744038306",
+    "W07": "37751063787",
+    "W08": "37772061455"
   }
 }
