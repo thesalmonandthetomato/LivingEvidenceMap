@@ -242,6 +242,16 @@ jobs:
             )
           }
 
+      - name: Install tracing tool only when explicitly requested
+        if: inputs.trace_dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v strace >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq strace
+          fi
+
       - name: Resolve and freeze source selection
         id: selection
         env:
@@ -257,6 +267,7 @@ jobs:
           W00_GROUP_GREY_PREPRINTS: ${{ inputs.group_grey_preprints }}
           W00_ADDITIONAL_SOURCES: ${{ inputs.additional_sources }}
           W00_EXCLUDE_SOURCES: ${{ inputs.exclude_sources }}
+          DEPENDENCY_TRACE: ${{ inputs.trace_dependencies }}
         shell: bash
         run: |
           set -euo pipefail
@@ -268,6 +279,8 @@ jobs:
             --group-config config/workflow00_source_groups.json
 
       - name: Validate search controls and write source queries
+        env:
+          DEPENDENCY_TRACE: ${{ inputs.trace_dependencies }}
         shell: bash
         run: |
           set -euo pipefail
