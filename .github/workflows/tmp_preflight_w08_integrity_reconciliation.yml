@@ -1,0 +1,212 @@
+name: TEMP preflight W08 integrity reconciliation
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_preflight_w08_integrity_reconciliation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  LEAN_POINTER: 'docs/compaction/zenodo/run-37648955012.json'
+  W03_POINTER: 'docs/publication_status/zenodo/run-37654051293.json'
+  W04_POINTER: 'docs/workflow04/zenodo/run-37679581307.json'
+  W05_POINTER: 'docs/workflow05/zenodo/run-37739192921.json'
+  W06_POINTER: 'docs/workflow06/zenodo/run-37744038306.json'
+  W07_POINTER: 'docs/workflow07/zenodo/run-37751063787.json'
+  PRIOR_W08_POINTER: 'docs/workflow08/zenodo/run-37234697766.json'
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','dplyr','digest','httr2','googlesheets4'))
+
+      - name: Restore corrected W03-W07 states
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs outputs
+          mkdir -p inputs/current inputs/prior_w08 outputs/workflow08_intake outputs/workflow08_active_shiny outputs/workflow08_reuse
+
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R             --pointer "$LEAN_POINTER" --output-dir inputs/current/lean
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R             --pointer "$W03_POINTER" --output-dir inputs/current/w03
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer "$W04_POINTER" --output-dir inputs/current/w04
+          Rscript scripts/updater/workflow_05_restore_state_from_zenodo.R             --pointer "$W05_POINTER" --output-dir inputs/current/w05
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R             --pointer "$W06_POINTER" --output-dir inputs/current/w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R             --pointer "$W07_POINTER" --output-dir inputs/current/w07
+
+      - name: Resolve corrected W08 intake files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$(find inputs/current/lean -type f -name canonical_lean.jsonl -print -quit)" inputs/current/canonical_lean.jsonl
+          cp "$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)" inputs/current/publication_status.jsonl
+          cp "$(find inputs/current/w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)" inputs/current/workflow04_final_screening_layer.jsonl
+          cp "$(find inputs/current/w05 -type f -name workflow05_species_layer.csv -print -quit)" inputs/current/workflow05_species_layer.csv
+          cp "$(find inputs/current/w05 -type f -name species_matches.csv -print -quit)" inputs/current/species_matches.csv
+          cp "$(find inputs/current/w06 -type f -name workflow06_geography_layer.csv -print -quit)" inputs/current/workflow06_geography_layer.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_records.csv -print -quit)" inputs/current/workflow07_records.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_workflow08_human_review_queue.csv -print -quit)" inputs/current/workflow07_review.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_pathway_scores_retained.csv -print -quit)" inputs/current/workflow07_scores.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_topic_record_qc.csv -print -quit)" inputs/current/workflow07_qc.csv
+          cp "$(find inputs/current/w07 -type f -name workflow07_late_automatic_exclusions.csv -print -quit)" inputs/current/workflow07_late.csv
+
+          GROUND="$(find inputs/current/w06 -type f -name geography_review_residual.csv -print -quit)"
+          if [ -z "$GROUND" ]; then
+            GROUND="$(find inputs/current/w06 -type f -name geography_ungrounded_evidence.csv -print -quit)"
+          fi
+          if [ -n "$GROUND" ]; then
+            cp "$GROUND" inputs/current/workflow06_grounding_residual.csv
+          else
+            Rscript -e 'readr::write_csv(data.frame(record_id=character()),"inputs/current/workflow06_grounding_residual.csv")'
+          fi
+
+      - name: Build corrected current W08 issue state
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_build_review_queue_dynamic.R             --w05 inputs/current/workflow05_species_layer.csv             --w06 inputs/current/workflow06_geography_layer.csv             --w06-grounding-residual inputs/current/workflow06_grounding_residual.csv             --w07-records inputs/current/workflow07_records.csv             --w07-review inputs/current/workflow07_review.csv             --w07-scores inputs/current/workflow07_scores.csv             --w07-late-exclusions inputs/current/workflow07_late.csv             --output-dir outputs/workflow08_intake
+
+      - name: Restore published prior W08 adjudication ledger
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_08_restore_adjudication_ledger.R             --pointer "$PRIOR_W08_POINTER"             --output inputs/prior_w08/prior_ledger.jsonl
+
+          MISSING="$(P=inputs/prior_w08/prior_ledger.jsonl Rscript -e '
+            library(jsonlite)
+            x<-readLines(Sys.getenv("P"),warn=FALSE);x<-x[nzchar(trimws(x))]
+            n<-sum(vapply(x,function(z){
+              r<-fromJSON(z,simplifyVector=FALSE);h<-r$issue_state_sha256
+              is.null(h)||!length(h)||!nzchar(trimws(as.character(h[[1]])))
+            },logical(1)))
+            cat(n)
+          ')"
+
+          if [ "$MISSING" -gt 0 ]; then
+            gh run download 36320650383               -n workflow08-review-intake-36320650383               -D inputs/prior_w08/legacy_queue
+            cp "$(find inputs/prior_w08/legacy_queue -type f -name workflow08_review_queue.jsonl -print -quit)" inputs/prior_w08/prior_queue.jsonl
+          fi
+          echo "PASS: restored durable prior W08 ledger; missing embedded fingerprints=$MISSING"
+
+      - name: Migrate still-relevant legacy geography decisions
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_08_migrate_legacy_geography_decisions.R             --queue outputs/workflow08_intake/workflow08_review_queue_current.jsonl             --legacy data/workflow08/geography_adjudication_decisions.jsonl             --output outputs/workflow08_legacy_geo.jsonl
+
+      - name: Read current and historical completed W08 Shiny decisions
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_08_capture_active_shiny_decisions.R             --sheet-id "$LEM_GOOGLE_SHEET_ID"             --credential "$RUNNER_TEMP/lem-google-service-account.json"             --output outputs/workflow08_active_shiny/active_decisions.jsonl             --history-output outputs/workflow08_active_shiny/historical_decisions.jsonl
+
+      - name: Build cumulative prior decision ledger
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          readj <- function(p){
+            if(!file.exists(p)) return(list())
+            x<-readLines(p,warn=FALSE);x<-x[nzchar(trimws(x))]
+            lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))
+          }
+          rows <- c(
+            readj('inputs/prior_w08/prior_ledger.jsonl'),
+            readj('outputs/workflow08_legacy_geo.jsonl'),
+            readj('outputs/workflow08_active_shiny/historical_decisions.jsonl'),
+            readj('outputs/workflow08_active_shiny/active_decisions.jsonl')
+          )
+          keys <- if(length(rows)) vapply(rows,function(z)as.character(z$review_key),character(1)) else character()
+          if(any(!nzchar(keys))) stop('Missing prior W08 review key')
+          if(length(rows) && anyDuplicated(keys)){
+            keep <- !duplicated(keys,fromLast=TRUE)
+            rows <- rows[keep]
+          }
+          con <- file('outputs/workflow08_prior_combined.jsonl','wt')
+          for(z in rows) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con)
+          close(con)
+          cat(sprintf('PASS: cumulative candidate prior ledger=%d unique issues\n',length(rows)))
+
+      - name: Reconcile old decisions against corrected issue-state hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --queue outputs/workflow08_intake/workflow08_review_queue_current.jsonl
+            --prior-ledger outputs/workflow08_prior_combined.jsonl
+            --output-dir outputs/workflow08_reuse
+          )
+          if [ -f inputs/prior_w08/prior_queue.jsonl ]; then
+            ARGS+=(--prior-queue inputs/prior_w08/prior_queue.jsonl)
+          fi
+          Rscript scripts/updater/workflow_08_reuse_decisions.R "${ARGS[@]}"
+
+      - name: Summarise corrected W08 reconciliation
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          intake<-fromJSON('outputs/workflow08_intake/workflow08_review_queue_manifest.json',simplifyVector=FALSE)
+          reuse<-fromJSON('outputs/workflow08_reuse/workflow08_reuse_manifest.json',simplifyVector=FALSE)
+          countj<-function(p){
+            if(!file.exists(p))return(0L)
+            x<-readLines(p,warn=FALSE);sum(nzchar(trimws(x)))
+          }
+          out<-list(
+            status='PASS',
+            current_population=as.integer(intake$input_population),
+            current_issue_records=as.integer(intake$unique_records_with_review_issues),
+            current_issues=as.integer(intake$total_review_issues),
+            reused_issues=as.integer(reuse$reused_issues),
+            pending_issues=as.integer(reuse$pending_issues),
+            pending_review_records=as.integer(reuse$pending_review_records),
+            new_issues=as.integer(reuse$new_issues),
+            changed_issues=as.integer(reuse$changed_issues),
+            compatible_geography_vocabulary_migrations=as.integer(reuse$compatible_geography_vocabulary_migrations),
+            compatible_zero_topic_vocabulary_migrations=as.integer(reuse$compatible_zero_topic_vocabulary_migrations),
+            active_shiny_issue_decisions_captured=countj('outputs/workflow08_active_shiny/active_decisions.jsonl'),
+            historical_shiny_issue_decisions_captured=countj('outputs/workflow08_active_shiny/historical_decisions.jsonl'),
+            current_queue_sha256=as.character(reuse$current_queue_sha256)
+          )
+          writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE),'outputs/workflow08_reconciliation_summary.json')
+          cat(sprintf('PASS: corrected W08 reconciliation current_issues=%d reused=%d pending=%d pending_records=%d new=%d changed=%d active_shiny_captured=%d\n',
+                      out$current_issues,out$reused_issues,out$pending_issues,out$pending_review_records,out$new_issues,out$changed_issues,out$active_shiny_issue_decisions_captured))
+
+      - name: Upload deterministic reconciliation preflight
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08-integrity-reconciliation-preflight-${{ github.run_id }}
+          path: |
+            outputs/workflow08_intake/
+            outputs/workflow08_active_shiny/
+            outputs/workflow08_reuse/
+            outputs/workflow08_reconciliation_summary.json
+          retention-days: 30
+          if-no-files-found: error
