@@ -24,11 +24,20 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
+      - name: Checkout Shiny app for read-only inspection
+        uses: actions/checkout@v4
+        with:
+          repository: thesalmonandthetomato/LivingEvidenceMapAdjudication
+          ref: main
+          path: shiny_app
+          persist-credentials: false
       - name: Validate diagnostic script
         run: |
           Rscript -e 'parse(file="scripts/updater/audit_runtime_dependencies.R"); cat("PASS: R parser\\n")'
       - name: Build read-only dependency census
         run: Rscript scripts/updater/audit_runtime_dependencies.R . outputs/dependency_audit
+      - name: Audit Shiny dependencies
+        run: Rscript scripts/updater/audit_shiny_dependencies.R shiny_app outputs/dependency_audit
       - name: Validate report files
         shell: bash
         run: |
@@ -36,6 +45,8 @@ jobs:
           test -s outputs/dependency_audit/dependency_edges.csv
           test -s outputs/dependency_audit/file_inventory.csv
           test -s outputs/dependency_audit/entry_points.csv
+          test -s outputs/dependency_audit/shiny_edges.csv
+          test -s outputs/dependency_audit/shiny_inventory.csv
           test -s outputs/dependency_audit/review_queue.csv
           test -s outputs/dependency_audit/README.txt
           grep -q 'No deletion decisions allowed' outputs/dependency_audit/README.txt
