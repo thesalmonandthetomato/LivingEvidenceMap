@@ -358,7 +358,8 @@ function showInfo(d,filtered){
   if(!info || !d || !d.data) return;
   var key=d.data.key || d.data.name || '';
   var def=(window.D && D.topic_definitions && D.topic_definitions[key]) || 'No definition is available for this topic.';
-  var selectedCount=Number(d.data.count||0);\n  info.innerHTML='<h3>'+escHtml(d.data.name)+'</h3><div class="topic-radial-info-path">'+escHtml(key)+'</div><p class="topic-radial-definition">'+escHtml(def)+'</p>'+(filtered?'<div class="topic-radial-filter-status"><div class="topic-radial-selected-count">'+fmt(selectedCount)+' unique records selected</div><strong>database filtered</strong><br><a href="#database">jump to the filtered database</a></div>':'');
+  var selectedCount=Number(d.data.count||0);
+  info.innerHTML='<h3>'+escHtml(d.data.name)+'</h3><div class="topic-radial-info-path">'+escHtml(key)+'</div><p class="topic-radial-definition">'+escHtml(def)+'</p>'+(filtered?'<div class="topic-radial-filter-status"><div class="topic-radial-selected-count">'+fmt(selectedCount)+' unique records selected</div><strong>database filtered</strong><br><a href="#database">jump to the filtered database</a></div>':'');
 }
 function filterWithoutJump(topic){
   state.species='__all__';state.country='__all__';state.topic=null;state.year=null;state.q='';
