@@ -101,7 +101,8 @@ jobs:
             --output-dir outputs/dependency_audit/w00_plan
           test -s outputs/w00_planning_trace/workflow_00_resolve_source_selection.R.trace/runtime_file_access.csv
           test -s outputs/w00_planning_trace/workflow_00_search_orchestrator.R.trace/runtime_file_access.csv
-          cp outputs/w00_planning_trace/*/runtime_file_access.csv outputs/dependency_audit/ 2>/dev/null || true
+          cp outputs/w00_planning_trace/workflow_00_resolve_source_selection.R.trace/runtime_file_access.csv outputs/dependency_audit/w00_selection_file_access.csv
+          cp outputs/w00_planning_trace/workflow_00_search_orchestrator.R.trace/runtime_file_access.csv outputs/dependency_audit/w00_search_planning_file_access.csv
       - name: Validate report files
         shell: bash
         run: |
