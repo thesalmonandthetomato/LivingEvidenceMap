@@ -1,0 +1,162 @@
+name: TEMP preflight W05-W07 integrity repair
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_preflight_w05_w07_integrity_repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CURRENT_W04_POINTER: 'docs/workflow04/zenodo/run-37679581307.json'
+  PRIOR_W04_POINTER: 'docs/workflow04/zenodo/run-37456188910.json'
+  PRIOR_W05_POINTER: 'docs/workflow05/zenodo/run-37511638503.json'
+  PRIOR_W06_POINTER: 'docs/workflow06/zenodo/run-37515511948.json'
+  PRIOR_W07_POINTER: 'docs/workflow07/zenodo/run-37515511948.json'
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','readr','dplyr'))
+
+      - name: Restore corrected and prior W04 plus prior W05-W07
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs outputs
+          mkdir -p inputs/current_w04 inputs/prior_w04 inputs/prior_w05 inputs/prior_w06 inputs/prior_w07 outputs
+
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer "$CURRENT_W04_POINTER" --output-dir inputs/current_w04
+          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer "$PRIOR_W04_POINTER" --output-dir inputs/prior_w04
+          Rscript scripts/updater/workflow_05_restore_state_from_zenodo.R             --pointer "$PRIOR_W05_POINTER" --output-dir inputs/prior_w05
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R             --pointer "$PRIOR_W06_POINTER" --output-dir inputs/prior_w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R             --pointer "$PRIOR_W07_POINTER" --output-dir inputs/prior_w07
+
+          cp "$(find inputs/current_w04 -type f -name workflow04_included_canonical.jsonl -print -quit)" inputs/current_retained.jsonl
+          cp "$(find inputs/prior_w04 -type f -name workflow04_included_canonical.jsonl -print -quit)" inputs/prior_retained.jsonl
+          cp "$(find inputs/prior_w05 -type f -name workflow05_species_layer.csv -print -quit)" inputs/prior_w05_species.csv
+          cp "$(find inputs/prior_w06 -type f -name workflow06_geography_layer.csv -print -quit)" inputs/prior_w06_geography.csv
+          cp "$(find inputs/prior_w07 -type f -name workflow07_records.csv -print -quit)" inputs/prior_w07_records.csv
+          cp "$(find inputs/prior_w07 -type f -name workflow07_topic_pathway_scores.csv -print -quit)" inputs/prior_w07_scores.csv
+          test -s inputs/current_retained.jsonl
+          test -s inputs/prior_retained.jsonl
+
+      - name: Audit exact downstream repair cohort
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(digest);library(readr);library(dplyr)})
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          scalar <- function(x){if(is.null(x)||!length(x))return('');z<-as.character(x[[1L]]);if(is.na(z))'' else trimws(z)}
+          readjl <- function(p){x<-readLines(p,warn=FALSE,encoding='UTF-8');x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
+          rid <- function(r)scalar((r$identity%||%list())$record_id)
+          title <- function(r)scalar((r$canonical%||%list())$title)
+          abstract <- function(r)scalar((r$canonical%||%list())$abstract)
+          fp <- function(r)digest(toJSON(list(title=title(r),abstract=abstract(r)),auto_unbox=TRUE,null='null',na='null'),algo='sha256',serialize=FALSE)
+
+          cur <- readjl('inputs/current_retained.jsonl')
+          old <- readjl('inputs/prior_retained.jsonl')
+          cids <- vapply(cur,rid,character(1)); oids <- vapply(old,rid,character(1))
+          stopifnot(length(cur)==23255L,length(old)==23371L)
+          stopifnot(all(nzchar(cids)),all(nzchar(oids)),!anyDuplicated(cids),!anyDuplicated(oids))
+          cmap <- setNames(cur,cids); omap <- setNames(old,oids)
+
+          surviving <- intersect(cids,oids)
+          new_retained <- setdiff(cids,oids)
+          no_longer_retained <- setdiff(oids,cids)
+          cfp <- setNames(vapply(surviving,function(id)fp(cmap[[id]]),character(1)),surviving)
+          ofp <- setNames(vapply(surviving,function(id)fp(omap[[id]]),character(1)),surviving)
+          changed <- surviving[cfp != ofp]
+          unchanged <- setdiff(surviving,changed)
+          affected <- sort(unique(c(new_retained,changed)))
+
+          prior_w05 <- read_csv('inputs/prior_w05_species.csv',show_col_types=FALSE,progress=FALSE)
+          prior_w06 <- read_csv('inputs/prior_w06_geography.csv',show_col_types=FALSE,progress=FALSE)
+          prior_w07 <- read_csv('inputs/prior_w07_records.csv',show_col_types=FALSE,progress=FALSE)
+          stopifnot(!anyDuplicated(prior_w05$record_id),!anyDuplicated(prior_w06$record_id),!anyDuplicated(prior_w07$record_id))
+          stopifnot(all(unchanged %in% prior_w05$record_id),all(unchanged %in% prior_w06$record_id),all(unchanged %in% prior_w07$record_id))
+
+          # Freeze configuration compatibility before allowing any reuse.
+          p5 <- fromJSON(Sys.getenv('PRIOR_W05_POINTER'),simplifyVector=FALSE)
+          p6 <- fromJSON(Sys.getenv('PRIOR_W06_POINTER'),simplifyVector=FALSE)
+          p7 <- fromJSON(Sys.getenv('PRIOR_W07_POINTER'),simplifyVector=FALSE)
+          current_w05_config <- digest(file='user_input/workflow05_coding_config.json',algo='sha256',serialize=FALSE)
+          current_w05_dict <- digest(file='user_input/workflow05_deterministic_concepts.csv',algo='sha256',serialize=FALSE)
+          current_w06_prompt <- digest(file='user_input/workflow06_geography_semantic_prompt.txt',algo='sha256',serialize=FALSE)
+          current_w07_ontology <- digest(file='user_input/workflow07_topic_ontology.csv',algo='sha256',serialize=FALSE)
+
+          # W07 production currently freezes the v3.6 prompt from this repository path.
+          prompt_candidates <- c('data/reference/topic_system_prompt_v3_6.txt','user_input/workflow07_topic_system_prompt.txt')
+          prompt_candidates <- prompt_candidates[file.exists(prompt_candidates)]
+          stopifnot(length(prompt_candidates)>=1L)
+          prompt_shas <- setNames(vapply(prompt_candidates,function(p)digest(file=p,algo='sha256',serialize=FALSE),character(1)),prompt_candidates)
+
+          stopifnot(tolower(current_w05_config)==tolower(as.character(p5$workflow05_coding_config_sha256)))
+          stopifnot(tolower(current_w05_dict)==tolower(as.character(p5$deterministic_concepts_sha256)))
+          stopifnot(tolower(current_w06_prompt)==tolower(as.character(p6$prompt_sha256)))
+          stopifnot(tolower(current_w07_ontology)==tolower(as.character(p7$ontology_sha256)))
+          w07_prompt_matches <- names(prompt_shas)[tolower(prompt_shas)==tolower(as.character(p7$prompt_sha256))]
+          stopifnot(length(w07_prompt_matches)>=1L)
+
+          rows <- data.frame(
+            record_id=affected,
+            repair_reason=ifelse(affected%in%new_retained,'newly_retained_after_corrected_w04','title_or_abstract_changed'),
+            stringsAsFactors=FALSE
+          )
+          write.csv(rows,'outputs/downstream_repair_cohort.csv',row.names=FALSE,na='')
+          writeLines(affected,'outputs/downstream_repair_record_ids.txt',useBytes=TRUE)
+          writeLines(sort(unchanged),'outputs/reusable_record_ids.txt',useBytes=TRUE)
+          writeLines(sort(no_longer_retained),'outputs/no_longer_retained_record_ids.txt',useBytes=TRUE)
+
+          summary <- list(
+            status='PASS',
+            corrected_w04_retained=length(cids),
+            prior_w04_retained=length(oids),
+            surviving_retained=length(surviving),
+            unchanged_retained=length(unchanged),
+            changed_title_abstract=length(changed),
+            newly_retained=length(new_retained),
+            no_longer_retained=length(no_longer_retained),
+            exact_w05_recode_records=length(affected),
+            exact_w06_rescreen_records=length(affected),
+            exact_w07_rescreen_records=length(affected),
+            reuse_records=length(unchanged),
+            w05_config_compatible=TRUE,
+            w06_prompt_compatible=TRUE,
+            w07_ontology_prompt_compatible=TRUE,
+            w07_prompt_path=unname(w07_prompt_matches[[1L]])
+          )
+          writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),'outputs/summary.json')
+          cat(sprintf('PASS: downstream repair preflight retained=%d reuse=%d affected=%d (new=%d changed=%d) dropped=%d\n',
+                      length(cids),length(unchanged),length(affected),length(new_retained),length(changed),length(no_longer_retained)))
+
+      - name: Upload preflight
+        uses: actions/upload-artifact@v4
+        with:
+          name: w05-w07-integrity-repair-preflight-${{ github.run_id }}
+          path: outputs/
+          retention-days: 30
+          if-no-files-found: error
