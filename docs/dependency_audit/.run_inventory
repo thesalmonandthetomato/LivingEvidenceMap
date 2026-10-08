@@ -1,3 +1,4 @@
 Dependency audit trigger, observational only. 2026-10-08.
 Retry after YAML validation fix.
 Run extended W00-W10 plus Shiny entry-point graph.
+Retry after validation assertion correction.
