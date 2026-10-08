@@ -1,0 +1,248 @@
+name: TEMP repair W08 reporting tail after integrity repair
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_repair_w08_reporting_tail.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  BRANCH: workflow01-final-architecture
+  W01_POINTER: docs/deduplication/zenodo/run-37608813159.json
+  W02_POINTER: docs/enrichment/zenodo/run-37648955012.json
+  W03_POINTER: docs/publication_status/zenodo/run-37654051293.json
+  W04_POINTER: docs/workflow04/zenodo/run-37679581307.json
+  W05_POINTER: docs/workflow05/zenodo/run-37739192921.json
+  W06_POINTER: docs/workflow06/zenodo/run-37744038306.json
+  W07_POINTER: docs/workflow07/zenodo/run-37751063787.json
+  W08_POINTER: docs/workflow08/zenodo/run-37772061455.json
+  W08_BATCH_ID: w08-run-37769335442
+  W08_QUEUE_SHA: 9a3ed1353cf2b2be227e387ef6ae58c533e3c19d677ad1899117dab8d461394c
+  W08_SOURCE_RUN_ID: '37769335442'
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+
+jobs:
+  repair-tail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','readr','httr2','googlesheets4'))
+
+      - name: Parse repair-tail implementation
+        shell: Rscript {0}
+        run: |
+          files <- c(
+            'scripts/updater/workflow_01_restore_state_from_zenodo.R',
+            'scripts/updater/workflow_10_restore_canonical_from_zenodo.R',
+            'scripts/updater/workflow_current_run_status_observer.R',
+            'scripts/updater/workflow_current_run_status_to_shiny.R',
+            'scripts/updater/workflow_shiny_batch_status.R',
+            'scripts/reporting/write_workflow09_stage_summary.R',
+            'scripts/reporting/write_workflow09_source_snapshot.R',
+            'scripts/reporting/refresh_workflow09_input_manifest.R'
+          )
+          for (p in files) parse(file=p)
+          cat('PASS: repair-tail implementation parses\n')
+
+      - name: Restore corrected W01 and published W08 canonical states
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs/repair_tail
+          mkdir -p inputs/repair_tail/w01 inputs/repair_tail/w08
+
+          Rscript scripts/updater/workflow_01_restore_state_from_zenodo.R \
+            --pointer "$W01_POINTER" \
+            --output-root inputs/repair_tail/w01
+
+          W01_CANON="$(PTR="$W01_POINTER" ROOT="inputs/repair_tail/w01" Rscript -e '
+            suppressPackageStartupMessages({library(jsonlite);library(digest)})
+            p<-fromJSON(Sys.getenv("PTR"),simplifyVector=FALSE)
+            want<-tolower(as.character(p$canonical_jsonl_sha256))
+            fs<-list.files(Sys.getenv("ROOT"),pattern="\\.jsonl$",recursive=TRUE,full.names=TRUE)
+            hit<-fs[vapply(fs,function(f)tolower(digest(file=f,algo="sha256",serialize=FALSE))==want,logical(1))]
+            if(length(hit)!=1L)stop(sprintf("Expected one corrected W01 canonical matching pointer SHA, found %d",length(hit)))
+            cat(hit[[1L]])
+          ')"
+          test -s "$W01_CANON"
+          printf '%s\n' "$W01_CANON" > inputs/repair_tail/w01_canonical_path.txt
+
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer "$W08_POINTER" \
+            --output inputs/repair_tail/w08/canonical.jsonl
+          test -s inputs/repair_tail/w08/canonical.jsonl
+
+          Rscript -e '
+            suppressPackageStartupMessages({library(jsonlite);library(digest)})
+            p<-fromJSON(Sys.getenv("W08_POINTER"),simplifyVector=FALSE)
+            got<-digest(file="inputs/repair_tail/w08/canonical.jsonl",algo="sha256",serialize=FALSE)
+            stopifnot(identical(tolower(got),tolower(as.character(p$final_canonical_jsonl_sha256))))
+            cat(sprintf("PASS: restored exact published W08 canonical SHA=%s\n",got))
+          '
+
+      - name: Rebuild corrected current-run lineage through W08
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W01 --pointer "$W01_POINTER"
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W02 --pointer "$W02_POINTER"
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W03 --pointer "$W03_POINTER"
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W04 --pointer "$W04_POINTER"
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W05 --pointer "$W05_POINTER"
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W06 --pointer "$W06_POINTER"
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W07 --pointer "$W07_POINTER"
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W08
+
+          Rscript -e '
+            library(jsonlite)
+            s<-fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE)
+            want<-list(
+              W01="37608813159",W02="37648955012",W03="37654051293",
+              W04="37679581307",W05="37739192921",W06="37744038306",
+              W07="37751063787",W08="37772061455"
+            )
+            for(nm in names(want))stopifnot(identical(as.character(s$workflow_runs[[nm]]),want[[nm]]))
+            stopifnot(
+              identical(as.integer(s$counts$deduplicated_records),50440L),
+              identical(as.integer(s$counts$screened_include),23255L),
+              identical(as.integer(s$counts$screened_exclude),27172L),
+              identical(as.integer(s$counts$species_records),23255L),
+              identical(as.integer(s$counts$geography$with),9499L),
+              identical(as.integer(s$counts$geography$without),13353L),
+              identical(as.integer(s$counts$topics$with),22548L),
+              identical(as.integer(s$counts$topics$without),304L)
+            )
+            cat("PASS: current-run lineage and repaired W01-W08 counts are coherent\n")
+          '
+
+      - name: Regenerate corrected W01-W08 reporting inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          W01_CANON="$(cat inputs/repair_tail/w01_canonical_path.txt)"
+
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W01 --run-id 37608813159 --pointer "$W01_POINTER"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W02 --run-id 37648955012 --pointer "$W02_POINTER"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W03 --run-id 37654051293 --pointer "$W03_POINTER"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W04 --run-id 37679581307 --pointer "$W04_POINTER"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W05 --run-id 37739192921 --pointer "$W05_POINTER"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W06 --run-id 37744038306 --pointer "$W06_POINTER"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W07 --run-id 37751063787 --pointer "$W07_POINTER"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id 37772061455 --pointer "$W08_POINTER"
+
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
+            --stage W01 \
+            --run-id 37608813159 \
+            --canonical "$W01_CANON"
+
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
+            --stage W08 \
+            --run-id 37772061455 \
+            --canonical inputs/repair_tail/w08/canonical.jsonl
+
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+
+      - name: Verify corrected source membership and W08 pointer
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          m <- read.csv('docs/reporting/workflow_09_inputs/current/w01_source_membership.csv',stringsAsFactors=FALSE,check.names=FALSE)
+          stopifnot(nrow(m)==50440L, !anyDuplicated(m$record_id))
+          p <- fromJSON(Sys.getenv('W08_POINTER'),simplifyVector=FALSE)
+          stopifnot(
+            identical(as.integer(p$canonical_records),22852L),
+            identical(as.integer(p$excluded_records),27588L),
+            identical(as.integer(p$w08_decision_issues),159L)
+          )
+          cat(sprintf('PASS: corrected W01 membership=%d rows; W08 canonical=%d excluded=%d issues=%d\n',
+                      nrow(m),p$canonical_records,p$excluded_records,p$w08_decision_issues))
+
+      - name: Sync repaired current-run status to Shiny
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+      - name: Commit repaired lineage and reporting inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
+          if ! git diff --cached --quiet; then
+            git commit -m "Repair current-run lineage and W09 inputs after W08 integrity repair [skip ci]"
+            git push origin HEAD:"$BRANCH"
+          fi
+
+      - name: Acknowledge consumed W08 Shiny batch
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          OUTPUT_SHA="$(Rscript -e 'cat(digest::digest(file="inputs/repair_tail/w08/canonical.jsonl",algo="sha256",serialize=FALSE))')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "08" \
+            --batch-id "$W08_BATCH_ID" \
+            --queue-sha256 "$W08_QUEUE_SHA" \
+            --status consumed \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --workflow-run-id "37772061455" \
+            --source-run-id "$W08_SOURCE_RUN_ID" \
+            --output-sha256 "$OUTPUT_SHA" \
+            --message "Workflow 08 integrity-repair decisions applied; published W08 record 23238386 retained and reporting lineage repaired."
+
+      - name: Trigger Workflow 09 publication package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run report_workflow09_figures.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$BRANCH"
+          echo "PASS: triggered Workflow 09 after repaired W08 reporting tail"
+
+      - name: Upload repair-tail diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08-reporting-tail-repair-${{ github.run_id }}
+          path: |
+            docs/current_run/current_run_status.json
+            docs/reporting/workflow_09_inputs/current/
+          retention-days: 30
+          if-no-files-found: error
