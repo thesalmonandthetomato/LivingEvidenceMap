@@ -1,0 +1,133 @@
+name: TEMP diagnose W08 parse warning and Shiny decision persistence
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_diagnose_w08_parse_and_shiny.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  W05_POINTER: 'docs/workflow05/zenodo/run-37739192921.json'
+  W06_POINTER: 'docs/workflow06/zenodo/run-37744038306.json'
+  W07_POINTER: 'docs/workflow07/zenodo/run-37751063787.json'
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','dplyr','httr2','googlesheets4'))
+
+      - name: Restore corrected W05-W07
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inputs outputs
+          mkdir -p inputs outputs
+          Rscript scripts/updater/workflow_05_restore_state_from_zenodo.R --pointer "$W05_POINTER" --output-dir inputs/w05
+          Rscript scripts/updater/workflow_06_restore_state_from_zenodo.R --pointer "$W06_POINTER" --output-dir inputs/w06
+          Rscript scripts/updater/workflow_07_restore_state_from_zenodo.R --pointer "$W07_POINTER" --output-dir inputs/w07
+
+      - name: Diagnose readr parsing problems in W08 source CSVs
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(readr))
+          files <- c(
+            workflow05_species_layer = list.files('inputs/w05',pattern='^workflow05_species_layer\\.csv$',recursive=TRUE,full.names=TRUE),
+            workflow06_geography_layer = list.files('inputs/w06',pattern='^workflow06_geography_layer\\.csv$',recursive=TRUE,full.names=TRUE),
+            workflow06_grounding_residual = {
+              z<-list.files('inputs/w06',pattern='^(geography_review_residual|geography_ungrounded_evidence)\\.csv$',recursive=TRUE,full.names=TRUE)
+              if(length(z)) z[[1]] else character()
+            },
+            workflow07_records = list.files('inputs/w07',pattern='^workflow07_records\\.csv$',recursive=TRUE,full.names=TRUE),
+            workflow07_review = list.files('inputs/w07',pattern='^workflow07_workflow08_human_review_queue\\.csv$',recursive=TRUE,full.names=TRUE),
+            workflow07_scores = list.files('inputs/w07',pattern='^workflow07_topic_pathway_scores_retained\\.csv$',recursive=TRUE,full.names=TRUE),
+            workflow07_late = list.files('inputs/w07',pattern='^workflow07_late_automatic_exclusions\\.csv$',recursive=TRUE,full.names=TRUE)
+          )
+          rows <- list()
+          for(nm in names(files)){
+            p <- files[[nm]]
+            if(!length(p)){cat(sprintf('PARSE %s: file absent\n',nm));next}
+            x <- suppressWarnings(read_csv(p,show_col_types=FALSE,progress=FALSE))
+            pr <- problems(x)
+            cat(sprintf('PARSE %s: rows=%d cols=%d problems=%d file=%s\n',nm,nrow(x),ncol(x),nrow(pr),p))
+            if(nrow(pr)){
+              print(pr)
+              rows[[nm]] <- pr
+            }
+          }
+          saveRDS(rows,'outputs/readr_problems.rds')
+          cat(sprintf('PASS: parse diagnostics complete; affected_files=%d total_problems=%d\n',
+                      length(rows),sum(vapply(rows,nrow,integer(1)))))
+
+      - name: Audit active W08 queue and decision persistence in Shiny
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(googlesheets4);library(jsonlite)})
+          `%||%` <- function(x,y) if(is.null(x)||length(x)==0L)y else x
+          cred<-file.path(Sys.getenv('RUNNER_TEMP'),'lem-google-service-account.json')
+          writeLines(Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cred,useBytes=TRUE)
+          Sys.chmod(cred,'0600')
+          gs4_auth(path=cred,cache=FALSE)
+          sid<-Sys.getenv('LEM_GOOGLE_SHEET_ID')
+          tabs<-sheet_names(sid)
+          stopifnot(all(c('queue_w08_active','decisions_w08')%in%tabs))
+          q<-read_sheet(sid,sheet='queue_w08_active',col_types='c')
+          d<-read_sheet(sid,sheet='decisions_w08',col_types='c')
+          cat(sprintf('SHINY queue rows=%d decision rows=%d\n',nrow(q),nrow(d)))
+          b<-unique(as.character(q$batch_id)); s<-unique(tolower(as.character(q$queue_sha256)))
+          stopifnot(length(b)==1L,length(s)==1L)
+          ad<-d[tolower(as.character(d$queue_sha256))==s[[1]],,drop=FALSE]
+          cat(sprintf('SHINY active batch=%s queue_sha=%s active decision rows=%d unique records=%d\n',
+                      b[[1]],s[[1]],nrow(ad),length(unique(as.character(ad$record_id)))))
+          issue_rows<-list()
+          if(nrow(ad)){
+            ad<-ad[order(as.character(ad$resolved_at_utc),seq_len(nrow(ad)),decreasing=TRUE),,drop=FALSE]
+            ad<-ad[!duplicated(as.character(ad$record_id)),,drop=FALSE]
+            for(i in seq_len(nrow(ad))){
+              got<-fromJSON(as.character(ad$issue_decisions_json[[i]]),simplifyVector=FALSE)
+              issue_rows<-c(issue_rows,got)
+            }
+          }
+          keys<-if(length(issue_rows))vapply(issue_rows,function(z)as.character(z$review_key%||%''),character(1))else character()
+          cat(sprintf('SHINY active completed issue decisions=%d unique review_keys=%d\n',length(issue_rows),length(unique(keys))))
+          writeLines(toJSON(list(
+            queue_rows=nrow(q),
+            decision_rows=nrow(d),
+            active_batch=b[[1]],
+            queue_sha256=s[[1]],
+            active_decision_rows=nrow(ad),
+            active_unique_records=length(unique(as.character(ad$record_id))),
+            active_issue_decisions=length(issue_rows),
+            active_unique_review_keys=length(unique(keys))
+          ),auto_unbox=TRUE,pretty=TRUE),'outputs/shiny_w08_audit.json')
+
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08-parse-shiny-diagnostics-${{ github.run_id }}
+          path: outputs/
+          retention-days: 14
+          if-no-files-found: error
