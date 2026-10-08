@@ -62,8 +62,8 @@ jobs:
           printf '%s\n' 'invisible(readLines(normalizePath("scripts/updater/workflow_00_search_orchestrator.R")))' 'writeLines("ok",file.path(getwd(),"outputs/dependency_trace_wrapper_test/fixture.txt"))' > outputs/dependency_trace_wrapper_test/fixture.R
           DEPENDENCY_TRACE=false bash scripts/updater/run_rscript_with_optional_trace.sh outputs/dependency_trace_wrapper_test/fixture.R
           DEPENDENCY_TRACE=true DEPENDENCY_TRACE_DIR=outputs/dependency_trace_wrapper_test bash scripts/updater/run_rscript_with_optional_trace.sh outputs/dependency_trace_wrapper_test/fixture.R
-          test -s outputs/dependency_trace_wrapper_test/fixture.R/runtime_file_access.csv
-          grep -q 'workflow_00_search_orchestrator.R' outputs/dependency_trace_wrapper_test/fixture.R/runtime_file_access.csv
+          test -s outputs/dependency_trace_wrapper_test/fixture.R.trace/runtime_file_access.csv
+          grep -q 'workflow_00_search_orchestrator.R' outputs/dependency_trace_wrapper_test/fixture.R.trace/runtime_file_access.csv
       - name: Check W00 workflow YAML syntax
         shell: bash
         run: |
