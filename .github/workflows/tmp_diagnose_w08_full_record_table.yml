@@ -1,0 +1,170 @@
+name: TEMP diagnose full W08 record-table pipeline
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_diagnose_w08_full_record_table.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','googlesheets4','digest'))
+      - name: Reproduce complete W08 record-table row pipeline
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(googlesheets4);library(jsonlite);library(digest)})
+          `%||%`<-function(x,y)if(is.null(x))y else x
+          cred<-file.path(Sys.getenv('RUNNER_TEMP'),'lem-google-service-account.json')
+          writeLines(Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cred,useBytes=TRUE);Sys.chmod(cred,'0600')
+          gs4_auth(path=cred,cache=FALSE); sid<-Sys.getenv('LEM_GOOGLE_SHEET_ID')
+          tabs<-sheet_names(sid)
+          q<-read_sheet(sid,sheet='queue_w08_active',col_types='c')
+          d<-read_sheet(sid,sheet='decisions_w08',col_types='c')
+          a<-read_sheet(sid,sheet='assignments',col_types='c')
+          user_tab<-intersect(c('users','user_registry','reviewers'),tabs)
+          if(!length(user_tab)) stop('No recognised user registry tab')
+          u<-read_sheet(sid,sheet=user_tab[[1]],col_types='c')
+          cat('USER TAB=',user_tab[[1]],' rows=',nrow(u),' cols=',paste(names(u),collapse='|'),'\n',sep='')
+
+          cases<-lapply(q$case_json,fromJSON,simplifyVector=FALSE)
+          ids<-as.character(d$decision_id); supers<-as.character(d$supersedes_decision_id)
+          active<-d[!ids %in% unique(supers[nzchar(supers)]),,drop=FALSE]
+          active<-active[tolower(active$queue_sha256)==tolower(q$queue_sha256[[1]]),,drop=FALSE]
+          events<-lapply(seq_len(nrow(active)),function(i){
+            x<-as.list(active[i,,drop=FALSE])
+            x$case_id<-as.character(x$record_id[[1]])
+            x$user_id<-as.character(x$reviewer[[1]])
+            x$version<-1L
+            x$active<-TRUE
+            x$event_at_utc<-as.character(x$resolved_at_utc[[1]])
+            x
+          })
+          asg<-a[as.character(a$workflow)=='08' & as.character(a$task_type)=='annotation' &
+                 as.character(a$batch_id)==as.character(q$batch_id[[1]]),,drop=FALSE]
+          assignments<-lapply(seq_len(nrow(asg)),function(i)as.list(asg[i,,drop=FALSE]))
+
+          decision_case_id<-function(x)as.character(x$case_id%||%x$review_case_id%||%x$record_id%||%'')
+          decision_user_id<-function(x)as.character(x$user_id%||%x$reviewer%||%'')
+          decision_resolves_case<-function(x){
+            decision<-tolower(trimws(as.character(x$decision%||%'')))
+            if(nzchar(decision))return(!identical(decision,'uncertain'))
+            issue_json<-trimws(as.character(x$issue_decisions_json%||%''))
+            nzchar(issue_json)
+          }
+          case_authoritative_event<-function(events,case_id){
+            hits<-Filter(function(x)identical(decision_case_id(x),as.character(case_id))&&decision_resolves_case(x),events%||%list())
+            if(!length(hits))return(NULL)
+            times<-vapply(hits,function(x)as.character(x$event_at_utc%||%x$resolved_at_utc%||%''),character(1))
+            versions<-vapply(hits,function(x){z<-suppressWarnings(as.integer(x$version%||%1L));if(is.na(z))1L else z},integer(1))
+            hits[[order(times,versions,seq_along(hits),decreasing=TRUE)[[1L]]]]
+          }
+          find_user<-function(uid){
+            if(!nrow(u))return(NULL)
+            hit<-which(as.character(u$user_id)==uid)
+            if(!length(hit))return(NULL)
+            as.list(u[hit[[1]],,drop=FALSE])
+          }
+          user_label<-function(uid){
+            uid<-as.character(uid%||%'')
+            if(!nzchar(uid))return('')
+            z<-find_user(uid)
+            if(is.null(z))uid else as.character(z$display_name%||%uid)
+          }
+          decision_label<-function(x){
+            dd<-tolower(trimws(as.character(x$decision%||%'')))
+            if(nzchar(dd))return(dd)
+            if(nzchar(trimws(as.character(x$issue_decisions_json%||%''))))return('Annotation saved')
+            ''
+          }
+          case_id<-function(z)as.character(z$review_case_id%||%z$case_id%||%z$record_id%||%'')
+          field_scalar<-function(x){
+            if(is.null(x)||!length(x))return('')
+            y<-as.character(x)
+            if(length(y)!=1L)stop('non-scalar display field')
+            if(is.na(y))'' else y
+          }
+          fields<-function(z){
+            list(
+              work_id=field_scalar(z$work_id%||%z$record_id),
+              year=field_scalar(z$year),
+              title=field_scalar(z$title),
+              doi=field_scalar(z$doi),
+              abstract=field_scalar(z$abstract)
+            )
+          }
+
+          # mirror implicit assignment creation
+          xs<-assignments
+          resolving<-Filter(decision_resolves_case,events)
+          existing_keys<-if(length(assignments))vapply(assignments,function(x)paste(as.character(x$case_id),as.character(x$user_id),sep='|'),character(1))else character()
+          implicit<-list()
+          for(e in resolving){
+            cid<-decision_case_id(e);uid<-decision_user_id(e);key<-paste(cid,uid,sep='|')
+            if(!nzchar(cid)||!nzchar(uid)||key%in%existing_keys)next
+            implicit[[length(implicit)+1L]]<-list(case_id=cid,user_id=uid,status='assigned')
+            existing_keys<-c(existing_keys,key)
+          }
+          xs<-c(xs,implicit)
+          eff<-lapply(xs,function(x){
+            aa<-list(case_id=as.character(x$case_id),user_id=as.character(x$user_id))
+            resolved<-case_authoritative_event(events,aa$case_id)
+            aa$effective_status<-if(is.null(resolved))'assigned' else if(identical(decision_user_id(resolved),aa$user_id))'complete' else 'resolved_elsewhere'
+            aa
+          })
+
+          completed_ids<-unique(vapply(Filter(function(x)identical(x$effective_status,'complete'),eff),function(x)x$case_id,character(1)))
+          selected<-Filter(function(z)case_id(z)%in%completed_ids,cases)
+          cat(sprintf('PIPELINE selected completed cases=%d\n',length(selected)))
+
+          bad<-character()
+          rows<-vector('list',length(selected))
+          for(i in seq_along(selected)){
+            z<-selected[[i]]
+            e<-tryCatch({
+              cid<-case_id(z)
+              ff<-fields(z)
+              ca<-Filter(function(x)identical(x$case_id,cid),eff)
+              ce<-Filter(function(x)identical(decision_case_id(x),cid),events)
+              assigned_users<-unique(vapply(ca,function(x)x$user_id,character(1)))
+              assigned_names<-vapply(assigned_users,user_label,character(1))
+              decision_text<-if(length(ce))paste(vapply(ce,function(x){
+                who<-user_label(decision_user_id(x)); lab<-decision_label(x)
+                if(nzchar(who))paste0(who,': ',lab)else lab
+              },character(1)),collapse='; ') else ''
+              statuses<-unique(vapply(ca,function(x)x$effective_status,character(1)))
+              status<-if(!length(ca))'Unassigned' else if(length(statuses)==1L){
+                map<-c(complete='Completed',assigned='Outstanding',resolved_elsewhere='Resolved elsewhere')
+                val<-unname(map[statuses[[1L]]]); if(is.na(val))statuses[[1L]] else val
+              } else 'mixed'
+              times<-if(length(ce))vapply(ce,function(x)as.character(x$event_at_utc%||%x$resolved_at_utc%||%''),character(1))else character()
+              last_activity<-if(length(times[nzchar(times)]))max(times[nzchar(times)])else ''
+              rows[[i]]<-list(cid=cid,fields=ff,status=status,assigned=paste(assigned_names[nzchar(assigned_names)],collapse=', '),decisions=decision_text,last_activity=last_activity)
+              NULL
+            },error=function(e)e)
+            if(inherits(e,'error'))bad<-c(bad,sprintf('row %d %s: %s',i,case_id(z),conditionMessage(e)))
+          }
+          cat(sprintf('FULL ROW PIPELINE problems=%d rows_built=%d\n',length(bad),sum(!vapply(rows,is.null,logical(1)))))
+          if(length(bad))cat(paste('PROBLEM',bad,sep=': ',collapse='\n'),'\n')
+          cat('PASS: full W08 record-table pipeline diagnostic complete\n')
