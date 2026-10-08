@@ -1,6 +1,10 @@
 name: Dependency audit (manual, read-only)
 on:
   workflow_dispatch:
+  push:
+    branches: [audit-runtime-dependencies]
+    paths:
+      - 'docs/dependency_audit/.run_inventory'
 
 permissions:
   contents: read
