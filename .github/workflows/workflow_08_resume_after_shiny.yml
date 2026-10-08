@@ -118,11 +118,21 @@ jobs:
             cp source/repair/workflow08_reused_decisions.jsonl source/workflow08_reuse/workflow08_reused_decisions.jsonl
             cp source/reconciliation/workflow08_intake/workflow08_issue_index_current.csv source/workflow08_intake/workflow08_issue_index_current.csv
 
-            CTX_SOURCE="$(Rscript -e 'x<-jsonlite::fromJSON("source/workflow08_reuse/shiny_resume_context.json");cat(as.character(x$source_reconciliation_run))')"
-            test "$CTX_SOURCE" = "37766236861"
-            test "$(Rscript -e 'x<-jsonlite::fromJSON("source/workflow08_reuse/shiny_resume_context.json");cat(as.integer(x$reused_issues))')" = "133"
-            test "$(Rscript -e 'x<-jsonlite::fromJSON("source/workflow08_reuse/shiny_resume_context.json");cat(as.integer(x$pending_issues))')" = "26"
-            test "$(grep -cve '^[[:space:]]*
+            Rscript -e 'x<-jsonlite::fromJSON("source/workflow08_reuse/shiny_resume_context.json");stopifnot(as.character(x$source_reconciliation_run)=="37766236861",as.integer(x$reused_issues)==133L,as.integer(x$pending_issues)==26L)'
+            Rscript -e 'count<-function(p){z<-readLines(p,warn=FALSE);sum(nzchar(trimws(z)))};stopifnot(count("source/workflow08_reuse/workflow08_pending_review_queue.jsonl")==26L,count("source/workflow08_reuse/workflow08_reused_decisions.jsonl")==133L)'
+            echo "PASS: restored integrity-repair W08 source state from immutable artefacts"
+          else
+            gh run download "$SOURCE_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "workflow08-review-state-$SOURCE_RUN_ID" \
+              --dir source
+          fi
+
+          test -s source/workflow08_reuse/shiny_resume_context.json
+          test -s source/workflow08_reuse/workflow08_pending_review_queue.jsonl
+          test -f source/workflow08_reuse/workflow08_reused_decisions.jsonl
+          test -s source/workflow08_intake/workflow08_issue_index_current.csv
+
       - name: Prepare Google credential
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
