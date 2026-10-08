@@ -43,8 +43,16 @@ jobs:
           q<-read_sheet(sid,sheet='queue_w08_active',col_types='c')
           d<-read_sheet(sid,sheet='decisions_w08',col_types='c')
           a<-read_sheet(sid,sheet='assignments',col_types='c')
-          user_tab<-intersect(c('users','user_registry','reviewers'),tabs)
-          if(!length(user_tab)) stop('No recognised user registry tab')
+          required_user_cols<-c('user_id','email','display_name','role','active')
+          user_tab<-character()
+          for(tab in tabs){
+            hdr<-tryCatch(read_sheet(sid,sheet=tab,col_types='c',n_max=1),error=function(e)NULL)
+            if(!is.null(hdr) && all(required_user_cols %in% names(hdr))){
+              user_tab<-tab
+              break
+            }
+          }
+          if(!length(user_tab)) stop('No user-registry tab with required schema found')
           u<-read_sheet(sid,sheet=user_tab[[1]],col_types='c')
           cat('USER TAB=',user_tab[[1]],' rows=',nrow(u),' cols=',paste(names(u),collapse='|'),'\n',sep='')
 
