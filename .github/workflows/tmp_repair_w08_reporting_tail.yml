@@ -202,6 +202,8 @@ jobs:
           git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
           if ! git diff --cached --quiet; then
             git commit -m "Repair current-run lineage and W09 inputs after W08 integrity repair [skip ci]"
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
             git push origin HEAD:"$BRANCH"
           fi
 
