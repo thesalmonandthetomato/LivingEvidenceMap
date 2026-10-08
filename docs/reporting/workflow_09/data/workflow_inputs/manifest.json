@@ -1,133 +1,133 @@
 {
   "schema": "living-evidence-map-workflow09-input-manifest-v1",
-  "generated_at_utc": "2026-10-04T21:33:39Z",
+  "generated_at_utc": "2026-10-08T13:09:18Z",
   "stages": [
     {
       "stage": "W00",
-      "source_run_id": "baseline-plus-manual-ris",
+      "source_run_id": "37346236893",
       "file": "w00_summary.json"
     },
     {
       "stage": "W01",
-      "source_run_id": "36971418284",
+      "source_run_id": "37608813159",
       "file": "w01_summary.json"
     },
     {
       "stage": "W02",
-      "source_run_id": "37016080508",
+      "source_run_id": "37648955012",
       "file": "w02_summary.json"
     },
     {
       "stage": "W03",
-      "source_run_id": "37024164176",
+      "source_run_id": "37654051293",
       "file": "w03_summary.json"
     },
     {
       "stage": "W04",
-      "source_run_id": "37051672356",
+      "source_run_id": "37679581307",
       "file": "w04_summary.json"
     },
     {
       "stage": "W05",
-      "source_run_id": "37110114836",
+      "source_run_id": "37739192921",
       "file": "w05_summary.json"
     },
     {
       "stage": "W06",
-      "source_run_id": "37114864202",
+      "source_run_id": "37744038306",
       "file": "w06_summary.json"
     },
     {
       "stage": "W07",
-      "source_run_id": "37153534771",
+      "source_run_id": "37751063787",
       "file": "w07_summary.json"
     },
     {
       "stage": "W08",
-      "source_run_id": "37234697766",
+      "source_run_id": "37772061455",
       "file": "w08_summary.json"
     }
   ],
   "files": [
     {
       "file": "w00_summary.json",
-      "bytes": 371,
-      "sha256": "c0aa2d368b43d8941c140d388b4bba2b5763aa8c409fb5171d3f6a1b6f9b42f7"
+      "bytes": 357,
+      "sha256": "ce5d9199d4d63a1521294b92611c8d79d9d7f117afd4ff82f0f8b5c387893bcd"
     },
     {
       "file": "w01_source_intersections.csv",
-      "bytes": 1788,
-      "sha256": "ac03f925d0eec2e7d166c268e88ca492f90386e2f9b50f3bf8737f4c5e42fb7d"
+      "bytes": 24742,
+      "sha256": "b9a4a29e8387f2e18e8797d3e02e748a298647f9154e3ba8e8176765cc805d14"
     },
     {
       "file": "w01_source_manifest.json",
-      "bytes": 794,
-      "sha256": "2edfc98c3989a77ee02ea23b026da08a46da8e49831aac64041f534bf68a582f"
+      "bytes": 796,
+      "sha256": "995be3941d2d7111ebd71435e0aab67981c3b846d21069770a77dadc27b5df3e"
     },
     {
       "file": "w01_source_membership.csv",
-      "bytes": 1917413,
-      "sha256": "7d2e20feda6401c78c41492d4d9e4a387b34def532b197b2b2481d3a2be996a0"
+      "bytes": 2336537,
+      "sha256": "f0c253356e3bf8cbbad1a6b50da03faaac0978d891ae2926dc279a55cd5c2236"
     },
     {
       "file": "w01_source_summary.csv",
-      "bytes": 389,
-      "sha256": "51aade68ac6c21f112be5e4b4288ac3e9d6f5b2bd907f80c682be0d8f3191960"
+      "bytes": 1107,
+      "sha256": "1d94349cfb4ae76107beba6704e4abea68e813f0fe92750dc875bab2c66c114a"
     },
     {
       "file": "w01_summary.json",
       "bytes": 595,
-      "sha256": "f3fabf727c3403537de811194130f9bd44e7ac73a38576f38cb7982b78a431ba"
+      "sha256": "ffed7753eb405f73ed4eed65af2fd44333b3cafa53c60e3533027176d5153538"
     },
     {
       "file": "w02_summary.json",
       "bytes": 675,
-      "sha256": "694351bb7103c9e5e1c2383ea23b8876097c7f5baeadf2d7a44173849d76c79a"
+      "sha256": "d170244f94f443ba2e42b44054d8b5a2a4e27c09397b41edcb2171c6b4ca8e55"
     },
     {
       "file": "w03_summary.json",
       "bytes": 636,
-      "sha256": "726f71c34e2a494cccdb2bec9813ba1112627290fab934fbc0061a0db6468b17"
+      "sha256": "49ae0ec69cf63991332b2e882192936c3a7edba71d468a90f64f0703e36be362"
     },
     {
       "file": "w04_summary.json",
       "bytes": 487,
-      "sha256": "84bc04436dd6af96cf25fc43dd040ef870983bc00834cf367e7225840bdc87a1"
+      "sha256": "321cb8667ca33bf7e0e66ccaeacd4b7d06f107c8a73c6eff5e1bce01798e6ad0"
     },
     {
       "file": "w05_summary.json",
       "bytes": 473,
-      "sha256": "578cf6ad36a3462b1f884e841de7b6044e9a99b2de2e62b57d22f35e3049ef22"
+      "sha256": "8cbb0fbfcd034f7f644c5af9a24118580e60ea95d934ec0b4098293272a8695a"
     },
     {
       "file": "w06_summary.json",
       "bytes": 543,
-      "sha256": "115d50a30571316b973292e9d28eb430ca600a75233dbd54d6a42161082c3ed9"
+      "sha256": "41dc16559e0df88e94ccda0427a45bf353223558794cc17c6f3d9a710ed46d75"
     },
     {
       "file": "w07_summary.json",
-      "bytes": 601,
-      "sha256": "d6d08f4bb4533ab3e8d3ff6382101bad4b7898e399c84db49c57840a2462e1ed"
+      "bytes": 600,
+      "sha256": "3ae39b2a89eb9a1c9cdca67263ea066980641d87b0aab6f5501ea80c2c282f3d"
     },
     {
       "file": "w08_source_intersections.csv",
-      "bytes": 1678,
-      "sha256": "7eadfafa3bec8dfc9adee94bbd9139f13b2d3f3cdfd46e7df50fe2d7daa1751f"
+      "bytes": 20650,
+      "sha256": "69cd39ebf1002660948863b0cdb8b4366fd53df9a63a8378ea137a98807dd2b5"
     },
     {
       "file": "w08_source_manifest.json",
-      "bytes": 794,
-      "sha256": "0efa3def0a8fec7adb3ca61c260f4ba065a2ffd569f190e9cec9c4ca47040b85"
+      "bytes": 796,
+      "sha256": "eab951252cf57e353e428c32faaccdb4c5e9354daea8067415a5e8ce1d0206cb"
     },
     {
       "file": "w08_source_summary.csv",
-      "bytes": 369,
-      "sha256": "b7e2438a64ba413657198f9f15d731e3df114b32ae035ff82552147f981d8f38"
+      "bytes": 1076,
+      "sha256": "4057e26f5fa6f61e37a306fd2f3880c1cda61380f8b4bbc44323cd0dd76d007c"
     },
     {
       "file": "w08_summary.json",
       "bytes": 833,
-      "sha256": "d94f14cb882d98af8edad9fd710de186691b37daf9a9b42f3b7d3754bfc725b4"
+      "sha256": "bd5564c008c94e2cd2246696af084c829f08ec60d2090cc84efb7255485113cd"
     }
   ]
 }

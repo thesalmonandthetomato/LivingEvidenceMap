@@ -3,16 +3,16 @@
 ## Review process
 
 The review process is outlined in the flow diagram in Figure 1. Across
-the 7 databases searched, a total of 118,527 search results was
-obtained. Following deduplication, 47,094 unique candidate records
-remained. Title and abstract repair and enrichment supplemented 2,218
-records, whilst a sweep for retractions identified 12 records that were
+the 19 databases searched, a total of 135,566 search results was
+obtained. Following deduplication, 50,440 unique candidate records
+remained. Title and abstract repair and enrichment supplemented 2,101
+records, whilst a sweep for retractions identified 13 records that were
 excluded from further analysis.
 
-Following screening of titles and abstracts, 21,493 were included in the
+Following screening of titles and abstracts, 22,852 were included in the
 map, and passed on to annotation. Species annotations were obtained for
-all 21,493 records, geography for 8,923 records, and topic
-classifications for 21,246 records.
+all 22,852 records, geography for 9,499 records, and topic
+classifications for 22,548 records.
 
 <figure>
 <img
@@ -72,7 +72,7 @@ No saved human–human consistency milestones were available for this
 reporting run.
 
 Database provenance was retained through deduplication, allowing the
-contribution and overlap of the 7 bibliographic sources to be compared
+contribution and overlap of the 19 bibliographic sources to be compared
 for the deduplicated corpus and the definitive final included corpus.
 Figure 2 shows records contributed uniquely by each database, while
 Figure 3 shows only multi-database overlaps.
@@ -105,13 +105,13 @@ the databases represented in each intersection.</em></figcaption>
 ## Publication year
 
 The volume of academic evidence on salmon farming increased markedly
-over time. There were 1,189 included records published in 2025, the
+over time. There were 1,233 included records published in 2025, the
 highest complete publication year in the current corpus, compared with
-just 516 in 2010.
+just 551 in 2010.
 
-The three largest focal species categories were Rainbow trout (8,960
-records; 41.7%), Atlantic salmon (8,072; 37.6%) and Unspecified species
-(4,489; 20.9%). Species categories are not mutually exclusive because
+The three largest focal species categories were Rainbow trout (9,337
+records; 40.9%), Atlantic salmon (8,338; 36.5%) and Unspecified species
+(5,102; 22.3%). Species categories are not mutually exclusive because
 individual records can refer to more than one eligible farmed species.
 
 <figure>
@@ -140,12 +140,12 @@ year.</em></figcaption>
 
 ## Geography
 
-A substantive study country could be resolved for 8,923 records (41.5%),
-while 12,570 included records (58.5%) did not contain sufficient
+A substantive study country could be resolved for 9,499 records (41.6%),
+while 13,353 included records (58.4%) did not contain sufficient
 evidence for a defensible country-level assignment. Among records with
 assigned geography (Figure 6), the largest country evidence bases were
-Norway (1,989 records), Canada (1,152), United Kingdom (1,050), Chile
-(1,028), United States (669), Turkey (493). Countries demonstrated
+Norway (2,065 records), Canada (1,275), United Kingdom (1,148), Chile
+(1,099), United States (774), Turkey (499). Countries demonstrated
 strong species-specificity, as expected (Figure 7), with the major
 Atlantic salmon producing countries contributing most to the evidence
 base, and a large number of other countries contributing collectively to
@@ -172,16 +172,16 @@ countries, by focal farmed species.</em></figcaption>
 
 ## Topics
 
-At least one topic was assigned to 21,246 of the 21,493 included
-records; 247 records (1.1%) remained uncoded for topic. Across coded
-records, the final ontology contained 60,221 distinct record-topic
+At least one topic was assigned to 22,548 of the 22,852 included
+records; 304 records (1.3%) remained uncoded for topic. Across coded
+records, the final ontology contained 63,162 distinct record-topic
 assignments.
 
 The evidence base was strongly oriented towards Production, represented
-in 15,820 records (73.6%). Environment was the second-largest theme
-(5,185; 24.1%), followed by Industry and governance (2,745; 12.8%),
-Methods (2,684; 12.5%) and Product (2,594; 12.1%). People and society
-(1,046; 4.9%) and Inputs and resources (835; 3.9%) were substantially
+in 16,654 records (72.9%). Environment was the second-largest theme
+(5,570; 24.4%), followed by Industry and governance (3,028; 13.3%),
+Methods (2,728; 11.9%) and Product (2,673; 11.7%). People and society
+(1,118; 4.9%) and Inputs and resources (877; 3.8%) were substantially
 smaller. Theme percentages are not mutually exclusive because a record
 can be assigned to more than one theme.
 
@@ -201,13 +201,13 @@ records.</em></figcaption>
 Production research was centred on fish performance and biology, fish
 health, feed and nutrition, breeding and reproduction, and stress and
 mortality. The most frequently assigned terminal topic was Physiology,
-metabolism and biological responses (5,002 records; 23.3%), followed by
-Growth and development (3,126; 14.5%). Other major concentrations
-included Other diseases - Prevention and treatment (2,004; 9.3%), Other
-diseases - Epidemiology (1,658; 7.7%), Other diseases - General (1,504;
-7.0%) and Alternative feed ingredients (1,482; 6.9%). Sea lice remained
-a substantial research cluster, including 770 records on Sea lice
-control and treatment and 576 on Sea lice epidemiology.
+metabolism and biological responses (5,178 records; 22.7%), followed by
+Growth and development (3,270; 14.3%). Other major concentrations
+included Other diseases - Prevention and treatment (2,066; 9.0%), Other
+diseases - Epidemiology (1,725; 7.5%), Other diseases - General (1,540;
+6.7%) and Alternative feed ingredients (1,534; 6.7%). Sea lice remained
+a substantial research cluster, including 805 records on Sea lice
+control and treatment and 589 on Sea lice epidemiology.
 
 <figure>
 <img
@@ -221,9 +221,9 @@ theme.</em></figcaption>
 ### Environment
 
 Environmental research was concentrated in Physiology, metabolism and
-biological responses (5,002; 23.3%), Growth and development (3,126;
-14.5%), Other diseases - Prevention and treatment (2,004; 9.3%) and
-Other diseases - Epidemiology (1,658; 7.7%).
+biological responses (5,178; 22.7%), Growth and development (3,270;
+14.3%), Other diseases - Prevention and treatment (2,066; 9.0%) and
+Other diseases - Epidemiology (1,725; 7.5%).
 
 <figure>
 <img
@@ -237,9 +237,9 @@ theme.</em></figcaption>
 ### Methods
 
 Methods research was dominated by Physiology, metabolism and biological
-responses (5,002; 23.3%), followed by Growth and development (3,126;
-14.5%), Other diseases - Prevention and treatment (2,004; 9.3%) and
-Other diseases - Epidemiology (1,658; 7.7%).
+responses (5,178; 22.7%), followed by Growth and development (3,270;
+14.3%), Other diseases - Prevention and treatment (2,066; 9.0%) and
+Other diseases - Epidemiology (1,725; 7.5%).
 
 <figure>
 <img
@@ -253,10 +253,10 @@ theme.</em></figcaption>
 ### Industry and governance
 
 Within Industry and governance, Physiology, metabolism and biological
-responses was the largest terminal topic (5,002; 23.3%), followed by
-Growth and development (3,126; 14.5%), Other diseases - Prevention and
-treatment (2,004; 9.3%), Other diseases - Epidemiology (1,658; 7.7%) and
-Other diseases - General (1,504; 7.0%).
+responses was the largest terminal topic (5,178; 22.7%), followed by
+Growth and development (3,270; 14.3%), Other diseases - Prevention and
+treatment (2,066; 9.0%), Other diseases - Epidemiology (1,725; 7.5%) and
+Other diseases - General (1,540; 6.7%).
 
 <figure>
 <img
@@ -270,8 +270,8 @@ theme.</em></figcaption>
 ### Product
 
 Product research was led by Physiology, metabolism and biological
-responses (5,002; 23.3%), Growth and development (3,126; 14.5%) and
-Other diseases - Prevention and treatment (2,004; 9.3%). Other
+responses (5,178; 22.7%), Growth and development (3,270; 14.3%) and
+Other diseases - Prevention and treatment (2,066; 9.0%). Other
 diseases - Epidemiology and Other diseases - General were also
 prominent.
 
@@ -288,15 +288,15 @@ theme.</em></figcaption>
 
 People and society was much smaller than the Production and Environment
 evidence bases. The largest terminal topics were Physiology, metabolism
-and biological responses (5,002; 23.3%), Growth and development (3,126;
-14.5%) and Other diseases - Prevention and treatment (2,004; 9.3%).
-Topics relating to Employment and job creation, Livelihoods and income,
+and biological responses (5,178; 22.7%), Growth and development (3,270;
+14.3%) and Other diseases - Prevention and treatment (2,066; 9.0%).
+Topics relating to Local and rural development, Livelihoods and income,
 Indigenous peoples and rights, Food availability and nutritional
 security, Culture, identity and traditions, Working conditions and
 occupational health, Distribution of benefits and harms, Local and
 Indigenous knowledge, Displacement, disruption and wellbeing, Multiple
 or general social impacts, Environmental justice and human rights,
-Competition with other food uses, Health impacts of aquaculture, Labour
+Health impacts of aquaculture, Competition with other food uses, Labour
 rights, exploitation and migration, and Affordability and access each
 represented under 0.5% of the full evidence map.
 
@@ -312,10 +312,10 @@ theme.</em></figcaption>
 ### Inputs and resources
 
 Inputs and resources was the smallest high-level theme. Physiology,
-metabolism and biological responses accounted for 5,002 records (23.3%)
-and was more common than Growth and development (3,126; 14.5%), and
-Other diseases - Prevention and treatment (2,004; 9.3%). Affordability
-and access and Therapeutants and chemicals were represented in only 10
+metabolism and biological responses accounted for 5,178 records (22.7%)
+and was more common than Growth and development (3,270; 14.3%), and
+Other diseases - Prevention and treatment (2,066; 9.0%). Affordability
+and access and Therapeutants and chemicals were represented in only 11
 (&lt;0.1%) and 9 (&lt;0.1%) records, respectively.
 
 <figure>
@@ -333,19 +333,19 @@ We compare these results with a recent umbrella review of 37 systematic
 reviews across salmon aquaculture ([Haddaway et al.
 2026](#ref-haddaway2026overview)). This comparison shows substantial
 differences between the distribution of primary research and
-systematic-review coverage. Sea lice control and treatment occurs in 770
-mapped records (3.6%), compared with 8 of 37 systematic reviews (21.6%)
+systematic-review coverage. Sea lice control and treatment occurs in 805
+mapped records (3.5%), compared with 8 of 37 systematic reviews (21.6%)
 in the umbrella-review dataset. By contrast, several of the largest
 areas in the mapped literature have comparatively little
 systematic-review coverage, including Physiology, metabolism and
-biological responses (23.3% of mapped records), Growth and development
-(14.5%), and major disease, environmental and methodological topics.
+biological responses (22.7% of mapped records), Growth and development
+(14.3%), and major disease, environmental and methodological topics.
 
 Social research was particularly weakly represented in the
 systematic-review literature. In the final canonical map, Antimicrobial
-resistance and One Health accounts for 23.3% of records, Conflict and
-social licence for 14.5%, and Public discourse and representation for
-9.3%; the umbrella review includes one review on antimicrobial
+resistance and One Health accounts for 22.7% of records, Conflict and
+social licence for 14.3%, and Public discourse and representation for
+9.0%; the umbrella review includes one review on antimicrobial
 resistance/One Health and none in most of the other social categories.
 Overall, the comparison continues to indicate that the systematic-review
 evidence covers a narrower subset of the topics represented across the
