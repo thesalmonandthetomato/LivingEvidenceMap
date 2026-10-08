@@ -1,0 +1,285 @@
+name: TEMP run W05-W07 integrity repair
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_run_w05_w07_integrity_repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  CURRENT_W04_POINTER: 'docs/workflow04/zenodo/run-37679581307.json'
+  CURRENT_LEAN_POINTER: 'docs/compaction/zenodo/run-37648955012.json'
+  PRIOR_W04_POINTER: 'docs/workflow04/zenodo/run-37456188910.json'
+  PRIOR_LEAN_POINTER: 'docs/compaction/zenodo/run-37381023181.json'
+  PRIOR_W06_POINTER: 'docs/workflow06/zenodo/run-37515511948.json'
+  PRIOR_W07_POINTER: 'docs/workflow07/zenodo/run-37515511948.json'
+  EXPECTED_CURRENT_RECORDS: '23255'
+  EXPECTED_REUSE_RECORDS: '21480'
+  EXPECTED_REPAIR_RECORDS: '1775'
+
+jobs:
+  w05:
+    uses: ./.github/workflows/workflow_05_production.yml
+    with:
+      workflow04_pointer_path: docs/workflow04/zenodo/run-37679581307.json
+      lean_pointer_path: docs/compaction/zenodo/run-37648955012.json
+      publish: false
+    secrets: inherit
+
+  publish-w05:
+    needs: w05
+    if: ${{ needs.w05.result == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      pointer_path: ${{ steps.pointer.outputs.pointer_path }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install publication dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Download deterministic W05 result
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow05-species-coding-${{ github.run_id }}
+          path: w05
+
+      - name: Validate and publish corrected W05 state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATE="$(find w05 -type d -name workflow05_state -print -quit)"
+          test -n "$STATE"
+          test -s "$STATE/workflow05_species_layer.csv"
+          N="$(Rscript -e 'x<-read.csv(commandArgs(TRUE)[1],stringsAsFactors=FALSE);cat(nrow(x))' "$STATE/workflow05_species_layer.csv")"
+          test "$N" -eq "$EXPECTED_CURRENT_RECORDS"
+
+          W04_RECORD="$(P="$CURRENT_W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$zenodo_record_id)')"
+          W04_SHA="$(P="$CURRENT_W04_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$workflow04_final_screening_layer_sha256)')"
+          mkdir -p outputs/workflow05_zenodo
+          Rscript scripts/updater/workflow_05_archive_state_to_zenodo.R             --state-dir "$STATE"             --source-run-id "$GITHUB_RUN_ID"             --source-commit "$(git rev-parse HEAD)"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow05_zenodo             --upstream-w04-record-id "$W04_RECORD"             --upstream-w04-layer-sha256 "$W04_SHA"
+
+      - name: Register corrected W05 state only
+        id: pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_05_update_zenodo_registry.R             --receipt outputs/workflow05_zenodo/zenodo_receipt.json             --registry docs/workflow05/zenodo_registry.csv             --pointer-dir docs/workflow05/zenodo
+          git add docs/workflow05/zenodo_registry.csv docs/workflow05/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register corrected W05 integrity repair $GITHUB_RUN_ID [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+          P="docs/workflow05/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "$P"
+          echo "pointer_path=$P" >> "$GITHUB_OUTPUT"
+          echo "PASS: corrected W05 registered; no Shiny/current-status update"
+
+  w06:
+    needs: publish-w05
+    if: ${{ needs.publish-w05.result == 'success' }}
+    uses: ./.github/workflows/workflow_06_production.yml
+    with:
+      workflow04_pointer_path: docs/workflow04/zenodo/run-37679581307.json
+      workflow05_pointer_path: ${{ needs.publish-w05.outputs.pointer_path }}
+      lean_pointer_path: docs/compaction/zenodo/run-37648955012.json
+      prior_workflow06_pointer_path: docs/workflow06/zenodo/run-37515511948.json
+      prior_workflow04_pointer_path: docs/workflow04/zenodo/run-37456188910.json
+      prior_lean_pointer_path: docs/compaction/zenodo/run-37381023181.json
+      prior_workflow07_pointer_path: docs/workflow07/zenodo/run-37515511948.json
+      publish: false
+    secrets: inherit
+
+  publish-w06:
+    needs: [publish-w05,w06]
+    if: ${{ needs.w06.result == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      pointer_path: ${{ steps.pointer.outputs.pointer_path }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install publication dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Download corrected W06 result
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow06-geography-production-${{ github.run_id }}
+          path: w06
+
+      - name: Validate exact W06 repair scope and publish
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W05_POINTER: ${{ needs.publish-w05.outputs.pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATE="$(find w06 -type d -name workflow06_final -print -quit)"
+          test -n "$STATE"
+          test -s "$STATE/workflow06_validated_summary.json"
+          Rscript -e '
+            x<-jsonlite::fromJSON(commandArgs(TRUE)[1],simplifyVector=FALSE)
+            stopifnot(identical(x$status,"PASS"))
+            stopifnot(as.integer(x$records)==as.integer(Sys.getenv("EXPECTED_CURRENT_RECORDS")))
+            stopifnot(as.integer(x$reused_records)==as.integer(Sys.getenv("EXPECTED_REUSE_RECORDS")))
+            stopifnot(as.integer(x$newly_screened_records)==as.integer(Sys.getenv("EXPECTED_REPAIR_RECORDS")))
+            cat(sprintf("PASS: exact W06 repair scope records=%d reuse=%d fresh=%d\n",x$records,x$reused_records,x$newly_screened_records))
+          ' "$STATE/workflow06_validated_summary.json"
+
+          W05_RECORD="$(P="$W05_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$zenodo_record_id)')"
+          W05_SHA="$(P="$W05_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$workflow05_species_layer_sha256)')"
+          mkdir -p outputs/workflow06_zenodo
+          Rscript scripts/updater/workflow_06_archive_state_to_zenodo.R             --state-dir "$STATE"             --source-run-id "$GITHUB_RUN_ID"             --source-commit "$(git rev-parse HEAD)"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow06_zenodo             --upstream-w05-record-id "$W05_RECORD"             --upstream-w05-layer-sha256 "$W05_SHA"
+
+      - name: Register corrected W06 state only
+        id: pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_06_update_zenodo_registry.R             --receipt outputs/workflow06_zenodo/zenodo_receipt.json             --registry docs/workflow06/zenodo_registry.csv             --pointer-dir docs/workflow06/zenodo
+          git add docs/workflow06/zenodo_registry.csv docs/workflow06/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register corrected W06 integrity repair $GITHUB_RUN_ID [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+          P="docs/workflow06/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "$P"
+          echo "pointer_path=$P" >> "$GITHUB_OUTPUT"
+          echo "PASS: corrected W06 registered; no Shiny/current-status update"
+
+  w07:
+    needs: publish-w06
+    if: ${{ needs.publish-w06.result == 'success' }}
+    uses: ./.github/workflows/workflow_07_production.yml
+    with:
+      workflow06_pointer_path: ${{ needs.publish-w06.outputs.pointer_path }}
+      prior_workflow07_pointer_path: docs/workflow07/zenodo/run-37515511948.json
+      publish: false
+    secrets: inherit
+
+  publish-w07:
+    needs: [publish-w06,w07]
+    if: ${{ needs.w07.result == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      pointer_path: ${{ steps.pointer.outputs.pointer_path }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install publication dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+
+      - name: Download corrected W07 result
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow07-topic-handoff-${{ github.run_id }}
+          path: w07
+
+      - name: Validate exact W07 repair scope and publish
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W06_POINTER: ${{ needs.publish-w06.outputs.pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATE="$(find w07 -type d -name workflow07_state -print -quit)"
+          test -n "$STATE"
+          test -s "$STATE/workflow07_topic_complete_manifest.json"
+          Rscript -e '
+            x<-jsonlite::fromJSON(commandArgs(TRUE)[1],simplifyVector=FALSE)
+            stopifnot(identical(x$status,"PASS"))
+            stopifnot(as.integer(x$records)==as.integer(Sys.getenv("EXPECTED_CURRENT_RECORDS")))
+            stopifnot(as.integer(x$reused_records)==as.integer(Sys.getenv("EXPECTED_REUSE_RECORDS")))
+            stopifnot(as.integer(x$fresh_records)==as.integer(Sys.getenv("EXPECTED_REPAIR_RECORDS")))
+            cat(sprintf("PASS: exact W07 repair scope records=%d reuse=%d fresh=%d\n",x$records,x$reused_records,x$fresh_records))
+          ' "$STATE/workflow07_topic_complete_manifest.json"
+
+          W06_RECORD="$(P="$W06_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$zenodo_record_id)')"
+          W06_SHA="$(P="$W06_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$workflow06_geography_layer_sha256)')"
+          mkdir -p outputs/workflow07_zenodo
+          Rscript scripts/updater/workflow_07_archive_state_to_zenodo.R             --state-dir "$STATE"             --source-run-id "$GITHUB_RUN_ID"             --source-commit "$(git rev-parse HEAD)"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow07_zenodo             --upstream-w06-record-id "$W06_RECORD"             --upstream-w06-layer-sha256 "$W06_SHA"
+
+      - name: Register corrected W07 state only
+        id: pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_07_update_zenodo_registry.R             --receipt outputs/workflow07_zenodo/zenodo_receipt.json             --registry docs/workflow07/zenodo_registry.csv             --pointer-dir docs/workflow07/zenodo
+          git add docs/workflow07/zenodo_registry.csv docs/workflow07/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register corrected W07 integrity repair $GITHUB_RUN_ID [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+          P="docs/workflow07/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "$P"
+          echo "pointer_path=$P" >> "$GITHUB_OUTPUT"
+          echo "PASS: corrected W07 registered; no Shiny/current-status/W08 handoff"
+
+  verify-stop:
+    needs: publish-w07
+    if: ${{ needs.publish-w07.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - name: Verify corrected pointers and intentional stop before W08
+        env:
+          W07_POINTER: ${{ needs.publish-w07.outputs.pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "docs/workflow05/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "docs/workflow06/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "$W07_POINTER"
+          echo "PASS: corrected W05-W07 states registered; workflow stopped before W08 and did not reset Shiny"
