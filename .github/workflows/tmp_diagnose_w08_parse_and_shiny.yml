@@ -34,7 +34,7 @@ jobs:
 
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','readr','dplyr','httr2','googlesheets4'))
+        run: install.packages(c('jsonlite','readr','dplyr','digest','httr2','googlesheets4'))
 
       - name: Restore corrected W05-W07
         env:
