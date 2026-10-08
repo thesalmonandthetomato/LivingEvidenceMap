@@ -58,10 +58,12 @@ jobs:
         run: |
           set -euo pipefail
           bash -n scripts/updater/run_rscript_with_optional_trace.sh
-          DEPENDENCY_TRACE=false bash scripts/updater/run_rscript_with_optional_trace.sh -e 'stopifnot(file.exists("scripts/updater/workflow_00_search_orchestrator.R"))'
-          DEPENDENCY_TRACE=true DEPENDENCY_TRACE_DIR=outputs/dependency_trace_wrapper_test bash scripts/updater/run_rscript_with_optional_trace.sh -e 'invisible(readLines(normalizePath("scripts/updater/workflow_00_search_orchestrator.R"))); writeLines("ok",file.path(getwd(),"outputs/dependency_trace_wrapper_test/fixture.txt"))'
-          test -s outputs/dependency_trace_wrapper_test/-e/runtime_file_access.csv
-          grep -q 'workflow_00_search_orchestrator.R' outputs/dependency_trace_wrapper_test/-e/runtime_file_access.csv
+          mkdir -p outputs/dependency_trace_wrapper_test
+          printf '%s\n' 'invisible(readLines(normalizePath("scripts/updater/workflow_00_search_orchestrator.R")))' 'writeLines("ok",file.path(getwd(),"outputs/dependency_trace_wrapper_test/fixture.txt"))' > outputs/dependency_trace_wrapper_test/fixture.R
+          DEPENDENCY_TRACE=false bash scripts/updater/run_rscript_with_optional_trace.sh outputs/dependency_trace_wrapper_test/fixture.R
+          DEPENDENCY_TRACE=true DEPENDENCY_TRACE_DIR=outputs/dependency_trace_wrapper_test bash scripts/updater/run_rscript_with_optional_trace.sh outputs/dependency_trace_wrapper_test/fixture.R
+          test -s outputs/dependency_trace_wrapper_test/fixture.R/runtime_file_access.csv
+          grep -q 'workflow_00_search_orchestrator.R' outputs/dependency_trace_wrapper_test/fixture.R/runtime_file_access.csv
       - name: Check W00 workflow YAML syntax
         shell: bash
         run: |
