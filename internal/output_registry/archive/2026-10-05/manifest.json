@@ -1,19 +1,19 @@
 {
   "schema": "living-evidence-map-internal-output-registry-manifest-v1",
   "search_date": "2026-10-05",
-  "generated_at_utc": "2026-10-06T12:15:31Z",
+  "generated_at_utc": "2026-10-08T13:28:15Z",
   "files": [
     {
       "path": "output-registry.html",
-      "sha256": "d2851f85b42549c2a5177846a25f0971c11ada0adc6e12f6e0483de851155501"
+      "sha256": "28ee699073a23b4eb08dde7d0b61bbcfd7166270b68ea9732d23399646688b20"
     },
     {
       "path": "output-registry.json",
-      "sha256": "061e5a37f339820b140180f6daea0f3e7c7b0bcf81aa1b3c29aa233643b627d6"
+      "sha256": "a3694fa9232b366699acfcf275f4bf26e77b0e1b431bb2e22fd4eb36da63b569"
     },
     {
       "path": "output-registry-files.csv",
-      "sha256": "fec72bd7190e42e4f76ed33862eae9ba9ba4b29fb45354a83d77ac1d0e6032ed"
+      "sha256": "447ebeb88082bcd3a782f26153c75b3f99796c6f067507707d0d692d28fb8bc4"
     }
   ]
 }
