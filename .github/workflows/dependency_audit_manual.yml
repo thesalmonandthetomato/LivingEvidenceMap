@@ -25,7 +25,8 @@ jobs:
           r-version: release
           use-public-rspm: true
       - name: Validate diagnostic script
-        run: Rscript -e 'parse(file="scripts/updater/audit_runtime_dependencies.R"); cat("PASS: R parser\n")'
+        run: |
+          Rscript -e 'parse(file="scripts/updater/audit_runtime_dependencies.R"); cat("PASS: R parser\\n")'
       - name: Build read-only dependency census
         run: Rscript scripts/updater/audit_runtime_dependencies.R . outputs/dependency_audit
       - name: Validate report files
