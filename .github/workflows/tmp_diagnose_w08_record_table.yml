@@ -1,0 +1,109 @@
+name: TEMP diagnose W08 record-table live data
+
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_diagnose_w08_record_table.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 1
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','googlesheets4'))
+
+      - name: Diagnose live W08 row-table assumptions
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(googlesheets4)
+            library(jsonlite)
+          })
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          cred <- file.path(Sys.getenv('RUNNER_TEMP'),'lem-google-service-account.json')
+          writeLines(Sys.getenv('LEM_GOOGLE_SERVICE_ACCOUNT_JSON'),cred,useBytes=TRUE)
+          Sys.chmod(cred,'0600')
+          gs4_auth(path=cred,cache=FALSE)
+          sid <- Sys.getenv('LEM_GOOGLE_SHEET_ID')
+          q <- read_sheet(sid,sheet='queue_w08_active',col_types='c')
+          d <- read_sheet(sid,sheet='decisions_w08',col_types='c')
+          cat(sprintf('LIVE queue rows=%d decision rows=%d\n',nrow(q),nrow(d)))
+          cat('QUEUE COLUMNS: ',paste(names(q),collapse=' | '),'\n')
+          cat('DECISION COLUMNS: ',paste(names(d),collapse=' | '),'\n')
+
+          scalar <- function(x,label,row){
+            if(is.null(x)) return('')
+            y <- as.character(x)
+            if(length(y)!=1L) stop(sprintf('row %d %s length=%d',row,label,length(y)))
+            if(is.na(y)) return('')
+            y
+          }
+
+          bad <- list()
+          for(i in seq_len(nrow(q))){
+            err <- tryCatch({
+              rid <- scalar(q$record_id[[i]],'record_id',i)
+              ttl <- scalar(q$title[[i]],'title',i)
+              yr <- if('year'%in%names(q)) scalar(q$year[[i]],'year',i) else ''
+              doi <- if('doi'%in%names(q)) scalar(q$doi[[i]],'doi',i) else ''
+              abs <- scalar(q$abstract[[i]],'abstract',i)
+              if(!nzchar(rid)) stop(sprintf('row %d blank record_id',i))
+              invisible(TRUE)
+            },error=function(e)e)
+            if(inherits(err,'error')) bad[[length(bad)+1L]] <- conditionMessage(err)
+          }
+
+          ad <- d[tolower(as.character(d$queue_sha256))==tolower(as.character(q$queue_sha256[[1]])),,drop=FALSE]
+          cat(sprintf('ACTIVE decisions rows=%d unique records=%d\n',nrow(ad),length(unique(as.character(ad$record_id)))))
+          if(nrow(ad)){
+            for(i in seq_len(nrow(ad))){
+              err <- tryCatch({
+                rid <- scalar(ad$record_id[[i]],'decision record_id',i)
+                rev <- scalar(ad$reviewer[[i]],'reviewer',i)
+                ijs <- scalar(ad$issue_decisions_json[[i]],'issue_decisions_json',i)
+                parsed <- fromJSON(ijs,simplifyVector=FALSE)
+                if(!is.list(parsed) || !length(parsed)) stop(sprintf('decision row %d has empty issue list',i))
+                invisible(TRUE)
+              },error=function(e)e)
+              if(inherits(err,'error')) bad[[length(bad)+1L]] <- conditionMessage(err)
+            }
+          }
+          cat(sprintf('DIAGNOSTIC structural problems=%d\n',length(bad)))
+          if(length(bad)) cat(paste('PROBLEM:',unlist(bad),collapse='\n'),'\n')
+
+          # Specifically test the app's W08 display assumptions.
+          vals <- list(
+            record_id = q$record_id,
+            title = q$title,
+            year = if('year'%in%names(q)) q$year else rep('',nrow(q)),
+            doi = if('doi'%in%names(q)) q$doi else rep('',nrow(q)),
+            abstract = q$abstract
+          )
+          for(nm in names(vals)){
+            z <- vals[[nm]]
+            cat(sprintf('FIELD %s: len=%d NA=%d blank=%d\n',nm,length(z),sum(is.na(z)),sum(!nzchar(ifelse(is.na(z),'',z)))))
+          }
+          cat('PASS: live W08 record-table diagnostic complete\n')
