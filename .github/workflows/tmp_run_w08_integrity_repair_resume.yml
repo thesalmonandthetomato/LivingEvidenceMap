@@ -1,5 +1,5 @@
 name: TEMP run W08 integrity-repair resume
-# retry after artefact restore fix
+# retry after restored clean resume workflow
 
 on:
   push:
