@@ -133,12 +133,34 @@ for(i in seq_len(nrow(w06_unresolved))){
   ))
 }
 
+# Invalid ISO3 codes require review even when evidence is grounded.
+valid_iso3 <- unique(toupper(trimws(as.character(gazetteer$iso3c))))
+invalid_iso3_ids <- as.character(w06$record_id[vapply(w06$luna_iso3c,function(value) {
+  codes <- trimws(unlist(strsplit(clean_chr(value),";",fixed=TRUE),use.names=FALSE))
+  codes <- toupper(codes[nzchar(codes)])
+  length(codes)>0L && any(!codes %in% valid_iso3)
+},logical(1))])
+for(rid in invalid_iso3_ids) {
+  z<-w06[match(rid,w06$record_id),,drop=FALSE]
+  add_issue(rid,list(
+    source_workflow="06",issue_type="geography_evidence_unvalidated",
+    automated_value=list(
+      geography_status=clean_chr(z$geography_status),
+      luna_iso3c=clean_chr(z$luna_iso3c),
+      luna_country_names=clean_chr(z$luna_country_names),
+      luna_evidence=clean_chr(z$luna_evidence),
+      geography_reason="invalid_iso3"
+    ),
+    allowed_human_outcomes=c("override_country_set","assign_none","exclude_record")
+  ))
+}
+
 # W06 evidence-grounding residual after deterministic revalidation.
 resid_ids<-unique(as.character(g_resid$record_id))
 resid_ids<-resid_ids[nzchar(resid_ids)]
 resid_ids<-setdiff(resid_ids,unique(c(
   as.character(w06_failures$record_id),
-  as.character(w06_unresolved_all$record_id)
+  as.character(w06_unresolved_all$record_id), invalid_iso3_ids
 )))
 if(length(setdiff(resid_ids,w06$record_id)))stop("Grounding residual contains ID outside W06",call.=FALSE)
 
