@@ -1,0 +1,46 @@
+name: W01 temporary identity regression
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w01-temporary-identity-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+      - name: Install packages
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","data.table","digest"))
+      - name: Test record identity safeguards
+        shell: bash
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/w01-identity"
+          mkdir -p "$T"
+          printf 'idx,source,source_record_id\n1,alpha,a\n2,beta,b\n3,alpha,c\n' > "$T/metadata.csv"
+          Rscript -e 'library(jsonlite);library(digest);m<-read.csv(commandArgs(TRUE)[1],stringsAsFactors=FALSE);payload<-paste(paste(m$idx,m$source,m$source_record_id,sep="\t"),collapse="\n");writeLines(toJSON(list(dedup_index_identity=list(rows=nrow(m),sha256=digest(payload,algo="sha256",serialize=FALSE))),auto_unbox=TRUE),commandArgs(TRUE)[2])' "$T/metadata.csv" "$T/checkpoint.json"
+          Rscript scripts/updater/workflow_01_validate_index_identity.R --metadata "$T/metadata.csv" --checkpoint-manifest "$T/checkpoint.json" --output "$T/verified.json"
+          printf 'idx,source,source_record_id\n1,beta,b\n2,alpha,a\n3,alpha,c\n' > "$T/reordered.csv"
+          if Rscript scripts/updater/workflow_01_validate_index_identity.R --metadata "$T/reordered.csv" --checkpoint-manifest "$T/checkpoint.json"; then echo "FAIL: reordered records accepted"; exit 1; fi
+          printf 'idx,source,source_record_id\n1,alpha,a\n2,beta,b\n3,alpha,new\n' > "$T/replaced.csv"
+          if Rscript scripts/updater/workflow_01_validate_index_identity.R --metadata "$T/replaced.csv" --checkpoint-manifest "$T/checkpoint.json"; then echo "FAIL: changed identity accepted"; exit 1; fi
+          printf '{}' > "$T/unsafe-checkpoint.json"
+          if Rscript scripts/updater/workflow_01_validate_index_identity.R --metadata "$T/metadata.csv" --checkpoint-manifest "$T/unsafe-checkpoint.json"; then echo "FAIL: missing historical identity accepted"; exit 1; fi
+          echo "PASS: identity changes and unsafe checkpoints rejected"
+      - name: Check both human-review and production controllers
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'workflow_01_validate_index_identity.R' .github/workflows-inert/workflow_01_resume_after_human_review.yml
+          grep -q 'workflow_01_apply_adjudications_and_recluster.R' .github/workflows-inert/workflow_01_resume_after_human_review.yml
+          grep -q 'workflow_01_apply_adjudications_and_recluster.R' .github/workflows-inert/workflow_01_production.yml
+          grep -q 'user_input/workflow01_explicit_cluster_splits.json' .github/workflows-inert/workflow_01_resume_after_human_review.yml
+          grep -q 'user_input/workflow01_explicit_cluster_splits.json' .github/workflows-inert/workflow_01_production.yml
+          echo "PASS: human-review resumption and historical split inputs wired"
