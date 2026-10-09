@@ -23,7 +23,7 @@ for(name in names(queries)){
   if(length(q)!=1L||!nzchar(trimws(q)))stop(sprintf("W00 archive: source %s has empty query",name),call.=FALSE)
   p<-file.path(target,paste0(name,".txt"))
   writeLines(q,p,useBytes=TRUE)
-  items[[name]]<-list(file=basename(p),sha256=digest(file=p,algo="sha256",serialize=FALSE),status="prepared_not_executed")
+  items[[name]]<-list(file=basename(p),sha256=digest(file=p,algo="sha256",serialize=FALSE),query_string_sha256=digest(q,algo="sha256",serialize=FALSE),status="prepared_not_executed")
 }
 manifest<-list(schema="w00-query-archive-v1",run_id=run_id,source_strategy=basename(strategy_path),strategy_sha256=digest(file=strategy_path,algo="sha256",serialize=FALSE),search_version=plan$search_version,run_type=plan$run_type,created_at=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),translation=if(is.null(plan$translation))"legacy-orchestrator-v1" else plan$translation,queries=items,execution_report_status="not_yet_available")
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(target,"manifest.json"),useBytes=TRUE)
