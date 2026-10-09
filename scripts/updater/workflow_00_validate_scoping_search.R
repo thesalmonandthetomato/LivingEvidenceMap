@@ -181,34 +181,36 @@ openalex_expr <- paste(oa_tokens, collapse = " ")
 openalex_expr <- gsub("\\( ", "(", openalex_expr)
 openalex_expr <- gsub(" \\)", ")", openalex_expr)
 
-source_queries <- list(
-  lens = sprintf("(title:(%s) OR abstract:(%s) OR keyword:(%s))", normalised, normalised, normalised),
-  scopus = sprintf("TITLE-ABS-KEY(%s)", normalised),
-  openalex = sprintf("works where title/abstract has (%s)", openalex_expr),
-  agricola = sprintf("SRC:AGR AND TITLE_ABS:(%s)", normalised),
-  pubmed = sprintf("SRC:MED AND TITLE_ABS:(%s)", normalised),
-  ethos = sprintf("SRC:ETH AND TITLE_ABS:(%s)", normalised),
-  cba = sprintf("SRC:CBA AND TITLE_ABS:(%s)", normalised),
-  epmc_preprints = sprintf("SRC:PPR AND TITLE_ABS:(%s)", normalised),
-  wos = sprintf("(TI=(%s)) OR (AB=(%s)) OR (AK=(%s))", normalised, normalised, normalised)
-)
-
-ebsco_field_query <- function(fields, expression) {
-  fields <- trimws(as.character(fields))
-  fields <- fields[nzchar(fields)]
-  if (!length(fields)) stop("EBSCO source has no configured search fields", call. = FALSE)
-  paste0(
-    "(",
-    paste(vapply(fields, function(tag) sprintf("%s (%s)", tag, expression), character(1)), collapse = " OR "),
-    ")"
-  )
+# Use the same database-specific rendering as full W00, after validating
+# the standalone scoping Boolean string above. OpenAlex OQL is explicit.
+source_ids <- c("lens","scopus","openalex","agricola","pubmed",
+                "ethos","cba","epmc_preprints","wos",names(ebsco_cfg$sources))
+scratch <- tempfile("w00-scope-")
+dir.create(scratch,recursive=TRUE)
+selection_file <- file.path(scratch,"selection.json")
+strategy_file <- file.path(scratch,"strategy.json")
+writeLines(toJSON(list(selected_sources=source_ids),auto_unbox=TRUE),selection_file)
+writeLines(toJSON(list(
+  search_version="scoping-count-only",
+  advanced_boolean=normalised,
+  database_overrides=list(openalex=sprintf("works where title/abstract has (%s)",openalex_expr))
+),auto_unbox=TRUE),strategy_file)
+translator <- "scripts/updater/workflow_00_translate_generic.R"
+if(!file.exists(translator))stop("W00 generic translator is missing",call.=FALSE)
+output_dir <- file.path(scratch,"translated")
+result <- suppressWarnings(system2("Rscript",c(translator,
+  "--run-type","full","--config",strategy_file,
+  "--source-selection",selection_file,"--ebsco-config",ebsco_config_path,
+  "--output-dir",output_dir),stdout=TRUE,stderr=TRUE))
+status <- attr(result,"status")
+if(!is.null(status)&&status!=0L){
+  unlink(scratch,recursive=TRUE)
+  stop(sprintf("W00 scoping translation failed: %s",paste(result,collapse="; ")),call.=FALSE)
 }
-ebsco_queries <- lapply(names(ebsco_cfg$sources), function(source_slug) {
-  src <- ebsco_cfg$sources[[source_slug]]
-  ebsco_field_query(unlist(src$search_fields, use.names = FALSE), normalised)
-})
-names(ebsco_queries) <- names(ebsco_cfg$sources)
-source_queries <- c(source_queries, ebsco_queries)
+source_queries <- fromJSON(file.path(output_dir,"source_queries.json"),simplifyVector=FALSE)
+unlink(scratch,recursive=TRUE)
+if(!setequal(names(source_queries),source_ids))
+  stop("W00 scoping translation did not cover the expected databases",call.=FALSE)
 
 out <- list(
   schema = "living-evidence-map-workflow00-scoping-search-plan-v1",
