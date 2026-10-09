@@ -15,6 +15,9 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
+      - name: Install test dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
       - name: Validate no hidden geography overrides
         shell: Rscript {0}
         run: |
