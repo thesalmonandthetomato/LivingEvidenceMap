@@ -51,3 +51,10 @@ The categories below distinguish **documented syntax** from **retrieval equivale
 - **Known limitation, unresolved:** legacy OpenAlex `year` filtering can miss newly added older records. The generic translator remains fail-closed until an explicit update query is given.
 - **Provider-specific exception:** EBSCO update retrieval is a complete query reharvest, not a last-14-days filter.
 - **Unverified:** actual retrieval equivalence, exact NOT semantics, wildcard/phrase behaviour, source filters and complete response-code contracts. These need controlled nonproduction API requests following static R syntax checks.
+
+## Subsequent static findings
+
+- Expansion translator previously substituted the selected concept with the new term; it has now been corrected to append the term to the selected concept and subtract the original complete expression.
+- The source child continues to check out `workflow01-final-architecture` explicitly, while the reconstructed scripts are on `production-minimal`. This is a blocking checkout mismatch and must be resolved in an isolated activation plan, without redirecting any live workflows.
+- Retrieval records now carry a query-string SHA-256, but the archive manifest uses a **file** SHA-256 (including the written newline). These are not interchangeable; hash checks must distinguish query-string and file checksums. End-to-end comparison is outstanding.
+- The archival job still pushes directly to its checkout branch. Do not activate it before auditing external writes and creating an isolated destination.
