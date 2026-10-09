@@ -1,11 +1,12 @@
 #!/usr/bin/env Rscript
-suppressPackageStartupMessages(library(jsonlite))
+suppressPackageStartupMessages({library(jsonlite);library(digest)})
 
 args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 input_root<-arg("--input-root")
 output_dir<-arg("--output-dir","outputs/workflow04_consensus_merged")
 expected_shards<-as.integer(arg("--expected-shards","8"))
+screening_config_path<-arg("--screening-config","user_input/workflow04_screening_config.json")
 if(is.null(input_root))stop("--input-root is required",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
@@ -24,7 +25,14 @@ idx<-vapply(summaries,function(x)as.integer(x$shard_index),integer(1))
 if(!setequal(idx,seq_len(expected_shards))||anyDuplicated(idx))stop("Shard-index coverage invariant failed",call.=FALSE)
 if(any(vapply(summaries,function(x)as.integer(x$shard_count)!=expected_shards,logical(1))))stop("Shard-count invariant failed",call.=FALSE)
 
-expected_sha<-"ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69"
+if(!file.exists(screening_config_path))stop("W04 screening configuration missing",call.=FALSE)
+config<-fromJSON(screening_config_path,simplifyVector=FALSE)
+expected_sha<-scalar(config$expected_prompt_sha256)
+if(!grepl("^[0-9a-f]{64}$",expected_sha))stop("Invalid configured W04 prompt checksum",call.=FALSE)
+prompt_path<-scalar(config$prompt_path)
+if(!nzchar(prompt_path)||!file.exists(prompt_path))stop("Configured W04 screening prompt missing",call.=FALSE)
+actual_sha<-digest::digest(paste(readLines(prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n"),algo="sha256",serialize=FALSE)
+if(!identical(actual_sha,expected_sha))stop("W04 screening prompt checksum does not match configuration",call.=FALSE)
 if(any(vapply(summaries,function(x)!identical(scalar(x$prompt_sha256),expected_sha),logical(1))))stop("Prompt SHA mismatch across shards",call.=FALSE)
 eligible_counts<-vapply(summaries,function(x)as.integer(x$workflow03_eligible),integer(1))
 if(any(is.na(eligible_counts))||length(unique(eligible_counts))!=1L)stop("W03 eligible count mismatch across shards",call.=FALSE)
