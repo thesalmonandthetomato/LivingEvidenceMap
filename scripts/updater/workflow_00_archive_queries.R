@@ -15,7 +15,7 @@ if(is.null(queries)||!length(queries))stop("W00 archive: no translated database 
 target<-file.path(archive_root,paste0("run-",run_id))
 if(dir.exists(target)||file.exists(target))stop(sprintf("W00 archive already exists (immutable): %s",target),call.=FALSE)
 dir.create(target,recursive=TRUE,showWarnings=FALSE)
-file.copy(strategy_path,file.path(target,"source_strategy.json"))
+if(!isTRUE(file.copy(strategy_path,file.path(target,"source_strategy.json"))))stop("W00 archive failed to copy strategy",call.=FALSE)
 items<-list()
 for(name in names(queries)){
   if(!grepl("^[A-Za-z0-9_-]+$",name))stop(sprintf("W00 archive: invalid source key: %s",name),call.=FALSE)
@@ -25,6 +25,6 @@ for(name in names(queries)){
   writeLines(q,p,useBytes=TRUE)
   items[[name]]<-list(file=basename(p),sha256=digest(file=p,algo="sha256",serialize=FALSE),status="prepared_not_executed")
 }
-manifest<-list(schema="w00-query-archive-v1",run_id=run_id,source_strategy=basename(strategy_path),strategy_sha256=digest(file=strategy_path,algo="sha256",serialize=FALSE),search_version=plan$search_version,run_type=plan$run_type,created_at=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),translation="legacy-orchestrator-v1",queries=items)
+manifest<-list(schema="w00-query-archive-v1",run_id=run_id,source_strategy=basename(strategy_path),strategy_sha256=digest(file=strategy_path,algo="sha256",serialize=FALSE),search_version=plan$search_version,run_type=plan$run_type,created_at=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),translation=if(is.null(plan$translation))"legacy-orchestrator-v1" else plan$translation,queries=items)
 writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(target,"manifest.json"),useBytes=TRUE)
 message(sprintf("Prepared W00 query archive: %s",target))
