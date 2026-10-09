@@ -166,7 +166,7 @@ permissions:
   actions: write
 
 env:
-  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow01-final-architecture
+  WORKFLOW00_ORCHESTRATOR_BRANCH: production-minimal
 
 jobs:
   validate-and-plan:
@@ -335,7 +335,12 @@ jobs:
           sel <- unlist(s$selected_sources,use.names=FALSE)
           missing <- setdiff(sel,names(q))
           if (length(missing)) stop(sprintf('Selected source(s) lack generated query: %s',paste(missing,collapse=', ')))
-          matrix <- lapply(sel,function(src) list(source=src,query=q[[src]]))
+          manifest <- fromJSON(sprintf('outputs/updater/workflow00_plan/search_archive/run-%s/manifest.json',Sys.getenv('GITHUB_RUN_ID')),simplifyVector=FALSE)
+          matrix <- lapply(sel,function(src) {
+            entry <- manifest$queries[[src]]
+            if(is.null(entry$query_string_sha256)) stop(sprintf('Archive lacks query-string hash for %s',src))
+            list(source=src,query=q[[src]],query_sha256=entry$query_string_sha256)
+          })
           emit('source_matrix_json',toJSON(matrix,auto_unbox=TRUE,null='null'))
 
       - name: Upload Workflow 00 plan
@@ -358,6 +363,7 @@ jobs:
       source: ${{ matrix.source }}
       run_type: ${{ inputs.run_type }}
       query: ${{ matrix.query }}
+      query_sha256: ${{ matrix.query_sha256 }}
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
