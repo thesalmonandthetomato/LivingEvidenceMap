@@ -106,6 +106,13 @@ render<-function(source,fields=NULL){
         sprintf("(%s=%s)",field,pair_expr),character(1)),collapse=" OR "))
       return(paste(vapply(c("TI","AB","AK"),function(field)sprintf("%s=(%s)",field,expr),character(1)),collapse=" OR "))
     }
+    if(source=="lens"&&is_pair){
+      block<-function(t){
+        txt<-paste(t,collapse=" OR ")
+        sprintf("(title:(%s) OR abstract:(%s) OR keyword:(%s))",txt,txt,txt)
+      }
+      return(sprintf("(%s AND %s)",block(vals[[tokens[[1L]]]]),block(vals[[tokens[[3L]]]])))
+    }
     if(source=="lens"||!is.null(fields))return(fielded(vals))
     stop(sprintf("W00: %s has no verified generic translation; supply database_overrides.%s",source,source),call.=FALSE)
   }
