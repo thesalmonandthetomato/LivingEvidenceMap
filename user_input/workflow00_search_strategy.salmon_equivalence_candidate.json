@@ -1,0 +1,36 @@
+{
+  "search_version": "v1-salmon-generic-equivalence-candidate",
+  "concepts": {
+    "species": {
+      "terms": [
+        "salmon",
+        "salmonid*",
+        "Salmo",
+        "Oncorhynchus",
+        "\"rainbow trout\""
+      ]
+    },
+    "farming": {
+      "terms": [
+        "farm*",
+        "cage*",
+        "pens",
+        "penned",
+        "pen",
+        "aquacultur*",
+        "commercial*"
+      ]
+    }
+  },
+  "expression": "species AND farming",
+  "database_overrides": {
+    "scopus": "TITLE-ABS-KEY((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+    "openalex": "works where title/abstract has ((\"salmon\" or \"salmonid*\" or \"Salmo\" or \"Oncorhynchus\" or \"rainbow trout\") and (\"farm*\" or \"cage*\" or \"pens\" or \"penned\" or \"pen\" or \"aquacultur*\" or \"commercial*\"))",
+    "agricola": "SRC:AGR AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+    "pubmed": "SRC:MED AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+    "ethos": "SRC:ETH AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+    "cba": "SRC:CBA AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+    "epmc_preprints": "SRC:PPR AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+    "wos": "(TI=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AB=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))) OR (AK=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))"
+  }
+}
