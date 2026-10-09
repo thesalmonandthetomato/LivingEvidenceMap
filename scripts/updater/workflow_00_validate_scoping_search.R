@@ -190,11 +190,31 @@ dir.create(scratch,recursive=TRUE)
 selection_file <- file.path(scratch,"selection.json")
 strategy_file <- file.path(scratch,"strategy.json")
 writeLines(toJSON(list(selected_sources=source_ids),auto_unbox=TRUE),selection_file)
-writeLines(toJSON(list(
-  search_version="scoping-count-only",
-  advanced_boolean=normalised,
-  database_overrides=list(openalex=sprintf("works where title/abstract has (%s)",openalex_expr))
-),auto_unbox=TRUE),strategy_file)
+# When the input consists of two OR-concepts joined by AND, represent those
+# concepts explicitly so scoping uses the same cross-field scope as full W00.
+match <- regexec("^\\\\((.+)\\\\) AND \\\\((.+)\\\\)$",normalised)
+parts <- regmatches(normalised,match)[[1L]]
+is_simple_pair <- length(parts)==3L &&
+  !any(grepl("[()]",parts[-1L]))
+if(is_simple_pair){
+  lhs<-trimws(strsplit(parts[[2L]]," OR ",fixed=TRUE)[[1L]])
+  rhs<-trimws(strsplit(parts[[3L]]," OR ",fixed=TRUE)[[1L]])
+  is_simple_pair<-length(lhs)>0L&&length(rhs)>0L&&
+    !any(grepl(" AND | NOT ",c(lhs,rhs),fixed=TRUE))
+}
+if(is_simple_pair){
+  strategy<-list(
+    search_version="scoping-count-only",
+    concepts=list(first=list(terms=lhs),second=list(terms=rhs)),
+    expression="first AND second",
+    database_overrides=list(openalex=sprintf("works where title/abstract has (%s)",openalex_expr))
+  )
+} else {
+  strategy<-list(search_version="scoping-count-only",
+    advanced_boolean=normalised,
+    database_overrides=list(openalex=sprintf("works where title/abstract has (%s)",openalex_expr)))
+}
+writeLines(toJSON(strategy,auto_unbox=TRUE),strategy_file)
 translator <- "scripts/updater/workflow_00_translate_generic.R"
 if(!file.exists(translator))stop("W00 generic translator is missing",call.=FALSE)
 output_dir <- file.path(scratch,"translated")
