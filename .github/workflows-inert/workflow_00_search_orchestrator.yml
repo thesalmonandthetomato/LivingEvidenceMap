@@ -58,6 +58,10 @@ on:
         required: false
         default: ''
         type: string
+      expansion_target:
+        required: false
+        default: ''
+        type: string
       resume_run_id:
         required: false
         default: ''
@@ -138,7 +142,12 @@ on:
         default: ''
         type: string
       additional_search_term:
-        description: 'Expansion only: add one search term to the farm/aquaculture concept'
+        description: 'Expansion only: new term or substring for the selected concept'
+        required: false
+        default: ''
+        type: string
+      expansion_target:
+        description: 'Expansion only: name of the single concept being expanded'
         required: false
         default: ''
         type: string
@@ -264,11 +273,22 @@ jobs:
           set -euo pipefail
           Rscript scripts/updater/workflow_00_validate_search_strategy.R \
             --config user_input/workflow00_search_strategy.json
-          Rscript scripts/updater/workflow_00_search_orchestrator.R \
-            --run-type '${{ inputs.run_type }}' \
-            --additional-search-term '${{ inputs.additional_search_term }}' \
-            --config user_input/workflow00_search_strategy.json \
-            --output-dir outputs/updater/workflow00_plan
+          # Preserve the historical translation route for the current legacy input.
+          # Use the generic translator only for explicit named-concept/advanced strategies.
+          if Rscript -e 'x<-jsonlite::fromJSON("user_input/workflow00_search_strategy.json",simplifyVector=FALSE);quit(status=if(is.null(x$concepts)&&is.null(x$advanced_boolean))1L else 0L)'; then
+            Rscript scripts/updater/workflow_00_translate_generic.R \
+              --run-type '${{ inputs.run_type }}' \
+              --expansion-target '${{ inputs.expansion_target }}' \
+              --additional-search-term '${{ inputs.additional_search_term }}' \
+              --config user_input/workflow00_search_strategy.json \
+              --output-dir outputs/updater/workflow00_plan
+          else
+            Rscript scripts/updater/workflow_00_search_orchestrator.R \
+              --run-type '${{ inputs.run_type }}' \
+              --additional-search-term '${{ inputs.additional_search_term }}' \
+              --config user_input/workflow00_search_strategy.json \
+              --output-dir outputs/updater/workflow00_plan
+          fi
 
       - name: Prepare database-specific query archive (offline)
         shell: bash
