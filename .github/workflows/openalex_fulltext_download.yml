@@ -8,8 +8,6 @@ on:
         required: true
         type: number
         default: 1
-  schedule:
-    - cron: "0 9 * * *"
 
 concurrency:
   group: openalex-fulltext-zenodo
