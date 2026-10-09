@@ -3,5 +3,8 @@
   "reviewer_full_name": "Neal Haddaway",
   "reviewer_short_name": "Neal",
   "ontology_label": "v3.6",
-  "species_config_path": "user_input/workflow05_coding_config.json"
+  "species_config_path": "user_input/workflow05_coding_config.json",
+  "exclude_on_deterministic_none": true,
+  "deterministic_none_code": "NONE",
+  "geography_corrections_path": ""
 }
