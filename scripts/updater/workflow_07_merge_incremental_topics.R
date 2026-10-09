@@ -9,7 +9,7 @@ reused_scores_path<-arg("--reused-scores")
 fresh_scores_path<-arg("--fresh-scores","")
 fresh_record_results_path<-arg("--fresh-record-results","")
 prepare_manifest_path<-arg("--prepare-manifest")
-ontology_path<-arg("--ontology","data/reference/topic_ontology_v3_6.csv")
+ontology_path<-arg("--ontology","user_input/workflow07_topic_ontology.csv")
 output_dir<-arg("--output-dir","outputs/workflow07_topic_complete")
 
 req<-c(current_records_path,reused_scores_path,prepare_manifest_path,ontology_path)
