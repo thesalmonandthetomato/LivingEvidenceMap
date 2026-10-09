@@ -1,0 +1,11 @@
+{
+  "search_version": "example-generic-v1",
+  "concepts": {
+    "population": {"terms": ["food system*", "agrifood"]},
+    "intervention": {"terms": ["\"collective action\"", "cooperativ*"]}
+  },
+  "expression": "population AND intervention",
+  "database_overrides": {
+    "openalex": "works where title/abstract has ((\"food system*\" or \"agrifood\") and (\"collective action\" or \"cooperativ*\"))"
+  }
+}
