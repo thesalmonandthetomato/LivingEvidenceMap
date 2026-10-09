@@ -1,0 +1,54 @@
+name: TEMP W00 isolated integration test
+on:
+  push:
+    branches: [production-minimal]
+    paths: [.github/workflows/w00-temp-integration-parent.yml]
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.export.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - shell: Rscript {0}
+        run: install.packages(c("jsonlite","digest"))
+      - name: Plan archive and produce source matrix
+        id: export
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          printf '{"selected_sources":["openalex","pubmed","ebsco_medline"]}\n' > "$tmp/selection.json"
+          Rscript scripts/updater/workflow_00_validate_search_strategy.R --config user_input/workflow00_search_strategy.json
+          Rscript scripts/updater/workflow_00_search_orchestrator.R --run-type full --output-dir "$tmp/plan"
+          Rscript scripts/updater/workflow_00_archive_queries.R --plan "$tmp/plan/search_plan.json" --strategy user_input/workflow00_search_strategy.json --archive-root "$tmp/archive" --run-id disposable
+          Rscript scripts/updater/workflow_00_read_archived_queries.R --archive "$tmp/archive/run-disposable" --source-selection "$tmp/selection.json" --output "$tmp/queries.json"
+          Rscript - "$tmp" <<'RS'
+          root<-commandArgs(TRUE)[[1]]
+          library(jsonlite)
+          queries<-fromJSON(file.path(root,"queries.json"),simplifyVector=FALSE)
+          manifest<-fromJSON(file.path(root,"archive","run-disposable","manifest.json"),simplifyVector=FALSE)
+          matrix<-lapply(names(queries),function(src)list(source=src,query=queries[[src]],query_sha256=manifest$queries[[src]]$query_string_sha256))
+          cat(sprintf("matrix=%s\n",toJSON(matrix,auto_unbox=TRUE)),file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+          RS
+  sources:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    uses: ./.github/workflows/w00-temp-integration-child.yml
+    with:
+      source: ${{ matrix.source }}
+      query: ${{ matrix.query }}
+      query_sha256: ${{ matrix.query_sha256 }}
+    secrets: inherit
