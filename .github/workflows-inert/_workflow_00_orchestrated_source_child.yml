@@ -50,6 +50,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
+      - name: Require explicit W00 source activation approval
+        shell: bash
+        run: |
+          echo 'W00 source harvesting is inactive pending approval of API execution and artefact retention.' >&2
+          exit 1
+
       - name: Resolve implementation branch
         id: impl
         shell: bash
