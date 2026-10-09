@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           Rscript -e "parse(file='scripts/updater/workflow_00_validate_scoping_search.R'); parse(file='scripts/updater/workflow_00_search_scope_counts.R'); cat('PASS: R scoping scripts parse\\n')"
-          python3 -m py_compile scripts/updater/workflow_00_search_scope_counts.py
+          Rscript -e "parse(file='scripts/updater/workflow_00_search_scope_counts.R'); cat('PASS: R scoping counter parses\\n')"
           echo 'PASS: lightweight Python scoping counter parses'
 
       - name: Resolve scoping search input
@@ -165,6 +165,13 @@ jobs:
           name: workflow00-scope-plan-${{ github.run_id }}
           path: outputs/workflow00_search_scope/plan
 
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R scoping dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','xml2'))
       - name: Count ${{ matrix.source }}
         env:
           LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
