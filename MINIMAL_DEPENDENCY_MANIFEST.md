@@ -1,24 +1,26 @@
-# Minimal production branch: reconstruction and isolation
+# Minimal repository: dependency closure and status
 
-Source: `workflow01-final-architecture` at `6eca21aea0b90b5c870bc25ff171ed647067de50`.
-Shiny source: `thesalmonandthetomato/LivingEvidenceMapAdjudication/main` (read-only).
+Source frozen at production commit `6eca21aea0b90b5c870bc25ff171ed647067de50`. Shiny source read-only: `thesalmonandthetomato/LivingEvidenceMapAdjudication/main`.
 
-## Safety state: INERT
+## Isolation
 
-All 27 copied GitHub Actions workflow definitions are held in `.github/workflows-inert/`, **outside** `.github/workflows/`. They retain identical blobs/contents, but are not discoverable as workflow definitions by GitHub Actions on `production-minimal`. Do not move them back until explicit external-write isolation and validation are authorised. The original `workflow01-final-architecture` still has its own workflows and is unchanged.
+All 27 GitHub Actions YAML definitions remain under `.github/workflows-inert/`. None are under `.github/workflows/` on this branch. Original files retain their unsafe external write targets; **do not reactivate** until Zenodo publication, Git push, shared Google Sheets, dashboard publication and cross-repository dispatch are individually isolated.
 
-The stored workflows still contain production targets and credentials, including pushes to `workflow01-final-architecture`, writes to Zenodo, Google Sheets and the public `salmonevidencemap` repository. They are **not safe to run** if reactivated unchanged. The live Shiny app remains connected to production, not this branch.
+## Static dependency inventory
 
-## Dependencies
+- Inspected direct workflow scripts and nested literal paths in the 165 R/Python/shell source files present before this pass, including W00–W10 and Shiny queue/resume helpers.
+- Added missing script helpers for W00 RIS, W01 restore, Shiny status and pipeline setup; added W00 manual source descriptors, W00/W02/W03 registry pointers, W08 geography corrections and dashboard/reporting input references.
+- Shiny `R/github_dispatch.R` names and `app.R` state references have been inspected; Shiny's production repository and Google Sheets remain unchanged.
+- Static patterns cannot establish closure for generated and dynamically computed files; no claim of validated run-readiness.
 
-Direct scripts from W00–W10 and Shiny workflow dispatches, core R code, W09 RMarkdown/visualisations, ontology/reference files and selected Zenodo registry/state pointers have been copied. Additional direct W00 scoping/manual RIS and W04 kappa scripts were added in this isolation commit. The check is a static inventory, not proof of transitive dependency closure. Generated file paths, `source()` calls inside scripts, runtime-selected paths, templates and Shiny-side reads/writes require further verification.
+## Unresolved references (not silently substituted)
 
-## Before validation (not yet authorised)
+- `config/workflow06_geography_semantic_prompt_v2.txt`: referenced in W06 merge script; not in frozen source tree.
+- `data/reference/topic_ontology_v3_6.csv`: referenced in W07 merge script; not in frozen source tree.
+- `data/reference/topic_system_prompt_v3_6.txt`: referenced in W07 preparation script; not in frozen source tree.
+- `docs/current_run/current_run_record_ids.txt`: referenced as runtime status output, not tracked in source; likely generated at runtime, verify later.
+- Other generated W09 outputs (reports, figures, RIS manifests) must be generated during the relevant workflow and are not copied as old historical outputs.
 
-1. Complete static closure review of R imports, dynamic paths and direct entry point dependencies.
-2. Define test-only credentials and write-sink guards before restoring Actions workflow definitions.
-3. Inspect Shiny callback/state-contract compatibility and isolate dispatch targets.
-4. Define which live registry pointers are restored vs generated from Zenodo.
-5. Only after approval, perform static parser/structure validation, followed by isolated tests.
+## Stop point
 
-**No Actions workflow, OpenAI API, Zenodo publication or Shiny task has been executed from this branch.**
+Dependency copying only. **No structural validation, unit tests, Actions runs, API calls or functional testing carried out.**
