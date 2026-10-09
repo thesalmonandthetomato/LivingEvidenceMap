@@ -59,6 +59,7 @@ jobs:
           d<-commandArgs(TRUE)[[1]];x<-data.table::fread(file.path(d,"metadata.csv"));x$source_record_id[2]<-x$source_record_id[1];x$source[2]<-x$source[1];data.table::fwrite(x,file.path(d,"metadata.csv"))
           RS
           if validate; then echo 'FAIL accepted duplicate immutable source key';exit 1;fi
+          cat "$tmp/output.log"
           grep -q 'duplicate immutable source identity' "$tmp/output.log"
           echo 'PASS rejects duplicate immutable source key'
       - name: Audit project specificity and stored data
