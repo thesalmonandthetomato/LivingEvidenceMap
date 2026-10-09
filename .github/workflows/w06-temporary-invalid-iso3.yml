@@ -1,0 +1,50 @@
+name: W06 invalid ISO3 temporary regression
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w06-temporary-invalid-iso3.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install packages
+        shell: Rscript {0}
+        run: install.packages(c("readr","dplyr","jsonlite","digest","stringr"))
+      - name: Validate old and new W06 ISO handling
+        shell: Rscript {0}
+        run: |
+          source("R/geography_grounding.R")
+          gaz<-readr::read_csv("config/global_country_gazetteer_v3.csv",show_col_types=FALSE)
+          evaluate<-function(code)geography_auto_validation("RESOLVED",FALSE,code,"",TRUE,"Sampling in India","Research",gaz)
+          stopifnot(isTRUE(evaluate("IND")$valid))
+          for(x in c("INN","NIQ","FIJ","IRE","UNK"))stopifnot(identical(evaluate(x)$basis,"invalid_iso3"),!isTRUE(evaluate(x)$valid))
+          sem<-paste(readLines("scripts/reporting/workflow05_geography_semantic_production.R"),collapse="\n")
+          stopifnot(!grepl('stop("Invalid geography ISO3 returned by model:',sem,fixed=TRUE))
+          cat("PASS: valid codes unchanged; historic invalid codes never autoaccepted\n")
+      - name: Verify W08 review path for invalid ISO3
+        shell: Rscript {0}
+        run: |
+          library(readr)
+          library(jsonlite)
+          t<-file.path(Sys.getenv("RUNNER_TEMP"),"invalid-iso")
+          dir.create(t)
+          records<-data.frame(record_id=c("bad","good"),title=c("India observations","Norway observations"),abstract=c("Research in India","Research in Norway"))
+          w05<-data.frame(record_id=records$record_id,farmed_species_codes="CODE",farmed_species="Study entity")
+          w06<-data.frame(record_id=records$record_id,geography_status="RESOLVED",luna_iso3c=c("INN","NOR"),luna_country_names=c("India","Norway"),luna_evidence=c("Research in India","Research in Norway"),geography_reason="",llm_failed=FALSE,llm_error="",deterministic_primary_countries=c("India","Norway"),deterministic_primary_iso3c=c("IND","NOR"))
+          review<-data.frame(record_id=character(),workflow08_reason=character())
+          scores<-data.frame(record_id=character(),path_id=character())
+          late<-data.frame(record_id=character())
+          for(n in c("records","w05","w06","review","scores","late"))write_csv(get(n),file.path(t,paste0(n,".csv")))
+          args<-c("scripts/updater/workflow_08_build_review_queue_dynamic.R","--w05",file.path(t,"w05.csv"),"--w06",file.path(t,"w06.csv"),"--w07-records",file.path(t,"records.csv"),"--w07-review",file.path(t,"review.csv"),"--w07-scores",file.path(t,"scores.csv"),"--w07-late-exclusions",file.path(t,"late.csv"),"--output-dir",file.path(t,"out"))
+          stopifnot(system2("Rscript",args)==0L)
+          txt<-paste(readLines(file.path(t,"out/workflow08_review_queue_current.jsonl")),collapse="\n")
+          stopifnot(grepl("bad",txt,fixed=TRUE),grepl("INN",txt,fixed=TRUE),!grepl('"record_id":"good"',txt,fixed=TRUE))
+          cat("PASS: invalid model code routed to W08; valid control unchanged\n")
