@@ -1,0 +1,44 @@
+name: Workflow 02 - Legacy resume request listener (manual only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      source_run_id: ${{ steps.request.outputs.source_run_id }}
+      validation_only: ${{ steps.request.outputs.validation_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 2
+
+      - id: request
+        name: Resolve exactly one W02 resume request
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/shiny_adjudication/w02_resume_requests/.*\.json$' || true)
+          test "${#FILES[@]}" -eq 1
+          FILE="${FILES[0]}"
+          readarray -t META < <(python3 -c 'import json,re,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); rid=str(x.get("source_run_id","")); assert re.fullmatch(r"[0-9]+",rid), "invalid source_run_id"; v="true" if x.get("validation_only") is True else "false"; print(rid); print(v)' "$FILE")
+          RUN_ID="${META[0]}"
+          VALIDATION_ONLY="${META[1]}"
+          echo "source_run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "validation_only=$VALIDATION_ONLY" >> "$GITHUB_OUTPUT"
+          echo "PASS: resolved automatic W02 resume request for source run $RUN_ID (validation_only=$VALIDATION_ONLY)"
+
+  resume:
+    needs: prepare
+    uses: ./.github/workflows/workflow_02_resume_after_human_review.yml
+    with:
+      source_run_id: ${{ needs.prepare.outputs.source_run_id }}
+      publish: ${{ needs.prepare.outputs.validation_only != 'true' }}
+      validation_only: ${{ needs.prepare.outputs.validation_only == 'true' }}
+    secrets: inherit

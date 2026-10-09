@@ -1,0 +1,35 @@
+{
+  "schema": "living-evidence-map-workflow05-coding-config-v1",
+  "dictionary_path": "user_input/workflow05_deterministic_concepts.csv",
+  "reference_dictionary_path": "user_input/workflow05_species_dictionary_reference.csv",
+  "entity_value": "farmed species",
+  "generic_code": "UNSPEC_SALMON",
+  "none_code": "NONE",
+  "default_group": "salmon",
+  "is_candidate": true,
+  "code_map": {
+    "Atlantic salmon": "SAL_SALAR",
+    "Rainbow trout": "ONC_MYKISS",
+    "Chinook salmon": "ONC_TSHAWYTSCHA",
+    "Coho salmon": "ONC_KISUTCH",
+    "Sockeye salmon": "ONC_NERKA",
+    "Chum salmon": "ONC_KETA",
+    "Pink salmon": "ONC_GORBUSCHA",
+    "Masu salmon": "ONC_MASOU",
+    "Unspecified species": "UNSPEC_SALMON"
+  },
+  "scientific_genera": [
+    "salmo",
+    "oncorhynchus",
+    "onchorhynchus",
+    "onchorrhychus",
+    "onchorynchus",
+    "oncorhyncus",
+    "ooncorhynchus",
+    "parasalmo"
+  ],
+  "pluralisable_common_head_terms": [
+    "salmon",
+    "trout"
+  ]
+}
