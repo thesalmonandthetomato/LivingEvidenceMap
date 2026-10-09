@@ -52,8 +52,6 @@ env:
   BATCH_MAX_WAIT_SECONDS: '7200'
   BATCH_TOKEN_LIMIT_RETRY_SECONDS: '120'
   BATCH_TOKEN_LIMIT_MAX_RETRIES: '12'
-  EXPECTED_ONTOLOGY_SHA256: '4ad41f90e35099fdf5f0eb463c86d9245d07b357940804a4faa090eba452f798'
-  EXPECTED_PROMPT_SHA256: 'f038a0c04a4a897ee806b36912bb3bf22a7d80040100489cf5a8a3659e56bec0'
 
 jobs:
   prepare:
@@ -89,8 +87,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "$EXPECTED_ONTOLOGY_SHA256  $TOPIC_ONTOLOGY_PATH" | sha256sum -c -
-          echo "$EXPECTED_PROMPT_SHA256  $TOPIC_SYSTEM_PROMPT_PATH" | sha256sum -c -
+                    Rscript -e 'x<-jsonlite::fromJSON("user_input/workflow07_input_checksums.json");stopifnot(identical(digest::digest(file=Sys.getenv("TOPIC_ONTOLOGY_PATH"),algo="sha256",serialize=FALSE),x$ontology_sha256),identical(digest::digest(file=Sys.getenv("TOPIC_SYSTEM_PROMPT_PATH"),algo="sha256",serialize=FALSE),x$prompt_sha256))'
           Rscript -e "
             parse(file='scripts/updater/workflow_06_restore_state_from_zenodo.R')
             parse(file='scripts/updater/workflow_07_restore_state_from_zenodo.R')
