@@ -1,0 +1,67 @@
+name: W04 temporary human finalisation test
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w04-temporary-human-final-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","digest"))
+      - name: Run synthetic human decisions and prompt config checks
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          t<-file.path(Sys.getenv("RUNNER_TEMP"),"w04-human")
+          dir.create(t,recursive=TRUE)
+          put<-function(xs,name)writeLines(vapply(xs,function(x)toJSON(x,auto_unbox=TRUE,null="null"),character(1)),file.path(t,name))
+          cfg<-fromJSON("user_input/workflow04_screening_config.json")
+          digest_sha<-digest::digest(paste(readLines(cfg$prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n"),algo="sha256",serialize=FALSE)
+          stopifnot(identical(cfg$expected_prompt_sha256,digest_sha))
+          canonical<-list(list(identity=list(record_id="include"),canonical=list(title="Included study",abstract="Text")),list(identity=list(record_id="review"),canonical=list(title="Uncertain study",abstract="Original text")))
+          layer<-list(list(record_id="include",screening=list(decision="retain")),list(record_id="review",screening=list(decision="uncertain",requires_human_review=TRUE)))
+          summary<-list(mode="first_run",workflow03_excluded=0,reused_records=0,newly_screened_records=2,new_record_ids=2,changed_screening_input=0)
+          decisions<-list(list(record_id="review",decision="exclude",reviewer="synthetic-reviewer",rationale="Out of scope"))
+          put(canonical,"canonical.jsonl")
+          put(layer,"layer.jsonl")
+          put(decisions,"decisions.jsonl")
+          writeLines(toJSON(summary,auto_unbox=TRUE),file.path(t,"source-summary.json"))
+          base<-c("scripts/updater/workflow_04_apply_human_resolution.R","--source-layer",file.path(t,"layer.jsonl"),"--canonical",file.path(t,"canonical.jsonl"),"--decisions",file.path(t,"decisions.jsonl"),"--source-summary",file.path(t,"source-summary.json"),"--output-dir",file.path(t,"out"))
+          stopifnot(system2("Rscript",base)==0L)
+          result<-fromJSON(file.path(t,"out/summary.json"))
+          stopifnot(result$status=="PASS",result$unresolved==0L,result$final_retain==1L,result$final_exclude==1L,result$human_resolution_records==1L)
+          stopifnot(identical(readLines(file.path(t,"out/workflow04_included_record_ids.txt")),"include"))
+          put(list(),"decisions.jsonl")
+          base[length(base)]<-file.path(t,"incomplete")
+          stopifnot(system2("Rscript",base)==1L)
+          put(list(list(record_id="review",decision="uncertain")),"decisions.jsonl")
+          base[length(base)]<-file.path(t,"invalid")
+          stopifnot(system2("Rscript",base)==1L)
+          cat("PASS: complete adjudication finalises; missing or uncertain human decisions fail\n")
+      - name: Test W04 consensus merge uses configured SHA
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          t<-file.path(Sys.getenv("RUNNER_TEMP"),"w04-human")
+          dir.create(file.path(t,"shard"))
+          sha<-fromJSON("user_input/workflow04_screening_config.json")$expected_prompt_sha256
+          writeLines(toJSON(list(shard_index=1,shard_count=1,workflow03_eligible=1,pass1_records=1,pass2_records=1,third_pass_records=0,two_of_two_agreement=1,model="test",prompt_version="test",prompt_sha256=sha),auto_unbox=TRUE),file.path(t,"shard/summary.json"))
+          writeLines(toJSON(list(record_id="include",screening=list(decision="retain",prompt_sha256=sha)),auto_unbox=TRUE),file.path(t,"shard/workflow04_consensus_layer.jsonl"))
+          cmd<-c("scripts/updater/workflow_04_merge_consensus.R","--input-root",file.path(t,"shard"),"--expected-shards","1","--output-dir",file.path(t,"merge"))
+          stopifnot(system2("Rscript",cmd)==0L)
+          bad<-fromJSON("user_input/workflow04_screening_config.json")
+          bad$expected_prompt_sha256<-paste(rep("0",64),collapse="")
+          writeLines(toJSON(bad,auto_unbox=TRUE),file.path(t,"bad-config.json"))
+          cmd<-c(cmd,"--screening-config",file.path(t,"bad-config.json"))
+          stopifnot(system2("Rscript",cmd)==1L)
+          cat("PASS: configured checksum accepted; altered checksum rejected\n")
