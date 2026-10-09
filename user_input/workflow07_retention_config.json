@@ -1,0 +1,44 @@
+{
+  "schema": "living-evidence-map-workflow07-retention-config-v1",
+  "max_retained_topics": 10,
+  "supersession_rules": [
+    {
+      "general_path_id": "V3_001",
+      "specific_level": "level_1",
+      "specific_value": "Environment"
+    },
+    {
+      "general_path_id": "V3_052",
+      "specific_level": "level_1",
+      "specific_value": "People and society"
+    },
+    {
+      "general_path_id": "V3_071",
+      "specific_level": "level_1",
+      "specific_value": "Product"
+    },
+    {
+      "general_path_id": "V3_088",
+      "specific_level": "level_2",
+      "specific_value": "Fish health"
+    },
+    {
+      "general_path_id": "V3_120",
+      "specific_path_ids": [
+        "V3_121",
+        "V3_122",
+        "V3_123"
+      ]
+    }
+  ],
+  "review_conflicts": [
+    {
+      "path_id": "V3_120",
+      "conflicting_path_ids": [
+        "V3_121",
+        "V3_122",
+        "V3_123"
+      ]
+    }
+  ]
+}
