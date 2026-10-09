@@ -34,7 +34,7 @@ normalise<-function(s)gsub("[[:space:]]+","",s,perl=TRUE)
 mismatches<-sources[!vapply(sources,function(n)identical(normalise(original[[n]]),normalise(candidate[[n]])),logical(1))]
 unlink(workspace,recursive=TRUE)
 for(src in sources){
-  cat(sprintf("%s: %s\n",src,if(src%in%mismatches)"DIFFERENT":"EXACT EXCEPT WHITESPACE"))
+  cat(sprintf("%s: %s\n",src,if(src%in%mismatches) "DIFFERENT" else "EXACT EXCEPT WHITESPACE"))
 }
 if(length(mismatches))stop(sprintf("W00 salmon query differences require review: %s",paste(mismatches,collapse=", ")),call.=FALSE)
 cat("PASS: all source query strings equal except whitespace\n")
