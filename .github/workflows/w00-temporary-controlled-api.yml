@@ -1,0 +1,95 @@
+name: Temporary W00 controlled API parity
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w00-temporary-controlled-api.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("httr2","jsonlite","xml2"))
+      - name: Run controlled Python-R API response parity
+        shell: bash
+        env:
+          LENS_API_TOKEN: TEST
+          SCOPUS_API_TOKEN: TEST
+          SCOPUS_INSTTOKEN: TEST
+          OPENALEX_API_KEY: TEST
+          WOS_STARTER_API: TEST
+          EBSCO_EHOST_UID: TEST
+          EBSCO_EHOST_PWD: TEST
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/mock
+          cat > outputs/mock/server.py <<'PY'
+          import http.server, json, os, urllib.parse
+          class Handler(http.server.BaseHTTPRequestHandler):
+              def log_message(self,*args): pass
+              def do_GET(self): self.respond()
+              def do_POST(self): self.respond()
+              def respond(self):
+                  path=urllib.parse.urlparse(self.path).path
+                  if path.endswith('/scholarly/search'): body={'total':12}
+                  elif path.endswith('/content/search/scopus'): body={'search-results':{'opensearch:totalResults':'34'}}
+                  elif path=='/': body={'meta':{'count':56}}
+                  elif path.endswith('/webservices/rest/search'): body={'hitCount':78}
+                  elif path.endswith('/v1/documents'): body={'metadata':{'total':90}}
+                  elif path.endswith('/Search'):
+                      data=b'<SearchResponse><Hits>123</Hits></SearchResponse>'
+                      self.send_response(200);self.send_header('Content-Type','application/xml');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data);return
+                  else: self.send_error(404);return
+                  data=json.dumps(body).encode()
+                  self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
+          http.server.HTTPServer(('127.0.0.1',8765),Handler).serve_forever()
+          PY
+          python3 outputs/mock/server.py &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          python3 - <<'PY'
+          import pathlib
+          base=pathlib.Path('scripts/updater')
+          patterns=['https://api.lens.org/scholarly/search','https://api.elsevier.com/content/search/scopus','https://api.openalex.org/','https://www.ebi.ac.uk/europepmc/webservices/rest/search','https://api.clarivate.com/apis/wos-starter/v1/documents','https://eit.ebscohost.com/Services/SearchService.asmx/Search']
+          for ext in ('py','R'):
+              s=(base/('workflow_00_search_scope_counts.'+ext)).read_text()
+              for url in patterns:
+                  parsed=url.split('://',1)[1].split('/',1)
+                  path='/'+parsed[1] if len(parsed)>1 else '/'
+                  s=s.replace(url,'http://127.0.0.1:8765'+path)
+              pathlib.Path('outputs/mock/counter.'+ext).write_text(s)
+          PY
+          Rscript - <<'RS'
+          library(jsonlite)
+          cfg<-fromJSON('config/workflow00_ebsco_sources.json',simplifyVector=FALSE)
+          sources<-c('lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',names(cfg$sources))
+          q<-as.list(setNames(rep('test',length(sources)),sources))
+          plan<-list(input_path='synthetic',original_search_string='test',normalised_search_string='test',validation=list(valid=TRUE),source_queries=q)
+          writeLines(toJSON(plan,auto_unbox=TRUE,pretty=TRUE),'outputs/mock/plan.json')
+          for(src in sources){
+            out<-list()
+            for(ext in c('py','R')){
+              command<-if(ext=='py')'python3' else 'Rscript'
+              a<-c(paste0('outputs/mock/counter.',ext),'--plan','outputs/mock/plan.json','--source',src,'--output-csv',paste0('outputs/mock/',src,'.',ext,'.csv'),'--output-json',paste0('outputs/mock/',src,'.',ext,'.json'))
+              logs<-suppressWarnings(system2(command,a,stdout=TRUE,stderr=TRUE))
+              code<-attr(logs,'status')
+              if(!is.null(code)&&code!=0)stop(paste('ERROR',src,ext,paste(logs,collapse=' | ')))
+              out[[ext]]<-fromJSON(paste0('outputs/mock/',src,'.',ext,'.json'),simplifyVector=FALSE)
+              out[[paste0(ext,'csv')]]<-read.csv(paste0('outputs/mock/',src,'.',ext,'.csv'),stringsAsFactors=FALSE)
+            }
+            a<-out$py;b<-out$R
+            a$counted_at_utc<-NULL;b$counted_at_utc<-NULL
+            if(!identical(a,b))stop(paste('JSON mismatch:',src,'Python:',toJSON(a,auto_unbox=TRUE),'R:',toJSON(b,auto_unbox=TRUE)))
+            if(!isTRUE(all.equal(out$pycsv,out$Rcsv,check.attributes=FALSE)))stop(paste('CSV mismatch:',src))
+            if(!identical(a$counts[[1]]$status,'counted live'))stop(paste('Did not count:',src))
+            cat('PASS controlled success:',src,'hits',a$counts[[1]]$hits,'\n')
+          }
+          RS
