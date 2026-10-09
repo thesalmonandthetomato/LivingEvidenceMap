@@ -29,3 +29,11 @@ The reconstruction now builds the per-run archive **after source selection**, wr
 For legacy inputs, the existing W00 translator is still used to preserve the established search meaning. The generic translator is selected for concept-mode and advanced-mode input, and translates **only selected databases**. Unsupported translation, including OpenAlex when no explicit override is given, fails with an actionable error rather than silently substituting semantics.
 
 **Outstanding:** persist the short-lived archive in a durable location beyond the Actions artefact's current retention; finalise source-specific fortnightly query semantics; strengthen the full Boolean parser and assess each provider's syntax; confirm that archive manifests and retrieval reports remain linked across run completion; and validate before any workflow activation. None of these actions has been run or tested on production.
+
+## Durable publication preflight
+
+The existing W00 Zenodo archiver already deposits the complete `plan/` directory as part of its search-documentation tarball. The archive now contains `plan/search_archive/run-<run-id>/` alongside the source-selection and search-plan files. Before any Zenodo deposition is created, `workflow_00_archive_to_zenodo.R` requires the per-run query manifest and checks the original strategy SHA-256, selected source coverage and each selected query checksum. The durable archive manifest records the query-manifest hash, strategy hash and translation identifier.
+
+For generic concept-mode search translation, source selection is supplied first and only selected providers are translated. Unverified OpenAlex translations require a source-specific override. If a source uses a fixed override during expansion, a distinct `expansion_overrides.<source>` is required. Fortnightly generic queries still require verified `fortnightly_overrides` for the selected providers; native provider date semantics remain to be reviewed.
+
+**Important caveat:** This implements the archive-provenance code path only; no validation, repository Actions execution or Zenodo deposition has been performed. Translation correctness and retrieval-to-archive integrity remain unverified, and some legacy input formats continue to use the historical translator.
