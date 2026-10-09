@@ -72,7 +72,8 @@ count_lens <- function(query) {
       `Content-Type` = "application/json",
       Accept = "application/json"
     ) |>
-    req_body_json(payload, auto_unbox = TRUE)
+    req_body_json(payload, auto_unbox = TRUE) |>
+    req_error(is_error = function(resp) FALSE)
   resp <- retry_request(req, "Lens")
   x <- resp_body_json(resp, simplifyVector = FALSE)
   n <- scalar_int(x$total)
