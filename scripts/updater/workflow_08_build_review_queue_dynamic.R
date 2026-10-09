@@ -69,7 +69,7 @@ context<-ctx |> transmute(
 if(!all(c("farmed_species_codes","farmed_species")%in%names(w05)))stop("W05 layer lacks species columns",call.=FALSE)
 review_config<-jsonlite::fromJSON(review_config_path,simplifyVector=FALSE)
 exclude_deterministic_none<-isTRUE(review_config$exclude_on_deterministic_none)
-none_code<-as.character(review_config$deterministic_none_code %||% "NONE")
+none_code<-as.character(if(is.null(review_config$deterministic_none_code)) "NONE" else review_config$deterministic_none_code)
 w05_none<-w05 |> filter(farmed_species_codes==none_code)
 w05_none_ids<-unique(as.character(w05_none$record_id))
 
