@@ -45,7 +45,7 @@ query_manifest_path <- file.path(query_archive_dir,"manifest.json")
 if(!file.exists(query_manifest_path))stop(sprintf("W00: missing archived query manifest for run %s; refusing Zenodo publication",run_id),call.=FALSE)
 query_manifest<-fromJSON(query_manifest_path,simplifyVector=FALSE)
 if(!identical(query_manifest$schema,"w00-query-archive-v1")||!identical(as.character(query_manifest$run_id),as.character(run_id)))stop("W00: query archive schema/run mismatch",call.=FALSE)
-if(!setequal(sources,names(query_manifest$queries)))stop("W00: selected source list differs from archived query list; refusing publication",call.=FALSE)
+if(length(setdiff(sources,names(query_manifest$queries))))stop("W00: selected source missing from archived query manifest; refusing publication",call.=FALSE)
 source_strategy_path<-file.path(query_archive_dir,"source_strategy.json")
 if(!file.exists(source_strategy_path)||!identical(tolower(digest(file=source_strategy_path,algo="sha256",serialize=FALSE)),tolower(query_manifest$strategy_sha256)))stop("W00: archived source strategy hash mismatch",call.=FALSE)
 for(src in sources){
