@@ -51,18 +51,22 @@ stopifnot(all(Omap$path_id==S$path_id))
 
 present <- function(x) !is.na(x) & nzchar(trimws(as.character(x)))
 
-# Explicit ontology-v3.6 fallback/supersession rules only.
-is_superseded_general <- function(pid, assigned_ids) {
-  assigned_ids <- unique(as.character(assigned_ids))
-  others <- setdiff(assigned_ids,pid)
+# Supersession rules are declared in the project configuration.
+cfg <- jsonlite::fromJSON("user_input/workflow07_retention_config.json",simplifyVector=FALSE)
+max_topics <- as.integer(cfg$max_retained_topics)
+stopifnot(length(max_topics)==1L,!is.na(max_topics),max_topics>0L)
+is_superseded_general <- function(pid,assigned_ids) {
+  others <- setdiff(unique(as.character(assigned_ids)),pid)
   if(!length(others)) return(FALSE)
   oo <- O[match(others,O$path_id),,drop=FALSE]
-  if(pid=="V3_001") return(any(oo$level_1=="Environment"))
-  if(pid=="V3_052") return(any(oo$level_1=="People and society"))
-  if(pid=="V3_071") return(any(oo$level_1=="Product"))
-  if(pid=="V3_088") return(any(oo$level_2=="Fish health"))
-  if(pid=="V3_120") return(any(others %in% c("V3_121","V3_122","V3_123")))
-  FALSE
+  any(vapply(cfg$supersession_rules,function(rule){
+    if(!identical(as.character(rule$general_path_id),pid)) return(FALSE)
+    if(!is.null(rule$specific_path_ids))return(any(others %in% unlist(rule$specific_path_ids)))
+    col <- as.character(rule$specific_level)
+    if(!col %in% c("level_1","level_2","level_3","hierarchy_path"))stop("Invalid supersession level")
+    if(!col %in% names(oo))stop("Ontology missing supersession level")
+    any(as.character(oo[[col]])==as.character(rule$specific_value),na.rm=TRUE)
+  },logical(1)))
 }
 
 S$retained_for_analysis <- FALSE
@@ -97,18 +101,18 @@ for(i in seq_len(nrow(R))) {
 
   # Soft maximum 10: retain complete confidence tiers. If the highest tier alone
   # exceeds 10, retain that whole highest tier. Never break ties arbitrarily.
-  if(length(kept_idx)<=10L) {
+  if(length(kept_idx)<=max_topics) {
     retain_idx <- kept_idx
   } else {
     retain_idx <- integer()
     for(star in 3:1) {
       tier <- kept_idx[S$confidence_n[kept_idx]==star]
       if(!length(tier)) next
-      if(!length(retain_idx) && length(tier)>10L) {
+      if(!length(retain_idx) && length(tier)>max_topics) {
         retain_idx <- tier
         break
       }
-      if(length(retain_idx)+length(tier)<=10L) {
+      if(length(retain_idx)+length(tier)<=max_topics) {
         retain_idx <- c(retain_idx,tier)
       } else {
         break
@@ -116,7 +120,7 @@ for(i in seq_len(nrow(R))) {
     }
   }
   S$retained_for_analysis[retain_idx] <- TRUE
-  S$retention_basis[retain_idx] <- if(length(kept_idx)<=10L) "retained_all_after_general_pruning" else "retained_complete_star_tier"
+  S$retention_basis[retain_idx] <- if(length(kept_idx)<=max_topics) "retained_all_after_general_pruning" else "retained_complete_star_tier"
   dropped_cap <- setdiff(kept_idx,retain_idx)
   S$retention_basis[dropped_cap] <- "below_retention_star_threshold"
 
@@ -138,7 +142,7 @@ for(i in seq_len(nrow(R))) {
   # the deterministic fallback pruning above. Residual pathology is therefore
   # defined as an unresolved V3_120 + V3_121/122/123 combination.
   retained_ids <- as.character(S$path_id[retain_idx])
-  pathology <- "V3_120" %in% retained_ids && any(retained_ids %in% c("V3_121","V3_122","V3_123"))
+  pathology <- any(vapply(cfg$review_conflicts,function(rule)as.character(rule$path_id) %in% retained_ids && any(retained_ids %in% unlist(rule$conflicting_path_ids)),logical(1)))
   # Jaccard is retained as a descriptive inter-pass agreement metric only.
   # Low agreement does not, by itself, imply that the retained union of topic
   # pathways is wrong and therefore does not trigger human adjudication.
@@ -151,7 +155,7 @@ for(i in seq_len(nrow(R))) {
     topic_count_after_general_pruning=length(kept_idx),
     topic_count_retained=length(retain_idx),
     mean_pairwise_jaccard=mean_j,
-    extreme_disagreement=extreme,zero_topic=FALSE,high_topic_raw=raw_n>10L,
+    extreme_disagreement=extreme,zero_topic=FALSE,high_topic_raw=raw_n>max_topics,
     ontology_pathology=pathology,zero_topic_rescreen_decision="",
     screening_action="retain",
     workflow08_reason=reason,workflow08_route=route,
@@ -162,7 +166,7 @@ Q <- do.call(rbind,record_rows)
 # Integrity invariants.
 if(any(S$retained_for_analysis & S$retention_basis=="")) stop("Retained assignment missing retention basis")
 if(any(!S$retained_for_analysis & S$retention_basis=="")) stop("Non-retained assignment missing retention basis")
-over10 <- which(Q$topic_count_retained > 10L)
+over10 <- which(Q$topic_count_retained > max_topics)
 if(length(over10)) {
   expected_tied <- vapply(Q$record_id[over10],function(rid){
     idx <- score_index[[rid]] %||% integer()
