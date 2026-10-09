@@ -13,6 +13,7 @@ w07_review_path<-arg("--w07-review")
 w07_scores_path<-arg("--w07-scores")
 w07_late_path<-arg("--w07-late-exclusions")
 out_dir<-arg("--output-dir","outputs/workflow08_intake_current")
+review_config_path<-arg("--review-config","user_input/workflow08_human_review_config.json")
 
 req<-c(w05_path,w06_path,w07_records_path,w07_review_path,w07_scores_path,w07_late_path)
 if(any(vapply(req,function(p)is.null(p)||!file.exists(p),logical(1))))stop("Required W05-W07 input missing",call.=FALSE)
@@ -66,14 +67,17 @@ context<-ctx |> transmute(
 # must not consume W08 human-review effort, even if geography/topic QC would
 # otherwise also generate an issue.
 if(!all(c("farmed_species_codes","farmed_species")%in%names(w05)))stop("W05 layer lacks species columns",call.=FALSE)
-w05_none<-w05 |> filter(farmed_species_codes=="NONE")
+review_config<-jsonlite::fromJSON(review_config_path,simplifyVector=FALSE)
+exclude_deterministic_none<-isTRUE(review_config$exclude_on_deterministic_none)
+none_code<-as.character(review_config$deterministic_none_code %||% "NONE")
+w05_none<-w05 |> filter(farmed_species_codes==none_code)
 w05_none_ids<-unique(as.character(w05_none$record_id))
 
 issue_map<-setNames(vector("list",nrow(context)),context$record_id)
 add_issue<-function(record_id,issue){
   rid<-as.character(record_id)
   if(!rid%in%names(issue_map))stop("Issue record absent from current context: ",rid,call.=FALSE)
-  if(rid%in%w05_none_ids)return(invisible(NULL))
+  if(exclude_deterministic_none && rid%in%w05_none_ids)return(invisible(NULL))
   state<-list(
     review_key=paste(rid,as.character(issue$issue_type),sep="::"),
     record_id=rid,
@@ -268,7 +272,7 @@ manifest<-list(
   created_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
   input_population=nrow(context),
   w05_species_none=nrow(w05_none),
-  w05_species_none_deterministic_exclusions=nrow(w05_none),
+  w05_species_none_deterministic_exclusions=if(exclude_deterministic_none)nrow(w05_none)else 0L,
   w05_species_none_human_review_issues=0L,
   w06_unresolved=nrow(w06_unresolved),
   w06_unresolved_no_country_autoassigned_none=nrow(w06_unresolved_auto_none),
