@@ -1,35 +1,24 @@
-# Minimal production reconstruction: dependency manifest
+# Minimal production branch: reconstruction and isolation
 
-Source branch: `workflow01-final-architecture` at `6eca21aea0b90b5c870bc25ff171ed647067de50` (read-only). Adjudication app: `LivingEvidenceMapAdjudication/main` (read-only).
+Source: `workflow01-final-architecture` at `6eca21aea0b90b5c870bc25ff171ed647067de50`.
+Shiny source: `thesalmonandthetomato/LivingEvidenceMapAdjudication/main` (read-only).
 
-## Current snapshot
+## Safety state: INERT
 
-- Files in reconstruction: **244**.
-- Copied production workflow entry points and direct W00–W10 scripts, shared R modules and coding reference files.
-- Copied Shiny publish queue workflows and W04/W08 resume/export helpers.
-- Copied W09 manuscript R Markdown, bibliography, figure R source, RIS export and human validation report code.
-- Copied stage Zenodo registries W01 and W04–W08; included live-status JSON and W04 kappa registry.
-- Excluded historical temporary repair workflows, generated reports, PNG/PDF output, and past run artefacts.
+All 27 copied GitHub Actions workflow definitions are held in `.github/workflows-inert/`, **outside** `.github/workflows/`. They retain identical blobs/contents, but are not discoverable as workflow definitions by GitHub Actions on `production-minimal`. Do not move them back until explicit external-write isolation and validation are authorised. The original `workflow01-final-architecture` still has its own workflows and is unchanged.
 
-## Structural spot check
+The stored workflows still contain production targets and credentials, including pushes to `workflow01-final-architecture`, writes to Zenodo, Google Sheets and the public `salmonevidencemap` repository. They are **not safe to run** if reactivated unchanged. The live Shiny app remains connected to production, not this branch.
 
-- PRESENT: `docs/reporting/workflow_09/manuscript/long_form_methods.Rmd`
-- PRESENT: `docs/reporting/workflow_09/manuscript/long_form_results.Rmd`
-- PRESENT: `docs/deduplication/zenodo_registry.csv`
-- PRESENT: `scripts/updater/workflow_08_export_shiny_decisions.R`
-- PRESENT: `scripts/updater/workflow_04_export_shiny_resolution_decisions.R`
-- PRESENT: `docs/reporting/workflow_09/figure_code/figure_01_flow_diagram.R`
-- PRESENT: `docs/current_run/current_run_status.json`
+## Dependencies
 
-## Outstanding blockers before executing **any** workflow
+Direct scripts from W00–W10 and Shiny workflow dispatches, core R code, W09 RMarkdown/visualisations, ontology/reference files and selected Zenodo registry/state pointers have been copied. Additional direct W00 scoping/manual RIS and W04 kappa scripts were added in this isolation commit. The check is a static inventory, not proof of transitive dependency closure. Generated file paths, `source()` calls inside scripts, runtime-selected paths, templates and Shiny-side reads/writes require further verification.
 
-1. Complete transitive `source()` / `read*` / dynamic file path audit, including non-R scripts and templates.
-2. Audit Shiny's dispatch, queue polling, GitHub writes and Google Sheets requests in both directions. Names of dispatch workflows were checked; runtime integration has **not** been validated.
-3. Check W00/W01–W08 Zenodo pointer read/write contracts, including new-run resumption and human review state. GitHub state files copied from production are historical and must not become independent authoritative state.
-4. Confirm correct W09 and W10 generation/publication files, output paths and provenance, and isolate live Pages publication.
-5. Replace or gate hardcoded `workflow01-final-architecture` branch targets and live organisation GitHub dispatches. **Do not run on this branch before isolation.**
-6. Run R parse, YAML syntax, file closure and safe fixtures. No end-to-end test yet.
+## Before validation (not yet authorised)
 
-## Verification status
+1. Complete static closure review of R imports, dynamic paths and direct entry point dependencies.
+2. Define test-only credentials and write-sink guards before restoring Actions workflow definitions.
+3. Inspect Shiny callback/state-contract compatibility and isolate dispatch targets.
+4. Define which live registry pointers are restored vs generated from Zenodo.
+5. Only after approval, perform static parser/structure validation, followed by isolated tests.
 
-File presence checked for Shiny dispatch filenames and selected W09/W10 paths. This is **not** full validation; unresolved generated files and runtime-dependent paths remain.
+**No Actions workflow, OpenAI API, Zenodo publication or Shiny task has been executed from this branch.**
