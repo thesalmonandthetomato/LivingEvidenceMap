@@ -1,0 +1,7 @@
+name: W04 validation
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo validation
