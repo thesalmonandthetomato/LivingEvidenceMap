@@ -23,7 +23,7 @@ jobs:
         run: |
           library(data.table)
           library(jsonlite)
-          t <- file.path(tempdir(),"w01-integration")
+          t <- file.path(Sys.getenv("RUNNER_TEMP"),"w01-integration")
           dir.create(t,recursive=TRUE)
           writeLines(t,"testpath.txt")
           meta <- data.table(idx=1:3,source=c("alpha","beta","gamma"),source_record_id=c("a1","b1","c1"))
