@@ -64,7 +64,7 @@ samp <- x |> filter(((record_sequence - 1L) %% shard_count) == (shard_id - 1L))
 
 prompt <- paste(readLines(prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n")
 prompt_sha <- digest(file=prompt_path,algo="sha256",serialize=FALSE)
-expected_prompt_sha <- "2ef4a9f2099878ae825395f3f09b329f219bfd3a185d3704a8662c52bcff70ed"
+expected_prompt_sha <- jsonlite::fromJSON("user_input/workflow06_geography_prompt_config.json")$expected_prompt_sha256
 if(!identical(prompt_sha,expected_prompt_sha)) stop("Locked geography prompt SHA mismatch")
 
 schema <- list(
