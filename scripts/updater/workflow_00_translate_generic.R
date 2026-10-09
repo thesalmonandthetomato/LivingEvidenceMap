@@ -110,11 +110,15 @@ queries<-setNames(lapply(source_names,function(n){
   render(n,fields)
 }),source_names)
 if(run_type=="fortnightly"){
-  # Date filtering must have source-specific verified semantics. Do not fabricate
-  # equivalent filters when working with a new arbitrary strategy.
+  # Explicit full provider queries preserve the user's selected indexing/publication
+  # date semantics. Never replace a query with an arbitrary publication-year filter.
   missing<-setdiff(source_names,names(cfg$fortnightly_overrides))
   if(length(missing))stop(sprintf("W00: fortnightly mode needs explicit dated queries for: %s",paste(missing,collapse=", ")),call.=FALSE)
-  queries<-cfg$fortnightly_overrides[source_names]
+  queries<-setNames(lapply(source_names,function(name){
+    q<-cfg$fortnightly_overrides[[name]]
+    if(!is.character(q)||length(q)!=1L||!nzchar(trimws(q)))stop(sprintf("W00: empty/invalid fortnightly override for %s",name),call.=FALSE)
+    q
+  }),source_names)
 }
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 plan<-list(workflow="00",status="planned",run_type=run_type,search_version=cfg$search_version,
