@@ -113,6 +113,10 @@ render<-function(source,fields=NULL){
       }
       return(sprintf("(%s AND %s)",block(vals[[tokens[[1L]]]]),block(vals[[tokens[[3L]]]])))
     }
+    if(is_pair&&!is.null(fields)){
+      block<-function(v)paste0("(",paste(sprintf("%s (%s)",fields,paste(v,collapse=" OR ")),collapse=" OR "),")")
+      return(sprintf("(%s AND %s)",block(vals[[tokens[[1L]]]]),block(vals[[tokens[[3L]]]])))
+    }
     if(source=="lens"||!is.null(fields))return(fielded(vals))
     stop(sprintf("W00: %s has no verified generic translation; supply database_overrides.%s",source,source),call.=FALSE)
   }
