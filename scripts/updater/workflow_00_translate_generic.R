@@ -88,12 +88,24 @@ render<-function(source,fields=NULL){
   }
   render_complete<-function(vals){
     expr<-plain(vals)
-    if(source=="scopus")return(sprintf("TITLE-ABS-KEY(%s)",expr))
+    # Match established legacy grouping exactly for two-concept AND searches.
+    is_pair<-length(tokens)==3L && tokens[[2L]]=="AND" &&
+      tokens[[1L]]%in%names(vals) && tokens[[3L]]%in%names(vals)
+    if(is_pair){
+      pair_expr<-sprintf("((%s) AND (%s))",
+        paste(vals[[tokens[[1L]]]],collapse=" OR "),
+        paste(vals[[tokens[[3L]]]],collapse=" OR "))
+    } else pair_expr<-expr
+    if(source=="scopus")return(sprintf("TITLE-ABS-KEY(%s)",pair_expr))
     if(source%in%c("agricola","pubmed","ethos","cba","epmc_preprints")){
       src<-c(agricola="AGR",pubmed="MED",ethos="ETH",cba="CBA",epmc_preprints="PPR")[[source]]
-      return(sprintf("SRC:%s AND TITLE_ABS:(%s)",src,expr))
+      return(sprintf("SRC:%s AND TITLE_ABS:(%s)",src,pair_expr))
     }
-    if(source=="wos")return(paste(vapply(c("TI","AB","AK"),function(field)sprintf("%s=(%s)",field,expr),character(1)),collapse=" OR "))
+    if(source=="wos"){
+      if(is_pair)return(paste(vapply(c("TI","AB","AK"),function(field)
+        sprintf("(%s=%s)",field,pair_expr),character(1)),collapse=" OR "))
+      return(paste(vapply(c("TI","AB","AK"),function(field)sprintf("%s=(%s)",field,expr),character(1)),collapse=" OR "))
+    }
     if(source=="lens"||!is.null(fields))return(fielded(vals))
     stop(sprintf("W00: %s has no verified generic translation; supply database_overrides.%s",source,source),call.=FALSE)
   }
