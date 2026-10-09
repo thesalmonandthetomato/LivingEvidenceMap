@@ -39,6 +39,23 @@ ebsco_cfg <- fromJSON(ebsco_config_path,simplifyVector=FALSE)
 allowed_sources <- c(base_sources,names(ebsco_cfg$sources))
 if (any(!sources %in% allowed_sources)) stop(sprintf("Unexpected source(s) in --sources: %s",paste(setdiff(sources,allowed_sources),collapse=", ")),call.=FALSE)
 
+# Confirm query provenance before creating any Zenodo deposition.
+query_archive_dir <- file.path(staging_root,"plan","search_archive",paste0("run-",run_id))
+query_manifest_path <- file.path(query_archive_dir,"manifest.json")
+if(!file.exists(query_manifest_path))stop(sprintf("W00: missing archived query manifest for run %s; refusing Zenodo publication",run_id),call.=FALSE)
+query_manifest<-fromJSON(query_manifest_path,simplifyVector=FALSE)
+if(!identical(query_manifest$schema,"w00-query-archive-v1")||!identical(as.character(query_manifest$run_id),as.character(run_id)))stop("W00: query archive schema/run mismatch",call.=FALSE)
+if(!setequal(sources,names(query_manifest$queries)))stop("W00: selected source list differs from archived query list; refusing publication",call.=FALSE)
+source_strategy_path<-file.path(query_archive_dir,"source_strategy.json")
+if(!file.exists(source_strategy_path)||!identical(tolower(digest(file=source_strategy_path,algo="sha256",serialize=FALSE)),tolower(query_manifest$strategy_sha256)))stop("W00: archived source strategy hash mismatch",call.=FALSE)
+for(src in sources){
+  q<-query_manifest$queries[[src]]
+  qp<-file.path(query_archive_dir,q$file)
+  if(!identical(basename(qp),paste0(src,".txt"))||!file.exists(qp))stop(sprintf("W00: invalid or missing archived query for %s",src),call.=FALSE)
+  if(!identical(tolower(digest(file=qp,algo="sha256",serialize=FALSE)),tolower(q$sha256)))stop(sprintf("W00: archived query SHA-256 mismatch for %s",src),call.=FALSE)
+}
+query_archive_tree_sha256<-digest(file=query_manifest_path,algo="sha256",serialize=FALSE)
+
 api <- "https://zenodo.org/api/deposit/depositions"
 marker <- paste0("LivingEvidenceMap-workflow00-run-",run_id)
 run_url <- sprintf("https://github.com/%s/actions/runs/%s",repository,run_id)
@@ -106,6 +123,9 @@ manifest <- list(
   search_version=search_version,
   sources=sources,
   handoff_sources=handoff_sources,
+  query_archive_manifest_sha256=query_archive_tree_sha256,
+  query_archive_strategy_sha256=query_manifest$strategy_sha256,
+  query_archive_translation=query_manifest$translation,
   file_visibility="restricted",
   files=file_meta
 )
