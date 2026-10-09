@@ -1,0 +1,74 @@
+name: W04 temporary prompt and decisions test
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w04-temporary-prompt-decisions-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","digest"))
+      - name: Create synthetic model output
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          t <- file.path(Sys.getenv("RUNNER_TEMP"),"w04-review")
+          dir.create(t,recursive=TRUE)
+          cfg <- fromJSON("user_input/workflow04_screening_config.json")
+          prompt <- paste(readLines(cfg$prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n")
+          sha <- digest(prompt,algo="sha256",serialize=FALSE)
+          stopifnot(identical(sha,cfg$expected_prompt_sha256))
+          stopifnot(nzchar(cfg$prompt_version),nzchar(cfg$response_schema_name))
+          writeLines(sha,file.path(t,"sha.txt"))
+          writejl <- function(rows,path) writeLines(vapply(rows,function(r)toJSON(r,auto_unbox=TRUE,null="null"),character(1)),path)
+          mk <- function(id,decision) list(record_id=id,screening=list(decision=decision,prompt_sha256=sha))
+          rows <- list(mk("a","retain"),mk("b","exclude"),mk("c","uncertain"))
+          writejl(rows,file.path(t,"rows.jsonl"))
+          writejl(list(list(identity=list(record_id="c"),canonical=list(title="Uncertain study",abstract="Ambiguous abstract"))),file.path(t,"canonical.jsonl"))
+          writejl(list(rows[[3]]),file.path(t,"uncertain.jsonl"))
+          for(i in 1:2){
+            d <- file.path(t,paste0("shard",i))
+            dir.create(d)
+            records <- if(i==1)rows[1:2] else rows[3]
+            writejl(records,file.path(d,"workflow04_consensus_layer.jsonl"))
+            summary <- list(shard_index=i,shard_count=2L,workflow03_eligible=3L,pass1_records=length(records),pass2_records=length(records),third_pass_records=if(i==2)1L else 0L,two_of_two_agreement=if(i==1)2L else 0L,model="synthetic",prompt_version=cfg$prompt_version,prompt_sha256=sha)
+            writeLines(toJSON(summary,auto_unbox=TRUE),file.path(d,"summary.json"))
+          }
+          cat("PASS: original prompt checksum verified\n")
+      - name: Check consensus decisions and uncertain queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/w04-review"
+          Rscript scripts/updater/workflow_04_merge_consensus.R --input-root "$T" --expected-shards 2 --output-dir "$T/merged"
+          Rscript -e 'library(jsonlite);t<-commandArgs(TRUE)[1];m<-fromJSON(file.path(t,"merged/summary.json"));stopifnot(m$status=="HUMAN_REVIEW_REQUIRED",m$final_retain==1L,m$final_exclude==1L,m$final_unresolved==1L)' "$T"
+          Rscript scripts/updater/workflow_04_build_resolution_queue.R --canonical "$T/canonical.jsonl" --human-review "$T/uncertain.jsonl" --output-dir "$T/queue" --source-run-id synthetic
+          Rscript -e 'library(jsonlite);t<-commandArgs(TRUE)[1];q<-fromJSON(readLines(file.path(t,"queue/workflow04_resolution_queue.jsonl"))[[1]]);stopifnot(q$record_id=="c",q$screening$decision=="uncertain")' "$T"
+          echo "PASS: uncertain records are sent to human review"
+      - name: Reject invalid model decisions and changed prompt hashes
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          t <- file.path(Sys.getenv("RUNNER_TEMP"),"w04-review")
+          rows <- lapply(readLines(file.path(t,"rows.jsonl")),fromJSON,simplifyVector=FALSE)
+          rows[[1]]$screening$decision <- "invalid"
+          d <- file.path(t,"shard1","workflow04_consensus_layer.jsonl")
+          writeLines(vapply(rows[1:2],function(r)toJSON(r,auto_unbox=TRUE),character(1)),d)
+          cmd <- c("scripts/updater/workflow_04_merge_consensus.R","--input-root",t,"--expected-shards","2","--output-dir",file.path(t,"invalid"))
+          stopifnot(system2("Rscript",cmd)==1L)
+          rows[[1]]$screening$decision <- "retain"
+          rows[[1]]$screening$prompt_sha256 <- paste(rep("0",64),collapse="")
+          writeLines(vapply(rows[1:2],function(r)toJSON(r,auto_unbox=TRUE),character(1)),d)
+          stopifnot(system2("Rscript",cmd)==1L)
+          cat("PASS: invalid decision and prompt hash rejected\n")
