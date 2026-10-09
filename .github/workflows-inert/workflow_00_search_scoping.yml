@@ -59,8 +59,6 @@ jobs:
         run: |
           set -euo pipefail
           Rscript -e "parse(file='scripts/updater/workflow_00_validate_scoping_search.R'); parse(file='scripts/updater/workflow_00_search_scope_counts.R'); cat('PASS: R scoping scripts parse\\n')"
-          Rscript -e "parse(file='scripts/updater/workflow_00_search_scope_counts.R'); cat('PASS: R scoping counter parses\\n')"
-          echo 'PASS: lightweight Python scoping counter parses'
 
       - name: Resolve scoping search input
         id: scoping_input
