@@ -1,0 +1,251 @@
+{
+  "schema": "living-evidence-map-workflow01-explicit-cluster-splits-v1",
+  "corrections": [
+    {
+      "previous_cluster_id": "work-653e23e9f79dc507",
+      "reason": "historical_false_merge_from_shared_copied_abstract",
+      "preserve_group": "horses",
+      "groups": [
+        {
+          "group": "horses",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "049-392-251-116-707"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W4300598210"
+            }
+          ]
+        },
+        {
+          "group": "noviembre",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "086-879-404-944-690"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W4206765122"
+            }
+          ]
+        },
+        {
+          "group": "world_literature_today_item",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "140-099-069-829-757"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W4232602820"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "previous_cluster_id": "work-6b59510241e5c992",
+      "reason": "historical_false_merge_from_shared_copied_abstract",
+      "preserve_group": "introduction",
+      "groups": [
+        {
+          "group": "introduction",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "022-612-060-895-818"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W7116951863"
+            }
+          ]
+        },
+        {
+          "group": "antitrust_common_law",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "143-759-590-762-792"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W7116938842"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "previous_cluster_id": "work-a0a0d2d791614e82",
+      "reason": "historical_false_merge_from_shared_copied_abstract",
+      "preserve_group": "polish_producer_groups",
+      "groups": [
+        {
+          "group": "polish_producer_groups",
+          "members": [
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W2771953240"
+            }
+          ]
+        },
+        {
+          "group": "rainbow_trout_production",
+          "members": [
+            {
+              "source": "cab",
+              "source_record_id": "cab:20173369945"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "previous_cluster_id": "work-0da7a30551538e8e",
+      "reason": "historical_false_merge_of_distinct_salmon_safe_publications",
+      "preserve_group": "salmon_safe_farms",
+      "groups": [
+        {
+          "group": "salmon_safe_farms",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "106-744-238-897-416"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W2901329323"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W7134700446"
+            }
+          ]
+        },
+        {
+          "group": "salmon_safe_farms_promoting_practices",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "125-738-730-987-884"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W3187026346"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "previous_cluster_id": "work-b8a5b62a4a7457e5",
+      "reason": "historical_false_merge_of_three_distinct_biofouling_outputs",
+      "preserve_group": "biofouling_norwegian_industry",
+      "groups": [
+        {
+          "group": "biofouling_norwegian_industry",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "049-444-555-486-709"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W181586479"
+            }
+          ]
+        },
+        {
+          "group": "hydroid_prevalence_oxygen",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "143-283-888-796-29X"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W419512591"
+            }
+          ]
+        },
+        {
+          "group": "stable_isotopes_biofouling",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "165-877-869-970-148"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W574366627"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "previous_cluster_id": "work-cd8b54c21568addc",
+      "reason": "historical_false_merge_of_article_and_distinct_peer_review_response_objects",
+      "preserve_group": "main_article",
+      "groups": [
+        {
+          "group": "main_article",
+          "members": [
+            {
+              "source": "lens",
+              "source_record_id": "148-301-058-426-757"
+            },
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W4408869679"
+            }
+          ]
+        },
+        {
+          "group": "editor_response_v1_4",
+          "members": [
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W4412808726"
+            },
+            {
+              "source": "lens",
+              "source_record_id": "119-632-736-324-958"
+            }
+          ]
+        },
+        {
+          "group": "reviewer_response_v1_3",
+          "members": [
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W4412808730"
+            },
+            {
+              "source": "lens",
+              "source_record_id": "104-125-471-791-292"
+            }
+          ]
+        },
+        {
+          "group": "reviewer_response_v1_2",
+          "members": [
+            {
+              "source": "openalex",
+              "source_record_id": "openalex:W4412808731"
+            },
+            {
+              "source": "lens",
+              "source_record_id": "058-072-754-429-67X"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

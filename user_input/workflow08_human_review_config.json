@@ -1,0 +1,7 @@
+{
+  "schema": "living-evidence-map-workflow08-human-review-config-v1",
+  "reviewer_full_name": "Neal Haddaway",
+  "reviewer_short_name": "Neal",
+  "ontology_label": "v3.6",
+  "species_config_path": "user_input/workflow05_coding_config.json"
+}

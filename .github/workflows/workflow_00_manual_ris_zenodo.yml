@@ -1,0 +1,94 @@
+name: Workflow 00 - Manual RIS Zenodo
+
+on:
+  workflow_dispatch:
+    inputs:
+      registry_path:
+        description: 'Path to the manual RIS registry JSON in user_input/'
+        required: true
+        type: string
+      operation:
+        description: 'Validate, complete the existing draft, or publish the completed restricted record'
+        required: true
+        default: validate
+        type: choice
+        options:
+          - validate
+          - complete
+          - publish
+
+permissions:
+  contents: read
+
+jobs:
+  manual-ris:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+
+      - name: Validate workflow input
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f '${{ inputs.registry_path }}'
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+
+      - name: Validate existing Zenodo draft
+        if: ${{ inputs.operation == 'validate' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_complete_ris_zenodo_draft.R \
+            --registry '${{ inputs.registry_path }}' \
+            --validate-only true \
+            --output-dir outputs/updater/workflow00_manual_ris_zenodo
+
+      - name: Complete existing Zenodo draft
+        if: ${{ inputs.operation == 'complete' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_complete_ris_zenodo_draft.R \
+            --registry '${{ inputs.registry_path }}' \
+            --validate-only false \
+            --output-dir outputs/updater/workflow00_manual_ris_zenodo
+
+      - name: Publish completed restricted Zenodo record
+        if: ${{ inputs.operation == 'publish' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_publish_ris_zenodo_record.R \
+            --registry '${{ inputs.registry_path }}' \
+            --output-dir outputs/updater/workflow00_manual_ris_publish
+
+      - name: Upload run artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-manual-ris-${{ inputs.operation }}-${{ github.run_id }}
+          path: |
+            outputs/updater/workflow00_manual_ris_zenodo/
+            outputs/updater/workflow00_manual_ris_publish/
+          retention-days: 7
+          if-no-files-found: warn

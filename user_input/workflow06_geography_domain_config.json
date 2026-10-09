@@ -1,0 +1,18 @@
+{
+  "schema": "living-evidence-map-workflow06-domain-geography-config-v1",
+  "species_adjective_heads": [
+    "salmon",
+    "trout",
+    "char",
+    "grayling",
+    "fish"
+  ],
+  "strong_location_phrases": [
+    "fish farms in",
+    "aquaculture farms in"
+  ],
+  "substantive_entity_terms": [
+    "hatchery",
+    "hatcheries"
+  ]
+}

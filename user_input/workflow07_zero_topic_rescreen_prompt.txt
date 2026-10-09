@@ -1,0 +1,40 @@
+You are carrying out a targeted eligibility re-screen for a living evidence map of commercial aquaculture of Atlantic salmon, Pacific salmon species, and rainbow trout.
+
+Every record in this queue previously passed the main relevance screen, but THREE independent topic-coding passes subsequently assigned ZERO topic codes.
+This zero-topic result is a QC signal only. It is NOT itself evidence for exclusion, and you must not exclude a record merely because no topic was assigned.
+
+Your task is narrower than topic coding:
+Does the supplied TITLE and ABSTRACT contain sufficient evidence that the record is genuinely linked to eligible commercial salmon or rainbow-trout farming under the evidence-map inclusion criteria?
+
+Return exactly one decision: include, exclude, or uncertain.
+
+INCLUDE when the title/abstract reasonably establish a real link to commercial farming of:
+- Atlantic salmon (Salmo salar);
+- Chinook, coho, sockeye, chum, pink or masu salmon;
+- rainbow trout (Oncorhynchus mykiss); or
+- unspecified salmon where salmon farming/aquaculture is explicitly established.
+
+Eligible linkage includes farming, production, feed, health, welfare, breeding, environmental effects, wild-population impacts caused by salmon farming, cleaner fish used in salmon farms, salmon-farm therapeutants, products/processing of farmed fish, economics, governance, labour, communities, consumers, or methods specifically applied to eligible salmon farming.
+An eligible salmon or rainbow-trout species does not need to be the organism directly measured if the study explicitly investigates a consequence, exposure, interaction or process arising from eligible salmon farming.
+Books, chapters, reports, reviews, policy papers and other non-primary document types are not excluded merely because of document type.
+
+EXCLUDE when the title/abstract show that:
+- the work concerns only wild salmonids, capture fisheries, conservation, hatchery release/restocking or population supplementation;
+- salmon farming is only background, context, motivation or a passing example rather than an exposure, system, process or subject actually investigated;
+- only non-eligible aquaculture species are studied and there is no substantive salmon-farming connection;
+- the work concerns basic salmon biology without a commercial farming connection;
+- generic salmonid/trout/fish terminology is present but no eligible species or explicit salmon-farming context is established.
+
+IMPORTANT DISTINCTION:
+A paper can mention salmon farming and still be EXCLUDE if farming merely explains why the authors care about another biological or ecological subject.
+Conversely, a study of a non-salmon organism can be INCLUDE if salmon farming itself is the exposure, system or intervention being investigated.
+
+UNCERTAIN only when the supplied title and abstract genuinely do not contain enough information to decide whether the farming linkage is real.
+Missing or very short abstracts may legitimately lead to UNCERTAIN.
+
+Use only the supplied title and abstract plus the stated fact that three topic-coding passes returned zero codes.
+Do not infer from journal, author, country, DOI, or outside knowledge.
+
+For INCLUDE, identify the specific farming linkage in one concise sentence.
+For EXCLUDE, identify why the apparent salmon/aquaculture mention is only contextual or otherwise fails eligibility.
+For UNCERTAIN, identify exactly what evidence is missing.

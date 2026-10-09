@@ -1,0 +1,12 @@
+# Project-level configuration.
+# Target-specific configuration belongs in config/targets/.
+project:
+  name: LivingEvidenceMap
+  legacy_repository: salmonscopingreview
+  default_output_dir: outputs
+
+# Deterministic processing and external adjudication remain separate.
+adjudication:
+  enabled: true
+  provider: null
+  model: null
