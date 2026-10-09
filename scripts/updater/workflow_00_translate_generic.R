@@ -48,8 +48,13 @@ if(run_type=="expansion"&&!target%in%names(terms))stop(sprintf("W00: expansion t
 render<-function(source,fields=NULL){
   override<-cfg$database_overrides[[source]]
   if(!is.null(override)){
-    if(run_type=="expansion")stop(sprintf("W00: %s has a fixed override; expansion needs an explicit expansion-mode override",source),call.=FALSE)
-    if(!is.character(override)||length(override)!=1L)stop(sprintf("W00: override for %s must be a string",source),call.=FALSE)
+    if(run_type=="expansion"){
+      mode_overrides<-cfg$expansion_overrides
+      specific<-if(!is.null(mode_overrides))mode_overrides[[source]] else NULL
+      if(is.null(specific))stop(sprintf("W00: %s uses a fixed query override; expansion requires expansion_overrides.%s for the selected concept",source,source),call.=FALSE)
+      override<-specific
+    }
+    if(!is.character(override)||length(override)!=1L||!nzchar(trimws(override)))stop(sprintf("W00: override for %s must be a non-empty string",source),call.=FALSE)
     return(override)
   }
   if(is.null(concepts))stop(sprintf("W00: %s needs an explicit override for advanced Boolean input",source),call.=FALSE)
