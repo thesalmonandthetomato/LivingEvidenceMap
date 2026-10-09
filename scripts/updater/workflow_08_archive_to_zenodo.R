@@ -13,6 +13,10 @@ repository <- arg("--repository")
 output_dir <- arg("--output-dir")
 supersedes_record_id <- arg("--supersedes-record-id","")
 supersedes_doi <- arg("--supersedes-doi","")
+review_config_path <- arg("--review-config","user_input/workflow08_human_review_config.json")
+review_config <- fromJSON(review_config_path,simplifyVector=FALSE)
+creators <- review_config$zenodo_creators
+if(is.null(creators)||!length(creators)||any(!vapply(creators,function(z)!is.null(z$name)&&nzchar(trimws(as.character(z$name))),logical(1)))) stop("W08 Zenodo creators must be configured",call.=FALSE)
 if(any(vapply(list(canonical,exclusions,ledger,manifest,source_run_id,repository,output_dir),is.null,logical(1)))) stop("Required W08 Zenodo arguments missing",call.=FALSE)
 if(nzchar(source_commit) && !grepl("^[0-9a-fA-F]{40}$",source_commit)) stop("Invalid W08 source commit SHA",call.=FALSE)
 for(p in c(canonical,exclusions,ledger,manifest)) if(!file.exists(p)) stop("Missing W08 archive file: ",p,call.=FALSE)
@@ -69,7 +73,7 @@ metadata <- list(metadata=list(
     if(nzchar(supersedes_record_id)) paste0("<p>This archive supersedes Workflow 08 Zenodo record ",supersedes_record_id,if(nzchar(supersedes_doi))paste0(" (",supersedes_doi,")")else "",".</p>") else "",
     "<p>The deposit also contains the complete machine-readable Workflow 08 adjudication ledger and checksum/provenance manifest.</p>"
   ),
-  creators=list(list(name="Haddaway, Neal")),
+  creators=creators,
   access_right="restricted",
   access_conditions="The canonical dataset contains bibliographic metadata and provider-derived content whose redistribution may be restricted by source terms.",
   keywords=list("Living Evidence Map","Workflow 08","human adjudication","canonical JSONL","exclusions",paste0("LivingEvidenceMap-workflow08-run-",source_run_id))
