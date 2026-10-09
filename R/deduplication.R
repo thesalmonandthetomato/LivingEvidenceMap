@@ -1,4 +1,4 @@
-# Salmon Living Evidence Map: Bramer-style bibliographic deduplication
+# Bramer-style bibliographic deduplication
 # Follows the staged logic described by Bramer et al. (2016).
 
 normalise_bibliographic_text <- function(x) {
