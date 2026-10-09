@@ -29,7 +29,7 @@ jobs:
           }
           workflow<-readLines(".github/workflows-inert/workflow_07_production.yml")
           for(x in scripts)stopifnot(any(grepl(paste0("scripts/updater/",x),workflow,fixed=TRUE)))
-          cfg<-fromJSON("user_input/workflow07_retention_config.json")
+          cfg<-fromJSON("user_input/workflow07_retention_config.json",simplifyVector=FALSE)
           stopifnot(cfg$max_retained_topics==10L,length(cfg$supersession_rules)==5L,length(cfg$review_conflicts)==1L)
           src<-paste(readLines("scripts/updater/workflow07_zero_topic_targeted_rescreen.R"),collapse=" ")
           stopifnot(!grepl("commercial salmon/rainbow-trout farming",src,fixed=TRUE))
