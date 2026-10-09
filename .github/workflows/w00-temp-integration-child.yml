@@ -1,0 +1,48 @@
+name: TEMP W00 integration child
+on:
+  workflow_call:
+    inputs:
+      source: {required: true, type: string}
+      query: {required: true, type: string}
+      query_sha256: {required: true, type: string}
+permissions:
+  contents: read
+jobs:
+  bounded-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - shell: Rscript {0}
+        run: install.packages(c("jsonlite","httr2","digest","xml2"))
+      - name: Check archive handoff and bounded retrieval
+        shell: bash
+        env:
+          SOURCE: ${{ inputs.source }}
+          SEARCH_QUERY: ${{ inputs.query }}
+          EXPECTED_HASH: ${{ inputs.query_sha256 }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+          EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+          EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          test "$(Rscript -e 'cat(digest::digest(Sys.getenv("SEARCH_QUERY"),algo="sha256",serialize=FALSE))')" = "$EXPECTED_HASH"
+          case "$SOURCE" in
+            openalex) Rscript scripts/updater/workflow_00c_openalex_ingestion.R --query "$SEARCH_QUERY" --max-records 2 --page-size 2 --output-dir "$tmp/source" >/dev/null ;;
+            pubmed) Rscript scripts/updater/workflow_00f_europe_pmc_source_ingestion.R --query "$SEARCH_QUERY" --source-code MED --source-slug pubmed --source-collection PubMed --max-records 2 --page-size 2 --output-dir "$tmp/source" >/dev/null ;;
+            ebsco_medline) Rscript scripts/updater/workflow_00g_ebsco_ingestion.R --query "$SEARCH_QUERY" --source ebsco_medline --max-records 2 --page-size 2 --output-dir "$tmp/source" >/dev/null ;;
+            *) exit 2 ;;
+          esac
+          test -s "$tmp/source/manifest.json"
+          Rscript scripts/updater/write_workflow00_search_record.R --source "$SOURCE" --run-type full --query "$SEARCH_QUERY" --expected-query-sha256 "$EXPECTED_HASH" --reported-results 2 --downloaded-results 2 --parent-run-id disposable --output-root "$tmp/report"
+          test -n "$(find "$tmp/report" -name '*.json' -print -quit)"
+          echo "PASS W00 integration child $SOURCE"
