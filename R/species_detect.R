@@ -2,9 +2,9 @@
 #
 # Match dictionary terms case-insensitively on token boundaries.
 # Lexical separators tolerate whitespace and hyphen variants. Overlap handling
-# never allows a generic salmon phrase to erase an explicitly named species.
+# uses a caller-supplied generic identifier to resolve overlapping mentions.
 
-detect_species_mentions <- function(title = NA_character_, abstract = NA_character_, dictionary, generic_species_id = "UNSPEC_SALMON", pluralisable_common_head_terms = c("salmon", "trout")) {
+detect_species_mentions <- function(title = NA_character_, abstract = NA_character_, dictionary, generic_species_id = NULL, pluralisable_common_head_terms = character()) {
   required <- c("species_id", "preferred_name", "scientific_name", "synonym", "synonym_type", "is_farmed_candidate", "default_group")
   missing <- setdiff(required, names(dictionary))
   if (length(missing) > 0L) stop("Species dictionary is missing: ", paste(missing, collapse = ", "), call. = FALSE)
@@ -71,9 +71,7 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
     core <- paste(parts, collapse = separator)
 
     # Bibliographic metadata occasionally pluralises common-name head nouns
-    # (e.g. "rainbow trouts" or "salmons"). Permit that only for English
-    # salmon/trout terms, never for generic 'trout' because it is not a
-    # dictionary entry.
+    # Permit optional common-name pluralisation only for configured head terms.
     if (type %in% c("common", "generic") && length(pluralisable_common_head_terms)) {
       suffix_pattern <- paste(vapply(pluralisable_common_head_terms, escape_regex, character(1)), collapse = "|")
       if (grepl(paste0("(", suffix_pattern, ")$"), term, ignore.case = TRUE, perl = TRUE)) {
@@ -112,10 +110,8 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
     out$term_length <- nchar(out$matched_term)
     out <- out[order(out$match_start, -out$term_length, out$species_id), , drop = FALSE]
 
-    # Resolve overlaps without allowing a generic salmon phrase to erase an
-    # explicitly named eligible species. For the same species ID, retain the
-    # longest lexical match. Across different IDs, a specific species beats
-    # UNSPEC_SALMON; otherwise retain both IDs.
+    # Resolve overlaps: prefer longest for the same ID; when configured,
+    # prefer specific IDs over the generic identifier. Otherwise retain both.
     keep <- rep(TRUE, nrow(out))
     for (i in seq_len(nrow(out))) {
       if (!keep[[i]]) next
@@ -126,8 +122,8 @@ detect_species_mentions <- function(title = NA_character_, abstract = NA_charact
         if (!overlaps) next
 
         same_id <- identical(out$species_id[[i]], out$species_id[[j]])
-        i_generic <- identical(out$species_id[[i]], generic_species_id)
-        j_generic <- identical(out$species_id[[j]], generic_species_id)
+        i_generic <- (!is.null(generic_species_id) && identical(out$species_id[[i]], generic_species_id))
+        j_generic <- (!is.null(generic_species_id) && identical(out$species_id[[j]], generic_species_id))
 
         if (same_id) {
           if (out$term_length[[j]] > out$term_length[[i]]) {
