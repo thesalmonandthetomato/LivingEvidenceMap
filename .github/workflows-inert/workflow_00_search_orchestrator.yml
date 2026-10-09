@@ -179,6 +179,12 @@ jobs:
       selected_sources_json: ${{ steps.selection.outputs.selected_sources_json }}
       source_matrix_json: ${{ steps.out.outputs.source_matrix_json }}
     steps:
+      - name: Require explicit W00 activation approval
+        shell: bash
+        run: |
+          echo 'W00 remains inactive pending explicit approval of external searches, repository writes, Zenodo publication and downstream dispatch.' >&2
+          exit 1
+
       - name: Validate run mode
         shell: bash
         run: |
