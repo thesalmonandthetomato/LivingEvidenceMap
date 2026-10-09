@@ -186,7 +186,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow00_search_scope/counts
-          python3 scripts/updater/workflow_00_search_scope_counts.py \
+          Rscript scripts/updater/workflow_00_search_scope_counts.R \
             --plan outputs/workflow00_search_scope/plan/search_plan.json \
             --lens-config config/lens_search.json \
             --ebsco-config config/workflow00_ebsco_sources.json \
