@@ -6,6 +6,11 @@ suppressPackageStartupMessages({
   library(digest)
 })
 
+zenodo_config <- jsonlite::fromJSON("user_input/zenodo_config.json",simplifyVector=FALSE)
+zenodo_creators <- zenodo_config$creators
+zenodo_access_right <- as.character(zenodo_config$access_right)
+if(is.null(zenodo_creators)||!length(zenodo_creators)||any(!vapply(zenodo_creators,function(z)!is.null(z$name)&&length(z$name)==1L&&nzchar(trimws(as.character(z$name))),logical(1))))stop("Configure at least one Zenodo creator",call.=FALSE)
+if(length(zenodo_access_right)!=1L||!identical(zenodo_access_right,"restricted"))stop("W00-W08 archives require restricted Zenodo deposits",call.=FALSE)
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag, default=NULL) {
   i <- match(flag,args)
@@ -174,8 +179,8 @@ metadata <- list(metadata = list(
   upload_type = "dataset",
   publication_date = format(Sys.Date(), "%Y-%m-%d"),
   description = description,
-  creators = list(list(name = "Haddaway, Neal")),
-  access_right = "restricted",
+  creators=zenodo_creators,
+  access_right=zenodo_access_right,
   access_conditions = paste(
     "Files contain database/API search-result exports and are restricted",
     "because source licensing or terms may limit redistribution.",
