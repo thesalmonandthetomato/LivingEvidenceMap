@@ -24,3 +24,13 @@ All 27 GitHub Actions YAML definitions remain under `.github/workflows-inert/`. 
 ## Stop point
 
 Dependency copying only. **No structural validation, unit tests, Actions runs, API calls or functional testing carried out.**
+
+## Legacy default paths resolved (2026-10-09)
+
+The following fallback defaults were updated in `production-minimal` only to match the explicit inputs supplied by the current production workflows:
+
+- `scripts/updater/workflow_06_merge_incremental.R`: default geography prompt now `user_input/workflow06_geography_semantic_prompt.txt`.
+- `scripts/updater/workflow_07_merge_incremental_topics.R`: default ontology now `user_input/workflow07_topic_ontology.csv`.
+- `scripts/updater/workflow_07_prepare_incremental.R`: default topic prompt now `user_input/workflow07_topic_system_prompt.txt`.
+
+`docs/current_run/current_run_record_ids.txt` remains a runtime state path. These are targeted reference edits, not validation. Workflow YAML definitions remain inactive in `.github/workflows-inert/`.
