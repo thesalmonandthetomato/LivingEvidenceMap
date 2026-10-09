@@ -1,6 +1,11 @@
 #!/usr/bin/env Rscript
 suppressPackageStartupMessages({library(httr2);library(jsonlite);library(digest)})
 
+zenodo_config <- jsonlite::fromJSON("user_input/zenodo_config.json",simplifyVector=FALSE)
+zenodo_creators <- zenodo_config$creators
+zenodo_access_right <- as.character(zenodo_config$access_right)
+if(is.null(zenodo_creators)||!length(zenodo_creators)||any(!vapply(zenodo_creators,function(z)!is.null(z$name)&&length(z$name)==1L&&nzchar(trimws(as.character(z$name))),logical(1))))stop("Configure at least one Zenodo creator",call.=FALSE)
+if(length(zenodo_access_right)!=1L||!identical(zenodo_access_right,"restricted"))stop("W00-W08 archives require restricted Zenodo deposits",call.=FALSE)
 args<-commandArgs(trailingOnly=TRUE)
 `%||%`<-function(x,y)if(is.null(x))y else x
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
@@ -82,7 +87,7 @@ metadata<-list(metadata=list(
  title=sprintf("Living Evidence Map Workflow 07 topic-coding state | run %s",source_run_id),
  upload_type="dataset",publication_date=format(Sys.Date(),"%Y-%m-%d"),
  description=paste0("<p>Durable sparse Workflow 07 topic-coding and QC state.</p><p>Records: ",nrow(records),"; raw topic assignments: ",nrow(scores),"; zero-topic records: ",qcs$zero_topic_records,"; late automatic exclusions: ",qcs$late_automatic_exclusions,"; human-adjudication records: ",qcs$immediate_human_adjudication_records,".</p>"),
- creators=list(list(name="Haddaway, Neal")),access_right="restricted",
+ creators=zenodo_creators,access_right=zenodo_access_right,
  access_conditions="Files contain bibliographic record identifiers and model-derived topic coding provenance.",
  keywords=list("Living Evidence Map","Workflow 07","topic coding","evidence synthesis")
 ))
