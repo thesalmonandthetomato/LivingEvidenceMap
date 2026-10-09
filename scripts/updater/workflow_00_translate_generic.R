@@ -65,42 +65,46 @@ render<-function(source,fields=NULL){
     return(override)
   }
   if(is.null(concepts))stop(sprintf("W00: %s needs an explicit override for advanced Boolean input",source),call.=FALSE)
-  wrap<-function(terms){
-    joined<-paste(terms,collapse=" OR ")
-    if(source=="lens")return(paste0("(",paste(sprintf("%s:(%s)",c("title","abstract","keyword"),joined),collapse=" OR "),")"))
-    if(source=="scopus")return(sprintf("TITLE-ABS-KEY(%s)",joined))
-    if(source=="wos")return(paste0("(",paste(sprintf("%s=(%s)",c("TI","AB","AK"),joined),collapse=" OR "),")"))
-    if(source%in%c("agricola","pubmed","ethos","cba","epmc_preprints")){
-      src<-c(agricola="AGR",pubmed="MED",ethos="ETH",cba="CBA",epmc_preprints="PPR")[[source]]
-      return(sprintf("SRC:%s AND TITLE_ABS:(%s)",src,joined))
-    }
-    if(source=="openalex")stop("W00: OpenAlex OQL translation requires an explicit verified database override",call.=FALSE)
-    if(!is.null(fields))return(paste0("(",paste(sprintf("%s (%s)",fields,joined),collapse=" OR "),")"))
-    stop(sprintf("W00: unsupported source %s",source),call.=FALSE)
-  }
-  # Source filters (e.g. SRC:MED) must be applied once around the entire Boolean
-  # expression, not inside each concept, to preserve NOT/OR precedence.
-  source_filter<-if(source%in%c("agricola","pubmed","ethos","cba","epmc_preprints"))c(agricola="AGR",pubmed="MED",ethos="ETH",cba="CBA",epmc_preprints="PPR")[[source]] else NULL
-  block<-function(t){
-    b<-wrap(t)
-    if(!is.null(source_filter))b<-sub("^SRC:[A-Z]+ AND ","",b)
-    b
-  }
-  expand_expression<-function(updated=NULL){
-    vals<-lapply(terms,identity)
-    if(!is.null(updated))vals[[target]]<-updated
-    pieces<-vapply(tokens,function(t){
-      if(t%in%names(vals))return(paste0("(",block(vals[[t]]),")"))
+  # Render the complete Boolean expression inside one search field when the
+  # source's legacy grammar scopes AND/OR within that field (Scopus/Europe PMC/WoS).
+  plain<-function(vals){
+    paste(vapply(tokens,function(t){
+      if(t%in%names(vals))return(paste0("(",paste(vals[[t]],collapse=" OR "),")"))
       if(t%in%c("(",")"))return(t)
       toupper(t)
-    },character(1))
-    paste(pieces,collapse=" ")
+    },character(1)),collapse=" ")
   }
-  expr<-if(run_type=="expansion"){
-    sprintf("((%s) AND NOT (%s))",expand_expression(c(terms[[target]],additional)),expand_expression())
-  } else expand_expression()
-  if(!is.null(source_filter))expr<-sprintf("SRC:%s AND (%s)",source_filter,expr)
-  expr
+  fielded<-function(vals){
+    joined<-lapply(vals,function(v)paste(v,collapse=" OR "))
+    paste(vapply(tokens,function(t){
+      if(t%in%names(joined)){
+        term<-joined[[t]]
+        if(source=="lens")return(paste0("(",paste(sprintf("%s:(%s)",c("title","abstract","keyword"),term),collapse=" OR "),")"))
+        if(!is.null(fields))return(paste0("(",paste(sprintf("%s (%s)",fields,term),collapse=" OR "),")"))
+      }
+      if(t%in%c("(",")"))return(t)
+      toupper(t)
+    },character(1)),collapse=" ")
+  }
+  render_complete<-function(vals){
+    expr<-plain(vals)
+    if(source=="scopus")return(sprintf("TITLE-ABS-KEY(%s)",expr))
+    if(source%in%c("agricola","pubmed","ethos","cba","epmc_preprints")){
+      src<-c(agricola="AGR",pubmed="MED",ethos="ETH",cba="CBA",epmc_preprints="PPR")[[source]]
+      return(sprintf("SRC:%s AND TITLE_ABS:(%s)",src,expr))
+    }
+    if(source=="wos")return(paste(vapply(c("TI","AB","AK"),function(field)sprintf("%s=(%s)",field,expr),character(1)),collapse=" OR "))
+    if(source=="lens"||!is.null(fields))return(fielded(vals))
+    stop(sprintf("W00: %s has no verified generic translation; supply database_overrides.%s",source,source),call.=FALSE)
+  }
+  base<-render_complete(terms)
+  if(run_type!="expansion")return(base)
+  amended<-terms
+  amended[[target]]<-c(terms[[target]],additional)
+  expanded<-render_complete(amended)
+  # Parenthesise complete source query; source-specific SRC filters must remain
+  # scoped to both branches. This preserves nested AND/OR/NOT semantics.
+  sprintf("((%s) AND NOT (%s))",expanded,base)
 }
 supported<-c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos",names(ebsco$sources))
 if(length(setdiff(selected,supported)))stop(sprintf("W00: no translator for selected source(s): %s",paste(setdiff(selected,supported),collapse=", ")),call.=FALSE)
