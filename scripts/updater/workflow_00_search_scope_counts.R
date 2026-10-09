@@ -24,19 +24,18 @@ if (any(vapply(list(plan_path, output_csv, output_json), is.null, logical(1)))) 
   stop("Required: --plan --output-csv --output-json", call. = FALSE)
 }
 if (!file.exists(plan_path)) stop("Search plan not found", call. = FALSE)
-if (!file.exists(lens_config_path)) stop("Lens config not found", call. = FALSE)
+if (is.null(source_filter) || !nzchar(source_filter)) stop("--source is required",call.=FALSE)
 if (!file.exists(ebsco_config_path)) stop("EBSCO config not found", call. = FALSE)
 
 now_utc <- function() format(Sys.time(), tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ")
-search_date <- format(Sys.Date(), "%Y-%m-%d")
+search_date <- format(as.Date(Sys.time(),tz="UTC"), "%Y-%m-%d")
 plan <- fromJSON(plan_path, simplifyVector = FALSE)
 q <- plan$source_queries
 
 ebsco_cfg <- fromJSON(ebsco_config_path,simplifyVector=FALSE)
 ebsco_sources <- names(ebsco_cfg$sources)
 required_queries <- c("lens", "scopus", "openalex", "agricola", "pubmed", "ethos", "cba", "epmc_preprints", "wos", ebsco_sources)
-missing_queries <- required_queries[vapply(required_queries, function(x) is.null(q[[x]]) || !nzchar(trimws(as.character(q[[x]]))), logical(1))]
-if (length(missing_queries)) stop(sprintf("Search plan missing source queries: %s", paste(missing_queries, collapse = ", ")), call. = FALSE)
+
 
 retry_request <- function(req, label) {
   last <- NULL
@@ -203,15 +202,12 @@ read_manual_reported <- function(path) {
   suppressWarnings(as.integer(x$search$reported_results))
 }
 
-source_catalogue <- c(
-  "lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos",
-  ebsco_sources,
-  "cab_abstracts","proquest_dissertations"
-)
-if (nzchar(source_filter) && !source_filter %in% source_catalogue) {
+source_catalogue <- required_queries
+if (!nzchar(source_filter) || !source_filter %in% source_catalogue) {
   stop(sprintf("Unknown scoping source: %s", source_filter), call.=FALSE)
 }
-selected_sources <- if (nzchar(source_filter)) source_filter else source_catalogue
+if (is.null(q[[source_filter]]) || !nzchar(trimws(as.character(q[[source_filter]])))) stop(paste0("Search plan missing source query: ",source_filter),call.=FALSE)
+selected_sources <- source_filter
 
 count_one <- function(src) {
   if (identical(src,"lens")) {
@@ -247,7 +243,7 @@ count_one <- function(src) {
     return(data.frame(source="Europe PMC preprints",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
   }
   if (identical(src,"wos")) {
-    r <- safe_count("Web of Science", function() count_wos(as.character(q$wos)))
+    r <- safe_count("Web of Science Core Collection", function() count_wos(as.character(q$wos)))
     return(data.frame(source="Web of Science Core Collection",access_mode="API count",search_date=search_date,hits=r$hits,status=r$status,source_slug=src,stringsAsFactors=FALSE))
   }
   if (src %in% ebsco_sources) {
@@ -270,7 +266,7 @@ rows <- do.call(rbind,lapply(selected_sources,count_one))
 row.names(rows) <- NULL
 
 dir.create(dirname(output_csv), recursive = TRUE, showWarnings = FALSE)
-write.csv(rows, output_csv, row.names = FALSE, na = "")
+write.table(rows, output_csv, sep=",",row.names=FALSE,col.names=TRUE,quote=TRUE,qmethod="double",na="",fileEncoding="UTF-8")
 
 out <- list(
   schema = "living-evidence-map-workflow00-search-scoping-v1",
@@ -296,4 +292,4 @@ out <- list(
   })
 )
 writeLines(toJSON(out, auto_unbox = TRUE, pretty = TRUE, null = "null"), output_json, useBytes = TRUE)
-cat("PASS: Workflow 00 search scoping counts complete; no result records persisted.\n")
+cat("PASS: Workflow 00 search scoping count complete; no result records persisted.\n")
