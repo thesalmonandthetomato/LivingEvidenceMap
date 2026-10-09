@@ -1,0 +1,62 @@
+name: W07 temporary refactor regression
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w07-temporary-refactor-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","readr","dplyr"))
+      - name: Verify relocated scripts and config
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          scripts<-c("workflow07_apply_retention_and_review_rules.R","workflow07_zero_topic_targeted_rescreen.R","workflow07_zero_topic_targeted_rescreen_merge.R")
+          for(x in scripts) {
+            stopifnot(file.exists(file.path("scripts/updater",x)),!file.exists(file.path("scripts/reporting",x)))
+            parse(file=file.path("scripts/updater",x))
+          }
+          workflow<-readLines(".github/workflows-inert/workflow_07_production.yml")
+          for(x in scripts)stopifnot(any(grepl(paste0("scripts/updater/",x),workflow,fixed=TRUE)))
+          cfg<-fromJSON("user_input/workflow07_retention_config.json")
+          stopifnot(cfg$max_retained_topics==10L,length(cfg$supersession_rules)==5L,length(cfg$review_conflicts)==1L)
+          src<-paste(readLines("scripts/updater/workflow07_zero_topic_targeted_rescreen.R"),collapse=" ")
+          stopifnot(!grepl("commercial salmon/rainbow-trout farming",src,fixed=TRUE))
+          cat("PASS: relocated scripts and topic-independent code\n")
+      - name: Test topic retention with salmon rules and unrelated ontology
+        shell: Rscript {0}
+        run: |
+          library(readr)
+          library(jsonlite)
+          base<-file.path(Sys.getenv("RUNNER_TEMP"),"w07")
+          dir.create(base)
+          run_case<-function(label,ontology,scores,expected_retained){
+            d<-file.path(base,label)
+            dir.create(d)
+            write_csv(ontology,file.path(d,"ontology.csv"))
+            write_csv(scores,file.path(d,"scores.csv"))
+            write_csv(data.frame(record_id="case1"),file.path(d,"records.csv"))
+            file.create(file.path(d,"zero.jsonl"))
+            cmd<-c("scripts/updater/workflow07_apply_retention_and_review_rules.R","--scores",file.path(d,"scores.csv"),"--records",file.path(d,"records.csv"),"--ontology",file.path(d,"ontology.csv"),"--zero-rescreen",file.path(d,"zero.jsonl"),"--output-dir",file.path(d,"out"))
+            stopifnot(system2("Rscript",cmd)==0L)
+            result<-read_csv(file.path(d,"out/workflow07_topic_pathway_scores_retained.csv"),show_col_types=FALSE)
+            stopifnot(setequal(result$path_id[result$retained_for_analysis],expected_retained))
+          }
+          ontology<-data.frame(path_id=c("V3_001","V3_002"),level_1=c("Environment","Environment"),level_2=c("General","Specific"),hierarchy_path=c("Environment > General","Environment > Specific"))
+          scores<-data.frame(record_id=c("case1","case1"),path_id=ontology$path_id,confidence_n=c(2,3),role_a=c("primary","primary"),role_b=c("primary","primary"),role_c=c("primary","primary"))
+          run_case("existing",ontology,scores,"V3_002")
+          unrelated<-data.frame(path_id=c("BIO_A","BIO_B"),level_1=c("Biome","Biome"),level_2=c("Terrestrial","Aquatic"),hierarchy_path=c("Biome > Terrestrial","Biome > Aquatic"))
+          scores$path_id<-unrelated$path_id
+          run_case("unrelated",unrelated,scores,c("BIO_A","BIO_B"))
+          cat("PASS: existing supersession and unrelated ontology\n")
