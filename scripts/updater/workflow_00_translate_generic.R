@@ -24,6 +24,13 @@ concepts<-cfg$concepts
 simple_term<-function(x){
   if(length(x)!=1||!is.character(x)||!nzchar(trimws(x)))stop("W00: invalid/empty term",call.=FALSE)
   if(grepl("[()]",x))stop(sprintf("W00: term '%s' contains parentheses; use an advanced query override",x),call.=FALSE)
+  # Term entries are atoms, not Boolean fragments; accepting operators here
+  # would change the intended concept grammar for some database providers.
+  unquoted<-gsub('"[^"]*"','',x,perl=TRUE)
+  if(grepl("\\b(AND|OR|NOT|NEAR|ADJ|WITHIN|PRE|W)\\b",unquoted,ignore.case=TRUE,perl=TRUE) ||
+     grepl("(^|[[:space:]])[A-Za-z_]+[[:digit:]]*:",unquoted,perl=TRUE)) {
+    stop(sprintf("W00: term '%s' contains Boolean/proximity/field syntax; use an explicit database-specific override",x),call.=FALSE)
+  }
   x
 }
 if(!is.null(concepts)){
