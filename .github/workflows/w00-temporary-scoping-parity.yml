@@ -1,0 +1,63 @@
+name: Temporary W00 Python to R scoping parity
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w00-temporary-scoping-parity.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','xml2'))
+      - name: Compare source-by-source Python and R outputs with credentials absent
+        shell: Rscript {0}
+        env:
+          LENS_API_TOKEN: ''
+          SCOPUS_API_TOKEN: ''
+          SCOPUS_INSTTOKEN: ''
+          OPENALEX_API_KEY: ''
+          OPENALEX_API_TOKEN: ''
+          WOS_STARTER_API: ''
+          EBSCO_EHOST_UID: ''
+          EBSCO_EHOST_PWD: ''
+        run: |
+          library(jsonlite)
+          cfg <- fromJSON('config/workflow00_ebsco_sources.json',simplifyVector=FALSE)
+          sources <- c('lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',names(cfg$sources))
+          queries <- as.list(setNames(rep('test',length(sources)),sources))
+          plan <- list(input_path='synthetic',original_search_string='test',normalised_search_string='test',validation=list(valid=TRUE),source_queries=queries)
+          dir.create('outputs/parity',recursive=TRUE,showWarnings=FALSE)
+          writeLines(toJSON(plan,auto_unbox=TRUE,pretty=TRUE),'outputs/parity/plan.json')
+          for(src in sources){
+            outputs <- list()
+            for(implementation in c('py','R')){
+              ext <- if(implementation=='py')'py' else 'R'
+              command <- if(implementation=='py')'python3' else 'Rscript'
+              args <- c(paste0('scripts/updater/workflow_00_search_scope_counts.',ext),'--plan','outputs/parity/plan.json','--source',src,'--output-csv',paste0('outputs/parity/',src,'.',implementation,'.csv'),'--output-json',paste0('outputs/parity/',src,'.',implementation,'.json'))
+              status <- suppressWarnings(system2(command,args,stdout=TRUE,stderr=TRUE))
+              code <- attr(status,'status')
+              stopifnot(is.null(code)||code==0)
+              outputs[[implementation]] <- fromJSON(paste0('outputs/parity/',src,'.',implementation,'.json'),simplifyVector=FALSE)
+              csv <- read.csv(paste0('outputs/parity/',src,'.',implementation,'.csv'),stringsAsFactors=FALSE,na.strings='')
+              stopifnot(nrow(csv)==1L,names(csv)==c('source','access_mode','search_date','hits','status','source_slug'))
+              outputs[[paste0(implementation,'csv')]]<-csv
+            }
+            a<-outputs$py;b<-outputs$R
+            for(k in c('schema','workflow','status','search_date','search_input_path','original_search_string','normalised_search_string','result_policy'))
+              stopifnot(identical(a[[k]],b[[k]]))
+            stopifnot(identical(a$source_queries,b$source_queries),identical(a$boolean_validation,b$boolean_validation))
+            for(k in c('source','source_slug','access_mode','search_date','status'))stopifnot(identical(a$counts[[1]][[k]],b$counts[[1]][[k]]))
+            stopifnot(is.null(a$counts[[1]]$hits),is.null(b$counts[[1]]$hits))
+            for(k in c('source','source_slug','access_mode','search_date','status'))stopifnot(identical(as.character(outputs$pycsv[[k]]),as.character(outputs$Rcsv[[k]])))
+            cat('PASS source:',src,'\n')
+          }
+          cat('PASS: source-level error-path parity for',length(sources),'sources\n')
