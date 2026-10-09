@@ -21,3 +21,11 @@ The authoritative file remains `user_input/workflow00_search_strategy.json`. A g
 5. Dispatch translated queries through existing source adapters. The Lens adapter now constructs request JSON from the translated query and does not require a salmonid clause or a sentinel record.
 
 **Not yet implemented:** complete concept grammar validation, syntax-aware proximity translations, archive-to-harvester checksum enforcement, immutable durable archive publication, and complete source-specific modes. Do not reactivate the workflow definitions before those are addressed and validation is authorised.
+
+## Implementation update: archived-query handoff
+
+The reconstruction now builds the per-run archive **after source selection**, writes it into the W00 plan artefact at `outputs/updater/workflow00_plan/search_archive/run-<run-id>/`, then uses `workflow_00_read_archived_queries.R` to reload the exact selected database query strings and verify file SHA-256 checksums before exporting the source dispatch matrix. This removes a competing plan-based dispatch path.
+
+For legacy inputs, the existing W00 translator is still used to preserve the established search meaning. The generic translator is selected for concept-mode and advanced-mode input, and translates **only selected databases**. Unsupported translation, including OpenAlex when no explicit override is given, fails with an actionable error rather than silently substituting semantics.
+
+**Outstanding:** persist the short-lived archive in a durable location beyond the Actions artefact's current retention; finalise source-specific fortnightly query semantics; strengthen the full Boolean parser and assess each provider's syntax; confirm that archive manifests and retrieval reports remain linked across run completion; and validate before any workflow activation. None of these actions has been run or tested on production.
