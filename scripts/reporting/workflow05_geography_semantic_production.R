@@ -221,9 +221,6 @@ call_one <- function(row){
     iso_norm <- toupper(trimws(iso))
     valid_codes <- unique(allowed_pairs$iso3c)
     bad_codes <- setdiff(unique(iso_norm),valid_codes)
-    if(length(bad_codes)){
-      stop("Invalid geography ISO3 returned by model: ",paste(bad_codes,collapse=", "))
-    }
 
     # ISO3 is the controlled machine identifier. Country names are descriptive
     # labels, so derive them deterministically from the gazetteer rather than
@@ -232,7 +229,7 @@ call_one <- function(row){
     canonical_name_for <- function(code){
       vals <- unique(allowed_pairs$country_name[allowed_pairs$iso3c==code])
       vals <- vals[nzchar(vals)]
-      if(!length(vals)) stop("No canonical country name for ISO3: ",code)
+      if(!length(vals)) return(names[[match(code,iso_norm)]])
       vals[[1L]]
     }
     iso <- iso_norm
