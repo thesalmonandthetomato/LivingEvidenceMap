@@ -555,6 +555,13 @@ jobs:
             --output-dir outputs/pending_checkpoint \
             --run-id "$GITHUB_RUN_ID"
 
+      - name: Snapshot project inputs in pending checkpoint
+        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_project_config_snapshot.R --mode snapshot --archive-dir outputs/pending_checkpoint
+
       - name: Archive compact human-review checkpoint
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
         env:
@@ -798,6 +805,12 @@ jobs:
             --previous-root previous_state \
             --delta-dir outputs/delta \
             --output-root outputs/replayed
+
+      - name: Snapshot project inputs in validated delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_project_config_snapshot.R --mode snapshot --archive-dir outputs/delta
 
       - name: Archive only the validated delta to Zenodo
         if: ${{ steps.adjudication.outputs.pending_count == '0' }}
