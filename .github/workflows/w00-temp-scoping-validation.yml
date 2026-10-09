@@ -1,0 +1,43 @@
+name: TEMP W00 scoping offline validation
+on:
+  push:
+    branches: [production-minimal]
+    paths: [.github/workflows/w00-temp-scoping-validation.yml]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install jsonlite
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+      - name: Validate scoping and query parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$(mktemp -d)"
+          trap 'rm -rf "$temp"' EXIT
+          Rscript scripts/updater/workflow_00_validate_scoping_search.R --input user_input/scoping_search_string.txt --output "$temp/scoping.json"
+          Rscript scripts/updater/workflow_00_search_orchestrator.R --run-type full --config user_input/workflow00_search_strategy.json --output-dir "$temp/legacy"
+          Rscript - "$temp/scoping.json" "$temp/legacy/source_queries.json" <<'RS'
+          args<-commandArgs(TRUE)
+          s<-jsonlite::fromJSON(args[[1]],simplifyVector=FALSE)$source_queries
+          l<-jsonlite::fromJSON(args[[2]],simplifyVector=FALSE)
+          stopifnot(length(s)==26L,setequal(names(s),names(l)))
+          norm<-function(x)gsub("[[:space:]]+","",x)
+          for(n in names(l)){
+            a<-norm(s[[n]]);b<-norm(l[[n]])
+            if(!identical(a,b))stop(sprintf("DIFFERENT %s: %s vs %s",n,substr(a,1,150),substr(b,1,150)))
+            cat(sprintf("PASS %s\n",n))
+          }
+          cat("PASS 26/26 scoping translations match W00 full searches\n")
+          RS
