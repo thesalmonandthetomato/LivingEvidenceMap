@@ -11,6 +11,7 @@ arg <- function(flag, default=NULL) {
 source <- arg("--source")
 run_type <- arg("--run-type")
 query <- arg("--query")
+expected_query_sha256 <- arg("--expected-query-sha256","")
 reported <- suppressWarnings(as.integer(arg("--reported-results")))
 downloaded <- suppressWarnings(as.integer(arg("--downloaded-results")))
 parent_run_id <- arg("--parent-run-id")
@@ -33,6 +34,8 @@ if (any(vapply(req,function(x)is.null(x)||!nzchar(x),logical(1)))) stop("source,
 if (is.na(reported) || reported < 0L) stop("reported-results must be >= 0",call.=FALSE)
 if (is.na(downloaded) || downloaded < 0L) stop("downloaded-results must be >= 0",call.=FALSE)
 if (!(run_type %in% c("full","fortnightly","expansion"))) stop("invalid run-type",call.=FALSE)
+
+if(nzchar(expected_query_sha256) && !identical(tolower(digest(query,algo="sha256",serialize=FALSE)),tolower(expected_query_sha256))) stop("W00: query text differs from archived dispatch checksum",call.=FALSE)
 
 folder <- switch(run_type, full="full_search", fortnightly="fortnightly_update", expansion="ad_hoc")
 stamp <- format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H-%M-%SZ")
@@ -57,6 +60,7 @@ record <- list(
   additional_search_term=if(nzchar(additional_search_term)) additional_search_term else NULL,
   search_string=query,
   dispatched_query_sha256=digest(query,algo="sha256",serialize=FALSE),
+  archived_query_sha256=if(nzchar(expected_query_sha256)) expected_query_sha256 else NULL,
   database_scope=database_scope,
   search_window=if(nzchar(window_from)||nzchar(window_to)) list(
     from=if(nzchar(window_from)) window_from else NULL,
