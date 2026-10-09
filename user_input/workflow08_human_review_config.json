@@ -5,5 +5,10 @@
   "ontology_label": "v3.6",
   "species_config_path": "user_input/workflow05_coding_config.json",
   "exclude_on_deterministic_none": true,
-  "deterministic_none_code": "NONE"
+  "deterministic_none_code": "NONE",
+  "zenodo_creators": [
+    {
+      "name": "Haddaway, Neal"
+    }
+  ]
 }
