@@ -189,6 +189,12 @@ jobs:
           test -s "$CHECKPOINT_DIR/human_review_package/review_manifest.json"
           echo "CHECKPOINT_DIR=$CHECKPOINT_DIR" >> "$GITHUB_ENV"
 
+      - name: Restore verified checkpoint project inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_project_config_snapshot.R --mode restore --archive-dir "$CHECKPOINT_DIR"
+
       - name: Restore previous authoritative Workflow 01 state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
@@ -341,6 +347,12 @@ jobs:
             --previous-root previous_state \
             --delta-dir outputs/delta \
             --output-root outputs/replayed
+
+      - name: Snapshot project inputs in validated delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_project_config_snapshot.R --mode snapshot --archive-dir outputs/delta
 
       - name: Archive only validated delta to Zenodo
         env:
