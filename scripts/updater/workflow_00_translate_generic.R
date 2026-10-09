@@ -97,7 +97,7 @@ render<-function(source,fields=NULL){
     paste(pieces,collapse=" ")
   }
   expr<-if(run_type=="expansion"){
-    sprintf("((%s) AND NOT (%s))",expand_expression(additional),expand_expression())
+    sprintf("((%s) AND NOT (%s))",expand_expression(c(terms[[target]],additional)),expand_expression())
   } else expand_expression()
   if(!is.null(source_filter))expr<-sprintf("SRC:%s AND (%s)",source_filter,expr)
   expr
