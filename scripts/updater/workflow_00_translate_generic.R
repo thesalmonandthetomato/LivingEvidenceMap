@@ -105,7 +105,10 @@ render<-function(source,fields=NULL){
 supported<-c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos",names(ebsco$sources))
 if(length(setdiff(selected,supported)))stop(sprintf("W00: no translator for selected source(s): %s",paste(setdiff(selected,supported),collapse=", ")),call.=FALSE)
 source_names<-selected
-queries<-setNames(lapply(source_names,function(n){
+# Fortnightly overrides are complete source queries. Do not first translate the
+# base strategy: that would incorrectly demand baseline overrides for sources
+# whose dated query has been explicitly supplied.
+queries<-if(run_type=="fortnightly")list() else setNames(lapply(source_names,function(n){
   fields<-if(n%in%names(ebsco$sources))unlist(ebsco$sources[[n]]$search_fields,use.names=FALSE) else NULL
   render(n,fields)
 }),source_names)
