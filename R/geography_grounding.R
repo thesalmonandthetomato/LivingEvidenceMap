@@ -114,6 +114,12 @@ geography_auto_validation <- function(status, llm_failed, luna_iso3c,
                                       evidence_all_grounded,
                                       title, abstract, gazetteer) {
   status <- as.character(status)
+  if (identical(status, "RESOLVED")) {
+    codes <- normalise_iso3_set(luna_iso3c)
+    valid_codes <- unique(toupper(trimws(as.character(gazetteer$iso3c))))
+    if (!length(codes) || any(!codes %in% valid_codes))
+      return(list(valid = FALSE, basis = "invalid_iso3"))
+  }
   if (isTRUE(llm_failed)) return(list(valid = FALSE, basis = "model_failure"))
   if (identical(status, "UNRESOLVED") && !length(normalise_iso3_set(luna_iso3c))) {
     return(list(valid = TRUE, basis = "unresolved_no_country_assign_none"))
