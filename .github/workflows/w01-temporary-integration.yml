@@ -45,7 +45,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          T="$(cat testpath.txt)"
+          T="$RUNNER_TEMP/w01-integration"
+          test -s "$T/pairs.csv"
+          test -s "$T/meta.csv"
           Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
             --combined-decisions "$T/pairs.csv" --manifestation-map "$T/meta.csv" \
             --llm-adjudications "$T/llm.jsonl" --human-decisions "$T/human.jsonl" \
