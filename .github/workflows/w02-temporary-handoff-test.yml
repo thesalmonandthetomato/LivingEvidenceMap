@@ -1,0 +1,61 @@
+name: W02 temporary handoff and enrichment test
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w02-temporary-handoff-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","digest"))
+      - name: Create synthetic W01 output and W02 enrichment
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          t <- file.path(Sys.getenv("RUNNER_TEMP"),"w02-test")
+          dir.create(t,recursive=TRUE,showWarnings=FALSE)
+          writejl <- function(x,p) writeLines(vapply(x,function(z)toJSON(z,auto_unbox=TRUE,null="null"),character(1)),p)
+          old <- list(
+            list(identity=list(record_id="work-a"),canonical=list(doi="10.1234/a",title="Original title",abstract=NULL)),
+            list(identity=list(record_id="work-b"),canonical=list(doi="10.1234/b",title=NULL,abstract=NULL)),
+            list(identity=list(record_id="work-c"),canonical=list(doi="10.1234/c",title="Existing",abstract="Existing abstract"))
+          )
+          writejl(old,file.path(t,"w01.jsonl"))
+          previous <- list(record_id="work-a",input_doi="10.1234/a",abstract=list(value="Prior abstract",provider="europepmc"))
+          writejl(list(previous),file.path(t,"previous.jsonl"))
+          current <- list(record_id="work-b",input_doi="10.1234/b",title=list(value="Recovered title",provider="scopus"),abstract=list(value="Recovered abstract",provider="scopus"))
+          writejl(list(current),file.path(t,"current.jsonl"))
+          stale <- list(record_id="work-c",input_doi="10.1234/WRONG",abstract=list(value="Must not apply",provider="scopus"))
+          writejl(list(stale),file.path(t,"stale.jsonl"))
+      - name: Test previous state, merge, and output inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/w02-test"
+          Rscript scripts/updater/workflow_02_apply_patch.R --input "$T/w01.jsonl" --patch "$T/previous.jsonl" --output "$T/with_previous.jsonl" --report "$T/previous_report.json" --mode fill_missing
+          Rscript scripts/updater/workflow_02_merge_patches.R --previous "$T/previous.jsonl" --current "$T/current.jsonl" --output "$T/cumulative.jsonl"
+          Rscript scripts/updater/workflow_02_apply_patch.R --input "$T/w01.jsonl" --patch "$T/cumulative.jsonl" --output "$T/final.jsonl" --report "$T/final_report.json" --mode fill_missing
+          Rscript scripts/updater/workflow_02_inventory_state.R --input "$T/final.jsonl" --report "$T/inventory.json" --missing-both-queue "$T/missing.jsonl"
+          Rscript -e 'library(jsonlite);t<-commandArgs(TRUE)[1];z<-lapply(readLines(file.path(t,"final.jsonl")),fromJSON,simplifyVector=FALSE);stopifnot(length(z)==3L,z[[1]]$canonical$title=="Original title",z[[1]]$canonical$abstract=="Prior abstract",z[[2]]$canonical$title=="Recovered title",z[[2]]$canonical$abstract=="Recovered abstract",z[[3]]$canonical$abstract=="Existing abstract",all(vapply(z,function(x)!is.null(x$identity$record_id),logical(1))));i<-fromJSON(file.path(t,"inventory.json"));stopifnot(i$canonical_records==3L,i$missing_both==0L)' "$T"
+          echo "PASS: W01 records and IDs preserved; enrichment and earlier changes retained"
+      - name: Reject incorrect DOI and conflicting changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/w02-test"
+          if Rscript scripts/updater/workflow_02_apply_patch.R --input "$T/w01.jsonl" --patch "$T/stale.jsonl" --output "$T/invalid.jsonl" --report "$T/invalid_report.json" --mode exact; then
+            echo "FAIL: incorrect DOI accepted"; exit 1
+          fi
+          Rscript scripts/updater/workflow_02_apply_patch.R --input "$T/w01.jsonl" --patch "$T/stale.jsonl" --output "$T/safe.jsonl" --report "$T/safe_report.json" --mode fill_missing
+          Rscript -e 'library(jsonlite);z<-lapply(readLines(commandArgs(TRUE)[1]),fromJSON,simplifyVector=FALSE);stopifnot(z[[3]]$canonical$abstract=="Existing abstract")' "$T/safe.jsonl"
+          echo "PASS: stale DOI patch blocked without overwriting existing metadata"
