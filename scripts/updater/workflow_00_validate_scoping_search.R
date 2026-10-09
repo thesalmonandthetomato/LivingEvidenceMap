@@ -192,7 +192,7 @@ strategy_file <- file.path(scratch,"strategy.json")
 writeLines(toJSON(list(selected_sources=source_ids),auto_unbox=TRUE),selection_file)
 # When the input consists of two OR-concepts joined by AND, represent those
 # concepts explicitly so scoping uses the same cross-field scope as full W00.
-match <- regexec("^\\\\((.+)\\\\) AND \\\\((.+)\\\\)$",normalised)
+match <- regexec("^\\((.+)\\) AND \\((.+)\\)$",normalised)
 parts <- regmatches(normalised,match)[[1L]]
 is_simple_pair <- length(parts)==3L &&
   !any(grepl("[()]",parts[-1L]))
