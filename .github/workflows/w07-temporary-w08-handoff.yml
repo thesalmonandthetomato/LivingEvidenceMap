@@ -1,0 +1,52 @@
+name: W07 W08 temporary handoff test
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w07-temporary-w08-handoff.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install packages
+        shell: Rscript {0}
+        run: install.packages(c("readr","dplyr","jsonlite","digest","stringr"))
+      - name: Exercise W07 retention and W08 intake
+        shell: Rscript {0}
+        run: |
+          library(readr)
+          library(jsonlite)
+          t<-file.path(Sys.getenv("RUNNER_TEMP"),"w07-w08")
+          dir.create(t)
+          records<-data.frame(record_id=c("coded","include0","exclude0","review0"),title=c("A study in Norway","Biome study","Background review","Climate adaptation"),abstract=c("Study sites in Norway","Wetland ecology","Unrelated literature","Adaptation decisions"))
+          ontology<-data.frame(path_id="BIO_01",level_1="Biome",level_2="Wetlands",hierarchy_path="Biome > Wetlands")
+          scores<-data.frame(record_id="coded",path_id="BIO_01",confidence_n=3,role_a="primary",role_b="primary",role_c="primary")
+          decisions<-list(list(record_id="include0",decision="include"),list(record_id="exclude0",decision="exclude"),list(record_id="review0",decision="uncertain"))
+          write_csv(records,file.path(t,"records.csv"))
+          write_csv(ontology,file.path(t,"ontology.csv"))
+          write_csv(scores,file.path(t,"scores.csv"))
+          writeLines(vapply(decisions,function(z)toJSON(z,auto_unbox=TRUE),character(1)),file.path(t,"zero.jsonl"))
+          args<-c("scripts/updater/workflow07_apply_retention_and_review_rules.R","--scores",file.path(t,"scores.csv"),"--records",file.path(t,"records.csv"),"--ontology",file.path(t,"ontology.csv"),"--zero-rescreen",file.path(t,"zero.jsonl"),"--output-dir",file.path(t,"w07"))
+          stopifnot(system2("Rscript",args)==0L)
+          get<-function(n)read_csv(file.path(t,"w07",n),show_col_types=FALSE)
+          retained<-get("workflow07_topic_pathway_scores_retained.csv")
+          human<-get("workflow07_workflow08_human_review_queue.csv")
+          excluded<-get("workflow07_late_automatic_exclusions.csv")
+          uncoded<-get("workflow07_included_uncoded.csv")
+          stopifnot(identical(retained$path_id[retained$retained_for_analysis],"BIO_01"),identical(human$record_id,"review0"),identical(excluded$record_id,"exclude0"),identical(uncoded$record_id,"include0"))
+          w05<-data.frame(record_id=records$record_id,farmed_species_codes="SPECIES_A",farmed_species="Species A")
+          w06<-data.frame(record_id=records$record_id,geography_status="NONE",luna_iso3c="",luna_country_names="",luna_evidence="",geography_reason="",llm_failed=FALSE,llm_error="",deterministic_primary_countries="",deterministic_primary_iso3c="")
+          write_csv(w05,file.path(t,"w05.csv"))
+          write_csv(w06,file.path(t,"w06.csv"))
+          args<-c("scripts/updater/workflow_08_build_review_queue_dynamic.R","--w05",file.path(t,"w05.csv"),"--w06",file.path(t,"w06.csv"),"--w07-records",file.path(t,"records.csv"),"--w07-review",file.path(t,"w07/workflow07_workflow08_human_review_queue.csv"),"--w07-scores",file.path(t,"w07/workflow07_topic_pathway_scores_retained.csv"),"--w07-late-exclusions",file.path(t,"w07/workflow07_late_automatic_exclusions.csv"),"--output-dir",file.path(t,"w08"))
+          stopifnot(system2("Rscript",args)==0L)
+          stopifnot(file.exists(file.path(t,"w08/workflow08_review_queue_current.jsonl")))
+          stopifnot(file.exists(file.path(t,"w08/workflow08_late_automatic_exclusions.csv")))
+          cat("PASS: W07 outputs consumed by actual W08 intake\n")
