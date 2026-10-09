@@ -1,0 +1,57 @@
+name: Temporary W00-W08 handoff dependency validation
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w00-w08-temporary-handoff-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install YAML support
+        shell: Rscript {0}
+        run: install.packages('yaml')
+      - name: Audit repository paths and workflow-call input contracts
+        shell: Rscript {0}
+        run: |
+          library(yaml)
+          root <- '.github/workflows-inert'
+          files <- list.files(root,pattern='^(_workflow_00|workflow_0[0-8]).*\\.yml$',full.names=TRUE)
+          stopifnot(length(files)>=19L)
+          errors <- character()
+          refs <- 0L
+          calls <- 0L
+          for(p in files){
+            s <- paste(readLines(p,warn=FALSE),collapse='\n')
+            matches <- regmatches(s,gregexpr('(scripts/(updater|reporting)/|R/|user_input/|config/)[[:alnum:]_./-]+\\.(R|py|csv|json|txt|yml)',s,perl=TRUE))[[1]]
+            matches <- unique(matches)
+            for(f in matches){
+              if(grepl('^R/(input_queue|production_manifest|checkpoint_manifest|previous_workflow01_pointer|incremental_rescored_pairs|all_adjudications|human_review_cases)\\.',f))next
+              refs <- refs+1L
+              if(!file.exists(f))errors <- c(errors,paste(p,'missing',f))
+            }
+            y <- yaml.load_file(p,eval.expr=FALSE)
+            jobs <- y$jobs
+            for(job in jobs){
+              use <- job$uses
+              if(is.null(use)||!startsWith(use,'./.github/workflows/'))next
+              calls <- calls+1L
+              target <- file.path(root,sub('^\\./\\.github/workflows/','',use))
+              if(!file.exists(target)){errors<-c(errors,paste(p,'missing reusable workflow',target));next}
+              child <- yaml.load_file(target,eval.expr=FALSE)
+              expected <- names(child[['on']][['workflow_call']][['inputs']])
+              supplied <- names(job[['with']])
+              unexpected <- setdiff(supplied,expected)
+              if(length(unexpected))errors<-c(errors,paste(p,'unexpected reusable-workflow inputs',paste(unexpected,collapse=',')))
+              cat('HANDOFF:',basename(p),'->',basename(target),'\n')
+            }
+          }
+          if(length(errors))stop(paste(errors,collapse='\n'))
+          cat(sprintf('PASS: %d workflow definitions, %d static file references, %d reusable workflow contracts\n',length(files),refs,calls))
