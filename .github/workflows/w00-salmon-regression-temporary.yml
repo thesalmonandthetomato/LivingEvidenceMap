@@ -1,5 +1,5 @@
 name: TEMP W00 salmon query regression
-# rerun after fixing permanent regression checker
+# rerun after fixing legacy Boolean grouping
 on:
   push:
     branches:
