@@ -270,6 +270,16 @@ jobs:
             --config user_input/workflow00_search_strategy.json \
             --output-dir outputs/updater/workflow00_plan
 
+      - name: Prepare database-specific query archive (offline)
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_archive_queries.R \
+            --plan outputs/updater/workflow00_plan/search_plan.json \
+            --strategy user_input/workflow00_search_strategy.json \
+            --run-id "$GITHUB_RUN_ID" \
+            --archive-root docs/search_archive
+
       - name: Record selected databases
         shell: Rscript {0}
         run: |
