@@ -1,4 +1,5 @@
 name: TEMP W00 scoping offline validation
+# retry after scoped Boolean fix
 on:
   push:
     branches: [production-minimal]
