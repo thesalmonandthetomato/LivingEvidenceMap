@@ -1,0 +1,32 @@
+name: W08 obsolete geography override removal test
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w08-temporary-remove-corrections.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Validate no hidden geography overrides
+        shell: Rscript {0}
+        run: |
+          library(utils)
+          f <- "scripts/updater/workflow_08_finalize_canonical_dynamic.R"
+          parse(file=f)
+          txt<-paste(readLines(f),collapse="\n")
+          stopifnot(!grepl("geography_corrections_path",txt,fixed=TRUE))
+          stopifnot(!grepl("geo_correction",txt,fixed=TRUE))
+          stopifnot(!grepl("--geography-corrections",txt,fixed=TRUE))
+          stopifnot(grepl('if(identical(geography$status,"RESOLVED"))validate_geo_set',txt,fixed=TRUE))
+          stopifnot(grepl("geography$workflow08_adjudication",txt,fixed=TRUE))
+          cfg<-jsonlite::fromJSON("user_input/workflow08_human_review_config.json")
+          stopifnot(is.null(cfg$geography_corrections_path),isTRUE(cfg$exclude_on_deterministic_none))
+          cat("PASS: no CSV geography overrides; normal adjudication and canonical contract retained\n")
