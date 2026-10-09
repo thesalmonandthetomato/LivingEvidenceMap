@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-suppressPackageStartupMessages(library(jsonlite))
+suppressPackageStartupMessages({library(jsonlite);library(digest)})
 
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag, default=NULL) {
@@ -56,6 +56,7 @@ record <- list(
   search_version=if(nzchar(search_version)) search_version else NULL,
   additional_search_term=if(nzchar(additional_search_term)) additional_search_term else NULL,
   search_string=query,
+  dispatched_query_sha256=digest(query,algo="sha256",serialize=FALSE),
   database_scope=database_scope,
   search_window=if(nzchar(window_from)||nzchar(window_to)) list(
     from=if(nzchar(window_from)) window_from else NULL,
@@ -94,6 +95,7 @@ md <- c(
   sprintf("- **Run type:** %s", run_type),
   sprintf("- **Search version:** %s", if(nzchar(search_version)) search_version else "not supplied"),
   sprintf("- **Source:** %s", source),
+  sprintf("- **Dispatched query SHA-256:** %s", record$dispatched_query_sha256),
   sprintf("- **Results reported by source:** %d", reported),
   sprintf("- **Results successfully downloaded:** %d", downloaded),
   sprintf("- **Complete download:** %s", if(reported==downloaded) "yes" else "no"),
