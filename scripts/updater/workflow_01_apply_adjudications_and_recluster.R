@@ -195,14 +195,13 @@ explicit_key_group <- character()
 explicit_key_target <- character()
 explicit_key_correction <- character()
 explicit_split_audit <- list()
-if(!is.null(explicit_splits_path)){
-  if(!file.exists(explicit_splits_path)) stop("Explicit cluster split registry not found",call.=FALSE)
+if(!is.null(explicit_splits_path) && file.exists(explicit_splits_path) && file.info(explicit_splits_path)$size>0L){
   explicit_split_cfg <- fromJSON(explicit_splits_path,simplifyVector=FALSE)
   if(!identical(explicit_split_cfg$schema,"living-evidence-map-workflow01-explicit-cluster-splits-v1")) {
     stop("Unsupported explicit cluster split schema",call.=FALSE)
   }
   corrections <- explicit_split_cfg$corrections
-  if(!length(corrections)) stop("Explicit cluster split registry contains no corrections",call.=FALSE)
+  if(is.null(corrections)) corrections <- list()
   explicit_split_ids <- vapply(corrections,function(x)as.character(x$previous_cluster_id),character(1))
   if(anyDuplicated(explicit_split_ids)) stop("Explicit split registry repeats previous_cluster_id",call.=FALSE)
 
