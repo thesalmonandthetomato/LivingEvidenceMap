@@ -11,12 +11,12 @@ new<-fromJSON(generic_path,simplifyVector=FALSE)
 stopifnot(identical(unlist(old$species_terms,use.names=FALSE),unlist(new$concepts$species$terms,use.names=FALSE)))
 stopifnot(identical(unlist(old$farm_terms,use.names=FALSE),unlist(new$concepts$farming$terms,use.names=FALSE)))
 stopifnot(identical(new$expression,"species AND farming"))
-repo_root<-normalizePath(".",mustWork=TRUE)
 workspace<-tempfile("w00-salmon-equivalence-")
 dir.create(workspace,recursive=TRUE)
-on.exit(unlink(workspace,recursive=TRUE),add=TRUE)
+
 sel<-file.path(workspace,"selection.json")
-sources<-c("lens","scopus","agricola","pubmed","ethos","cba","epmc_preprints","wos")
+catalogue<-fromJSON("config/workflow00_ebsco_sources.json",simplifyVector=FALSE)
+sources<-c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos",names(catalogue$sources))
 writeLines(toJSON(list(selected_sources=as.list(sources)),auto_unbox=TRUE),sel)
 old_out<-file.path(workspace,"legacy")
 new_out<-file.path(workspace,"generic")
@@ -32,6 +32,7 @@ candidate<-fromJSON(file.path(new_out,"source_queries.json"),simplifyVector=FALS
 # Compare meaningful query syntax ignoring superficial whitespace and redundant grouping.
 normalise<-function(s)gsub("[[:space:]]+","",s,perl=TRUE)
 mismatches<-sources[!vapply(sources,function(n)identical(normalise(original[[n]]),normalise(candidate[[n]])),logical(1))]
+unlink(workspace,recursive=TRUE)
 for(src in sources){
   cat(sprintf("%s: %s\n",src,if(src%in%mismatches)"DIFFERENT":"EXACT EXCEPT WHITESPACE"))
 }
