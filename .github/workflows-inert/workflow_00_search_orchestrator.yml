@@ -290,16 +290,6 @@ jobs:
               --output-dir outputs/updater/workflow00_plan
           fi
 
-      - name: Prepare database-specific query archive (offline)
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_00_archive_queries.R \
-            --plan outputs/updater/workflow00_plan/search_plan.json \
-            --strategy user_input/workflow00_search_strategy.json \
-            --run-id "$GITHUB_RUN_ID" \
-            --archive-root docs/search_archive
-
       - name: Record selected databases
         shell: Rscript {0}
         run: |
@@ -313,13 +303,27 @@ jobs:
           x$source_selection <- fromJSON(s,simplifyVector=FALSE)
           writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null='null'),p)
 
+      - name: Prepare database-specific query archive (offline)
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_archive_queries.R \
+            --plan outputs/updater/workflow00_plan/search_plan.json \
+            --strategy user_input/workflow00_search_strategy.json \
+            --run-id "$GITHUB_RUN_ID" \
+            --archive-root outputs/updater/workflow00_plan/search_archive
+          Rscript scripts/updater/workflow_00_read_archived_queries.R \
+            --archive "outputs/updater/workflow00_plan/search_archive/run-$GITHUB_RUN_ID" \
+            --source-selection outputs/updater/workflow00_plan/source_selection.json \
+            --output outputs/updater/workflow00_plan/archived_selected_queries.json
+
       - name: Export source queries
         id: out
         shell: Rscript {0}
         run: |
           library(jsonlite)
           p <- fromJSON('outputs/updater/workflow00_plan/search_plan.json')
-          q <- p$source_queries
+          q <- fromJSON('outputs/updater/workflow00_plan/archived_selected_queries.json')
           emit <- function(name,value) {
             cat(sprintf('%s<<EOF\n%s\nEOF\n',name,value),file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
           }
