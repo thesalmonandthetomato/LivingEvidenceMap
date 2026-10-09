@@ -1,0 +1,57 @@
+name: W02 temporary API enrichment and W03 handoff test
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w02-temporary-live-enrichment.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","digest","httr2","stringdist"))
+      - name: Create disposable records
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          t <- file.path(Sys.getenv("RUNNER_TEMP"),"w02-api")
+          dir.create(t,recursive=TRUE,showWarnings=FALSE)
+          docs <- list(
+            list(identity=list(record_id="work-europepmc"),canonical=list(doi="10.1038/nature12373",title=NULL,abstract=NULL),manifestations=list(list(source="alpha",source_record_id="a1"))),
+            list(identity=list(record_id="work-scopus"),canonical=list(doi="10.1145/3290605.3300233",title=NULL,abstract=NULL),manifestations=list(list(source="beta",source_record_id="b1")))
+          )
+          writeLines(vapply(docs,function(x)toJSON(x,auto_unbox=TRUE,null="null"),character(1)),file.path(t,"w01.jsonl"))
+      - name: Run actual Europe PMC and Scopus enrichment
+        env:
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SCOPUS_API_TOKEN:-}" ] || [ -z "${SCOPUS_INSTTOKEN:-}" ]; then
+            echo "Scopus secrets unavailable: cannot verify live Scopus calls"; exit 1
+          fi
+          T="$RUNNER_TEMP/w02-api"
+          Rscript scripts/updater/workflow_02_metadata_enrichment.R \
+            --input "$T/w01.jsonl" --output "$T/enriched.jsonl" \
+            --audit "$T/audit.jsonl" --report "$T/report.json" \
+            --delay 0 --limit 2
+          Rscript -e 'library(jsonlite);t<-commandArgs(TRUE)[1];x<-fromJSON(file.path(t,"report.json"),simplifyVector=FALSE);z<-lapply(readLines(file.path(t,"audit.jsonl")),fromJSON,simplifyVector=FALSE);stopifnot(identical(unlist(x$provider_order),c("europe_pmc","scopus")),x$processed_eligible_records==2L,x$counts$scopus_attempted>=1L,length(z)==2L);cat("PASS: both API paths attempted; check outcome details in enrichment report\n")' "$T"
+      - name: Verify W02 patch and W03 lean handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/w02-api"
+          Rscript scripts/updater/workflow_02_build_patch.R --input "$T/w01.jsonl" --enriched "$T/enriched.jsonl" --audit "$T/audit.jsonl" --enrichment-report "$T/report.json" --patch "$T/patch.jsonl" --retry-queue "$T/retry.jsonl" --report "$T/patch-report.json"
+          Rscript scripts/updater/workflow_02_apply_patch.R --input "$T/w01.jsonl" --patch "$T/patch.jsonl" --output "$T/replayed.jsonl" --report "$T/replay-report.json" --mode exact
+          Rscript scripts/updater/workflow_02_compact_post_w02_canonical.R --input "$T/replayed.jsonl" --output "$T/canonical_lean.jsonl" --report "$T/lean-report.json"
+          Rscript -e 'library(jsonlite);t<-commandArgs(TRUE)[1];e<-lapply(readLines(file.path(t,"enriched.jsonl")),fromJSON,simplifyVector=FALSE);r<-lapply(readLines(file.path(t,"replayed.jsonl")),fromJSON,simplifyVector=FALSE);l<-lapply(readLines(file.path(t,"canonical_lean.jsonl")),fromJSON,simplifyVector=FALSE);stopifnot(identical(e,r),length(l)==2L,all(vapply(l,function(z)length(z$manifestation_refs)==1L && is.null(z$manifestations),logical(1))),identical(vapply(e,function(z)z$identity$record_id,character(1)),vapply(l,function(z)z$identity$record_id,character(1))))' "$T"
+          echo "PASS: W02 output reconstructs and compacts correctly for W03"
