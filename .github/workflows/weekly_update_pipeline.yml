@@ -1,8 +1,6 @@
 name: Weekly evidence-map update
 
 on:
-  schedule:
-    - cron: '0 3 * * 1'
   workflow_dispatch:
     inputs:
       ris_path:
