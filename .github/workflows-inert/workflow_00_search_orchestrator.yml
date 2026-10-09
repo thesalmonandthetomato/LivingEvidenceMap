@@ -262,6 +262,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          Rscript scripts/updater/workflow_00_validate_search_strategy.R \
+            --config user_input/workflow00_search_strategy.json
           Rscript scripts/updater/workflow_00_search_orchestrator.R \
             --run-type '${{ inputs.run_type }}' \
             --additional-search-term '${{ inputs.additional_search_term }}' \
