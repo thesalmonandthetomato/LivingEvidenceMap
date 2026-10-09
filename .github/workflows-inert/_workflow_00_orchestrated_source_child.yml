@@ -12,6 +12,9 @@ on:
       query:
         required: true
         type: string
+      query_sha256:
+        required: true
+        type: string
       parent_run_id:
         required: true
         type: string
@@ -40,7 +43,7 @@ permissions:
   actions: read
 
 env:
-  WORKFLOW00_ORCHESTRATOR_BRANCH: workflow01-final-architecture
+  WORKFLOW00_ORCHESTRATOR_BRANCH: production-minimal
 
 jobs:
   search:
@@ -60,12 +63,6 @@ jobs:
           ref: ${{ steps.impl.outputs.branch }}
           persist-credentials: false
 
-      - name: Fetch common Workflow 00 documentation writer
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
-          git show origin/$WORKFLOW00_ORCHESTRATOR_BRANCH:scripts/updater/write_workflow00_search_record.R > /tmp/write_workflow00_search_record.R
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
@@ -82,6 +79,7 @@ jobs:
           SOURCE: ${{ inputs.source }}
           RUN_TYPE: ${{ inputs.run_type }}
           SEARCH_QUERY: ${{ inputs.query }}
+          ARCHIVED_QUERY_SHA256: ${{ inputs.query_sha256 }}
           LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
           SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
           SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
@@ -248,6 +246,7 @@ jobs:
           SOURCE: ${{ inputs.source }}
           RUN_TYPE: ${{ inputs.run_type }}
           SEARCH_QUERY: ${{ inputs.query }}
+          ARCHIVED_QUERY_SHA256: ${{ inputs.query_sha256 }}
           PARENT_RUN_ID: ${{ inputs.parent_run_id }}
           SEARCH_VERSION: ${{ inputs.search_version }}
           ADDITIONAL_SEARCH_TERM: ${{ inputs.additional_search_term }}
@@ -258,6 +257,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          expected_hash="$ARCHIVED_QUERY_SHA256"
+          actual_hash="$(Rscript -e 's<-Sys.getenv("SEARCH_QUERY");cat(digest::digest(s,algo="sha256",serialize=FALSE))')"
+          if [ "$actual_hash" != "$expected_hash" ]; then
+            echo "W00 query checksum mismatch before writing search record" >&2
+            exit 1
+          fi
           documented_query="$SEARCH_QUERY"
           if [ "$SOURCE" = "wos" ] && [ "$RUN_TYPE" = "fortnightly" ]; then
             documented_query="$SEARCH_QUERY ; modifiedTimeSpan=$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE"
@@ -269,7 +274,7 @@ jobs:
             new_native="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/updater/source_delta/reconciliation_manifest.json");cat(as.integer(x$new_native_ids))')"
             native_args=(--known-native-results "$known_native" --new-native-results "$new_native")
           fi
-          Rscript /tmp/write_workflow00_search_record.R --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_SEARCH_TERM" --artifact-name "workflow00-${SOURCE}-harvest-${PARENT_RUN_ID}" --orchestrator-sha "$implementation_sha" --source-handler-sha "$implementation_sha" --window-from "$FORTNIGHTLY_FROM_DATE" --window-to "$FORTNIGHTLY_TO_DATE" --source-manifest outputs/updater/source_child/manifest.json "${native_args[@]}" --output-root outputs/updater/search_record
+          Rscript scripts/updater/write_workflow00_search_record.R --expected-query-sha256 "$ARCHIVED_QUERY_SHA256" --source "$SOURCE" --run-type "$RUN_TYPE" --query "$documented_query" --reported-results "$REPORTED" --downloaded-results "$DOWNLOADED" --parent-run-id "$PARENT_RUN_ID" --search-version "$SEARCH_VERSION" --additional-search-term "$ADDITIONAL_SEARCH_TERM" --artifact-name "workflow00-${SOURCE}-harvest-${PARENT_RUN_ID}" --orchestrator-sha "$implementation_sha" --source-handler-sha "$implementation_sha" --window-from "$FORTNIGHTLY_FROM_DATE" --window-to "$FORTNIGHTLY_TO_DATE" --source-manifest outputs/updater/source_child/manifest.json "${native_args[@]}" --output-root outputs/updater/search_record
 
       - name: Upload source harvest
         uses: actions/upload-artifact@v4
