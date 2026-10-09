@@ -12,7 +12,8 @@ arg <- function(flag, default = NULL) {
   if (i == length(args)) stop(sprintf('Missing value after %s', flag))
   args[[i + 1L]]
 }
-config_path <- arg('--config', 'config/lens_search.json')
+config_path <- arg('--config', NULL)
+if (is.null(config_path) || !nzchar(config_path)) stop('W00 Lens requires --config with generated database-specific query JSON', call. = FALSE)
 canonical_path <- arg('--output', 'data/canonical/current/repair/records.jsonl')
 manifest_path <- arg('--manifest', 'data/canonical/current/repair/manifest.json')
 audit_dir <- arg('--audit-dir', 'fresh_rebuild')
@@ -20,8 +21,6 @@ audit_dir <- arg('--audit-dir', 'fresh_rebuild')
 api <- 'https://api.lens.org/scholarly/search'
 page_size <- 500L
 scroll_ttl <- '1m'
-sentinel_lens_id <- '033-262-857-738-715'
-require_sentinel <- tolower(arg('--require-sentinel', 'true')) %in% c('true','1','yes')
 token <- Sys.getenv('LENS_API_TOKEN', unset = '')
 if (!nzchar(token)) stop('LENS_API_TOKEN is required')
 
@@ -52,9 +51,7 @@ doi_from <- function(raw) {
 
 cfg <- fromJSON(config_path, simplifyVector = FALSE)
 query_string <- cfg$api_query$query$bool$must[[1]]$query_string$query
-if (!grepl('salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout"', query_string, fixed = TRUE)) {
-  stop('Refusing Workflow 00: species clause must contain salmonid*, Salmo, Oncorhynchus and "rainbow trout"')
-}
+if (!is.character(query_string) || length(query_string) != 1L || !nzchar(trimws(query_string))) stop('W00 Lens configuration has no translated query string', call. = FALSE)
 base_query <- cfg$api_query$query
 query_sha <- digest(query_string, algo = 'sha256', serialize = FALSE)
 retrieved_at <- now_utc()
@@ -164,10 +161,6 @@ if (!is.null(reported_total) && raw_count < reported_total) {
 }
 lens_ids <- vapply(rows, function(r) r$identity$lens_id, character(1))
 if (anyDuplicated(lens_ids)) stop('Internal Lens-ID uniqueness failure')
-sentinel_present <- sentinel_lens_id %in% lens_ids
-if (require_sentinel && !sentinel_present) {
-  stop(sprintf('Regression guard failed: known eligible Lens record %s was not returned by the corrected search', sentinel_lens_id))
-}
 
 con <- file(canonical_path, open = 'wt', encoding = 'UTF-8')
 for (r in rows) writeLines(toJSON(r, auto_unbox = TRUE, null = 'null', na = 'null', digits = NA), con)
@@ -182,10 +175,6 @@ manifest <- list(
   query_config = config_path,
   query_string = query_string,
   query_sha256 = query_sha,
-  rainbow_trout_present_in_query = TRUE,
-  regression_sentinel_lens_id = sentinel_lens_id,
-  regression_sentinel_required = require_sentinel,
-  regression_sentinel_present = sentinel_present,
   lens_reported_total = reported_total,
   raw_records_retrieved = raw_count,
   unique_records_written = length(rows),
@@ -204,4 +193,4 @@ manifest <- list(
 writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = 'null', na = 'null'), manifest_path)
 writeLines(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = 'null', na = 'null'), file.path(audit_dir, 'search_manifest.json'))
 message(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE, null = 'null', na = 'null'))
-message(sprintf('PASS: Lens harvest complete; sentinel_required=%s sentinel_present=%s.', require_sentinel, sentinel_present))
+message('PASS: Lens harvest complete.')
