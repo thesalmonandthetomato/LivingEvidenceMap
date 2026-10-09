@@ -54,7 +54,7 @@ screen_one <- function(row,pass){
   user_text <- paste0(
     "CODING CONTEXT\nThree independent Workflow 07 Luna topic-coding passes assigned zero topic codes to this record.\n\n",
     "TITLE\n",title,"\n\nABSTRACT\n",abstract,
-    "\n\nAssess only whether there is sufficient evidence of linkage to eligible commercial salmon/rainbow-trout farming for inclusion."
+    "\n\nApply the eligibility criteria defined in the system prompt. Return include, exclude or uncertain."
   )
   tryCatch({
     body <- list(
