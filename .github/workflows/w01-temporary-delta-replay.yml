@@ -1,0 +1,62 @@
+name: W01 temporary delta replay test
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w01-temporary-delta-replay.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install packages
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest"))
+      - name: Prepare small previous and current states
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          library(jsonlite)
+          library(digest)
+          t <- file.path(Sys.getenv("RUNNER_TEMP"),"w01-delta")
+          old <- file.path(t,"old")
+          cur <- file.path(t,"current")
+          for (d in c(file.path(old,"workflow01_seed"),file.path(old,"workflow01_full_five_source"),file.path(old,"canonical"),file.path(cur,"workflow01_seed"),file.path(cur,"workflow01_full_five_source"),file.path(cur,"canonical"))) dir.create(d,recursive=TRUE,showWarnings=FALSE)
+          writeLines('{"source":"alpha","id":"a1"}',file.path(old,"workflow01_seed","alpha_records_for_deduplication.jsonl"))
+          writeLines(c('{"source":"alpha","id":"a1"}','{"source":"alpha","id":"a2"}'),file.path(cur,"workflow01_seed","alpha_records_for_deduplication.jsonl"))
+          fwrite(data.table(pair_key="1::2",record_i=1L,record_j=2L,rescored_classification="not_duplicate",rescored_rule="old"),file.path(old,"workflow01_full_five_source","final_pair_decisions.csv"))
+          fwrite(data.table(pair_key=c("1::2","2::3"),record_i=c(1L,2L),record_j=c(2L,3L),rescored_classification=c("duplicate","not_duplicate"),rescored_rule=c("human","new")),file.path(cur,"workflow01_full_five_source","final_pair_decisions.csv"))
+          fwrite(data.table(idx=1L,source="alpha",source_record_id="a1",cluster_id="work-a",cluster_size=1L),file.path(old,"workflow01_full_five_source","manifestation_cluster_map.csv"))
+          fwrite(data.table(idx=1:2,source="alpha",source_record_id=c("a1","a2"),cluster_id=c("work-a","work-b"),cluster_size=c(1L,1L)),file.path(cur,"workflow01_full_five_source","manifestation_cluster_map.csv"))
+          for (d in c(old,cur)) writeLines("",file.path(d,"workflow01_full_five_source","abstract_strip_actions.jsonl"))
+          writeLines('{"identity":{"record_id":"work-a"},"title":"Old"}',file.path(old,"canonical","records.jsonl"))
+          writeLines(c('{"identity":{"record_id":"work-a"},"title":"Updated"}','{"identity":{"record_id":"work-b"},"title":"New"}'),file.path(cur,"canonical","records.jsonl"))
+          writeLines('{"status":"final"}',file.path(cur,"workflow01_full_five_source","summary.json"))
+          writeLines('{"status":"published","state":"final","github_run_id":"previous","zenodo_record_id":"synthetic","doi":"synthetic","manifest_sha256":"synthetic"}',file.path(t,"previous_pointer.json"))
+          canonical <- file.path(cur,"canonical","records.jsonl")
+          writeLines(toJSON(list(records=2L,source_manifestations=2L,canonical_jsonl_sha256=digest(file=canonical,algo="sha256",serialize=FALSE),canonical_jsonl_bytes=as.numeric(file.info(canonical)$size)),auto_unbox=TRUE),file.path(cur,"canonical","canonical_manifest.json"))
+      - name: Build and replay W01 delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/w01-delta"
+          Rscript scripts/updater/workflow_01_build_delta.R \
+            --previous-root "$T/old" \
+            --current-seed-root "$T/current/workflow01_seed" \
+            --current-final-root "$T/current/workflow01_full_five_source" \
+            --current-canonical "$T/current/canonical/records.jsonl" \
+            --current-canonical-manifest "$T/current/canonical/canonical_manifest.json" \
+            --previous-pointer "$T/previous_pointer.json" \
+            --output-dir "$T/delta" --run-id synthetic-run
+          Rscript scripts/updater/workflow_01_replay_delta.R \
+            --previous-root "$T/old" --delta-dir "$T/delta" --output-root "$T/replayed"
+          cmp "$T/current/workflow01_seed/alpha_records_for_deduplication.jsonl" "$T/replayed/workflow01_seed/alpha_records_for_deduplication.jsonl"
+          cmp "$T/current/canonical/records.jsonl" "$T/replayed/canonical/records.jsonl"
+          Rscript -e 'library(data.table);t<-commandArgs(TRUE)[1];a<-fread(file.path(t,"current/workflow01_full_five_source/manifestation_cluster_map.csv"));b<-fread(file.path(t,"replayed/workflow01_full_five_source/manifestation_cluster_map.csv"));stopifnot(isTRUE(all.equal(a[order(source,source_record_id)],b[order(source,source_record_id)],check.attributes=FALSE)));p<-fread(file.path(t,"replayed/workflow01_full_five_source/final_pair_decisions.csv"));stopifnot(nrow(p)==2L,p$rescored_classification[p$pair_key=="1::2"]=="duplicate");m<-jsonlite::fromJSON(file.path(t,"replayed/workflow01_delta_replay_audit.json"));stopifnot(m$status=="PASS")' "$T"
+          echo "PASS: full W01 delta replay matches expected records, clusters and pair decisions"
