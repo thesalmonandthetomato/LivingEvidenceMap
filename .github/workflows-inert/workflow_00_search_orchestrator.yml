@@ -281,6 +281,7 @@ jobs:
               --expansion-target '${{ inputs.expansion_target }}' \
               --additional-search-term '${{ inputs.additional_search_term }}' \
               --config user_input/workflow00_search_strategy.json \
+              --source-selection outputs/updater/workflow00_plan/source_selection.json \
               --output-dir outputs/updater/workflow00_plan
           else
             Rscript scripts/updater/workflow_00_search_orchestrator.R \
