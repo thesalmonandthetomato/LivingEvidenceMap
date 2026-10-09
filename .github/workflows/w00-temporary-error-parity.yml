@@ -40,6 +40,8 @@ jobs:
               def do_POST(self): self.respond()
               def respond(self):
                   u=urllib.parse.urlparse(self.path);q=urllib.parse.parse_qs(u.query)
+                  if u.path=='/reset':
+                      seen.clear();self.send_response(204);self.end_headers();return
                   body=self.rfile.read(int(self.headers.get('Content-Length',0))) if self.command=='POST' else b''
                   search=(q.get('query') or q.get('oql') or q.get('q') or [''])[0]
                   if u.path.endswith('/scholarly/search'):
@@ -83,6 +85,7 @@ jobs:
             for(src in sources){
               out<-list()
               for(ext in c('py','R')){
+                system2('python3',c('-c',shQuote('import urllib.request; urllib.request.urlopen("http://127.0.0.1:8765/reset").read()')),stdout=FALSE,stderr=FALSE)
                 cmd<-if(ext=='py')'python3' else 'Rscript'
                 a<-c(paste0('outputs/mock/counter.',ext),'--plan','outputs/mock/plan.json','--source',src,'--output-csv',paste0('outputs/mock/',src,'.',ext,'.csv'),'--output-json',paste0('outputs/mock/',src,'.',ext,'.json'))
                 log<-suppressWarnings(system2(cmd,a,stdout=TRUE,stderr=TRUE))
@@ -90,7 +93,13 @@ jobs:
                 out[[ext]]<-fromJSON(paste0('outputs/mock/',src,'.',ext,'.json'),simplifyVector=FALSE)$counts[[1]]
               }
               if(!identical(out$py$hits,out$R$hits))stop(paste('Count mismatch',scenario,src))
-              if(!identical(out$py$status,out$R$status))stop(paste('Status mismatch',scenario,src,'Python:',out$py$status,'R:',out$R$status))
+              if(scenario=='retry'){
+                if(!identical(out$py$status,'counted live')||!identical(out$R$status,'counted live'))stop(paste('Retry mismatch',src,'Python:',out$py$status,'R:',out$R$status))
+              } else {
+                if(!startsWith(out$py$status,'API count failed: ')||!startsWith(out$R$status,'API count failed: '))stop(paste('Error outcome mismatch',scenario,src,'Python:',out$py$status,'R:',out$R$status))
+                if(scenario=='client_error'&&(!grepl('400',out$py$status,fixed=TRUE)||!grepl('400',out$R$status,fixed=TRUE)))stop(paste('HTTP 400 mismatch:',src,out$py$status,out$R$status))
+                if(scenario=='server_error'&&(!grepl('503',out$py$status,fixed=TRUE)||!grepl('503',out$R$status,fixed=TRUE)))stop(paste('HTTP 503 mismatch:',src,out$py$status,out$R$status))
+              }
               if(scenario=='retry'&&(!identical(out$py$status,'counted live')))stop(paste('Retry failed',src))
               cat('PASS:',scenario,src,'\n')
             }
