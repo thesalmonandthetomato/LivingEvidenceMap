@@ -92,7 +92,7 @@ render<-function(source,fields=NULL){
     is_pair<-length(tokens)==3L && tokens[[2L]]=="AND" &&
       tokens[[1L]]%in%names(vals) && tokens[[3L]]%in%names(vals)
     if(is_pair){
-      pair_expr<-sprintf("((%s) AND (%s))",
+      pair_expr<-sprintf("(%s) AND (%s)",
         paste(vals[[tokens[[1L]]]],collapse=" OR "),
         paste(vals[[tokens[[3L]]]],collapse=" OR "))
     } else pair_expr<-expr
@@ -103,7 +103,7 @@ render<-function(source,fields=NULL){
     }
     if(source=="wos"){
       if(is_pair)return(paste(vapply(c("TI","AB","AK"),function(field)
-        sprintf("(%s=%s)",field,pair_expr),character(1)),collapse=" OR "))
+        sprintf("(%s=(%s))",field,pair_expr),character(1)),collapse=" OR "))
       return(paste(vapply(c("TI","AB","AK"),function(field)sprintf("%s=(%s)",field,expr),character(1)),collapse=" OR "))
     }
     if(source=="lens"&&is_pair){
