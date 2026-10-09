@@ -98,7 +98,7 @@ jobs:
             parse(file='scripts/updater/workflow_07_merge_incremental_topics.R')
             parse(file='scripts/updater/workflow_07_prepare_zero_rescreen_incremental.R')
             parse(file='scripts/updater/workflow_07_merge_zero_rescreen_incremental.R')
-            parse(file='scripts/reporting/workflow07_apply_retention_and_review_rules.R')
+            parse(file='scripts/updater/workflow07_apply_retention_and_review_rules.R')
             parse(file='scripts/updater/workflow_07_archive_state_to_zenodo.R')
           "
 
@@ -385,7 +385,7 @@ jobs:
             : > outputs/zero-${{ matrix.shard }}/final_rescreen.jsonl
             SHARD="${{ matrix.shard }}" OUT="outputs/zero-${{ matrix.shard }}/summary.json" Rscript -e 'jsonlite::write_json(list(records=0L,shard_index=as.integer(Sys.getenv("SHARD")),shard_count=4L),Sys.getenv("OUT"),auto_unbox=TRUE,pretty=TRUE)'
           else
-            Rscript scripts/reporting/workflow07_zero_topic_targeted_rescreen.R               --input "$Q"               --output-dir outputs/zero-${{ matrix.shard }}               --model gpt-5.6-luna               --shard-index ${{ matrix.shard }}               --shard-count 4
+            Rscript scripts/updater/workflow07_zero_topic_targeted_rescreen.R               --input "$Q"               --output-dir outputs/zero-${{ matrix.shard }}               --model gpt-5.6-luna               --shard-index ${{ matrix.shard }}               --shard-count 4
           fi
 
       - name: Upload zero-topic shard
@@ -432,7 +432,7 @@ jobs:
       - name: Merge fresh zero-topic decisions
         shell: bash
         run: |
-          Rscript scripts/reporting/workflow07_zero_topic_targeted_rescreen_merge.R             --input-root zero_shards             --output-dir outputs/workflow07_zero_fresh             --expected-shards 4
+          Rscript scripts/updater/workflow07_zero_topic_targeted_rescreen_merge.R             --input-root zero_shards             --output-dir outputs/workflow07_zero_fresh             --expected-shards 4
 
       - name: Build complete zero-topic decision state
         shell: bash
@@ -442,7 +442,7 @@ jobs:
       - name: Rebuild deterministic retention and W08 routing
         shell: bash
         run: |
-          Rscript scripts/reporting/workflow07_apply_retention_and_review_rules.R             --scores topic/workflow07_topic_complete/workflow07_topic_pathway_scores.csv             --records topic/workflow07_topic_complete/workflow07_topic_record_summary.csv             --ontology "$TOPIC_ONTOLOGY_PATH"             --zero-rescreen outputs/workflow07_zero_complete/workflow07_zero_topic_targeted_rescreen.jsonl             --output-dir outputs/workflow07_final_qc
+          Rscript scripts/updater/workflow07_apply_retention_and_review_rules.R             --scores topic/workflow07_topic_complete/workflow07_topic_pathway_scores.csv             --records topic/workflow07_topic_complete/workflow07_topic_record_summary.csv             --ontology "$TOPIC_ONTOLOGY_PATH"             --zero-rescreen outputs/workflow07_zero_complete/workflow07_zero_topic_targeted_rescreen.jsonl             --output-dir outputs/workflow07_final_qc
 
       - name: Assemble durable W07 state
         shell: bash
