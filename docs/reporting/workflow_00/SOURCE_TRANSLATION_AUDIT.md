@@ -29,3 +29,25 @@
 - Static R syntax checks and executable dry-run unit tests on a safely isolated branch; no production Actions or API queries until authorised.
 
 **Disposition:** Implementation in progress; none of the adapters or translations are certified for production use by this document.
+
+
+## Source-by-source static verification, 9 October 2026
+
+The categories below distinguish **documented syntax** from **retrieval equivalence**, which cannot be established without controlled provider requests.
+
+| Source | Supported by reviewed provider documentation | Actual implementation and disposition |
+|---|---|---|
+| Lens | Scholarly API query strings support AND/OR/NOT, fielded title/abstract searches and range queries; the `created` field exists. https://docs.api.lens.org/request-scholar.html | Legacy translator appends `created:[from TO to]` for fortnightly retrieval. **Documented field, syntactic approach plausible; exact date window boundaries and matching behaviour not live-tested.** The generic route requires a separately supplied dated override. |
+| Scopus | The Elsevier developer guide documents `orig-load-date aft YYYYMMDD` as date of first indexing in Scopus. https://dev.elsevier.com/tecdoc_ir_cris_vivo.html | Legacy `ORIG-LOAD-DATE AFT` is consistent with documented semantics. The boundary is exclusive; the 14-day overlap plus ID reconciliation is the intended safeguard. **Syntax supported; coverage not live-tested.** |
+| OpenAlex | OpenAlex OQL supports nested text conditions and year comparisons, and accepts OQL at the API root. Its `/query` endpoint validates OQL without searching. https://help.openalex.org/api/oql/ | Legacy current-year through next-year restriction is a **publication-year** window. It is **not equivalent** to a newly indexed/modified-record window and may omit old publications recently incorporated. Keep generic queries explicit; select a deliberate update strategy before enabling generic fortnightly automation. |
+| Europe PMC (AGR/MED/ETH/CBA/PPR) | The Europe PMC query reference lists `FIRST_PDATE` and `CREATION_DATE`. https://europepmc.org/docs/EBI_Europe_PMC_Web_Service_Reference.pdf | W00 uses `FIRST_PDATE` for AGR and `CREATION_DATE` for other source codes. These **represent distinct events**, so metadata must report the exact date semantics per source. Source collection availability and actual date boundary handling remain live tests. |
+| WoS Starter | Clarivate's Starter client documents `modifiedTimeSpan` as an API query parameter, with `YYYY-MM-DD+YYYY-MM-DD` syntax, and disallows it with `db=WOK`. https://github.com/clarivate/wosstarter_python_client | The W00 adapter uses `db=WOS` and passes the date span separately. **Parameter and format supported; freshness means last modification, not necessarily first indexing.** |
+| EBSCO | The EBSCOhost Integration Toolkit exposes a search `query` argument; EDS documentation is **not** sufficient to confirm syntax for this distinct EBSCOhost API. https://eit.ebscohost.com/Pages/MethodDescription.aspx?method=Search&service=%2FServices%2FSearchService.asmx | W00 produces fielded queries using source-specific field tags. **Do not certify their full Boolean compatibility based on EDS documentation alone.** W00 reharvests the full EBSCO query during updates, then reconciles IDs, avoiding an assumed indexing-date field. |
+
+### Concrete defects and decisions
+
+- **Corrected:** the generic translator was not receiving the source-selection JSON from the inert orchestrator. The argument is now passed.
+- **Corrected:** empty or invalid fortnightly overrides previously could pass the presence check. A selected source now requires a non-empty scalar string.
+- **Known limitation, unresolved:** legacy OpenAlex `year` filtering can miss newly added older records. The generic translator remains fail-closed until an explicit update query is given.
+- **Provider-specific exception:** EBSCO update retrieval is a complete query reharvest, not a last-14-days filter.
+- **Unverified:** actual retrieval equivalence, exact NOT semantics, wildcard/phrase behaviour, source filters and complete response-code contracts. These need controlled nonproduction API requests following static R syntax checks.
