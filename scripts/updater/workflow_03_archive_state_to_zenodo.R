@@ -1,6 +1,11 @@
 #!/usr/bin/env Rscript
 suppressPackageStartupMessages({library(httr2);library(jsonlite);library(digest)})
 
+zenodo_config <- jsonlite::fromJSON("user_input/zenodo_config.json",simplifyVector=FALSE)
+zenodo_creators <- zenodo_config$creators
+zenodo_access_right <- as.character(zenodo_config$access_right)
+if(is.null(zenodo_creators)||!length(zenodo_creators)||any(!vapply(zenodo_creators,function(z)!is.null(z$name)&&length(z$name)==1L&&nzchar(trimws(as.character(z$name))),logical(1))))stop("Configure at least one Zenodo creator",call.=FALSE)
+if(length(zenodo_access_right)!=1L||!identical(zenodo_access_right,"restricted"))stop("W00-W08 archives require restricted Zenodo deposits",call.=FALSE)
 args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 state_dir<-normalizePath(arg("--state-dir"),mustWork=TRUE)
@@ -80,8 +85,8 @@ metadata<-list(metadata=list(
   description=paste0("<p>Sparse publication-status surveillance state for Living Evidence Map Workflow 03.</p>",
     "<p>The layer is keyed by stable canonical record_id and is applied to lean canonical SHA-256 <code>",upstream_sha,"</code>.</p>",
     "<p>Records: ",length(lines),"; excluded from Workflow 04: ",as.integer(r$exclude_from_workflow04),"; unresolved evidence conflicts: ",as.integer(r$evidence_conflicts),".</p>"),
-  creators=list(list(name="Haddaway, Neal")),
-  access_right="restricted",
+  creators=zenodo_creators,
+  access_right=zenodo_access_right,
   access_conditions="Files contain bibliographic identifiers and provider-derived publication-status metadata whose redistribution may be restricted by source terms.",
   keywords=list("Living Evidence Map","Workflow 03","publication status","retraction surveillance","OpenAlex",paste0("LivingEvidenceMap-workflow03-run-",source_run_id))
 ))
