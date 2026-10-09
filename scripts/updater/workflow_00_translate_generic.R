@@ -9,12 +9,16 @@ run_type<-arg("--run-type")
 additional<-arg("--additional-search-term","")
 target<-arg("--expansion-target","")
 ebsco_path<-arg("--ebsco-config","config/workflow00_ebsco_sources.json")
-if(!run_type%in%c("full","fortnightly","expansion"))stop("W00: run type must be full, fortnightly, expansion",call.=FALSE)
+if(is.null(run_type)||!run_type%in%c("full","fortnightly","expansion"))stop("W00: run type must be full, fortnightly, expansion",call.=FALSE)
 cfg<-fromJSON(config_path,simplifyVector=FALSE)
 if(is.null(cfg$concepts)&&is.null(cfg$advanced_boolean))stop("W00: new strategy needs concepts/expression or advanced_boolean",call.=FALSE)
 if(run_type=="expansion"&&(!nzchar(target)||!nzchar(additional)))stop("W00 expansion: both --expansion-target and --additional-search-term are required",call.=FALSE)
 if(run_type!="expansion"&&(nzchar(target)||nzchar(additional)))stop("W00: expansion options allowed only in expansion mode",call.=FALSE)
 if(!file.exists(ebsco_path))stop("W00: missing EBSCO source catalogue",call.=FALSE)
+selection_path<-arg("--source-selection")
+if(is.null(selection_path)||!file.exists(selection_path))stop("W00: --source-selection is required to translate only selected databases",call.=FALSE)
+selected<-unlist(fromJSON(selection_path,simplifyVector=FALSE)$selected_sources,use.names=FALSE)
+if(!length(selected)||anyDuplicated(selected))stop("W00: expected unique selected database IDs",call.=FALSE)
 ebsco<-fromJSON(ebsco_path,simplifyVector=FALSE)
 concepts<-cfg$concepts
 simple_term<-function(x){
@@ -86,7 +90,9 @@ render<-function(source,fields=NULL){
   if(!is.null(source_filter))expr<-sprintf("SRC:%s AND (%s)",source_filter,expr)
   expr
 }
-source_names<-c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos",names(ebsco$sources))
+supported<-c("lens","scopus","openalex","agricola","pubmed","ethos","cba","epmc_preprints","wos",names(ebsco$sources))
+if(length(setdiff(selected,supported)))stop(sprintf("W00: no translator for selected source(s): %s",paste(setdiff(selected,supported),collapse=", ")),call.=FALSE)
+source_names<-selected
 queries<-setNames(lapply(source_names,function(n){
   fields<-if(n%in%names(ebsco$sources))unlist(ebsco$sources[[n]]$search_fields,use.names=FALSE) else NULL
   render(n,fields)
