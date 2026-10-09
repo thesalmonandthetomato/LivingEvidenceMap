@@ -9,7 +9,7 @@ prior_records_path<-arg("--prior-records","")
 prior_scores_path<-arg("--prior-scores","")
 prior_manifest_path<-arg("--prior-manifest","")
 ontology_path<-arg("--ontology","user_input/workflow07_topic_ontology.csv")
-prompt_path<-arg("--prompt","data/reference/topic_system_prompt_v3_6.txt")
+prompt_path<-arg("--prompt","user_input/workflow07_topic_system_prompt.txt")
 output_dir<-arg("--output-dir","outputs/workflow07_prepare")
 
 if(is.null(current_path)||!file.exists(current_path))stop("--current is required",call.=FALSE)
