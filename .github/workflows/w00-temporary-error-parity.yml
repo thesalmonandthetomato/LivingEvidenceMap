@@ -1,0 +1,98 @@
+name: Temporary W00 API error parity
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/w00-temporary-error-parity.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","httr2","xml2"))
+      - name: Compare retry, HTTP errors and malformed API counts
+        shell: bash
+        env:
+          LENS_API_TOKEN: TEST
+          SCOPUS_API_TOKEN: TEST
+          SCOPUS_INSTTOKEN: TEST
+          OPENALEX_API_KEY: TEST
+          WOS_STARTER_API: TEST
+          EBSCO_EHOST_UID: TEST
+          EBSCO_EHOST_PWD: TEST
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/mock
+          cat > outputs/mock/server.py <<'PY'
+          import http.server,json,urllib.parse,collections
+          seen=collections.Counter()
+          class Handler(http.server.BaseHTTPRequestHandler):
+              def log_message(self,*args): pass
+              def do_GET(self): self.respond()
+              def do_POST(self): self.respond()
+              def respond(self):
+                  u=urllib.parse.urlparse(self.path);q=urllib.parse.parse_qs(u.query)
+                  body=self.rfile.read(int(self.headers.get('Content-Length',0))) if self.command=='POST' else b''
+                  search=(q.get('query') or q.get('oql') or q.get('q') or [''])[0]
+                  if u.path.endswith('/scholarly/search'):
+                      search=json.loads(body).get('query',{}).get('bool',{}).get('must',[{}])[0].get('query_string',{}).get('query','')
+                  key=(u.path,search);seen[key]+=1
+                  status=429 if search=='retry' and seen[key]<3 else (503 if search=='server_error' else (400 if search=='client_error' else 200))
+                  if search=='malformed': response=b'{"other":1}'
+                  elif u.path.endswith('/scholarly/search'): response=b'{"total":12}'
+                  elif u.path.endswith('/content/search/scopus'): response=b'{"search-results":{"opensearch:totalResults":"34"}}'
+                  elif u.path=='/': response=b'{"meta":{"count":56}}'
+                  elif u.path.endswith('/webservices/rest/search'): response=b'{"hitCount":78}'
+                  elif u.path.endswith('/v1/documents'): response=b'{"metadata":{"total":90}}'
+                  elif u.path.endswith('/Search'): response=b'<SearchResponse><Hits>123</Hits></SearchResponse>'
+                  else: status=404;response=b'not found'
+                  self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(response)));self.end_headers();self.wfile.write(response)
+          http.server.HTTPServer(('127.0.0.1',8765),Handler).serve_forever()
+          PY
+          python3 outputs/mock/server.py &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          python3 - <<'PY'
+          import pathlib
+          base=pathlib.Path('scripts/updater')
+          urls=['https://api.lens.org/scholarly/search','https://api.elsevier.com/content/search/scopus','https://api.openalex.org/','https://www.ebi.ac.uk/europepmc/webservices/rest/search','https://api.clarivate.com/apis/wos-starter/v1/documents','https://eit.ebscohost.com/Services/SearchService.asmx/Search']
+          for ext in ('py','R'):
+              s=(base/('workflow_00_search_scope_counts.'+ext)).read_text()
+              for url in urls:
+                  parts=url.split('://',1)[1].split('/',1)
+                  s=s.replace(url,'http://127.0.0.1:8765/'+(parts[1] if len(parts)>1 else ''))
+              if ext=='py':s=s.replace('time.sleep(min(30, 2 ** attempt))','time.sleep(0.01)')
+              else:s=s.replace('Sys.sleep(min(30, 2^(attempt - 1L)))','Sys.sleep(0.01)')
+              pathlib.Path('outputs/mock/counter.'+ext).write_text(s)
+          PY
+          Rscript - <<'RS'
+          library(jsonlite)
+          cfg<-fromJSON('config/workflow00_ebsco_sources.json',simplifyVector=FALSE)
+          sources<-c('lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',names(cfg$sources))
+          for(scenario in c('retry','client_error','server_error','malformed')){
+            plan<-list(input_path='synthetic',original_search_string=scenario,normalised_search_string=scenario,validation=list(valid=TRUE),source_queries=as.list(setNames(rep(scenario,length(sources)),sources)))
+            writeLines(toJSON(plan,auto_unbox=TRUE,pretty=TRUE),'outputs/mock/plan.json')
+            for(src in sources){
+              out<-list()
+              for(ext in c('py','R')){
+                cmd<-if(ext=='py')'python3' else 'Rscript'
+                a<-c(paste0('outputs/mock/counter.',ext),'--plan','outputs/mock/plan.json','--source',src,'--output-csv',paste0('outputs/mock/',src,'.',ext,'.csv'),'--output-json',paste0('outputs/mock/',src,'.',ext,'.json'))
+                log<-suppressWarnings(system2(cmd,a,stdout=TRUE,stderr=TRUE))
+                if(!is.null(attr(log,'status'))&&attr(log,'status')!=0)stop(paste('Execution failed',src,ext,scenario,paste(log,collapse=' | ')))
+                out[[ext]]<-fromJSON(paste0('outputs/mock/',src,'.',ext,'.json'),simplifyVector=FALSE)$counts[[1]]
+              }
+              if(!identical(out$py$hits,out$R$hits))stop(paste('Count mismatch',scenario,src))
+              if(!identical(out$py$status,out$R$status))stop(paste('Status mismatch',scenario,src,'Python:',out$py$status,'R:',out$R$status))
+              if(scenario=='retry'&&(!identical(out$py$status,'counted live')))stop(paste('Retry failed',src))
+              cat('PASS:',scenario,src,'\n')
+            }
+          }
+          RS
