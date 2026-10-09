@@ -1,4 +1,5 @@
 name: TEMP W00 salmon query regression
+# rerun after fixing permanent regression checker
 on:
   push:
     branches:
