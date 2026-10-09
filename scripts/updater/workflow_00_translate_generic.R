@@ -64,7 +64,20 @@ render<-function(source,fields=NULL){
     if(!is.character(override)||length(override)!=1L||!nzchar(trimws(override)))stop(sprintf("W00: override for %s must be a non-empty string",source),call.=FALSE)
     return(override)
   }
-  if(is.null(concepts))stop(sprintf("W00: %s needs an explicit override for advanced Boolean input",source),call.=FALSE)
+  if(is.null(concepts)){
+    expr<-as.character(cfg$advanced_boolean)
+    if(length(expr)!=1L||!nzchar(trimws(expr)))stop("W00: missing advanced Boolean expression",call.=FALSE)
+    if(source=="openalex")stop("W00: OpenAlex requires an explicit OQL database override",call.=FALSE)
+    if(source=="lens")return(sprintf("(title:(%s) OR abstract:(%s) OR keyword:(%s))",expr,expr,expr))
+    if(source=="scopus")return(sprintf("TITLE-ABS-KEY(%s)",expr))
+    if(source%in%c("agricola","pubmed","ethos","cba","epmc_preprints")){
+      src<-c(agricola="AGR",pubmed="MED",ethos="ETH",cba="CBA",epmc_preprints="PPR")[[source]]
+      return(sprintf("SRC:%s AND TITLE_ABS:(%s)",src,expr))
+    }
+    if(source=="wos")return(paste(vapply(c("TI","AB","AK"),function(tag)sprintf("(%s=(%s))",tag,expr),character(1)),collapse=" OR "))
+    if(!is.null(fields))return(paste0("(",paste(sprintf("%s (%s)",fields,expr),collapse=" OR "),")"))
+    stop(sprintf("W00: unsupported source %s",source),call.=FALSE)
+  }
   # Render the complete Boolean expression inside one search field when the
   # source's legacy grammar scopes AND/OR within that field (Scopus/Europe PMC/WoS).
   plain<-function(vals){
