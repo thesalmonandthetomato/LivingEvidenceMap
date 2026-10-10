@@ -388,6 +388,7 @@ jobs:
           Rscript scripts/updater/workflow_01_identifier_inject_decisions.R \
             --rescored outputs/workflow01_incremental_rescore/rescored_sample.csv \
             --safe-edges outputs/workflow01_identifier_assist/safe_identifier_edges.csv \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
             --output outputs/workflow01_incremental_assisted/identifier_assisted_decisions.csv \
             --audit outputs/workflow01_incremental_assisted/identifier_injection_summary.json
 
