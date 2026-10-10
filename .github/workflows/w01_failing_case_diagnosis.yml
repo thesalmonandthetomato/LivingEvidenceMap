@@ -363,6 +363,16 @@ jobs:
           }
           RS
 
+      - name: Verify exact OpenAlex raw-payload lookup
+        shell: Rscript {0}
+        run: |
+          x <- list(raw_payload_duplicated_in_w01=FALSE)
+          stopifnot(identical(x$raw_payload,FALSE))
+          stopifnot(is.null(x[["raw_payload",exact=TRUE]]))
+          code <- readLines("scripts/updater/workflow_01_build_duplicate_adjudication_cases.R",warn=FALSE)
+          stopifnot(any(grepl('container[["raw_payload", exact = TRUE]]',code,fixed=TRUE)))
+          cat("PASS: exact lookup does not match OpenAlex raw payload metadata flag\\n")
+
       - name: Reproduce original W01 case-builder exception without API calls
         shell: bash
         run: |
