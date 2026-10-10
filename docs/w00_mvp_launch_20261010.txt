@@ -9,3 +9,6 @@ search_version=mvp-salmon-feed-test-v1
 
 retry=2
 preflight_fix=use_configured_r_package_repository
+
+retry=3
+fix=install_missing_digest_and_jsonlite_for_W00_planning
