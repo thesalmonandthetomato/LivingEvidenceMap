@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      dispatch_w01:
+        description: Dispatch W01 after W00; keep false for controlled W00 validation
+        required: false
+        default: false
+        type: boolean
       run_type:
         required: true
         type: string
@@ -80,6 +85,11 @@ on:
     inputs:
       first_run:
         description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
+      dispatch_w01:
+        description: Dispatch W01 after W00; keep false for controlled W00 validation
         required: false
         default: false
         type: boolean
@@ -890,6 +900,7 @@ jobs:
           fi
 
       - name: Trigger Workflow 01 after successful Workflow 00
+        if: ${{ inputs.dispatch_w01 == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
