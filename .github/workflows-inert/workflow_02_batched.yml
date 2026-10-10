@@ -3,6 +3,11 @@ name: Workflow 02 - Batched bibliographic enrichment
 on:
   workflow_call:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       workflow01_pointer_path:
         required: true
         type: string
@@ -53,6 +58,11 @@ on:
         required: true
   workflow_dispatch:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       workflow01_pointer_path:
         description: 'Authoritative Workflow 01 Zenodo pointer'
         required: true
