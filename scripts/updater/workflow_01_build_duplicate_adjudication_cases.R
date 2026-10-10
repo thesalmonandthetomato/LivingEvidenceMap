@@ -81,13 +81,15 @@ authors_text <- function(x) {
   collapse_text(vals)
 }
 
+# Source adapters may store raw_payload as a scalar reference rather than an
+# embedded object. Only named JSON objects support field-level extraction.
+field_object <- function(x) if (is.list(x) && !is.data.frame(x)) x else list()
+
 extract_record <- function(r, expected_source, fallback) {
-  mapped <- if (expected_source=="lens") (r$canonical %||% list()) else (r$mapped_fields %||% list())
-  raw <- if (expected_source=="lens") ((r$lens %||% list())$raw_payload %||% list()) else {
-    container <- r[[expected_source]] %||% list()
-    container$raw_payload %||% list()
-  }
-  enrich <- r$abstract_enrichment %||% list()
+  mapped <- field_object(if (expected_source=="lens") r$canonical else r$mapped_fields)
+  container <- field_object(if (expected_source=="lens") r$lens else r[[expected_source]])
+  raw <- field_object(container$raw_payload)
+  enrich <- field_object(r$abstract_enrichment)
 
   abstract_candidates <- c(
     scalar(mapped$abstract),
