@@ -1,6 +1,10 @@
 name: Temporary isolated integration safety gate
 on:
   workflow_dispatch:
+  push:
+    branches: [production-minimal]
+    paths:
+      - '.github/workflows/w00-w09-temporary-isolated-integration.yml'
 permissions:
   contents: read
 jobs:
