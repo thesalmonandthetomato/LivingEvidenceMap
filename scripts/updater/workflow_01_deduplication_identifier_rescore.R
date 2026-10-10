@@ -115,13 +115,18 @@ meta <- fread(meta_path, na.strings = c("", "NA"))
 if (!"idx" %in% names(meta)) stop("normalised_metadata.csv lacks idx", call. = FALSE)
 setkey(meta, idx)
 
-labels_path <- file.path("data", "validation", "workflow02_v2_human_labels_2026-09-21.csv")
-if (!file.exists(labels_path)) stop("Human validation label file not found", call. = FALSE)
-labels <- fread(labels_path)
-if (!all(c("record_i","record_j","truth") %in% names(labels))) stop("Human validation labels lack required columns", call. = FALSE)
-labels[, pair_key := paste(pmin(record_i, record_j), pmax(record_i, record_j), sep = "::")]
-if (anyDuplicated(labels$pair_key)) stop("Duplicate pair keys in human validation labels", call. = FALSE)
-progress("validation labels loaded", nrow(labels), nrow(labels))
+labels_path <- arg("--benchmark-labels", file.path("data", "validation", "workflow02_v2_human_labels_2026-09-21.csv"))
+benchmark_available <- file.exists(labels_path)
+if (benchmark_available) {
+  labels <- fread(labels_path)
+  if (!all(c("record_i","record_j","truth") %in% names(labels))) stop("Human validation labels lack required columns", call. = FALSE)
+  labels[, pair_key := paste(pmin(record_i, record_j), pmax(record_i, record_j), sep = "::")]
+  if (anyDuplicated(labels$pair_key)) stop("Duplicate pair keys in human validation labels", call. = FALSE)
+  progress("validation labels loaded", nrow(labels), nrow(labels))
+} else {
+  labels <- data.table(record_i=integer(),record_j=integer(),truth=character(),pair_key=character())
+  progress("historical benchmark not supplied; classifier runs without optional evaluation", 0L, 0L)
+}
 
 normalise_visible_title <- function(s) {
   if (is.na(s) || !nzchar(trimws(s))) return(NA_character_)
@@ -700,6 +705,7 @@ summary <- list(
   rescored_classification_counts = as.list(table(x$rescored_classification)),
   changed_by_original_rule = if (nrow(changed_by_rule)) split(changed_by_rule$N, changed_by_rule$rule) else list(),
   remaining_automatic_by_rule = if (nrow(remaining_auto_by_rule)) split(remaining_auto_by_rule$N, remaining_auto_by_rule$rescored_rule) else list(),
+  historical_benchmark_evaluation = if (benchmark_available) "performed" else "not_available",
   historic_human_adjudications_loaded = FALSE,
   candidate_generation_repeated = FALSE,
   source_candidate_artifact_reused = TRUE
