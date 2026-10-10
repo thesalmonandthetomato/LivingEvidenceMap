@@ -217,7 +217,7 @@ if(stage=="W00"){
   s<-list(
     schema="living-evidence-map-current-run-status-v1",
     update_id=paste0("w00-run-",parent),
-    branch="workflow01-final-architecture",
+    branch=Sys.getenv("GITHUB_REF_NAME",unset="main"),
     started_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
     last_updated_at_utc=NULL,
     baseline=baseline,
