@@ -1,6 +1,10 @@
 name: Workflow 00 - Search orchestrator
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/w00_mvp_launch_20261010.txt'
   workflow_call:
     inputs:
       first_run:
@@ -203,7 +207,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case '${{ inputs.run_type }}' in
+          case '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' in
             full|fortnightly|expansion) ;;
             *) echo 'Unsupported Workflow 00 run type' >&2; exit 2 ;;
           esac
@@ -236,7 +240,7 @@ jobs:
 
       - name: Validate explicit first-run contract
         env:
-          LEM_FIRST_RUN: ${{ inputs.first_run || false }}
+          LEM_FIRST_RUN: ${{ github.event_name == 'push' || inputs.first_run || false }}
           LEM_PREVIOUS_POINTER: ""
         shell: bash
         run: |
@@ -291,23 +295,23 @@ jobs:
       - name: Resolve and freeze source selection
         id: selection
         env:
-          W00_GROUP_CORE_MULTIDISCIPLINARY: ${{ inputs.group_core_multidisciplinary }}
-          W00_GROUP_HEALTH_MEDICINE: ${{ inputs.group_health_medicine }}
-          W00_GROUP_ENVIRONMENT_AGRICULTURE: ${{ inputs.group_environment_agriculture }}
-          W00_GROUP_SOCIAL_SCIENCES: ${{ inputs.group_social_sciences }}
-          W00_GROUP_EDUCATION: ${{ inputs.group_education }}
-          W00_GROUP_REGIONAL: ${{ inputs.group_regional }}
-          W00_GROUP_MEDIA_COMMUNICATION: ${{ inputs.group_media_communication }}
-          W00_GROUP_HUMANITIES: ${{ inputs.group_humanities }}
-          W00_GROUP_SPORT_TOURISM: ${{ inputs.group_sport_tourism }}
-          W00_GROUP_GREY_PREPRINTS: ${{ inputs.group_grey_preprints }}
+          W00_GROUP_CORE_MULTIDISCIPLINARY: ${{ github.event_name == 'push' || inputs.group_core_multidisciplinary }}
+          W00_GROUP_HEALTH_MEDICINE: ${{ github.event_name == 'push' || inputs.group_health_medicine }}
+          W00_GROUP_ENVIRONMENT_AGRICULTURE: ${{ github.event_name == 'push' || inputs.group_environment_agriculture }}
+          W00_GROUP_SOCIAL_SCIENCES: ${{ github.event_name == 'push' || inputs.group_social_sciences }}
+          W00_GROUP_EDUCATION: ${{ github.event_name == 'push' || inputs.group_education }}
+          W00_GROUP_REGIONAL: ${{ github.event_name == 'push' || inputs.group_regional }}
+          W00_GROUP_MEDIA_COMMUNICATION: ${{ github.event_name == 'push' || inputs.group_media_communication }}
+          W00_GROUP_HUMANITIES: ${{ github.event_name == 'push' || inputs.group_humanities }}
+          W00_GROUP_SPORT_TOURISM: ${{ github.event_name == 'push' || inputs.group_sport_tourism }}
+          W00_GROUP_GREY_PREPRINTS: ${{ github.event_name == 'push' || inputs.group_grey_preprints }}
           W00_ADDITIONAL_SOURCES: ${{ inputs.additional_sources }}
           W00_EXCLUDE_SOURCES: ${{ inputs.exclude_sources }}
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_00_resolve_source_selection.R \
-            --run-type '${{ inputs.run_type }}' \
+            --run-type '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' \
             --saved data/workflow00/source_selection.json \
             --output outputs/updater/workflow00_plan/source_selection.json \
             --ebsco-config config/workflow00_ebsco_sources.json \
@@ -323,7 +327,7 @@ jobs:
           # Use the generic translator only for explicit named-concept/advanced strategies.
           if Rscript -e 'x<-jsonlite::fromJSON("user_input/workflow00_search_strategy.json",simplifyVector=FALSE);quit(status=if(is.null(x$concepts)&&is.null(x$advanced_boolean))1L else 0L)'; then
             Rscript scripts/updater/workflow_00_translate_generic.R \
-              --run-type '${{ inputs.run_type }}' \
+              --run-type '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' \
               --expansion-target '${{ inputs.expansion_target }}' \
               --additional-search-term '${{ inputs.additional_search_term }}' \
               --config user_input/workflow00_search_strategy.json \
@@ -331,7 +335,7 @@ jobs:
               --output-dir outputs/updater/workflow00_plan
           else
             Rscript scripts/updater/workflow_00_search_orchestrator.R \
-              --run-type '${{ inputs.run_type }}' \
+              --run-type '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' \
               --additional-search-term '${{ inputs.additional_search_term }}' \
               --config user_input/workflow00_search_strategy.json \
               --output-dir outputs/updater/workflow00_plan
@@ -407,7 +411,7 @@ jobs:
     uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
     with:
       source: ${{ matrix.source }}
-      run_type: ${{ inputs.run_type }}
+      run_type: ${{ github.event_name == 'push' && 'full' || inputs.run_type }}
       query: ${{ matrix.query }}
       query_sha256: ${{ matrix.query_sha256 }}
       parent_run_id: ${{ github.run_id }}
@@ -621,7 +625,7 @@ jobs:
             echo "One or more selected child searches did not succeed: ${{ needs.search-sources.result }}" >&2
             exit 1
           fi
-          if [ '${{ inputs.run_type }}' = 'expansion' ] && [ '${{ needs.reconcile-expansion.result }}' != 'success' ]; then
+          if [ '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' = 'expansion' ] && [ '${{ needs.reconcile-expansion.result }}' != 'success' ]; then
             echo "Expansion reconciliation did not succeed: ${{ needs.reconcile-expansion.result }}" >&2
             exit 1
           fi
@@ -715,14 +719,14 @@ jobs:
           mkdir -p docs/search_record
           cp -R downloaded_search_records/* docs/search_record/
 
-          if [ '${{ inputs.run_type }}' = 'expansion' ]; then
+          if [ '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' = 'expansion' ]; then
             cp -R downloaded_expansion_reconciliation/expansion_archive/docs/* docs/
             mkdir -p data/workflow00/source_id_registry
             cp -R downloaded_expansion_reconciliation/expansion_archive/data/workflow00/source_id_registry/* \
               data/workflow00/source_id_registry/
           fi
 
-          if [ '${{ inputs.run_type }}' = 'full' ]; then
+          if [ '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' = 'full' ]; then
             mkdir -p data/workflow00/source_id_registry
             test -s downloaded_plan/source_selection.json
             cp downloaded_plan/source_selection.json data/workflow00/source_selection.json
@@ -737,7 +741,7 @@ jobs:
             done
           fi
 
-          if [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
+          if [ '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' = 'fortnightly' ]; then
             mkdir -p data/workflow00/source_id_registry
             mkdir -p "docs/search_record/fortnightly_update/reconciliation/$GITHUB_RUN_ID"
             IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
@@ -753,10 +757,10 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/search_record
-          if [ '${{ inputs.run_type }}' = 'full' ] || [ '${{ inputs.run_type }}' = 'expansion' ] || [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
+          if [ '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' = 'full' ] || [ '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' = 'expansion' ] || [ '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' = 'fortnightly' ]; then
             git add data/workflow00/source_id_registry
           fi
-          if [ '${{ inputs.run_type }}' = 'full' ]; then
+          if [ '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' = 'full' ]; then
             git add data/workflow00/source_selection.json
           fi
 
@@ -804,7 +808,7 @@ jobs:
         id: stage
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_TYPE: ${{ inputs.run_type }}
+          RUN_TYPE: ${{ github.event_name == 'push' && 'full' || inputs.run_type }}
         shell: bash
         run: |
           set -euo pipefail
@@ -852,7 +856,7 @@ jobs:
           Rscript scripts/updater/workflow_00_archive_to_zenodo.R \
             --staging-root zenodo_staging \
             --run-id "$GITHUB_RUN_ID" \
-            --run-type '${{ inputs.run_type }}' \
+            --run-type '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' \
             --search-version '${{ needs.validate-and-plan.outputs.search_version }}' \
             --sources '${{ steps.stage.outputs.sources }}' \
             --repository "$GITHUB_REPOSITORY" \
@@ -888,7 +892,7 @@ jobs:
           test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
           git pull --ff-only origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
           Rscript scripts/updater/workflow_current_run_status_observer.R \
-            --first-run "${{ inputs.first_run || false }}" \
+            --first-run "${{ github.event_name == 'push' || inputs.first_run || false }}" \
             --force-stage W00 \
             --w00-run-id "$GITHUB_RUN_ID"
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
@@ -914,7 +918,7 @@ jobs:
           fi
 
       - name: Trigger Workflow 01 after successful Workflow 00
-        if: ${{ inputs.dispatch_w01 == true }}
+        if: ${{ github.event_name != 'push' && inputs.dispatch_w01 == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -927,7 +931,7 @@ jobs:
           EXPECTED="w00-run-$GITHUB_RUN_ID"
           ACTUAL="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(as.character(x$update_id))')"
           test "$ACTUAL" = "$EXPECTED"
-          FIRST_RUN="${{ inputs.first_run || false }}"
+          FIRST_RUN="${{ github.event_name == 'push' || inputs.first_run || false }}"
           PREV_W01=""
           if [ "$FIRST_RUN" = "false" ]; then
             PREV_W01="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow01_pointer))')"
