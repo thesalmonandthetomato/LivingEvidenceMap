@@ -71,6 +71,16 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('digest','dplyr','jsonlite','readr','tibble','testthat','httr2','googlesheets4'))
 
+      - name: Validate first-run provenance
+        env:
+          LEM_FIRST_RUN: ${{ inputs.first_run || false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_validate_first_run.R \
+            --stage W05 \
+            --first-run "$LEM_FIRST_RUN"
+
       - name: Validate implementation and vocabulary
         shell: Rscript {0}
         run: |
