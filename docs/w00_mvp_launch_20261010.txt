@@ -1,0 +1,8 @@
+W00 MVP first-run launch
+branch=main
+run_type=full
+first_run=true
+dispatch_w01=false
+source_groups=all_10
+expected_distinct_sources=26
+search_version=mvp-salmon-feed-test-v1
