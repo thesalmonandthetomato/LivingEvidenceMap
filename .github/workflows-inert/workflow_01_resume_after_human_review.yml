@@ -183,6 +183,8 @@ jobs:
             --output-root checkpoint_restore > outputs_checkpoint_dir.txt
           CHECKPOINT_DIR="$(tail -n 1 outputs_checkpoint_dir.txt)"
           test -s "$CHECKPOINT_DIR/checkpoint_manifest.json"
+          FIRST_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("CHECKPOINT_DIR"),"checkpoint_manifest.json"));cat(tolower(as.character(isTRUE(x$first_run))))')"
+          echo "LEM_FIRST_RUN=$FIRST_RUN" >> "$GITHUB_ENV"
           test -s "$CHECKPOINT_DIR/previous_workflow01_pointer.json"
           test -s "$CHECKPOINT_DIR/incremental_rescored_pairs.csv"
           test -s "$CHECKPOINT_DIR/all_adjudications.jsonl"
@@ -196,6 +198,7 @@ jobs:
           Rscript scripts/updater/workflow_01_project_config_snapshot.R --mode restore --archive-dir "$CHECKPOINT_DIR"
 
       - name: Restore previous authoritative Workflow 01 state
+        if: ${{ env.LEM_FIRST_RUN != 'true' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
@@ -209,6 +212,17 @@ jobs:
           test -s previous_state/workflow01_full_five_source/manifestation_cluster_map.csv
           test -s previous_state/canonical/records.jsonl
           test -f previous_state/provenance/cumulative_data_quality_repairs.jsonl
+
+      - name: Initialise empty previous state for first-run resumption
+        if: ${{ env.LEM_FIRST_RUN == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p previous_state/workflow01_seed previous_state/workflow01_full_five_source previous_state/provenance
+          : > previous_state/provenance/cumulative_data_quality_repairs.jsonl
+          : > previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl
+          : > previous_state/workflow01_full_five_source/final_pair_decisions.csv
+          Rscript -e 'jsonlite::write_json(list(source_manifestations=0L), "previous_state/workflow01_full_five_source/summary.json",auto_unbox=TRUE)'
 
       - name: Reconstruct current source union from compact checkpoint
         shell: bash
@@ -224,9 +238,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow01_candidates
-          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
-            --input-manifest outputs/workflow01_union/source_inputs.json \
-            --old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+          PRIOR_ARGS=(--old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv)
+          if [ "$LEM_FIRST_RUN" = "true" ]; then PRIOR_ARGS=(--first-run true); fi
+          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \\
+            --input-manifest outputs/workflow01_union/source_inputs.json \\
+            "${PRIOR_ARGS[@]}" \\
             --output-dir outputs/workflow01_candidates \
             --score-n 1 \
             --workflow01-run-id "$GITHUB_RUN_ID" \
@@ -247,7 +263,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow01_pre_adjudication
-          Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
+          FIRST_RUN_ARGS=()
+          if [ "$LEM_FIRST_RUN" = "true" ]; then FIRST_RUN_ARGS=(--first-run true); fi
+          Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \\
+            "${FIRST_RUN_ARGS[@]}" \\
             --old-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
             --new-decisions "$CHECKPOINT_DIR/incremental_rescored_pairs.csv" \
             --metadata outputs/workflow01_candidates/normalised_metadata.csv \
@@ -288,14 +307,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/final
-          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
+          PREVIOUS_MAP_ARGS=(--previous-cluster-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv)
+          if [ "$LEM_FIRST_RUN" = "true" ]; then PREVIOUS_MAP_ARGS=(); fi
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \\
+            "${PREVIOUS_MAP_ARGS[@]}" \\
             --combined-decisions outputs/workflow01_pre_adjudication/combined_pair_decisions.csv \
             --manifestation-map outputs/workflow01_pre_adjudication/manifestation_cluster_map.csv \
             --llm-adjudications "$CHECKPOINT_DIR/all_adjudications.jsonl" \
             --human-decisions outputs/human_gate/normalised/human_decisions.normalised.jsonl \
             --human-integrity-manifest outputs/human_gate/human_review_integrity.json \
             --data-quality-repairs outputs/human_gate/normalised/data_quality_repairs.normalised.jsonl \
-            --previous-cluster-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
             --explicit-cluster-splits user_input/workflow01_explicit_cluster_splits.json \
             --output-dir outputs/final
 
@@ -329,6 +350,7 @@ jobs:
             --manifest outputs/canonical/canonical_manifest.json
 
       - name: Build and replay final delta
+        if: ${{ env.LEM_FIRST_RUN != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -349,12 +371,14 @@ jobs:
             --output-root outputs/replayed
 
       - name: Snapshot project inputs in validated delta
+        if: ${{ env.LEM_FIRST_RUN != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_01_project_config_snapshot.R --mode snapshot --archive-dir outputs/delta
 
       - name: Archive only validated delta to Zenodo
+        if: ${{ env.LEM_FIRST_RUN != 'true' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
@@ -366,6 +390,26 @@ jobs:
             --run-id "$GITHUB_RUN_ID" \
             --repository "$GITHUB_REPOSITORY" \
             --output-dir outputs/zenodo
+
+      - name: Stage and archive initial full baseline after human review
+        if: ${{ env.LEM_FIRST_RUN == 'true' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="outputs/initial_baseline"
+          mkdir -p "$ROOT/workflow01_seed" "$ROOT/workflow01_incremental_rescore" "$ROOT/workflow01_full_five_source" "$ROOT/adjudication" "$ROOT/canonical" "$ROOT/reports" "$ROOT/provenance"
+          cp outputs/workflow01_union/*_records_for_deduplication.jsonl "$ROOT/workflow01_seed/"
+          cp "$CHECKPOINT_DIR/incremental_rescored_pairs.csv" "$ROOT/workflow01_incremental_rescore/"
+          cp outputs/final/summary.json outputs/final/final_pair_decisions.csv outputs/final/manifestation_cluster_map.csv outputs/final/abstract_strip_actions.jsonl "$ROOT/workflow01_full_five_source/"
+          cp "$CHECKPOINT_DIR/all_adjudications.jsonl" "$ROOT/adjudication/"
+          cp outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json "$ROOT/canonical/"
+          cp outputs/final/cumulative_data_quality_repairs.jsonl "$ROOT/provenance/"
+          mkdir -p outputs/zenodo
+          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \\
+            --staging-root "$ROOT" --run-id "$GITHUB_RUN_ID" --repository "$GITHUB_REPOSITORY" \\
+            --state final --output-dir outputs/zenodo
 
       - name: Register final delta and checkpoint resolution
         env:
@@ -453,6 +497,7 @@ jobs:
             --message "Workflow 01 decisions applied; validated delta archived and registered."
 
       - name: Trigger Workflow 02 after resumed Workflow 01
+        if: ${{ env.LEM_FIRST_RUN != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
