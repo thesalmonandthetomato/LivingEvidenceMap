@@ -1,0 +1,65 @@
+name: Temporary isolated integration safety gate
+on:
+  workflow_dispatch:
+  push:
+    branches: [production-minimal]
+    paths:
+      - '.github/workflows/w00-w09-temporary-isolated-integration.yml'
+permissions:
+  contents: read
+jobs:
+  isolation:
+    runs-on: ubuntu-latest
+    env:
+      GIT_CONFIG_GLOBAL: /dev/null
+      GIT_CONFIG_SYSTEM: /dev/null
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prove read-only checkout and no service credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for k in OPENAI_API_KEY ZENODO_ACCESS_TOKEN LEM_GOOGLE_SERVICE_ACCOUNT_JSON LEM_GITHUB_TOKEN GH_TOKEN GITHUB_TOKEN SCOPUS_API_TOKEN WOS_STARTER_API LENS_API_TOKEN; do
+            test -z "${!k:-}" || { echo "::error::Credential unexpectedly available: $k"; exit 1; }
+          done
+          test -z "$(git config --local --get-regexp '^http\\..*extraheader$' || true)"
+          test -z "$(git remote get-url origin | grep -E '^https://[^/]+@' || true)"
+          test "$(git status --porcelain | wc -l)" -eq 0
+          echo "PASS: no application credentials, checkout credentials or local changes"
+      - name: Establish and verify filesystem/network confinement
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /tmp/lem-isolated
+          sudo chmod 777 /tmp/lem-isolated
+          sudo iptables -I OUTPUT 1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+          sudo iptables -I OUTPUT 2 -d 127.0.0.0/8 -j ACCEPT
+          sudo iptables -A OUTPUT -j REJECT
+          sudo ip6tables -A OUTPUT -j REJECT
+          if curl --connect-timeout 3 --max-time 5 -fsS https://api.github.com >/dev/null 2>&1; then
+            echo "::error::Outbound network remains accessible"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os, pathlib, socket
+          root=pathlib.Path('/tmp/lem-isolated')
+          try:
+              socket.create_connection(('api.github.com',443),timeout=2)
+          except OSError:
+              pass
+          else:
+              raise RuntimeError('External socket reachable')
+          report={'result':'PASS','outbound_network':'blocked','checkout':'read_only','credentials':'absent','production_scripts_modified':False,'processing_executed':False}
+          (root/'safety_report.json').write_text(json.dumps(report,indent=2))
+          print('PASS: network blocked, safety gate ready')
+          PY
+      - name: Upload safety-gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-safety-gate
+          path: /tmp/lem-isolated/safety_report.json
+          if-no-files-found: warn
+          retention-days: 7
