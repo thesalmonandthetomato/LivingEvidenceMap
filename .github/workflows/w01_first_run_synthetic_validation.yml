@@ -253,6 +253,14 @@ jobs:
           if(is.null(s$manual_review_pairs)) s$manual_review_pairs<-1L
           write_json(s,p,auto_unbox=TRUE)
           RS
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R \
+            --cluster-map "$ROOT/human_test/final/manifestation_cluster_map.csv" \
+            --strip-actions "$ROOT/human_test/final/abstract_strip_actions.jsonl" \
+            --data-quality-repairs "$ROOT/human_test/repairs.jsonl" \
+            --input-manifest "$ROOT/replayed_union/source_inputs.json" \
+            --run-id synthetic-validation \
+            --output "$ROOT/archived/canonical/records.jsonl" \
+            --manifest "$ROOT/archived/canonical/canonical_manifest.json"
           cp "$ROOT/human_test/final/final_pair_decisions.csv" "$ROOT/archived/workflow01_full_five_source/"
           cp "$ROOT/human_test/final/manifestation_cluster_map.csv" "$ROOT/archived/workflow01_full_five_source/"
           cp "$ROOT/human_test/final/abstract_strip_actions.jsonl" "$ROOT/archived/workflow01_full_five_source/"
@@ -271,7 +279,7 @@ jobs:
           library(jsonlite)
           p<-"/tmp/w01_smoke/offline_archive/archive_files/LivingEvidenceMap_workflow01_run-synthetic-validation_manifest.json"
           m<-fromJSON(p)
-          stopifnot(m$state=="final",m$source_manifestations==2L,m$files$state_archive$bytes>0)
+          stopifnot(m$state=="final",m$source_manifestations==2L,m$canonical_records==1L,m$files$state_archive$bytes>0)
           cat("PASS: original W01 full-state archiver creates verified local archive and manifest without Zenodo\\n")
           RS
       - name: Upload synthetic test outputs
