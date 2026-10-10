@@ -463,6 +463,7 @@ jobs:
     if: ${{ needs.finalise.result == 'success' && inputs.publish == true }}
     uses: ./.github/workflows/workflow_07_production.yml
     with:
+      first_run: ${{ inputs.first_run }}
       workflow06_pointer_path: ${{ format('docs/workflow06/zenodo/run-{0}.json', github.run_id) }}
       prior_workflow07_pointer_path: ${{ inputs.prior_workflow07_pointer_path }}
       publish: true
