@@ -89,3 +89,11 @@ For every new defect discovered on `main`, add one entry identifying: **problem,
 - **Main change:** Commit `7c74c89` removes benchmark CSV loading, benchmark-only join/metrics and historical CSV output from `scripts/updater/workflow_01_deduplication_identifier_rescore.R`. The benchmark CSV is already absent on main and remains archived on `legacy-pre-pipeline-cleanup-20261005`. No production decisions, rescored CSV generation, core classifier rule, or primary summary metric was modified.
 - **Evidence:** Exact source comparison against commit `a6de132` confirms only benchmark-specific sections were removed; isolated R parse and source equivalence Actions validation is being completed.
 - **Production branch:** This note only; do not alter production implementation until the current work is safely reconciled.
+
+### 14. OpenAlex partial matching broke W01 LLM case construction
+- **Observed:** W01 run 38078768540 failed during case building (`raw$abstract` on logical value); no OpenAI adjudication calls made.
+- **Root cause:** R `$` partial matching on `container$raw_payload` matched OpenAlex metadata flag `raw_payload_duplicated_in_w01=FALSE` because embedded raw payload is intentionally absent. All 25 OpenAlex records in 101-record/104-pair adjudication selection had this structure.
+- **Main correction:** commit `1b0296ad` replaces raw lookup with `container[["raw_payload", exact = TRUE]]` while retaining safe object guard from `ed294d3`. Other classification and case fields unchanged.
+- **Evidence:** isolated source reconstruction and real 104-pair case build PASSED in Actions run 38081525482 without LLM calls or external publication.
+- **Rerun:** controlled W01 launch 38081853866, first_run true; W02 dispatch disabled; max_llm_cases 5000.
+- **Production branch:** note only, port fix if implementation affected.
