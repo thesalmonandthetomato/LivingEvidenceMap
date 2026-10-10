@@ -74,12 +74,43 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c("httr2","jsonlite","digest","xml2"))
 
+      - name: Download parent W00 query archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow00-search-plan-${{ inputs.parent_run_id }}
+          run-id: ${{ inputs.parent_run_id }}
+          github-token: ${{ github.token }}
+          path: workflow00_plan_download
+
+      - name: Restore verified source query locally
+        env:
+          SOURCE: ${{ inputs.source }}
+          PARENT_RUN_ID: ${{ inputs.parent_run_id }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          root <- file.path("workflow00_plan_download","search_archive",paste0("run-",Sys.getenv("PARENT_RUN_ID")))
+          manifest <- fromJSON(file.path(root,"manifest.json"),simplifyVector=FALSE)
+          source <- Sys.getenv("SOURCE")
+          entry <- manifest$queries[[source]]
+          if (is.null(entry)) stop("Missing archived query for ",source)
+          path <- file.path(root,entry$file)
+          if (!identical(basename(path),paste0(source,".txt")) || !file.exists(path)) stop("Invalid archived query file")
+          file_sha <- digest(file=path,algo="sha256",serialize=FALSE)
+          if (!identical(tolower(file_sha),tolower(entry$sha256))) stop("Archived query file SHA mismatch")
+          query <- paste(readLines(path,warn=FALSE,encoding="UTF-8"),collapse="\\n")
+          query_sha <- digest(query,algo="sha256",serialize=FALSE)
+          if (!identical(tolower(query_sha),tolower(entry$query_string_sha256))) stop("Archived query string SHA mismatch")
+          con <- file(Sys.getenv("GITHUB_ENV"),"at")
+          writeLines(c("SEARCH_QUERY<<W00_VERIFIED_QUERY_END",query,"W00_VERIFIED_QUERY_END",paste0("ARCHIVED_QUERY_SHA256=",query_sha)),con)
+          close(con)
+          cat("PASS: restored verified archived query for ",source,"\\n",sep="")
+
       - name: Run source search
         env:
           SOURCE: ${{ inputs.source }}
           RUN_TYPE: ${{ inputs.run_type }}
-          SEARCH_QUERY: ${{ inputs.query }}
-          ARCHIVED_QUERY_SHA256: ${{ inputs.query_sha256 }}
           LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
           SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
           SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
@@ -252,8 +283,6 @@ jobs:
         env:
           SOURCE: ${{ inputs.source }}
           RUN_TYPE: ${{ inputs.run_type }}
-          SEARCH_QUERY: ${{ inputs.query }}
-          ARCHIVED_QUERY_SHA256: ${{ inputs.query_sha256 }}
           PARENT_RUN_ID: ${{ inputs.parent_run_id }}
           SEARCH_VERSION: ${{ inputs.search_version }}
           ADDITIONAL_SEARCH_TERM: ${{ inputs.additional_search_term }}
