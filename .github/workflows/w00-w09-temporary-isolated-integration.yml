@@ -185,7 +185,7 @@ jobs:
           test -s /tmp/lem-isolated/linked/w05-retained.jsonl
           test -f /tmp/lem-isolated/linked/linked-report.json
           test -z "$(git status --porcelain)"
-      - name: Extended W06 W07 incremental and W08 W09 reporting validation
+      - name: Extended W06 W07 incremental and W08 W09 verified reporting validation
         shell: bash
         run: |
           set -euo pipefail
