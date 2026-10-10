@@ -75,7 +75,7 @@ jobs:
           echo "W00_SOURCES=$SOURCES" >> "$GITHUB_ENV"
 
       - name: Restore latest Workflow 01 state from baseline plus deltas
-        if: ${{ inputs.first_run != true }}
+        if: ${{ false }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           PREV_W01_POINTER: 
@@ -97,7 +97,7 @@ jobs:
           done
 
       - name: Bind historical W01 decisions to archived source IDs
-        if: ${{ inputs.first_run != true }}
+        if: ${{ false }}
         shell: bash
         run: |
           set -euo pipefail
@@ -108,7 +108,7 @@ jobs:
             --output previous_state/identity_bound/final_pair_decisions.csv
 
       - name: Initialise empty first-run W01 state
-        if: ${{ inputs.first_run == true }}
+        if: ${{ true }}
         shell: bash
         run: |
           set -euo pipefail
