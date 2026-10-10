@@ -1,0 +1,381 @@
+name: W01 failing-case record diagnosis (no LLM)
+on:
+  push:
+    branches: [main]
+    paths: [docs/w01_failing_case_diagnosis_trigger.txt]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      WORKFLOW01_BRANCH: main
+      WORKFLOW00_REPORTING_BRANCH: main
+    steps:
+      - name: Checkout Workflow 01 implementation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW01_BRANCH }}
+          fetch-depth: 0
+
+      - name: Checkout Workflow 00 pointer registry
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKFLOW00_REPORTING_BRANCH }}
+          path: workflow00_registry
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
+
+      - name: Validate explicit first-run contract
+        env:
+          LEM_FIRST_RUN: true
+          LEM_PREVIOUS_POINTER: ""
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_validate_first_run.R \
+            --stage W01 \
+            --first-run "$LEM_FIRST_RUN" \
+            --previous-pointer "$LEM_PREVIOUS_POINTER"
+
+
+      - name: Validate input pointers and source subset
+        env:
+          W00_POINTER: docs/search_record/zenodo/run-38069704382.json
+          PREV_W01_POINTER: 
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "workflow00_registry/$W00_POINTER"
+          if [ "true" != "true" ]; then
+            test -s "$PREV_W01_POINTER"
+            PREV_POINTER="$PREV_W01_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("PREV_POINTER"));stopifnot(x$status=="published",x$state %in% c("final","delta"),x$visibility=="restricted")'
+          fi
+          POINTER="workflow00_registry/$W00_POINTER"
+          SCHEMA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(if(is.null(x$schema)) "" else x$schema)')"
+          if [ "$SCHEMA" = "living-evidence-map-workflow00-state-v1" ]; then
+            Rscript scripts/updater/workflow_00_validate_state.R --state "$POINTER"
+            SOURCES="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);s<-names(x$sources);stopifnot(length(s)>0L,all(grepl("^[a-z0-9][a-z0-9_-]*$",s)));cat(paste(s,collapse=","))')"
+          else
+            POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));s<-as.character(unlist(x$sources));stopifnot(x$status=="published",x$visibility=="restricted",length(s)>0L,all(grepl("^[a-z0-9][a-z0-9_-]*$",s)),!anyDuplicated(s))'
+            SOURCES="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(paste(as.character(unlist(x$sources)),collapse=","))')"
+          fi
+          echo "W00_SOURCES=$SOURCES" >> "$GITHUB_ENV"
+
+      - name: Restore latest Workflow 01 state from baseline plus deltas
+        if: ${{ false }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          PREV_W01_POINTER: 
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$PREV_W01_POINTER" \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root previous_state
+          test -s previous_state/workflow01_full_five_source/final_pair_decisions.csv
+          test -s previous_state/workflow01_full_five_source/manifestation_cluster_map.csv
+          test -s previous_state/workflow01_full_five_source/summary.json
+          test -s previous_state/canonical/records.jsonl
+          seed_files=(previous_state/workflow01_seed/*_records_for_deduplication.jsonl)
+          [ -e "${seed_files[0]}" ] || { echo "No previous Workflow 01 seed files found" >&2; exit 1; }
+          for seed in "${seed_files[@]}"; do
+            test -s "$seed"
+          done
+
+      - name: Bind historical W01 decisions to archived source IDs
+        if: ${{ false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p previous_state/identity_bound
+          Rscript scripts/updater/workflow_01_bind_legacy_decisions_from_archive.R \
+            --decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --archived-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --output previous_state/identity_bound/final_pair_decisions.csv
+
+      - name: Initialise empty first-run W01 state
+        if: ${{ true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p previous_state/workflow01_seed previous_state/workflow01_full_five_source previous_state/provenance previous_state/identity_bound
+          Rscript -e 'jsonlite::write_json(list(source_manifestations=0L), "previous_state/workflow01_full_five_source/summary.json",auto_unbox=TRUE)'
+          : > previous_state/provenance/cumulative_data_quality_repairs.jsonl
+          : > previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl
+          : > previous_state/identity_bound/final_pair_decisions.csv
+          echo 'PASS: first-run state contains zero historical manifestations and decisions'
+
+      - name: Restore current Workflow 00 source subset
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          W00_POINTER: docs/search_record/zenodo/run-38069704382.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          POINTER="workflow00_registry/$W00_POINTER"
+          SCHEMA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(if(is.null(x$schema)) "" else x$schema)')"
+          rm -rf current_workflow00
+          mkdir -p current_workflow00
+          if [ "$SCHEMA" = "living-evidence-map-workflow00-state-v1" ]; then
+            Rscript scripts/updater/workflow_01_restore_workflow00_state.R               --state "$POINTER"               --output-root current_workflow00
+            echo "PASS: restored authoritative composite Workflow 00 state"
+            exit 0
+          fi
+          RUN_ID="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$github_run_id)' 2>/dev/null || true)"
+          CACHE_OK=true
+          HAS_HASHES="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(!is.null(x$handoff_sources))')"
+          if [ "$HAS_HASHES" != "TRUE" ] || [ -z "$RUN_ID" ]; then CACHE_OK=false; fi
+          if [ "$CACHE_OK" = true ]; then
+            IFS=',' read -ra SRC <<< "$W00_SOURCES"
+            for source in "${SRC[@]}"; do
+              mkdir -p "current_workflow00/$source"
+              if ! gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow00-${source}-harvest-${RUN_ID}" --dir "current_workflow00/$source"; then
+                CACHE_OK=false; break
+              fi
+              EXPECTED="$(POINTER="$POINTER" SOURCE="$source" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(x$handoff_sources[[Sys.getenv("SOURCE")]]$tree_sha256)')"
+              ACTUAL="$(ROOT="current_workflow00/$source" Rscript -e 'library(digest);root<-Sys.getenv("ROOT");fs<-list.files(root,recursive=TRUE,full.names=TRUE,all.files=TRUE,no..=TRUE);fs<-fs[file.info(fs)$isdir %in% FALSE];rel<-substring(fs,nchar(normalizePath(root,mustWork=TRUE))+2L);o<-order(rel);fs<-fs[o];rel<-rel[o];z<-vapply(seq_along(fs),function(i)paste(rel[[i]],digest(file=fs[[i]],algo="sha256",serialize=FALSE),sep="\t"),character(1));cat(digest(paste(z,collapse="\n"),algo="sha256",serialize=FALSE))')"
+              if [ "$EXPECTED" != "$ACTUAL" ]; then CACHE_OK=false; break; fi
+            done
+          fi
+          if [ "$CACHE_OK" = true ]; then
+            echo "PASS: using verified 7-day Workflow 00 handoff artefacts"
+          else
+            rm -rf current_workflow00
+            Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+              --pointer "$POINTER" \
+              --sources "$W00_SOURCES" \
+              --output-root current_workflow00
+            echo "PASS: restored authoritative Workflow 00 state from Zenodo"
+          fi
+
+      - name: Prepare updated and preserved API source inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          has_source(){ case ",$W00_SOURCES," in *",$1,"*) return 0;; *) return 1;; esac; }
+
+          delta_root() {
+            local source="$1"
+            local p="current_workflow00/$source/source_delta/filtered_source"
+            if [ -d "$p" ]; then printf '%s' "$p"; else printf ''; fi
+          }
+
+          delta_n() {
+            local source="$1"
+            local m="current_workflow00/$source/source_delta/reconciliation_manifest.json"
+            if [ -s "$m" ]; then
+              M="$m" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("M"));cat(as.integer(x$new_native_ids))'
+            else
+              printf ''
+            fi
+          }
+
+          find_handoff_jsonl() {
+            local root="$1"
+            local p=""
+            for candidate in "$root/records.jsonl" "$root/handoff/records.jsonl" "$root/source_child/records.jsonl"; do
+              if [ -f "$candidate" ]; then p="$candidate"; break; fi
+            done
+            if [ -z "$p" ]; then
+              p="$(find "$root" -type f -name 'records.jsonl' -print -quit 2>/dev/null || true)"
+            fi
+            printf '%s' "$p"
+          }
+
+          prepare_direct_source() {
+            local source="$1"
+            local out="current_sources/$source/records.jsonl"
+            mkdir -p "current_sources/$source"
+            local d n p
+            d="$(delta_root "$source")"
+            n="$(delta_n "$source")"
+            if [ -n "$d" ] && [ "$n" = "0" ]; then : > "$out"; return; fi
+            if [ -n "$d" ]; then p="$(find_handoff_jsonl "$d")"; else p="$(find_handoff_jsonl "current_workflow00/$source")"; fi
+            if [ -z "$p" ]; then
+              local code collection
+              case "$source" in
+                pubmed) code=MED; collection=pubmed ;;
+                ethos) code=ETH; collection=ethos ;;
+                cba) code=CBA; collection=cba ;;
+                epmc_preprints) code=PPR; collection=epmc_preprints ;;
+                *) echo "No normalized records.jsonl handoff found for API source $source" >&2; exit 1 ;;
+              esac
+              local raw_root="current_workflow00/$source"
+              if [ -n "$d" ]; then raw_root="$d"; fi
+              Rscript scripts/updater/workflow_01x_europe_pmc_sidecar_adapter.R \
+                --input-dir "$raw_root" \
+                --output-dir "current_sources/$source" \
+                --source-code "$code" \
+                --source-slug "$source" \
+                --source-collection "$collection"
+              p="current_sources/$source/${source}_sidecar_records.jsonl"
+              test -s "$p"
+            fi
+            if [ "$p" != "$out" ]; then mv "$p" "$out"; fi
+          }
+
+          # Existing five API sources retain their established, validated adapters.
+          for source in lens scopus openalex agricola wos; do
+            mkdir -p "current_sources/$source"
+            if has_source "$source"; then
+              D="$(delta_root "$source")"
+              N="$(delta_n "$source")"
+              case "$source" in
+                lens)
+                  if [ -n "$D" ]; then cp "$D/records.jsonl" current_sources/lens/records.jsonl; else P="$(find current_workflow00/lens -path '*/source_child/records.jsonl' -type f -print -quit)"; test -n "$P"; cp "$P" current_sources/lens/records.jsonl; fi
+                  ;;
+                scopus)
+                  if [ -n "$D" ] && [ "$N" = "0" ]; then : > current_sources/scopus/scopus_sidecar_records.jsonl; else if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/scopus -type d -name source_child -print -quit)"; fi; test -n "$P"; Rscript scripts/updater/workflow_01s_scopus_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/scopus; fi
+                  ;;
+                openalex)
+                  if [ -n "$D" ] && [ "$N" = "0" ]; then : > current_sources/openalex/openalex_sidecar_records.jsonl; else if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/openalex -type d -name source_child -print -quit)"; fi; test -n "$P"; Rscript scripts/updater/workflow_01u_openalex_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/openalex; fi
+                  ;;
+                agricola)
+                  if [ -n "$D" ] && [ "$N" = "0" ]; then : > current_sources/agricola/agricola_sidecar_records.jsonl; else if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/agricola -type d -name source_child -print -quit)"; fi; test -n "$P"; Rscript scripts/updater/workflow_01v_agricola_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/agricola; fi
+                  ;;
+                wos)
+                  if [ -n "$D" ] && [ "$N" = "0" ]; then : > current_sources/wos/wos_starter_sidecar_records.jsonl; else if [ -n "$D" ]; then P="$D"; else P="$(find current_workflow00/wos -type d -name source_child -print -quit)"; fi; test -n "$P"; Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir "$P" --output-dir current_sources/wos; fi
+                  ;;
+              esac
+            else
+              case "$source" in
+                lens) dest="records.jsonl" ;;
+                scopus) dest="scopus_sidecar_records.jsonl" ;;
+                openalex) dest="openalex_sidecar_records.jsonl" ;;
+                agricola) dest="agricola_sidecar_records.jsonl" ;;
+                wos) dest="wos_starter_sidecar_records.jsonl" ;;
+              esac
+              cp "previous_state/workflow01_seed/${source}_records_for_deduplication.jsonl" "current_sources/$source/$dest"
+            fi
+          done
+
+          # Additional API sources pass through generically when W00 emits normalized records.jsonl.
+          IFS=',' read -ra API_SOURCES <<< "$W00_SOURCES"
+          for source in "${API_SOURCES[@]}"; do
+            case "$source" in lens|scopus|openalex|agricola|wos) continue;; esac
+            prepare_direct_source "$source"
+          done
+      - name: Build runtime source catalogue and validate source inputs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs
+          MANUAL_OPTION=()
+          if [ -f user_input/workflow01_manual_sources.json ]; then
+            MANUAL_OPTION=(--manual-config user_input/workflow01_manual_sources.json)
+          fi
+          Rscript scripts/updater/workflow_01_build_runtime_catalogue.R \
+            --w00-sources "$W00_SOURCES" \
+            --w00-status docs/current_run/current_run_status.json \
+            --output outputs/workflow01_runtime_source_catalogue.json \
+            "${MANUAL_OPTION[@]}"
+          Rscript scripts/updater/workflow_01_prepare_source_catalogue.R \
+            --catalogue outputs/workflow01_runtime_source_catalogue.json \
+            --output-manifest outputs/workflow01_source_inputs.json
+
+      - name: Restore archived W01 failed case selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 38078768540 --repo "$GITHUB_REPOSITORY" --name workflow01-production-38078768540 --dir archived_w01
+          test -s archived_w01/workflow01_pre_adjudication/manual_review_pairs.csv
+          test -s archived_w01/workflow01_candidates/normalised_metadata.csv
+
+      - name: Reconstruct source-union from archived W00 records
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow01_union
+          Rscript scripts/updater/workflow_01_deduplication_build_union.R \
+            --old-dir previous_state/workflow01_seed \
+            --first-run true \
+            --input-manifest outputs/workflow01_source_inputs.json \
+            --expected-prior-manifestations 0 \
+            --output-dir outputs/workflow01_union
+
+      - name: Diagnose exact failing input types and record identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          library(data.table);library(jsonlite)
+          meta<-fread("archived_w01/workflow01_candidates/normalised_metadata.csv")
+          review<-fread("archived_w01/workflow01_pre_adjudication/manual_review_pairs.csv")
+          wanted<-meta[idx %in% unique(c(review$record_i,review$record_j))]
+          inspect<-function(r,source) {
+            r_id<-if(source=="lens") (r$identity %||% list())$lens_id else (r$sidecar_identity %||% list())$sidecar_record_id
+            id<-if(is.null(r_id)) "" else as.character(r_id[[1L]])
+            if(!id %in% wanted[source==source_name,source_record_id]) return(invisible(NULL))
+            container<-if(source=="lens") r$lens else r[[source]]
+            raw<-if(is.list(container)) container$raw_payload else NULL
+            mapped<-if(source=="lens") r$canonical else r$mapped_fields
+            enrich<-r$abstract_enrichment
+            types<-c(raw=typeof(raw),container=typeof(container),mapped=typeof(mapped),enrich=typeof(enrich))
+            cat(sprintf("CASE_RECORD source=%s id=%s raw=%s container=%s mapped=%s enrich=%s\n",source,id,types[["raw"]],types[["container"]],types[["mapped"]],types[["enrich"]]))
+            if(!is.null(raw) && !is.list(raw)) {
+              cat(sprintf("ATOMIC_RAW_ERROR source=%s id=%s raw_type=%s raw_length=%d\n",source,id,typeof(raw),length(raw)))
+            }
+            if(!is.null(enrich) && !is.list(enrich)) cat(sprintf("ATOMIC_ENRICH_ERROR source=%s id=%s type=%s\n",source,id,typeof(enrich)))
+            if(!is.null(mapped) && !is.list(mapped)) cat(sprintf("ATOMIC_MAPPED_ERROR source=%s id=%s type=%s\n",source,id,typeof(mapped)))
+          }
+          `%||%`<-function(x,y) if(is.null(x)) y else x
+          for(source_name in sort(unique(wanted$source))) {
+            file<-file.path("outputs/workflow01_union",paste0(source_name,"_records_for_deduplication.jsonl"))
+            con<-file(file,"r"); found<-character()
+            repeat {
+              lines<-readLines(con,n=500L,warn=FALSE)
+              if(!length(lines))break
+              for(line in lines) {
+                if(!nzchar(line))next
+                r<-fromJSON(line,simplifyVector=FALSE)
+                rid<-if(source_name=="lens") (r$identity %||% list())$lens_id else (r$sidecar_identity %||% list())$sidecar_record_id
+                id<-if(is.null(rid)) "" else as.character(rid[[1L]])
+                if(id %in% wanted[source==source_name,source_record_id]) {
+                  inspect(r,source_name)
+                  found<-c(found,id)
+                }
+              }
+            }
+            close(con)
+            need<-wanted[source==source_name,source_record_id]
+            cat(sprintf("SOURCE_SUMMARY source=%s wanted=%d found=%d missing=%d\n",source_name,length(need),length(found),length(setdiff(need,found))))
+            stopifnot(!length(setdiff(need,found)))
+          }
+          RS
+
+      - name: Reproduce original W01 case-builder exception without API calls
+        shell: bash
+        run: |
+          mkdir -p outputs/diagnostic_cases
+          Rscript scripts/updater/workflow_01_build_duplicate_adjudication_cases.R \
+            --review-pairs archived_w01/workflow01_pre_adjudication/manual_review_pairs.csv \
+            --metadata archived_w01/workflow01_candidates/normalised_metadata.csv \
+            --union-dir outputs/workflow01_union \
+            --output outputs/diagnostic_cases/cases.jsonl
+      - name: Assert complete source catalogue
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          x <- fromJSON("outputs/workflow01_source_inputs.json",simplifyVector=FALSE)
+          stopifnot(length(x$sources)==28L)
+          cat(sprintf("PASS: all %d W00 sources prepared and count-validated without LLM\n",length(x$sources)))
