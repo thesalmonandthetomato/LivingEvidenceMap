@@ -51,3 +51,10 @@ This is a **defect and required-fix register**, not a testing or validation log.
 ## Adding new issues
 
 For every new defect discovered on `main`, add one entry identifying: **problem, required correction, affected file(s), main commit (if fixed there), and whether still outstanding on workflow01**. Do not record ordinary test runs, successful validation, routine commits, or temporary MVP-only launch settings. Do not mark an issue fixed on workflow01 until that branch has actually been changed.
+
+### 8. OpenAlex adapter rejects repeated work IDs across W00 raw pages
+- **Observed:** W01 initial integration run 38075196803 failed at "Prepare updated and preserved API source inputs" with `Duplicate OpenAlex sidecar_record_id values found`, before LLM calls.
+- **Correction on main:** `scripts/updater/workflow_01u_openalex_sidecar_adapter.R` commit cfc1244. It preserves the first occurrence of an OpenAlex work ID, records identical repeats in `duplicate_source_occurrences.jsonl`, and fails closed when mapped bibliographic metadata conflict. Deduplication algorithms and canonical schemas are untouched.
+- **Production branch:** Assess whether the same adapter issue applies; port with appropriate validation, not by merging unrelated main work.
+- **Status:** Main correction awaiting integration rerun; production branch unresolved.
+
