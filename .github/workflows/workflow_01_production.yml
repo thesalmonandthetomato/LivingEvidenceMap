@@ -844,8 +844,40 @@ jobs:
             --output outputs/canonical/records.jsonl \
             --manifest outputs/canonical/canonical_manifest.json
 
+      - name: Stage initial full W01 baseline
+        if: ${{ inputs.first_run == true && steps.adjudication.outputs.pending_count == '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="outputs/initial_baseline"
+          mkdir -p "$ROOT/workflow01_seed" "$ROOT/workflow01_incremental_rescore" "$ROOT/workflow01_full_five_source" "$ROOT/adjudication" "$ROOT/canonical" "$ROOT/reports" "$ROOT/provenance"
+          cp outputs/workflow01_union/*_records_for_deduplication.jsonl "$ROOT/workflow01_seed/"
+          cp outputs/workflow01_incremental_assisted/final_incremental_decisions.csv "$ROOT/workflow01_incremental_rescore/"
+          cp outputs/final/summary.json outputs/final/final_pair_decisions.csv outputs/final/manifestation_cluster_map.csv "$ROOT/workflow01_full_five_source/"
+          cp outputs/final/abstract_strip_actions.jsonl "$ROOT/workflow01_full_five_source/"
+          cp outputs/adjudication/merged/all_adjudications.jsonl "$ROOT/adjudication/"
+          cp outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json "$ROOT/canonical/"
+          cp outputs/final/cumulative_data_quality_repairs.jsonl "$ROOT/provenance/"
+          test -s "$ROOT/canonical/records.jsonl"
+          test -s "$ROOT/workflow01_full_five_source/manifestation_cluster_map.csv"
+
+      - name: Archive initial full W01 baseline
+        if: ${{ inputs.first_run == true && steps.adjudication.outputs.pending_count == '0' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/zenodo
+          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \\
+            --staging-root outputs/initial_baseline \\
+            --run-id "$GITHUB_RUN_ID" \\
+            --repository "$GITHUB_REPOSITORY" \\
+            --state final \\
+            --output-dir outputs/zenodo
+
       - name: Validate final state and build delta
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ inputs.first_run != true && steps.adjudication.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -863,7 +895,7 @@ jobs:
             --run-id "$GITHUB_RUN_ID"
 
       - name: Replay delta and require exact reconstruction
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ inputs.first_run != true && steps.adjudication.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -873,13 +905,14 @@ jobs:
             --output-root outputs/replayed
 
       - name: Snapshot project inputs in validated delta
+        if: ${{ inputs.first_run != true && steps.adjudication.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_01_project_config_snapshot.R --mode snapshot --archive-dir outputs/delta
 
       - name: Archive only the validated delta to Zenodo
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ inputs.first_run != true && steps.adjudication.outputs.pending_count == '0' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
