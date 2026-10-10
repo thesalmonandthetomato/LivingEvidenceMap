@@ -7,7 +7,8 @@ This is a **defect and required-fix register**, not a testing or validation log.
 ### 1. W01 fresh-run handling
 - **Problem:** The pipeline needs an explicit, reliable first-ever W01 run path when no prior canonical W08 baseline exists. Do not assume update-mode state, registry entries or a previous run.
 - **Required fix:** Review and implement the necessary first-run initialisation/validation and W00-to-W01 handoff on `workflow01-final-architecture`, preserving normal subsequent-update behaviour.
-- **Reference:** First-run changes on `main`, including `scripts/updater/workflow_validate_first_run.R`; inspect the relevant W01 workflow/scripts there before porting.
+- **Concrete defect confirmed 10 October 2026:** `.github/workflows/workflow_01_production.yml` unconditionally requires a non-empty `previous_workflow01_pointer_path` and restores prior W01 state, then reads previous summaries/maps throughout candidate generation and cluster merging, even for `first_run=true`. The existing `scripts/updater/workflow_01_initial_deduplication.R` supports only initial union/candidate preparation; it does **not** complete classification, adjudication or baseline publication. A proper first-run path must handle those downstream stages and prevent accidental W02 dispatch. The original workflow has been activated on `main` but was deliberately **not run** in this broken mode.
+- **Reference:** First-run changes on `main`, including `scripts/updater/workflow_validate_first_run.R`, `scripts/updater/workflow_01_initial_deduplication.R`, and `.github/workflows/workflow_01_production.yml`.
 - **Status:** Needs review/fix on workflow01 branch.
 
 ### 2. CBA: zero-result harvest rejected
