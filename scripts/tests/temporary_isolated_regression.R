@@ -54,8 +54,26 @@ manifest<-fromJSON(file.path(root,"w04","prepare_manifest.json"))
 stopifnot(manifest$status=="PASS",manifest$canonical_records==3,manifest$reusable_records==1,manifest$screen_queue_records==2,manifest$new_record_ids==1,manifest$changed_screening_input==1,manifest$changed_screening_input_reused==0)
 stopifnot(identical(readLines(file.path(root,"w04","reused_record_ids.txt")),"b"))
 stopifnot(setequal(readLines(file.path(root,"w04","screen_queue_record_ids.txt")),c("a","c")))
+# Idempotence: same prior state and inputs must give identical record assignments.
+run("scripts/updater/workflow_04_prepare_incremental.R",c("--canonical",new_path,"--workflow03-status",w03,"--prior-workflow04",prior_layer,"--prior-canonical",old_path,"--output-dir",file.path(root,"w04-repeat")))
+stopifnot(identical(readLines(file.path(root,"w04","reused_record_ids.txt")),readLines(file.path(root,"w04-repeat","reused_record_ids.txt"))))
+stopifnot(identical(readLines(file.path(root,"w04","screen_queue_record_ids.txt")),readLines(file.path(root,"w04-repeat","screen_queue_record_ids.txt"))))
+# The reused human decision must still belong to the unchanged record.
+reused<-fromJSON(readLines(file.path(root,"w04","reused_workflow04_layer.jsonl"))[[1]],simplifyVector=FALSE)
+stopifnot(identical(reused$record_id,"b"),identical(reused$screening$decision,"retain"),isTRUE(reused$screening$reuse$reused))
+# Changed title, not just changed abstract, also invalidates reuse.
+title_update<-list(canon("a","Climate A","Original A"),canon("b","Climate B revised","Original B"),canon("c","Climate C","New C"))
+writejl(title_update,file.path(root,"title_changed.jsonl"))
+run("scripts/updater/workflow_04_prepare_incremental.R",c("--canonical",file.path(root,"title_changed.jsonl"),"--workflow03-status",w03,"--prior-workflow04",prior_layer,"--prior-canonical",old_path,"--output-dir",file.path(root,"w04-title")))
+stopifnot(setequal(readLines(file.path(root,"w04-title","screen_queue_record_ids.txt")),c("b","c")))
+stopifnot(identical(readLines(file.path(root,"w04-title","reused_record_ids.txt")),"a"))
+# Malformed canonical and duplicate prior decisions are rejected.
+writejl(c(update,list(update[[2]])),file.path(root,"duplicate-canonical.jsonl"))
+run("scripts/updater/workflow_04_prepare_incremental.R",c("--canonical",file.path(root,"duplicate-canonical.jsonl"),"--workflow03-status",w03,"--output-dir",file.path(root,"w04-duplicate")),expect_ok=FALSE)
+writejl(c(lapply(c("a","b"),function(id)list(record_id=id,screening=list(decision="retain"))),list(record_id="b",screening=list(decision="exclude"))),file.path(root,"duplicate-prior.jsonl"))
+run("scripts/updater/workflow_04_prepare_incremental.R",c("--canonical",new_path,"--workflow03-status",w03,"--prior-workflow04",file.path(root,"duplicate-prior.jsonl"),"--prior-canonical",old_path,"--output-dir",file.path(root,"w04-duplicate-prior")),expect_ok=FALSE)
 # Negative: forced rescreen of an unknown identity must fail closed.
 writeLines("unknown-id",file.path(root,"unknown.txt"))
 run("scripts/updater/workflow_04_prepare_incremental.R",c("--canonical",new_path,"--workflow03-status",w03,"--force-rescreen-record-ids",file.path(root,"unknown.txt"),"--output-dir",file.path(root,"w04-invalid")),expect_ok=FALSE)
-write_json(list(status="PASS",w01_stable_index=TRUE,w01_swapped_index_rejected=TRUE,w01_duplicate_identity_rejected=TRUE,w01_missing_identity_rejected=TRUE,w01_invalid_index_rejected=TRUE,w01_missing_checkpoint_rejected=TRUE,w04_unchanged_reused=1,w04_changed_rescreened=1,w04_new_queued=1,w04_invalid_forced_id_rejected=TRUE),file.path(root,"regression-report.json"),auto_unbox=TRUE,pretty=TRUE)
+write_json(list(status="PASS",w01_stable_index=TRUE,w01_swapped_index_rejected=TRUE,w01_duplicate_identity_rejected=TRUE,w01_missing_identity_rejected=TRUE,w01_invalid_index_rejected=TRUE,w01_missing_checkpoint_rejected=TRUE,w04_unchanged_reused=1,w04_changed_rescreened=1,w04_new_queued=1,w04_invalid_forced_id_rejected=TRUE,w04_repeat_idempotent=TRUE,w04_reused_human_decision_preserved=TRUE,w04_changed_title_rescreened=TRUE,w04_duplicate_canonical_rejected=TRUE,w04_duplicate_prior_decision_rejected=TRUE),file.path(root,"regression-report.json"),auto_unbox=TRUE,pretty=TRUE)
 cat("PASS: W01 index stability and W04 incremental update regression tests\n")
