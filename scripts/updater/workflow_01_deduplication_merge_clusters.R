@@ -12,6 +12,7 @@ arg <- function(flag,default=NULL) {
   if (i==length(args)) stop(sprintf("Missing value after %s",flag),call.=FALSE)
   args[[i+1L]]
 }
+first_run <- identical(tolower(arg("--first-run","false")),"true")
 old_decisions <- arg("--old-decisions")
 new_decisions <- arg("--new-decisions")
 metadata <- arg("--metadata")
@@ -21,9 +22,10 @@ if (any(vapply(list(old_decisions,new_decisions,metadata,output_dir),is.null,log
 }
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
-old <- fread(old_decisions,na.strings=c("","NA"))
 new <- fread(new_decisions,na.strings=c("","NA"))
+old <- if (first_run) copy(new[0]) else fread(old_decisions,na.strings=c("","NA"))
 meta <- fread(metadata,na.strings=c("","NA"))
+if (first_run && file.exists(old_decisions) && isTRUE(file.info(old_decisions)$size > 0L)) stop("First run must not supply historical decisions",call.=FALSE)
 stopifnot(all(c("idx","source","source_record_id") %in% names(meta)))
 stopifnot(identical(meta$idx,seq_len(nrow(meta))))
 
