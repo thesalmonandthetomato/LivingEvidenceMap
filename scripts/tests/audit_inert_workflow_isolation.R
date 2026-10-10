@@ -19,5 +19,21 @@ for (f in files) {
   unsafe_found <- unsafe_found || any(flags[c("branch","hardcoded_sheet","zenodo","push")])
   cat(basename(f),paste(names(flags)[flags],collapse=","),"\n",sep=" | ")
 }
+
+# MVP must start with empty, schema-preserving Zenodo registries.
+registries <- list.files("docs",pattern="^zenodo_registry[.]csv$",recursive=TRUE,full.names=TRUE)
+stopifnot(length(registries)==9L)
+nonempty <- registries[vapply(registries,function(p) length(readLines(p,warn=FALSE))>1L,logical(1))]
+if(length(nonempty)) {
+  cat("Non-empty Zenodo registry: ",paste(nonempty,collapse=", "),"\n",sep="")
+  unsafe_found <- TRUE
+}
+# W10 must never publish to another repository or internal path.
+w10 <- paste(readLines(".github/workflows-inert/workflow_10_dashboard.yml",warn=FALSE),collapse="\n")
+if(any(vapply(c("salmonevidencemap","public-site","SALMON_EVIDENCE_MAP_PUBLISH_TOKEN",
+                "Commit internal output registry archive"),grepl,logical(1),x=w10,fixed=TRUE))) {
+  cat("W10 has a publication target outside docs.\n")
+  unsafe_found <- TRUE
+}
 cat("Audit complete; no workflow definitions were changed.\\n")
 if (mode == "enforce" && unsafe_found) stop("Unsafe targets remain: release refused")
