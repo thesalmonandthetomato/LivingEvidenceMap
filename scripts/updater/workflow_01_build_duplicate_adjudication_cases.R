@@ -88,7 +88,7 @@ field_object <- function(x) if (is.list(x) && !is.data.frame(x)) x else list()
 extract_record <- function(r, expected_source, fallback) {
   mapped <- field_object(if (expected_source=="lens") r$canonical else r$mapped_fields)
   container <- field_object(if (expected_source=="lens") r$lens else r[[expected_source]])
-  raw <- field_object(container$raw_payload)
+  raw <- field_object(container[["raw_payload", exact = TRUE]])
   enrich <- field_object(r$abstract_enrichment)
 
   abstract_candidates <- c(
