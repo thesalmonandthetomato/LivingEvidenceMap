@@ -3,7 +3,7 @@ run-name: W00 scope ${{ inputs.request_id || github.event.head_commit.message }}
 
 on:
   push:
-    branches: [production-minimal]
+    branches: [main]
     paths:
       - 'docs/shiny_scoping_requests/**'
   workflow_dispatch:
@@ -41,7 +41,7 @@ jobs:
       - name: Checkout Workflow 00 implementation
         uses: actions/checkout@v4
         with:
-          ref: production-minimal
+          ref: main
           persist-credentials: false
 
       - name: Set up R
@@ -154,7 +154,7 @@ jobs:
       - name: Checkout Workflow 00 implementation
         uses: actions/checkout@v4
         with:
-          ref: production-minimal
+          ref: main
           persist-credentials: false
 
       - name: Download validated scoping plan
@@ -211,7 +211,7 @@ jobs:
       - name: Checkout Workflow 00 implementation
         uses: actions/checkout@v4
         with:
-          ref: production-minimal
+          ref: main
           persist-credentials: false
 
       - name: Set up R
