@@ -26,8 +26,12 @@ jobs:
           import pathlib,re
           prior=pathlib.Path('/tmp/w01_before.R').read_text()
           current=pathlib.Path('scripts/updater/workflow_01_deduplication_identifier_rescore.R').read_text()
-          expected=re.sub(r'labels_path <- arg\\([\\s\\S]*?(?=\\nnormalise_visible_title <-)','',prior,count=1)
-          expected=re.sub(r'x\\[, pair_key := paste\\([\\s\\S]*?(?=\\nsummary <- list\\()','',expected,count=1)
+          a=prior.index('labels_path <- arg(')
+          b=prior.index('\\nnormalise_visible_title <-',a)
+          expected=prior[:a]+prior[b:]
+          a=expected.index('x[, pair_key := paste(')
+          b=expected.index('\\nsummary <- list(',a)
+          expected=expected[:a]+expected[b:]
           expected=expected.replace('  historical_benchmark_evaluation = if (benchmark_available) "performed" else "not_available",\\n','')
           assert current==expected,'Non-benchmark code changed'
           assert 'workflow02_v2_human_labels_2026-09-21.csv' not in current
