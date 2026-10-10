@@ -25,7 +25,7 @@ on:
         type: string
   push:
     branches:
-      - workflow01-final-architecture
+      - main
     paths:
       - 'docs/deduplication/handoffs/w01/**'
 
@@ -38,7 +38,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  WORKFLOW01_BRANCH: workflow01-final-architecture
+  WORKFLOW01_BRANCH: main
 
 jobs:
   resume:
@@ -400,7 +400,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ vars.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -431,7 +431,7 @@ jobs:
       - name: Acknowledge consumed W01 Shiny batch
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ vars.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
