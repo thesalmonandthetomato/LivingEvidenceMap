@@ -121,8 +121,10 @@ jobs:
         run: |
           set -euo pipefail
           test -s "workflow00_registry/$W00_POINTER"
-          test -s "$PREV_W01_POINTER"
-          PREV_POINTER="$PREV_W01_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("PREV_POINTER"));stopifnot(x$status=="published",x$state %in% c("final","delta"),x$visibility=="restricted")'
+          if [ "${{ inputs.first_run }}" != "true" ]; then
+            test -s "$PREV_W01_POINTER"
+            PREV_POINTER="$PREV_W01_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("PREV_POINTER"));stopifnot(x$status=="published",x$state %in% c("final","delta"),x$visibility=="restricted")'
+          fi
           POINTER="workflow00_registry/$W00_POINTER"
           SCHEMA="$(POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"),simplifyVector=FALSE);cat(if(is.null(x$schema)) "" else x$schema)')"
           if [ "$SCHEMA" = "living-evidence-map-workflow00-state-v1" ]; then
@@ -135,6 +137,7 @@ jobs:
           echo "W00_SOURCES=$SOURCES" >> "$GITHUB_ENV"
 
       - name: Restore latest Workflow 01 state from baseline plus deltas
+        if: ${{ inputs.first_run != true }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           PREV_W01_POINTER: ${{ inputs.previous_workflow01_pointer_path }}
@@ -165,6 +168,18 @@ jobs:
             --decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
             --archived-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
             --output previous_state/identity_bound/final_pair_decisions.csv
+
+      - name: Initialise empty first-run W01 state
+        if: ${{ inputs.first_run == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p previous_state/workflow01_seed previous_state/workflow01_full_five_source previous_state/provenance previous_state/identity_bound
+          Rscript -e 'jsonlite::write_json(list(source_manifestations=0L), "previous_state/workflow01_full_five_source/summary.json",auto_unbox=TRUE)'
+          : > previous_state/provenance/cumulative_data_quality_repairs.jsonl
+          : > previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl
+          : > previous_state/identity_bound/final_pair_decisions.csv
+          echo 'PASS: first-run state contains zero historical manifestations and decisions'
 
       - name: Restore current Workflow 00 source subset
         env:
@@ -324,9 +339,12 @@ jobs:
         run: |
           set -euo pipefail
           PRIOR_N="$(Rscript -e 'x<-jsonlite::fromJSON("previous_state/workflow01_full_five_source/summary.json");cat(x$source_manifestations)')"
+          FIRST_RUN_ARGS=()
+          if [ "${{ inputs.first_run }}" = "true" ]; then FIRST_RUN_ARGS=(--first-run true); fi
           mkdir -p outputs/workflow01_union
           Rscript scripts/updater/workflow_01_deduplication_build_union.R \
             --old-dir previous_state/workflow01_seed \
+            "${FIRST_RUN_ARGS[@]}" \
             --input-manifest outputs/workflow01_source_inputs.json \
             --expected-prior-manifestations "$PRIOR_N" \
             --output-dir outputs/workflow01_union
@@ -336,9 +354,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow01_candidates
+          PRIOR_ARGS=(--old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv)
+          if [ "${{ inputs.first_run }}" = "true" ]; then PRIOR_ARGS=(--first-run true); fi
           Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
             --input-manifest outputs/workflow01_union/source_inputs.json \
-            --old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            "${PRIOR_ARGS[@]}" \
             --output-dir outputs/workflow01_candidates \
             --score-n 1 \
             --workflow01-run-id "$GITHUB_RUN_ID"
