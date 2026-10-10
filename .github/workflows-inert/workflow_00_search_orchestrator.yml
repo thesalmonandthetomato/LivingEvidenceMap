@@ -210,6 +210,18 @@ jobs:
           r-version: release
           use-public-rspm: true
 
+      - name: Validate explicit first-run contract
+        env:
+          LEM_FIRST_RUN: ${{ inputs.first_run || false }}
+          LEM_PREVIOUS_POINTER: ""
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_validate_first_run.R \
+            --stage W00 \
+            --first-run "$LEM_FIRST_RUN" \
+            --previous-pointer "$LEM_PREVIOUS_POINTER"
+
       - name: Install R dependency
         shell: Rscript {0}
         run: install.packages('jsonlite')
