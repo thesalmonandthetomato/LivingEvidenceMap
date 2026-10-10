@@ -114,6 +114,62 @@ jobs:
           cat('PASS: five isolated synthetic component checks\n')
           RS
           test -z "$(git status --porcelain)"
+      - name: Synthetic W00 W03 W04 W05 W09 executable handoffs under network blockade
+        shell: bash
+        run: |
+          set -euo pipefail
+          D=/tmp/lem-isolated
+          printf '(climate OR biodiversity) AND (adaptation OR conservation)\n' > "$D/search.txt"
+          Rscript scripts/updater/workflow_00_validate_scoping_search.R --input "$D/search.txt" --output "$D/w00.json"
+          Rscript - <<'RS'
+          library(jsonlite)
+          d<-'/tmp/lem-isolated'
+          v<-fromJSON(file.path(d,'w00.json'),simplifyVector=FALSE)
+          stopifnot(v$status=='valid',length(v$source_queries)>0)
+          records<-list(
+            list(identity=list(record_id='synthetic-a'),canonical=list(title='Climate adaptation review',abstract='A systematic study of adaptation')),
+            list(identity=list(record_id='synthetic-b'),canonical=list(title='Retraction: Biodiversity impact review',abstract='A notice of retraction')))
+          writeLines(vapply(records,toJSON,character(1),auto_unbox=TRUE),file.path(d,'w03_input.jsonl'))
+          RS
+          Rscript scripts/updater/workflow_03_publication_status.R --input "$D/w03_input.jsonl" --output "$D/w03.jsonl" --audit "$D/w03_audit.jsonl" --report "$D/w03_report.json"
+          Rscript - <<'RS'
+          library(jsonlite)
+          d<-'/tmp/lem-isolated'
+          r<-lapply(readLines(file.path(d,'w03.jsonl')),fromJSON,simplifyVector=FALSE)
+          stopifnot(length(r)==2,identical(r[[2]]$publication_status$exclude_from_workflow04,TRUE))
+          RS
+          Rscript scripts/updater/workflow_04_prepare_incremental.R --canonical "$D/w03_input.jsonl" --workflow03-status "$D/w03.jsonl" --output-dir "$D/w04"
+          Rscript - <<'RS'
+          library(jsonlite)
+          d<-'/tmp/lem-isolated'
+          m<-fromJSON(file.path(d,'w04/prepare_manifest.json'))
+          stopifnot(m$status=='PASS',m$workflow03_excluded==1,m$workflow03_eligible==1,m$screen_queue_records==1)
+          writeLines('synthetic-a',file.path(d,'included_ids.txt'))
+          RS
+          Rscript scripts/updater/workflow_05_materialise_retained.R --canonical "$D/w03_input.jsonl" --included-ids "$D/included_ids.txt" --output "$D/w05_retained.jsonl" --expected-records 1
+          Rscript - <<'RS'
+          library(jsonlite)
+          d<-'/tmp/lem-isolated'
+          stopifnot(length(readLines(file.path(d,'w05_retained.jsonl')))==1)
+          dir.create(file.path(d,'w09'),recursive=TRUE)
+          status<-list(update_id='synthetic-integration',search=list(search_date='2026-10-10'),counts=list(search_results=2,deduplicated_records=2),workflow_runs=list())
+          write_json(status,file.path(d,'current_run.json'),auto_unbox=TRUE,pretty=TRUE)
+          write_json(list(source_manifestations=2,canonical_records=2,canonical_jsonl_sha256='synthetic'),file.path(d,'w01_pointer.json'),auto_unbox=TRUE)
+          RS
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W00 --run-id 9000 --status "$D/current_run.json" --output-dir "$D/w09"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W01 --run-id 9001 --pointer "$D/w01_pointer.json" --status "$D/current_run.json" --output-dir "$D/w09"
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R --input-dir "$D/w09" --output "$D/w09/manifest.json"
+          Rscript - <<'RS'
+          library(jsonlite)
+          d<-'/tmp/lem-isolated'
+          x<-fromJSON(file.path(d,'w09/manifest.json'),simplifyVector=FALSE)
+          stopifnot(length(x$stages)==2,length(x$files)==2)
+          r<-fromJSON(file.path(d,'safety_report.json'))
+          r$synthetic_components<-c(r$synthetic_components,'W00 search validation','W03 publication status','W04 screening preparation','W05 retained materialisation','W09 reporting input manifest')
+          write_json(r,file.path(d,'safety_report.json'),pretty=TRUE,auto_unbox=TRUE)
+          cat('PASS: additional five synthetic stage checks\n')
+          RS
+          test -z "$(git status --porcelain)"
       - name: Restore runner networking for audit artefact upload
         if: always()
         shell: bash
