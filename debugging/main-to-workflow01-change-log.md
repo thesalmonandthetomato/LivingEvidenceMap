@@ -58,3 +58,9 @@ For every new defect discovered on `main`, add one entry identifying: **problem,
 - **Production branch:** Assess whether the same adapter issue applies; port with appropriate validation, not by merging unrelated main work.
 - **Status:** Main correction awaiting integration rerun; production branch unresolved.
 
+
+### 9. Europe PMC-derived W00 sources lack generic normalised JSONL handoffs
+- **Observed:** W01 first-run 38075483055 passed OpenAlex (2,426 unique records), AGRICOLA and WoS, then failed at PubMed with `No normalized records.jsonl handoff found for API source pubmed`; no LLM calls.
+- **Cause:** W00 retains raw Europe PMC responses for PubMed (MED), EThOS (ETH), CAB Abstracts (CBA), and preprints (PPR). The W01 generic path assumes `records.jsonl` and did not invoke the existing `workflow_01x_europe_pmc_sidecar_adapter.R`.
+- **Main correction:** commit 6a2542e: route these four formats through the existing R adapter, retaining input schemas and source identities; fail closed on unsupported source layouts.
+- **Status:** Awaiting main integration validation. Assess/port to production branch after verification.
