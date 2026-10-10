@@ -177,7 +177,7 @@ jobs:
           Rscript scripts/tests/temporary_isolated_regression.R
           test -f /tmp/lem-isolated/regression/regression-report.json
           test -z "$(git status --porcelain)"
-      - name: Validate linked W02 to W05 execution and on-disk checksum under network blockade
+      - name: Validate linked W02 to W05 execution and corrected on-disk checksum under network blockade
         shell: bash
         run: |
           set -euo pipefail
