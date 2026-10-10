@@ -14,3 +14,5 @@ validation=real_archiver_offline
 validation=final_human_canonical_archive_consistency
 
 validation=offline_archiver_httr2_dependency
+
+validation=openalex_reconciliation_positive_negative
