@@ -1,0 +1,47 @@
+#!/usr/bin/env Rscript
+# Synthetic incremental W06/W07 and actual W08->W09 reporting handoff.
+suppressPackageStartupMessages({library(jsonlite);library(digest);library(readr)})
+root<-"/tmp/lem-isolated/extended";dir.create(root,recursive=TRUE,showWarnings=FALSE)
+p<-function(s)file.path(root,s)
+run<-function(script,args,ok=TRUE){
+ o<-suppressWarnings(system2("Rscript",c(script,args),stdout=TRUE,stderr=TRUE))
+ success<-is.null(attr(o,"status"))||attr(o,"status")==0L
+ if(!identical(success,ok))stop(paste(script,paste(o,collapse=" | ")))
+}
+fp<-function(t,a)digest(toJSON(list(title=t,abstract=a),auto_unbox=TRUE,null="null",na="null"),algo="sha256",serialize=FALSE)
+base<-data.frame(record_sequence=1:2,record_id=c("a","b"),title=c("Title A","Title B"),abstract=c("Abstract A","Abstract B"),geography_input_sha256=c(fp("Title A","Abstract A"),fp("Title B","Abstract B")),deterministic_primary_countries=c("",""),deterministic_primary_iso3c=c("",""),geography_review_required=c(FALSE,FALSE),geography_review_reason=c("",""))
+update<-rbind(base,data.frame(record_sequence=3,record_id="c",title="Title C",abstract="Abstract C",geography_input_sha256=fp("Title C","Abstract C"),deterministic_primary_countries="",deterministic_primary_iso3c="",geography_review_required=FALSE,geography_review_reason=""))
+update$abstract[1]<-"Abstract A revised";update$geography_input_sha256[1]<-fp(update$title[1],update$abstract[1])
+write_csv(base,p("baseline.csv"));write_csv(update,p("update.csv"))
+write_csv(transform(base,country_code=c("GBR","NOR")),p("prior-geography.csv"))
+run("scripts/updater/workflow_06_prepare_incremental.R",c("--current",p("update.csv"),"--prior-geography",p("prior-geography.csv"),"--output-dir",p("w06")))
+m6<-fromJSON(p("w06/prepare_manifest.json"))
+stopifnot(m6$reusable_records==1,m6$screen_queue_records==2,m6$changed_title_abstract==1,m6$new_record_ids==1)
+reuse6<-read_csv(p("w06/reused_geography.csv"),show_col_types=FALSE)
+stopifnot(identical(as.character(reuse6$record_id),"b"),identical(reuse6$country_code,"NOR"))
+ontology<-"user_input/workflow07_topic_ontology.csv";prompt<-"user_input/workflow07_topic_system_prompt.txt"
+run("scripts/updater/workflow_07_prepare_incremental.R",c("--current",p("baseline.csv"),"--ontology",ontology,"--prompt",prompt,"--output-dir",p("w07base")))
+priorrec<-read_csv(p("w07base/current_topic_records.csv"),show_col_types=FALSE)
+write_csv(data.frame(record_id=c("a","b"),path_id=c("T1","T1"),score=c(1,0)),p("prior-scores.csv"))
+run("scripts/updater/workflow_07_prepare_incremental.R",c("--current",p("update.csv"),"--prior-records",p("w07base/current_topic_records.csv"),"--prior-scores",p("prior-scores.csv"),"--prior-manifest",p("w07base/prepare_manifest.json"),"--ontology",ontology,"--prompt",prompt,"--output-dir",p("w07update")))
+m7<-fromJSON(p("w07update/prepare_manifest.json"))
+stopifnot(m7$reusable_records==1,m7$screen_queue_records==2,m7$changed_title_abstract==1,m7$new_record_ids==1)
+s7<-read_csv(p("w07update/reused_topic_pathway_scores.csv"),show_col_types=FALSE)
+stopifnot(identical(as.character(s7$record_id),"b"))
+# Changing ontology must reject reuse rather than silently apply incompatible decisions.
+file.copy(ontology,p("changed-ontology.csv"));cat("\n",file=p("changed-ontology.csv"),append=TRUE)
+run("scripts/updater/workflow_07_prepare_incremental.R",c("--current",p("update.csv"),"--prior-records",p("w07base/current_topic_records.csv"),"--prior-scores",p("prior-scores.csv"),"--prior-manifest",p("w07base/prepare_manifest.json"),"--ontology",p("changed-ontology.csv"),"--prompt",prompt,"--output-dir",p("w07-invalid")),ok=FALSE)
+# Actual W08 output manifest is consumed by the W09 reporting script.
+assembled<-list(list(identity=list(record_id="a"),canonical=list(title="A"),screening=list(final_included=TRUE)),list(identity=list(record_id="b"),canonical=list(title="B"),screening=list(final_included=FALSE,exclusion_stage="W04",exclusion_reason="out of scope")))
+writeLines(vapply(assembled,toJSON,character(1),auto_unbox=TRUE),p("assembled.jsonl"))
+write_json(list(status="PASS",canonical_records=2,final_included_records=1,final_excluded_records=1,final_canonical_jsonl_sha256="prepartition"),p("prepartition.json"),auto_unbox=TRUE)
+run("scripts/updater/workflow_08_partition_final_outputs_dynamic.R",c("--assembled",p("assembled.jsonl"),"--old-manifest",p("prepartition.json"),"--canonical-output",p("included.jsonl"),"--exclusions-output",p("excluded.csv"),"--manifest-output",p("w08-manifest.json")))
+w8<-fromJSON(p("w08-manifest.json"))
+stopifnot(w8$canonical_records==1,w8$excluded_records==1,w8$final_canonical_jsonl_sha256==digest(file=p("included.jsonl"),algo="sha256",serialize=FALSE))
+write_json(list(update_id="extended-synthetic",counts=list(),workflow_runs=list()),p("status.json"),auto_unbox=TRUE)
+run("scripts/reporting/write_workflow09_stage_summary.R",c("--stage","W08","--run-id","808","--pointer",p("w08-manifest.json"),"--status",p("status.json"),"--output-dir",p("w09")))
+run("scripts/reporting/refresh_workflow09_input_manifest.R",c("--input-dir",p("w09"),"--output",p("w09/manifest.json")))
+s<-fromJSON(p("w09/w08_summary.json"));report<-fromJSON(p("w09/manifest.json"))
+stopifnot(s$metrics$canonical_records==1,s$metrics$excluded_records==1,s$metrics$final_canonical_sha256==w8$final_canonical_jsonl_sha256,length(report$stages)==1,report$stages[[1]]$stage=="W08")
+write_json(list(status="PASS",w06=list(reused=1,queued=2),w07=list(reused=1,queued=2,ontology_mismatch_rejected=TRUE),w08_w09=list(included=1,excluded=1,sha256=w8$final_canonical_jsonl_sha256)),p("extended-report.json"),auto_unbox=TRUE,pretty=TRUE)
+cat("PASS: W06/W07 incremental decision reuse, ontology mismatch rejection, and W08->W09 reporting\n")
