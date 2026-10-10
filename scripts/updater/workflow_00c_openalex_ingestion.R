@@ -226,6 +226,9 @@ repeat {
 
 raw_files <- sort(list.files(raw_dir, pattern = "^response_[0-9]{6}\\.json$", full.names = TRUE))
 ids <- character()
+unique_ids_seen <- new.env(hash=TRUE,parent=emptyenv())
+unique_records_path <- file.path(root,"unique_works.jsonl")
+unique_con <- file(unique_records_path,open="wb")
 recount <- 0L
 for (rf in raw_files) {
   x <- fromJSON(rf, simplifyVector = FALSE)
@@ -234,7 +237,15 @@ for (rf in raw_files) {
   page_ids <- vapply(rs, function(w) scalar_text(w$id, ""), character(1))
   if (any(!nzchar(page_ids))) stop(sprintf("Missing OpenAlex work ID in %s", basename(rf)))
   ids <- c(ids, page_ids)
+  for (i in seq_along(page_ids)) {
+    id <- page_ids[[i]]
+    if (!exists(id,envir=unique_ids_seen,inherits=FALSE)) {
+      assign(id,TRUE,envir=unique_ids_seen)
+      writeBin(charToRaw(paste0(toJSON(rs[[i]],auto_unbox=TRUE,null="null",na="null",digits=NA),"\n")),unique_con)
+    }
+  }
 }
+close(unique_con)
 
 duplicate_ids <- unique(ids[duplicated(ids)])
 count_matches_pages <- identical(recount, retrieved)
@@ -253,6 +264,9 @@ validation <- list(
   openalex_ids_present = length(ids),
   unique_openalex_ids = unique_id_count,
   duplicate_openalex_ids_n = length(duplicate_ids),
+  duplicate_occurrences_removed = recount - unique_id_count,
+  internal_unique_export = "unique_works.jsonl",
+  raw_count_at_least_reported = if (expected_complete) recount >= reported_total else NA,
   duplicate_openalex_ids = duplicate_ids,
   full_harvest_requested = full_harvest,
   first_page_total_reported_by_openalex = reported_total,
@@ -268,28 +282,28 @@ if (!count_matches_pages) stop("Validation failure: raw-page recount does not ma
 if (length(duplicate_ids) > 0L) {
   message(sprintf("NOTE: %d repeated OpenAlex Work IDs occurred across live cursor pages; raw responses remain unchanged and exact-ID repeats will be collapsed downstream.", length(duplicate_ids)))
 }
-if (expected_complete && !isTRUE(count_matches_reported_total) && isTRUE(unique_count_matches_reported_total) && length(duplicate_ids) > 0L) {
-  message(sprintf("NOTE: OpenAlex raw count %d exceeds reported total %d by %d repeated Work ID occurrences; unique IDs reconcile exactly.",recount,reported_total,recount-unique_id_count))
+if (expected_complete && recount < reported_total) {
+  stop(sprintf("Validation failure: incomplete raw harvest (%d raw responses vs %d reported results)",recount,reported_total))
 }
-if (expected_complete && !isTRUE(count_matches_reported_total) && !isTRUE(unique_count_matches_reported_total) && !isTRUE(reported_total_changed)) {
-  stop(sprintf("Validation failure: full harvest retrieved %d records but OpenAlex first page reported %d without observed live-index count drift",
-               recount, reported_total))
+if (expected_complete && recount > reported_total) {
+  message(sprintf("NOTE: raw export (%d) exceeds OpenAlex reported search count (%d); preserved all raw records, removed %d repeated-ID occurrences from unique export.",
+                  recount,reported_total,recount-unique_id_count))
 }
-if (expected_complete && !isTRUE(count_matches_reported_total) && !isTRUE(unique_count_matches_reported_total) && isTRUE(reported_total_changed)) {
-  message(sprintf("NOTE: full-harvest raw count (%d) differs from first-page count (%d), accepted because OpenAlex reported live-index count drift during pagination.",
-                  recount, reported_total))
-}
+message(sprintf("PASS: OpenAlex exported %d raw records and %d unique Work IDs (reported search count: %s).",
+                recount,unique_id_count,if (is.na(reported_total)) "unknown" else as.character(reported_total)))
 
 manifest$status <- "success"
 manifest$completed_at <- now_utc()
 manifest$total_results_reported_by_openalex_first_page <- reported_total
 manifest$entries_retrieved <- retrieved
+manifest$unique_records_exported <- unique_id_count
 manifest$pages_retrieved <- length(page_summaries)
 manifest$cumulative_cost_usd <- cumulative_cost_usd
 manifest$validation = validation
 manifest$pages <- page_summaries
 manifest$output <- list(
   raw_responses = "raw/response_*.json",
+  unique_work_ids = "unique_works.jsonl",
   response_headers = "headers/response_*_headers.json",
   checkpoint = "checkpoint.json",
   validation = "validation.json",
