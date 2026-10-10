@@ -83,3 +83,9 @@ For every new defect discovered on `main`, add one entry identifying: **problem,
 - **Original file:** archived at `legacy-pre-pipeline-cleanup-20261005`; 205 historical pair labels (166 duplicate, 39 not_duplicate), columns `record_i,record_j,truth,review_group,original_review_rule`. Numeric IDs belong to an older corpus and must not be reused as current W01 IDs.
 - **Main correction:** commit `a6de132`. Missing benchmark becomes a zero-row optional evaluation input; deterministic rescore rules and primary `rescored_sample.csv` output are unchanged, and evaluation outputs are retained. Explicit `--benchmark-labels` supports historical benchmarking if appropriate.
 - **Production branch:** assess and port only if applicable. Main integration rerun pending.
+
+### 13. Remove historical benchmark evaluation from the W01 classifier
+- **Reason:** The numerical-ID historical benchmark is tied to an obsolete dataset and inappropriate for current first-run classification.
+- **Main change:** Commit `7c74c89` removes benchmark CSV loading, benchmark-only join/metrics and historical CSV output from `scripts/updater/workflow_01_deduplication_identifier_rescore.R`. The benchmark CSV is already absent on main and remains archived on `legacy-pre-pipeline-cleanup-20261005`. No production decisions, rescored CSV generation, core classifier rule, or primary summary metric was modified.
+- **Evidence:** Exact source comparison against commit `a6de132` confirms only benchmark-specific sections were removed; isolated R parse and source equivalence Actions validation is being completed.
+- **Production branch:** This note only; do not alter production implementation until the current work is safely reconciled.
