@@ -9,12 +9,6 @@ on:
       run_type:
         required: true
         type: string
-      query:
-        required: true
-        type: string
-      query_sha256:
-        required: true
-        type: string
       parent_run_id:
         required: true
         type: string
