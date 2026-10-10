@@ -596,8 +596,14 @@ jobs:
           P05="docs/workflow05/zenodo/run-$W05.json"
           P06="$W06_POINTER"
           P07="docs/workflow07/zenodo/run-$GITHUB_RUN_ID.json"
-          PRIOR08=$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$baseline$workflow08_pointer)')
-          for p in "$LEAN" "$P03" "$P04" "$P05" "$P06" "$P07" "$PRIOR08"; do test -s "$p"; done
+          FIRST_RUN="${{ inputs.first_run || false }}"
+          PRIOR08="none"
+          if [ "$FIRST_RUN" = "false" ]; then
+            PRIOR08=$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$baseline$workflow08_pointer)')
+            test -n "$PRIOR08"
+            test -s "$PRIOR08"
+          fi
+          for p in "$LEAN" "$P03" "$P04" "$P05" "$P06" "$P07"; do test -s "$p"; done
           echo "lean_pointer_path=$LEAN" >> "$GITHUB_OUTPUT"
           echo "workflow03_pointer_path=$P03" >> "$GITHUB_OUTPUT"
           echo "workflow04_pointer_path=$P04" >> "$GITHUB_OUTPUT"
