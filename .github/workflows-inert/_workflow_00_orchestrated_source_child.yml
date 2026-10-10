@@ -43,7 +43,7 @@ permissions:
   actions: read
 
 env:
-  WORKFLOW00_ORCHESTRATOR_BRANCH: production-minimal
+  WORKFLOW00_ORCHESTRATOR_BRANCH: main
 
 jobs:
   search:
