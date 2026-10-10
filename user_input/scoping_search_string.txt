@@ -1,1 +1,1 @@
-(salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)
+("salmo salar" OR "atlantic salmon" OR "norwegian salmon" OR "scottish salmon") AND (feed OR fishmeal OR "fish oil" OR "marine ingredient*")
