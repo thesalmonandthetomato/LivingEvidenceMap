@@ -2,3 +2,5 @@ W01 synthetic validation invocation 2026-10-10
 No API, Zenodo, Shiny or W02 side effects.
 
 validation=cluster_and_canonical_20261010
+
+validation=checkpoint_replay_archive
