@@ -177,6 +177,21 @@ jobs:
           Rscript scripts/tests/temporary_isolated_regression.R
           test -f /tmp/lem-isolated/regression/regression-report.json
           test -z "$(git status --porcelain)"
+      - name: Check regression report and isolate all output files
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          library(jsonlite)
+          p <- '/tmp/lem-isolated/regression/regression-report.json'
+          stopifnot(file.exists(p))
+          x <- fromJSON(p)
+          stopifnot(x$status == 'PASS', isTRUE(x$w01_duplicate_identity_rejected),
+                    isTRUE(x$w01_missing_identity_rejected),
+                    isTRUE(x$w04_invalid_forced_id_rejected))
+          cat('PASS: regression report assertions verified\n')
+          RS
+          test -z "$(git status --porcelain)"
       - name: Restore runner networking for audit artefact upload
         if: always()
         shell: bash
@@ -190,6 +205,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: isolated-safety-gate
-          path: /tmp/lem-isolated/safety_report.json
+          path: |
+            /tmp/lem-isolated/safety_report.json
+            /tmp/lem-isolated/regression/regression-report.json
+            /tmp/lem-isolated/w04/prepare_manifest.json
+            /tmp/lem-isolated/w09/manifest.json
           if-no-files-found: warn
           retention-days: 7
