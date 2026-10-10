@@ -3,6 +3,11 @@ name: Workflow 04 - relevance screening production
 on:
   workflow_call:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       lean_pointer_path:
         required: true
         type: string
@@ -43,6 +48,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       lean_pointer_path:
         description: 'Authoritative current post-W02 lean canonical pointer'
         required: true
