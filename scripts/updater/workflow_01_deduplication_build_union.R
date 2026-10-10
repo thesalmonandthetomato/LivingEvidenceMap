@@ -117,12 +117,12 @@ for (src in names(current_paths)) {
 
   is_new <- !(cur_ids %in% old_ids)
   append_lines <- cur_lines[is_new]
-  if(first_run && length(append_ids <- cur_ids[is_new])) {
+  append_ids <- cur_ids[is_new]
+  if(first_run && length(append_ids)) {
     o <- order(append_ids,method="radix")
     append_lines <- append_lines[o]
     append_ids <- append_ids[o]
   }
-  append_ids <- cur_ids[is_new]
 
   out_path <- file.path(output_dir,paste0(src,"_records_for_deduplication.jsonl"))
   con <- file(out_path,"wt",encoding="UTF-8")
