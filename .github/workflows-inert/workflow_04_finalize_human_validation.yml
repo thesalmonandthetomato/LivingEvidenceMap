@@ -26,14 +26,14 @@ jobs:
     timeout-minutes: 20
     env:
       LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-      LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+      LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
       BATCH_ID: ${{ inputs.batch_id }}
       QUEUE_SHA256: ${{ inputs.queue_sha256 }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: main
 
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -149,7 +149,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin workflow01-final-architecture
+          git pull --rebase origin main
           W04_RUN="$(cat outputs/w04_validation_completed/source_workflow04_run_id.txt)"
           Rscript scripts/updater/workflow_04_update_kappa_registry.R \
             --registry docs/workflow04/kappa_registry.csv \
@@ -164,8 +164,8 @@ jobs:
           git add docs/workflow04/kappa_registry.csv
           if ! git diff --cached --quiet; then
             git commit -m "Append W04 validation kappa $BATCH_ID"
-            git pull --rebase origin workflow01-final-architecture
-            git push origin HEAD:workflow01-final-architecture
+            git pull --rebase origin main
+            git push origin HEAD:main
           fi
 
       - name: Synchronise Google kappa registry mirror
