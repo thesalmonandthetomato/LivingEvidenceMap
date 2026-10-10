@@ -155,6 +155,17 @@ jobs:
             test -s "$seed"
           done
 
+      - name: Bind historical W01 decisions to archived source IDs
+        if: ${{ inputs.first_run != true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p previous_state/identity_bound
+          Rscript scripts/updater/workflow_01_bind_legacy_decisions_from_archive.R \
+            --decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --archived-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --output previous_state/identity_bound/final_pair_decisions.csv
+
       - name: Restore current Workflow 00 source subset
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
@@ -408,7 +419,7 @@ jobs:
           set -euo pipefail
           mkdir -p outputs/workflow01_pre_adjudication
           Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
-            --old-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --old-decisions previous_state/identity_bound/final_pair_decisions.csv \
             --new-decisions outputs/workflow01_incremental_assisted/final_incremental_decisions.csv \
             --metadata outputs/workflow01_candidates/normalised_metadata.csv \
             --output-dir outputs/workflow01_pre_adjudication
