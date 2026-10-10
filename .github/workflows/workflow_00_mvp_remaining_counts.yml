@@ -1,0 +1,65 @@
+name: W00 MVP remaining API counts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/w00_remaining_counts_trigger.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  count-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        source: [lens, scopus, agricola, ethos, cba, epmc_preprints, wos, ebsco_africa_wide, ebsco_amed, ebsco_psycinfo, ebsco_atla_religion, ebsco_biological_agricultural_index, ebsco_cinahl, ebsco_communication_mass_media, ebsco_econlit, ebsco_eric, ebsco_family_society, ebsco_greenfile, ebsco_hospitality_tourism, ebsco_medline, ebsco_mla, ebsco_political_science, ebsco_sportdiscus, ebsco_waters_oceans]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','xml2'))
+      - name: Validate and translate W00 search
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_validate_search_strategy.R --config user_input/workflow00_search_strategy.json
+          Rscript scripts/updater/workflow_00_search_orchestrator.R \
+            --run-type full \
+            --config user_input/workflow00_search_strategy.json \
+            --output-dir outputs/w00_count_preflight/plan
+      - name: Count source without harvesting
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+          EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+          EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/w00_count_preflight/counts
+          Rscript scripts/updater/workflow_00_search_scope_counts.R \
+            --plan outputs/w00_count_preflight/plan/search_plan.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --source "${{ matrix.source }}" \
+            --output-csv "outputs/w00_count_preflight/counts/${{ matrix.source }}.csv" \
+            --output-json "outputs/w00_count_preflight/counts/${{ matrix.source }}.json"
+          cat "outputs/w00_count_preflight/counts/${{ matrix.source }}.csv" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w00-mvp-count-${{ matrix.source }}-${{ github.run_id }}
+          path: outputs/w00_count_preflight/
+          retention-days: 7
+          if-no-files-found: error
