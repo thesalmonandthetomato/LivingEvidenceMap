@@ -97,3 +97,10 @@ For every new defect discovered on `main`, add one entry identifying: **problem,
 - **Evidence:** isolated source reconstruction and real 104-pair case build PASSED in Actions run 38081525482 without LLM calls or external publication.
 - **Rerun:** controlled W01 launch 38081853866, first_run true; W02 dispatch disabled; max_llm_cases 5000.
 - **Production branch:** note only, port fix if implementation affected.
+
+### W01 Shiny Google Sheets intermittent save stalls (10 Oct 2026)
+- **Observed:** W01 reviewer reported intermittent Shiny blocking overlay and Google Sheets retry countdown while adjudicating 38 assigned records in batch w01-run-38081853866.
+- **Cause investigated:** W01 save path used an active-decision log read followed by append and another full-log read for verification; uncertain HTTP write outcomes could lead to resubmission risks. Google API throttling is plausible, not confirmed from deployment logs.
+- **Shiny repo main fix:** LivingEvidenceMapAdjudication commit 6da8ddf removes redundant nested active-log read, preserves pre-write cross-reviewer authority, detects previously written decision IDs, performs only one append attempt, and verifies by ID after append even if the HTTP response fails. It returns a clear, cautious error if verification cannot determine persistence. Reference copy synchronised b0330ac.
+- **Safety:** No Google Sheet writes or deletion performed during code change. Existing decision events, assignments, queue hashes, and tab schema unchanged. No W00/W01 rerun and no API LLM calls.
+- **Follow-up:** Verify regression CI, deployment environment, and live reviewer save latency; resolve separate hard-coded GitHub dispatch refs before pipeline continuation. Do not republish/reset a queue while reviewing.
