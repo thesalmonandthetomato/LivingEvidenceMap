@@ -3,7 +3,7 @@ name: Workflow 02 - Resume after Shiny adjudication
 on:
   push:
     branches:
-      - workflow01-final-architecture
+      - main
     paths:
       - 'docs/shiny_adjudication/w02_resume_requests/*.json'
   workflow_dispatch:
@@ -32,8 +32,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  WORKFLOW02_BRANCH: workflow01-final-architecture
-  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+  WORKFLOW02_BRANCH: main
+  LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
   W02_QUEUE_TAB: 'queue_w02_active'
   W02_DECISIONS_TAB: 'decisions_w02'
 
@@ -385,7 +385,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -413,7 +413,7 @@ jobs:
         if: ${{ needs.prepare.outputs.publish == 'true' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
