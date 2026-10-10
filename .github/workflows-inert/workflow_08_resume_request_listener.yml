@@ -3,7 +3,7 @@ name: Workflow 08 - Resume request listener
 on:
   push:
     branches:
-      - workflow01-final-architecture
+      - main
     paths:
       - 'docs/shiny_adjudication/w08_resume_requests/*.json'
   workflow_dispatch:
@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: main
           fetch-depth: 2
 
       - id: request
