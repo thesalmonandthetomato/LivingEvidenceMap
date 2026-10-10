@@ -1,0 +1,1 @@
+Audit 28 W00 sources through original W01 preparation and catalogue validation, without LLM or Zenodo publication.
