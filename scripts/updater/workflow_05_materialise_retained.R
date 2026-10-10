@@ -12,7 +12,8 @@ if(expected>0L&&length(ids)!=expected)stop(sprintf("Expected %d included IDs, fo
 expected<-length(ids)
 wanted<-setNames(rep(FALSE,length(ids)),ids);seen<-setNames(rep(FALSE,length(ids)),ids)
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
-inp<-file(canonical,"rt",encoding="UTF-8");out<-file(output,"wt",encoding="UTF-8");on.exit({close(inp);close(out)},add=TRUE)
+inp<-file(canonical,"rt",encoding="UTF-8");out<-file(output,"wt",encoding="UTF-8")
+on.exit({if(isOpen(inp))close(inp);if(isOpen(out))close(out)},add=TRUE)
 n<-0L
 repeat{
  lines<-readLines(inp,n=500L,warn=FALSE);if(!length(lines))break
@@ -25,4 +26,5 @@ repeat{
 missing<-names(seen)[!seen]
 if(length(missing))stop(sprintf("%d included record_ids absent from canonical input",length(missing)),call.=FALSE)
 if(n!=expected)stop(sprintf("Expected %d materialised records, wrote %d",expected,n),call.=FALSE)
+close(out)
 cat(sprintf("PASS: materialised %d Workflow 04-retained canonical records; sha256=%s\n",n,digest(file=output,algo="sha256",serialize=FALSE)))
