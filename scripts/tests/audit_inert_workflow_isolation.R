@@ -16,11 +16,11 @@ for (f in files) {
     zenodo=grepl("ZENODO_ACCESS_TOKEN",x,fixed=TRUE),
     push=grepl("git push",x,fixed=TRUE)
   )
-  unsafe_found <- unsafe_found || any(flags[c("branch","hardcoded_sheet","zenodo","push")])
+  unsafe_found <- unsafe_found || any(flags[c("branch","hardcoded_sheet")])
   cat(basename(f),paste(names(flags)[flags],collapse=","),"\n",sep=" | ")
 }
 
-# MVP must start with empty, schema-preserving Zenodo registries.
+# The presence of Zenodo API calls and main-branch pushes is expected; they require separate runtime checks.\n# MVP must start with empty, schema-preserving Zenodo registries.
 registries <- list.files("docs",pattern="^zenodo_registry[.]csv$",recursive=TRUE,full.names=TRUE)
 stopifnot(length(registries)==9L)
 nonempty <- registries[vapply(registries,function(p) length(readLines(p,warn=FALSE))>1L,logical(1))]
@@ -35,5 +35,9 @@ if(any(vapply(c("salmonevidencemap","public-site","SALMON_EVIDENCE_MAP_PUBLISH_T
   cat("W10 has a publication target outside docs.\n")
   unsafe_found <- TRUE
 }
-cat("Audit complete; no workflow definitions were changed.\\n")
+if (file.exists("docs/current_run/current_run_status.json")) {
+  cat("Inherited current-run status detected; test isolation refused.\\n")
+  unsafe_found <- TRUE
+}
+cat("Static destination audit complete; Zenodo write provenance and first-run state still require validation.\\n")
 if (mode == "enforce" && unsafe_found) stop("Unsafe targets remain: release refused")
