@@ -41,6 +41,13 @@ This is a **defect and required-fix register**, not a testing or validation log.
 - **Reference:** `.github/workflows/workflow_01_production.yml` on `main`, fix commit [1f03e5f](https://github.com/thesalmonandthetomato/LivingEvidenceMap/commit/1f03e5f6cfce8c38e8fed1f8aebbabaf79d080d2).
 - **Status:** Review on workflow01 branch.
 
+### 7. W01 first-run checkpoint does not preserve original rescoring artefacts
+- **Problem:** The W01 pending human-adjudication checkpoint retains the final pair decisions but not the complete original rescoring files (`rescored_sample.csv` and `summary.json`). After Shiny review, the original scoring outputs cannot be faithfully included in the full initial W01 baseline. This can compromise reproducibility and baseline compatibility; it does **not** establish that pair decisions themselves are incorrect.
+- **Required fix:** Save those two original files, unchanged, in the pending checkpoint and restore them on resumption. Verify the full published baseline contains the original files and that downstream baseline restoration uses them as expected.
+- **Affected files:** `scripts/updater/workflow_01_build_pending_checkpoint.R`, W01 production workflow and `workflow_01_resume_after_human_review.yml`.
+- **Evidence:** Confirmed `workflow01-final-architecture` lacks `--rescore-dir` and `initial_rescore` snapshot handling on 10 October 2026. `main` fixes [6e17a07](https://github.com/thesalmonandthetomato/LivingEvidenceMap/commit/6e17a075fee1e86e6c05a9bb8bea170ec50a6d17), [e14e738](https://github.com/thesalmonandthetomato/LivingEvidenceMap/commit/e14e7384c0d701773af0a43685ce564d50de9c66) and [3f2ee19](https://github.com/thesalmonandthetomato/LivingEvidenceMap/commit/3f2ee190848cb2fea1b3f59680d6f63d0d131d5e).
+- **Status:** Open on workflow01 branch. Inspect original workflow path and only port where applicable.
+
 ## Adding new issues
 
 For every new defect discovered on `main`, add one entry identifying: **problem, required correction, affected file(s), main commit (if fixed there), and whether still outstanding on workflow01**. Do not record ordinary test runs, successful validation, routine commits, or temporary MVP-only launch settings. Do not mark an issue fixed on workflow01 until that branch has actually been changed.
