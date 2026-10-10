@@ -8,3 +8,5 @@ validation=checkpoint_replay_archive
 validation=final_adjudication_canonical
 
 validation=human_duplicate_20261010
+
+validation=real_archiver_offline
