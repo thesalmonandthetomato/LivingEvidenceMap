@@ -1,0 +1,34 @@
+name: Temporary post-cleanup dependency audit
+on:
+  push:
+    branches: [production-minimal]
+    paths:
+      - '.github/workflows/temporary-post-cleanup-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+      - name: Run checked-in dependency closure scanner
+        run: |
+          set -euo pipefail
+          Rscript scripts/audit_mvp_dependencies.R --output /tmp/mvp-cleanup-audit.json
+          Rscript -e 'x<-jsonlite::fromJSON("/tmp/mvp-cleanup-audit.json"); stopifnot(length(x$errors)==0, x$counts$workflow_definitions==28)'
+          test -z "$(git status --porcelain)"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-cleanup-dependency-audit
+          path: /tmp/mvp-cleanup-audit.json
+          if-no-files-found: warn
