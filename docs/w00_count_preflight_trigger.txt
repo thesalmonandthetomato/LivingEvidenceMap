@@ -1,0 +1,3 @@
+W00 MVP count-only preflight trigger
+source=openalex
+purpose=validate configured search result count without harvesting or publication
