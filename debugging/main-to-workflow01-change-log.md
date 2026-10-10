@@ -70,3 +70,10 @@ For every new defect discovered on `main`, add one entry identifying: **problem,
 - **Cause:** The Europe PMC adapter created `pubmed_sidecar_records.jsonl`, then the W01 preparation copied the same records to `records.jsonl` in the same directory. The existing runtime catalogue correctly rejects ambiguous inputs.
 - **Main correction:** Commit `f2322da` moves (rather than copies) the adapter output to the sole standard `records.jsonl`, preserving content and avoiding duplicate candidate files.
 - **Status:** Main integration retest pending; assess same fix for production branch.
+
+### 11. OpenAlex W00 occurrence counts differ from unique W01 manifestations
+- **Observed:** Initial W01 integration run 38076040704 failed count validation: 2,426 OpenAlex W00 occurrences versus 2,422 unique OpenAlex source records after duplicate work IDs were removed.
+- **Cause:** Source catalogue required raw W00 download count to equal deduplicated W01 record count, without accounting for the adapter's audited four identical repeated work IDs.
+- **Main fix:** `scripts/updater/workflow_01_prepare_source_catalogue.R` commit `83f50a5` validates W00 raw count = unique prepared records + individually logged identical duplicate occurrences. It rejects inconsistent counts, missing audit files and mismatched ledger lengths.
+- **Validation:** Synthetic positive and negative reconciliation cases passed in Actions run 38076435811, which also passed all earlier W01 offline tests.
+- **Status:** Production branch requires assessment and appropriate porting before deployment. Full W01 live rerun not yet attempted following correction.
