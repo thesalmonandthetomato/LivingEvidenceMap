@@ -20,6 +20,7 @@ arg <- function(flag,default=NULL){
 previous_root <- arg("--previous-root")
 current_seed_root <- arg("--current-seed-root")
 incremental_rescore <- arg("--incremental-rescore")
+rescore_dir <- arg("--rescore-dir",NULL)
 adjudications <- arg("--adjudications")
 review_package <- arg("--review-package")
 pre_summary <- arg("--pre-summary")
@@ -124,6 +125,14 @@ for(src in source_order){
 }
 
 file.copy(incremental_rescore,file.path(output_dir,"incremental_rescored_pairs.csv"),overwrite=TRUE)
+if (!is.null(rescore_dir) && nzchar(rescore_dir)) {
+  for (fn in c("rescored_sample.csv","summary.json")) {
+    src <- file.path(rescore_dir,fn)
+    if (!file.exists(src)) stop(sprintf("Checkpoint missing first-run rescoring output: %s",src),call.=FALSE)
+    dir.create(file.path(output_dir,"initial_rescore"),showWarnings=FALSE)
+    if (!file.copy(src,file.path(output_dir,"initial_rescore",fn),overwrite=TRUE)) stop("Could not snapshot rescoring output",call.=FALSE)
+  }
+}
 file.copy(adjudications,file.path(output_dir,"all_adjudications.jsonl"),overwrite=TRUE)
 file.copy(pre_summary,file.path(output_dir,"pre_adjudication_summary.json"),overwrite=TRUE)
 if (first_run) {
