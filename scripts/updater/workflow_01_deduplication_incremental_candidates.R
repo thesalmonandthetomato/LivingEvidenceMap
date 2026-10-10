@@ -51,6 +51,9 @@ if (!is.null(input_manifest_path)) {
   }
 }
 
+first_run <- tolower(arg("--first-run","false"))
+if(!first_run %in% c("true","false"))stop("--first-run must be true or false",call.=FALSE)
+first_run <- identical(first_run,"true")
 old_metadata_path <- arg("--old-metadata",NULL)
 old_manifestation_map_path <- arg("--old-manifestation-map",NULL)
 output_dir <- arg("--output-dir")
@@ -64,7 +67,7 @@ if (!is.finite(repeated_abstract_min_title_diversity) || repeated_abstract_min_t
 validate_index_only <- identical(tolower(arg("--validate-index-only", "false")), "true")
 
 if (is.null(output_dir) || !length(paths)) stop("Required: --output-dir and at least one source input",call.=FALSE)
-if (is.null(old_metadata_path) && is.null(old_manifestation_map_path)) {
+if (!first_run && is.null(old_metadata_path) && is.null(old_manifestation_map_path)) {
   stop("Provide either --old-metadata or --old-manifestation-map", call.=FALSE)
 }
 if (is.na(score_n) || score_n < 1L) stop("--score-n must be positive", call. = FALSE)
@@ -291,7 +294,9 @@ if (anyDuplicated(meta$corpus_key)) stop("Duplicate source namespace + record ID
 # source order. Historic pair decisions therefore continue to address the same
 # manifestation indices without blocking legitimate metadata repairs.
 old_state_path <- if (!is.null(old_metadata_path)) old_metadata_path else old_manifestation_map_path
-old_meta <- fread(old_state_path, na.strings=c("", "NA"))
+if(first_run && !is.null(old_state_path)) stop("First run may not ingest historical metadata",call.=FALSE)
+old_meta <- if(first_run) data.table(source=character(),source_record_id=character()) else
+  fread(old_state_path, na.strings=c("", "NA"))
 stopifnot(all(c("source","source_record_id") %in% names(old_meta)))
 if ("idx" %in% names(old_meta)) setorder(old_meta,idx)
 old_keys <- paste(old_meta$source,old_meta$source_record_id,sep="::")
