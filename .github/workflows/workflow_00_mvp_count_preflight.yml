@@ -52,6 +52,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            SELECTED_SOURCE="$(sed -n 's/^source=//p' docs/w00_count_preflight_trigger.txt | tail -1)"
+          fi
+          case "$SELECTED_SOURCE" in openalex|pubmed) ;; *) echo "Unsupported source"; exit 1;; esac
           mkdir -p outputs/w00_count_preflight/counts
           Rscript scripts/updater/workflow_00_search_scope_counts.R \
             --plan outputs/w00_count_preflight/plan/search_plan.json \
