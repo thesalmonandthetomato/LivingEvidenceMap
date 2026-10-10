@@ -1,0 +1,215 @@
+{
+  "schema": "living-evidence-map-current-run-status-v1",
+  "update_id": "w00-run-38069704382",
+  "branch": "main",
+  "started_at_utc": "2026-10-10T17:17:28Z",
+  "last_updated_at_utc": "2026-10-10T17:17:28Z",
+  "first_run": true,
+  "baseline": {
+    "release_update_id": null,
+    "workflow01_source_run_id": null,
+    "workflow01_pointer": null,
+    "workflow02_source_run_id": null,
+    "workflow02_pointer": null,
+    "lean_pointer": null,
+    "workflow04_pointer": null,
+    "workflow05_pointer": null,
+    "workflow06_pointer": null,
+    "workflow07_pointer": null,
+    "workflow08_pointer": null,
+    "canonical_records": 0,
+    "canonical_sha256": null,
+    "previous_counts": {
+      "search_results": 0,
+      "deduplicated_records": 0,
+      "enriched_records": 0,
+      "retraction_exclusions": 0,
+      "screened_include": 0,
+      "screened_exclude": 0,
+      "species_records": 0,
+      "geography": {
+        "with": 0,
+        "without": 0
+      },
+      "topics": {
+        "with": 0,
+        "without": 0
+      }
+    }
+  },
+  "search": {
+    "workflow00_run_id": "38069704382",
+    "search_date": "2026-10-10",
+    "search_results": 13449,
+    "sources": {
+      "agricola": {
+        "reported_search_results": 587,
+        "successfully_downloaded_results": 587
+      },
+      "cba": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_africa_wide": {
+        "reported_search_results": 12,
+        "successfully_downloaded_results": 12
+      },
+      "ebsco_amed": {
+        "reported_search_results": 1,
+        "successfully_downloaded_results": 1
+      },
+      "ebsco_atla_religion": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_biological_agricultural_index": {
+        "reported_search_results": 443,
+        "successfully_downloaded_results": 443
+      },
+      "ebsco_cinahl": {
+        "reported_search_results": 33,
+        "successfully_downloaded_results": 33
+      },
+      "ebsco_communication_mass_media": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_econlit": {
+        "reported_search_results": 10,
+        "successfully_downloaded_results": 10
+      },
+      "ebsco_eric": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_family_society": {
+        "reported_search_results": 50,
+        "successfully_downloaded_results": 50
+      },
+      "ebsco_greenfile": {
+        "reported_search_results": 56,
+        "successfully_downloaded_results": 56
+      },
+      "ebsco_hospitality_tourism": {
+        "reported_search_results": 7,
+        "successfully_downloaded_results": 7
+      },
+      "ebsco_medline": {
+        "reported_search_results": 626,
+        "successfully_downloaded_results": 626
+      },
+      "ebsco_mla": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_political_science": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_psycinfo": {
+        "reported_search_results": 10,
+        "successfully_downloaded_results": 10
+      },
+      "ebsco_sportdiscus": {
+        "reported_search_results": 7,
+        "successfully_downloaded_results": 7
+      },
+      "ebsco_waters_oceans": {
+        "reported_search_results": 236,
+        "successfully_downloaded_results": 236
+      },
+      "epmc_preprints": {
+        "reported_search_results": 37,
+        "successfully_downloaded_results": 37
+      },
+      "ethos": {
+        "reported_search_results": 22,
+        "successfully_downloaded_results": 22
+      },
+      "lens": {
+        "reported_search_results": 3433,
+        "successfully_downloaded_results": 3433
+      },
+      "openalex": {
+        "reported_search_results": 2422,
+        "successfully_downloaded_results": 2426
+      },
+      "pubmed": {
+        "reported_search_results": 576,
+        "successfully_downloaded_results": 576
+      },
+      "scopus": {
+        "reported_search_results": 2044,
+        "successfully_downloaded_results": 2044
+      },
+      "wos": {
+        "reported_search_results": 2837,
+        "successfully_downloaded_results": 2837
+      }
+    }
+  },
+  "cohort": {
+    "record_ids_path": "docs/current_run/current_run_record_ids.txt",
+    "record_ids_sha256": null,
+    "deduplicated_records": null
+  },
+  "counts": {
+    "search_results": 13449,
+    "deduplicated_records": 0,
+    "enriched_records": 0,
+    "retraction_exclusions": 0,
+    "screened_include": 0,
+    "screened_exclude": 0,
+    "species_records": 0,
+    "geography": {
+      "with": 0,
+      "without": 0
+    },
+    "topics": {
+      "with": 0,
+      "without": 0
+    }
+  },
+  "progress": {
+    "W00": {
+      "status": "complete"
+    },
+    "W01": {
+      "status": "active"
+    },
+    "W02": {
+      "status": "pending"
+    },
+    "W03": {
+      "status": "pending"
+    },
+    "W04": {
+      "status": "pending"
+    },
+    "W05": {
+      "status": "pending"
+    },
+    "W06": {
+      "status": "pending"
+    },
+    "W07": {
+      "status": "pending"
+    },
+    "W08": {
+      "status": "pending"
+    },
+    "W09": {
+      "status": "pending"
+    },
+    "W10": {
+      "status": "pending"
+    },
+    "current_stage": "W00",
+    "completed_through": 1,
+    "active_position": 2,
+    "status_label": "Search complete; awaiting deduplication"
+  },
+  "workflow_runs": {
+    "W00": "38069704382"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "living-evidence-map-workflow09-stage-summary-v1",
+  "stage": "W00",
+  "source_run_id": "38069704382",
+  "update_id": "w00-run-38069704382",
+  "generated_at_utc": "2026-10-10T17:17:33Z",
+  "pointer_path": null,
+  "pointer_sha256": null,
+  "status": "complete",
+  "metrics": {
+    "search_results": 13449,
+    "search_date": "2026-10-10"
+  }
+}
