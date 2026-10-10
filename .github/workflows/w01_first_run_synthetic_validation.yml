@@ -18,7 +18,7 @@ jobs:
           use-public-rspm: true
       - name: Install existing W01 dependencies
         shell: Rscript {0}
-        run: install.packages(c("jsonlite","stringdist","digest","xml2","stringi","data.table"))
+        run: install.packages(c("jsonlite","stringdist","digest","xml2","stringi","data.table","httr2"))
       - name: Exercise original first-run union, indexing and checkpoint contracts
         shell: bash
         run: |
