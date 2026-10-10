@@ -607,6 +607,7 @@ jobs:
           set -euo pipefail
           FIRST_RUN_ARGS=()
           if [ "${{ inputs.first_run }}" = "true" ]; then FIRST_RUN_ARGS=(--first-run true); fi
+          if [ "${{ inputs.first_run }}" = "true" ]; then FIRST_RUN_ARGS+=(--rescore-dir outputs/workflow01_incremental_rescore); fi
           Rscript scripts/updater/workflow_01_build_pending_checkpoint.R \
             "${FIRST_RUN_ARGS[@]}" \
             --previous-root previous_state \
