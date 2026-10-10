@@ -1,0 +1,41 @@
+name: Temporary conservative unused-file classification
+on:
+  push:
+    branches: [production-minimal]
+    paths: ['.github/workflows/temporary-unused-classification.yml']
+permissions:
+  contents: read
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Classify tracked files by exact path and basename references
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess, json, re
+          files=[pathlib.Path(x) for x in subprocess.check_output(['git','ls-files','-z']).decode().strip('\0').split('\0') if x]
+          text={}
+          for p in files:
+              try: text[str(p)]=p.read_text(encoding='utf-8')
+              except (UnicodeError, OSError): continue
+          candidates=[]
+          for p in files:
+              s=str(p)
+              if s.startswith(('.github/workflows-inert/','scripts/tests/','docs/validation/','.github/workflows/')): continue
+              stem=p.name
+              if len(stem)<12: continue
+              uses=[]
+              for other,txt in text.items():
+                  if other==s: continue
+                  if s in txt or stem in txt: uses.append(other)
+              if not uses:
+                  candidates.append(s)
+          print('UNREFERENCED_CANDIDATES_BEGIN')
+          print(json.dumps(candidates,indent=2))
+          print('UNREFERENCED_CANDIDATES_END')
+          print('Tracked:',len(files),'Conservatively unreferenced:',len(candidates))
+          PY
