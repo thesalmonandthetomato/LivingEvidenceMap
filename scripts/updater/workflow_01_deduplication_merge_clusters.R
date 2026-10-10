@@ -27,6 +27,27 @@ meta <- fread(metadata,na.strings=c("","NA"))
 stopifnot(all(c("idx","source","source_record_id") %in% names(meta)))
 stopifnot(identical(meta$idx,seq_len(nrow(meta))))
 
+# Verify persisted identities before accepting positional candidate coordinates.
+# Rows may be reordered between a paused classification and its resumption.
+verify_pair_ids <- function(x,label) {
+  fields <- c("source_id_i","source_record_id_i","source_id_j","source_record_id_j")
+  present <- fields %in% names(x)
+  if(!any(present)) return(invisible(FALSE)) # legacy decisions require index SHA guard upstream
+  if(!all(present)) stop(label,": partial immutable identity columns",call.=FALSE)
+  if(!nrow(x)) return(invisible(TRUE))
+  i<-as.integer(x$record_i); j<-as.integer(x$record_j)
+  if(anyNA(i)||anyNA(j)||any(i<1L|i>nrow(meta)|j<1L|j>nrow(meta)|i==j))
+    stop(label,": invalid positional coordinates",call.=FALSE)
+  valid <- as.character(x$source_id_i)==as.character(meta$source[i]) &
+    as.character(x$source_record_id_i)==as.character(meta$source_record_id[i]) &
+    as.character(x$source_id_j)==as.character(meta$source[j]) &
+    as.character(x$source_record_id_j)==as.character(meta$source_record_id[j])
+  if(anyNA(valid)||!all(valid))
+    stop(label,": immutable source identity mismatch; refusing positional decision assignment",call.=FALSE)
+  invisible(TRUE)
+}
+verify_pair_ids(old,"Preserved decisions")
+verify_pair_ids(new,"New decisions")
 pair_key <- function(x) paste(pmin(x$record_i,x$record_j),pmax(x$record_i,x$record_j),sep="::")
 old[,pair_key:=pair_key(old)]
 new[,pair_key:=pair_key(new)]
