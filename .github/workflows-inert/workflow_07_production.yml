@@ -3,6 +3,11 @@ name: Workflow 07 - topic coding production
 on:
   workflow_call:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       workflow06_pointer_path:
         required: true
         type: string
@@ -24,6 +29,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       workflow06_pointer_path:
         description: 'Current authoritative Workflow 06 pointer'
         required: true
