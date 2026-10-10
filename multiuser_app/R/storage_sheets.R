@@ -1137,8 +1137,9 @@ read_github_w04_kappa_registry <- function() {
   )
   ref <- Sys.getenv(
     "LEM_W04_KAPPA_REGISTRY_REF",
-    unset = "workflow01-final-architecture"
+    unset = ""
   )
+  if (!identical(repo, "thesalmonandthetomato/LivingEvidenceMap") || !identical(ref, "main")) stop("Development app refuses W04 registry reads outside LivingEvidenceMap/main",call.=FALSE)
   path <- Sys.getenv(
     "LEM_W04_KAPPA_REGISTRY_PATH",
     unset = "docs/workflow04/kappa_registry.csv"
