@@ -1,5 +1,8 @@
 name: W01 first-run synthetic validation (no APIs)
 on:
+  push:
+    branches: [main]
+    paths: [docs/w01_synthetic_validation_trigger.txt]
   workflow_dispatch:
 permissions:
   contents: read
@@ -155,6 +158,41 @@ jobs:
           x<-fromJSON(file.path(root,"index_identity.json"))
           stopifnot(file.exists(file.path(root,"local-baseline.tar.gz")))
           cat("PASS: checkpoint and source reconstruction preserve first-run identities and original rescoring files; local archive is valid\n")
+          RS
+      - name: Apply final adjudications and verify resumed canonical baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/w01_smoke
+          : > "$ROOT/empty_human_decisions.jsonl"
+          Rscript - <<'RS'
+          jsonlite::write_json(list(resume_allowed=TRUE),"/tmp/w01_smoke/human_integrity.json",auto_unbox=TRUE)
+          RS
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
+            --combined-decisions "$ROOT/merged/combined_pair_decisions.csv" \
+            --manifestation-map "$ROOT/merged/manifestation_cluster_map.csv" \
+            --llm-adjudications "$ROOT/all_adjudications.jsonl" \
+            --human-decisions "$ROOT/empty_human_decisions.jsonl" \
+            --human-integrity-manifest "$ROOT/human_integrity.json" \
+            --output-dir "$ROOT/final"
+          mkdir -p "$ROOT/resumed_canonical"
+          : > "$ROOT/final/empty_repairs.jsonl"
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R \
+            --cluster-map "$ROOT/final/manifestation_cluster_map.csv" \
+            --strip-actions "$ROOT/final/abstract_strip_actions.jsonl" \
+            --data-quality-repairs "$ROOT/final/empty_repairs.jsonl" \
+            --input-manifest "$ROOT/replayed_union/source_inputs.json" \
+            --run-id synthetic-validation \
+            --output "$ROOT/resumed_canonical/records.jsonl" \
+            --manifest "$ROOT/resumed_canonical/canonical_manifest.json"
+          Rscript - <<'RS'
+          library(jsonlite)
+          root <- "/tmp/w01_smoke"
+          orig <- fromJSON(file.path(root,"canonical_manifest.json"))
+          resumed <- fromJSON(file.path(root,"resumed_canonical","canonical_manifest.json"))
+          stopifnot(orig$records==2L,resumed$records==2L)
+          stopifnot(identical(readLines(file.path(root,"canonical.jsonl")),readLines(file.path(root,"resumed_canonical","records.jsonl"))))
+          cat("PASS: final adjudication application and reconstructed canonical JSONL match original synthetic baseline\\n")
           RS
       - name: Upload synthetic test outputs
         if: always()
