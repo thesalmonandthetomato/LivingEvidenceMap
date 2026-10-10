@@ -513,6 +513,26 @@ for (k in seq_along(pair_keys)) {
   light[[k]] <- data.table(record_i=z$i,record_j=z$j,blocks=paste(sort(unique(z$blocks)),collapse=";"))
 }
 candidate_dt <- rbindlist(light)
+# Persist explicit source identities alongside all positional indices.
+# Positional indices are ephemeral computational coordinates, not pair IDs.
+if(nrow(candidate_dt)) {
+  candidate_dt[, `:=`(
+    source_id_i=as.character(meta$source[record_i]),
+    source_record_id_i=as.character(meta$source_record_id[record_i]),
+    source_id_j=as.character(meta$source[record_j]),
+    source_record_id_j=as.character(meta$source_record_id[record_j])
+  )]
+  identity <- function(src,id) paste0(nchar(src,type="bytes"),":",src,nchar(id,type="bytes"),":",id)
+  ki <- identity(candidate_dt$source_id_i,candidate_dt$source_record_id_i)
+  kj <- identity(candidate_dt$source_id_j,candidate_dt$source_record_id_j)
+  first <- ifelse(ki<=kj,ki,kj)
+  second <- ifelse(ki<=kj,kj,ki)
+  candidate_dt[,stable_pair_key:=vapply(seq_along(first),function(k)
+    digest(paste0(nchar(first[[k]],type="bytes"),":",first[[k]],second[[k]]),
+           algo="sha256",serialize=FALSE),character(1))]
+  if(anyDuplicated(candidate_dt$stable_pair_key))
+    stop("Candidate pairs have repeated immutable identities",call.=FALSE)
+}
 
 # Incremental extension: every candidate in memory already contains at least
 # one newly appended manifestation. Historical old-old decisions remain restored
@@ -638,6 +658,9 @@ for (k in seq_len(nrow(score_sample))) {
 
   scored[[k]]<-data.table(
     record_i=i,record_j=j,source_i=a$source,source_j=b$source,
+    source_id_i=a$source,source_record_id_i=a$source_record_id,
+    source_id_j=b$source,source_record_id_j=b$source_record_id,
+    stable_pair_key=score_sample$stable_pair_key[[k]],
     title_i=a$title,title_j=b$title,doi_i=a$doi_norm,doi_j=b$doi_norm,
     blocks=blocks,title_similarity=tsim,title_containment=containment,
     exact_title=exact_title,exact_abstract=exact_abs,
