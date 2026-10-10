@@ -166,7 +166,7 @@ permissions:
   actions: write
 
 env:
-  WORKFLOW00_ORCHESTRATOR_BRANCH: production-minimal
+  WORKFLOW00_ORCHESTRATOR_BRANCH: main
 
 jobs:
   validate-and-plan:
@@ -835,7 +835,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1x00D0idQz558dKp3gB0z-mcUBVrw8jjllqGAZdqYlcs'
+          LEM_GOOGLE_SHEET_ID: ${{ vars.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
