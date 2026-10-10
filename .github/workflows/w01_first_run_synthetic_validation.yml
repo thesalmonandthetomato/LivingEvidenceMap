@@ -1,5 +1,8 @@
 name: W01 first-run synthetic validation (no APIs)
 on:
+  push:
+    branches: [main]
+    paths: [docs/w01_synthetic_validation_trigger.txt]
   workflow_dispatch:
 permissions:
   contents: read
@@ -190,6 +193,48 @@ jobs:
           stopifnot(orig$records==2L,resumed$records==2L)
           stopifnot(identical(readLines(file.path(root,"canonical.jsonl")),readLines(file.path(root,"resumed_canonical","records.jsonl"))))
           cat("PASS: final adjudication application and reconstructed canonical JSONL match original synthetic baseline\\n")
+          RS
+      - name: Verify synthetic human duplicate decision changes clustering
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/w01_smoke
+          mkdir -p "$ROOT/human_test"
+          Rscript - <<'RS'
+          library(jsonlite)
+          library(data.table)
+          library(digest)
+          root <- "/tmp/w01_smoke"
+          pair <- fread(file.path(root,"merged","combined_pair_decisions.csv"))[1]
+          rec <- function(id) list(source="ebsco_amed",source_record_id=id)
+          llm <- list(review_case_id="SYNTHETIC-HUMAN-1",pair_key=as.character(pair$pair_key),promotion="human_review",record_i=rec("TEST-1"),record_j=rec("TEST-2"),model_decision="uncertain",model_confidence=0.5,model_rationale="Synthetic test only")
+          queue <- list(review_case_id="SYNTHETIC-HUMAN-1",record_i=rec("TEST-1"),record_j=rec("TEST-2"))
+          dir <- file.path(root,"human_test")
+          writeLines(toJSON(llm,auto_unbox=TRUE,null="null"),file.path(dir,"llm.jsonl"))
+          writeLines(toJSON(queue,auto_unbox=TRUE,null="null"),file.path(dir,"queue.jsonl"))
+          sha <- digest(file=file.path(dir,"queue.jsonl"),algo="sha256",serialize=FALSE)
+          human <- list(review_case_id="SYNTHETIC-HUMAN-1",queue_sha256=sha,decision="duplicate",rationale="Synthetic duplicate match",reviewer="validation",resolved_at_utc="2026-10-10T12:00:00Z")
+          writeLines(toJSON(human,auto_unbox=TRUE,null="null"),file.path(dir,"human.jsonl"))
+          file.create(file.path(dir,"repairs.jsonl"))
+          RS
+          Rscript scripts/updater/workflow_01_validate_human_review_state.R \
+            --queue "$ROOT/human_test/queue.jsonl" \
+            --decisions "$ROOT/human_test/human.jsonl" \
+            --repairs "$ROOT/human_test/repairs.jsonl" \
+            --output "$ROOT/human_test/integrity.json" \
+            --require-complete true
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
+            --combined-decisions "$ROOT/merged/combined_pair_decisions.csv" \
+            --manifestation-map "$ROOT/merged/manifestation_cluster_map.csv" \
+            --llm-adjudications "$ROOT/human_test/llm.jsonl" \
+            --human-decisions "$ROOT/human_test/human.jsonl" \
+            --human-integrity-manifest "$ROOT/human_test/integrity.json" \
+            --output-dir "$ROOT/human_test/final"
+          Rscript - <<'RS'
+          library(jsonlite)
+          s<-fromJSON("/tmp/w01_smoke/human_test/final/summary.json")
+          stopifnot(as.integer(s$clusters)==1L,as.integer(s$human_final_decisions)==1L)
+          cat("PASS: genuine synthetic human decision collapses 2 separate records into 1 cluster\n")
           RS
       - name: Upload synthetic test outputs
         if: always()
