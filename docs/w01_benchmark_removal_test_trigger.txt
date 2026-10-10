@@ -1,2 +1,3 @@
 Validate removal of historic benchmark evaluation with R parser and exact decision-code comparison.
 Rerun corrected exact string-boundary comparison.
+Rerun with corrected newline literals.
