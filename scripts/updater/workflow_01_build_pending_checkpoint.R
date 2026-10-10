@@ -24,12 +24,13 @@ adjudications <- arg("--adjudications")
 review_package <- arg("--review-package")
 pre_summary <- arg("--pre-summary")
 metadata_path <- arg("--metadata")
+first_run <- identical(tolower(arg("--first-run","false")),"true")
 previous_pointer <- arg("--previous-pointer")
 workflow00_pointer <- arg("--workflow00-pointer")
 output_dir <- arg("--output-dir")
 run_id <- arg("--run-id")
 required <- list(previous_root,current_seed_root,incremental_rescore,adjudications,review_package,
-                 pre_summary,metadata_path,previous_pointer,workflow00_pointer,output_dir,run_id)
+                 pre_summary,metadata_path,workflow00_pointer,output_dir,run_id)
 if(any(vapply(required,is.null,logical(1)))) stop("Missing required checkpoint argument",call.=FALSE)
 
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
@@ -125,13 +126,19 @@ for(src in source_order){
 file.copy(incremental_rescore,file.path(output_dir,"incremental_rescored_pairs.csv"),overwrite=TRUE)
 file.copy(adjudications,file.path(output_dir,"all_adjudications.jsonl"),overwrite=TRUE)
 file.copy(pre_summary,file.path(output_dir,"pre_adjudication_summary.json"),overwrite=TRUE)
-file.copy(previous_pointer,file.path(output_dir,"previous_workflow01_pointer.json"),overwrite=TRUE)
+if (first_run) {
+  if (!is.null(previous_pointer) && nzchar(previous_pointer)) stop("First run forbids a previous W01 pointer",call.=FALSE)
+  writeLines(toJSON(list(first_run=TRUE,previous_baseline=NULL),auto_unbox=TRUE,null="null"),file.path(output_dir,"previous_workflow01_pointer.json"))
+} else {
+  if (is.null(previous_pointer) || !file.exists(previous_pointer)) stop("Previous W01 pointer is required for update checkpoint",call.=FALSE)
+  file.copy(previous_pointer,file.path(output_dir,"previous_workflow01_pointer.json"),overwrite=TRUE)
+}
 file.copy(workflow00_pointer,file.path(output_dir,"workflow00_pointer.json"),overwrite=TRUE)
 dir.create(file.path(output_dir,"human_review_package"),showWarnings=FALSE)
 files <- list.files(review_package,full.names=TRUE,all.files=TRUE,no..=TRUE)
 file.copy(files,file.path(output_dir,"human_review_package"),recursive=TRUE,overwrite=TRUE)
 
-prev <- fromJSON(previous_pointer,simplifyVector=FALSE)
+prev <- if (first_run) NULL else fromJSON(previous_pointer,simplifyVector=FALSE)
 w00 <- fromJSON(workflow00_pointer,simplifyVector=FALSE)
 review_manifest <- fromJSON(file.path(output_dir,"human_review_package","review_manifest.json"),simplifyVector=FALSE)
 manifest <- list(
@@ -139,7 +146,8 @@ manifest <- list(
   workflow="01",
   state="pre_adjudication",
   github_run_id=as.character(run_id),
-  previous_workflow01=list(
+  first_run=first_run,
+  previous_workflow01=if (first_run) NULL else list(
     github_run_id=as.character(prev$github_run_id),
     zenodo_record_id=as.character(prev$zenodo_record_id),
     manifest_sha256=as.character(prev$manifest_sha256)
