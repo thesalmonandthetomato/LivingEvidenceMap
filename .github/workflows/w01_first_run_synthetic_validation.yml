@@ -1,5 +1,8 @@
 name: W01 first-run synthetic validation (no APIs)
 on:
+  push:
+    branches: [main]
+    paths: [docs/w01_synthetic_validation_trigger.txt]
   workflow_dispatch:
 permissions:
   contents: read
@@ -232,6 +235,44 @@ jobs:
           s<-fromJSON("/tmp/w01_smoke/human_test/final/summary.json")
           stopifnot(as.integer(s$clusters)==1L,as.integer(s$human_final_decisions)==1L)
           cat("PASS: genuine synthetic human decision collapses 2 separate records into 1 cluster\n")
+          RS
+      - name: Exercise original full-state archiver offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/w01_smoke
+          cp "$ROOT/human_test/final/summary.json" "$ROOT/archived/workflow01_full_five_source/summary.json"
+          Rscript - <<'RS'
+          library(jsonlite)
+          p<-"/tmp/w01_smoke/archived/workflow01_full_five_source/summary.json"
+          s<-fromJSON(p,simplifyVector=FALSE)
+          if(is.null(s$incremental_candidate_rows)) s$incremental_candidate_rows<-1L
+          if(is.null(s$incremental_pair_decisions)) s$incremental_pair_decisions<-1L
+          if(is.null(s$exact_duplicate_candidate_rows_removed)) s$exact_duplicate_candidate_rows_removed<-0L
+          if(is.null(s$preserved_pair_decisions)) s$preserved_pair_decisions<-0L
+          if(is.null(s$manual_review_pairs)) s$manual_review_pairs<-1L
+          write_json(s,p,auto_unbox=TRUE)
+          RS
+          cp "$ROOT/human_test/final/final_pair_decisions.csv" "$ROOT/archived/workflow01_full_five_source/"
+          cp "$ROOT/human_test/final/manifestation_cluster_map.csv" "$ROOT/archived/workflow01_full_five_source/"
+          cp "$ROOT/human_test/final/abstract_strip_actions.jsonl" "$ROOT/archived/workflow01_full_five_source/"
+          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \
+            --archive-only true \
+            --staging-root "$ROOT/archived" \
+            --run-id synthetic-validation \
+            --repository thesalmonandthetomato/LivingEvidenceMap \
+            --state final \
+            --output-dir "$ROOT/offline_archive"
+          test -s "$ROOT/offline_archive/archive_files/LivingEvidenceMap_workflow01_run-synthetic-validation_final-state.tar.gz"
+          test -s "$ROOT/offline_archive/archive_files/LivingEvidenceMap_workflow01_run-synthetic-validation_manifest.json"
+          tar -tzf "$ROOT/offline_archive/archive_files/LivingEvidenceMap_workflow01_run-synthetic-validation_final-state.tar.gz" | grep -q 'canonical/records.jsonl'
+          tar -tzf "$ROOT/offline_archive/archive_files/LivingEvidenceMap_workflow01_run-synthetic-validation_final-state.tar.gz" | grep -q 'workflow01_seed/source_inputs.json'
+          Rscript - <<'RS'
+          library(jsonlite)
+          p<-"/tmp/w01_smoke/offline_archive/archive_files/LivingEvidenceMap_workflow01_run-synthetic-validation_manifest.json"
+          m<-fromJSON(p)
+          stopifnot(m$state=="final",m$source_manifestations==2L,m$files$state_archive$bytes>0)
+          cat("PASS: original W01 full-state archiver creates verified local archive and manifest without Zenodo\\n")
           RS
       - name: Upload synthetic test outputs
         if: always()
