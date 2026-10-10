@@ -14,6 +14,7 @@ on:
         options:
           - openalex
           - pubmed
+          - scopus
 
 permissions:
   contents: read
@@ -48,6 +49,8 @@ jobs:
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
           OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
           SELECTED_SOURCE: ${{ inputs.source || 'openalex' }}
         shell: bash
         run: |
@@ -55,7 +58,7 @@ jobs:
           if [ "${{ github.event_name }}" = "push" ]; then
             SELECTED_SOURCE="$(sed -n 's/^source=//p' docs/w00_count_preflight_trigger.txt | tail -1)"
           fi
-          case "$SELECTED_SOURCE" in openalex|pubmed) ;; *) echo "Unsupported source"; exit 1;; esac
+          case "$SELECTED_SOURCE" in openalex|pubmed|scopus) ;; *) echo "Unsupported source"; exit 1;; esac
           mkdir -p outputs/w00_count_preflight/counts
           Rscript scripts/updater/workflow_00_search_scope_counts.R \
             --plan outputs/w00_count_preflight/plan/search_plan.json \
