@@ -240,9 +240,9 @@ jobs:
           mkdir -p outputs/workflow01_candidates
           PRIOR_ARGS=(--old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv)
           if [ "$LEM_FIRST_RUN" = "true" ]; then PRIOR_ARGS=(--first-run true); fi
-          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \\
-            --input-manifest outputs/workflow01_union/source_inputs.json \\
-            "${PRIOR_ARGS[@]}" \\
+          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
+            "${PRIOR_ARGS[@]}" \
             --output-dir outputs/workflow01_candidates \
             --score-n 1 \
             --workflow01-run-id "$GITHUB_RUN_ID" \
@@ -265,8 +265,8 @@ jobs:
           mkdir -p outputs/workflow01_pre_adjudication
           FIRST_RUN_ARGS=()
           if [ "$LEM_FIRST_RUN" = "true" ]; then FIRST_RUN_ARGS=(--first-run true); fi
-          Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \\
-            "${FIRST_RUN_ARGS[@]}" \\
+          Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
+            "${FIRST_RUN_ARGS[@]}" \
             --old-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
             --new-decisions "$CHECKPOINT_DIR/incremental_rescored_pairs.csv" \
             --metadata outputs/workflow01_candidates/normalised_metadata.csv \
@@ -309,8 +309,8 @@ jobs:
           mkdir -p outputs/final
           PREVIOUS_MAP_ARGS=(--previous-cluster-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv)
           if [ "$LEM_FIRST_RUN" = "true" ]; then PREVIOUS_MAP_ARGS=(); fi
-          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \\
-            "${PREVIOUS_MAP_ARGS[@]}" \\
+          Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
+            "${PREVIOUS_MAP_ARGS[@]}" \
             --combined-decisions outputs/workflow01_pre_adjudication/combined_pair_decisions.csv \
             --manifestation-map outputs/workflow01_pre_adjudication/manifestation_cluster_map.csv \
             --llm-adjudications "$CHECKPOINT_DIR/all_adjudications.jsonl" \
@@ -407,8 +407,8 @@ jobs:
           cp outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json "$ROOT/canonical/"
           cp outputs/final/cumulative_data_quality_repairs.jsonl "$ROOT/provenance/"
           mkdir -p outputs/zenodo
-          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \\
-            --staging-root "$ROOT" --run-id "$GITHUB_RUN_ID" --repository "$GITHUB_REPOSITORY" \\
+          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \
+            --staging-root "$ROOT" --run-id "$GITHUB_RUN_ID" --repository "$GITHUB_REPOSITORY" \
             --state final --output-dir outputs/zenodo
 
       - name: Register final delta and checkpoint resolution
