@@ -113,7 +113,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  WORKFLOW02_BRANCH: workflow01-final-architecture
+  WORKFLOW02_BRANCH: main
 
 jobs:
   prepare:
@@ -516,7 +516,7 @@ jobs:
         if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
           QUEUE_TAB: 'queue_w02_active'
         shell: bash
         run: |
@@ -551,7 +551,7 @@ jobs:
         if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -633,8 +633,8 @@ jobs:
           git add docs/enrichment/zenodo_registry.csv docs/enrichment/zenodo/run-"$GITHUB_RUN_ID".json
           if ! git diff --cached --quiet; then
             git commit -m "Register batched Workflow 02 enrichment state run $GITHUB_RUN_ID"
-            git pull --rebase origin workflow01-final-architecture
-            git push origin HEAD:workflow01-final-architecture
+            git pull --rebase origin main
+            git push origin HEAD:main
           fi
 
       - name: Update current-run live status through W02
@@ -642,7 +642,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
