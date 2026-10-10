@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - workflow01-final-architecture
+      - main
     paths:
       - 'docs/reporting/.run_workflow09_topic_figures'
 
@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: main
           persist-credentials: false
 
       - name: Set up R
