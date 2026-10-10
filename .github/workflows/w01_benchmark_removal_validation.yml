@@ -20,19 +20,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript -e 'invisible(parse(file="scripts/updater/workflow_01_deduplication_identifier_rescore.R"));cat("PASS: R classifier parses\\n")'
+          Rscript -e 'invisible(parse(file="scripts/updater/workflow_01_deduplication_identifier_rescore.R"));cat("PASS: R classifier parses\n")'
           git show a6de132be86304f56661ea3f9e7c0e71db33808b:scripts/updater/workflow_01_deduplication_identifier_rescore.R > /tmp/w01_before.R
           python3 - <<'PY'
           import pathlib,re
           prior=pathlib.Path('/tmp/w01_before.R').read_text()
           current=pathlib.Path('scripts/updater/workflow_01_deduplication_identifier_rescore.R').read_text()
           a=prior.index('labels_path <- arg(')
-          b=prior.index('\\nnormalise_visible_title <-',a)
+          b=prior.index('\nnormalise_visible_title <-',a)
           expected=prior[:a]+prior[b:]
           a=expected.index('x[, pair_key := paste(')
-          b=expected.index('\\nsummary <- list(',a)
+          b=expected.index('\nsummary <- list(',a)
           expected=expected[:a]+expected[b:]
-          expected=expected.replace('  historical_benchmark_evaluation = if (benchmark_available) "performed" else "not_available",\\n','')
+          expected=expected.replace('  historical_benchmark_evaluation = if (benchmark_available) "performed" else "not_available",\n','')
           assert current==expected,'Non-benchmark code changed'
           assert 'workflow02_v2_human_labels_2026-09-21.csv' not in current
           assert 'human_validation_results.csv' not in current
