@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - workflow01-final-architecture
+      - main
     paths:
       - 'docs/deduplication/w01_export_requests/**'
 
@@ -23,15 +23,15 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-      LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+      LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
       DECISIONS_TAB: 'decisions'
       REPAIRS_TAB: 'w01_data_quality_repairs'
-      WORKFLOW01_BRANCH: workflow01-final-architecture
+      WORKFLOW01_BRANCH: main
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: main
           fetch-depth: 0
 
       - uses: r-lib/actions/setup-r@v2
