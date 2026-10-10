@@ -284,6 +284,11 @@ for (src in names(paths)) {
   checkpoint(paste0("normalised_",src),sum(n_by_source),NULL,list(source_counts=as.list(n_by_source)))
 }
 meta <- rbindlist(rows,use.names=TRUE,fill=TRUE)
+if(anyNA(meta$source)||anyNA(meta$source_record_id)||
+   any(!nzchar(trimws(as.character(meta$source))))||
+   any(!nzchar(trimws(as.character(meta$source_record_id)))))
+ stop("W00 handoff contains missing source identity",call.=FALSE)
+
 meta[, corpus_key := paste(source,source_record_id,sep="::")]
 if (anyDuplicated(meta$corpus_key)) stop("Duplicate source namespace + record ID",call.=FALSE)
 
