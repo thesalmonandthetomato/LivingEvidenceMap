@@ -605,6 +605,7 @@ jobs:
     needs: prepare-w08-handoff
     uses: ./.github/workflows/workflow_08_production.yml
     with:
+      first_run: ${{ inputs.first_run }}
       lean_pointer_path: ${{ needs.prepare-w08-handoff.outputs.lean_pointer_path }}
       workflow03_pointer_path: ${{ needs.prepare-w08-handoff.outputs.workflow03_pointer_path }}
       workflow04_pointer_path: ${{ needs.prepare-w08-handoff.outputs.workflow04_pointer_path }}
