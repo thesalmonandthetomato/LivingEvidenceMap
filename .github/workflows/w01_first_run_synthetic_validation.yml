@@ -1,5 +1,8 @@
 name: W01 first-run synthetic validation (no APIs)
 on:
+  push:
+    branches: [main]
+    paths: [docs/w01_synthetic_validation_trigger.txt]
   workflow_dispatch:
 permissions:
   contents: read
@@ -91,6 +94,70 @@ jobs:
           x <- fromJSON("/tmp/w01_smoke/canonical_manifest.json")
           stopifnot(as.integer(x$records)==2L)
           cat("PASS: original W01 canonical builder produces two canonical records\n")
+          RS
+      - name: Check first-run checkpoint, source replay and local archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/w01_smoke
+          mkdir -p "$ROOT/empty_prior/workflow01_seed" "$ROOT/review_package" "$ROOT/rescore" "$ROOT/archived/workflow01_seed" "$ROOT/archived/workflow01_full_five_source" "$ROOT/archived/workflow01_incremental_rescore" "$ROOT/archived/canonical" "$ROOT/archived/provenance"
+          cp "$ROOT/prep/candidates/normalised_metadata.csv" "$ROOT/metadata.csv"
+          cp "$ROOT/new_decisions.csv" "$ROOT/rescore/rescored_sample.csv"
+          cp "$ROOT/merged/summary.json" "$ROOT/rescore/summary.json"
+          cp "$ROOT/new_decisions.csv" "$ROOT/rescored_pairs.csv"
+          : > "$ROOT/all_adjudications.jsonl"
+          Rscript - <<'RS'
+          library(jsonlite)
+          root <- "/tmp/w01_smoke"
+          write_json(list(pending_count=1,queue_sha256="synthetic-test-queue"),file.path(root,"review_package","review_manifest.json"),auto_unbox=TRUE)
+          write_json(list(status="published",github_run_id="synthetic-w00",zenodo_record_id="synthetic-only"),file.path(root,"w00_pointer.json"),auto_unbox=TRUE)
+          RS
+          Rscript scripts/updater/workflow_01_build_pending_checkpoint.R \
+            --first-run true \
+            --previous-root "$ROOT/empty_prior" \
+            --current-seed-root "$ROOT/prep/union" \
+            --incremental-rescore "$ROOT/rescored_pairs.csv" \
+            --rescore-dir "$ROOT/rescore" \
+            --adjudications "$ROOT/all_adjudications.jsonl" \
+            --review-package "$ROOT/review_package" \
+            --pre-summary "$ROOT/merged/summary.json" \
+            --metadata "$ROOT/metadata.csv" \
+            --workflow00-pointer "$ROOT/w00_pointer.json" \
+            --output-dir "$ROOT/checkpoint" \
+            --run-id synthetic-validation
+          Rscript scripts/updater/workflow_01_apply_checkpoint_sources.R \
+            --previous-seed "$ROOT/empty_prior/workflow01_seed" \
+            --checkpoint-dir "$ROOT/checkpoint" \
+            --output-dir "$ROOT/replayed_union"
+          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
+            --first-run true \
+            --input-manifest "$ROOT/replayed_union/source_inputs.json" \
+            --output-dir "$ROOT/replayed_candidates" \
+            --score-n 1 \
+            --validate-index-only true
+          Rscript scripts/updater/workflow_01_validate_index_identity.R \
+            --metadata "$ROOT/replayed_candidates/normalised_metadata.csv" \
+            --checkpoint-manifest "$ROOT/checkpoint/checkpoint_manifest.json" \
+            --output "$ROOT/index_identity.json"
+          cp "$ROOT/prep/union/"*_records_for_deduplication.jsonl "$ROOT/archived/workflow01_seed/"
+          cp "$ROOT/prep/union/source_inputs.json" "$ROOT/archived/workflow01_seed/"
+          cp "$ROOT/rescore/rescored_sample.csv" "$ROOT/rescore/summary.json" "$ROOT/archived/workflow01_incremental_rescore/"
+          cp "$ROOT/merged/summary.json" "$ROOT/merged/manifestation_cluster_map.csv" "$ROOT/archived/workflow01_full_five_source/"
+          cp "$ROOT/canonical.jsonl" "$ROOT/archived/canonical/records.jsonl"
+          cp "$ROOT/canonical_manifest.json" "$ROOT/archived/canonical/"
+          tar -czf "$ROOT/local-baseline.tar.gz" -C "$ROOT/archived" .
+          tar -tzf "$ROOT/local-baseline.tar.gz" >/dev/null
+          Rscript - <<'RS'
+          library(jsonlite)
+          root <- "/tmp/w01_smoke"
+          m <- fromJSON(file.path(root,"checkpoint","checkpoint_manifest.json"))
+          stopifnot(isTRUE(m$first_run),is.null(m$previous_workflow01))
+          for (x in c("rescored_sample.csv","summary.json")) {
+            stopifnot(identical(readBin(file.path(root,"rescore",x),"raw",n=1e7),readBin(file.path(root,"checkpoint","initial_rescore",x),"raw",n=1e7)))
+          }
+          x<-fromJSON(file.path(root,"index_identity.json"))
+          stopifnot(file.exists(file.path(root,"local-baseline.tar.gz")))
+          cat("PASS: checkpoint and source reconstruction preserve first-run identities and original rescoring files; local archive is valid\n")
           RS
       - name: Upload synthetic test outputs
         if: always()
