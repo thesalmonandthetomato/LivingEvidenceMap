@@ -12,3 +12,6 @@ preflight_fix=use_configured_r_package_repository
 
 retry=3
 fix=install_missing_digest_and_jsonlite_for_W00_planning
+
+retry=4
+fix=source_id_matrix_and_verified_artifact_queries
