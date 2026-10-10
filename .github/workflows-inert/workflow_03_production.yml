@@ -3,6 +3,11 @@ name: Workflow 03 - Publication status
 on:
   workflow_call:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       limit:
         required: false
         default: '0'
@@ -32,6 +37,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       limit:
         description: 'Records to scan; 0 = all records in the incoming lean canonical checkpoint'
         required: true
