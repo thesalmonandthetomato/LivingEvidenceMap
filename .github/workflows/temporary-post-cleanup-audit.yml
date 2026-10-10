@@ -25,6 +25,9 @@ jobs:
           Rscript scripts/audit_mvp_dependencies.R --output /tmp/mvp-cleanup-audit.json
           Rscript -e 'x<-jsonlite::fromJSON("/tmp/mvp-cleanup-audit.json"); stopifnot(length(x$errors)==0, x$counts$workflow_definitions==28)'
           test -z "$(git status --porcelain)"
+          test ! -e MINIMAL_DEPENDENCY_MANIFEST.md
+          test ! -e scripts/updater/workflow_00_compare_salmon_queries.R
+          test -z "$(find .github/workflows -name 'w00-w09-temporary-*' -print)"
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
