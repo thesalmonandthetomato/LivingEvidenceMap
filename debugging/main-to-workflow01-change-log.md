@@ -77,3 +77,9 @@ For every new defect discovered on `main`, add one entry identifying: **problem,
 - **Main fix:** `scripts/updater/workflow_01_prepare_source_catalogue.R` commit `83f50a5` validates W00 raw count = unique prepared records + individually logged identical duplicate occurrences. It rejects inconsistent counts, missing audit files and mismatched ledger lengths.
 - **Validation:** Synthetic positive and negative reconciliation cases passed in Actions run 38076435811, which also passed all earlier W01 offline tests.
 - **Status:** Production branch requires assessment and appropriate porting before deployment. Full W01 live rerun not yet attempted following correction.
+
+### 12. Historical human benchmark labels incorrectly required for W01 first-run classifier
+- **Observed:** Run 38077293901 passed source validation and candidate scoring, then failed in `workflow_01_deduplication_identifier_rescore.R` because `data/validation/workflow02_v2_human_labels_2026-09-21.csv` was removed from the cleaned repository.
+- **Original file:** archived at `legacy-pre-pipeline-cleanup-20261005`; 205 historical pair labels (166 duplicate, 39 not_duplicate), columns `record_i,record_j,truth,review_group,original_review_rule`. Numeric IDs belong to an older corpus and must not be reused as current W01 IDs.
+- **Main correction:** commit `a6de132`. Missing benchmark becomes a zero-row optional evaluation input; deterministic rescore rules and primary `rescored_sample.csv` output are unchanged, and evaluation outputs are retained. Explicit `--benchmark-labels` supports historical benchmarking if appropriate.
+- **Production branch:** assess and port only if applicable. Main integration rerun pending.
