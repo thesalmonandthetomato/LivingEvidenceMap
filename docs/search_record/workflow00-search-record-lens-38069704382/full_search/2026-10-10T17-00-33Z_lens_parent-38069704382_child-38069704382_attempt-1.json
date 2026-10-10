@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-10T17:00:33Z",
+  "source": "lens",
+  "run_type": "full",
+  "search_version": "mvp-salmon-feed-test-v1",
+  "additional_search_term": null,
+  "search_string": "((title:(\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") OR abstract:(\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") OR keyword:(\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\")) AND (title:(feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\") OR abstract:(feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\") OR keyword:(feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\")))",
+  "dispatched_query_sha256": "cb7af48287e1784819e77b662aefb0d261dca93ea9620bf7637e0960c139d419",
+  "archived_query_sha256": "cb7af48287e1784819e77b662aefb0d261dca93ea9620bf7637e0960c139d419",
+  "database_scope": null,
+  "search_window": null,
+  "reported_search_results": 3433,
+  "successfully_downloaded_results": 3433,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "38069704382",
+    "child_workflow_run_id": "38069704382",
+    "run_attempt": "1",
+    "ref": "main",
+    "triggering_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "orchestrator_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "source_handler_sha": "172a8ca3f73c88ddff512c640806013265183c46"
+  },
+  "artifact_name": "workflow00-lens-harvest-38069704382"
+}

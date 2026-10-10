@@ -2,11 +2,11 @@
   "schema": "living-evidence-map-workflow00-source-selection-v1",
   "run_type": "full",
   "selection_origin": "full_run_group_inputs",
-  "baseline_run_id": "37346236893",
-  "selected_groups": [],
-  "additional_sources": ["ebsco_medline", "ebsco_cinahl", "ebsco_amed", "ebsco_psycinfo", "ebsco_biological_agricultural_index", "ebsco_greenfile", "ebsco_waters_oceans", "ebsco_econlit", "ebsco_political_science", "ebsco_family_society", "ebsco_africa_wide", "ebsco_mla", "ebsco_atla_religion"],
+  "baseline_run_id": "38069704382",
+  "selected_groups": ["core_multidisciplinary", "health_medicine", "environment_agriculture", "social_sciences", "education", "regional", "media_communication", "humanities", "sport_tourism", "grey_preprints"],
+  "additional_sources": [],
   "excluded_sources": [],
-  "selected_sources": ["ebsco_africa_wide", "ebsco_amed", "ebsco_psycinfo", "ebsco_atla_religion", "ebsco_biological_agricultural_index", "ebsco_cinahl", "ebsco_econlit", "ebsco_family_society", "ebsco_greenfile", "ebsco_medline", "ebsco_mla", "ebsco_political_science", "ebsco_waters_oceans"],
-  "selected_source_count": 13,
-  "generated_at_utc": "2026-10-05T17:09:50Z"
+  "selected_sources": ["lens", "scopus", "openalex", "agricola", "pubmed", "ethos", "cba", "epmc_preprints", "wos", "ebsco_africa_wide", "ebsco_amed", "ebsco_psycinfo", "ebsco_atla_religion", "ebsco_biological_agricultural_index", "ebsco_cinahl", "ebsco_communication_mass_media", "ebsco_econlit", "ebsco_eric", "ebsco_family_society", "ebsco_greenfile", "ebsco_hospitality_tourism", "ebsco_medline", "ebsco_mla", "ebsco_political_science", "ebsco_sportdiscus", "ebsco_waters_oceans"],
+  "selected_source_count": 26,
+  "generated_at_utc": "2026-10-10T16:57:43Z"
 }

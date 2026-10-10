@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-10T16:58:53Z",
+  "source": "ebsco_hospitality_tourism",
+  "run_type": "full",
+  "search_version": "mvp-salmon-feed-test-v1",
+  "additional_search_term": null,
+  "search_string": "((TI (\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") OR AB (\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") OR KW (\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\")) AND (TI (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\") OR AB (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\") OR KW (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\")))",
+  "dispatched_query_sha256": "7cf7c85fbc7e546c87621af546c62fe592d114387f171b89e6ad2ccd9dbf5dea",
+  "archived_query_sha256": "7cf7c85fbc7e546c87621af546c62fe592d114387f171b89e6ad2ccd9dbf5dea",
+  "database_scope": {
+    "provider": "EBSCOhost EIT",
+    "database_code": "hjh",
+    "database_name": "Hospitality & Tourism Complete",
+    "field_scope": [
+      "TI",
+      "AB",
+      "KW"
+    ]
+  },
+  "search_window": null,
+  "reported_search_results": 7,
+  "successfully_downloaded_results": 7,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "38069704382",
+    "child_workflow_run_id": "38069704382",
+    "run_attempt": "1",
+    "ref": "main",
+    "triggering_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "orchestrator_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "source_handler_sha": "172a8ca3f73c88ddff512c640806013265183c46"
+  },
+  "artifact_name": "workflow00-ebsco_hospitality_tourism-harvest-38069704382"
+}

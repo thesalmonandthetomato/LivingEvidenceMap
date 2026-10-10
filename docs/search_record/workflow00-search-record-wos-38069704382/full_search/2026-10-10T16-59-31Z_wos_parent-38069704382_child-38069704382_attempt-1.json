@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-10T16:59:31Z",
+  "source": "wos",
+  "run_type": "full",
+  "search_version": "mvp-salmon-feed-test-v1",
+  "additional_search_term": null,
+  "search_string": "(TI=((\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") AND (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\"))) OR (AB=((\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") AND (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\"))) OR (AK=((\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") AND (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\")))",
+  "dispatched_query_sha256": "1eae35939ea2cfedb4d0f25f0fba7b9d13f8ea3a490cf91d4818acb3818bd16e",
+  "archived_query_sha256": "1eae35939ea2cfedb4d0f25f0fba7b9d13f8ea3a490cf91d4818acb3818bd16e",
+  "database_scope": {
+    "platform": "Web of Science",
+    "api_product": "Web of Science Starter API",
+    "endpoint": "https://api.clarivate.com/apis/wos-starter/v1/documents",
+    "database_parameter": "WOS",
+    "databases_searched": [
+      {
+        "code": "WOS",
+        "name": "Web of Science Core Collection"
+      }
+    ],
+    "selection_method": "Explicit db=WOS API parameter",
+    "recorded_at_utc": "2026-10-10T16:58:44Z",
+    "institutional_coverage_note": "The content, editions and historical coverage available within the Web of Science Core Collection are determined by the institutional/API entitlement active at query time and may change.",
+    "core_collection_editions": "Not exposed or independently verified by this Starter API request"
+  },
+  "search_window": null,
+  "reported_search_results": 2837,
+  "successfully_downloaded_results": 2837,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "38069704382",
+    "child_workflow_run_id": "38069704382",
+    "run_attempt": "1",
+    "ref": "main",
+    "triggering_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "orchestrator_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "source_handler_sha": "172a8ca3f73c88ddff512c640806013265183c46"
+  },
+  "artifact_name": "workflow00-wos-harvest-38069704382"
+}

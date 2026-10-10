@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-10T16:58:51Z",
+  "source": "agricola",
+  "run_type": "full",
+  "search_version": "mvp-salmon-feed-test-v1",
+  "additional_search_term": null,
+  "search_string": "SRC:AGR AND TITLE_ABS:((\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") AND (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\"))",
+  "dispatched_query_sha256": "86c3a5a5f80785aa36736a5d0644af9bf3eb8019c06074b39702459d1f33e1a1",
+  "archived_query_sha256": "86c3a5a5f80785aa36736a5d0644af9bf3eb8019c06074b39702459d1f33e1a1",
+  "database_scope": null,
+  "search_window": null,
+  "reported_search_results": 587,
+  "successfully_downloaded_results": 587,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "38069704382",
+    "child_workflow_run_id": "38069704382",
+    "run_attempt": "1",
+    "ref": "main",
+    "triggering_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "orchestrator_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "source_handler_sha": "172a8ca3f73c88ddff512c640806013265183c46"
+  },
+  "artifact_name": "workflow00-agricola-harvest-38069704382"
+}

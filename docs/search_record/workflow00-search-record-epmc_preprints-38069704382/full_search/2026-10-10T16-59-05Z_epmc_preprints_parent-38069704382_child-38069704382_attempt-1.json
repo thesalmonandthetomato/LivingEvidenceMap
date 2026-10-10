@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-10T16:59:05Z",
+  "source": "epmc_preprints",
+  "run_type": "full",
+  "search_version": "mvp-salmon-feed-test-v1",
+  "additional_search_term": null,
+  "search_string": "SRC:PPR AND TITLE_ABS:((\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") AND (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\"))",
+  "dispatched_query_sha256": "d528dd458b79c840df016c4f85cfb4f8a9cb732a5600bac6faec4b9ae78b3a34",
+  "archived_query_sha256": "d528dd458b79c840df016c4f85cfb4f8a9cb732a5600bac6faec4b9ae78b3a34",
+  "database_scope": null,
+  "search_window": null,
+  "reported_search_results": 37,
+  "successfully_downloaded_results": 37,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "38069704382",
+    "child_workflow_run_id": "38069704382",
+    "run_attempt": "1",
+    "ref": "main",
+    "triggering_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "orchestrator_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "source_handler_sha": "172a8ca3f73c88ddff512c640806013265183c46"
+  },
+  "artifact_name": "workflow00-epmc_preprints-harvest-38069704382"
+}

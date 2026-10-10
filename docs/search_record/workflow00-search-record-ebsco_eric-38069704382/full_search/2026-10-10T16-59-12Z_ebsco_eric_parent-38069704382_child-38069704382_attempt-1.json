@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-10T16:59:12Z",
+  "source": "ebsco_eric",
+  "run_type": "full",
+  "search_version": "mvp-salmon-feed-test-v1",
+  "additional_search_term": null,
+  "search_string": "((TI (\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\") OR AB (\"salmo salar\" OR \"atlantic salmon\" OR \"norwegian salmon\" OR \"scottish salmon\")) AND (TI (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\") OR AB (feed OR fishmeal OR \"fish oil\" OR \"marine ingredient*\")))",
+  "dispatched_query_sha256": "6f6fc68b692b012e70d7e8f6e4287ce10b886bd32d9a853ce92f8f73602e2825",
+  "archived_query_sha256": "6f6fc68b692b012e70d7e8f6e4287ce10b886bd32d9a853ce92f8f73602e2825",
+  "database_scope": {
+    "provider": "EBSCOhost EIT",
+    "database_code": "eric",
+    "database_name": "ERIC",
+    "field_scope": [
+      "TI",
+      "AB"
+    ]
+  },
+  "search_window": null,
+  "reported_search_results": 0,
+  "successfully_downloaded_results": 0,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "38069704382",
+    "child_workflow_run_id": "38069704382",
+    "run_attempt": "1",
+    "ref": "main",
+    "triggering_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "orchestrator_sha": "172a8ca3f73c88ddff512c640806013265183c46",
+    "source_handler_sha": "172a8ca3f73c88ddff512c640806013265183c46"
+  },
+  "artifact_name": "workflow00-ebsco_eric-harvest-38069704382"
+}
