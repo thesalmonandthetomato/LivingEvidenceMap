@@ -864,6 +864,7 @@ jobs:
           test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
           git pull --ff-only origin "$WORKFLOW00_ORCHESTRATOR_BRANCH"
           Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --first-run "${{ inputs.first_run || false }}" \
             --force-stage W00 \
             --w00-run-id "$GITHUB_RUN_ID"
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
@@ -901,14 +902,19 @@ jobs:
           EXPECTED="w00-run-$GITHUB_RUN_ID"
           ACTUAL="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(as.character(x$update_id))')"
           test "$ACTUAL" = "$EXPECTED"
-          PREV_W01="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow01_pointer))')"
-          test -n "$PREV_W01"
-          test -s "$PREV_W01"
+          FIRST_RUN="${{ inputs.first_run || false }}"
+          PREV_W01=""
+          if [ "$FIRST_RUN" = "false" ]; then
+            PREV_W01="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow01_pointer))')"
+            test -n "$PREV_W01"
+            test -s "$PREV_W01"
+          fi
           gh workflow run workflow_01_production.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$WORKFLOW00_ORCHESTRATOR_BRANCH" \
             -f workflow00_pointer_path="$W00_POINTER" \
             -f previous_workflow01_pointer_path="$PREV_W01" \
+            -f first_run="$FIRST_RUN" \
             -f model='gpt-5.6-luna' \
             -f auto_threshold='0.95' \
             -f max_llm_cases='5000'
