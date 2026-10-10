@@ -1,8 +1,5 @@
 name: W01 first-run synthetic validation (no APIs)
 on:
-  push:
-    branches: [main]
-    paths: [docs/w01_synthetic_validation_trigger.txt]
   workflow_dispatch:
 permissions:
   contents: read
