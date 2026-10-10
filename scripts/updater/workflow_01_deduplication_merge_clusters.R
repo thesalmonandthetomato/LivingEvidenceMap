@@ -32,7 +32,7 @@ stopifnot(identical(meta$idx,seq_len(nrow(meta))))
 verify_pair_ids <- function(x,label) {
   fields <- c("source_id_i","source_record_id_i","source_id_j","source_record_id_j")
   present <- fields %in% names(x)
-  if(!any(present)) return(invisible(FALSE)) # legacy decisions require index SHA guard upstream
+  if(!any(present)) stop(label,": persisted decisions lack immutable source IDs",call.=FALSE)
   if(!all(present)) stop(label,": partial immutable identity columns",call.=FALSE)
   if(!nrow(x)) return(invisible(TRUE))
   i<-as.integer(x$record_i); j<-as.integer(x$record_j)
@@ -48,7 +48,21 @@ verify_pair_ids <- function(x,label) {
 }
 verify_pair_ids(old,"Preserved decisions")
 verify_pair_ids(new,"New decisions")
-pair_key <- function(x) paste(pmin(x$record_i,x$record_j),pmax(x$record_i,x$record_j),sep="::")
+# A persisted pair key is based on the immutable source namespace and source ID.
+# Numeric indices are used only to address the current in-memory metadata.
+pair_key <- function(x) {
+  if(!nrow(x)) return(character())
+  i<-as.integer(x$record_i);j<-as.integer(x$record_j)
+  if(anyNA(i)||anyNA(j)||any(i<1L|i>nrow(meta)|j<1L|j>nrow(meta)|i==j))
+    stop("Invalid positional pair coordinates",call.=FALSE)
+  identity<-function(src,id)paste0(nchar(src,type="bytes"),":",src,nchar(id,type="bytes"),":",id)
+  a<-identity(as.character(meta$source[i]),as.character(meta$source_record_id[i]))
+  b<-identity(as.character(meta$source[j]),as.character(meta$source_record_id[j]))
+  low<-ifelse(a<=b,a,b);high<-ifelse(a<=b,b,a)
+  vapply(seq_along(low),function(k)
+    digest(paste0(nchar(low[[k]],type="bytes"),":",low[[k]],high[[k]]),
+      algo="sha256",serialize=FALSE),character(1))
+}
 old[,pair_key:=pair_key(old)]
 new[,pair_key:=pair_key(new)]
 if (anyDuplicated(old$pair_key)) stop("Duplicate preserved pair key",call.=FALSE)
