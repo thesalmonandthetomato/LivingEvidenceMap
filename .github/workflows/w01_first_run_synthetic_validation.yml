@@ -1,5 +1,8 @@
 name: W01 first-run synthetic validation (no APIs)
 on:
+  push:
+    branches: [main]
+    paths: [docs/w01_synthetic_validation_trigger.txt]
   workflow_dispatch:
 permissions:
   contents: read
@@ -278,6 +281,33 @@ jobs:
           m<-fromJSON(p)
           stopifnot(m$state=="final",m$source_manifestations==2L,m$canonical_records==1L,m$files$state_archive$bytes>0)
           cat("PASS: original W01 full-state archiver creates verified local archive and manifest without Zenodo\\n")
+          RS
+      - name: Validate OpenAlex occurrence to unique-source reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/w01_smoke/count_contract
+          mkdir -p "$ROOT/current_sources/openalex" "$ROOT/output"
+          printf '%s\\n' '{"sidecar_identity":{"sidecar_record_id":"openalex:W1"}}' '{"sidecar_identity":{"sidecar_record_id":"openalex:W2"}}' > "$ROOT/current_sources/openalex/openalex_sidecar_records.jsonl"
+          printf '%s\\n' '{"sidecar_record_id":"openalex:W1","first_raw_file":"a.json","repeated_raw_file":"b.json","status":"identical_mapped_fields"}' > "$ROOT/current_sources/openalex/duplicate_source_occurrences.jsonl"
+          Rscript - <<'RS'
+          library(jsonlite)
+          root <- "/tmp/w01_smoke/count_contract"
+          write_json(list(input=list(records_read=3L,unique_records=2L,identical_duplicate_occurrences=1L)),file.path(root,"current_sources/openalex/compatibility_audit.json"),auto_unbox=TRUE)
+          write_json(list(schema="living-evidence-map-workflow01-source-catalogue-v1",sources=list(openalex=list(kind="workflow00_state",source="openalex",prepared_path=file.path(root,"current_sources/openalex/openalex_sidecar_records.jsonl"),expected_records=3L))),file.path(root,"catalogue.json"),auto_unbox=TRUE)
+          RS
+          Rscript scripts/updater/workflow_01_prepare_source_catalogue.R --catalogue "$ROOT/catalogue.json" --output-manifest "$ROOT/output/source_inputs.json"
+          Rscript - <<'RS'
+          library(jsonlite)
+          root <- "/tmp/w01_smoke/count_contract"
+          a <- file.path(root,"current_sources/openalex/compatibility_audit.json")
+          p <- file.path(root,"catalogue.json")
+          x<-fromJSON(a,simplifyVector=FALSE)
+          x$input$identical_duplicate_occurrences<-0L
+          write_json(x,a,auto_unbox=TRUE)
+          status<-system2("Rscript",c("scripts/updater/workflow_01_prepare_source_catalogue.R","--catalogue",p,"--output-manifest",file.path(root,"output/invalid.json")),stdout=FALSE,stderr=FALSE)
+          stopifnot(status!=0L)
+          cat("PASS: genuine identical OpenAlex occurrences reconcile, while a false duplicate audit fails closed\\n")
           RS
       - name: Upload synthetic test outputs
         if: always()
