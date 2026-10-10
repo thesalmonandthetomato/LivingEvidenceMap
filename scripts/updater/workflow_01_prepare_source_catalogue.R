@@ -59,7 +59,28 @@ for (src in names(sources)) {
   if (identical(kind,"workflow00_state") && !is.na(expected_records)) {
     lines <- readLines(prepared,warn=FALSE,encoding="UTF-8")
     actual_records <- sum(nzchar(trimws(lines)))
-    if (actual_records != expected_records) {
+    if (identical(src,"openalex")) {
+      audit_path <- file.path(dirname(prepared),"compatibility_audit.json")
+      duplicate_path <- file.path(dirname(prepared),"duplicate_source_occurrences.jsonl")
+      if (!file.exists(audit_path) || !file.exists(duplicate_path)) {
+        stop("OpenAlex count reconciliation requires the adapter audit and duplicate-occurrence ledger",call.=FALSE)
+      }
+      audit <- fromJSON(audit_path,simplifyVector=FALSE)
+      input <- audit$input
+      raw_n <- as.integer(input$records_read %||% NA_integer_)
+      unique_n <- as.integer(input$unique_records %||% NA_integer_)
+      repeats_n <- as.integer(input$identical_duplicate_occurrences %||% NA_integer_)
+      duplicate_lines <- readLines(duplicate_path,warn=FALSE,encoding="UTF-8")
+      duplicate_lines <- duplicate_lines[nzchar(trimws(duplicate_lines))]
+      if (anyNA(c(raw_n,unique_n,repeats_n)) ||
+          raw_n!=expected_records || unique_n!=actual_records ||
+          repeats_n!=length(duplicate_lines) || raw_n!=unique_n+repeats_n) {
+        stop(sprintf("OpenAlex count reconciliation failed: W00=%d raw=%d unique=%d prepared=%d duplicates=%d audit_lines=%d",
+                     expected_records,raw_n,unique_n,actual_records,repeats_n,length(duplicate_lines)),call.=FALSE)
+      }
+      cat(sprintf("PASS: OpenAlex source count: %d W00 occurrences = %d unique records + %d identical duplicates\\n",
+                  raw_n,unique_n,repeats_n))
+    } else if (actual_records != expected_records) {
       stop(sprintf(
         "Prepared source count mismatch for %s: expected %d from W00, found %d in %s",
         src,expected_records,actual_records,prepared
