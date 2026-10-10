@@ -1,5 +1,8 @@
 name: W01 first-run synthetic validation (no APIs)
 on:
+  push:
+    branches: [main]
+    paths: [docs/w01_synthetic_validation_trigger.txt]
   workflow_dispatch:
 permissions:
   contents: read
@@ -43,6 +46,54 @@ jobs:
           stopifnot(nrow(meta)==2L,all(c("idx","source","source_record_id") %in% names(meta)))
           stopifnot(identical(as.character(meta$source_record_id),c("TEST-1","TEST-2")))
           cat("PASS: synthetic initial W01 union, empty historical state, and stable metadata identities\n")
+          RS
+      - name: Exercise original cluster merger and canonical builder without APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          library(data.table)
+          x <- data.table(
+            record_i=1L,record_j=2L,
+            source_id_i="ebsco_amed",source_record_id_i="TEST-1",
+            source_id_j="ebsco_amed",source_record_id_j="TEST-2",
+            rescored_classification="not_duplicate",rescored_rule="synthetic_validation",
+            review_route="automatic",source_row_index=1L
+          )
+          fwrite(x,"/tmp/w01_smoke/new_decisions.csv")
+          file.create("/tmp/w01_smoke/empty_prior_decisions.csv")
+          RS
+          Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
+            --first-run true \
+            --old-decisions /tmp/w01_smoke/empty_prior_decisions.csv \
+            --new-decisions /tmp/w01_smoke/new_decisions.csv \
+            --metadata /tmp/w01_smoke/prep/candidates/normalised_metadata.csv \
+            --output-dir /tmp/w01_smoke/merged
+          Rscript - <<'RS'
+          library(jsonlite)
+          library(data.table)
+          p <- "/tmp/w01_smoke/merged"
+          s <- fromJSON(file.path(p,"summary.json"))
+          m <- fread(file.path(p,"manifestation_cluster_map.csv"))
+          stopifnot(s$source_manifestations==2L,s$preserved_pair_decisions==0L,s$clusters==2L)
+          stopifnot(identical(as.character(m$source_record_id),c("TEST-1","TEST-2")))
+          cat("PASS: original W01 cluster merger with zero historical decisions\n")
+          RS
+          : > /tmp/w01_smoke/empty_strip_actions.jsonl
+          : > /tmp/w01_smoke/empty_repairs.jsonl
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R \
+            --cluster-map /tmp/w01_smoke/merged/manifestation_cluster_map.csv \
+            --strip-actions /tmp/w01_smoke/empty_strip_actions.jsonl \
+            --data-quality-repairs /tmp/w01_smoke/empty_repairs.jsonl \
+            --input-manifest /tmp/w01_smoke/prep/union/source_inputs.json \
+            --run-id synthetic-validation \
+            --output /tmp/w01_smoke/canonical.jsonl \
+            --manifest /tmp/w01_smoke/canonical_manifest.json
+          Rscript - <<'RS'
+          library(jsonlite)
+          x <- fromJSON("/tmp/w01_smoke/canonical_manifest.json")
+          stopifnot(as.integer(x$records)==2L)
+          cat("PASS: original W01 canonical builder produces two canonical records\n")
           RS
       - name: Upload synthetic test outputs
         if: always()
