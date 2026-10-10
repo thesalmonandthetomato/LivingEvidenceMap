@@ -33,7 +33,7 @@ The methods for this living evidence map are informed by the Collaboration for E
 
 The principal deviations from the original protocol and subsequent methodological developments were:
 
-- Inclusion of all eligible *Oncorhynchus mykiss* aquaculture research, including freshwater rainbow trout. Differentiating between freshwater and marine populations proved unfeasible at title and abstract.
+- Inclusion of all eligible Oncorhynchus mykiss aquaculture research, including freshwater rainbow trout. Differentiating between freshwater and marine populations proved unfeasible at title and abstract.
 - Expansion from the original Lens search to a multi-database search architecture.
 - We combined manual title-and-abstract screening of a substantial proportion of the original search corpus, rather than using machine-learning prioritisation. After the database list was expanded, large language models were used to screen all records, after a demonstrated extremely high rate of agreement with 20,000 manual decisions.
 - We made use of additional bibliographic sources to repair and enrich incomplete records before screening and annotation/coding.
@@ -44,34 +44,30 @@ The principal deviations from the original protocol and subsequent methodologica
 
 ## Search strategy
 
-```{r methods-database-setup, include=FALSE}
-source('scripts/reporting/workflow09_methods_sources.R')
-methods_sources <- methods_source_inventory()
-```
-
-The search strategy combined terms describing eligible salmon species with terms identifying aquaculture, farming and commercial production. The original search was developed and tested in The Lens bibliographic database, with an initial validation set screened on 11 November 2024. The living search architecture now applies one version-controlled conceptual strategy across all included sources, with source-specific syntax and field restrictions. Search dates and retrieved-result counts are therefore source- and update-specific rather than fixed here.
+The search strategy combined terms describing eligible salmon species with terms identifying aquaculture, farming and commercial production. The original search was developed and tested in The Lens bibliographic database, with an initial validation set screened on 11 November 2024. The living search architecture now applies one version-controlled conceptual strategy across all included sources, with source-specific syntax and field restrictions recorded in Workflow 00 provenance. Search dates and retrieved-result counts are therefore source- and update-specific rather than fixed in the manuscript text.
 
 Table 1. Conceptual search strategy
 
-| Component | Substring |
+| Substring number | Substring |
 | --- | --- |
 | #1 | farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* |
 | #2 | salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout" |
 | #3 | #1 AND #2 |
 
-The living evidence map was subsequently expanded to retrieve bibliographic records independently from `r methods_sources$total` sources. `r methods_sources$api_count` are harvested through automated database workflows:
+The living evidence map was subsequently expanded to retrieve bibliographic records independently from seven sources. Five are harvested through automated database workflows:
 
-```{r methods-api-list, echo=FALSE, results='asis'}
-cat(paste0("- ",methods_sources$api$name,", via ",methods_sources$api$via,collapse="\n"),"\n")
-```
+- The Lens
+- OpenAlex
+- Scopus
+- Web of Science (Web of Science Core Collection: Science Citation Index Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation Index (SSCI) 1981-present, Arts & Humanities Citation Index (AHCI) 2017-present, Emerging Sources Citation Index (ESCI) 2005-present; Current Contents Connect; MEDLINE; Preprint Citation Index; Research Commons)
+- AGRICOLA
 
-Two further sources are imported from manually exported RIS files:
+Two further sources are imported from manually exported RIS files because they are not harvested through the automated API workflows:
 
-```{r methods-manual-list, echo=FALSE, results='asis'}
-cat(paste0("- ",methods_sources$manual$name,", via ",methods_sources$manual$via,collapse="\n"),"\n")
-```
+- CAB Abstracts, accessed via CABI Digital Library
+- ProQuest Dissertations & Theses Global (PQD&T), accessed via ProQuest
 
-Database-specific implementations were derived from the same underlying conceptual search and adapted to the syntax and indexing of each source.
+Database-specific implementations were derived from the same underlying conceptual search and adapted to the syntax and indexing of each source. Search strings, search dates, fields and source-specific restrictions are stored as version-controlled user inputs and provenance records in the project repository.
 
 ### Searches for grey literature
 
@@ -87,7 +83,7 @@ The evidence map has been converted into a living resource in September 2026. Se
 
 ## Reference library repair
 
-Incomplete bibliographic records, i.e. records lacking abstracts or complete titles, were repaired before subsequent screening and annotation where reliable information could be recovered. Bibliographic sources were queried using persistent identifiers. Europe PMC and Scopus were used as repair and enrichment sources to recover missing titles and abstracts.
+Incomplete bibliographic records, i.e. records lacking abstracts or complete titles, were repaired before subsequent screening and annotation where reliable information could be recovered. Bibliographic sources were queried using persistent identifiers. Europe PMC and Scopus were used as repair and enrichment sources to recover missing titles and abstracts; Europe PMC was not treated as an included bibliographic search database.
 
 Repair was provenance-preserving: the original source manifestation was retained, and information obtained from another source was treated as enrichment rather than evidence that the record originated from that database. Bibliographic data were used to ensure complete DOI matching to avoid incorrect enrichment. Records for which a reliable abstract could not be recovered were not automatically excluded.
 
@@ -95,9 +91,9 @@ Repair was provenance-preserving: the original source manifestation was retained
 
 Records retrieved from the different bibliographic sources were converted to a common structure and reconciled into a single canonical corpus. Multiple database records describing the same underlying publication were treated as manifestations of one unique record, with the contributing source database versions retained as provenance.
 
-Deduplication combined persistent identifiers with bibliographic comparison. Shared DOIs were informative but were not treated as sufficient evidence in isolation where other metadata conflicted due to known DOI error rates in bibliographic databases. Records without shared identifiers could also be linked using combinations of title, authorship, year and other bibliographic fields. Potential duplicate relationships that could not be resolved deterministically were placed into an adjudication set for human review.
+Deduplication combined persistent identifiers with bibliographic comparison. Shared DOIs were informative but were not treated as sufficient evidence in isolation where other metadata conflicted. Records without shared identifiers could also be linked using combinations of title, authorship, year and other bibliographic fields. Potential duplicate relationships that could not be resolved deterministically were placed into an adjudication set for human review.
 
-Prior to deduplication, fields were converted to a universal format for comparison (normalisation) using field-specific rules, including Unicode-aware title normalisation, conservative DOI normalization, and sequence-preserving abstract normalisation. Candidate pairs were generated from multiple bibliographic blocks, including combinations of author, year, title, journal, volume and pages, as well as exact normalised DOI, exact title, exact abstract and high-containment abstract signatures. Pairs were only merged automatically when they met predefined high-specificity rules based on exact or very strong agreement across multiple fields; fuzzy (i.e. partially matched) title or abstract evidence was not allowed to override material bibliographic contradictions, and borderline cases were sent for immediate human review. Accepted duplicate links were clustered. All source manifestations were retained as provenance for source traceability, and a single representative record was selected for downstream processing using the highest level of meta-data completeness and identifier quality.
+Prior to deduplication, comparison fields were converted to a universal format for comparison (normalisation) using field-specific rules, including Unicode-aware title normalisation, conservative DOI normalization, and sequence-preserving abstract normalisation. Candidate pairs were generated from multiple bibliographic blocks, including combinations of author, year, title, journal, volume and pages, as well as exact normalised DOI, exact title, exact abstract and high-containment abstract signatures. Pairs were only merged automatically when they met predefined high-specificity rules based on exact or very strong agreement across multiple fields; fuzzy (i.e. partially matched) title or abstract evidence was not allowed to override material bibliographic contradictions, and borderline cases were sent for immediate human review. Accepted duplicate links were clustered. All source manifestations were retained as provenance for source traceability, and a single representative record was selected for downstream processing using the highest level of meta-data completeness and identifier quality.
 
 ## Retraction and withdrawal sweeping
 
