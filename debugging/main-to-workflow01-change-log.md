@@ -64,3 +64,9 @@ For every new defect discovered on `main`, add one entry identifying: **problem,
 - **Cause:** W00 retains raw Europe PMC responses for PubMed (MED), EThOS (ETH), CAB Abstracts (CBA), and preprints (PPR). The W01 generic path assumes `records.jsonl` and did not invoke the existing `workflow_01x_europe_pmc_sidecar_adapter.R`.
 - **Main correction:** commit 6a2542e: route these four formats through the existing R adapter, retaining input schemas and source identities; fail closed on unsupported source layouts.
 - **Status:** Awaiting main integration validation. Assess/port to production branch after verification.
+
+### 10. Multiple prepared inputs for Europe PMC source
+- **Observed:** W01 initial run 38075736402 failed in the source catalogue with `Expected one prepared W00 input for pubmed, found 2`.
+- **Cause:** The Europe PMC adapter created `pubmed_sidecar_records.jsonl`, then the W01 preparation copied the same records to `records.jsonl` in the same directory. The existing runtime catalogue correctly rejects ambiguous inputs.
+- **Main correction:** Commit `f2322da` moves (rather than copies) the adapter output to the sole standard `records.jsonl`, preserving content and avoiding duplicate candidate files.
+- **Status:** Main integration retest pending; assess same fix for production branch.
