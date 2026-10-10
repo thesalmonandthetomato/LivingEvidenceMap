@@ -96,7 +96,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: main
           fetch-depth: 0
 
       - name: Freeze W06 execution commit
@@ -396,12 +396,12 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin workflow01-final-architecture
+          git pull --rebase origin main
           Rscript scripts/updater/workflow_06_update_zenodo_registry.R             --receipt outputs/workflow06_zenodo/zenodo_receipt.json             --registry docs/workflow06/zenodo_registry.csv             --pointer-dir docs/workflow06/zenodo
           git add docs/workflow06/zenodo_registry.csv docs/workflow06/zenodo/
           if ! git diff --cached --quiet; then
             git commit -m "Register Workflow 06 geography state $GITHUB_RUN_ID"
-            git push origin HEAD:workflow01-final-architecture
+            git push origin HEAD:main
           fi
 
       - name: Update live Shiny progress after published W06
@@ -409,11 +409,11 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
-          git pull --rebase origin workflow01-final-architecture
+          git pull --rebase origin main
           Rscript scripts/updater/workflow_current_run_status_observer.R \
             --force-stage W06 \
             --pointer "docs/workflow06/zenodo/run-$GITHUB_RUN_ID.json"
@@ -430,8 +430,8 @@ jobs:
           git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
           if ! git diff --cached --quiet; then
             git commit -m "Update current-run status through W06 [skip ci]"
-            git pull --rebase origin workflow01-final-architecture
-            git push origin HEAD:workflow01-final-architecture
+            git pull --rebase origin main
+            git push origin HEAD:main
           fi
 
       - name: Upload W06 handoff
