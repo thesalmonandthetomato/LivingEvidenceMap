@@ -29,7 +29,7 @@ jobs:
           use-public-rspm: true
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','httr2'))
+        run: install.packages(c('jsonlite','httr2','xml2'))
       - name: Validate and translate actual W00 search configuration
         shell: bash
         run: |
