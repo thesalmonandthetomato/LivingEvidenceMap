@@ -12,7 +12,8 @@ on:
         required: true
         type: string
       previous_workflow01_pointer_path:
-        required: true
+        required: false
+        default: ""
         type: string
       model:
         required: false
@@ -39,7 +40,8 @@ on:
         type: string
       previous_workflow01_pointer_path:
         description: 'Latest Workflow 01 pointer path (full baseline or delta)'
-        required: true
+        required: false
+        default: ""
         type: string
       model:
         description: 'Duplicate adjudication model'
@@ -929,14 +931,19 @@ jobs:
           W01_POINTER="docs/deduplication/zenodo/run-$GITHUB_RUN_ID.json"
           test -s "$STATUS"
           test -s "$W01_POINTER"
-          PREV_W02="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow02_pointer))')"
-          test -n "$PREV_W02"
-          test -s "$PREV_W02"
+          FIRST_RUN="${{ inputs.first_run || false }}"
+          PREV_W02=""
+          if [ "$FIRST_RUN" = "false" ]; then
+            PREV_W02="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow02_pointer))')"
+            test -n "$PREV_W02"
+            test -s "$PREV_W02"
+          fi
           gh workflow run workflow_02_batched_production.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$WORKFLOW01_BRANCH" \
             -f workflow01_pointer_path="$W01_POINTER" \
-            -f previous_workflow02_pointer_path="$PREV_W02"
+            -f previous_workflow02_pointer_path="$PREV_W02" \
+            -f first_run="$FIRST_RUN"
           echo "PASS: dispatched Workflow 02 from authoritative W01 run $GITHUB_RUN_ID"
 
       - name: Upload short-lived audit state
