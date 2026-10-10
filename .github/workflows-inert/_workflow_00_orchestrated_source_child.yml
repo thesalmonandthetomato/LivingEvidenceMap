@@ -155,6 +155,13 @@ jobs:
           esac
 
 
+      - name: Validate W00 source-native identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_validate_source_ids.R \
+            --root outputs/updater
+
       - name: Seed native-ID registry for new Europe PMC source
         if: ${{ inputs.run_type == 'full' && (inputs.source == 'pubmed' || inputs.source == 'ethos' || inputs.source == 'cba' || inputs.source == 'epmc_preprints') }}
         env:
