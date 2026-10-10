@@ -1,3 +1,3 @@
 W00 MVP count-only preflight trigger
-source=pubmed
-purpose=validate configured search result count without harvesting or publication
+source=scopus
+purpose=count Scopus with API and institution tokens; no harvesting
