@@ -1,0 +1,5 @@
+{
+  "request_id": "mvp_scoping_20261010",
+  "source": "MVP W00 isolated test",
+  "note": "Use user_input/scoping_search_string.txt; count only, no record harvesting"
+}
