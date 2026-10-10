@@ -29,7 +29,19 @@ if(!all(c("record_i","record_j")%in%names(d)))stop("Decision indices absent",cal
 i <- as.integer(d$record_i);j <- as.integer(d$record_j)
 if(anyNA(i)||anyNA(j)||any(i<1L|i>length(ids)|j<1L|j>length(ids)|i==j))
  stop("Invalid pair indices",call.=FALSE)
+# Decisions crossing a persistence or adjudication boundary MUST already carry
+# their source identities. Never derive them from a potentially reordered table.
+identity_cols <- c("source_id_i","source_record_id_i","source_id_j","source_record_id_j")
+if(!all(identity_cols %in% names(d)))
+ stop("Pair decisions lack persisted source IDs; refusing positional reconstruction",call.=FALSE)
+if(anyNA(d[,..identity_cols]))
+ stop("Pair decisions contain missing source identity",call.=FALSE)
+stored_i <- identity(as.character(d$source_id_i),as.character(d$source_record_id_i))
+stored_j <- identity(as.character(d$source_id_j),as.character(d$source_record_id_j))
 key_i <- ids[i];key_j <- ids[j]
+if(any(stored_i!=key_i | stored_j!=key_j)) {
+ stop("Pair index-to-source-ID mismatch: source ordering changed; refusing incorrect decision assignment",call.=FALSE)
+}
 first <- ifelse(key_i<=key_j,key_i,key_j)
 second <- ifelse(key_i<=key_j,key_j,key_i)
 d[, `:=`(source_id_i=as.character(meta$source[i]),
