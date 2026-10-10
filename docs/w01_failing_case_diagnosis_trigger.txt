@@ -1,1 +1,2 @@
 Diagnose exact malformed input among 101 archived W01 review records without calling LLMs.
+Confirm exact raw lookup using the 104 archived real review pairs.
