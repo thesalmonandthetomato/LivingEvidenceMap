@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       workflow00_pointer_path:
-        description: 'Workflow 00 state or archive pointer path on workflow01-final-architecture'
+        description: 'Workflow 00 state or archive pointer path on main'
         required: true
         type: string
       previous_workflow01_pointer_path:
@@ -56,8 +56,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  WORKFLOW01_BRANCH: workflow01-final-architecture
-  WORKFLOW00_REPORTING_BRANCH: workflow01-final-architecture
+  WORKFLOW01_BRANCH: main
+  WORKFLOW00_REPORTING_BRANCH: main
 
 jobs:
   workflow01:
@@ -623,7 +623,7 @@ jobs:
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ vars.LEM_TEST_GOOGLE_SHEET_ID }}
           QUEUE_TAB: 'queue_w01_active'
         shell: bash
         run: |
@@ -656,7 +656,7 @@ jobs:
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ vars.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -857,7 +857,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ vars.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
