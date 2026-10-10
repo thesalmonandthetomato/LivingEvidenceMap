@@ -3,7 +3,7 @@ name: Workflow 04 - Resume after Shiny resolution
 on:
   push:
     branches:
-      - workflow01-final-architecture
+      - main
     paths:
       - 'docs/shiny_adjudication/w04_resolution_resume_requests/*.json'
   workflow_dispatch:
@@ -30,11 +30,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  WORKFLOW04_BRANCH: workflow01-final-architecture
+  WORKFLOW04_BRANCH: main
   SOURCE_RUN_ID: ${{ inputs.source_run_id }}
   BATCH_ID: ${{ inputs.batch_id }}
   QUEUE_SHA256: ${{ inputs.queue_sha256 }}
-  LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+  LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
 
 jobs:
   resume:
