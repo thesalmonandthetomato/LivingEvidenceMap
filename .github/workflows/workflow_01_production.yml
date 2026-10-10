@@ -289,7 +289,7 @@ jobs:
               p="current_sources/$source/${source}_sidecar_records.jsonl"
               test -s "$p"
             fi
-            if [ "$p" != "$out" ]; then cp "$p" "$out"; fi
+            if [ "$p" != "$out" ]; then mv "$p" "$out"; fi
           }
 
           # Existing five API sources retain their established, validated adapters.
