@@ -1,6 +1,10 @@
 name: W00 MVP count-only preflight
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/w00_count_preflight_trigger.txt'
   workflow_dispatch:
     inputs:
       source:
@@ -44,7 +48,7 @@ jobs:
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
           OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
-          SELECTED_SOURCE: ${{ inputs.source }}
+          SELECTED_SOURCE: ${{ inputs.source || 'openalex' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -58,7 +62,7 @@ jobs:
           cat "outputs/w00_count_preflight/counts/${SELECTED_SOURCE}.csv" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: w00-mvp-count-${{ inputs.source }}-${{ github.run_id }}
+          name: w00-mvp-count-${{ inputs.source || 'openalex' }}-${{ github.run_id }}
           path: outputs/w00_count_preflight/
           retention-days: 7
           if-no-files-found: error
