@@ -35,6 +35,12 @@ This is a **defect and required-fix register**, not a testing or validation log.
 - **Reference:** `.github/workflows/workflow_00_search_orchestrator.yml` on `main`; fix commits [9883f00](https://github.com/thesalmonandthetomato/LivingEvidenceMap/commit/9883f003a0d850e4ac8ed62844cb1aa50f9b35c0) and [fcb3b8a](https://github.com/thesalmonandthetomato/LivingEvidenceMap/commit/fcb3b8a4975fbde8fa16ae651c06230e2849cdb8).
 - **Status:** Check whether the issue exists on workflow01 branch; fix if applicable.
 
+### 6. W01 first-run incorrectly dispatches W02 automatically
+- **Problem:** After a successful W01 run with no pending human review, the existing workflow initiates W02 even during an isolated first-run MVP test.
+- **Required fix:** Gate automatic W02 dispatch behind `first_run != true` for the MVP, or add an explicit downstream-dispatch input. Preserve normal production dispatch semantics after integration.
+- **Reference:** `.github/workflows/workflow_01_production.yml` on `main`, fix commit [1f03e5f](https://github.com/thesalmonandthetomato/LivingEvidenceMap/commit/1f03e5f6cfce8c38e8fed1f8aebbabaf79d080d2).
+- **Status:** Review on workflow01 branch.
+
 ## Adding new issues
 
 For every new defect discovered on `main`, add one entry identifying: **problem, required correction, affected file(s), main commit (if fixed there), and whether still outstanding on workflow01**. Do not record ordinary test runs, successful validation, routine commits, or temporary MVP-only launch settings. Do not mark an issue fixed on workflow01 until that branch has actually been changed.
