@@ -241,6 +241,7 @@ count_matches_pages <- identical(recount, retrieved)
 unique_id_count <- length(unique(ids))
 expected_complete <- full_harvest && !is.na(reported_total)
 count_matches_reported_total <- if (expected_complete) identical(recount, reported_total) else NA
+unique_count_matches_reported_total <- if (expected_complete) identical(unique_id_count, reported_total) else NA
 
 validation <- list(
   workflow = "00c_openalex_ingestion",
@@ -256,6 +257,7 @@ validation <- list(
   full_harvest_requested = full_harvest,
   first_page_total_reported_by_openalex = reported_total,
   count_matches_first_page_total = count_matches_reported_total,
+  unique_count_matches_first_page_total = unique_count_matches_reported_total,
   reported_total_changed_during_harvest = reported_total_changed,
   duplicate_policy = "Raw API responses are preserved unchanged; exact repeated OpenAlex Work IDs are recorded here and collapsed deterministically downstream before identifier-delta comparison.",
   canonical_json_modified = FALSE
@@ -266,11 +268,14 @@ if (!count_matches_pages) stop("Validation failure: raw-page recount does not ma
 if (length(duplicate_ids) > 0L) {
   message(sprintf("NOTE: %d repeated OpenAlex Work IDs occurred across live cursor pages; raw responses remain unchanged and exact-ID repeats will be collapsed downstream.", length(duplicate_ids)))
 }
-if (expected_complete && !isTRUE(count_matches_reported_total) && !isTRUE(reported_total_changed)) {
+if (expected_complete && !isTRUE(count_matches_reported_total) && isTRUE(unique_count_matches_reported_total) && length(duplicate_ids) > 0L) {
+  message(sprintf("NOTE: OpenAlex raw count %d exceeds reported total %d by %d repeated Work ID occurrences; unique IDs reconcile exactly.",recount,reported_total,recount-unique_id_count))
+}
+if (expected_complete && !isTRUE(count_matches_reported_total) && !isTRUE(unique_count_matches_reported_total) && !isTRUE(reported_total_changed)) {
   stop(sprintf("Validation failure: full harvest retrieved %d records but OpenAlex first page reported %d without observed live-index count drift",
                recount, reported_total))
 }
-if (expected_complete && !isTRUE(count_matches_reported_total) && isTRUE(reported_total_changed)) {
+if (expected_complete && !isTRUE(count_matches_reported_total) && !isTRUE(unique_count_matches_reported_total) && isTRUE(reported_total_changed)) {
   message(sprintf("NOTE: full-harvest raw count (%d) differs from first-page count (%d), accepted because OpenAlex reported live-index count drift during pagination.",
                   recount, reported_total))
 }
