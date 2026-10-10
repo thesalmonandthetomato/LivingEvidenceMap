@@ -224,6 +224,11 @@ jobs:
           r-version: release
           use-public-rspm: true
 
+      - name: Install W00 planning dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(c("digest", "jsonlite"))
+
       - name: Preflight dedicated test Google Sheet
         env:
           LEM_TEST_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
