@@ -10,3 +10,5 @@ validation=final_adjudication_canonical
 validation=human_duplicate_20261010
 
 validation=real_archiver_offline
+
+validation=final_human_canonical_archive_consistency
