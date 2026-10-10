@@ -314,6 +314,7 @@ jobs:
     if: ${{ needs.species.result == 'success' && needs.prepare-w06-handoff.result == 'success' && inputs.publish == true }}
     uses: ./.github/workflows/workflow_06_production.yml
     with:
+      first_run: ${{ inputs.first_run }}
       workflow04_pointer_path: ${{ inputs.workflow04_pointer_path }}
       workflow05_pointer_path: ${{ format('docs/workflow05/zenodo/run-{0}.json', github.run_id) }}
       lean_pointer_path: ${{ needs.prepare-w06-handoff.outputs.lean_pointer_path }}
