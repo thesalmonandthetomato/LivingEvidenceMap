@@ -3,6 +3,11 @@ name: Workflow 01 - Production deduplication and canonicalisation
 on:
   workflow_call:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       workflow00_pointer_path:
         required: true
         type: string
@@ -23,6 +28,11 @@ on:
         type: number
   workflow_dispatch:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       workflow00_pointer_path:
         description: 'Workflow 00 state or archive pointer path on main'
         required: true
