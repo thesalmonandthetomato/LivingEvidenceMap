@@ -177,6 +177,14 @@ jobs:
           Rscript scripts/tests/temporary_isolated_regression.R
           test -f /tmp/lem-isolated/regression/regression-report.json
           test -z "$(git status --porcelain)"
+      - name: Validate linked W02 to W05 execution and on-disk checksum under network blockade
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/tests/temporary_linked_handoff.R
+          test -s /tmp/lem-isolated/linked/w05-retained.jsonl
+          test -f /tmp/lem-isolated/linked/linked-report.json
+          test -z "$(git status --porcelain)"
       - name: Check regression report and isolate all output files
         shell: bash
         run: |
@@ -200,13 +208,13 @@ jobs:
           python3 - <<'PY'
           import hashlib,json,pathlib,os
           root=pathlib.Path('/tmp/lem-isolated')
-          reports=['safety_report.json','regression/regression-report.json','w04/prepare_manifest.json','w09/manifest.json']
+          reports=['safety_report.json','regression/regression-report.json','w04/prepare_manifest.json','w09/manifest.json','linked/linked-report.json']
           evidence={}
           for rel in reports:
               p=root/rel
               if not p.is_file(): raise RuntimeError('Missing report: '+rel)
               evidence[rel]={'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size}
-          report={'status':'COMPONENT_TESTS_EXECUTED','commit':os.environ.get('GITHUB_SHA'),'run_id':os.environ.get('GITHUB_RUN_ID'),'test_evidence':evidence,'limits':['Not full consecutive W00-W09 producer-to-consumer execution','No full W01/W02/W04/W08 Shiny adjudication and resume cycle','No live production integration validated']}
+          report={'status':'COMPONENT_TESTS_EXECUTED','commit':os.environ.get('GITHUB_SHA'),'run_id':os.environ.get('GITHUB_RUN_ID'),'test_evidence':evidence,'limits':['Linked W02-W05 validated; not full consecutive W00-W09 producer-to-consumer execution','No full W01/W02/W04/W08 Shiny adjudication and resume cycle','No live production integration validated']}
           (root/'validation-summary.json').write_text(json.dumps(report,indent=2))
           print('PASS: audit report written, end-to-end scope not overstated')
           PY
@@ -229,5 +237,6 @@ jobs:
             /tmp/lem-isolated/w04/prepare_manifest.json
             /tmp/lem-isolated/w09/manifest.json
             /tmp/lem-isolated/validation-summary.json
+            /tmp/lem-isolated/linked/linked-report.json
           if-no-files-found: warn
           retention-days: 7
