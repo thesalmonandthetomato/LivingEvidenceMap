@@ -21,3 +21,6 @@ fix=matrix_from_accepted_selected_sources_json
 
 retry=6
 fix=cba_empty_registry_and_openalex_unique_id_validation
+
+retry=7
+fix=openalex_raw_count_validation_and_internal_unique_export
