@@ -1,0 +1,5 @@
+{
+  "schema": "living-evidence-map-workflow06-prompt-config-v1",
+  "prompt_path": "user_input/workflow06_geography_semantic_prompt.txt",
+  "expected_prompt_sha256": "2ef4a9f2099878ae825395f3f09b329f219bfd3a185d3704a8662c52bcff70ed"
+}

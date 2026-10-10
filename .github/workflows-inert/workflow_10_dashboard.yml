@@ -1,0 +1,390 @@
+name: Workflow 10 - dashboard from authoritative Workflow 08 canonical
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/workflow_10_dashboard.yml'
+      - 'docs/reporting/.run_workflow10_dashboard'
+      - 'R/workflow_10_dashboard_from_canonical_jsonl.R'
+      - 'R/workflow_10_make_public_dashboard.R'
+      - 'scripts/reporting/workflow_10_build_internal_output_registry.R'
+      - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
+      - 'docs/index.html'
+      - 'docs/dashboard-topic-definitions.json'
+      - 'user_input/workflow07_topic_ontology.csv'
+      - 'config/iso3_numeric_map.json'
+      - 'config/global_country_gazetteer_v3.csv'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: workflow10-dashboard-workflow01-final-architecture
+  cancel-in-progress: false
+
+env:
+  TOPIC_ONTOLOGY_PATH: 'user_input/workflow07_topic_ontology.csv'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout workflow branch
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest','httr2','googlesheets4'))
+
+      - name: Mark Workflow 10 started in Shiny
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W10 \
+            --stage-status start
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+      - name: Parse Workflow 10 R scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
+          parse(file='R/workflow_10_dashboard_from_canonical_jsonl.R')
+          parse(file='R/workflow_10_make_public_dashboard.R')
+          parse(file='scripts/reporting/workflow_10_build_internal_output_registry.R')
+          cat('PASS: Workflow 10 scripts parse\n')
+
+      - name: Resolve authoritative Workflow 08 pointer
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          reg <- read.csv('docs/workflow08/zenodo_registry.csv',stringsAsFactors=FALSE)
+          required <- c('source_run_id','zenodo_record_id','doi','canonical_sha256','status')
+          if(!all(required %in% names(reg))) stop('Workflow 08 registry schema is incomplete',call.=FALSE)
+          auth <- reg[reg$status=='authoritative',,drop=FALSE]
+          if(nrow(auth)!=1L) stop(sprintf('Expected exactly one authoritative Workflow 08 registry row; found %d',nrow(auth)),call.=FALSE)
+          run_id <- as.character(auth$source_run_id[[1L]])
+          p <- sprintf('docs/workflow08/zenodo/run-%s.json',run_id)
+          if(!file.exists(p)) stop(sprintf('Authoritative Workflow 08 pointer not found: %s',p),call.=FALSE)
+          x <- fromJSON(p,simplifyVector=FALSE)
+          if(!identical(as.character(x$status),'published') ||
+             !identical(as.character(x$workflow),'08') ||
+             !identical(as.character(x$state),'corrected_final_adjudicated_canonical') ||
+             as.character(x$zenodo_record_id)!=as.character(auth$zenodo_record_id[[1L]]) ||
+             as.character(x$doi)!=as.character(auth$doi[[1L]]) ||
+             tolower(as.character(x$final_canonical_jsonl_sha256))!=tolower(as.character(auth$canonical_sha256[[1L]])) ||
+             is.na(as.integer(x$canonical_records)) || as.integer(x$canonical_records)<1L) {
+            stop('Authoritative Workflow 08 pointer does not match the registry',call.=FALSE)
+          }
+          cat(sprintf('W08_POINTER=%s\n',p),file=Sys.getenv('GITHUB_ENV'),append=TRUE)
+          cat(sprintf('PASS: authoritative W08 pointer = %s / Zenodo %s / %d records\n',p,x$zenodo_record_id,as.integer(x$canonical_records)))
+
+      - name: Validate Workflow 09 compact reporting handoff
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(digest)})
+          pointer <- fromJSON(Sys.getenv('W08_POINTER'),simplifyVector=FALSE)
+          root <- 'docs/reporting/workflow_09/data/workflow_inputs'
+          required <- file.path(root,c('manifest.json','w08_summary.json','w08_source_manifest.json'))
+          if(!all(file.exists(required))) stop('Workflow 09 compact publication handoff is incomplete',call.=FALSE)
+
+          manifest <- fromJSON(required[[1L]],simplifyVector=FALSE)
+          w08_summary <- fromJSON(required[[2L]],simplifyVector=FALSE)
+          w08_source <- fromJSON(required[[3L]],simplifyVector=FALSE)
+          flow <- fromJSON('docs/reporting/workflow_09/flow_counts.json',simplifyVector=FALSE)
+
+          stages <- manifest$stages
+          stage08 <- Filter(function(x) identical(as.character(x$stage),'W08'),stages)
+          if(length(stage08)!=1L) stop('Workflow 09 manifest does not contain exactly one W08 stage',call.=FALSE)
+
+          expected_run <- as.character(pointer$source_github_run_id)
+          expected_sha <- tolower(as.character(pointer$final_canonical_jsonl_sha256))
+          expected_n <- as.integer(pointer$canonical_records)
+          expected_excluded <- as.integer(pointer$excluded_records)
+
+          stopifnot(
+            identical(as.character(stage08[[1L]]$source_run_id),expected_run),
+            identical(as.character(w08_summary$source_run_id),expected_run),
+            identical(as.character(w08_source$source_run_id),expected_run),
+            identical(tolower(as.character(w08_summary$metrics$final_canonical_sha256)),expected_sha),
+            identical(tolower(as.character(w08_source$canonical_sha256)),expected_sha),
+            as.integer(w08_summary$metrics$canonical_records)==expected_n,
+            as.integer(w08_source$canonical_records)==expected_n,
+            as.integer(w08_summary$metrics$excluded_records)==expected_excluded,
+            as.integer(flow$counts$final_included)==expected_n,
+            as.integer(flow$counts$final_excluded)==expected_excluded
+          )
+          cat(sprintf('PASS: W09 handoff matches authoritative W08 run %s / %d included / %d excluded\n',expected_run,expected_n,expected_excluded))
+
+      - name: Restore authoritative Workflow 08 canonical from Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/workflow10 outputs/workflow10
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer "$W08_POINTER" \
+            --output inputs/workflow10/living_evidence_map_canonical_final.jsonl
+
+      - name: Build Workflow 10 dashboard data
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript R/workflow_10_dashboard_from_canonical_jsonl.R \
+            inputs/workflow10/living_evidence_map_canonical_final.jsonl \
+            outputs/workflow10/living_evidence_map-internal.csv \
+            outputs/workflow10/dashboard-internal-data.js \
+            "$W08_POINTER"
+          Rscript R/workflow_10_make_public_dashboard.R \
+            outputs/workflow10/dashboard-internal-data.js \
+            inputs/workflow10/living_evidence_map_canonical_final.jsonl \
+            outputs/workflow10/dashboard-data.js
+          cp docs/index.html outputs/workflow10/index.html
+
+      - name: Validate Workflow 10 output
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(jsonlite);library(readr);library(digest)})
+          pointer <- fromJSON(Sys.getenv('W08_POINTER'),simplifyVector=FALSE)
+          expected_n <- as.integer(pointer$canonical_records)
+          expected_sha <- tolower(as.character(pointer$final_canonical_jsonl_sha256))
+          stopifnot(!is.na(expected_n),expected_n>0L,grepl('^[0-9a-f]{64}$',expected_sha))
+
+          csv <- read_csv('outputs/workflow10/living_evidence_map-internal.csv',show_col_types=FALSE,progress=FALSE)
+          stopifnot(nrow(csv)==expected_n,!anyDuplicated(csv$record_id))
+
+          prefix <- 'window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA='
+          internal_js <- paste(readLines('outputs/workflow10/dashboard-internal-data.js',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(startsWith(internal_js,prefix),endsWith(internal_js,';'))
+          internal_payload <- fromJSON(substr(internal_js,nchar(prefix)+1L,nchar(internal_js)-1L),simplifyVector=FALSE)
+
+          js <- paste(readLines('outputs/workflow10/dashboard-data.js',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(startsWith(js,prefix),endsWith(js,';'))
+          payload <- fromJSON(substr(js,nchar(prefix)+1L,nchar(js)-1L),simplifyVector=FALSE)
+          flow <- fromJSON('docs/reporting/workflow_09/flow_counts.json',simplifyVector=FALSE)
+          stopifnot(length(internal_payload$records)==expected_n)
+          stopifnot(length(payload$records)==expected_n)
+          stopifnot(as.integer(payload$metrics$total_records)==expected_n)
+          stopifnot(as.integer(payload$metrics$search_results)==as.integer(flow$counts$combined_search_results))
+          stopifnot(as.integer(payload$metrics$unique_records_screened)==as.integer(flow$counts$deduplicated_records))
+          stopifnot(as.integer(payload$metrics$candidate_search_results_screened)==as.integer(flow$counts$title_abstract_screened))
+          stopifnot(as.integer(payload$metrics$databases_searched)==length(flow$counts$sources))
+          stopifnot(as.character(payload$source$zenodo_record_id)==as.character(pointer$zenodo_record_id))
+          stopifnot(tolower(as.character(payload$source$canonical_sha256))==expected_sha)
+
+          stars <- unlist(lapply(internal_payload$records,function(r)unlist(r$topic_stars,use.names=FALSE)),use.names=FALSE)
+          stopifnot(length(stars)>0L,all(nzchar(stars)),all(stars %in% c('★','★★','★★★')))
+
+          html <- paste(readLines('outputs/workflow10/index.html',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          stopifnot(grepl('./dashboard-data.js',html,fixed=TRUE))
+          stopifnot(grepl('id="database"',html,fixed=TRUE))
+          stopifnot(grepl('id="tableSpecies"',html,fixed=TRUE))
+          stopifnot(grepl('id="tableCountry"',html,fixed=TRUE))
+          stopifnot(grepl('id="tableYear"',html,fixed=TRUE))
+          stopifnot(grepl('id="tableTopic"',html,fixed=TRUE))
+          stopifnot(grepl('id="tbody"',html,fixed=TRUE))
+          stopifnot(grepl('filter the database',html,fixed=TRUE))
+          stopifnot(!grepl('Search and download',html,fixed=TRUE))
+          stopifnot(!grepl('Download filtered results (.RIS)',html,fixed=TRUE))
+          stopifnot(!grepl('workflow10-search-trial-controller',html,fixed=TRUE))
+          stopifnot(!file.exists('outputs/workflow10/dashboard-search-index.js'))
+          stopifnot(!file.exists('outputs/workflow10/search-trial-manifest.json'))
+
+          stopifnot(isTRUE(payload$public_projection$database_table))
+          stopifnot(isFALSE(payload$public_projection$full_abstracts))
+          stopifnot(as.integer(payload$public_projection$abstract_snippet_words)==30L)
+          stopifnot(isFALSE(payload$public_projection$search))
+          stopifnot(isFALSE(payload$public_projection$ris_download))
+          stopifnot(isFALSE(payload$public_projection$abstract_index))
+          required_table_fields <- c('record_id','title','abstract_snippet','doi','year','authors','journal','volume','pages','species','countries','iso3','topics','topic_paths','topic_stars')
+          stopifnot(all(vapply(payload$records,function(r)all(required_table_fields %in% names(r)),logical(1))))
+          stopifnot(all(vapply(payload$records,function(r)is.null(r[['abstract']]),logical(1))))
+
+          cat(sprintf(
+            'PASS: Workflow 10 built from Zenodo %s: %d records; %d starred topic assignments\n',
+            pointer$zenodo_record_id,nrow(csv),length(stars)
+          ))
+
+      - name: Build internal output registry archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/workflow_10_build_internal_output_registry.R \
+            --status docs/current_run/current_run_status.json \
+            --flow docs/reporting/workflow_09/flow_counts.json \
+            --w10-dir outputs/workflow10 \
+            --output-root internal/output_registry/archive
+
+          SEARCH_DATE="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$search$search_date)')"
+          REG_DIR="internal/output_registry/archive/$SEARCH_DATE"
+          test -s "$REG_DIR/output-registry.html"
+          test -s "$REG_DIR/output-registry.json"
+          test -s "$REG_DIR/output-registry-files.csv"
+          test -s "$REG_DIR/manifest.json"
+
+          Rscript - <<'RS'
+          library(jsonlite)
+          status <- fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE)
+          d <- status$search$search_date
+          p <- file.path("internal/output_registry/archive",d,"output-registry.json")
+          x <- fromJSON(p,simplifyVector=FALSE)
+          stopifnot(
+            identical(x$schema,"living-evidence-map-internal-output-registry-v1"),
+            identical(x$search_date,d),
+            length(x$zenodo_records) > 0L,
+            all(vapply(x$zenodo_records,function(z)identical(z$visibility,"restricted"),logical(1)))
+          )
+          h <- paste(readLines(file.path("internal/output_registry/archive",d,"output-registry.html"),warn=FALSE),collapse="\n")
+          stopifnot(
+            grepl("INTERNAL · REPOSITORY ONLY",h,fixed=TRUE),
+            !grepl("Public release",h,fixed=TRUE),
+            !grepl(">Zenodo record / DOI<",h,fixed=TRUE),
+            grepl("https://doi.org/10.5281/zenodo.",h,fixed=TRUE)
+          )
+          cat("PASS: internal W10 output registry contract\n")
+          RS
+
+      - name: Commit internal output registry archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          SEARCH_DATE="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$search$search_date)')"
+          REG_DIR="internal/output_registry/archive/$SEARCH_DATE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # W10 has other generated working-tree changes at this point
+          # (for example docs/current_run and outputs/workflow10). Keep only
+          # the registry staged while rebasing/pushing, then restore the rest.
+          git add "$REG_DIR"
+          STASHED=0
+          if [ -n "$(git status --porcelain --untracked-files=all | grep -v '^A  internal/output_registry/archive/' || true)" ]; then
+            git stash push --include-untracked --keep-index -m "w10-registry-nonregistry-$GITHUB_RUN_ID"
+            STASHED=1
+          fi
+
+          if git diff --cached --quiet; then
+            echo "Internal output registry for $SEARCH_DATE is already current."
+          else
+            git commit -m "Archive internal output registry for $SEARCH_DATE [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+
+          if [ "$STASHED" -eq 1 ]; then
+            git stash pop
+          fi
+
+      - name: Upload Workflow 10 dashboard artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow10-dashboard-${{ github.run_id }}
+          path: |
+            outputs/workflow10/index.html
+            outputs/workflow10/dashboard-data.js
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Checkout public salmon evidence map repository
+        uses: actions/checkout@v4
+        with:
+          repository: thesalmonandthetomato/salmonevidencemap
+          ref: main
+          token: ${{ secrets.SALMON_EVIDENCE_MAP_PUBLISH_TOKEN }}
+          path: public-site
+          fetch-depth: 0
+
+      - name: Publish validated dashboard and reports to public repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ secrets.SALMON_EVIDENCE_MAP_PUBLISH_TOKEN }}"
+
+          test -s outputs/workflow10/index.html
+          test -s outputs/workflow10/dashboard-data.js
+          test -s docs/reporting/workflow_09/manuscript/methods.html
+          test -s docs/reporting/workflow_09/manuscript/results.html
+          test "$(wc -c < outputs/workflow10/dashboard-data.js)" -gt 40000000
+
+          cp outputs/workflow10/index.html public-site/index.html
+          cp outputs/workflow10/dashboard-data.js public-site/dashboard-data.js
+          cp docs/reporting/workflow_09/manuscript/methods.html public-site/methodology.html
+          cp docs/reporting/workflow_09/manuscript/results.html public-site/results.html
+          touch public-site/.nojekyll
+
+          grep -q './dashboard-data.js' public-site/index.html
+          grep -q './methodology.html' public-site/index.html
+          grep -q './results.html' public-site/index.html
+
+          cd public-site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html dashboard-data.js methodology.html results.html .nojekyll
+
+          if git diff --cached --quiet; then
+            echo "Public salmon evidence map is already current."
+            exit 0
+          fi
+
+          git commit -m "Publish Living Evidence Map W10 run ${GITHUB_RUN_ID}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Mark current-run dashboard stage complete
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W10 \
+            --stage-status complete
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+      - name: Commit current-run reporting metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d docs/current_run ]; then
+            echo "No active current-run status exists; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs/current_run
+          if git diff --cached --quiet; then
+            echo "No W10 reporting changes to commit."
+            exit 0
+          fi
+          git commit -m "Complete current-run live status [skip ci]"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture

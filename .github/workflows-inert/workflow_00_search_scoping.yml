@@ -1,0 +1,372 @@
+name: Workflow 00 - Count-only search scoping
+run-name: W00 scope ${{ inputs.request_id || github.event.head_commit.message }}
+
+on:
+  push:
+    branches: [production-minimal]
+    paths:
+      - 'docs/shiny_scoping_requests/**'
+  workflow_dispatch:
+    inputs:
+      search_string_path:
+        description: 'Repository path to plain-text Boolean scoping search string'
+        required: true
+        default: 'user_input/scoping_search_string.txt'
+        type: string
+      search_string_b64:
+        description: 'Optional base64-encoded inline Boolean search string for temporary Shiny scoping'
+        required: false
+        default: ''
+        type: string
+      request_id:
+        description: 'Optional caller identifier used to match this run from the Shiny app'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow00-search-scoping
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sources: ${{ steps.sources.outputs.sources }}
+    steps:
+      - name: Checkout Workflow 00 implementation
+        uses: actions/checkout@v4
+        with:
+          ref: production-minimal
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install preparation dependencies
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Parse scoping implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e "parse(file='scripts/updater/workflow_00_validate_scoping_search.R'); parse(file='scripts/updater/workflow_00_search_scope_counts.R'); cat('PASS: R scoping scripts parse\\n')"
+
+      - name: Resolve scoping search input
+        id: scoping_input
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SEARCH_STRING_PATH: ${{ inputs.search_string_path || 'user_input/scoping_search_string.txt' }}
+          SEARCH_STRING_B64: ${{ inputs.search_string_b64 || '' }}
+          REQUEST_ID: ${{ inputs.request_id || github.event.head_commit.message }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/scoping_search_string.txt"
+          if [ -n "$SEARCH_STRING_B64" ]; then
+            printf '%s' "$SEARCH_STRING_B64" | base64 --decode > "$TARGET"
+            SOURCE_LABEL='inline workflow input'
+          elif [ "$EVENT_NAME" = "push" ]; then
+            MARKER="docs/shiny_scoping_requests/${REQUEST_ID}.json"
+            if [ -s "$MARKER" ] && jq -e '.search_string_b64 // empty' "$MARKER" >/dev/null; then
+              jq -r '.search_string_b64' "$MARKER" | base64 --decode > "$TARGET"
+              SOURCE_LABEL='Shiny request marker'
+            else
+              test -s "$SEARCH_STRING_PATH"
+              cp "$SEARCH_STRING_PATH" "$TARGET"
+              SOURCE_LABEL="$SEARCH_STRING_PATH"
+            fi
+          else
+            test -s "$SEARCH_STRING_PATH"
+            cp "$SEARCH_STRING_PATH" "$TARGET"
+            SOURCE_LABEL="$SEARCH_STRING_PATH"
+          fi
+          test -s "$TARGET"
+          echo "path=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "source_label=$SOURCE_LABEL" >> "$GITHUB_OUTPUT"
+          echo "PASS: resolved temporary scoping input from $SOURCE_LABEL"
+
+      - name: Validate Boolean scoping search string
+        env:
+          SEARCH_STRING: ${{ steps.scoping_input.outputs.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$SEARCH_STRING"
+          mkdir -p outputs/workflow00_search_scope/plan
+          Rscript scripts/updater/workflow_00_validate_scoping_search.R \
+            --input "$SEARCH_STRING" \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --output outputs/workflow00_search_scope/plan/search_plan.json
+
+      - name: Validate EBSCO scoping coverage
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- fromJSON('outputs/workflow00_search_scope/plan/search_plan.json', simplifyVector=FALSE)
+          e <- fromJSON('config/workflow00_ebsco_sources.json', simplifyVector=FALSE)
+          expected <- names(e$sources)
+          missing <- setdiff(expected, names(p$source_queries))
+          if (length(missing)) {
+            stop(sprintf('Scoping plan is missing EBSCO source query/queries: %s', paste(missing, collapse=', ')))
+          }
+          cat(sprintf('PASS: scoping plan contains all %d configured EBSCO databases\n', length(expected)))
+
+      - name: Build database matrix
+        id: sources
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          e <- fromJSON('config/workflow00_ebsco_sources.json', simplifyVector=FALSE)
+          sources <- c(
+            'lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',
+            names(e$sources)
+          )
+          cat(sprintf('sources=%s\n', toJSON(sources, auto_unbox=FALSE)), file=Sys.getenv('GITHUB_OUTPUT'), append=TRUE)
+          cat(sprintf('PASS: %d database/source count jobs configured\n', length(sources)))
+
+      - name: Upload validated scoping plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-scope-plan-${{ github.run_id }}
+          path: outputs/workflow00_search_scope/plan/search_plan.json
+          retention-days: 7
+          if-no-files-found: error
+
+  count:
+    name: count / ${{ matrix.source }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        source: ${{ fromJSON(needs.prepare.outputs.sources) }}
+    steps:
+      - name: Checkout Workflow 00 implementation
+        uses: actions/checkout@v4
+        with:
+          ref: production-minimal
+          persist-credentials: false
+
+      - name: Download validated scoping plan
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow00-scope-plan-${{ github.run_id }}
+          path: outputs/workflow00_search_scope/plan
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R scoping dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','xml2'))
+      - name: Count ${{ matrix.source }}
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          SCOPUS_API_TOKEN: ${{ secrets.SCOPUS_API_TOKEN }}
+          SCOPUS_INSTTOKEN: ${{ secrets.SCOPUS_INSTTOKEN }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          OPENALEX_API_TOKEN: ${{ secrets.OPENALEX_API_TOKEN }}
+          WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+          EBSCO_EHOST_UID: ${{ secrets.EBSCO_EHOST_UID }}
+          EBSCO_EHOST_PWD: ${{ secrets.EBSCO_EHOST_PWD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow00_search_scope/counts
+          Rscript scripts/updater/workflow_00_search_scope_counts.R \
+            --plan outputs/workflow00_search_scope/plan/search_plan.json \
+            --lens-config config/lens_search.json \
+            --ebsco-config config/workflow00_ebsco_sources.json \
+            --source "${{ matrix.source }}" \
+            --output-csv "outputs/workflow00_search_scope/counts/${{ matrix.source }}.csv" \
+            --output-json "outputs/workflow00_search_scope/counts/${{ matrix.source }}.json"
+
+      - name: Upload ${{ matrix.source }} count
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-scope-count-${{ matrix.source }}-${{ github.run_id }}
+          path: |
+            outputs/workflow00_search_scope/counts/${{ matrix.source }}.csv
+            outputs/workflow00_search_scope/counts/${{ matrix.source }}.json
+          retention-days: 7
+          if-no-files-found: error
+
+  merge:
+    needs: [prepare, count]
+    if: ${{ always() && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Workflow 00 implementation
+        uses: actions/checkout@v4
+        with:
+          ref: production-minimal
+          persist-credentials: false
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install report dependency
+        shell: Rscript {0}
+        run: install.packages('jsonlite')
+
+      - name: Download validated scoping plan
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow00-scope-plan-${{ github.run_id }}
+          path: outputs/workflow00_search_scope/plan
+
+      - name: Download all database counts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow00-scope-count-*-${{ github.run_id }}
+          path: outputs/workflow00_search_scope/counts
+          merge-multiple: true
+
+      - name: Merge database counts
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          plan <- fromJSON('outputs/workflow00_search_scope/plan/search_plan.json', simplifyVector=FALSE)
+          files <- list.files('outputs/workflow00_search_scope/counts', pattern='\\.csv$', full.names=TRUE)
+          if (!length(files)) stop('No database count outputs were downloaded', call.=FALSE)
+          rows <- do.call(rbind, lapply(files, function(p) read.csv(p, stringsAsFactors=FALSE, na.strings='')))
+          e <- fromJSON('config/workflow00_ebsco_sources.json', simplifyVector=FALSE)
+          order_slugs <- c(
+            'lens','scopus','openalex','agricola','pubmed','ethos','cba','epmc_preprints','wos',
+            names(e$sources)
+          )
+          labels <- c(
+            lens='The Lens',
+            scopus='Scopus',
+            openalex='OpenAlex',
+            agricola='AGRICOLA',
+            pubmed='PubMed/MEDLINE',
+            ethos='EThOS',
+            cba='Chinese Biological Abstracts',
+            epmc_preprints='Europe PMC preprints',
+            wos='Web of Science Core Collection',
+            setNames(vapply(e$sources,function(x) as.character(x$display_name),character(1)),names(e$sources))
+          )
+          missing <- setdiff(order_slugs, as.character(rows$source_slug))
+          if (length(missing)) {
+            rows <- rbind(
+              rows,
+              data.frame(
+                source=unname(labels[missing]),
+                access_mode='Count job failed before producing an artefact',
+                search_date=format(Sys.Date(),'%Y-%m-%d'),
+                hits=NA_integer_,
+                status='Failed',
+                source_slug=missing,
+                stringsAsFactors=FALSE
+              )
+            )
+          }
+          platform <- c(
+            lens='The Lens',
+            scopus='Scopus',
+            openalex='OpenAlex',
+            agricola='Europe PMC',
+            pubmed='Europe PMC',
+            ethos='Europe PMC',
+            cba='Europe PMC',
+            epmc_preprints='Europe PMC',
+            wos='Web of Science',
+            setNames(rep('EBSCO',length(e$sources)),names(e$sources))
+          )
+          rows$source <- sprintf('%s, via %s', unname(labels[rows$source_slug]), unname(platform[rows$source_slug]))
+          rows <- rows[order(tolower(rows$source)),,drop=FALSE]
+          rownames(rows) <- NULL
+          dir.create('outputs/workflow00_search_scope', recursive=TRUE, showWarnings=FALSE)
+          write.csv(rows, 'outputs/workflow00_search_scope/search_scope_counts.csv', row.names=FALSE, na='')
+          out <- list(
+            schema='living-evidence-map-workflow00-search-scoping-v1',
+            workflow='00_search_scoping',
+            status=if(any(tolower(rows$status)=='failed' | grepl('fail|error',tolower(rows$status)))) 'partial_failure' else 'success',
+            counted_at_utc=format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ'),
+            search_date=format(Sys.Date(),'%Y-%m-%d'),
+            search_input_path=plan$input_path,
+            original_search_string=plan$original_search_string,
+            normalised_search_string=plan$normalised_search_string,
+            boolean_validation=plan$validation,
+            source_queries=plan$source_queries,
+            result_policy='Counts only. No search-result records or raw API responses are written to disk.',
+            counts=lapply(seq_len(nrow(rows)), function(i) list(
+              source=rows$source[[i]],
+              source_slug=rows$source_slug[[i]],
+              access_mode=rows$access_mode[[i]],
+              search_date=rows$search_date[[i]],
+              hits=if(is.na(rows$hits[[i]])) NULL else as.integer(rows$hits[[i]]),
+              status=rows$status[[i]]
+            ))
+          )
+          writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'outputs/workflow00_search_scope/search_scope_counts.json',
+                     useBytes=TRUE)
+          cat(sprintf('PASS: merged %d database/source count rows\n', nrow(rows)))
+
+      - name: Render lightweight PDF scoping report
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_render_scoping_report.R \
+            --counts outputs/workflow00_search_scope/search_scope_counts.csv \
+            --meta outputs/workflow00_search_scope/search_scope_counts.json \
+            --output outputs/workflow00_search_scope/search_scoping_report.pdf
+
+      - name: Add counts to Actions summary
+        shell: Rscript {0}
+        run: |
+          x <- read.csv('outputs/workflow00_search_scope/search_scope_counts.csv', stringsAsFactors=FALSE, na.strings='')
+          fmt <- function(v) ifelse(is.na(v), '', format(as.integer(v), big.mark=',', scientific=FALSE))
+          z <- c(
+            '# Workflow 00 search scoping',
+            '',
+            '| Search source | Date | Hits | Status |',
+            '|---|---|---:|---|',
+            sprintf('| %s | %s | %s | %s |', x$source, x$search_date, fmt(x$hits), x$status),
+            '',
+            'Count-only run: no bibliographic result records or raw API responses were persisted.'
+          )
+          cat(paste(z, collapse='\n'), file=Sys.getenv('GITHUB_STEP_SUMMARY'))
+
+      - name: Assert count-only output contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s outputs/workflow00_search_scope/plan/search_plan.json
+          test -s outputs/workflow00_search_scope/search_scope_counts.csv
+          test -s outputs/workflow00_search_scope/search_scope_counts.json
+          test -s outputs/workflow00_search_scope/search_scoping_report.pdf
+          if find outputs/workflow00_search_scope -type f \( -name '*.ris' -o -name 'records.jsonl' -o -path '*/raw/*' \) -print -quit | grep -q .; then
+            echo 'Count-only contract violated: search-result material was written.' >&2
+            exit 1
+          fi
+          echo 'PASS: count-only scoping output contains reports/counts only'
+
+      - name: Upload search scoping report
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow00-search-scoping-${{ github.run_id }}
+          path: |
+            outputs/workflow00_search_scope/plan/search_plan.json
+            outputs/workflow00_search_scope/search_scope_counts.csv
+            outputs/workflow00_search_scope/search_scope_counts.json
+            outputs/workflow00_search_scope/search_scoping_report.pdf
+          retention-days: 90
+          if-no-files-found: error

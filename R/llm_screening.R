@@ -52,7 +52,7 @@ extract_openai_output_text <- function(response) {
   text_items[[1]]$text
 }
 
-screen_salmon_record <- function(llm_record_key, record_id, title, abstract, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5.6-luna") {
+screen_salmon_record <- function(llm_record_key, record_id, title, abstract, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5-mini") {
   if (!nzchar(api_key)) stop("OPENAI_API_KEY was not found.")
   user_prompt <- paste0("TITLE\n", dplyr::coalesce(as.character(title),""), "\n\nABSTRACT\n", dplyr::coalesce(as.character(abstract),""), "\n\nDecide whether this record meets the salmon-farming eligibility criteria.")
   body <- list(model=model, store=FALSE, reasoning=list(effort="low"), input=list(list(role="system",content=list(list(type="input_text",text=salmon_llm_system_prompt()))),list(role="user",content=list(list(type="input_text",text=user_prompt)))), text=list(verbosity="low",format=list(type="json_schema",name="salmon_farming_relevance_screen",strict=TRUE,schema=salmon_llm_response_schema())))
@@ -64,7 +64,7 @@ screen_salmon_record <- function(llm_record_key, record_id, title, abstract, api
   tibble::tibble(llm_record_key=llm_record_key,record_id=record_id,llm_decision=parsed$decision,llm_reason=parsed$reason,llm_failed=FALSE,llm_error=NA_character_)
 }
 
-screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5.6-luna", fallback_model="gpt-5-mini") {
+screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), model="gpt-5-mini") {
   if (!nzchar(api_key)) stop("OPENAI_API_KEY was not found.")
   if (!nrow(records)) return(tibble::tibble())
 
@@ -101,7 +101,7 @@ screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), m
     )
   )
 
-  result <- tryCatch({
+  tryCatch({
     response <- httr2::request("https://api.openai.com/v1/responses") |>
       httr2::req_auth_bearer_token(api_key) |>
       httr2::req_body_json(body, auto_unbox=TRUE) |>
@@ -140,30 +140,4 @@ screen_salmon_batch <- function(records, api_key=Sys.getenv("OPENAI_API_KEY"), m
       llm_error = conditionMessage(e)
     )
   })
-
-  if (nrow(result) && all(result$llm_failed) && !is.null(fallback_model) && nzchar(fallback_model) && !identical(model, fallback_model)) {
-    primary_error <- unique(stats::na.omit(result$llm_error))
-    message(sprintf(
-      "LLM screening: model %s batch failed for the whole batch (%s); retrying %d records individually with fallback model %s.",
-      model,
-      if (length(primary_error)) primary_error[[1]] else "unknown error",
-      nrow(records),
-      fallback_model
-    ))
-    return(purrr::pmap_dfr(
-      records |> dplyr::select(llm_record_key, record_id, title, abstract),
-      function(llm_record_key, record_id, title, abstract) {
-        screen_salmon_record(
-          llm_record_key = llm_record_key,
-          record_id = record_id,
-          title = title,
-          abstract = abstract,
-          api_key = api_key,
-          model = fallback_model
-        )
-      }
-    ))
-  }
-
-  result
 }

@@ -1,0 +1,11 @@
+{
+  "schema": "living-evidence-map-workflow01-manual-sources-v1",
+  "sources": {
+    "cab": {
+      "registry": "user_input/workflow00_ris_cab_abstracts_2026-09-30.json"
+    },
+    "proquest": {
+      "registry": "user_input/workflow00_ris_proquest_2026-09-30.json"
+    }
+  }
+}
