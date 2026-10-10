@@ -404,7 +404,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PREV_RUN="$(Rscript -e 'x<-jsonlite::fromJSON("previous_state/workflow01_current_state_restore_audit.json");cat(x$latest_github_run_id)')"
+          PREV_RUN=""
+          if [ "${{ inputs.first_run }}" != "true" ]; then
+            PREV_RUN="$(Rscript -e 'x<-jsonlite::fromJSON("previous_state/workflow01_current_state_restore_audit.json");cat(x$latest_github_run_id)')"
+          fi
           mkdir -p outputs/workflow01_incremental_rescore
           Rscript scripts/updater/workflow_01_deduplication_identifier_rescore.R \
             --input-dir outputs/workflow01_incremental_score \
