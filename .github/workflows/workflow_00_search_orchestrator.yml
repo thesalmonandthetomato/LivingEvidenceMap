@@ -235,7 +235,7 @@ jobs:
           test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" || { echo 'Missing LEM_GOOGLE_SERVICE_ACCOUNT_JSON' >&2; exit 1; }
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-mvp-google.json"
           chmod 600 "$RUNNER_TEMP/lem-mvp-google.json"
-          Rscript -e 'if (!requireNamespace("googlesheets4",quietly=TRUE)) install.packages("googlesheets4",repos="https://cloud.r-project.org"); a <- commandArgs(TRUE); googlesheets4::gs4_auth(path=a[[2]],cache=FALSE); invisible(googlesheets4::gs4_get(a[[1]])); cat("PASS: dedicated test spreadsheet accessible\\n")' "$LEM_TEST_GOOGLE_SHEET_ID" "$RUNNER_TEMP/lem-mvp-google.json"
+          Rscript -e 'if (!requireNamespace("googlesheets4",quietly=TRUE)) install.packages("googlesheets4"); a <- commandArgs(TRUE); googlesheets4::gs4_auth(path=a[[2]],cache=FALSE); invisible(googlesheets4::gs4_get(a[[1]])); cat("PASS: dedicated test spreadsheet accessible\\n")' "$LEM_TEST_GOOGLE_SHEET_ID" "$RUNNER_TEMP/lem-mvp-google.json"
           rm -f "$RUNNER_TEMP/lem-mvp-google.json"
 
       - name: Validate explicit first-run contract
