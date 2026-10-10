@@ -165,9 +165,20 @@ for (i in seq_len(nrow(review))) {
   mj <- meta[.(q$record_j)]
   ri <- get(paste(mi$source,mi$source_record_id,sep="::"),envir=records,inherits=FALSE)
   rj <- get(paste(mj$source,mj$source_record_id,sep="::"),envir=records,inherits=FALSE)
-  stable <- paste(sort(c(paste(mi$source,mi$source_record_id,sep=":"),
-                         paste(mj$source,mj$source_record_id,sep=":"))),collapse="|")
+  identity <- function(src,id) paste0(nchar(src,type="bytes"),":",src,nchar(id,type="bytes"),":",id)
+  stable <- paste(sort(c(identity(as.character(mi$source),as.character(mi$source_record_id)),
+                         identity(as.character(mj$source),as.character(mj$source_record_id)))),collapse="|")
   case_id <- paste0("hr-",substr(digest(stable,algo="sha256",serialize=FALSE),1,20))
+  if(any(c("source_id_i","source_record_id_i","source_id_j","source_record_id_j") %in% names(q))) {
+    if(!all(c("source_id_i","source_record_id_i","source_id_j","source_record_id_j") %in% names(q)))
+      stop("Review pair has incomplete immutable IDs",call.=FALSE)
+    if(!identical(as.character(q$source_id_i),as.character(mi$source)) ||
+       !identical(as.character(q$source_record_id_i),as.character(mi$source_record_id)) ||
+       !identical(as.character(q$source_id_j),as.character(mj$source)) ||
+       !identical(as.character(q$source_record_id_j),as.character(mj$source_record_id)))
+      stop("Review pair source identity differs from metadata",call.=FALSE)
+  }
+
   z <- list(
     schema="living-evidence-map-workflow01-duplicate-adjudication-case-v1",
     review_case_id=case_id,
