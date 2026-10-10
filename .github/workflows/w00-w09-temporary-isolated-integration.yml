@@ -23,7 +23,7 @@ jobs:
           use-public-rspm: true
       - name: Install local test dependencies before network isolation
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','readr','dplyr'))
+        run: install.packages(c('jsonlite','digest','readr','dplyr','httr2'))
       - name: Prove read-only checkout and no service credentials
         shell: bash
         run: |
