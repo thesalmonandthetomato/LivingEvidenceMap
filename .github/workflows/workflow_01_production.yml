@@ -869,11 +869,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/zenodo
-          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \\
-            --staging-root outputs/initial_baseline \\
-            --run-id "$GITHUB_RUN_ID" \\
-            --repository "$GITHUB_REPOSITORY" \\
-            --state final \\
+          Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \
+            --staging-root outputs/initial_baseline \
+            --run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --state final \
             --output-dir outputs/zenodo
 
       - name: Validate final state and build delta
