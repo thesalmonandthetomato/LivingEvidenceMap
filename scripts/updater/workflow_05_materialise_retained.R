@@ -13,7 +13,7 @@ expected<-length(ids)
 wanted<-setNames(rep(FALSE,length(ids)),ids);seen<-setNames(rep(FALSE,length(ids)),ids)
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
 inp<-file(canonical,"rt",encoding="UTF-8");out<-file(output,"wt",encoding="UTF-8")
-on.exit({if(isOpen(inp))close(inp);if(isOpen(out))close(out)},add=TRUE)
+on.exit({try(close(inp),silent=TRUE);try(close(out),silent=TRUE)},add=TRUE)
 n<-0L
 repeat{
  lines<-readLines(inp,n=500L,warn=FALSE);if(!length(lines))break
