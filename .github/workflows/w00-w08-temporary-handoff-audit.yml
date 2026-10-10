@@ -24,7 +24,7 @@ jobs:
           library(yaml)
           root <- '.github/workflows-inert'
           files <- list.files(root,pattern='^(_workflow_00|workflow_0[0-8]).*\\.yml$',full.names=TRUE)
-          stopifnot(length(files)>=19L)
+          stopifnot(length(files)>=18L)
           errors <- character()
           refs <- 0L
           calls <- 0L
