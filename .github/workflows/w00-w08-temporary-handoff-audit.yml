@@ -33,7 +33,7 @@ jobs:
             matches <- regmatches(s,gregexpr('(scripts/(updater|reporting)/|R/|user_input/|config/)[[:alnum:]_./-]+\\.(R|py|csv|json|txt|yml)',s,perl=TRUE))[[1]]
             matches <- unique(matches)
             for(f in matches){
-              if(grepl('^R/(input_queue|production_manifest|checkpoint_manifest|previous_workflow01_pointer|incremental_rescored_pairs|all_adjudications|human_review_cases)\\.',f))next
+              if(startsWith(f,'R/') && !file.exists(f) && grepl('(^R/(input_queue|production_manifest|checkpoint_manifest|previous_workflow01_pointer|incremental_rescored_pairs|all_adjudications|human_review_cases)\\.|^R/(human_review_package|workflow[0-9]+_)/)',f))next
               refs <- refs+1L
               if(!file.exists(f))errors <- c(errors,paste(p,'missing',f))
             }
@@ -46,10 +46,17 @@ jobs:
               target <- file.path(root,sub('^\\./\\.github/workflows/','',use))
               if(!file.exists(target)){errors<-c(errors,paste(p,'missing reusable workflow',target));next}
               child <- yaml.load_file(target,eval.expr=FALSE)
-              expected <- names(child[['on']][['workflow_call']][['inputs']])
+              events <- child[['on']]
+              if(is.null(events))events <- child[['TRUE']]
+              if(is.null(events))events <- child[['true']]
+              if(is.null(events) || is.null(events[['workflow_call']])){
+                errors <- c(errors,paste('Cannot read workflow_call contract for',target,'keys:',paste(names(child),collapse=',')))
+                next
+              }
+              expected <- names(events[['workflow_call']][['inputs']])
               supplied <- names(job[['with']])
               unexpected <- setdiff(supplied,expected)
-              if(length(unexpected))errors<-c(errors,paste(p,'unexpected reusable-workflow inputs',paste(unexpected,collapse=',')))
+              if(length(unexpected))errors<-c(errors,paste(p,'unexpected reusable-workflow inputs',paste(unexpected,collapse=','),'accepted:',paste(expected,collapse=',')))
               cat('HANDOFF:',basename(p),'->',basename(target),'\n')
             }
           }
