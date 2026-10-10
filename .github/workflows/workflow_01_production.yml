@@ -438,7 +438,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow01_pre_adjudication
+          FIRST_RUN_ARGS=()
+          if [ "${{ inputs.first_run }}" = "true" ]; then FIRST_RUN_ARGS=(--first-run true); fi
           Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
+            "${FIRST_RUN_ARGS[@]}" \
             --old-decisions previous_state/identity_bound/final_pair_decisions.csv \
             --new-decisions outputs/workflow01_incremental_assisted/final_incremental_decisions.csv \
             --metadata outputs/workflow01_candidates/normalised_metadata.csv \
