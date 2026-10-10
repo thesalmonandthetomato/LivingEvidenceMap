@@ -188,10 +188,28 @@ jobs:
           x <- fromJSON(p)
           stopifnot(x$status == 'PASS', isTRUE(x$w01_duplicate_identity_rejected),
                     isTRUE(x$w01_missing_identity_rejected),
-                    isTRUE(x$w04_invalid_forced_id_rejected))
+                    isTRUE(x$w04_invalid_forced_id_rejected),
+                    isTRUE(x$w04_repeat_idempotent),
+                    isTRUE(x$w04_reused_human_decision_preserved),
+                    isTRUE(x$w04_changed_title_rescreened),
+                    isTRUE(x$w04_duplicate_canonical_rejected),
+                    isTRUE(x$w04_duplicate_prior_decision_rejected))
           cat('PASS: regression report assertions verified\n')
           RS
           test -z "$(git status --porcelain)"
+          python3 - <<'PY'
+          import hashlib,json,pathlib,os
+          root=pathlib.Path('/tmp/lem-isolated')
+          reports=['safety_report.json','regression/regression-report.json','w04/prepare_manifest.json','w09/manifest.json']
+          evidence={}
+          for rel in reports:
+              p=root/rel
+              if not p.is_file(): raise RuntimeError('Missing report: '+rel)
+              evidence[rel]={'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size}
+          report={'status':'COMPONENT_TESTS_EXECUTED','commit':os.environ.get('GITHUB_SHA'),'run_id':os.environ.get('GITHUB_RUN_ID'),'test_evidence':evidence,'limits':['Not full consecutive W00-W09 producer-to-consumer execution','No full W01/W02/W04/W08 Shiny adjudication and resume cycle','No live production integration validated']}
+          (root/'validation-summary.json').write_text(json.dumps(report,indent=2))
+          print('PASS: audit report written, end-to-end scope not overstated')
+          PY
       - name: Restore runner networking for audit artefact upload
         if: always()
         shell: bash
@@ -210,5 +228,6 @@ jobs:
             /tmp/lem-isolated/regression/regression-report.json
             /tmp/lem-isolated/w04/prepare_manifest.json
             /tmp/lem-isolated/w09/manifest.json
+            /tmp/lem-isolated/validation-summary.json
           if-no-files-found: warn
           retention-days: 7
