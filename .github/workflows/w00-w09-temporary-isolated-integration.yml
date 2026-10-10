@@ -192,6 +192,13 @@ jobs:
           Rscript scripts/tests/temporary_extended_validation.R
           test -f /tmp/lem-isolated/extended/extended-report.json
           test -z "$(git status --porcelain)"
+      - name: Validate W01 adjudication selector and resume edge cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/tests/temporary_adjudication_contract.R
+          test -f /tmp/lem-isolated/adjudication/adjudication-report.json
+          test -z "$(git status --porcelain)"
       - name: Check regression report and isolate all output files
         shell: bash
         run: |
@@ -215,7 +222,7 @@ jobs:
           python3 - <<'PY'
           import hashlib,json,pathlib,os
           root=pathlib.Path('/tmp/lem-isolated')
-          reports=['safety_report.json','regression/regression-report.json','w04/prepare_manifest.json','w09/manifest.json','linked/linked-report.json','extended/extended-report.json']
+          reports=['safety_report.json','regression/regression-report.json','w04/prepare_manifest.json','w09/manifest.json','linked/linked-report.json','extended/extended-report.json','adjudication/adjudication-report.json']
           evidence={}
           for rel in reports:
               p=root/rel
@@ -246,5 +253,6 @@ jobs:
             /tmp/lem-isolated/validation-summary.json
             /tmp/lem-isolated/linked/linked-report.json
             /tmp/lem-isolated/extended/extended-report.json
+            /tmp/lem-isolated/adjudication/adjudication-report.json
           if-no-files-found: warn
           retention-days: 7
