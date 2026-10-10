@@ -182,6 +182,7 @@ jobs:
             --pointer "$POINTER" \
             --output-root checkpoint_restore > outputs_checkpoint_dir.txt
           CHECKPOINT_DIR="$(tail -n 1 outputs_checkpoint_dir.txt)"
+          export CHECKPOINT_DIR
           test -s "$CHECKPOINT_DIR/checkpoint_manifest.json"
           FIRST_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("CHECKPOINT_DIR"),"checkpoint_manifest.json"));cat(tolower(as.character(isTRUE(x$first_run))))')"
           echo "LEM_FIRST_RUN=$FIRST_RUN" >> "$GITHUB_ENV"
