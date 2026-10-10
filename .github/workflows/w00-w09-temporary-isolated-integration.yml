@@ -23,7 +23,7 @@ jobs:
           use-public-rspm: true
       - name: Install local test dependencies before network isolation
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','readr','dplyr','httr2'))
+        run: install.packages(c('jsonlite','digest','readr','dplyr','httr2','data.table'))
       - name: Prove read-only checkout and no service credentials
         shell: bash
         run: |
@@ -169,6 +169,13 @@ jobs:
           write_json(r,file.path(d,'safety_report.json'),pretty=TRUE,auto_unbox=TRUE)
           cat('PASS: additional five synthetic stage checks\n')
           RS
+          test -z "$(git status --porcelain)"
+      - name: Test immutable W01 identities and incremental W04 decision reuse without network
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/tests/temporary_isolated_regression.R
+          test -f /tmp/lem-isolated/regression/regression-report.json
           test -z "$(git status --porcelain)"
       - name: Restore runner networking for audit artefact upload
         if: always()
