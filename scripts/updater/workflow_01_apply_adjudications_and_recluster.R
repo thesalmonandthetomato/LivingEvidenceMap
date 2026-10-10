@@ -37,6 +37,30 @@ if (anyDuplicated(pairs$pair_key)) stop("Combined pair decisions contain duplica
 setkey(pairs,pair_key)
 setorder(meta,idx)
 if (!identical(meta$idx,seq_len(nrow(meta)))) stop("Manifestation map idx is not contiguous",call.=FALSE)
+# Check that the stored stable key resolves to the same source records as
+# the current computational indices. Never trust a numeric pair key.
+identity<-function(src,id)paste0(nchar(src,type="bytes"),":",src,nchar(id,type="bytes"),":",id)
+if(nrow(pairs)) {
+  if(!all(c("source_id_i","source_record_id_i","source_id_j","source_record_id_j") %in% names(pairs)))
+    stop("Final W01 decisions lack explicit source identities",call.=FALSE)
+  i<-as.integer(pairs$record_i);j<-as.integer(pairs$record_j)
+  if(anyNA(i)||anyNA(j)||any(i<1L|i>nrow(meta)|j<1L|j>nrow(meta)|i==j))
+    stop("Final W01 decision indices are invalid",call.=FALSE)
+  match_ids<-pairs$source_id_i==meta$source[i] &
+    pairs$source_record_id_i==meta$source_record_id[i] &
+    pairs$source_id_j==meta$source[j] &
+    pairs$source_record_id_j==meta$source_record_id[j]
+  if(anyNA(match_ids)||!all(match_ids))stop("Final W01 decision identity mismatch",call.=FALSE)
+  a<-identity(as.character(meta$source[i]),as.character(meta$source_record_id[i]))
+  b<-identity(as.character(meta$source[j]),as.character(meta$source_record_id[j]))
+  lo<-ifelse(a<=b,a,b);hi<-ifelse(a<=b,b,a)
+  keys<-vapply(seq_along(lo),function(k)
+    digest(paste0(nchar(lo[[k]],type="bytes"),":",lo[[k]],hi[[k]]),
+      algo="sha256",serialize=FALSE),character(1))
+  if(!identical(as.character(pairs$pair_key),keys))
+    stop("Final W01 persisted pair keys do not match source IDs",call.=FALSE)
+}
+
 
 read_jsonl <- function(path) {
   x <- readLines(path,warn=FALSE,encoding="UTF-8")
