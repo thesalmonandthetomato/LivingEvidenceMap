@@ -42,6 +42,6 @@ write_json(list(update_id="extended-synthetic",counts=list(),workflow_runs=list(
 run("scripts/reporting/write_workflow09_stage_summary.R",c("--stage","W08","--run-id","808","--pointer",p("w08-manifest.json"),"--status",p("status.json"),"--output-dir",p("w09")))
 run("scripts/reporting/refresh_workflow09_input_manifest.R",c("--input-dir",p("w09"),"--output",p("w09/manifest.json")))
 s<-fromJSON(p("w09/w08_summary.json"));report<-fromJSON(p("w09/manifest.json"))
-stopifnot(s$metrics$canonical_records==1,s$metrics$excluded_records==1,s$metrics$final_canonical_sha256==w8$final_canonical_jsonl_sha256,length(report$stages)==1,report$stages[[1]]$stage=="W08")
+stopifnot(s$metrics$canonical_records==1,s$metrics$excluded_records==1,s$metrics$final_canonical_sha256==w8$final_canonical_jsonl_sha256,nrow(report$stages)==1,report$stages$stage[[1]]=="W08")
 write_json(list(status="PASS",w06=list(reused=1,queued=2),w07=list(reused=1,queued=2,ontology_mismatch_rejected=TRUE),w08_w09=list(included=1,excluded=1,sha256=w8$final_canonical_jsonl_sha256)),p("extended-report.json"),auto_unbox=TRUE,pretty=TRUE)
 cat("PASS: W06/W07 incremental decision reuse, ontology mismatch rejection, and W08->W09 reporting\n")
