@@ -1,8 +1,5 @@
 name: W01 benchmark removal validation
 on:
-  push:
-    branches: [main]
-    paths: [docs/w01_benchmark_removal_test_trigger.txt]
   workflow_dispatch:
 permissions:
   contents: read
