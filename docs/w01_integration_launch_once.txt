@@ -5,3 +5,5 @@ Retry after OpenAlex repeated-ID handling cfc1244; conflict guard remains enable
 Retry after wiring existing Europe PMC sidecar adapter for MED/ETH/CBA/PPR.
 
 Retry after removing duplicate PubMed/Europe PMC prepared input files (f2322da).
+
+Restart after successful 28-source W00-W01 contract audit run 38076839851; 5000-case ceiling, first run, no W02.
