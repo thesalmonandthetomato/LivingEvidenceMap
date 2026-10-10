@@ -1,0 +1,18 @@
+name: W01 controlled initial integration launch
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/w01_integration_launch_once.txt
+permissions:
+  contents: write
+  actions: write
+jobs:
+  launch:
+    uses: ./.github/workflows/workflow_01_production.yml
+    with:
+      first_run: true
+      workflow00_pointer_path: docs/search_record/zenodo/run-38069704382.json
+      previous_workflow01_pointer_path: ''
+      max_llm_cases: 5000
+    secrets: inherit
