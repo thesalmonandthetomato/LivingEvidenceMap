@@ -1,8 +1,5 @@
 name: W01 W00 source-contract audit (28 sources; no LLM)
 on:
-  push:
-    branches: [main]
-    paths: [docs/w01_source_audit_trigger.txt]
   workflow_dispatch:
 permissions:
   contents: read
