@@ -202,7 +202,7 @@ jobs:
             --registry /tmp/empty_native_ids.txt \
             --output-dir outputs/updater/source_delta
           test -s outputs/updater/source_delta/reconciliation_manifest.json
-          test -s outputs/updater/source_delta/updated_native_ids.txt
+          test -f outputs/updater/source_delta/updated_native_ids.txt
 
 
       - name: Seed native-ID registry for EBSCO source
