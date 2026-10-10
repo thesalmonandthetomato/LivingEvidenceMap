@@ -30,6 +30,10 @@ if(!stage_status %in% c("start","complete","waiting_human")) stop("--stage-statu
 changed_file <- arg("--changed-files","")
 pointer_path <- arg("--pointer","")
 w00_run_id <- arg("--w00-run-id","")
+first_run_raw <- tolower(trimws(arg("--first-run",Sys.getenv("LEM_FIRST_RUN",unset="false"))))
+if(!first_run_raw %in% c("true","false")) stop("first_run must be true or false",call.=FALSE)
+first_run <- identical(first_run_raw,"true")
+
 changed <- if(nzchar(changed_file) && file.exists(changed_file)) {
   trimws(readLines(changed_file,warn=FALSE))
 } else character()
@@ -204,7 +208,22 @@ if(stage=="W00"){
   if(any(!nzchar(parents))) stop("W00 search record is missing github.parent_workflow_run_id",call.=FALSE)
   parent<-if(nzchar(w00_run_id)) w00_run_id else names(sort(table(parents),decreasing=TRUE))[[1L]]
   recs<-recs[parents==parent]
-  baseline<-published_release_baseline()
+  baseline <- if(first_run) {
+    reg <- read.csv("docs/workflow08/zenodo_registry.csv",stringsAsFactors=FALSE)
+    if(any(as.character(reg$status)=="authoritative")) stop("first_run=TRUE conflicts with existing W08 baseline",call.=FALSE)
+    list(
+      release_update_id=NULL,
+      workflow01_source_run_id=NULL,workflow01_pointer=NULL,
+      workflow02_source_run_id=NULL,workflow02_pointer=NULL,
+      lean_pointer=NULL,workflow04_pointer=NULL,workflow05_pointer=NULL,
+      workflow06_pointer=NULL,workflow07_pointer=NULL,workflow08_pointer=NULL,
+      canonical_records=0L,canonical_sha256=NULL,
+      previous_counts=list(search_results=0L,deduplicated_records=0L,
+        enriched_records=0L,retraction_exclusions=0L,
+        screened_include=0L,screened_exclude=0L,species_records=0L,
+        geography=list(with=0L,without=0L),topics=list(with=0L,without=0L))
+    )
+  } else published_release_baseline()
   update_total<-sum(vapply(recs,function(z)as.integer(z$reported_search_results),integer(1)))
   prior_total<-as.integer(baseline$previous_counts$search_results)
   if(is.na(prior_total) || prior_total < 0L) stop("Published-release W00 baseline search-results total is invalid",call.=FALSE)
@@ -220,6 +239,7 @@ if(stage=="W00"){
     branch=Sys.getenv("GITHUB_REF_NAME",unset="main"),
     started_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
     last_updated_at_utc=NULL,
+    first_run=first_run,
     baseline=baseline,
     search=list(workflow00_run_id=parent,search_date=as.character(max(dates,na.rm=TRUE)),
                 search_results=update_total,sources=src),
