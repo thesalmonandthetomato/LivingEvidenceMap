@@ -6,3 +6,6 @@ dispatch_w01=false
 source_groups=all_10
 expected_distinct_sources=26
 search_version=mvp-salmon-feed-test-v1
+
+retry=2
+preflight_fix=use_configured_r_package_repository
