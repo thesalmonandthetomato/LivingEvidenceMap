@@ -26,6 +26,19 @@ swapped$idx<-1:3
 write.csv(swapped,meta_path,row.names=FALSE)
 run(script,c("--metadata",meta_path,"--checkpoint-manifest",checkpoint),expect_ok=FALSE)
 write.csv(meta,meta_path,row.names=FALSE)
+# Negative tests: duplicate source key, missing key, noncontiguous index and absent checkpoint fingerprint.
+duplicate<-meta; duplicate$source[2]<-duplicate$source[1]; duplicate$source_record_id[2]<-duplicate$source_record_id[1]
+write.csv(duplicate,meta_path,row.names=FALSE)
+run(script,c("--metadata",meta_path,"--checkpoint-manifest",checkpoint),expect_ok=FALSE)
+missing<-meta; missing$source_record_id[2]<-""
+write.csv(missing,meta_path,row.names=FALSE,na="")
+run(script,c("--metadata",meta_path,"--checkpoint-manifest",checkpoint),expect_ok=FALSE)
+badindex<-meta; badindex$idx[2]<-9L
+write.csv(badindex,meta_path,row.names=FALSE)
+run(script,c("--metadata",meta_path,"--checkpoint-manifest",checkpoint),expect_ok=FALSE)
+write.csv(meta,meta_path,row.names=FALSE)
+write_json(list(),file.path(root,"checkpoint-no-fingerprint.json"),auto_unbox=TRUE)
+run(script,c("--metadata",meta_path,"--checkpoint-manifest",file.path(root,"checkpoint-no-fingerprint.json")),expect_ok=FALSE)
 # W04: retain unchanged prior decisions; changed inputs and new records must requeue.
 canon <- function(id,title,abstract)list(identity=list(record_id=id),canonical=list(title=title,abstract=abstract))
 initial<-list(canon("a","Climate A","Original A"),canon("b","Climate B","Original B"))
@@ -35,7 +48,7 @@ writejl(initial,old_path);writejl(update,new_path)
 statuses<-lapply(c("a","b","c"),function(id)list(record_id=id,publication_status=list(exclude_from_workflow04=FALSE)))
 w03<-file.path(root,"w03.jsonl");writejl(statuses,w03)
 prior_layer<-file.path(root,"prior_screen.jsonl")
-writejl(lapply(c("a","b"),function(id)list(record_id=id,screening=list(final_decision="include"))),prior_layer)
+writejl(lapply(c("a","b"),function(id)list(record_id=id,screening=list(decision="retain"))),prior_layer)
 run("scripts/updater/workflow_04_prepare_incremental.R",c("--canonical",new_path,"--workflow03-status",w03,"--prior-workflow04",prior_layer,"--prior-canonical",old_path,"--output-dir",file.path(root,"w04")))
 manifest<-fromJSON(file.path(root,"w04","prepare_manifest.json"))
 stopifnot(manifest$status=="PASS",manifest$canonical_records==3,manifest$reusable_records==1,manifest$screen_queue_records==2,manifest$new_record_ids==1,manifest$changed_screening_input==1,manifest$changed_screening_input_reused==0)
@@ -44,5 +57,5 @@ stopifnot(setequal(readLines(file.path(root,"w04","screen_queue_record_ids.txt")
 # Negative: forced rescreen of an unknown identity must fail closed.
 writeLines("unknown-id",file.path(root,"unknown.txt"))
 run("scripts/updater/workflow_04_prepare_incremental.R",c("--canonical",new_path,"--workflow03-status",w03,"--force-rescreen-record-ids",file.path(root,"unknown.txt"),"--output-dir",file.path(root,"w04-invalid")),expect_ok=FALSE)
-write_json(list(status="PASS",w01_stable_index=TRUE,w01_swapped_index_rejected=TRUE,w04_unchanged_reused=1,w04_changed_rescreened=1,w04_new_queued=1,w04_invalid_forced_id_rejected=TRUE),file.path(root,"regression-report.json"),auto_unbox=TRUE,pretty=TRUE)
+write_json(list(status="PASS",w01_stable_index=TRUE,w01_swapped_index_rejected=TRUE,w01_duplicate_identity_rejected=TRUE,w01_missing_identity_rejected=TRUE,w01_invalid_index_rejected=TRUE,w01_missing_checkpoint_rejected=TRUE,w04_unchanged_reused=1,w04_changed_rescreened=1,w04_new_queued=1,w04_invalid_forced_id_rejected=TRUE),file.path(root,"regression-report.json"),auto_unbox=TRUE,pretty=TRUE)
 cat("PASS: W01 index stability and W04 incremental update regression tests\n")
