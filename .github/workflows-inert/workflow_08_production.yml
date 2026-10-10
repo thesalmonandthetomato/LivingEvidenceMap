@@ -3,6 +3,11 @@ name: Workflow 08 - living finalisation
 on:
   workflow_call:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       execution_ref:
         required: false
         default: ''
@@ -45,6 +50,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      first_run:
+        description: Initialise an entirely new review, with no prior baseline
+        required: false
+        default: false
+        type: boolean
       execution_ref:
         description: Exact repository commit to use; blank uses current main head
         required: false
