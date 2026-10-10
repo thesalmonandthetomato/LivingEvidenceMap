@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - workflow01-final-architecture
+      - main
     paths:
       - 'docs/search_record/full_search/*.json'
       - 'docs/search_record/fortnightly_update/*.json'
@@ -34,7 +34,7 @@ jobs:
       - name: Checkout development branch
         uses: actions/checkout@v4
         with:
-          ref: workflow01-final-architecture
+          ref: main
           fetch-depth: 0
 
       - name: Set up R
@@ -77,7 +77,7 @@ jobs:
       - name: Sync current-run status to Shiny
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -104,5 +104,5 @@ jobs:
             exit 0
           fi
           git commit -m "Update current-run live status [skip ci]"
-          git pull --rebase origin workflow01-final-architecture
-          git push origin HEAD:workflow01-final-architecture
+          git pull --rebase origin main
+          git push origin HEAD:main
