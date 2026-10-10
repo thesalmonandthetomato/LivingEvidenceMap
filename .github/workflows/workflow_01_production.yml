@@ -605,7 +605,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          FIRST_RUN_ARGS=()
+          if [ "${{ inputs.first_run }}" = "true" ]; then FIRST_RUN_ARGS=(--first-run true); fi
           Rscript scripts/updater/workflow_01_build_pending_checkpoint.R \
+            "${FIRST_RUN_ARGS[@]}" \
             --previous-root previous_state \
             --current-seed-root outputs/workflow01_union \
             --incremental-rescore outputs/workflow01_incremental_assisted/final_incremental_decisions.csv \
