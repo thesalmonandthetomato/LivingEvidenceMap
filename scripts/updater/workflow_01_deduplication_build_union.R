@@ -9,6 +9,9 @@ arg <- function(flag, default=NULL) {
   args[[i+1L]]
 }
 old_dir <- arg("--old-dir")
+first_run <- tolower(arg("--first-run","false"))
+if(!first_run %in% c("true","false"))stop("--first-run must be true or false",call.=FALSE)
+first_run <- identical(first_run,"true")
 expected_prior <- suppressWarnings(as.integer(arg("--expected-prior-manifestations",NA_character_)))
 output_dir <- arg("--output-dir")
 
@@ -103,16 +106,22 @@ for (src in names(current_paths)) {
     old_lines <- read_lines_nonempty(hits[[1L]])
     old_ids <- ids_for_lines(old_lines,src)
     if (anyDuplicated(old_ids)) stop(sprintf("Duplicate preserved %s source IDs",src),call.=FALSE)
-  } else if (src %in% legacy_required_sources) {
+  } else if (!first_run && src %in% legacy_required_sources) {
     stop(sprintf("Required preserved source file missing for legacy source %s",src),call.=FALSE)
   }
 
+  if(first_run && length(old_lines)) stop("first_run forbids preserved source state: ",src,call.=FALSE)
   cur_lines <- read_lines_nonempty(current_paths[[src]])
   cur_ids <- ids_for_lines(cur_lines,src)
   if (anyDuplicated(cur_ids)) stop(sprintf("Duplicate current %s source IDs",src),call.=FALSE)
 
   is_new <- !(cur_ids %in% old_ids)
   append_lines <- cur_lines[is_new]
+  if(first_run && length(append_ids <- cur_ids[is_new])) {
+    o <- order(append_ids,method="radix")
+    append_lines <- append_lines[o]
+    append_ids <- append_ids[o]
+  }
   append_ids <- cur_ids[is_new]
 
   out_path <- file.path(output_dir,paste0(src,"_records_for_deduplication.jsonl"))
