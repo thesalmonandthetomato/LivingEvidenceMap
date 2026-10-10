@@ -757,6 +757,7 @@ jobs:
             -f limit='0' \
             -f batch_size='100' \
             -f publish='true' \
+            -f first_run="${{ inputs.first_run || false }}" \
             -f lean_pointer_path="$LEAN_POINTER"
           echo "PASS: dispatched Workflow 03 from W02 run $GITHUB_RUN_ID"
 
