@@ -288,8 +288,8 @@ jobs:
           set -euo pipefail
           ROOT=/tmp/w01_smoke/count_contract
           mkdir -p "$ROOT/current_sources/openalex" "$ROOT/output"
-          printf '%s\\n' '{"sidecar_identity":{"sidecar_record_id":"openalex:W1"}}' '{"sidecar_identity":{"sidecar_record_id":"openalex:W2"}}' > "$ROOT/current_sources/openalex/openalex_sidecar_records.jsonl"
-          printf '%s\\n' '{"sidecar_record_id":"openalex:W1","first_raw_file":"a.json","repeated_raw_file":"b.json","status":"identical_mapped_fields"}' > "$ROOT/current_sources/openalex/duplicate_source_occurrences.jsonl"
+          printf '%s\n' '{"sidecar_identity":{"sidecar_record_id":"openalex:W1"}}' '{"sidecar_identity":{"sidecar_record_id":"openalex:W2"}}' > "$ROOT/current_sources/openalex/openalex_sidecar_records.jsonl"
+          printf '%s\n' '{"sidecar_record_id":"openalex:W1","first_raw_file":"a.json","repeated_raw_file":"b.json","status":"identical_mapped_fields"}' > "$ROOT/current_sources/openalex/duplicate_source_occurrences.jsonl"
           Rscript - <<'RS'
           library(jsonlite)
           root <- "/tmp/w01_smoke/count_contract"
