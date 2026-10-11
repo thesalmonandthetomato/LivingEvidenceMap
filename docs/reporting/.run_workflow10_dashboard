@@ -1,4 +1,4 @@
-W10 dashboard publication retry
+W10 finalisation retry
 methodsresults=false
 source_w09=38164718659
-reason=stash_generated_unstaged_files_before_rebase
+reason=restore_active_status_after_git_stash
