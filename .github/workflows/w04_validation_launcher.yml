@@ -1,0 +1,32 @@
+name: W04 temporary validation launcher
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/screening/w04_launch_requests/*.json'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Dispatch existing production W04
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t REQUESTS < <(git diff --name-only HEAD^ HEAD -- docs/screening/w04_launch_requests/)
+          test "${#REQUESTS[@]}" -eq 1
+          REQUEST="${REQUESTS[0]}"
+          test -s "$REQUEST"
+          readarray -t POINTERS < <(python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["first_run"] is True and x["publish"] is True; print(x["lean_pointer_path"]); print(x["workflow03_pointer_path"])' "$REQUEST")
+          test "${#POINTERS[@]}" -eq 2
+          test -s "${POINTERS[0]}"
+          test -s "${POINTERS[1]}"
+          gh workflow run workflow_04_production.yml --repo "$GITHUB_REPOSITORY" --ref main -f first_run=true -f lean_pointer_path="${POINTERS[0]}" -f workflow03_pointer_path="${POINTERS[1]}" -f prior_workflow04_pointer_path=none -f prior_lean_pointer_path='' -f manual_decisions_path='' -f manual_repair_zenodo_record_id='' -f recovery_pass1_zenodo_record_id='' -f publish=true
+          echo "PASS: dispatched full first-run W04 screening"
