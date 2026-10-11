@@ -93,7 +93,17 @@ jobs:
           source('R/species_detect.R')
           x<-readr::read_csv('user_input/workflow05_deterministic_concepts.csv',show_col_types=FALSE)
           stopifnot(identical(names(x),c('coding','entity','terms')))
-          testthat::test_file('tests/testthat/test-species.R',reporter='summary')
+          # Self-contained deterministic smoke test; the historic test-species.R
+          # fixture is not present in the reusable production repository.
+          d <- data.frame(
+            species_id='fixture-001', preferred_name='Test species',
+            scientific_name='Fictitia exemplaris', synonym='Fictitia exemplaris',
+            synonym_type='scientific', is_farmed_candidate=TRUE,
+            default_group='fixture', stringsAsFactors=FALSE
+          )
+          hit <- detect_species_mentions(title='Fictitia exemplaris study',abstract='',dictionary=d)
+          miss <- detect_species_mentions(title='Unrelated study',abstract='',dictionary=d)
+          stopifnot(nrow(hit)==1L,identical(as.character(hit$species_id[[1L]]),'fixture-001'),nrow(miss)==0L)
           cat('PASS: W05 implementation and deterministic vocabulary validated\n')
 
       - name: Restore current Workflow 04 state
