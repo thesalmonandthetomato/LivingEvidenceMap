@@ -3,13 +3,8 @@ name: Report - Workflow 09 publication package
 on:
   workflow_dispatch:
     inputs:
-      methods_doc:
-        description: 'Render Methods manuscript outputs'
-        type: boolean
-        required: false
-        default: false
-      results_doc:
-        description: 'Render Results manuscript outputs'
+      methodsresults:
+        description: 'Render both Methods and Results manuscripts'
         type: boolean
         required: false
         default: false
@@ -318,8 +313,8 @@ jobs:
 
       - name: Render enabled manuscript documents
         env:
-          METHODS_DOC: ${{ inputs.methods_doc || false }}
-          RESULTS_DOC: ${{ inputs.results_doc || false }}
+          METHODSRESULTS: ${{ inputs.methodsresults || false }}
+          
         env:
           CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
           FLOW_COUNTS_JSON: ${{ github.workspace }}/visualisations/figure_07_flow_diagram_counts.json
@@ -363,8 +358,8 @@ jobs:
           }
 
           enabled <- c(
-            methods = identical(tolower(Sys.getenv("METHODS_DOC")), "true"),
-            results = identical(tolower(Sys.getenv("RESULTS_DOC")), "true")
+            methods = identical(tolower(Sys.getenv("METHODSRESULTS")), "true"),
+            results = identical(tolower(Sys.getenv("METHODSRESULTS")), "true")
           )
           for (stem in names(enabled)[enabled]) {
             render_all(
@@ -393,15 +388,13 @@ jobs:
 
       - name: Convert enabled Word manuscripts to PDF
         env:
-          METHODS_DOC: ${{ inputs.methods_doc || false }}
-          RESULTS_DOC: ${{ inputs.results_doc || false }}
+          METHODSRESULTS: ${{ inputs.methodsresults || false }}
+          
         shell: bash
         run: |
           set -euo pipefail
           for stem in methods results; do
-            flag=METHODS_DOC
-            if [ "$stem" = results ]; then flag=RESULTS_DOC; fi
-            if [ "${!flag}" = true ]; then
+            if [ "$METHODSRESULTS" = true ]; then
               libreoffice --headless --convert-to pdf --outdir outputs/workflow09_manuscript "outputs/workflow09_manuscript/$stem.docx"
               test -s "outputs/workflow09_manuscript/$stem.pdf"
             fi
@@ -409,8 +402,8 @@ jobs:
 
       - name: Stage permanent Workflow 09 publication package
         env:
-          METHODS_DOC: ${{ inputs.methods_doc || false }}
-          RESULTS_DOC: ${{ inputs.results_doc || false }}
+          METHODSRESULTS: ${{ inputs.methodsresults || false }}
+          
         shell: bash
         run: |
           set -euo pipefail
@@ -494,8 +487,8 @@ jobs:
 
       - name: Validate Workflow 09 publication package
         env:
-          METHODS_DOC: ${{ inputs.methods_doc || false }}
-          RESULTS_DOC: ${{ inputs.results_doc || false }}
+          METHODSRESULTS: ${{ inputs.methodsresults || false }}
+          
         shell: Rscript {0}
         run: |
           library(jsonlite)
@@ -600,7 +593,7 @@ jobs:
           stopifnot(identical(sort(required_code), actual_code))
 
           for (stem in c("methods", "results")) {
-            enabled <- identical(tolower(Sys.getenv(paste0(toupper(stem), "_DOC"))), "true")
+            enabled <- identical(tolower(Sys.getenv("METHODSRESULTS")), "true")
             rendered <- file.path(
               "docs/reporting/workflow_09/manuscript",
               paste0(stem, c(".md", ".html", ".docx", ".pdf"))
