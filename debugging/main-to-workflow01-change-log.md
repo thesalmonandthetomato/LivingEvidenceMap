@@ -104,3 +104,9 @@ For every new defect discovered on `main`, add one entry identifying: **problem,
 - **Shiny repo main fix:** LivingEvidenceMapAdjudication commit 6da8ddf removes redundant nested active-log read, preserves pre-write cross-reviewer authority, detects previously written decision IDs, performs only one append attempt, and verifies by ID after append even if the HTTP response fails. It returns a clear, cautious error if verification cannot determine persistence. Reference copy synchronised b0330ac.
 - **Safety:** No Google Sheet writes or deletion performed during code change. Existing decision events, assignments, queue hashes, and tab schema unchanged. No W00/W01 rerun and no API LLM calls.
 - **Follow-up:** Verify regression CI, deployment environment, and live reviewer save latency; resolve separate hard-coded GitHub dispatch refs before pipeline continuation. Do not republish/reset a queue while reviewing.
+
+### W01 initial-run resume historical split-registry failure (11 Oct 2026)
+- Run 38086219307 failed at `Apply final adjudications with stable work IDs`: `Explicit split work-653e23e9f79dc507/horses is missing declared manifestation(s)` for legacy Lens and OpenAlex IDs. These belong to `user_input/workflow01_explicit_cluster_splits.json`, a historic salmon-project correction registry inappropriate for a fresh first run.
+- Main fix e5c2fdbb: only supply `--explicit-cluster-splits` to W01 resume for non-first-run updates (`LEM_FIRST_RUN != true`), retain prior historical update logic. No changes to Shiny decisions or checkpoint.
+- Reuse original exported 38-case handoff `run-38081853866.json` from successful export 38086090236; retry triggered as run 38113970985. Verify publication and downstream activation after run result.
+- Production branch: documentation only; no code changes made here.
