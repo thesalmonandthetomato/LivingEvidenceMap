@@ -9,5 +9,6 @@
   "export_run_id": "38086090236",
   "decisions_artifact": "workflow01-human-decisions-38081853866-38086090236",
   "decisions_export_sha256": "a68f1a1863135d09c4a8cd7f6788391478e421d40b2c5d73ca91a5c3a31d9779",
-  "created_at_utc": "2026-10-10T21:04:27Z"
+  "created_at_utc": "2026-10-10T21:04:27Z",
+  "resume_retry_note": "2026-10-11: Skip historical explicit cluster split registry for first-run resume; original validated export retained."
 }
