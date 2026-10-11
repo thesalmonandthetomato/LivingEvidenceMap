@@ -476,7 +476,7 @@ jobs:
           # Remove stale renders when a document is disabled, preserving its Rmd source.
           for stem in methods results; do
             rm -f "$PUB/manuscript/$stem".{md,html,docx,pdf}
-            if [ "${!flag}" = true ]; then
+            if [ "$METHODSRESULTS" = true ]; then
               cp "outputs/workflow09_manuscript/$stem".{md,html,docx,pdf} "$PUB/manuscript/"
             fi
           done
