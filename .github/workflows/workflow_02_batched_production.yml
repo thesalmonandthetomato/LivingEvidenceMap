@@ -2,8 +2,7 @@ name: Workflow 02 - Batched production candidate
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'docs/enrichment/w02_launch_requests/*.json'
   workflow_dispatch:
@@ -36,62 +35,47 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     outputs:
-      first_run: ${{ steps.params.outputs.first_run }}
-      workflow01_pointer_path: ${{ steps.params.outputs.workflow01_pointer_path }}
-      previous_workflow02_pointer_path: ${{ steps.params.outputs.previous_workflow02_pointer_path }}
-      resume_run_id: ${{ steps.params.outputs.resume_run_id }}
+      first_run: ${{ steps.select.outputs.first_run }}
+      pointer: ${{ steps.select.outputs.pointer }}
+      previous: ${{ steps.select.outputs.previous }}
+      resume: ${{ steps.select.outputs.resume }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
-      - name: Resolve explicit W02 production launch
-        id: params
+      - name: Select W02 inputs
+        id: select
         env:
-          INPUT_FIRST_RUN: ${{ inputs.first_run }}
-          INPUT_W01_POINTER: ${{ inputs.workflow01_pointer_path }}
-          INPUT_PREV_W02_POINTER: ${{ inputs.previous_workflow02_pointer_path }}
-          INPUT_RESUME_RUN: ${{ inputs.resume_run_id }}
+          FIRST_RUN: ${{ inputs.first_run }}
+          POINTER: ${{ inputs.workflow01_pointer_path }}
+          PREVIOUS: ${{ inputs.previous_workflow02_pointer_path }}
+          RESUME: ${{ inputs.resume_run_id }}
+        shell: bash
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            mapfile -t REQUESTS < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^docs/enrichment/w02_launch_requests/.*\.json
-      batch_size: '250'
-      max_records: '0'
-      recheck_after_days: '90'
-      publish: true
-      use_scopus: false
-      enrich_author_keywords: false
-    secrets: inherit
- || true)
-            test "${#REQUESTS[@]}" -eq 1
-            python3 - "${REQUESTS[0]}" >> "$GITHUB_OUTPUT" <<'PY'
-          import json, re, sys
-          x=json.load(open(sys.argv[1],encoding='utf-8'))
-          assert x.get('first_run') is True, 'Push launch requires explicitly confirmed first_run=true'
-          pointer=x.get('workflow01_pointer_path','')
-          assert re.fullmatch(r'docs/deduplication/zenodo/run-[0-9]+\.json',pointer), 'Invalid W01 pointer'
-          assert x.get('previous_workflow02_pointer_path','') == '', 'First run must not use previous W02'
-          print('first_run=true')
-          print('workflow01_pointer_path='+pointer)
-          print('previous_workflow02_pointer_path=')
-          print('resume_run_id=')
-          PY
-          else
-            test -n "$INPUT_W01_POINTER"
-            echo "first_run=$INPUT_FIRST_RUN" >> "$GITHUB_OUTPUT"
-            echo "workflow01_pointer_path=$INPUT_W01_POINTER" >> "$GITHUB_OUTPUT"
-            echo "previous_workflow02_pointer_path=$INPUT_PREV_W02_POINTER" >> "$GITHUB_OUTPUT"
-            echo "resume_run_id=$INPUT_RESUME_RUN" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            REQUEST="docs/enrichment/w02_launch_requests/first-run-w01-38123211165.json"
+            test -s "$REQUEST"
+            test "$(git diff --name-only HEAD^ HEAD -- "$REQUEST")" = "$REQUEST"
+            POINTER="$(python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["first_run"] is True and x.get("previous_workflow02_pointer_path","")==""; print(x["workflow01_pointer_path"])' "$REQUEST")"
+            FIRST_RUN=true
+            PREVIOUS=""
+            RESUME=""
           fi
+          test -s "$POINTER"
+          echo "first_run=$FIRST_RUN" >> "$GITHUB_OUTPUT"
+          echo "pointer=$POINTER" >> "$GITHUB_OUTPUT"
+          echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
+          echo "resume=$RESUME" >> "$GITHUB_OUTPUT"
   production:
     needs: resolve
     uses: ./.github/workflows/workflow_02_batched.yml
     with:
       first_run: ${{ fromJSON(needs.resolve.outputs.first_run) }}
-      workflow01_pointer_path: ${{ needs.resolve.outputs.workflow01_pointer_path }}
-      previous_workflow02_pointer_path: ${{ needs.resolve.outputs.previous_workflow02_pointer_path }}
+      workflow01_pointer_path: ${{ needs.resolve.outputs.pointer }}
+      previous_workflow02_pointer_path: ${{ needs.resolve.outputs.previous }}
       mode: 'incremental'
-      resume_run_id: ${{ needs.resolve.outputs.resume_run_id }}
+      resume_run_id: ${{ needs.resolve.outputs.resume }}
       batch_size: '250'
       max_records: '0'
       recheck_after_days: '90'
