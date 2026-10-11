@@ -1,0 +1,16 @@
+{
+  "schema": "living-evidence-map-workflow09-source-snapshot-v2",
+  "stage": "W01",
+  "source_run_id": "38123211165",
+  "canonical_records": 4212,
+  "source_count": 20,
+  "intersection_count": 134,
+  "canonical_sha256": "2a025f8ae8edc944a98510821f80b24facb37ea8f1e7e26f854a269f6afb67da",
+  "source_summary_file": "w01_source_summary.csv",
+  "source_summary_sha256": "094e81a16eb3e0fcb1787d732f5585dd9ef11dd243395917975c75174a32f715",
+  "intersections_file": "w01_source_intersections.csv",
+  "intersections_sha256": "bebeb494cda9543ae9ec9ad3480c0627384b5535e36a2fb8be841f8bda1a48e4",
+  "w01_source_membership_file": "w01_source_membership.csv",
+  "w01_source_membership_sha256": "59e8fd381ec87d99897d4c26bf697a084497d2786aea0da513fb76e2e7cdfbc5",
+  "generated_at_utc": "2026-10-11T08:03:47Z"
+}

@@ -1,0 +1,2 @@
+"date","source","records_reviewed","records_compared","raw_agreement","human_model_kappa","humans_model_fleiss_kappa","batch_id","registry_row_id"
+"2026-09-26","historical_baseline",22198,21950,0.967927107061503,0.921612714112598,,"historical-baseline-2026-09-26","w04-kappa-baseline-20260926"
