@@ -401,7 +401,7 @@ jobs:
           for stem in methods results; do
             flag=METHODS_DOC
             if [ "$stem" = results ]; then flag=RESULTS_DOC; fi
-            if [ "${!flag,,}" = true ]; then
+            if [ "${!flag}" = true ]; then
               libreoffice --headless --convert-to pdf --outdir outputs/workflow09_manuscript "outputs/workflow09_manuscript/$stem.docx"
               test -s "outputs/workflow09_manuscript/$stem.pdf"
             fi
@@ -485,7 +485,7 @@ jobs:
             flag=METHODS_DOC
             if [ "$stem" = results ]; then flag=RESULTS_DOC; fi
             rm -f "$PUB/manuscript/$stem".{md,html,docx,pdf}
-            if [ "${!flag,,}" = true ]; then
+            if [ "${!flag}" = true ]; then
               cp "outputs/workflow09_manuscript/$stem".{md,html,docx,pdf} "$PUB/manuscript/"
             fi
           done
