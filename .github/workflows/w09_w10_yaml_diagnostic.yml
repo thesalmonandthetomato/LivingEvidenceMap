@@ -13,3 +13,4 @@ jobs:
         run: |
           set -euo pipefail
           ruby -ryaml -e 'ARGV.each { |x| YAML.load_file(x, aliases: true); puts "PASS YAML #{x}" }' .github/workflows/report_workflow09_figures.yml .github/workflows/workflow_10_dashboard.yml
+          go run github.com/rhysd/actionlint/cmd/actionlint@latest -color=false .github/workflows/report_workflow09_figures.yml .github/workflows/workflow_10_dashboard.yml
