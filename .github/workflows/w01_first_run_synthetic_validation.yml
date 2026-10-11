@@ -20,6 +20,16 @@ jobs:
       - name: Install existing W01 dependencies
         shell: Rscript {0}
         run: install.packages(c("jsonlite","stringdist","digest","xml2","stringi","data.table","httr2"))
+      - name: Verify historical correction registry is absent in reusable W01
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q 'explicit.cluster.splits' scripts/updater/workflow_01_apply_adjudications_and_recluster.R
+          ! grep -q 'explicit-cluster-splits' .github/workflows/workflow_01_production.yml
+          ! grep -q 'explicit-cluster-splits' .github/workflows/workflow_01_resume_after_human_review.yml
+          test ! -e user_input/workflow01_explicit_cluster_splits.json
+          test ! -e config/workflow01_explicit_cluster_splits.json
+          echo "PASS: no historical W01 split-registry inputs or execution path"
       - name: Exercise original first-run union, indexing and checkpoint contracts
         shell: bash
         run: |
