@@ -1,0 +1,35 @@
+name: W08 checkpoint recovery launcher
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/workflow08/recovery_requests/*.json'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dispatch W08 only from authoritative checkpoints
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for p in docs/compaction/zenodo/run-38137694653.json docs/publication_status/zenodo/run-38138355889.json docs/workflow04/zenodo/run-38141909882.json docs/workflow05/zenodo/run-38144786847.json docs/workflow06/zenodo/run-38144786847.json docs/workflow07/zenodo/run-38144786847.json; do
+            test -s "$p"
+          done
+          gh workflow run workflow_08_production.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f first_run=true \
+            -f lean_pointer_path=docs/compaction/zenodo/run-38137694653.json \
+            -f workflow03_pointer_path=docs/publication_status/zenodo/run-38138355889.json \
+            -f workflow04_pointer_path=docs/workflow04/zenodo/run-38141909882.json \
+            -f workflow05_pointer_path=docs/workflow05/zenodo/run-38144786847.json \
+            -f workflow06_pointer_path=docs/workflow06/zenodo/run-38144786847.json \
+            -f workflow07_pointer_path=docs/workflow07/zenodo/run-38144786847.json \
+            -f prior_workflow08_pointer_path=none \
+            -f new_decisions_path='' \
+            -f publish=true
+          echo "PASS: W08 dispatched without upstream stages"
