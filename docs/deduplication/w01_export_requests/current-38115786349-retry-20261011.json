@@ -1,0 +1,6 @@
+{
+  "reason": "Retry completed W01 Shiny decision export after checkpoint selection fix",
+  "checkpoint_run_id": "38115786349",
+  "queue_sha256": "c5b0965d7e2a4f5d6337382eb10d53f2e923c490d1cc685b8444ba466634714a",
+  "original_failed_export_run_id": "38122845697"
+}
