@@ -1,0 +1,52 @@
+{
+  "status": "published",
+  "workflow": "08",
+  "state": "corrected_final_adjudicated_canonical",
+  "supersedes_zenodo_record_id": null,
+  "supersedes_doi": null,
+  "source_github_run_id": "38159781873",
+  "source_github_commit": null,
+  "source_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/38159781873",
+  "source_canonical_population": 4212,
+  "canonical_records": 2852,
+  "excluded_records": 1360,
+  "w08_decision_issues": 10,
+  "canonical_schema_version": "living-evidence-map-canonical-v1",
+  "annotation_preservation": "lossless-upstream-handoff-v2",
+  "final_canonical_jsonl_sha256": "94a0117e103356cbdbb9e5cdd8127dfe0a2a5df0ff2a66a95e610955b01e5fff",
+  "final_canonical_jsonl_bytes": 39799730,
+  "excluded_records_csv_sha256": "74ce3925079822f20fdd764b158da3348313fb6f49e634b05ae2be59ddd36ffc",
+  "adjudication_ledger_sha256": "b25977e266a5c2f0e4cb59dda6ee59ecfa8acf0944295c6f9ee8aeda71f2307a",
+  "zenodo_record_id": "23301931",
+  "zenodo_deposition_id": "23301931",
+  "doi": "10.5281/zenodo.23301931",
+  "record_url": "https://zenodo.org/records/23301931",
+  "visibility": "restricted",
+  "files": [
+    {
+      "filename": "living_evidence_map_canonical_final.jsonl",
+      "bytes": 39799730,
+      "sha256": "94a0117e103356cbdbb9e5cdd8127dfe0a2a5df0ff2a66a95e610955b01e5fff",
+      "zenodo_checksum": "md5:2e63af7a70fc1f2f90f0d907ccfc1e7c"
+    },
+    {
+      "filename": "workflow08_excluded_records.csv",
+      "bytes": 379234,
+      "sha256": "74ce3925079822f20fdd764b158da3348313fb6f49e634b05ae2be59ddd36ffc",
+      "zenodo_checksum": "md5:41adcab7c0d5e93ced6d4431450c2347"
+    },
+    {
+      "filename": "workflow08_adjudication_ledger.jsonl",
+      "bytes": 5395,
+      "sha256": "b25977e266a5c2f0e4cb59dda6ee59ecfa8acf0944295c6f9ee8aeda71f2307a",
+      "zenodo_checksum": "md5:483da0540906afcf0a41eddf1f8c4ac1"
+    },
+    {
+      "filename": "workflow08_final_manifest.json",
+      "bytes": 2373,
+      "sha256": "a6ef01fab410c441938fe91d63a6633e5ea86922c747fdf7603a46ac19f6baa2",
+      "zenodo_checksum": "md5:460eeb37c0448f0335b21e2388512236"
+    }
+  ],
+  "published_at_utc": "2026-10-11T17:33:40Z"
+}
