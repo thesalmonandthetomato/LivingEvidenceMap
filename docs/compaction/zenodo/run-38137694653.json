@@ -1,0 +1,39 @@
+{
+  "status": "published",
+  "workflow": "02",
+  "state": "post_w02_lean_canonical_checkpoint",
+  "source_github_run_id": "38137694653",
+  "source_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/38137694653",
+  "publication_github_run_id": "38137694653",
+  "publication_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/38137694653",
+  "input_canonical_sha256": "f126e2ac0e34200bbabafd6fe5d87adff91562371edbff0811b553f39ff921c5",
+  "lean_canonical_sha256": "d7c153ec953b80d95f7911e6dfdb32d72f1f1d0eb4f5e7328f3c08f4e3e64731",
+  "canonical_records": 4212,
+  "manifestations": 13449,
+  "manifestation_refs": 13449,
+  "input_bytes": 56352076,
+  "output_bytes": 17462770,
+  "bytes_removed": 38889306,
+  "size_reduction_fraction": 0.6901,
+  "zenodo_record_id": "23297862",
+  "zenodo_deposition_id": "23297862",
+  "doi": "10.5281/zenodo.23297862",
+  "record_url": "https://zenodo.org/records/23297862",
+  "visibility": "restricted",
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_post_w02_lean_checkpoint_run-38137694653.tar.gz",
+      "bytes": 4034692,
+      "sha256": "4b22e04e7732f6ca42ac2c79ff29c31170358c53c2376338dfed2c11d4900929",
+      "zenodo_checksum": "md5:eac10b0f6cc28a84f989e0e73e2b7689"
+    },
+    {
+      "filename": "LivingEvidenceMap_post_w02_lean_checkpoint_run-38137694653_manifest.json",
+      "bytes": 1311,
+      "sha256": "d57f5e9dc56dc9f1b2de7d7aeb1e474e24e25a19c31db268d73c2c99273eae6b",
+      "zenodo_checksum": "md5:89d2d9d913eaedcd7f41b3abaf51b51e"
+    }
+  ],
+  "manifest_sha256": "d57f5e9dc56dc9f1b2de7d7aeb1e474e24e25a19c31db268d73c2c99273eae6b",
+  "published_at_utc": "2026-10-11T12:06:53Z"
+}
