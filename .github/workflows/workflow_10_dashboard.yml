@@ -337,6 +337,11 @@ jobs:
           done
           if ! git diff --cached --quiet; then
             git commit -m "Publish W10 dashboard and optional report pages [skip ci]"
+            # Generated reporting and registry files are not part of this publication commit.
+            # Stash them so the rebase can operate on a clean worktree.
+            if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+              git stash push --include-untracked -m "w10-runner-only-$GITHUB_RUN_ID"
+            fi
             git pull --rebase origin main
             git push origin HEAD:main
           fi
