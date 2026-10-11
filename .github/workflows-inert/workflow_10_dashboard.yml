@@ -318,7 +318,12 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html docs/dashboard-data.js docs/methodology.html docs/results.html docs/.nojekyll
+          git add docs/index.html docs/dashboard-data.js docs/.nojekyll
+          for page in docs/methodology.html docs/results.html; do
+            if [ -e "$page" ] || git ls-files --error-unmatch "$page" >/dev/null 2>&1; then
+              git add -A -- "$page"
+            fi
+          done
           STASHED=0
           if [ -n "$(git status --porcelain --untracked-files=all | grep -vE '^([AMDRC U?!]{2})? *docs/(index[.]html|dashboard-data[.]js|methodology[.]html|results[.]html|[.]nojekyll)
 
