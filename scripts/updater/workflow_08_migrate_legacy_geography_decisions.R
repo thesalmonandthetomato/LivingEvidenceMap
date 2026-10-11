@@ -5,11 +5,14 @@ args<-commandArgs(trailingOnly=TRUE)
 arg<-function(flag,default=NULL){i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop(sprintf("Missing value after %s",flag),call.=FALSE);args[[i+1L]]}
 queue_path<-arg("--queue");legacy_path<-arg("--legacy");output<-arg("--output")
 if(any(vapply(c(queue_path,legacy_path,output),is.null,logical(1))))stop("Required: --queue --legacy --output",call.=FALSE)
-for(p in c(queue_path,legacy_path))if(!file.exists(p))stop("Missing input: ",p,call.=FALSE)
+if(!file.exists(queue_path))stop("Missing input: ",queue_path,call.=FALSE)
+# New reviews legitimately have no historical geography adjudications.
+# Treat an absent legacy file as an empty source, not as a required input.
+legacy_available<-file.exists(legacy_path)
 
 read_jsonl<-function(path){x<-readLines(path,warn=FALSE,encoding="UTF-8");x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
 clean<-function(x){if(is.null(x)||!length(x))return("");z<-as.character(x[[1L]]);if(is.na(z))"" else z}
-queue<-read_jsonl(queue_path);legacy<-read_jsonl(legacy_path)
+queue<-read_jsonl(queue_path);legacy<-if(legacy_available)read_jsonl(legacy_path) else list()
 
 qmap<-list()
 for(rec in queue){
