@@ -57,11 +57,13 @@ jobs:
           PY
           echo "PASS: resolved W08 resume request $FILE"
 
-  resume:
-    needs: prepare
-    uses: ./.github/workflows/workflow_08_resume_after_shiny.yml
-    with:
-      source_run_id: ${{ needs.prepare.outputs.source_run_id }}
-      batch_id: ${{ needs.prepare.outputs.batch_id }}
-      queue_sha256: ${{ needs.prepare.outputs.queue_sha256 }}
-    secrets: inherit
+      - name: Dispatch W08 resume from validated request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_ID: ${{ steps.request.outputs.source_run_id }}
+          BATCH_ID: ${{ steps.request.outputs.batch_id }}
+          QUEUE_SHA: ${{ steps.request.outputs.queue_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run workflow_08_resume_after_shiny.yml --repo "$GITHUB_REPOSITORY" --ref main -f source_run_id="$SOURCE_ID" -f batch_id="$BATCH_ID" -f queue_sha256="$QUEUE_SHA"
