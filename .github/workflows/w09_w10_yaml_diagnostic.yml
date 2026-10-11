@@ -1,0 +1,15 @@
+name: W09 W10 definition diagnostic
+on:
+  push:
+    branches: [main]
+    paths: ['docs/reporting/.w09_w10_yaml_diagnostic']
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse workflow YAML and show errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -ryaml -e 'ARGV.each { |x| YAML.load_file(x, aliases: true); puts "PASS YAML #{x}" }' .github/workflows/report_workflow09_figures.yml .github/workflows/workflow_10_dashboard.yml
