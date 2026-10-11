@@ -3,7 +3,7 @@
   "update_id": "w00-run-38069704382",
   "branch": "main",
   "started_at_utc": "2026-10-10T17:17:28Z",
-  "last_updated_at_utc": "2026-10-11T17:16:44Z",
+  "last_updated_at_utc": "2026-10-11T17:37:11Z",
   "first_run": true,
   "baseline": {
     "release_update_id": null,
@@ -161,12 +161,12 @@
     "screened_exclude": 1342,
     "species_records": 2869,
     "geography": {
-      "with": 486,
-      "without": 2383
+      "with": 481,
+      "without": 2371
     },
     "topics": {
-      "with": 2846,
-      "without": 23
+      "with": 2843,
+      "without": 9
     }
   },
   "progress": {
@@ -195,18 +195,18 @@
       "status": "complete"
     },
     "W08": {
-      "status": "active"
+      "status": "complete"
     },
     "W09": {
-      "status": "pending"
+      "status": "active"
     },
     "W10": {
       "status": "pending"
     },
     "current_stage": "W08",
-    "completed_through": 8,
-    "active_position": 9,
-    "status_label": "Final adjudication awaiting human review"
+    "completed_through": 9,
+    "active_position": 10,
+    "status_label": "Final adjudication complete; awaiting report build"
   },
   "workflow_runs": {
     "W00": "38069704382",
@@ -217,6 +217,6 @@
     "W05": "38144786847",
     "W06": "38144786847",
     "W07": "38144786847",
-    "W08": "38158784957"
+    "W08": "38159781873"
   }
 }
