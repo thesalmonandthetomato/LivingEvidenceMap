@@ -3,7 +3,7 @@
   "update_id": "w00-run-38069704382",
   "branch": "main",
   "started_at_utc": "2026-10-10T17:17:28Z",
-  "last_updated_at_utc": "2026-10-11T05:56:21Z",
+  "last_updated_at_utc": "2026-10-11T08:03:42Z",
   "first_run": true,
   "baseline": {
     "release_update_id": null,
@@ -150,12 +150,11 @@
   },
   "cohort": {
     "record_ids_path": "docs/current_run/current_run_record_ids.txt",
-    "record_ids_sha256": null,
-    "deduplicated_records": null
+    "deduplicated_records": 4212
   },
   "counts": {
     "search_results": 13449,
-    "deduplicated_records": 0,
+    "deduplicated_records": 4212,
     "enriched_records": 0,
     "retraction_exclusions": 0,
     "screened_include": 0,
@@ -175,10 +174,10 @@
       "status": "complete"
     },
     "W01": {
-      "status": "active"
+      "status": "complete"
     },
     "W02": {
-      "status": "pending"
+      "status": "active"
     },
     "W03": {
       "status": "pending"
@@ -205,12 +204,12 @@
       "status": "pending"
     },
     "current_stage": "W01",
-    "completed_through": 1,
-    "active_position": 2,
-    "status_label": "Deduplication awaiting human review"
+    "completed_through": 2,
+    "active_position": 3,
+    "status_label": "Deduplication complete; Workflow 02 enrichment in progress"
   },
   "workflow_runs": {
     "W00": "38069704382",
-    "W01": "38115786349"
+    "W01": "38123211165"
   }
 }
