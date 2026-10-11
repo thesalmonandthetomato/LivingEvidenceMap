@@ -3,7 +3,7 @@
   "update_id": "w00-run-38069704382",
   "branch": "main",
   "started_at_utc": "2026-10-10T17:17:28Z",
-  "last_updated_at_utc": "2026-10-11T13:53:25Z",
+  "last_updated_at_utc": "2026-10-11T14:15:53Z",
   "first_run": true,
   "baseline": {
     "release_update_id": null,
@@ -161,8 +161,8 @@
     "screened_exclude": 1342,
     "species_records": 2869,
     "geography": {
-      "with": 0,
-      "without": 0
+      "with": 486,
+      "without": 2383
     },
     "topics": {
       "with": 0,
@@ -189,10 +189,10 @@
       "status": "complete"
     },
     "W06": {
-      "status": "active"
+      "status": "complete"
     },
     "W07": {
-      "status": "pending"
+      "status": "active"
     },
     "W08": {
       "status": "pending"
@@ -203,10 +203,10 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W05",
-    "completed_through": 6,
-    "active_position": 7,
-    "status_label": "Species coding complete; awaiting geography coding"
+    "current_stage": "W06",
+    "completed_through": 7,
+    "active_position": 8,
+    "status_label": "Geography coding complete; awaiting topic coding"
   },
   "workflow_runs": {
     "W00": "38069704382",
@@ -214,6 +214,7 @@
     "W02": "38137694653",
     "W03": "38138355889",
     "W04": "38141909882",
-    "W05": "38144786847"
+    "W05": "38144786847",
+    "W06": "38144786847"
   }
 }
