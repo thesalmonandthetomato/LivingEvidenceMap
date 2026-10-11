@@ -1,0 +1,30 @@
+name: W03 temporary validation launcher
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/publication_status/w03_launch_requests/*.json'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Dispatch existing production W03
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t REQUESTS < <(git diff --name-only HEAD^ HEAD -- docs/publication_status/w03_launch_requests/)
+          test "${#REQUESTS[@]}" -eq 1
+          REQUEST="${REQUESTS[0]}"
+          test -s "$REQUEST"
+          POINTER="$(python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["first_run"] is True and x["publish"] is True and x["limit"]=="0"; print(x["lean_pointer_path"])' "$REQUEST")"
+          test -s "$POINTER"
+          gh workflow run workflow_03_production.yml --repo "$GITHUB_REPOSITORY" --ref main -f first_run=true -f limit=0 -f batch_size=100 -f publish=true -f lean_pointer_path="$POINTER"
+          echo "PASS: dispatched W03 full first-run validation"
