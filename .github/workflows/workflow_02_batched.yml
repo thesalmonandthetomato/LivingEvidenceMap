@@ -554,11 +554,13 @@ jobs:
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
             --tab "$QUEUE_TAB" \
             --source-run-id "$GITHUB_RUN_ID" \
-            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --metadata-output "$RUNNER_TEMP/w02-published-queue.json"
 
-          META="$(CRED="$RUNNER_TEMP/lem-google-service-account.json" SHEET="$LEM_GOOGLE_SHEET_ID" TAB="$QUEUE_TAB" Rscript -e 'suppressPackageStartupMessages(library(googlesheets4));gs4_auth(path=Sys.getenv("CRED"),cache=FALSE);x<-read_sheet(Sys.getenv("SHEET"),sheet=Sys.getenv("TAB"),col_types="c");stopifnot(nrow(x)>0);cat(paste(x$batch_id[[1]],x$queue_sha256[[1]],sep="|"))')"
-          BATCH_ID="${META%%|*}"
-          QUEUE_SHA="${META#*|}"
+          BATCH_ID="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$batch_id)' "$RUNNER_TEMP/w02-published-queue.json")"
+          QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$queue_sha256)' "$RUNNER_TEMP/w02-published-queue.json")"
+          test -n "$BATCH_ID"
+          [[ "$QUEUE_SHA" =~ ^[0-9a-f]{64}$ ]]
           Rscript scripts/updater/workflow_shiny_batch_status.R \
             --stage "02" \
             --batch-id "$BATCH_ID" \
