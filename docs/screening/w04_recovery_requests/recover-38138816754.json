@@ -1,0 +1,8 @@
+{
+  "source_run_id": "38138816754",
+  "source_commit": "ce9be27524848a8578c4c4713a13e82f65219c29",
+  "expected_shards": 8,
+  "source_prepared_artifact": "workflow04-prepared-38138816754",
+  "skip_screening_api": true,
+  "description": "Resume W04 at merge using original complete paid-screening artefacts"
+}
