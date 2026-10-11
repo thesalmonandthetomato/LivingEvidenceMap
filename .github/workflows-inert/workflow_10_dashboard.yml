@@ -298,7 +298,7 @@ jobs:
           # using the same publication flag as the underlying report pages.
           METHODSRESULTS="$METHODSRESULTS" Rscript - <<'RS'
           p <- "docs/index.html"
-          x <- paste(readLines(p, warn = FALSE, encoding = "UTF-8"), collapse = "\\n")
+          x <- paste(readLines(p, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
           phrases <- c("To read more about the methods", "To read the living results report")
           for (phrase in phrases) {
             if (!grepl(phrase, x, fixed = TRUE)) stop("Dashboard report link missing from template: ", phrase)
