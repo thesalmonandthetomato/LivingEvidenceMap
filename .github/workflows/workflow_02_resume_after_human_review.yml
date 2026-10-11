@@ -275,8 +275,21 @@ jobs:
             find source/batches -type f -name retry_queue.jsonl -print0 | sort -z | xargs -0 cat > outputs/workflow02/retry_queue.jsonl
           fi
 
+          # Rebuild the same audited enrichment report as the uninterrupted W02 route.
+          # Bind its patch checksum to the final human-adjudicated current patch below.
+          if [ "$BATCH_COUNT" != "0" ]; then
+            Rscript scripts/updater/workflow_02_aggregate_batches.R \
+              --batch-root source/batches \
+              --plan source/prepared/outputs/workflow02_plan/plan.json \
+              --input source/prepared/outputs/workflow02/input_with_previous_state.jsonl \
+              --current-patch outputs/workflow02/current_patch.jsonl \
+              --output outputs/workflow02/enrichment_report.json
+          else
+            cp source/prepared/outputs/workflow02_plan/plan.json outputs/workflow02/enrichment_report.json
+          fi
+          test -s outputs/workflow02/enrichment_report.json
           test -f outputs/workflow02/current_patch.jsonl
-          echo "PASS: reconstructed source-run current W02 patch from immutable checkpoints"
+          echo "PASS: reconstructed source-run current W02 patch and enrichment report from immutable checkpoints"
 
       - name: Apply human decisions to current patch
         shell: bash
@@ -331,6 +344,7 @@ jobs:
             --missing-both-queue outputs/workflow02/missing_both_queue.jsonl
 
           cp outputs/workflow02/cumulative_patch.jsonl outputs/workflow02_state/
+          cp outputs/workflow02/enrichment_report.json outputs/workflow02_state/
           cp outputs/workflow02/enrichment_audit.jsonl outputs/workflow02_state/
           cp outputs/workflow02/retry_queue.jsonl outputs/workflow02_state/
           cp outputs/workflow02/final_inventory.json outputs/workflow02_state/
