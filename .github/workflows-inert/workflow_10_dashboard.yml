@@ -294,13 +294,22 @@ jobs:
 
           cp outputs/workflow10/index.html docs/index.html
           cp outputs/workflow10/dashboard-data.js docs/dashboard-data.js
-          # Dashboard header must never include the retired report links.
-          Rscript - <<'RS'
+          # Keep both report links in the HTML template. Control their visibility
+          # using the same publication flag as the underlying report pages.
+          METHODSRESULTS="$METHODSRESULTS" Rscript - <<'RS'
           p <- "docs/index.html"
-          x <- paste(readLines(p, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
-          x <- gsub('<p class="project-description"[^>]*>To read more about the methods, click <a href="./methodology.html"[^>]*>here</a>\\.</p>', '', x, perl = TRUE)
-          x <- gsub('<p class="project-description"[^>]*>To read the living results report, click <a href="./results.html"[^>]*>here</a>\\.</p>', '', x, perl = TRUE)
-          if (grepl("To read more about the methods|To read the living results report", x)) stop("Retired dashboard links remain")
+          x <- paste(readLines(p, warn = FALSE, encoding = "UTF-8"), collapse = "\\n")
+          phrases <- c("To read more about the methods", "To read the living results report")
+          for (phrase in phrases) {
+            if (!grepl(phrase, x, fixed = TRUE)) stop("Dashboard report link missing from template: ", phrase)
+          }
+          if (Sys.getenv("METHODSRESULTS") != "true") {
+            x <- gsub('(<p class="project-description"[^>]*)(>To read (?:more about the methods|the living results report), click )',
+                      '\\1 hidden="hidden"\\2', x, perl = TRUE)
+          } else {
+            x <- gsub('(<p class="project-description"[^>]*?) hidden="hidden"(>To read (?:more about the methods|the living results report), click )',
+                      '\\1\\2', x, perl = TRUE)
+          }
           writeLines(x, p, useBytes = TRUE)
           RS
           rm -f docs/methodology.html docs/results.html
@@ -313,8 +322,8 @@ jobs:
           touch docs/.nojekyll
 
           grep -q './dashboard-data.js' docs/index.html
-          ! grep -q './methodology.html' docs/index.html
-          ! grep -q './results.html' docs/index.html
+          grep -q './methodology.html' docs/index.html
+          grep -q './results.html' docs/index.html
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
