@@ -286,14 +286,6 @@ for(g in groups) {
   id_origin <- "new"
   retired_ids <- character()
   if(length(prior_ids)==0L){
-      id_origin <- "explicit_split"
-    } else {
-      stop(sprintf(
-        "Explicit split component target %s conflicts with prior work ID(s): %s",
-        cid,paste(prior_ids,collapse=",")
-      ),call.=FALSE)
-    }
-  } else if(length(prior_ids)==0L){
     cid <- paste0("work-",substr(digest(paste(sort(keys_colon),collapse="|"),algo="sha256",serialize=FALSE),1,16))
   } else if(length(prior_ids)==1L){
     cid <- prior_ids[[1L]]
