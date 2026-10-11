@@ -3,6 +3,16 @@ name: Report - Workflow 09 publication package
 on:
   workflow_dispatch:
     inputs:
+      methods_doc:
+        description: 'Render Methods manuscript outputs'
+        type: boolean
+        required: false
+        default: false
+      results_doc:
+        description: 'Render Results manuscript outputs'
+        type: boolean
+        required: false
+        default: false
       search_update_date:
         description: 'Actual latest database search date (YYYY-MM-DD); leave blank only when unknown'
         required: false
@@ -306,7 +316,10 @@ jobs:
             --input-dir docs/reporting/workflow_09_inputs/current \
             --output-dir outputs/citesource_contribution
 
-      - name: Render Methods and Results manuscripts
+      - name: Render enabled manuscript documents
+        env:
+          METHODS_DOC: ${{ inputs.methods_doc || false }}
+          RESULTS_DOC: ${{ inputs.results_doc || false }}
         env:
           CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
           FLOW_COUNTS_JSON: ${{ github.workspace }}/visualisations/figure_07_flow_diagram_counts.json
@@ -349,55 +362,55 @@ jobs:
             )
           }
 
-          render_all("docs/reporting/workflow_09/manuscript/long_form_methods.Rmd", "methods")
-          render_all("docs/reporting/workflow_09/manuscript/long_form_results.Rmd", "results")
-
-          # Apply deterministic Word/PDF publication styling after Pandoc render.
-          # This preserves manuscript content while enforcing requested table
-          # widths, caption sizing/spacing, and heading spacing.
-          style_status <- system2(
-            "Rscript",
-            c(
-              "scripts/reporting/style_workflow09_docx.R",
-              "outputs/workflow09_manuscript/methods.docx",
-              "outputs/workflow09_manuscript/results.docx"
+          enabled <- c(
+            methods = identical(tolower(Sys.getenv("METHODS_DOC")), "true"),
+            results = identical(tolower(Sys.getenv("RESULTS_DOC")), "true")
+          )
+          for (stem in names(enabled)[enabled]) {
+            render_all(
+              file.path("docs/reporting/workflow_09/manuscript", paste0("long_form_", stem, ".Rmd")),
+              stem
             )
-          )
-          if (!identical(style_status, 0L)) {
-            stop("Workflow 09 DOCX styling failed", call. = FALSE)
           }
 
-          stopifnot(all(file.exists(file.path(
-            "outputs/workflow09_manuscript",
-            c("methods.docx","methods.html","methods.md","results.docx","results.html","results.md")
-          ))))
-
-          # Pandoc can otherwise succeed after replacing missing images with
-          # alt text. The results manuscript contains Figures 1-16, so require
-          # at least 16 embedded media assets in the generated Word file.
-          results_media <- unzip(
-            "outputs/workflow09_manuscript/results.docx",
-            list = TRUE
-          )
-          results_media <- results_media$Name[grepl("^word/media/", results_media$Name)]
-          if (length(results_media) < 16L) {
-            stop(sprintf(
-              "Results DOCX contains only %d embedded media files; expected at least 16",
-              length(results_media)
-            ), call. = FALSE)
+          for (stem in names(enabled)[enabled]) {
+            style_status <- system2(
+              "Rscript",
+              c("scripts/reporting/style_workflow09_docx.R",
+                file.path("outputs/workflow09_manuscript", paste0(stem, ".docx")))
+            )
+            if (!identical(style_status, 0L)) stop("DOCX styling failed: ", stem)
+            stopifnot(all(file.exists(file.path(
+              "outputs/workflow09_manuscript", paste0(stem, c(".docx", ".html", ".md"))
+            ))))
           }
-          cat(sprintf("PASS: results DOCX embeds %d media files\n", length(results_media)))
+          if (enabled[["results"]]) {
+            media <- unzip("outputs/workflow09_manuscript/results.docx", list = TRUE)$Name
+            if (sum(grepl("^word/media/", media)) < 16L) {
+              stop("Results DOCX contains fewer than 16 embedded manuscript figures")
+            }
+          }
 
-      - name: Convert Word manuscripts to PDF
+      - name: Convert enabled Word manuscripts to PDF
+        env:
+          METHODS_DOC: ${{ inputs.methods_doc || false }}
+          RESULTS_DOC: ${{ inputs.results_doc || false }}
         shell: bash
         run: |
           set -euo pipefail
-          libreoffice --headless --convert-to pdf --outdir outputs/workflow09_manuscript outputs/workflow09_manuscript/methods.docx
-          libreoffice --headless --convert-to pdf --outdir outputs/workflow09_manuscript outputs/workflow09_manuscript/results.docx
-          test -s outputs/workflow09_manuscript/methods.pdf
-          test -s outputs/workflow09_manuscript/results.pdf
+          for stem in methods results; do
+            flag=METHODS_DOC
+            if [ "$stem" = results ]; then flag=RESULTS_DOC; fi
+            if [ "${!flag,,}" = true ]; then
+              libreoffice --headless --convert-to pdf --outdir outputs/workflow09_manuscript "outputs/workflow09_manuscript/$stem.docx"
+              test -s "outputs/workflow09_manuscript/$stem.pdf"
+            fi
+          done
 
       - name: Stage permanent Workflow 09 publication package
+        env:
+          METHODS_DOC: ${{ inputs.methods_doc || false }}
+          RESULTS_DOC: ${{ inputs.results_doc || false }}
         shell: bash
         run: |
           set -euo pipefail
@@ -467,12 +480,22 @@ jobs:
           cp visualisations/04_topic_hierarchy.R "$PUB/figure_code/figures_08_to_15_topic_hierarchy.R"
           cp visualisations/08_umbrella_review_figure.R "$PUB/figure_code/figure_16_umbrella_review.R"
 
-          cp outputs/workflow09_manuscript/methods.{md,html,docx,pdf} "$PUB/manuscript/"
-          cp outputs/workflow09_manuscript/results.{md,html,docx,pdf} "$PUB/manuscript/"
+          # Remove stale renders when a document is disabled, preserving its Rmd source.
+          for stem in methods results; do
+            flag=METHODS_DOC
+            if [ "$stem" = results ]; then flag=RESULTS_DOC; fi
+            rm -f "$PUB/manuscript/$stem".{md,html,docx,pdf}
+            if [ "${!flag,,}" = true ]; then
+              cp "outputs/workflow09_manuscript/$stem".{md,html,docx,pdf} "$PUB/manuscript/"
+            fi
+          done
           cp scripts/reporting/export_canonical_ris.R "$PUB/data/export_canonical_ris.R"
           cp scripts/reporting/workflow09_human_validation_report.R "$PUB/data/human_validation/workflow09_human_validation_report.R"
 
       - name: Validate Workflow 09 publication package
+        env:
+          METHODS_DOC: ${{ inputs.methods_doc || false }}
+          RESULTS_DOC: ${{ inputs.results_doc || false }}
         shell: Rscript {0}
         run: |
           library(jsonlite)
@@ -576,20 +599,21 @@ jobs:
           ))
           stopifnot(identical(sort(required_code), actual_code))
 
+          for (stem in c("methods", "results")) {
+            enabled <- identical(tolower(Sys.getenv(paste0(toupper(stem), "_DOC"))), "true")
+            rendered <- file.path(
+              "docs/reporting/workflow_09/manuscript",
+              paste0(stem, c(".md", ".html", ".docx", ".pdf"))
+            )
+            if (enabled && !all(file.exists(rendered))) stop("Missing enabled ", stem, " manuscript render")
+            if (!enabled && any(file.exists(rendered))) stop("Disabled ", stem, " manuscript render remains staged")
+          }
           required <- c(
             required_figures,
             required_code,
             "docs/reporting/workflow_09/manuscript/long_form_methods.Rmd",
             "docs/reporting/workflow_09/manuscript/long_form_results.Rmd",
             "docs/reporting/workflow_09/manuscript/references.bib",
-            "docs/reporting/workflow_09/manuscript/methods.md",
-            "docs/reporting/workflow_09/manuscript/methods.html",
-            "docs/reporting/workflow_09/manuscript/methods.docx",
-            "docs/reporting/workflow_09/manuscript/methods.pdf",
-            "docs/reporting/workflow_09/manuscript/results.md",
-            "docs/reporting/workflow_09/manuscript/results.html",
-            "docs/reporting/workflow_09/manuscript/results.docx",
-            "docs/reporting/workflow_09/manuscript/results.pdf",
             "docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris",
             "docs/reporting/workflow_09/data/human_validation/human_validation_summary.json",
             "docs/reporting/workflow_09/data/human_validation/model_validation_history.csv",
