@@ -151,7 +151,6 @@ jobs:
             'scripts/updater/workflow_08_restore_adjudication_ledger.R',
             'R/geography_grounding.R',
           'scripts/updater/workflow_08_build_review_queue_dynamic.R',
-            'scripts/updater/workflow_08_migrate_legacy_geography_decisions.R',
             'scripts/updater/workflow_08_capture_active_shiny_decisions.R',
             'scripts/updater/workflow_08_reuse_decisions.R',
             'scripts/updater/workflow_08_publish_shiny_queue.R',
@@ -245,11 +244,6 @@ jobs:
             cp "$(find inputs/prior_w08/legacy_queue -type f -name workflow08_review_queue.jsonl -print -quit)" inputs/prior_w08/prior_queue.jsonl
           fi
 
-      - name: Migrate currently relevant pre-ledger geography decisions
-        shell: bash
-        run: |
-          Rscript scripts/updater/workflow_08_migrate_legacy_geography_decisions.R             --queue outputs/workflow08_intake/workflow08_review_queue_current.jsonl             --legacy data/workflow08/geography_adjudication_decisions.jsonl             --output outputs/workflow08_legacy_geo.jsonl
-
       - name: Capture completed decisions from currently active W08 Shiny queue
         if: ${{ inputs.new_decisions_path == '' }}
         env:
@@ -278,7 +272,6 @@ jobs:
           }
           rows <- c(
             readj('inputs/prior_w08/prior_ledger.jsonl'),
-            readj('outputs/workflow08_legacy_geo.jsonl'),
             readj('outputs/workflow08_active_shiny/historical_decisions.jsonl'),
             readj('outputs/workflow08_active_shiny/active_decisions.jsonl')
           )
