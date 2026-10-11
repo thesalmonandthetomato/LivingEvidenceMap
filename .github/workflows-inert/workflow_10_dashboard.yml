@@ -18,6 +18,8 @@ on:
       - 'scripts/reporting/workflow_10_build_internal_output_registry.R'
       - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
       - 'docs/index.html'
+      - 'user_input/workflow10_dashboard_text.json'
+      - 'scripts/reporting/workflow10_apply_dashboard_text.R'
       - 'docs/dashboard-topic-definitions.json'
       - 'user_input/workflow07_topic_ontology.csv'
       - 'config/iso3_numeric_map.json'
@@ -168,6 +170,8 @@ jobs:
             inputs/workflow10/living_evidence_map_canonical_final.jsonl \
             outputs/workflow10/dashboard-data.js
           cp docs/index.html outputs/workflow10/index.html
+          Rscript scripts/reporting/workflow10_apply_dashboard_text.R \
+            user_input/workflow10_dashboard_text.json outputs/workflow10/index.html
 
       - name: Validate Workflow 10 output
         shell: Rscript {0}
