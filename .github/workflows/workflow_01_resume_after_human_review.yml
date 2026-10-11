@@ -310,13 +310,8 @@ jobs:
           mkdir -p outputs/final
           PREVIOUS_MAP_ARGS=(--previous-cluster-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv)
           if [ "$LEM_FIRST_RUN" = "true" ]; then PREVIOUS_MAP_ARGS=(); fi
-          SPLIT_ARGS=()
-          if [ "$LEM_FIRST_RUN" != "true" ]; then
-            SPLIT_ARGS=(--explicit-cluster-splits user_input/workflow01_explicit_cluster_splits.json)
-          fi
           Rscript scripts/updater/workflow_01_apply_adjudications_and_recluster.R \
             "${PREVIOUS_MAP_ARGS[@]}" \
-            "${SPLIT_ARGS[@]}" \
             --combined-decisions outputs/workflow01_pre_adjudication/combined_pair_decisions.csv \
             --manifestation-map outputs/workflow01_pre_adjudication/manifestation_cluster_map.csv \
             --llm-adjudications "$CHECKPOINT_DIR/all_adjudications.jsonl" \
