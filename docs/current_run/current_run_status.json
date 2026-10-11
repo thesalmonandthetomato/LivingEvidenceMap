@@ -3,7 +3,7 @@
   "update_id": "w00-run-38069704382",
   "branch": "main",
   "started_at_utc": "2026-10-10T17:17:28Z",
-  "last_updated_at_utc": "2026-10-11T12:04:56Z",
+  "last_updated_at_utc": "2026-10-11T12:14:58Z",
   "first_run": true,
   "baseline": {
     "release_update_id": null,
@@ -156,7 +156,7 @@
     "search_results": 13449,
     "deduplicated_records": 4212,
     "enriched_records": 367,
-    "retraction_exclusions": 0,
+    "retraction_exclusions": 1,
     "screened_include": 0,
     "screened_exclude": 0,
     "species_records": 0,
@@ -180,10 +180,10 @@
       "status": "complete"
     },
     "W03": {
-      "status": "active"
+      "status": "complete"
     },
     "W04": {
-      "status": "pending"
+      "status": "active"
     },
     "W05": {
       "status": "pending"
@@ -203,14 +203,15 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W02",
-    "completed_through": 3,
-    "active_position": 4,
-    "status_label": "Enrichment complete; awaiting retraction screening"
+    "current_stage": "W03",
+    "completed_through": 4,
+    "active_position": 5,
+    "status_label": "Retraction screening complete; awaiting relevance screening"
   },
   "workflow_runs": {
     "W00": "38069704382",
     "W01": "38123211165",
-    "W02": "38137694653"
+    "W02": "38137694653",
+    "W03": "38138355889"
   }
 }
