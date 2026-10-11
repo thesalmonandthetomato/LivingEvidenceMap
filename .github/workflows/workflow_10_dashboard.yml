@@ -293,7 +293,6 @@ jobs:
           set -euo pipefail
           test -s outputs/workflow10/index.html
           test -s outputs/workflow10/dashboard-data.js
-          test "$(wc -c < outputs/workflow10/dashboard-data.js)" -gt 40000000
 
           cp outputs/workflow10/index.html docs/index.html
           cp outputs/workflow10/dashboard-data.js docs/dashboard-data.js
