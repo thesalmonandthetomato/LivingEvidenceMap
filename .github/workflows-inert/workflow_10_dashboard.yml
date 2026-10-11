@@ -2,6 +2,12 @@ name: Workflow 10 - dashboard from authoritative Workflow 08 canonical
 
 on:
   workflow_dispatch:
+    inputs:
+      methodsresults:
+        description: 'Publish Methods and Results HTML pages'
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [main]
     paths:
@@ -276,25 +282,39 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      - name: Publish W10 dashboard and reports to repository docs only
+      - name: Publish W10 dashboard and optional reports to repository docs only
+        env:
+          METHODSRESULTS: ${{ inputs.methodsresults || false }}
         shell: bash
         run: |
           set -euo pipefail
           test -s outputs/workflow10/index.html
           test -s outputs/workflow10/dashboard-data.js
-          test -s docs/reporting/workflow_09/manuscript/methods.html
-          test -s docs/reporting/workflow_09/manuscript/results.html
           test "$(wc -c < outputs/workflow10/dashboard-data.js)" -gt 40000000
 
           cp outputs/workflow10/index.html docs/index.html
           cp outputs/workflow10/dashboard-data.js docs/dashboard-data.js
-          cp docs/reporting/workflow_09/manuscript/methods.html docs/methodology.html
-          cp docs/reporting/workflow_09/manuscript/results.html docs/results.html
+          # Dashboard header must never include the retired report links.
+          Rscript - <<'RS'
+          p <- "docs/index.html"
+          x <- paste(readLines(p, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+          x <- gsub('<p class="project-description"[^>]*>To read more about the methods, click <a href="./methodology.html"[^>]*>here</a>\\.</p>', '', x, perl = TRUE)
+          x <- gsub('<p class="project-description"[^>]*>To read the living results report, click <a href="./results.html"[^>]*>here</a>\\.</p>', '', x, perl = TRUE)
+          if (grepl("To read more about the methods|To read the living results report", x)) stop("Retired dashboard links remain")
+          writeLines(x, p, useBytes = TRUE)
+          RS
+          rm -f docs/methodology.html docs/results.html
+          if [ "$METHODSRESULTS" = true ]; then
+            test -s docs/reporting/workflow_09/manuscript/methods.html
+            test -s docs/reporting/workflow_09/manuscript/results.html
+            cp docs/reporting/workflow_09/manuscript/methods.html docs/methodology.html
+            cp docs/reporting/workflow_09/manuscript/results.html docs/results.html
+          fi
           touch docs/.nojekyll
 
           grep -q './dashboard-data.js' docs/index.html
-          grep -q './methodology.html' docs/index.html
-          grep -q './results.html' docs/index.html
+          ! grep -q './methodology.html' docs/index.html
+          ! grep -q './results.html' docs/index.html
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
