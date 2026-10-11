@@ -241,6 +241,16 @@ jobs:
             --stage "04" \
             --batch-id "$BATCH_ID" \
             --queue-sha256 "$QUEUE_SHA256" \
+            --status review_complete \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --message "W04 human decisions validated and published."
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "04" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA256" \
             --status consumed \
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
             --credential "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" \
