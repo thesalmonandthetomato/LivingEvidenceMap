@@ -1,0 +1,18 @@
+{
+  "schema": "living-evidence-map-workflow09-stage-summary-v1",
+  "stage": "W07",
+  "source_run_id": "38144786847",
+  "update_id": "w00-run-38069704382",
+  "generated_at_utc": "2026-10-11T17:03:37Z",
+  "pointer_path": "docs/workflow07/zenodo/run-38144786847.json",
+  "pointer_sha256": "821dffc757bd2e4a1db572d35eaa49c87831c47f7e41ad74e745ce298891834b",
+  "status": "complete",
+  "metrics": {
+    "records": 2869,
+    "raw_topic_assignments": 10131,
+    "zero_topic_records": 23,
+    "included_uncoded_records": 9,
+    "late_automatic_exclusions": 11,
+    "human_adjudication_records": 3
+  }
+}
