@@ -6,7 +6,8 @@ args<-commandArgs(trailingOnly=TRUE)
 arg<-function(k,default=NULL){i<-match(k,args);if(is.na(i))return(default);if(i==length(args))stop(paste("Missing",k),call.=FALSE);args[[i+1L]]}
 mode<-arg("--mode");archive<-arg("--archive-dir");input<-arg("--input-dir","user_input")
 if(is.null(mode)||is.null(archive)||!(mode %in% c("snapshot","restore")))stop("Required: --mode snapshot|restore --archive-dir DIR",call.=FALSE)
-names<-c("workflow01_explicit_cluster_splits.json","workflow01_identifier_never_auto_resolve.csv","workflow01_manual_sources.json")
+names<-c("workflow01_manual_sources.json")
+legacy_names<-c("workflow01_explicit_cluster_splits.json","workflow01_identifier_never_auto_resolve.csv")
 dest<-file.path(archive,"project_configuration")
 manifest_path<-file.path(dest,"manifest.json")
 if(mode=="snapshot"){
@@ -28,7 +29,7 @@ if(mode=="snapshot"){
   m<-fromJSON(manifest_path,simplifyVector=FALSE)
   if(!identical(m$schema,"living-evidence-map-w01-project-config-v1"))stop("Invalid configuration manifest",call.=FALSE)
   listed<-names(m$files)
-  if(length(setdiff(listed,names)))stop("Unknown archived project configuration",call.=FALSE)
+  if(length(setdiff(listed,c(names,legacy_names))))stop("Unknown archived project configuration",call.=FALSE)
   for(n in listed){
     src<-file.path(dest,n);z<-m$files[[n]]
     if(!file.exists(src)||!identical(digest(file=src,algo="sha256",serialize=FALSE),z$sha256)||
@@ -41,5 +42,9 @@ if(mode=="snapshot"){
       if(!file.copy(file.path(dest,n),target,overwrite=TRUE))stop(paste("Cannot restore",n),call.=FALSE)
     }else if(file.exists(target))unlink(target)
   }
-  cat("PASS: restored and verified checkpoint project configuration\n")
+  for(n in legacy_names){
+    target<-file.path(input,n)
+    if(file.exists(target))unlink(target)
+  }
+  cat("PASS: restored supported project configuration; historical corrections excluded\n")
 }
