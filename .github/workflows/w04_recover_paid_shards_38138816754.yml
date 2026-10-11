@@ -1,0 +1,295 @@
+name: W04 recovery from original paid-screening artefacts
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/screening/w04_recovery_requests/recover-38138816754.json'
+permissions:
+  contents: write
+  actions: write
+jobs:
+  merge-new:
+    needs: []
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install merge dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+
+      - name: Download shard outputs
+        if: ${{ true }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workflow04-incremental-shard-*-38138816754
+          run-id: 38138816754
+          github-token: ${{ github.token }}
+          path: shards
+          merge-multiple: false
+
+      - name: Merge new screening decisions
+        if: ${{ true }}
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_04_merge_consensus.R             --input-root shards             --output-dir outputs/workflow04_new_consensus             --expected-shards 8
+
+      - name: Create empty new layer when nothing requires screening
+        if: ${{ false }}
+        shell: bash
+        run: |
+          mkdir -p outputs/workflow04_new_consensus
+          : > outputs/workflow04_new_consensus/workflow04_consensus_layer.jsonl
+          Rscript -e 'jsonlite::write_json(list(schema="living-evidence-map-workflow04-luna-consensus-merged-v1",status="PASS",workflow03_eligible=0L,consensus_records=0L,final_retain=0L,final_exclude=0L,final_unresolved=0L), "outputs/workflow04_new_consensus/summary.json",auto_unbox=TRUE,pretty=TRUE)'
+
+      - name: Upload merged new layer
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-new-consensus-${{ github.run_id }}
+          path: outputs/workflow04_new_consensus/
+          retention-days: 90
+          if-no-files-found: error
+
+  finalise:
+    needs: merge-new
+    if: ${{ always() && needs.merge-new.result == 'success' }}
+    outputs:
+      status: ${{ steps.status.outputs.status }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SOURCE_RUN_ID: '38138816754'
+      SOURCE_SHA: 'ce9be27524848a8578c4c4713a13e82f65219c29'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','readr','googlesheets4'))
+
+      - name: Download prepared state
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-prepared-38138816754
+          run-id: 38138816754
+          github-token: ${{ github.token }}
+          path: prepared
+
+      - name: Download merged new layer
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-new-consensus-${{ github.run_id }}
+          path: new_consensus
+
+      - name: Build complete current W04 state
+        env:
+          MANUAL_PATH: ${{ '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --canonical prepared/inputs/current/canonical_lean.jsonl
+            --workflow03-status prepared/inputs/current/publication_status.jsonl
+            --reused-layer prepared/outputs/workflow04_prepare/reused_workflow04_layer.jsonl
+            --new-consensus new_consensus/workflow04_consensus_layer.jsonl
+            --prepare-manifest prepared/outputs/workflow04_prepare/prepare_manifest.json
+            --output-dir outputs/workflow04_final
+          )
+          if [ -n "$MANUAL_PATH" ]; then ARGS+=(--manual-decisions "$MANUAL_PATH"); fi
+          Rscript scripts/updater/workflow_04_merge_incremental.R "${ARGS[@]}"
+
+          test -s prepared/outputs/workflow04_prepare/prompt_provenance.json
+          Rscript -e '
+            library(jsonlite)
+            z <- fromJSON("prepared/outputs/workflow04_prepare/prompt_provenance.json", simplifyVector=FALSE)
+            stopifnot(identical(as.character(z$source_github_run_id), Sys.getenv("SOURCE_RUN_ID")))
+            stopifnot(identical(as.character(z$source_github_sha), Sys.getenv("SOURCE_SHA")))
+            stopifnot(grepl("^[0-9a-f]{64}$", as.character(z$prompt_sha256)))
+          '
+          cp prepared/outputs/workflow04_prepare/prompt_provenance.json outputs/workflow04_final/prompt_provenance.json
+
+      - name: Inspect final status
+        id: status
+        shell: bash
+        run: |
+          STATUS=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");cat(x$status)')
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "Workflow 04 status: $STATUS"
+
+      - name: Build Shiny resolution queue when human review is required
+        if: ${{ steps.status.outputs.status == 'HUMAN_REVIEW_REQUIRED' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow04_resolution
+          Rscript scripts/updater/workflow_04_build_resolution_queue.R \
+            --canonical prepared/inputs/current/canonical_lean.jsonl \
+            --human-review outputs/workflow04_final/workflow04_human_review_queue.jsonl \
+            --output-dir outputs/workflow04_resolution \
+            --source-run-id "$GITHUB_RUN_ID"
+
+      - name: Publish W04 resolution queue to Shiny
+        if: ${{ steps.status.outputs.status == 'HUMAN_REVIEW_REQUIRED' }}
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R \
+            --queue outputs/workflow04_resolution/workflow04_resolution_queue.jsonl \
+            --manifest outputs/workflow04_resolution/workflow04_resolution_queue_manifest.json \
+            --highlight-terms user_input/workflow04_screening_highlight_terms.csv \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --queue-tab queue_w04_resolution_active \
+            --receipt outputs/workflow04_resolution/shiny_publish_receipt.json
+          BATCH_ID="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$batch_id)')"
+          QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_resolution/shiny_publish_receipt.json");cat(x$queue_sha256)')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "04" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status published \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --message "Workflow 04 model screening paused for human conflict resolution."
+
+      - name: Mark Workflow 04 awaiting human review
+        if: ${{ steps.status.outputs.status == 'HUMAN_REVIEW_REQUIRED' }}
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W04 \
+            --stage-status waiting_human
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Mark W04 awaiting human review [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Publish resolved W04 state
+        if: ${{ steps.status.outputs.status == 'PASS' && true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEAN_POINTER: ${{ 'docs/compaction/zenodo/run-38137694653.json' }}
+          W03_POINTER: ${{ 'docs/publication_status/zenodo/run-38138355889.json' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LEAN_SHA=$(Rscript -e 'cat(digest::digest(file="prepared/inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')
+          W03_SHA=$(P="$W03_POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$publication_status_sha256)')
+          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/prompt_provenance.json",simplifyVector=FALSE);stopifnot(grepl("^[0-9a-f]{64}$",x$prompt_sha256));cat(x$prompt_sha256)')"
+          mkdir -p outputs/workflow04_zenodo
+          Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R             --state-dir outputs/workflow04_final             --source-run-id "$GITHUB_RUN_ID"             --publication-run-id "$GITHUB_RUN_ID"             --repository "$GITHUB_REPOSITORY"             --output-dir outputs/workflow04_zenodo             --upstream-lean-sha256 "$LEAN_SHA"             --upstream-workflow03-sha256 "$W03_SHA"             --prompt-sha256 "$PROMPT_SHA"
+
+      - name: Register resolved W04 state
+        if: ${{ steps.status.outputs.status == 'PASS' && true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
+          Rscript scripts/updater/workflow_04_update_zenodo_registry.R             --receipt outputs/workflow04_zenodo/zenodo_receipt.json             --registry docs/workflow04/zenodo_registry.csv             --pointer-dir docs/workflow04/zenodo
+          git add docs/workflow04/zenodo_registry.csv docs/workflow04/zenodo/
+          if ! git diff --cached --quiet; then
+            git commit -m "Register Workflow 04 screening state $GITHUB_RUN_ID"
+            git push origin HEAD:main
+          fi
+
+      - name: Update live Shiny progress after published W04
+        if: ${{ steps.status.outputs.status == 'PASS' && true }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Registry commits made by GITHUB_TOKEN do not trigger a second
+          # workflow, so update the live status explicitly in this job.
+          git pull --rebase origin main
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W04 \
+            --pointer "docs/workflow04/zenodo/run-$GITHUB_RUN_ID.json"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W04 --run-id "$GITHUB_RUN_ID"
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+          git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current-run status through W04 [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Upload W04 handoff/review state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow04-production-${{ github.run_id }}
+          path: |
+            outputs/workflow04_final/
+            outputs/workflow04_resolution/
+            outputs/workflow04_zenodo/
+          retention-days: 90
+          if-no-files-found: error
+
+  handoff-w05:
+    permissions:
+      contents: write
+      actions: write
+    needs: finalise
+    if: ${{ needs.finalise.result == 'success' && needs.finalise.outputs.status == 'PASS' && true }}
+    uses: ./.github/workflows/workflow_05_production.yml
+    with:
+      first_run: ${{ true }}
+      workflow04_pointer_path: ${{ format('docs/workflow04/zenodo/run-{0}.json', github.run_id) }}
+      lean_pointer_path: ${{ 'docs/compaction/zenodo/run-38137694653.json' }}
+      publish: true
+    secrets: inherit
+
