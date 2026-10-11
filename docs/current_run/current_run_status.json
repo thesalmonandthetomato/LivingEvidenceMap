@@ -3,7 +3,7 @@
   "update_id": "w00-run-38069704382",
   "branch": "main",
   "started_at_utc": "2026-10-10T17:17:28Z",
-  "last_updated_at_utc": "2026-10-11T08:03:42Z",
+  "last_updated_at_utc": "2026-10-11T11:29:50Z",
   "first_run": true,
   "baseline": {
     "release_update_id": null,
@@ -203,13 +203,14 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W01",
+    "current_stage": "W02",
     "completed_through": 2,
     "active_position": 3,
-    "status_label": "Deduplication complete; Workflow 02 enrichment in progress"
+    "status_label": "Enrichment awaiting human review"
   },
   "workflow_runs": {
     "W00": "38069704382",
-    "W01": "38123211165"
+    "W01": "38123211165",
+    "W02": "38135107176"
   }
 }
