@@ -418,9 +418,9 @@ jobs:
           r-version: release
           use-public-rspm: true
 
-      - name: Install dependency
+      - name: Install merge dependencies
         shell: Rscript {0}
-        run: install.packages('jsonlite')
+        run: install.packages(c('jsonlite','digest'))
 
       - name: Download shard outputs
         if: ${{ needs.prepare.outputs.queue_n != '0' }}
