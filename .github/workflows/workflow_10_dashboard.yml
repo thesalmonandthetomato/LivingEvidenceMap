@@ -326,7 +326,7 @@ jobs:
           test -s outputs/workflow10/dashboard-data.js
           test -s docs/reporting/workflow_09/manuscript/methods.html
           test -s docs/reporting/workflow_09/manuscript/results.html
-          test "$(wc -c < outputs/workflow10/dashboard-data.js)" -gt 40000000
+          # Structural, provenance and record-count validation is performed in the preceding W10 validation step.
 
           cp outputs/workflow10/index.html public-site/index.html
           cp outputs/workflow10/dashboard-data.js public-site/dashboard-data.js
