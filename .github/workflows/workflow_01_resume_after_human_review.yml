@@ -440,7 +440,24 @@ jobs:
           git add docs/deduplication/zenodo_registry.csv docs/deduplication/zenodo/ docs/deduplication/runs/ docs/deduplication/checkpoints/resolutions/
           if ! git diff --cached --quiet; then
             git commit -m "Record resumed Workflow 01 delta run $GITHUB_RUN_ID"
-            git push origin "HEAD:$WORKFLOW01_BRANCH"
+            # Concurrent workflow commits may advance main while W01 is archiving.
+            # Rebase this exact publication commit; never force-push or discard conflicts.
+            for attempt in 1 2 3; do
+              if git push origin "HEAD:$WORKFLOW01_BRANCH"; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "ERROR: W01 registry/checkpoint publication failed after 3 attempts" >&2
+                exit 1
+              fi
+              echo "W01 publication push rejected; rebasing onto latest $WORKFLOW01_BRANCH (attempt $attempt)" >&2
+              git fetch origin "$WORKFLOW01_BRANCH"
+              if ! git rebase "origin/$WORKFLOW01_BRANCH"; then
+                git rebase --abort || true
+                echo "ERROR: W01 publication conflicts with upstream changes; manual reconciliation required" >&2
+                exit 1
+              fi
+            done
           fi
 
       - name: Update current-run live status through W01
