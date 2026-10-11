@@ -11,3 +11,5 @@ Restart after successful 28-source W00-W01 contract audit run 38076839851; 5000-
 Retry W01 first-run after optional historical classifier benchmarking fix a6de132; original classifier rules unchanged.
 
 Retry after exact OpenAlex raw-payload lookup fix 1b0296ad; regression 38081525482 PASS on 104 archived cases.
+
+Fresh W01 production end-to-end test using current main after removal of historic project-specific registry and configuration. No workflow code changes. Trigger requested 2026-10-11.
