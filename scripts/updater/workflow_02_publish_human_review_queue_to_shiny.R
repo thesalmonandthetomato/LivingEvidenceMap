@@ -118,4 +118,10 @@ if(!identical(digest(reconstructed,algo="sha256",serialize=FALSE),queue_sha)) {
   stop("Published W02 queue reconstruction SHA mismatch",call.=FALSE)
 }
 
+metadata_output <- arg("--metadata-output", "")
+if(nzchar(metadata_output)) {
+  dir.create(dirname(metadata_output), recursive=TRUE, showWarnings=FALSE)
+  writeLines(toJSON(list(batch_id=batch_id,queue_sha256=queue_sha,cases=length(out)),
+                    auto_unbox=TRUE,pretty=TRUE),metadata_output,useBytes=TRUE)
+}
 cat(sprintf("PASS: published validated W02 queue batch=%s cases=%d sha256=%s\n",batch_id,length(out),queue_sha))
