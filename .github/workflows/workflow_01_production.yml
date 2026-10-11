@@ -391,7 +391,6 @@ jobs:
           Rscript scripts/updater/workflow_01_identifier_assist_build.R \
             --input-manifest outputs/workflow01_union/source_inputs.json \
             --metadata outputs/workflow01_candidates/normalised_metadata.csv \
-            --guard-file user_input/workflow01_identifier_never_auto_resolve.csv \
             --prior-manifestations "$PRIOR_N" \
             --output-dir outputs/workflow01_identifier_assist
 
@@ -830,7 +829,6 @@ jobs:
             --human-integrity-manifest outputs/human_gate/human_review_integrity.json \
             --data-quality-repairs outputs/human_gate/normalised/data_quality_repairs.normalised.jsonl \
             --precomputed-strip-actions outputs/workflow01_candidates/pathological_abstract_strip_actions.jsonl \
-            --explicit-cluster-splits user_input/workflow01_explicit_cluster_splits.json \
             --output-dir outputs/final
 
       - name: Preserve incremental metrics and cumulative repair provenance
