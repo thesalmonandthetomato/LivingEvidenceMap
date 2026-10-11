@@ -1,0 +1,28 @@
+name: W05 checkpoint-based validation launcher
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/species/w05_launch_requests/*.json'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Dispatch W05 from published W04
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < <(git diff --name-only HEAD^ HEAD -- docs/species/w05_launch_requests/)
+          test "${#FILES[@]}" -eq 1
+          python3 -c 'import json,sys;x=json.load(open(sys.argv[1])); assert x["workflow04_pointer_path"]=="docs/workflow04/zenodo/run-38141909882.json" and x["first_run"] is True' "${FILES[0]}"
+          test -s docs/workflow04/zenodo/run-38141909882.json
+          gh workflow run workflow_05_production.yml --repo "$GITHUB_REPOSITORY" --ref main -f first_run=true -f workflow04_pointer_path=docs/workflow04/zenodo/run-38141909882.json -f lean_pointer_path=docs/compaction/zenodo/run-38137694653.json -f publish=true
+          echo "PASS: W05 launched without any W04 screening"
