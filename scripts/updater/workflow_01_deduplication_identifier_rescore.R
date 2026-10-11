@@ -18,7 +18,7 @@ arg <- function(flag, default = NULL) {
 
 input_dir <- arg("--input-dir")
 output_dir <- arg("--output-dir")
-source_run_id <- arg("--source-run-id", "35585544686")
+source_run_id <- arg("--source-run-id", Sys.getenv("GITHUB_RUN_ID", ""))
 start_row <- as.integer(arg("--start-row", "1"))
 end_row_arg <- arg("--end-row", NULL)
 
