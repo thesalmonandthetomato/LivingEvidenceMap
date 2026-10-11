@@ -2,6 +2,8 @@
 
 suppressPackageStartupMessages(library(jsonlite))
 
+`%||%` <- function(x,y) if(is.null(x)) y else x
+
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag,default=NULL){
   i <- match(flag,args)
@@ -39,8 +41,22 @@ for(path in paths){
 }
 
 if(length(rows)>1L){
+  # The current review's W01 run is recorded by the W01 production workflow.
+  # Use that authoritative run identity instead of guessing from checkpoint age.
+  status_path <- arg("--current-run-status","docs/current_run/current_run_status.json")
+  current_id <- ""
+  if(file.exists(status_path)){
+    current <- fromJSON(status_path,simplifyVector=FALSE)
+    current_id <- as.character(current$workflow_runs$W01 %||% "")
+  }
   ids <- vapply(rows,function(z)z$checkpoint_run_id,character(1))
-  stop("Multiple unresolved W01 checkpoints found; refusing to guess: ",paste(ids,collapse=", "),call.=FALSE)
+  matched <- which(ids == current_id)
+  if(length(matched)!=1L){
+    stop("Multiple unresolved W01 checkpoints and no unique match to current-run W01 ID: ",
+         paste(ids,collapse=", "),call.=FALSE)
+  }
+  rows <- rows[matched]
+  cat("Selected current-run W01 checkpoint ",current_id," among unresolved checkpoints\\n",sep="")
 }
 
 out <- if(!length(rows)) {
