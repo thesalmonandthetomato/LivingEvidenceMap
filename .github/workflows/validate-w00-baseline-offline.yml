@@ -159,6 +159,19 @@ jobs:
           assert '--review-id "$LEM_REVIEW_ID"' in s
           print('PASS: explicit identity with start/failure state writers')
           PY
+      - name: Check stale W00 receipt protection offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'parse(file="scripts/updater/workflow_00_record_review_receipt.R")'
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/updater/workflow_00_record_review_receipt.R').read_text()
+          assert 'value("latest_w00_run_id"),run_id' in s
+          assert 'inactive or failed W00 state' in s
+          assert 'Conflicting existing event for W00 run' in s
+          print('PASS: receipt writer checks active review run and event consistency')
+          PY
       - name: Validate Shiny receipt writer and guards
         shell: bash
         run: |
