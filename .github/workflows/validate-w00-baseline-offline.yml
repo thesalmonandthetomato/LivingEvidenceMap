@@ -58,7 +58,7 @@ jobs:
           boundaries=[
               ('      - name: Validate explicit first-run contract','      - name: Install R dependency'),
               ('      - name: Refuse overlapping pipeline update','      - name: Resolve and freeze source selection'),
-              ('      - name: Resolve and freeze source selection','      - name: Validate search controls and write source queries'),
+
               ('      - name: Validate search controls and write source queries','      - name: Record selected databases'),
               ('      - name: Archive search records and source-ID registries','      - name: Upload consolidated search archive'),
               ('      - name: Update repository Zenodo search registry','      - name: Update current-run live status through W00'),
@@ -67,6 +67,8 @@ jobs:
           for start,end in boundaries:
               assert start in original and end in original and start in current and end in current,start
               assert section(current,start,end)==section(original,start,end),start
+          start='      - name: Resolve and freeze source selection'
+          assert section(original,start,'      - name: Validate search controls and write source queries') == section(current,start,'      - name: Validate explicit execution pathway')
           assert current.count('default: github')==2
           assert current.count("if: ${{ inputs.execution_pathway == 'shiny' }}")==1
           print('PASS: original GitHub first-run, selection, translation, archive and hand-off steps byte-identical')
