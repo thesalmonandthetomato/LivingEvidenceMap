@@ -2,6 +2,11 @@
 # Append W00 Zenodo receipt to this review's Google Sheet, without repository writes.
 suppressPackageStartupMessages(library(jsonlite))
 args <- commandArgs(trailingOnly=TRUE)
+# Test routing is explicit; production defaults remain unchanged.
+test_tabs <- "--isolated-test-tabs" %in% args
+metadata_tab <- if(test_tabs) "w00_test_metadata" else "review_metadata"
+events_tab <- if(test_tabs) "w00_test_events" else "workflow_events"
+
 get <- function(k) {i<-match(k,args);if(is.na(i)||i==length(args)) stop("Missing ",k,call.=FALSE);args[[i+1L]]}
 receipt <- fromJSON(get("--receipt"),simplifyVector=FALSE)
 sheet_id <- get("--sheet-id")
@@ -15,8 +20,8 @@ if(!requireNamespace("googlesheets4",quietly=TRUE)) stop("googlesheets4 missing"
 googlesheets4::gs4_auth(path=credential,cache=FALSE)
 expected_events <- c("event_id","timestamp_utc","review_id","workflow","event_type",
                      "github_run_id","zenodo_record_id","details_json")
-metadata <- as.data.frame(googlesheets4::read_sheet(sheet_id,sheet="review_metadata",col_types="cc"))
-events <- as.data.frame(googlesheets4::read_sheet(sheet_id,sheet="workflow_events",col_types="cccccccc"))
+metadata <- as.data.frame(googlesheets4::read_sheet(sheet_id,sheet=metadata_tab,col_types="cc"))
+events <- as.data.frame(googlesheets4::read_sheet(sheet_id,sheet=events_tab,col_types="cccccccc"))
 if(!identical(names(metadata),c("key","value"))||!identical(names(events),expected_events))
   stop("Missing or incompatible review tabs; initialise before W00",call.=FALSE)
 if(anyDuplicated(metadata$key)||any(!nzchar(metadata$key))) stop("Invalid review metadata keys",call.=FALSE)
@@ -45,7 +50,7 @@ if(event_id %in% events$event_id) {
     details_json=as.character(toJSON(list(doi=receipt$doi,record_url=receipt$record_url,
       manifest_sha256=receipt$manifest_sha256,source_ids=receipt$sources),auto_unbox=TRUE)),
     stringsAsFactors=FALSE)
-  googlesheets4::sheet_append(sheet_id,entry,sheet="workflow_events")
+  googlesheets4::sheet_append(sheet_id,entry,sheet=events_tab)
 }
 # Metadata is updated only after the receipt is registered in the append-only log.
 updates <- c(latest_w00_run_id=run_id,latest_w00_status="success",
@@ -54,10 +59,10 @@ for(k in names(updates)) {
   idx <- match(k,metadata$key)
   if(is.na(idx)) {
     googlesheets4::sheet_append(sheet_id,data.frame(key=k,value=updates[[k]]),
-                                sheet="review_metadata")
+                                sheet=metadata_tab)
   } else {
     googlesheets4::range_write(sheet_id,data.frame(value=updates[[k]]),
-      sheet="review_metadata",range=paste0("B",idx+1L),col_names=FALSE)
+      sheet=metadata_tab,range=paste0("B",idx+1L),col_names=FALSE)
   }
 }
 cat("PASS: review-specific W00 Zenodo receipt and event stored\n")
