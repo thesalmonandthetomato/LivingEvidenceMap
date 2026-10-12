@@ -985,7 +985,25 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --output-dir outputs/updater/workflow00_zenodo
 
+      - name: Record Shiny review Zenodo receipt
+        if: ${{ inputs.execution_pathway == 'shiny' }}
+        env:
+          LEM_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-review-receipt-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-review-receipt-account.json"
+          Rscript scripts/updater/workflow_00_record_review_receipt.R \
+            --receipt outputs/updater/workflow00_zenodo/zenodo_receipt.json \
+            --sheet-id "$LEM_REVIEW_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-review-receipt-account.json" \
+            --run-id "$GITHUB_RUN_ID"
+          rm -f "$RUNNER_TEMP/lem-review-receipt-account.json"
+
       - name: Update repository Zenodo search registry
+        if: ${{ inputs.execution_pathway != 'shiny' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1005,6 +1023,7 @@ jobs:
           fi
 
       - name: Update current-run live status through W00
+        if: ${{ inputs.execution_pathway != 'shiny' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -1041,7 +1060,7 @@ jobs:
           fi
 
       - name: Trigger Workflow 01 after successful Workflow 00
-        if: ${{ github.event_name != 'push' && inputs.dispatch_w01 == true }}
+        if: ${{ github.event_name != 'push' && inputs.execution_pathway != 'shiny' && inputs.dispatch_w01 == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
