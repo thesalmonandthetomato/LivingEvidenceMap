@@ -38,15 +38,45 @@ page_lines <- function(lines, mono=FALSE, cex=0.82, top=0.94, bottom=0.06, line_
   }
 }
 
+fit_pdf_lines <- function(text,max_width=0.88,family="sans",cex=0.82) {
+  words <- unlist(strsplit(as.character(text),"[[:space:]]+"))
+  words <- words[nzchar(words)]
+  out <- character()
+  line <- ""
+  for(word in words) {
+    candidate <- if(nzchar(line)) paste(line,word) else word
+    if(graphics::strwidth(candidate,units="user",family=family,cex=cex)<=max_width) {
+      line <- candidate
+    } else {
+      if(nzchar(line)) out <- c(out,line)
+      line <- ""
+      for(ch in strsplit(word,"",fixed=TRUE)[[1L]]) {
+        if(nzchar(line) &&
+           graphics::strwidth(paste0(line,ch),units="user",family=family,cex=cex)>max_width) {
+          out <- c(out,line)
+          line <- ""
+        }
+        line <- paste0(line,ch)
+      }
+    }
+  }
+  if(nzchar(line)) out <- c(out,line)
+  out
+}
+
 graphics::plot.new()
 graphics::text(0.06,0.95,"Search scoping report",adj=c(0,1),family="sans",font=2,cex=1.45)
 graphics::text(0.06,0.91,sprintf("Scoping date: %s",format(as.Date(meta$search_date),"%d-%m-%Y")),adj=c(0,1),family="sans",cex=0.9)
-graphics::text(0.06,0.865,"This report records a count-only scoping search. No bibliographic records or raw API responses were retained.",adj=c(0,1),family="sans",cex=0.82)
-
-graphics::text(0.06,0.81,"Search string",adj=c(0,1),family="sans",font=2,cex=1.05)
+intro <- fit_pdf_lines("This report records a count-only scoping search. No bibliographic records or raw API responses were retained.",family="sans",cex=0.82)
+intro_y <- 0.865
+for(line in intro) {
+  graphics::text(0.06,intro_y,line,adj=c(0,1),family="sans",cex=0.82)
+  intro_y <- intro_y-0.025
+}
+graphics::text(0.06,intro_y-0.03,"Search string",adj=c(0,1),family="sans",font=2,cex=1.05)
 q <- as.character(if (is.null(meta$original_search_string)) "" else meta$original_search_string)
-q_lines <- unlist(strwrap(q,width=105),use.names=FALSE)
-y <- 0.775
+q_lines <- fit_pdf_lines(q,family="mono",cex=0.68)
+y <- intro_y-0.065
 for (line in q_lines) {
   graphics::text(0.06,y,line,adj=c(0,1),family="mono",cex=0.68)
   y <- y-0.022
