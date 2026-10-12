@@ -12,6 +12,11 @@ on:
         required: false
         default: github
         type: string
+      review_sheet_id:
+        description: Review-specific Google Sheet ID for Shiny execution
+        required: false
+        default: ''
+        type: string
       strategy_json_b64:
         description: Optional base64 encoded inline search strategy JSON
         required: false
@@ -101,6 +106,11 @@ on:
         description: Execution pathway (github preserves original repository-input behaviour)
         required: false
         default: github
+        type: string
+      review_sheet_id:
+        description: Review-specific Google Sheet ID for Shiny execution
+        required: false
+        default: ''
         type: string
       strategy_json_b64:
         description: Optional base64 encoded inline search strategy JSON
@@ -249,6 +259,7 @@ jobs:
           install.packages(c("digest", "jsonlite"))
 
       - name: Preflight dedicated test Google Sheet
+        if: ${{ inputs.execution_pathway != 'shiny' }}
         env:
           LEM_TEST_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -261,6 +272,21 @@ jobs:
           chmod 600 "$RUNNER_TEMP/lem-mvp-google.json"
           Rscript -e 'if (!requireNamespace("googlesheets4",quietly=TRUE)) install.packages("googlesheets4"); a <- commandArgs(TRUE); googlesheets4::gs4_auth(path=a[[2]],cache=FALSE); invisible(googlesheets4::gs4_get(a[[1]])); cat("PASS: dedicated test spreadsheet accessible\\n")' "$LEM_TEST_GOOGLE_SHEET_ID" "$RUNNER_TEMP/lem-mvp-google.json"
           rm -f "$RUNNER_TEMP/lem-mvp-google.json"
+
+      - name: Preflight review-specific Shiny Google Sheet
+        if: ${{ inputs.execution_pathway == 'shiny' }}
+        env:
+          LEM_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_REVIEW_SHEET_ID" || { echo 'Shiny pathway requires review_sheet_id' >&2; exit 1; }
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" || { echo 'Missing Google service account credentials' >&2; exit 1; }
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-review-google.json"
+          chmod 600 "$RUNNER_TEMP/lem-review-google.json"
+          Rscript -e 'if (!requireNamespace("googlesheets4",quietly=TRUE)) install.packages("googlesheets4"); a <- commandArgs(TRUE); googlesheets4::gs4_auth(path=a[[2]],cache=FALSE); invisible(googlesheets4::gs4_get(a[[1]])); cat("PASS: review-specific spreadsheet accessible\\n")' "$LEM_REVIEW_SHEET_ID" "$RUNNER_TEMP/lem-review-google.json"
+          rm -f "$RUNNER_TEMP/lem-review-google.json"
 
       - name: Validate explicit first-run contract
         env:
@@ -944,7 +970,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+          LEM_GOOGLE_SHEET_ID: ${{ inputs.execution_pathway == 'shiny' && inputs.review_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
