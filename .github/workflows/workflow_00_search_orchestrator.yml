@@ -424,12 +424,13 @@ jobs:
           W00_GROUP_GREY_PREPRINTS: ${{ github.event_name == 'push' || inputs.group_grey_preprints }}
           W00_ADDITIONAL_SOURCES: ${{ inputs.additional_sources }}
           W00_EXCLUDE_SOURCES: ${{ inputs.exclude_sources }}
+          W00_SAVED_SOURCE_SELECTION: ${{ inputs.execution_pathway == 'shiny' && 'outputs/updater/workflow00_plan/review_source_selection.json' || 'data/workflow00/source_selection.json' }}
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_00_resolve_source_selection.R \
             --run-type '${{ github.event_name == 'push' && 'full' || inputs.run_type }}' \
-            --saved data/workflow00/source_selection.json \
+            --saved "$W00_SAVED_SOURCE_SELECTION" \
             --output outputs/updater/workflow00_plan/source_selection.json \
             --ebsco-config config/workflow00_ebsco_sources.json \
             --group-config config/workflow00_source_groups.json
