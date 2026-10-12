@@ -22,6 +22,8 @@ or_else <- function(x,y) if (is.null(x)) y else x
 
 staging_root <- normalizePath(arg("--staging-root"),mustWork=TRUE)
 run_id <- arg("--run-id")
+review_id <- arg("--review-id","")
+if (nzchar(review_id) && !grepl("^[A-Za-z0-9][A-Za-z0-9._-]{3,127}$",review_id)) stop("Invalid review ID",call.=FALSE)
 run_type <- arg("--run-type")
 search_version <- arg("--search-version")
 sources <- strsplit(arg("--sources",""),",",fixed=TRUE)[[1L]]
@@ -301,6 +303,8 @@ receipt <- list(
   manifest_sha256=digest(file=manifest_path,algo="sha256",serialize=FALSE),
   published_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
+
+if (nzchar(review_id)) receipt$review_id <- review_id
 
 writeLines(
   toJSON(receipt,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),
