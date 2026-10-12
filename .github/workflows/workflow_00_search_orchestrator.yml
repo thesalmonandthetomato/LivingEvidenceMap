@@ -438,6 +438,7 @@ jobs:
         env:
           EXECUTION_PATHWAY: ${{ inputs.execution_pathway || 'github' }}
           INLINE_STRATEGY: ${{ inputs.strategy_json_b64 }}
+          REQUESTED_RUN_TYPE: ${{ github.event_name == 'push' && 'full' || inputs.run_type }}
         shell: bash
         run: |
           set -euo pipefail
@@ -448,6 +449,7 @@ jobs:
               ;;
             shiny)
               test -n "$INLINE_STRATEGY" || { echo 'Shiny pathway requires an explicit inline strategy' >&2; exit 1; }
+              test "$REQUESTED_RUN_TYPE" = "full" || { echo 'Shiny fortnightly/expansion require review-isolated source-ID registries; full only until migration' >&2; exit 1; }
               echo "PASS: shiny pathway has explicit strategy"
               ;;
             *)
