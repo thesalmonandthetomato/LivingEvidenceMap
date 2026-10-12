@@ -41,6 +41,36 @@ jobs:
           cfg <- jsonlite::fromJSON("user_input/workflow00_search_strategy.json",simplifyVector=FALSE)
           stopifnot(length(cfg$species_terms)>0L,length(cfg$farm_terms)>0L)
           cat(sprintf("PASS: parsed %d W00 R files and checked legacy strategy\\n",length(paths)))
+      - name: Compare GitHub execution steps with frozen legacy baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin a42291ee59f3ce59e870bd4625a161da9822bb76
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+          original=subprocess.check_output(
+              ['git','show','a42291ee59f3ce59e870bd4625a161da9822bb76:.github/workflows/workflow_00_search_orchestrator.yml'],
+              text=True)
+          current=Path('.github/workflows/workflow_00_search_orchestrator.yml').read_text()
+          def section(src,heading,next_heading):
+              return src.split(heading,1)[1].split(next_heading,1)[0]
+          boundaries=[
+              ('      - name: Validate explicit first-run contract','      - name: Install R dependency'),
+              ('      - name: Refuse overlapping pipeline update','      - name: Resolve and freeze source selection'),
+              ('      - name: Resolve and freeze source selection','      - name: Validate search controls and write source queries'),
+              ('      - name: Validate search controls and write source queries','      - name: Record selected databases'),
+              ('      - name: Archive search records and source-ID registries','      - name: Upload consolidated search archive'),
+              ('      - name: Update repository Zenodo search registry','      - name: Update current-run live status through W00'),
+              ('      - name: Update current-run live status through W00','      - name: Trigger Workflow 01 after successful Workflow 00')
+          ]
+          for start,end in boundaries:
+              assert start in original and end in original and start in current and end in current,start
+              assert section(current,start,end)==section(original,start,end),start
+          assert current.count('default: github')==2
+          assert current.count("if: ${{ inputs.execution_pathway == 'shiny' }}")==1
+          print('PASS: original GitHub first-run, selection, translation, archive and hand-off steps byte-identical')
+          PY
       - name: Run existing W00 strategy validation offline
         shell: bash
         run: |
