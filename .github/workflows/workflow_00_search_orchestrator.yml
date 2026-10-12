@@ -288,7 +288,25 @@ jobs:
           Rscript -e 'if (!requireNamespace("googlesheets4",quietly=TRUE)) install.packages("googlesheets4"); a <- commandArgs(TRUE); googlesheets4::gs4_auth(path=a[[2]],cache=FALSE); invisible(googlesheets4::gs4_get(a[[1]])); cat("PASS: review-specific spreadsheet accessible\\n")' "$LEM_REVIEW_SHEET_ID" "$RUNNER_TEMP/lem-review-google.json"
           rm -f "$RUNNER_TEMP/lem-review-google.json"
 
+      - name: Validate Shiny review first-run contract
+        if: ${{ inputs.execution_pathway == 'shiny' }}
+        env:
+          LEM_FIRST_RUN: ${{ inputs.first_run }}
+          LEM_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-review-metadata-credential.json"
+          chmod 600 "$RUNNER_TEMP/lem-review-metadata-credential.json"
+          Rscript scripts/updater/workflow_00_validate_review_metadata.R \
+            --first-run "$LEM_FIRST_RUN" \
+            --sheet-id "$LEM_REVIEW_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-review-metadata-credential.json"
+          rm -f "$RUNNER_TEMP/lem-review-metadata-credential.json"
+
       - name: Validate explicit first-run contract
+        if: ${{ inputs.execution_pathway != 'shiny' }}
         env:
           LEM_FIRST_RUN: ${{ github.event_name == 'push' || inputs.first_run || false }}
           LEM_PREVIOUS_POINTER: ""
