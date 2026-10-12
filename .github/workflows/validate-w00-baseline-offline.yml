@@ -76,6 +76,20 @@ jobs:
           assert current.count("if: $"+"{{ inputs.execution_pathway == 'shiny' }}")==1
           print('PASS: original GitHub first-run, selection, translation, archive and hand-off steps byte-identical')
           PY
+      - name: Validate explicit spreadsheet routing offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          wf=Path('.github/workflows/workflow_00_search_orchestrator.yml').read_text()
+          assert wf.count('review_sheet_id:')==2
+          assert 'inputs.execution_pathway == \'shiny\' && inputs.review_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID' in wf
+          assert "if: ${{ inputs.execution_pathway != 'shiny' }}" in wf
+          assert "if: ${{ inputs.execution_pathway == 'shiny' }}" in wf
+          assert "Shiny pathway requires review_sheet_id" in wf
+          print('PASS: Shiny sheet ID explicit; legacy GitHub sheet fallback retained')
+          PY
       - name: Run existing W00 strategy validation offline
         shell: bash
         run: |
