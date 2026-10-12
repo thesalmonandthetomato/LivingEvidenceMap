@@ -22,6 +22,11 @@ if(!identical(names(metadata),c("key","value"))||!identical(names(events),expect
 if(anyDuplicated(metadata$key)||any(!nzchar(metadata$key))) stop("Invalid review metadata keys",call.=FALSE)
 value <- function(k) {i<-match(k,metadata$key);if(is.na(i)) stop("Missing required key: ",k,call.=FALSE);as.character(metadata$value[[i]])}
 review_id <- value("review_id")
+if(!identical(value("latest_w00_run_id"),run_id))
+  stop("Refusing to publish receipt against another or newer W00 run",call.=FALSE)
+current_status <- tolower(value("latest_w00_status"))
+if(!current_status %in% c("running","in_progress","success"))
+  stop("Cannot finalise Zenodo receipt from inactive or failed W00 state",call.=FALSE)
 if(!grepl("^[A-Za-z0-9][A-Za-z0-9._-]{3,127}$",review_id)) stop("Invalid review ID",call.=FALSE)
 event_id <- paste0("W00:",run_id,":zenodo_published")
 if(event_id %in% events$event_id) {
