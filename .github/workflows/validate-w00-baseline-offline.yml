@@ -74,6 +74,17 @@ jobs:
                   actual=actual.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\n","")
               if 'Validate explicit first-run contract' in start:
                   actual=actual.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\n","")
+              if 'Archive search records and source-ID registries' in start:
+                  shiny_skip="""          if [ '$"+"{{ inputs.execution_pathway }}' = 'shiny' ]; then
+            echo 'Shiny pathway: temporary search archive staged for Zenodo; no GitHub state commit.'
+            exit 0
+          fi
+
+"""
+                  assert actual.count(shiny_skip)==1,'Shiny archive guard missing'
+                  actual=actual.replace(shiny_skip,"")
+              if 'Update repository Zenodo search registry' in start:
+                  actual=actual.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\n","")
               assert actual==previous,start
           start='      - name: Resolve and freeze source selection'
           assert section(original,start,'      - name: Validate search controls and write source queries') == section(current,start,'      - name: Validate explicit execution pathway')
@@ -83,9 +94,10 @@ jobs:
           new_sheet="LEM_GOOGLE_SHEET_ID: $"+"{{ inputs.execution_pathway == 'shiny' && inputs.review_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}"
           assert old_status.count(old_sheet)==1
           assert new_status.count(new_sheet)==1
+          new_status=new_status.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\n","")
           assert new_status.replace(new_sheet,old_sheet)==old_status,'unexpected current-run status change'
           assert current.count('default: github')==2
-          assert current.count("if: $"+"{{ inputs.execution_pathway == 'shiny' }}")==4,'unexpected Shiny-only steps'
+          assert current.count("if: $"+"{{ inputs.execution_pathway == 'shiny' }}")==5,'unexpected Shiny-only steps'
           print('PASS: GitHub W00 steps match legacy; only review Sheet routing differs in status step')
           PY
       - name: Validate non-destructive review tab initialiser
@@ -134,6 +146,39 @@ jobs:
           Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv" --resume-run-id 101
           if Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv" --resume-run-id 999; then exit 1; fi
           echo 'PASS: review overlap guard blocks different active runs'
+      - name: Validate Shiny receipt writer syntax and pathway gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'parse(file="scripts/updater/workflow_00_record_review_receipt.R");cat("PASS: receipt writer R syntax\\n")'
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('.github/workflows/workflow_00_search_orchestrator.yml').read_text()
+          assert 'scripts/updater/workflow_00_record_review_receipt.R' in s
+          assert 'if: 
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          wf=Path('.github/workflows/workflow_00_search_orchestrator.yml').read_text()
+          assert wf.count('review_sheet_id:')==2
+          assert 'inputs.execution_pathway == \'shiny\' && inputs.review_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID' in wf
+          assert ("if: $"+"{{ inputs.execution_pathway != 'shiny' }}") in wf
+          assert ("if: $"+"{{ inputs.execution_pathway == 'shiny' }}") in wf
+          assert "Shiny pathway requires review_sheet_id" in wf
+          print('PASS: Shiny sheet ID explicit; legacy GitHub sheet fallback retained')
+          PY
+      - name: Run existing W00 strategy validation offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_validate_search_strategy.R --config user_input/workflow00_search_strategy.json
+          echo 'PASS: existing GitHub-input strategy validated; no searches performed'
++'{{ github.event_name != \'push\' && inputs.execution_pathway != \'shiny\' && inputs.dispatch_w01 == true }}' in s
+          assert 'Shiny pathway: temporary search archive staged for Zenodo; no GitHub state commit.' in s
+          print('PASS: Shiny receipt and GitHub isolation guards')
+          PY
       - name: Validate explicit spreadsheet routing offline
         shell: bash
         run: |
