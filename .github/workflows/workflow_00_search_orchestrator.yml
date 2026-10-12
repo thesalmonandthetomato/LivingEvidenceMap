@@ -12,6 +12,11 @@ on:
         required: false
         default: github
         type: string
+      review_id:
+        description: Immutable review identifier for Shiny execution
+        required: false
+        default: ''
+        type: string
       review_sheet_id:
         description: Review-specific Google Sheet ID for Shiny execution
         required: false
@@ -106,6 +111,11 @@ on:
         description: Execution pathway (github preserves original repository-input behaviour)
         required: false
         default: github
+        type: string
+      review_id:
+        description: Immutable review identifier for Shiny execution
+        required: false
+        default: ''
         type: string
       review_sheet_id:
         description: Review-specific Google Sheet ID for Shiny execution
@@ -379,6 +389,25 @@ jobs:
               call.=FALSE
             )
           }
+
+      - name: Record Shiny review W00 start
+        if: ${{ inputs.execution_pathway == 'shiny' }}
+        env:
+          LEM_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
+          LEM_REVIEW_ID: ${{ inputs.review_id }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_REVIEW_ID"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-start-credential.json"
+          chmod 600 "$RUNNER_TEMP/lem-start-credential.json"
+          Rscript scripts/updater/workflow_00_record_review_start.R \
+            --sheet-id "$LEM_REVIEW_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-start-credential.json" \
+            --review-id "$LEM_REVIEW_ID" \
+            --run-id "$GITHUB_RUN_ID"
+          rm -f "$RUNNER_TEMP/lem-start-credential.json"
 
       - name: Resolve and freeze source selection
         id: selection
