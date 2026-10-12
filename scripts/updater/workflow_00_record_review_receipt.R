@@ -27,6 +27,7 @@ if(!identical(names(metadata),c("key","value"))||!identical(names(events),expect
 if(anyDuplicated(metadata$key)||any(!nzchar(metadata$key))) stop("Invalid review metadata keys",call.=FALSE)
 value <- function(k) {i<-match(k,metadata$key);if(is.na(i)) stop("Missing required key: ",k,call.=FALSE);as.character(metadata$value[[i]])}
 review_id <- value("review_id")
+if(!identical(as.character(receipt$review_id),review_id)) stop("Zenodo receipt belongs to another review",call.=FALSE)
 source("scripts/updater/workflow_00_review_transition_rules.R")
 decision<-w00_review_transition(metadata,events,review_id,run_id,"success",as.character(receipt$zenodo_record_id))
 if(decision$status!="success")stop("Unexpected transition",call.=FALSE)
