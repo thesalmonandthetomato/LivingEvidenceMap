@@ -430,25 +430,6 @@ jobs:
             echo "PASS: using existing repository strategy fallback"
           fi
 
-      - name: Record Shiny review W00 start
-        if: ${{ inputs.execution_pathway == 'shiny' }}
-        env:
-          LEM_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
-          LEM_REVIEW_ID: ${{ inputs.review_id }}
-          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$LEM_REVIEW_ID"
-          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-start-credential.json"
-          chmod 600 "$RUNNER_TEMP/lem-start-credential.json"
-          Rscript scripts/updater/workflow_00_record_review_start.R \
-            --sheet-id "$LEM_REVIEW_SHEET_ID" \
-            --credential "$RUNNER_TEMP/lem-start-credential.json" \
-            --review-id "$LEM_REVIEW_ID" \
-            --run-id "$GITHUB_RUN_ID"
-          rm -f "$RUNNER_TEMP/lem-start-credential.json"
-
       - name: Resolve and freeze source selection
         id: selection
         env:
@@ -549,6 +530,25 @@ jobs:
             if(is.null(entry$query_string_sha256)) stop(sprintf('Archive lacks query-string hash for %s',src))
             list(source=src,query=q[[src]],query_sha256=entry$query_string_sha256)
           })
+
+      - name: Record Shiny review W00 start
+        if: ${{ inputs.execution_pathway == 'shiny' }}
+        env:
+          LEM_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
+          LEM_REVIEW_ID: ${{ inputs.review_id }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_REVIEW_ID"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-start-credential.json"
+          chmod 600 "$RUNNER_TEMP/lem-start-credential.json"
+          Rscript scripts/updater/workflow_00_record_review_start.R \
+            --sheet-id "$LEM_REVIEW_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-start-credential.json" \
+            --review-id "$LEM_REVIEW_ID" \
+            --run-id "$GITHUB_RUN_ID"
+          rm -f "$RUNNER_TEMP/lem-start-credential.json"
 
       - name: Upload Workflow 00 plan
         uses: actions/upload-artifact@v4
