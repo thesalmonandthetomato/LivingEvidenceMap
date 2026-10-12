@@ -1,5 +1,5 @@
 name: Workflow 00 - Search orchestrator
-run-name: ${{ inputs.shiny_request_id != '' && format('W00 Shiny {0}', inputs.shiny_request_id) || 'Workflow 00 - Search orchestrator' }}
+run-name: ${{ inputs.execution_pathway == 'shiny' && inputs.shiny_request_id != '' && format('W00 Shiny {0}', inputs.shiny_request_id) || 'Workflow 00 - Search orchestrator' }}
 
 on:
   push:
@@ -9,13 +9,9 @@ on:
   workflow_call:
     inputs:
       shiny_request_id:
-
         description: Optional Shiny request identifier for progress monitoring
-
         required: false
-
         default: ''
-
         type: string
 
       execution_pathway:
@@ -119,13 +115,9 @@ on:
   workflow_dispatch:
     inputs:
       shiny_request_id:
-
         description: Optional Shiny request identifier for progress monitoring
-
         required: false
-
         default: ''
-
         type: string
 
       execution_pathway:
