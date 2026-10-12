@@ -1,0 +1,49 @@
+name: Validate W00 baseline offline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/validate-w00-baseline-offline.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-r-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out W00 main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+      - name: Install offline validation dependencies
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+      - name: Parse W00 scripts and check existing default route
+        shell: Rscript {0}
+        run: |
+          paths <- list.files("scripts/updater", pattern="\\.R$", full.names=TRUE)
+          paths <- paths[grepl("/workflow_00_",paths)]
+          stopifnot(length(paths)>5L)
+          for(path in paths) {
+            tryCatch(parse(file=path,keep.source=FALSE),
+              error=function(e) stop(sprintf("R parse failed: %s: %s",path,conditionMessage(e))))
+            cat("PASS parse:",path,"\\n")
+          }
+          cfg <- jsonlite::fromJSON("user_input/workflow00_search_strategy.json",simplifyVector=FALSE)
+          stopifnot(length(cfg$species_terms)>0L,length(cfg$farm_terms)>0L)
+          cat(sprintf("PASS: parsed %d W00 R files and checked legacy strategy\\n",length(paths)))
+      - name: Run existing W00 strategy validation offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_validate_search_strategy.R --config user_input/workflow00_search_strategy.json
+          echo 'PASS: existing GitHub-input strategy validated; no searches performed'
