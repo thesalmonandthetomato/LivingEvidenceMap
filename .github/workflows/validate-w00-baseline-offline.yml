@@ -71,7 +71,7 @@ jobs:
               previous=section(original,start,end)
               actual=section(current,start,end)
               if 'Validate explicit first-run contract' in start:
-                  actual=actual.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\\n","")
+                  actual=actual.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\n","")
               assert actual==previous,start
           start='      - name: Resolve and freeze source selection'
           assert section(original,start,'      - name: Validate search controls and write source queries') == section(current,start,'      - name: Validate explicit execution pathway')
