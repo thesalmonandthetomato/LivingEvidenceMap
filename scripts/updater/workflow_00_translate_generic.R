@@ -67,7 +67,7 @@ render<-function(source,fields=NULL){
   if(is.null(concepts)){
     expr<-as.character(cfg$advanced_boolean)
     if(length(expr)!=1L||!nzchar(trimws(expr)))stop("W00: missing advanced Boolean expression",call.=FALSE)
-    if(source=="openalex")stop("W00: OpenAlex requires an explicit OQL database override",call.=FALSE)
+    if(source=="openalex")return(sprintf("works where title-abstract-keywords has (%s)",expr))
     if(source=="lens")return(sprintf("(title:(%s) OR abstract:(%s) OR keyword:(%s))",expr,expr,expr))
     if(source=="scopus")return(sprintf("TITLE-ABS-KEY(%s)",expr))
     if(source%in%c("agricola","pubmed","ethos","cba","epmc_preprints")){
@@ -109,6 +109,7 @@ render<-function(source,fields=NULL){
         paste(vals[[tokens[[1L]]]],collapse=" OR "),
         paste(vals[[tokens[[3L]]]],collapse=" OR "))
     } else pair_expr<-expr
+    if(source=="openalex")return(sprintf("works where title-abstract-keywords has (%s)",pair_expr))
     if(source=="scopus")return(sprintf("TITLE-ABS-KEY(%s)",pair_expr))
     if(source%in%c("agricola","pubmed","ethos","cba","epmc_preprints")){
       src<-c(agricola="AGR",pubmed="MED",ethos="ETH",cba="CBA",epmc_preprints="PPR")[[source]]
