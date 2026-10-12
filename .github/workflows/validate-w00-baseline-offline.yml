@@ -127,9 +127,9 @@ jobs:
           Rscript -e 'parse(file="scripts/updater/workflow_00_guard_review_overlap.R")'
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
-          printf 'key,value\\nreview_id,almeria-map\\nlatest_w00_status,success\\nlatest_w00_run_id,100\\n' > "$tmp/done.csv"
+          printf 'key,value\nreview_id,almeria-map\nlatest_w00_status,success\nlatest_w00_run_id,100\n' > "$tmp/done.csv"
           Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/done.csv"
-          printf 'key,value\\nreview_id,almeria-map\\nlatest_w00_status,running\\nlatest_w00_run_id,101\\n' > "$tmp/running.csv"
+          printf 'key,value\nreview_id,almeria-map\nlatest_w00_status,running\nlatest_w00_run_id,101\n' > "$tmp/running.csv"
           if Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv"; then exit 1; fi
           Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv" --resume-run-id 101
           if Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv" --resume-run-id 999; then exit 1; fi
