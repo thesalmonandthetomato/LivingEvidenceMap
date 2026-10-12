@@ -75,12 +75,10 @@ jobs:
               if 'Validate explicit first-run contract' in start:
                   actual=actual.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\n","")
               if 'Archive search records and source-ID registries' in start:
-                  shiny_skip="""          if [ '$"+"{{ inputs.execution_pathway }}' = 'shiny' ]; then
-            echo 'Shiny pathway: temporary search archive staged for Zenodo; no GitHub state commit.'
-            exit 0
-          fi
-
-"""
+                  shiny_skip=("          if [ '$"+"{{ inputs.execution_pathway }}' = 'shiny' ]; then\\n"
+                              "            echo 'Shiny pathway: temporary search archive staged for Zenodo; no GitHub state commit.'\\n"
+                              "            exit 0\\n"
+                              "          fi\\n\\n")
                   assert actual.count(shiny_skip)==1,'Shiny archive guard missing'
                   actual=actual.replace(shiny_skip,"")
               if 'Update repository Zenodo search registry' in start:
