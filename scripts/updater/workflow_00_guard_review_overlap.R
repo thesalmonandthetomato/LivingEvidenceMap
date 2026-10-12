@@ -23,7 +23,13 @@ if(nzchar(csv)) {
 if(!all(c("key","value")%in%names(d))) stop("Invalid review metadata columns",call.=FALSE)
 keys <- trimws(as.character(d$key))
 if(anyNA(keys)||anyDuplicated(keys)||any(!nzchar(keys))) stop("Invalid metadata keys",call.=FALSE)
-get <- function(k) {i<-match(k,keys); if(is.na(i)) "" else trimws(as.character(d$value[[i]]))}
+get <- function(k) {
+  i <- match(k,keys)
+  if(is.na(i)) return("")
+  value <- d$value[[i]]
+  if(length(value)!=1L || is.na(value)) return("")
+  trimws(as.character(value))
+}
 if(!grepl("^[A-Za-z0-9][A-Za-z0-9._-]{3,127}$",get("review_id")))
   stop("Missing review_id",call.=FALSE)
 status <- tolower(get("latest_w00_status"))
