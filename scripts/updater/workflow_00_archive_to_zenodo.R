@@ -196,9 +196,11 @@ metadata <- list(metadata = list(
     "evidence synthesis",
     "search archive",
     "Workflow 00",
-    marker
+    marker,
+    if (nzchar(review_id)) paste0("review:",review_id)
   ),
   notes = paste0(
+    if (nzchar(review_id)) paste0("Review ID: ",review_id,". ") else "",
     "Source GitHub Actions run: ",run_id,
     ". Search strategy version: ",search_version,
     ". Sources: ",paste(sources,collapse=", "),"."
