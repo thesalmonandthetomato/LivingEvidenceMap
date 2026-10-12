@@ -390,6 +390,30 @@ jobs:
             )
           }
 
+      - name: Validate explicit execution pathway
+        env:
+          EXECUTION_PATHWAY: ${{ inputs.execution_pathway || 'github' }}
+          INLINE_STRATEGY: ${{ inputs.strategy_json_b64 }}
+          REQUESTED_RUN_TYPE: ${{ github.event_name == 'push' && 'full' || inputs.run_type }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$EXECUTION_PATHWAY" in
+            github)
+              test -z "$INLINE_STRATEGY" || { echo 'GitHub pathway does not accept a Shiny inline strategy' >&2; exit 1; }
+              echo "PASS: github pathway uses unchanged repository inputs"
+              ;;
+            shiny)
+              test -n "$INLINE_STRATEGY" || { echo 'Shiny pathway requires an explicit inline strategy' >&2; exit 1; }
+              test "$REQUESTED_RUN_TYPE" = "full" || { echo 'Shiny fortnightly/expansion require review-isolated source-ID registries; full only until migration' >&2; exit 1; }
+              echo "PASS: shiny pathway has explicit strategy"
+              ;;
+            *)
+              echo "Invalid execution_pathway (expected github or shiny)" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Record Shiny review W00 start
         if: ${{ inputs.execution_pathway == 'shiny' }}
         env:
@@ -434,30 +458,6 @@ jobs:
             --output outputs/updater/workflow00_plan/source_selection.json \
             --ebsco-config config/workflow00_ebsco_sources.json \
             --group-config config/workflow00_source_groups.json
-
-      - name: Validate explicit execution pathway
-        env:
-          EXECUTION_PATHWAY: ${{ inputs.execution_pathway || 'github' }}
-          INLINE_STRATEGY: ${{ inputs.strategy_json_b64 }}
-          REQUESTED_RUN_TYPE: ${{ github.event_name == 'push' && 'full' || inputs.run_type }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "$EXECUTION_PATHWAY" in
-            github)
-              test -z "$INLINE_STRATEGY" || { echo 'GitHub pathway does not accept a Shiny inline strategy' >&2; exit 1; }
-              echo "PASS: github pathway uses unchanged repository inputs"
-              ;;
-            shiny)
-              test -n "$INLINE_STRATEGY" || { echo 'Shiny pathway requires an explicit inline strategy' >&2; exit 1; }
-              test "$REQUESTED_RUN_TYPE" = "full" || { echo 'Shiny fortnightly/expansion require review-isolated source-ID registries; full only until migration' >&2; exit 1; }
-              echo "PASS: shiny pathway has explicit strategy"
-              ;;
-            *)
-              echo "Invalid execution_pathway (expected github or shiny)" >&2
-              exit 1
-              ;;
-          esac
 
       - name: Resolve review-specific search strategy
         if: ${{ inputs.execution_pathway == 'shiny' }}
