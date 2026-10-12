@@ -86,6 +86,17 @@ jobs:
           assert current.count("if: $"+"{{ inputs.execution_pathway == 'shiny' }}")==3,'unexpected Shiny-only steps'
           print('PASS: GitHub W00 steps match legacy; only review Sheet routing differs in status step')
           PY
+      - name: Validate non-destructive review tab initialiser
+        shell: Rscript {0}
+        run: |
+          p <- "scripts/updater/workflow_00_initialise_review_tabs.R"
+          parse(file=p)
+          x <- paste(readLines(p,warn=FALSE),collapse="\\n")
+          stopifnot(grepl('"--apply" %in% args',x,fixed=TRUE))
+          stopifnot(grepl('if(!apply)',x,fixed=TRUE))
+          stopifnot(grepl('setdiff(required,tabs)',x,fixed=TRUE))
+          stopifnot(grepl('Existing review_metadata belongs to another review',x,fixed=TRUE))
+          cat("PASS: tab initialiser parses and contains opt-in + isolation guards\\n")
       - name: Verify review-specific first-run decisions offline
         shell: bash
         run: |
