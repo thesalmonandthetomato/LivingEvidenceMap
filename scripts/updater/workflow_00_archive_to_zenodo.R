@@ -162,10 +162,13 @@ perform <- function(req, expected, label, timeout = 600) {
   resp
 }
 
-expected_title <- sprintf(
-  "Living Evidence Map search archive | %s | Workflow 00 run %s",
-  run_type, run_id
-)
+expected_title <- if (nzchar(review_id)) {
+  sprintf("Living Evidence Map search archive | review %s | %s | Workflow 00 run %s",
+          review_id,run_type,run_id)
+} else {
+  sprintf("Living Evidence Map search archive | %s | Workflow 00 run %s",
+          run_type,run_id)
+}
 
 description <- paste0(
   "<p>Search archive for the Living Evidence Map Workflow 00 ingestion pipeline.</p>",
