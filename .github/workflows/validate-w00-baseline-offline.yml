@@ -70,6 +70,8 @@ jobs:
               assert start in original and end in original and start in current and end in current,start
               previous=section(original,start,end)
               actual=section(current,start,end)
+              if 'Refuse overlapping pipeline update' in start:
+                  actual=actual.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\n","")
               if 'Validate explicit first-run contract' in start:
                   actual=actual.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\n","")
               assert actual==previous,start
@@ -83,7 +85,7 @@ jobs:
           assert new_status.count(new_sheet)==1
           assert new_status.replace(new_sheet,old_sheet)==old_status,'unexpected current-run status change'
           assert current.count('default: github')==2
-          assert current.count("if: $"+"{{ inputs.execution_pathway == 'shiny' }}")==3,'unexpected Shiny-only steps'
+          assert current.count("if: $"+"{{ inputs.execution_pathway == 'shiny' }}")==4,'unexpected Shiny-only steps'
           print('PASS: GitHub W00 steps match legacy; only review Sheet routing differs in status step')
           PY
       - name: Validate non-destructive review tab initialiser
@@ -118,6 +120,20 @@ jobs:
             echo 'ERROR: incomplete metadata incorrectly permitted' >&2; exit 1
           fi
           echo 'PASS: first-run metadata contract cases'
+      - name: Verify review-specific overlap guard offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'parse(file="scripts/updater/workflow_00_guard_review_overlap.R")'
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          printf 'key,value\\nreview_id,almeria-map\\nlatest_w00_status,success\\nlatest_w00_run_id,100\\n' > "$tmp/done.csv"
+          Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/done.csv"
+          printf 'key,value\\nreview_id,almeria-map\\nlatest_w00_status,running\\nlatest_w00_run_id,101\\n' > "$tmp/running.csv"
+          if Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv"; then exit 1; fi
+          Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv" --resume-run-id 101
+          if Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv" --resume-run-id 999; then exit 1; fi
+          echo 'PASS: review overlap guard blocks different active runs'
       - name: Validate explicit spreadsheet routing offline
         shell: bash
         run: |
