@@ -33,13 +33,19 @@ dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 now_utc <- function() format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 scalar <- function(x) {
   if (is.null(x)||length(x)==0L) return(NULL)
-  y <- trimws(as.character(x[[1L]])); if (!nzchar(y)) NULL else y
+  value <- x[[1L]]
+  if (is.null(value)||length(value)==0L) return(NULL)
+  y <- trimws(as.character(value[[1L]]))
+  if (length(y)!=1L || is.na(y) || !nzchar(y)) NULL else y
 }
 extract_list_values <- function(x, child) {
   if (is.null(x) || !is.list(x)) return(NULL)
   vals <- x[[child]]
   if (is.null(vals)) return(NULL)
-  unname(vapply(vals,function(z) if (is.list(z)) scalar(z)%||%"" else as.character(z),character(1)))
+  unname(vapply(vals,function(z) {
+    value <- scalar(z)
+    if (is.null(value)) "" else value
+  },character(1)))
 }
 
 raw_files <- sort(list.files(file.path(input_dir,"raw"),pattern="^response_[0-9]{6}\\.json$",full.names=TRUE))
