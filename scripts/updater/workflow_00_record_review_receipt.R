@@ -44,8 +44,7 @@ if(event_id %in% events$event_id) {
     timestamp_utc=as.character(receipt$published_at_utc),review_id=review_id,
     workflow="W00",event_type="zenodo_published",github_run_id=run_id,
     zenodo_record_id=as.character(receipt$zenodo_record_id),
-    details_json=as.character(toJSON(list(doi=receipt$doi,record_url=receipt$record_url,
-      manifest_sha256=receipt$manifest_sha256,source_ids=receipt$sources),auto_unbox=TRUE)),
+    details_json=as.character(toJSON(list(receipt=receipt),auto_unbox=TRUE,null="null")),
     stringsAsFactors=FALSE)
   googlesheets4::sheet_append(sheet_id,entry,sheet="workflow_events")
 }
