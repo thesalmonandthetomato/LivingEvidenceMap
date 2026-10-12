@@ -871,6 +871,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ '${{ inputs.execution_pathway }}' = 'shiny' ]; then
+            # Clear only the disposable checkout: prevent existing salmon records
+            # entering this review's GitHub artefact or restricted Zenodo archive.
+            rm -rf docs/search_record
+          fi
           mkdir -p docs/search_record
           cp -R downloaded_search_records/* docs/search_record/
 
