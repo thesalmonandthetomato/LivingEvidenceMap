@@ -30,7 +30,12 @@ status <- tolower(get("latest_w00_status"))
 id <- get("latest_w00_run_id")
 supersede <- identical(tolower(get_arg("--supersede")),"true")
 resume <- get_arg("--resume-run-id")
-if(nzchar(id) && !grepl("^[0-9]+$",id)) stop("Invalid previous run ID",call.=FALSE)
+if(nzchar(id) && !grepl("^[0-9]+$",id)) {
+  if(status %in% c("queued","in_progress","running","pending"))
+    stop("Active W00 status has an invalid run ID; refusing overlap",call.=FALSE)
+  warning("Ignoring non-numeric historical run ID for an inactive W00 review",call.=FALSE)
+  id <- ""
+}
 if(nzchar(resume) && !grepl("^[0-9]+$",resume)) stop("Invalid resume run ID",call.=FALSE)
 if(!status %in% c("","queued","in_progress","running","pending","completed","success","failure","failed","cancelled","skipped","timed_out"))
   stop("Unknown review-specific W00 status",call.=FALSE)
