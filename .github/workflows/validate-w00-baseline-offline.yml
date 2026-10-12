@@ -159,6 +159,23 @@ jobs:
           assert '--review-id "$LEM_REVIEW_ID"' in s
           print('PASS: explicit identity with start/failure state writers')
           PY
+      - name: Verify isolated W00 test-tab routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          names = ['start','failure','receipt']
+          for name in names:
+              p = Path('scripts/updater/workflow_00_record_review_'+name+'.R')
+              s = p.read_text()
+              assert '"--isolated-test-tabs" %in% args' in s, name
+              assert 'if(test_tabs) "w00_test_metadata" else "review_metadata"' in s, name
+              assert 'if(test_tabs) "w00_test_events" else "workflow_events"' in s, name
+              assert 'sheet="review_metadata"' not in s, name
+              assert 'sheet="workflow_events"' not in s, name
+          print('PASS: all W00 writers isolate test tabs only on explicit opt-in')
+          PY
       - name: Exercise synthetic review W00 transitions
         shell: bash
         run: |
