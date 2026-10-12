@@ -83,7 +83,7 @@ jobs:
           assert new_status.count(new_sheet)==1
           assert new_status.replace(new_sheet,old_sheet)==old_status,'unexpected current-run status change'
           assert current.count('default: github')==2
-          assert current.count("if: $"+"{{ inputs.execution_pathway == 'shiny' }}")==2
+          assert current.count("if: $"+"{{ inputs.execution_pathway == 'shiny' }}")==3,'unexpected Shiny-only steps'
           print('PASS: GitHub W00 steps match legacy; only review Sheet routing differs in status step')
           PY
       - name: Verify review-specific first-run decisions offline
