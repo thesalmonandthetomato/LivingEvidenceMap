@@ -322,7 +322,27 @@ jobs:
         shell: Rscript {0}
         run: install.packages('jsonlite')
 
+      - name: Refuse overlapping Shiny review update
+        if: ${{ inputs.execution_pathway == 'shiny' }}
+        env:
+          LEM_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          SUPERSEDE_INCOMPLETE: ${{ inputs.supersede_incomplete_update }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-overlap-credential.json"
+          chmod 600 "$RUNNER_TEMP/lem-overlap-credential.json"
+          Rscript scripts/updater/workflow_00_guard_review_overlap.R \
+            --sheet-id "$LEM_REVIEW_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-overlap-credential.json" \
+            --supersede "$SUPERSEDE_INCOMPLETE" \
+            --resume-run-id "$RESUME_RUN_ID"
+          rm -f "$RUNNER_TEMP/lem-overlap-credential.json"
+
       - name: Refuse overlapping pipeline update
+        if: ${{ inputs.execution_pathway != 'shiny' }}
         env:
           SUPERSEDE_INCOMPLETE: ${{ inputs.supersede_incomplete_update }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
