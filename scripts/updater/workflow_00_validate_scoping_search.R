@@ -168,21 +168,8 @@ normalised <- paste(tokens, collapse = " ")
 normalised <- gsub("\\( ", "(", normalised)
 normalised <- gsub(" \\)", ")", normalised)
 
-quote_openalex_operand <- function(tok) {
-  if (!is_operand(tok)) return(tok)
-  if (startsWith(tok, '"') && endsWith(tok, '"')) return(tok)
-  paste0('"', gsub('"', '\\"', tok, fixed = TRUE), '"')
-}
-oa_tokens <- vapply(tokens, quote_openalex_operand, character(1))
-oa_tokens[oa_tokens == "AND"] <- "and"
-oa_tokens[oa_tokens == "OR"] <- "or"
-oa_tokens[oa_tokens == "NOT"] <- "not"
-openalex_expr <- paste(oa_tokens, collapse = " ")
-openalex_expr <- gsub("\\( ", "(", openalex_expr)
-openalex_expr <- gsub(" \\)", ")", openalex_expr)
-
 # Use the same database-specific rendering as full W00, after validating
-# the standalone scoping Boolean string above. OpenAlex OQL is explicit.
+# the standalone scoping Boolean string above, including OpenAlex.
 source_ids <- c("lens","scopus","openalex","agricola","pubmed",
                 "ethos","cba","epmc_preprints","wos",names(ebsco_cfg$sources))
 scratch <- tempfile("w00-scope-")
@@ -190,30 +177,8 @@ dir.create(scratch,recursive=TRUE)
 selection_file <- file.path(scratch,"selection.json")
 strategy_file <- file.path(scratch,"strategy.json")
 writeLines(toJSON(list(selected_sources=source_ids),auto_unbox=TRUE),selection_file)
-# When the input consists of two OR-concepts joined by AND, represent those
-# concepts explicitly so scoping uses the same cross-field scope as full W00.
-match <- regexec("^\\((.+)\\) AND \\((.+)\\)$",normalised)
-parts <- regmatches(normalised,match)[[1L]]
-is_simple_pair <- length(parts)==3L &&
-  !any(grepl("[()]",parts[-1L]))
-if(is_simple_pair){
-  lhs<-trimws(strsplit(parts[[2L]]," OR ",fixed=TRUE)[[1L]])
-  rhs<-trimws(strsplit(parts[[3L]]," OR ",fixed=TRUE)[[1L]])
-  is_simple_pair<-length(lhs)>0L&&length(rhs)>0L&&
-    !any(grepl(" AND | NOT ",c(lhs,rhs),fixed=TRUE))
-}
-if(is_simple_pair){
-  strategy<-list(
-    search_version="scoping-count-only",
-    concepts=list(first=list(terms=lhs),second=list(terms=rhs)),
-    expression="first AND second",
-    database_overrides=list(openalex=sprintf("works where title/abstract has (%s)",openalex_expr))
-  )
-} else {
-  strategy<-list(search_version="scoping-count-only",
-    advanced_boolean=normalised,
-    database_overrides=list(openalex=sprintf("works where title/abstract has (%s)",openalex_expr)))
-}
+# Use precisely the same generic Boolean strategy as full Shiny W00.
+strategy <- list(search_version="scoping-count-only",advanced_boolean=normalised)
 writeLines(toJSON(strategy,auto_unbox=TRUE),strategy_file)
 translator <- "scripts/updater/workflow_00_translate_generic.R"
 if(!file.exists(translator))stop("W00 generic translator is missing",call.=FALSE)
