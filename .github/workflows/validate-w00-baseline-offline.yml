@@ -69,7 +69,7 @@ jobs:
           for start,end in boundaries:
               assert start in original and end in original and start in current and end in current,start
               previous=section(original,start,end)
-              actual=section(current,start,end)
+              actual=section(current,start,'      - name: Record Shiny review W00 start' if 'Refuse overlapping pipeline update' in start else end)
               if 'Refuse overlapping pipeline update' in start:
                   actual=actual.replace("        if: $"+"{{ inputs.execution_pathway != 'shiny' }}\n","")
               if 'Validate explicit first-run contract' in start:
