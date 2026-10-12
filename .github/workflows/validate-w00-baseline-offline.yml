@@ -209,6 +209,12 @@ jobs:
               assert 'sheet="workflow_events"' not in s, name
           print('PASS: all W00 writers isolate test tabs only on explicit opt-in')
           PY
+      - name: Validate review-scoped W00-to-W01 handoff contract offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/tests/test_workflow_00_shiny_handoff.R
+
       - name: Exercise synthetic review W00 transitions
         shell: bash
         run: |
