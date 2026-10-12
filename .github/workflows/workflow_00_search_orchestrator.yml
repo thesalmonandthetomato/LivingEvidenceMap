@@ -7,6 +7,11 @@ on:
       - 'docs/w00_mvp_launch_20261010.txt'
   workflow_call:
     inputs:
+      execution_pathway:
+        description: Execution pathway (github preserves original repository-input behaviour)
+        required: false
+        default: github
+        type: string
       strategy_json_b64:
         description: Optional base64 encoded inline search strategy JSON
         required: false
@@ -92,6 +97,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      execution_pathway:
+        description: Execution pathway (github preserves original repository-input behaviour)
+        required: false
+        default: github
+        type: string
       strategy_json_b64:
         description: Optional base64 encoded inline search strategy JSON
         required: false
@@ -331,7 +341,30 @@ jobs:
             --ebsco-config config/workflow00_ebsco_sources.json \
             --group-config config/workflow00_source_groups.json
 
+      - name: Validate explicit execution pathway
+        env:
+          EXECUTION_PATHWAY: ${{ inputs.execution_pathway || 'github' }}
+          INLINE_STRATEGY: ${{ inputs.strategy_json_b64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$EXECUTION_PATHWAY" in
+            github)
+              test -z "$INLINE_STRATEGY" || { echo 'GitHub pathway does not accept a Shiny inline strategy' >&2; exit 1; }
+              echo "PASS: github pathway uses unchanged repository inputs"
+              ;;
+            shiny)
+              test -n "$INLINE_STRATEGY" || { echo 'Shiny pathway requires an explicit inline strategy' >&2; exit 1; }
+              echo "PASS: shiny pathway has explicit strategy"
+              ;;
+            *)
+              echo "Invalid execution_pathway (expected github or shiny)" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Resolve review-specific search strategy
+        if: ${{ inputs.execution_pathway == 'shiny' }}
         env:
           SEARCH_STRATEGY_B64: ${{ inputs.strategy_json_b64 }}
         shell: bash
