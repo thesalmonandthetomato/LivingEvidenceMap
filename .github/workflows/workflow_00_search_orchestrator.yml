@@ -877,6 +877,11 @@ jobs:
             done
           fi
 
+          if [ '${{ inputs.execution_pathway }}' = 'shiny' ]; then
+            echo 'Shiny pathway: temporary search archive staged for Zenodo; no GitHub state commit.'
+            exit 0
+          fi
+
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/search_record
