@@ -92,17 +92,17 @@ jobs:
           set -euo pipefail
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
-          printf 'key,value\\nreview_id,almeria-map\\nauthoritative_w08_baseline,FALSE\\n' > "$tmp/new.csv"
+          printf 'key,value\nreview_id,almeria-map\nauthoritative_w08_baseline,FALSE\n' > "$tmp/new.csv"
           Rscript scripts/updater/workflow_00_validate_review_metadata.R --metadata-csv "$tmp/new.csv" --first-run true
           if Rscript scripts/updater/workflow_00_validate_review_metadata.R --metadata-csv "$tmp/new.csv" --first-run false; then
             echo 'ERROR: update of a new review was incorrectly permitted' >&2; exit 1
           fi
-          printf 'key,value\\nreview_id,almeria-map\\nauthoritative_w08_baseline,TRUE\\nlatest_w08_zenodo_record_id,12345678\\n' > "$tmp/existing.csv"
+          printf 'key,value\nreview_id,almeria-map\nauthoritative_w08_baseline,TRUE\nlatest_w08_zenodo_record_id,12345678\n' > "$tmp/existing.csv"
           Rscript scripts/updater/workflow_00_validate_review_metadata.R --metadata-csv "$tmp/existing.csv" --first-run false
           if Rscript scripts/updater/workflow_00_validate_review_metadata.R --metadata-csv "$tmp/existing.csv" --first-run true; then
             echo 'ERROR: first run over authoritative baseline incorrectly permitted' >&2; exit 1
           fi
-          printf 'key,value\\nreview_id,almeria-map\\n' > "$tmp/missing.csv"
+          printf 'key,value\nreview_id,almeria-map\n' > "$tmp/missing.csv"
           if Rscript scripts/updater/workflow_00_validate_review_metadata.R --metadata-csv "$tmp/missing.csv" --first-run true; then
             echo 'ERROR: incomplete metadata incorrectly permitted' >&2; exit 1
           fi
