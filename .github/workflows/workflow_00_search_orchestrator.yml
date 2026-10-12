@@ -7,6 +7,11 @@ on:
       - 'docs/w00_mvp_launch_20261010.txt'
   workflow_call:
     inputs:
+      strategy_json_b64:
+        description: Optional base64 encoded inline search strategy JSON
+        required: false
+        default: ''
+        type: string
       first_run:
         description: Initialise an entirely new review, with no prior baseline
         required: false
@@ -87,6 +92,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      strategy_json_b64:
+        description: Optional base64 encoded inline search strategy JSON
+        required: false
+        default: ''
+        type: string
       first_run:
         description: Initialise an entirely new review, with no prior baseline
         required: false
@@ -320,6 +330,21 @@ jobs:
             --output outputs/updater/workflow00_plan/source_selection.json \
             --ebsco-config config/workflow00_ebsco_sources.json \
             --group-config config/workflow00_source_groups.json
+
+      - name: Resolve review-specific search strategy
+        env:
+          SEARCH_STRATEGY_B64: ${{ inputs.strategy_json_b64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$SEARCH_STRATEGY_B64" ]; then
+            printf '%s' "$SEARCH_STRATEGY_B64" | base64 --decode > "$RUNNER_TEMP/workflow00_inline_strategy.json"
+            python3 -m json.tool "$RUNNER_TEMP/workflow00_inline_strategy.json" > /dev/null
+            cp "$RUNNER_TEMP/workflow00_inline_strategy.json" user_input/workflow00_search_strategy.json
+            echo "PASS: resolved inline review strategy (repository fallback untouched)"
+          else
+            echo "PASS: using existing repository strategy fallback"
+          fi
 
       - name: Validate search controls and write source queries
         shell: bash
