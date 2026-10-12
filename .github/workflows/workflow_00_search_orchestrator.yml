@@ -1,4 +1,5 @@
 name: Workflow 00 - Search orchestrator
+run-name: ${{ inputs.shiny_request_id != '' && format('W00 Shiny {0}', inputs.shiny_request_id) || 'Workflow 00 - Search orchestrator' }}
 
 on:
   push:
@@ -7,6 +8,16 @@ on:
       - 'docs/w00_mvp_launch_20261010.txt'
   workflow_call:
     inputs:
+      shiny_request_id:
+
+        description: Optional Shiny request identifier for progress monitoring
+
+        required: false
+
+        default: ''
+
+        type: string
+
       execution_pathway:
         description: Execution pathway (github preserves original repository-input behaviour)
         required: false
@@ -107,6 +118,16 @@ on:
 
   workflow_dispatch:
     inputs:
+      shiny_request_id:
+
+        description: Optional Shiny request identifier for progress monitoring
+
+        required: false
+
+        default: ''
+
+        type: string
+
       execution_pathway:
         description: Execution pathway (github preserves original repository-input behaviour)
         required: false
