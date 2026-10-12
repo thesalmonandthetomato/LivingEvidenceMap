@@ -187,7 +187,9 @@ jobs:
           assert "REQUESTED_RUN_TYPE: $"+"{{ github.event_name == 'push' && 'full' || inputs.run_type }}" in wf
           assert 'test "$REQUESTED_RUN_TYPE" = "full"' in wf
           assert 'Shiny fortnightly/expansion require review-isolated source-ID registries' in wf
-          assert '--saved data/workflow00/source_selection.json' in wf
+          assert '--saved "$W00_SAVED_SOURCE_SELECTION"' in wf
+          assert "'data/workflow00/source_selection.json'" in wf
+          assert "'outputs/updater/workflow00_plan/review_source_selection.json'" in wf
           print('PASS: Shiny update modes blocked until source state is isolated')
           PY
       - name: Verify isolated W00 test-tab routing
