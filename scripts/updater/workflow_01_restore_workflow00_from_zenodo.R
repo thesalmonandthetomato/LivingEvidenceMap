@@ -17,6 +17,7 @@ arg <- function(flag, default=NULL) {
 pointer_path <- arg("--pointer")
 output_root <- arg("--output-root")
 source_filter <- arg("--sources","")
+expected_review_id <- arg("--review-id","")
 if (is.null(pointer_path) || is.null(output_root)) {
   stop("Required: --pointer --output-root",call.=FALSE)
 }
@@ -27,6 +28,7 @@ if (!nzchar(token)) stop("ZENODO_ACCESS_TOKEN is required",call.=FALSE)
 
 x <- fromJSON(pointer_path,simplifyVector=FALSE)
 if (!identical(x$status,"published")) stop("Zenodo pointer is not a published archive",call.=FALSE)
+if (nzchar(expected_review_id) && !identical(as.character(x$review_id),expected_review_id)) stop("W00 Zenodo receipt review identity mismatch",call.=FALSE)
 if (!identical(x$visibility,"restricted")) stop("Expected restricted Workflow 00 archive",call.=FALSE)
 if (is.null(x$zenodo_deposition_id) || !nzchar(as.character(x$zenodo_deposition_id))) {
   stop("Pointer lacks zenodo_deposition_id",call.=FALSE)
