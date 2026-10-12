@@ -13,7 +13,9 @@ expected<-c("event_id","timestamp_utc","review_id","workflow","event_type","gith
 if(!identical(names(meta),c("key","value"))||!identical(names(events),expected))stop("Unexpected tab schema",call.=FALSE)
 if(anyDuplicated(meta$key)||anyDuplicated(events$event_id))stop("Duplicate metadata",call.=FALSE)
 lookup<-function(k){i<-match(k,meta$key);if(is.na(i))stop("Missing ",k,call.=FALSE);as.character(meta$value[[i]])}
-if(!identical(lookup("review_id"),review))stop("Review identity mismatch",call.=FALSE)
+source("scripts/updater/workflow_00_review_transition_rules.R")
+decision<-w00_review_transition(meta,events,review,run,"failure")
+if(decision$status!="failed")stop("Unexpected transition",call.=FALSE)
 if(!identical(lookup("latest_w00_run_id"),run))stop("Refusing to overwrite newer or unrelated W00 state",call.=FALSE)
 if(identical(tolower(lookup("latest_w00_status")),"success"))stop("Refusing to turn published W00 success into failure",call.=FALSE)
 event_id<-paste0("W00:",run,":failed")
