@@ -159,6 +159,12 @@ jobs:
           assert '--review-id "$LEM_REVIEW_ID"' in s
           print('PASS: explicit identity with start/failure state writers')
           PY
+      - name: Exercise synthetic review W00 transitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/tests/test_workflow_00_review_transitions.R
+
       - name: Check stale W00 receipt protection offline
         shell: bash
         run: |
