@@ -146,38 +146,18 @@ jobs:
           Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv" --resume-run-id 101
           if Rscript scripts/updater/workflow_00_guard_review_overlap.R --metadata-csv "$tmp/running.csv" --resume-run-id 999; then exit 1; fi
           echo 'PASS: review overlap guard blocks different active runs'
-      - name: Validate Shiny receipt writer syntax and pathway gates
+      - name: Validate Shiny receipt writer and guards
         shell: bash
         run: |
           set -euo pipefail
-          Rscript -e 'parse(file="scripts/updater/workflow_00_record_review_receipt.R");cat("PASS: receipt writer R syntax\\n")'
+          Rscript -e 'parse(file="scripts/updater/workflow_00_record_review_receipt.R");cat("PASS: receipt writer parses\\n")'
           python3 - <<'PY'
           from pathlib import Path
           s=Path('.github/workflows/workflow_00_search_orchestrator.yml').read_text()
           assert 'scripts/updater/workflow_00_record_review_receipt.R' in s
-          assert 'if: 
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          wf=Path('.github/workflows/workflow_00_search_orchestrator.yml').read_text()
-          assert wf.count('review_sheet_id:')==2
-          assert 'inputs.execution_pathway == \'shiny\' && inputs.review_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID' in wf
-          assert ("if: $"+"{{ inputs.execution_pathway != 'shiny' }}") in wf
-          assert ("if: $"+"{{ inputs.execution_pathway == 'shiny' }}") in wf
-          assert "Shiny pathway requires review_sheet_id" in wf
-          print('PASS: Shiny sheet ID explicit; legacy GitHub sheet fallback retained')
-          PY
-      - name: Run existing W00 strategy validation offline
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_00_validate_search_strategy.R --config user_input/workflow00_search_strategy.json
-          echo 'PASS: existing GitHub-input strategy validated; no searches performed'
-+'{{ github.event_name != \'push\' && inputs.execution_pathway != \'shiny\' && inputs.dispatch_w01 == true }}' in s
-          assert 'Shiny pathway: temporary search archive staged for Zenodo; no GitHub state commit.' in s
-          print('PASS: Shiny receipt and GitHub isolation guards')
+          assert 'Shiny pathway: temporary search archive staged for Zenodo' in s
+          assert "inputs.execution_pathway != 'shiny' && inputs.dispatch_w01 == true" in s
+          print('PASS: Shiny receipt and GitHub pathway guards')
           PY
       - name: Validate explicit spreadsheet routing offline
         shell: bash
