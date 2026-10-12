@@ -1,6 +1,11 @@
 #!/usr/bin/env Rscript
 # Review-scoped W00 start state; never reads or modifies repository current-run files.
 args <- commandArgs(trailingOnly=TRUE)
+# Test routing must be explicitly enabled; production defaults remain unchanged.
+test_tabs <- "--isolated-test-tabs" %in% args
+metadata_tab <- if(test_tabs) "w00_test_metadata" else "review_metadata"
+events_tab <- if(test_tabs) "w00_test_events" else "workflow_events"
+
 arg <- function(k) {i<-match(k,args);if(is.na(i)||i==length(args)) stop("Missing ",k,call.=FALSE);args[[i+1L]]}
 sheet <- arg("--sheet-id")
 credential <- arg("--credential")
@@ -11,8 +16,8 @@ if(!grepl("^[0-9]+$",run_id)||!grepl("^[A-Za-z0-9][A-Za-z0-9._-]{3,127}$",review
 if(!file.exists(credential)) stop("Credential not found",call.=FALSE)
 if(!requireNamespace("googlesheets4",quietly=TRUE)) stop("googlesheets4 unavailable",call.=FALSE)
 googlesheets4::gs4_auth(path=credential,cache=FALSE)
-meta <- as.data.frame(googlesheets4::read_sheet(sheet,sheet="review_metadata",col_types="cc"))
-events <- as.data.frame(googlesheets4::read_sheet(sheet,sheet="workflow_events",col_types="cccccccc"))
+meta <- as.data.frame(googlesheets4::read_sheet(sheet,sheet=metadata_tab,col_types="cc"))
+events <- as.data.frame(googlesheets4::read_sheet(sheet,sheet=events_tab,col_types="cccccccc"))
 cols <- c("event_id","timestamp_utc","review_id","workflow","event_type","github_run_id","zenodo_record_id","details_json")
 if(!identical(names(meta),c("key","value"))||!identical(names(events),cols))
   stop("Review metadata/events schema mismatch",call.=FALSE)
@@ -30,13 +35,13 @@ if(!event %in% events$event_id) {
   row <- data.frame(event_id=event,timestamp_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
     review_id=review,workflow="W00",event_type="started",github_run_id=run_id,
     zenodo_record_id="",details_json="{}",stringsAsFactors=FALSE)
-  googlesheets4::sheet_append(sheet,row,sheet="workflow_events")
+  googlesheets4::sheet_append(sheet,row,sheet=events_tab)
 }
 for(k in c("latest_w00_run_id","latest_w00_status")) {
   idx<-match(k,meta$key)
   val<-if(k=="latest_w00_run_id")run_id else "running"
   if(is.na(idx)) stop("Missing required key ",k,call.=FALSE)
-  googlesheets4::range_write(sheet,data.frame(value=val),sheet="review_metadata",
+  googlesheets4::range_write(sheet,data.frame(value=val),sheet=metadata_tab,
     range=paste0("B",idx+1L),col_names=FALSE)
 }
 cat("PASS: review-specific W00 start event and running status recorded\n")
