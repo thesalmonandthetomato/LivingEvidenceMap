@@ -145,7 +145,8 @@ jobs:
     name: count / ${{ matrix.source }}
     needs: prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Allow transient package-mirror retries before the count stage.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
