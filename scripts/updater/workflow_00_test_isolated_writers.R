@@ -18,7 +18,7 @@ call_writer("start")
 m<-as.data.frame(read_sheet(sheet,sheet="w00_test_metadata",col_types="cc"))
 stopifnot(identical(as.character(m$value[match("latest_w00_status",m$key)]),"running"))
 tmp<-tempfile(fileext=".json")
-jsonlite::write_json(list(status="published",github_run_id=run,zenodo_record_id="123456789",
+jsonlite::write_json(list(status="published",review_id=review,github_run_id=run,zenodo_record_id="123456789",
   published_at_utc="2026-10-12T00:00:00Z",doi="10.5281/zenodo.123456789",
   record_url="https://zenodo.org/records/123456789",manifest_sha256="synthetic",sources=list("test")),
   tmp,auto_unbox=TRUE)
