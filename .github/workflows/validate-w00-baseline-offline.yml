@@ -215,6 +215,22 @@ jobs:
           set -euo pipefail
           Rscript scripts/updater/tests/test_workflow_00_review_transitions.R
 
+      - name: Verify review identity in Zenodo receipt and archive routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'parse(file="scripts/updater/workflow_00_archive_to_zenodo.R");parse(file="scripts/updater/workflow_00_record_review_receipt.R")'
+          python3 - <<'PY'
+          from pathlib import Path
+          archive=Path('scripts/updater/workflow_00_archive_to_zenodo.R').read_text()
+          receipt=Path('scripts/updater/workflow_00_record_review_receipt.R').read_text()
+          wf=Path('.github/workflows/workflow_00_search_orchestrator.yml').read_text()
+          assert 'if (nzchar(review_id)) receipt$review_id <- review_id' in archive
+          assert 'Zenodo receipt belongs to another review' in receipt
+          assert '--review-id "$LEM_ARCHIVE_REVIEW_ID"' in wf
+          assert "inputs.execution_pathway == 'shiny' && inputs.review_id" in wf
+          print('PASS: Shiny archive receipt review ID isolated')
+          PY
       - name: Check stale W00 receipt protection offline
         shell: bash
         run: |
