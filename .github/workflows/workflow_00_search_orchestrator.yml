@@ -937,6 +937,40 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  finalise-shiny-w00-failure:
+    needs: [validate-and-plan, search-sources, reconcile-expansion, archive-search-records, archive-search-to-zenodo]
+    if: ${{ always() && inputs.execution_pathway == 'shiny' && (needs.validate-and-plan.result == 'failure' || needs.search-sources.result == 'failure' || needs.archive-search-records.result == 'failure' || needs.archive-search-to-zenodo.result == 'failure' || needs.reconcile-expansion.result == 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install Sheet support
+        shell: Rscript {0}
+        run: install.packages('googlesheets4')
+      - name: Record failed W00 review event
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_REVIEW_ID: ${{ inputs.review_id }}
+          LEM_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_REVIEW_ID"
+          test -n "$LEM_REVIEW_SHEET_ID"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-failure-credential.json"
+          chmod 600 "$RUNNER_TEMP/lem-failure-credential.json"
+          Rscript scripts/updater/workflow_00_record_review_failure.R \
+            --sheet-id "$LEM_REVIEW_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-failure-credential.json" \
+            --review-id "$LEM_REVIEW_ID" \
+            --run-id "$GITHUB_RUN_ID"
+          rm -f "$RUNNER_TEMP/lem-failure-credential.json"
+
   archive-search-to-zenodo:
     needs: [validate-and-plan, archive-search-records]
     if: ${{ always() && needs.validate-and-plan.result == 'success' && needs.archive-search-records.result == 'success' }}
