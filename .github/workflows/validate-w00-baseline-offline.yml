@@ -91,8 +91,8 @@ jobs:
           wf=Path('.github/workflows/workflow_00_search_orchestrator.yml').read_text()
           assert wf.count('review_sheet_id:')==2
           assert 'inputs.execution_pathway == \'shiny\' && inputs.review_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID' in wf
-          assert "if: ${{ inputs.execution_pathway != 'shiny' }}" in wf
-          assert "if: ${{ inputs.execution_pathway == 'shiny' }}" in wf
+          assert ("if: $"+"{{ inputs.execution_pathway != 'shiny' }}") in wf
+          assert ("if: $"+"{{ inputs.execution_pathway == 'shiny' }}") in wf
           assert "Shiny pathway requires review_sheet_id" in wf
           print('PASS: Shiny sheet ID explicit; legacy GitHub sheet fallback retained')
           PY
