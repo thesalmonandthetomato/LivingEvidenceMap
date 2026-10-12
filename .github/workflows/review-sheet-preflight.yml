@@ -24,4 +24,4 @@ jobs:
           set -euo pipefail
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/service-account.json"
           chmod 600 "$RUNNER_TEMP/service-account.json"
-          Rscript scripts/updater/workflow_00_initialise_review_tabs.R --sheet-id 1wii1QjB4jM9OzOqboIgZn4z8CAN7W4EAyIKIyGcGjeU --credential "$RUNNER_TEMP/service-account.json" --review-id almeria-map --apply
+          Rscript scripts/updater/workflow_00_initialise_review_tabs.R --sheet-id 1wii1QjB4jM9OzOqboIgZn4z8CAN7W4EAyIKIyGcGjeU --credential "$RUNNER_TEMP/service-account.json" --review-id almeria-map
