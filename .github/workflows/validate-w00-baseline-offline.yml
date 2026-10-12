@@ -41,17 +41,20 @@ jobs:
           cfg <- jsonlite::fromJSON("user_input/workflow00_search_strategy.json",simplifyVector=FALSE)
           stopifnot(length(cfg$species_terms)>0L,length(cfg$farm_terms)>0L)
           cat(sprintf("PASS: parsed %d W00 R files and checked legacy strategy\\n",length(paths)))
+      - name: Check out frozen legacy baseline (read-only)
+        uses: actions/checkout@v4
+        with:
+          ref: a42291ee59f3ce59e870bd4625a161da9822bb76
+          path: legacy_baseline
+          persist-credentials: false
       - name: Compare GitHub execution steps with frozen legacy baseline
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin a42291ee59f3ce59e870bd4625a161da9822bb76
           python3 - <<'PY'
           import subprocess
           from pathlib import Path
-          original=subprocess.check_output(
-              ['git','show','a42291ee59f3ce59e870bd4625a161da9822bb76:.github/workflows/workflow_00_search_orchestrator.yml'],
-              text=True)
+          original=Path('legacy_baseline/.github/workflows/workflow_00_search_orchestrator.yml').read_text()
           current=Path('.github/workflows/workflow_00_search_orchestrator.yml').read_text()
           def section(src,heading,next_heading):
               return src.split(heading,1)[1].split(next_heading,1)[0]
@@ -70,7 +73,7 @@ jobs:
           start='      - name: Resolve and freeze source selection'
           assert section(original,start,'      - name: Validate search controls and write source queries') == section(current,start,'      - name: Validate explicit execution pathway')
           assert current.count('default: github')==2
-          assert current.count("if: ${{ inputs.execution_pathway == 'shiny' }}")==1
+          assert current.count("if: $"+"{{ inputs.execution_pathway == 'shiny' }}")==1
           print('PASS: original GitHub first-run, selection, translation, archive and hand-off steps byte-identical')
           PY
       - name: Run existing W00 strategy validation offline
