@@ -191,13 +191,13 @@ metadata <- list(metadata = list(
     "because source licensing or terms may limit redistribution.",
     "Access may be granted by the depositor where permitted."
   ),
-  keywords = list(
+  keywords = c(
     "Living Evidence Map",
     "evidence synthesis",
     "search archive",
     "Workflow 00",
     marker,
-    if (nzchar(review_id)) paste0("review:",review_id)
+    if (nzchar(review_id)) paste0("review:",review_id) else character()
   ),
   notes = paste0(
     if (nzchar(review_id)) paste0("Review ID: ",review_id,". ") else "",
