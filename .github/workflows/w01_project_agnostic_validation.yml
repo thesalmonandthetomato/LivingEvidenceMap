@@ -53,6 +53,21 @@ jobs:
           Rscript scripts/updater/workflow_01_restore_review_manual_ris.R \
             --input-manifest "$RUNNER_TEMP/w01-inputs.json" \
             --output-root "$RUNNER_TEMP/w01-manual"
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+            --pointer "$RUNNER_TEMP/w00-receipt.json" \
+            --review-id "$REVIEW_ID" \
+            --output-root "$RUNNER_TEMP/w01-api"
+          Rscript - <<'RS'
+          root<-file.path(Sys.getenv("RUNNER_TEMP"),"w01-api")
+          dirs<-list.dirs(root,recursive=FALSE,full.names=TRUE)
+          dirs<-dirs[!grepl("^\\.",basename(dirs))]
+          stopifnot(length(dirs)>0L)
+          for(d in dirs){
+            files<-list.files(d,recursive=TRUE,full.names=TRUE)
+            cat("W00 restored:",basename(d),"files:",length(files),
+              "records.jsonl:",sum(basename(files)=="records.jsonl"),"\\n")
+          }
+          RS
           echo "PASS: Actual Almeria W00 receipt and manual RIS restored and checked"
       - name: Confirm legacy project corrections cannot enter active W01
         shell: bash
