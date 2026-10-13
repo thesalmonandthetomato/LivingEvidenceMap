@@ -144,6 +144,18 @@ jobs:
             Rscript scripts/updater/workflow_01_restore_review_manual_ris.R \
               --input-manifest "$RUNNER_TEMP/review-w01-input-manifest.json" \
               --output-root "$RUNNER_TEMP/w01-restored-manual-ris"
+          Rscript scripts/updater/workflow_01_review_prepared_api_catalogue.R \
+            --w00-pointer "$RUNNER_TEMP/review-w00-pointer.json" \
+            --restored-root "$RUNNER_TEMP/w01-restored-w00" \
+            --output "$RUNNER_TEMP/review-w01-api-catalogue.json"
+          Rscript scripts/updater/workflow_01_review_source_catalogue.R \
+            --input-manifest "$RUNNER_TEMP/review-w01-input-manifest.json" \
+            --api-catalogue "$RUNNER_TEMP/review-w01-api-catalogue.json" \
+            --manual-manifest "$RUNNER_TEMP/w01-restored-manual-ris/manifest.json" \
+            --output "$RUNNER_TEMP/review-w01-combined-catalogue.json"
+          Rscript scripts/updater/workflow_01_prepare_source_catalogue.R \
+            --catalogue "$RUNNER_TEMP/review-w01-combined-catalogue.json" \
+            --output-manifest "$RUNNER_TEMP/review-w01-source-inputs.json"
           rm -rf "$RUNNER_TEMP/w01-restored-w00" "$RUNNER_TEMP/w01-restored-manual-ris"
           rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
           echo "PASS: W01 Shiny receipt preflight only; deduplication intentionally disabled"
