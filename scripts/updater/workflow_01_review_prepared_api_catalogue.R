@@ -17,7 +17,10 @@ for(src in sources){
   if(!grepl("^[a-z0-9][a-z0-9_-]*$",src)) stop("Invalid W00 source",call.=FALSE)
   dir<-file.path(root,src)
   if(!dir.exists(dir))stop("Missing restored API source: ",src,call.=FALSE)
-  candidates<-c(file.path(dir,"records.jsonl"),file.path(dir,"handoff","records.jsonl"),
+  candidates<-c(file.path(dir,"records.jsonl"),
+    file.path(dir,paste0(src,"_sidecar_records.jsonl")),
+    file.path(dir,paste0(src,"_starter_sidecar_records.jsonl")),
+    file.path(dir,"handoff","records.jsonl"),
     file.path(dir,"source_child","records.jsonl"))
   present<-candidates[file.exists(candidates)]
   if(length(present)!=1L)
