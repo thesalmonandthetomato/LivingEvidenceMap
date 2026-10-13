@@ -68,6 +68,16 @@ manifests <- list.files(extract,pattern="^checkpoint_manifest\\.json$",recursive
 if(length(manifests)!=1L) stop("Expected exactly one checkpoint_manifest.json",call.=FALSE)
 checkpoint_dir <- dirname(manifests[[1L]])
 cm <- fromJSON(manifests[[1L]],simplifyVector=FALSE)
+if(xor(is.null(cm$review_id),is.null(cm$google_sheet_id)) ||
+   xor(is.null(p$review_id),is.null(p$google_sheet_id)))
+  stop("Checkpoint or pointer has incomplete review identity",call.=FALSE)
+if(!is.null(cm$review_id) || !is.null(p$review_id)) {
+  if(is.null(cm$review_id) || is.null(p$review_id) ||
+     !nzchar(as.character(cm$review_id)) || !nzchar(as.character(cm$google_sheet_id)) ||
+     !identical(as.character(cm$review_id),as.character(p$review_id)) ||
+     !identical(as.character(cm$google_sheet_id),as.character(p$google_sheet_id)))
+    stop("Checkpoint review identity differs from its Zenodo pointer",call.=FALSE)
+}
 if(!identical(as.character(cm$queue_sha256),as.character(p$queue_sha256))) stop("Checkpoint queue SHA does not match pointer",call.=FALSE)
 if(!identical(as.character(cm$previous_workflow01$zenodo_record_id),as.character(p$previous_zenodo_record_id))) stop("Checkpoint previous-state lineage mismatch",call.=FALSE)
 
