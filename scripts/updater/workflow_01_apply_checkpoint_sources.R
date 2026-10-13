@@ -50,6 +50,12 @@ count_lines <- function(path){
 }
 
 cm <- fromJSON(file.path(checkpoint_dir,"checkpoint_manifest.json"),simplifyVector=FALSE)
+if(xor(is.null(cm$review_id),is.null(cm$google_sheet_id)))
+  stop("Checkpoint contains incomplete review-specific routing",call.=FALSE)
+if(!is.null(cm$review_id) &&
+   (length(cm$review_id)!=1L || length(cm$google_sheet_id)!=1L ||
+    !nzchar(as.character(cm$review_id)) || !nzchar(as.character(cm$google_sheet_id))))
+  stop("Checkpoint review-specific identity must be non-empty",call.=FALSE)
 source_counts_expected <- cm$new_source_manifestations_by_source
 if(is.null(source_counts_expected) || !length(source_counts_expected) || is.null(names(source_counts_expected))) {
   stop("Checkpoint manifest has no source manifestation counts",call.=FALSE)
@@ -119,7 +125,9 @@ for(src in sources){
 writeLines(toJSON(list(
   schema="living-evidence-map-workflow01-source-inputs-v1",
   status="checkpoint_reconstructed",
-  sources=reconstructed_inputs
+  sources=reconstructed_inputs,
+  review_id=cm$review_id,
+  google_sheet_id=cm$google_sheet_id
 ),auto_unbox=TRUE,pretty=TRUE,null="null"),
 file.path(output_dir,"source_inputs.json"))
 writeLines(toJSON(list(status="PASS",source_counts=counts),auto_unbox=TRUE,pretty=TRUE),
