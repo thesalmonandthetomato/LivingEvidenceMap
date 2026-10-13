@@ -133,11 +133,18 @@ jobs:
             --review-id "$LEM_REVIEW_ID" \
             --output "$RUNNER_TEMP/review-w00-pointer.json" \
             --input-manifest "$RUNNER_TEMP/review-w01-input-manifest.json"
+          # Restore the identical authoritative W00 archive used by the GitHub pathway.
+          # This preflight is read-only: no deduplication, registry update or publication.
+          ZENODO_ACCESS_TOKEN="${{ secrets.ZENODO_ACCESS_TOKEN }}" \
+            Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+              --pointer "$RUNNER_TEMP/review-w00-pointer.json" \
+              --review-id "$LEM_REVIEW_ID" \
+              --output-root "$RUNNER_TEMP/w01-restored-w00"
           ZENODO_ACCESS_TOKEN="${{ secrets.ZENODO_ACCESS_TOKEN }}" \
             Rscript scripts/updater/workflow_01_restore_review_manual_ris.R \
               --input-manifest "$RUNNER_TEMP/review-w01-input-manifest.json" \
               --output-root "$RUNNER_TEMP/w01-restored-manual-ris"
-          rm -rf "$RUNNER_TEMP/w01-restored-manual-ris"
+          rm -rf "$RUNNER_TEMP/w01-restored-w00" "$RUNNER_TEMP/w01-restored-manual-ris"
           rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
           echo "PASS: W01 Shiny receipt preflight only; deduplication intentionally disabled"
   workflow01:
