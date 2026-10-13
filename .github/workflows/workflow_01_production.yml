@@ -113,7 +113,7 @@ jobs:
           use-public-rspm: true
       - name: Install read-only resolver dependencies
         shell: Rscript {0}
-        run: install.packages(c('googlesheets4','jsonlite'))
+        run: install.packages(c('googlesheets4','jsonlite','digest'))
       - name: Resolve review-specific W00 Zenodo receipt without running W01
         env:
           LEM_SHEET_ID: ${{ inputs.review_sheet_id }}
@@ -131,7 +131,8 @@ jobs:
             --sheet-id "$LEM_SHEET_ID" \
             --credential "$RUNNER_TEMP/lem-w01-credentials.json" \
             --review-id "$LEM_REVIEW_ID" \
-            --output "$RUNNER_TEMP/review-w00-pointer.json"
+            --output "$RUNNER_TEMP/review-w00-pointer.json" \
+            --input-manifest "$RUNNER_TEMP/review-w01-input-manifest.json"
           rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
           echo "PASS: W01 Shiny receipt preflight only; deduplication intentionally disabled"
   workflow01:
