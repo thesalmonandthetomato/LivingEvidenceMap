@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript -e 'install.packages(c("googlesheets4","jsonlite","digest","httr2"),repos="https://cloud.r-project.org")'
+          Rscript -e 'install.packages(c("googlesheets4","jsonlite","digest","httr2"))'
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/w01-credentials.json"
           chmod 600 "$RUNNER_TEMP/w01-credentials.json"
           REVIEW_ID="$(Rscript -e 'googlesheets4::gs4_auth(path=commandArgs(TRUE)[1],cache=FALSE);x<-googlesheets4::read_sheet(commandArgs(TRUE)[2],sheet="review_metadata",col_types="cc");stopifnot(identical(names(x),c("key","value")));id<-as.character(x$value[match("review_id",x$key)]);stopifnot(length(id)==1L,!is.na(id),grepl("^[A-Za-z0-9][A-Za-z0-9._-]{3,127}$",id));cat(id)' "$RUNNER_TEMP/w01-credentials.json" "$REVIEW_SHEET_ID")"
