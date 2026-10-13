@@ -33,6 +33,34 @@ jobs:
           invisible(lapply(files, parse))
           cat("PASS:",length(files),"W01 scripts parse\\n")
           RS
+      - name: Temporary synthetic RIS conversion check
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          install.packages(c("jsonlite","digest"),repos="https://cloud.r-project.org")
+          d<-tempfile("w01-ris-");dir.create(d)
+          writeLines(c("TY  - JOUR","AU  - Smith, Alex","AU  - Jones, Pat",
+            "PY  - 2022","TI  - Example title","JO  - Sample Journal",
+            "VL  - 5","IS  - 2","SP  - 11","EP  - 19",
+            "DO  - https://doi.org/10.1234/TEST","AB  - Example abstract",
+            "ER  -"),file.path(d,"example.ris"))
+          target<-file.path(d,"records.jsonl")
+          status<-system2(file.path(R.home("bin"),"Rscript"),
+            c("scripts/updater/workflow_01_generic_ris_to_sidecar.R",
+              "--input-dir",shQuote(d),"--source","manual_test",
+              "--submission-id","manual-test123","--output",shQuote(target)))
+          stopifnot(identical(as.integer(status),0L),file.exists(target))
+          z<-jsonlite::fromJSON(readLines(target,warn=FALSE)[[1L]],simplifyVector=FALSE)
+          stopifnot(identical(z$mapped_fields$title,"Example title"),
+            identical(z$mapped_fields$publication_type,"JOUR"),
+            identical(z$mapped_fields$year,"2022"),
+            identical(z$mapped_fields$doi,"10.1234/test"),
+            length(z$mapped_fields$authors)==2L,
+            identical(z$mapped_fields$pages,"11-19"),
+            identical(z$mapped_fields$abstract,"Example abstract"))
+          cat("PASS: synthetic RIS bibliographic conversion\n")
+          RS
       - name: Confirm legacy project corrections cannot enter active W01
         shell: bash
         run: |
