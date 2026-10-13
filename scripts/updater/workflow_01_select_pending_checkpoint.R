@@ -14,6 +14,9 @@ arg <- function(flag,default=NULL){
 
 checkpoint_dir <- arg("--checkpoint-dir","docs/deduplication/checkpoints")
 resolution_dir <- arg("--resolution-dir",file.path(checkpoint_dir,"resolutions"))
+requested_run <- arg("--run-id","")
+if(nzchar(requested_run) && !grepl("^[0-9]+$",requested_run))
+  stop("Invalid --run-id; expected numeric GitHub run ID",call.=FALSE)
 output <- arg("--output")
 if(is.null(output)) stop("Required: --output",call.=FALSE)
 
@@ -40,7 +43,14 @@ for(path in paths){
   )
 }
 
-if(length(rows)>1L){
+if(nzchar(requested_run)) {
+  matching <- Filter(function(z)identical(z$checkpoint_run_id,requested_run),rows)
+  if(length(matching)!=1L)
+    stop("No unique unresolved W01 checkpoint for requested run ",requested_run,call.=FALSE)
+  rows <- matching
+}
+
+if(!nzchar(requested_run) && length(rows)>1L){
   # The current review's W01 run is recorded by the W01 production workflow.
   # Use that authoritative run identity instead of guessing from checkpoint age.
   status_path <- arg("--current-run-status","docs/current_run/current_run_status.json")
