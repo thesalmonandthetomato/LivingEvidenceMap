@@ -42,7 +42,7 @@ on:
   workflow_dispatch:
     inputs:
       execution_pathway:
-        description: "Execution route (github or shiny preflight only)"
+        description: "Execution route (review-specific requests remain preflight-only)"
         required: false
         default: github
         type: choice
@@ -100,8 +100,8 @@ env:
   WORKFLOW00_REPORTING_BRANCH: main
 
 jobs:
-  shiny-handoff-preflight:
-    if: ${{ inputs.execution_pathway == 'shiny' }}
+  review-input-preflight:
+    if: ${{ inputs.review_id != '' && inputs.review_sheet_id != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -196,7 +196,7 @@ jobs:
             --output-manifest "$RUNNER_TEMP/review-w01-source-inputs.json"
           rm -rf "$RUNNER_TEMP/w01-restored-w00" "$RUNNER_TEMP/w01-restored-manual-ris"
           rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
-          echo "PASS: W01 Shiny receipt preflight only; deduplication intentionally disabled"
+          echo "PASS: shared W01 review-specific receipt and input preflight; deduplication intentionally disabled"
   workflow01:
     if: ${{ inputs.execution_pathway != 'shiny' }}
     runs-on: ubuntu-latest
