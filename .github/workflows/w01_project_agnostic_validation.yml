@@ -16,7 +16,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: r-lib/actions/setup-r@v2
@@ -33,6 +33,91 @@ jobs:
           invisible(lapply(files, parse))
           cat("PASS:",length(files),"W01 scripts parse\\n")
           RS
+      - name: Temporary Almeria combined W01 input preflight
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_SHEET_ID: 1wii1QjB4jM9OzOqboIgZn4z8CAN7W4EAyIKIyGcGjeU
+        shell: bash
+        run: |
+          Rscript -e 'install.packages(c("googlesheets4","jsonlite","digest","httr2"))'
+          set -euo pipefail
+          test -n "$LEM_SHEET_ID"
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-w01-credentials.json"
+          chmod 600 "$RUNNER_TEMP/lem-w01-credentials.json"
+          LEM_REVIEW_ID="$(Rscript -e 'googlesheets4::gs4_auth(path=commandArgs(TRUE)[1],cache=FALSE);x<-googlesheets4::read_sheet(commandArgs(TRUE)[2],sheet="review_metadata",col_types="cc");cat(as.character(x$value[match("review_id",x$key)]))' "$RUNNER_TEMP/lem-w01-credentials.json" "$LEM_SHEET_ID")"
+          test -n "$LEM_REVIEW_ID"
+          Rscript scripts/updater/workflow_01_resolve_review_w00_receipt.R \
+            --sheet-id "$LEM_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-w01-credentials.json" \
+            --review-id "$LEM_REVIEW_ID" \
+            --output "$RUNNER_TEMP/review-w00-pointer.json" \
+            --input-manifest "$RUNNER_TEMP/review-w01-input-manifest.json"
+          # Restore the identical authoritative W00 archive used by the GitHub pathway.
+          # This preflight is read-only: no deduplication, registry update or publication.
+          ZENODO_ACCESS_TOKEN="${{ secrets.ZENODO_ACCESS_TOKEN }}" \
+            Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+              --pointer "$RUNNER_TEMP/review-w00-pointer.json" \
+              --review-id "$LEM_REVIEW_ID" \
+              --output-root "$RUNNER_TEMP/w01-restored-w00"
+          ZENODO_ACCESS_TOKEN="${{ secrets.ZENODO_ACCESS_TOKEN }}" \
+            Rscript scripts/updater/workflow_01_restore_review_manual_ris.R \
+              --input-manifest "$RUNNER_TEMP/review-w01-input-manifest.json" \
+              --output-root "$RUNNER_TEMP/w01-restored-manual-ris"
+          # Prepare each review-specific API source with its existing W01 adapter.
+          mkdir -p "$RUNNER_TEMP/w01-prepared-api"
+          mapfile -t REVIEW_SOURCES < <(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(unlist(x$sources,use.names=FALSE),sep=intToUtf8(10))' "$RUNNER_TEMP/review-w00-pointer.json")
+          for source in "${REVIEW_SOURCES[@]}"; do
+            root="$RUNNER_TEMP/w01-restored-w00/$source"
+            out="$RUNNER_TEMP/w01-prepared-api/$source"
+            mkdir -p "$out"
+            case "$source" in
+              scopus|openalex|agricola|wos)
+                case "$source" in
+                  scopus) script=workflow_01s_scopus_sidecar_adapter.R; result=scopus_sidecar_records.jsonl ;;
+                  openalex) script=workflow_01u_openalex_sidecar_adapter.R; result=openalex_sidecar_records.jsonl ;;
+                  agricola) script=workflow_01v_agricola_sidecar_adapter.R; result=agricola_sidecar_records.jsonl ;;
+                  wos) script=workflow_01w_wos_starter_sidecar_adapter.R; result=wos_starter_sidecar_records.jsonl ;;
+                esac
+                Rscript "scripts/updater/$script" --input-dir "$root" --output-dir "$out"
+                test -f "$out/$result"
+                ;;
+              *)
+                p="$(find "$root" -type f -name records.jsonl -print -quit)"
+                if [ -n "$p" ]; then
+                  cp "$p" "$out/records.jsonl"
+                else
+                  case "$source" in
+                    pubmed) code=MED ;;
+                    ethos) code=ETH ;;
+                    cba) code=CBA ;;
+                    epmc_preprints) code=PPR ;;
+                    *) echo "No supported prepared W00 handoff for $source" >&2; exit 1 ;;
+                  esac
+                  Rscript scripts/updater/workflow_01x_europe_pmc_sidecar_adapter.R \
+                    --input-dir "$root" --output-dir "$out" \
+                    --source-code "$code" --source-slug "$source" --source-collection "$source"
+                  mv "$out/${source}_sidecar_records.jsonl" "$out/records.jsonl"
+                fi
+                ;;
+            esac
+          done
+          Rscript scripts/updater/workflow_01_review_prepared_api_catalogue.R \
+            --w00-pointer "$RUNNER_TEMP/review-w00-pointer.json" \
+            --restored-root "$RUNNER_TEMP/w01-prepared-api" \
+            --output "$RUNNER_TEMP/review-w01-api-catalogue.json"
+          Rscript scripts/updater/workflow_01_review_source_catalogue.R \
+            --input-manifest "$RUNNER_TEMP/review-w01-input-manifest.json" \
+            --api-catalogue "$RUNNER_TEMP/review-w01-api-catalogue.json" \
+            --manual-manifest "$RUNNER_TEMP/w01-restored-manual-ris/manifest.json" \
+            --output "$RUNNER_TEMP/review-w01-combined-catalogue.json"
+          Rscript scripts/updater/workflow_01_prepare_source_catalogue.R \
+            --catalogue "$RUNNER_TEMP/review-w01-combined-catalogue.json" \
+            --output-manifest "$RUNNER_TEMP/review-w01-source-inputs.json"
+          rm -rf "$RUNNER_TEMP/w01-restored-w00" "$RUNNER_TEMP/w01-restored-manual-ris"
+          rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
+          echo "PASS: W01 Shiny receipt preflight only; deduplication intentionally disabled"
       - name: Confirm legacy project corrections cannot enter active W01
         shell: bash
         run: |
