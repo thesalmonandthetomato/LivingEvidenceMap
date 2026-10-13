@@ -13,6 +13,7 @@ output_dir <- arg("--output-dir")
 source_code <- toupper(arg("--source-code",""))
 source_slug <- arg("--source-slug","")
 source_collection <- arg("--source-collection","")
+allow_empty <- identical(tolower(arg("--allow-empty","false")),"true")
 if (is.null(input_dir)||is.null(output_dir)) stop("--input-dir and --output-dir are required",call.=FALSE)
 if (!source_code %in% c("MED","ETH","CBA","PPR")) stop("--source-code must be MED, ETH, CBA, or PPR",call.=FALSE)
 if (!nzchar(source_slug)) stop("--source-slug is required",call.=FALSE)
@@ -49,12 +50,19 @@ extract_list_values <- function(x, child) {
 }
 
 raw_files <- sort(list.files(file.path(input_dir,"raw"),pattern="^response_[0-9]{6}\\.json$",full.names=TRUE))
+if (!length(raw_files)) stop("No authoritative raw Europe PMC response files",call.=FALSE)
 records <- list()
 for (rf in raw_files) {
   x <- fromJSON(rf,simplifyVector=FALSE)
   records <- c(records,x[["resultList"]][["result"]] %||% list())
 }
-if (!length(records)) stop(sprintf("No %s records to adapt",source_collection),call.=FALSE)
+if (!length(records)) {
+  if (!allow_empty) stop(sprintf("No %s records to adapt",source_collection),call.=FALSE)
+  path <- file.path(output_dir,paste0(source_slug,"_sidecar_records.jsonl"))
+  file.create(path)
+  cat(sprintf("PASS: no %s records in %d archived raw response(s)\\n",source_collection,length(raw_files)))
+  quit(save="no",status=0L)
+}
 
 out <- vector("list",length(records)); rows <- vector("list",length(records))
 for (i in seq_along(records)) {
