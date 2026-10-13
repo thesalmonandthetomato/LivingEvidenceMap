@@ -161,6 +161,10 @@ file.copy(files,file.path(output_dir,"human_review_package"),recursive=TRUE,over
 
 prev <- if (first_run) NULL else fromJSON(previous_pointer,simplifyVector=FALSE)
 w00 <- fromJSON(workflow00_pointer,simplifyVector=FALSE)
+if(!is.null(expected_review_id) && !first_run &&
+   (!identical(as.character(prev$review_id),expected_review_id) ||
+    !identical(as.character(prev$google_sheet_id),expected_sheet_id)))
+  stop("Checkpoint previous W01 pointer belongs to a different or unidentified review",call.=FALSE)
 review_manifest <- fromJSON(file.path(output_dir,"human_review_package","review_manifest.json"),simplifyVector=FALSE)
 if(!is.null(expected_review_id) && !identical(as.character(w00$review_id),expected_review_id))
   stop("Checkpoint W00 review identity mismatch",call.=FALSE)
