@@ -50,9 +50,10 @@ if(!is.na(manifest_flag)){
     required<-c("review_key","submission_id","zenodo_record_id","zenodo_receipt_json",
       "file_count","records_downloaded")
     if(!all(required %in% names(tab)))stop("Invalid manual RIS registry schema",call.=FALSE)
-    # The registry's review_key is derived from the same review_id.
+    # Review keys match the Shiny strategy registry's SHA-256 derivation.
+    review_key<-digest::digest(review,algo="sha256",serialize=FALSE)
     candidates<-tab[!is.na(tab$review_key) &
-      as.character(tab$review_key)==review,,drop=FALSE]
+      as.character(tab$review_key)==review_key,,drop=FALSE]
     if(nrow(candidates)){
       if(anyDuplicated(candidates$submission_id))stop("Duplicate manual RIS submission ID",call.=FALSE)
       manual<-lapply(seq_len(nrow(candidates)),function(i){
