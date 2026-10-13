@@ -48,8 +48,22 @@ for(src in sources){
     ids<-c(ids,as.character(rid))
   }
   if(anyDuplicated(ids))stop("Repeated sidecar identities in source ",src,call.=FALSE)
+  expected_n <- length(lines)
+  if(identical(src,"openalex")) {
+    audit_path <- file.path(dir,"compatibility_audit.json")
+    ledger_path <- file.path(dir,"duplicate_source_occurrences.jsonl")
+    if(!file.exists(audit_path) || !file.exists(ledger_path))
+      stop("OpenAlex prepared input lacks mandatory occurrence reconciliation files",call.=FALSE)
+    audit <- fromJSON(audit_path,simplifyVector=FALSE)
+    expected_n <- as.integer(audit$input$records_read)
+    unique_n <- as.integer(audit$input$unique_records)
+    duplicates <- as.integer(audit$input$identical_duplicate_occurrences)
+    if(anyNA(c(expected_n,unique_n,duplicates)) ||
+       expected_n!=unique_n+duplicates || unique_n!=length(lines))
+      stop("OpenAlex prepared count does not reconcile with raw occurrence audit",call.=FALSE)
+  }
   z[[src]]<-list(kind="workflow00_state",source=src,prepared_path=present[[1L]],
-    expected_records=length(lines),sha256=digest(file=present[[1L]],algo="sha256",serialize=FALSE))
+    expected_records=expected_n,sha256=digest(file=present[[1L]],algo="sha256",serialize=FALSE))
 }
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
 write_json(list(schema="living-evidence-map-workflow01-source-catalogue-v1",
