@@ -101,7 +101,7 @@ env:
 
 jobs:
   review-input-preflight:
-    if: ${{ inputs.review_id != '' || inputs.review_sheet_id != '' }}
+    if: ${{ inputs.execution_pathway == 'shiny' || inputs.review_id != '' || inputs.review_sheet_id != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
