@@ -196,6 +196,28 @@ jobs:
           Rscript scripts/updater/workflow_01_prepare_source_catalogue.R \
             --catalogue "$RUNNER_TEMP/review-w01-combined-catalogue.json" \
             --output-manifest "$RUNNER_TEMP/review-w01-source-inputs.json"
+          # Exercise the actual shared first-run union code using the authoritative
+          # review-specific 28-source manifest. No candidates or LLM calls are created.
+          mkdir -p "$RUNNER_TEMP/w01-empty-prior"
+          Rscript scripts/updater/workflow_01_deduplication_build_union.R \
+            --first-run true \
+            --old-dir "$RUNNER_TEMP/w01-empty-prior" \
+            --input-manifest "$RUNNER_TEMP/review-w01-source-inputs.json" \
+            --expected-review-id "$LEM_REVIEW_ID" \
+            --expected-sheet-id "$LEM_SHEET_ID" \
+            --expected-prior-manifestations 0 \
+            --output-dir "$RUNNER_TEMP/w01-reviewed-union"
+          Rscript - <<'RS'
+          library(jsonlite)
+          root <- Sys.getenv("RUNNER_TEMP")
+          sources <- fromJSON(file.path(root,"review-w01-source-inputs.json"),simplifyVector=FALSE)
+          union <- fromJSON(file.path(root,"w01-reviewed-union","source_inputs.json"),simplifyVector=FALSE)
+          if(!identical(as.character(sources$review_id),as.character(union$review_id)) ||
+             !identical(as.character(sources$google_sheet_id),as.character(union$google_sheet_id)) ||
+             !identical(names(sources$sources),names(union$sources)))
+            stop("W01 preflight union provenance mismatch",call.=FALSE)
+          cat("PASS: review-specific W01 union generated with preserved review identity and source order\n")
+          RS
           rm -rf "$RUNNER_TEMP/w01-restored-w00" "$RUNNER_TEMP/w01-restored-manual-ris"
           rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
           echo "PASS: shared W01 review-specific receipt and input preflight; deduplication intentionally disabled"
