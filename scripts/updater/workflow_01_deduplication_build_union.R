@@ -28,6 +28,8 @@ if (!is.null(input_manifest_path)) {
   if (!identical(im$schema,"living-evidence-map-workflow01-source-inputs-v1")) stop("Unsupported source-input manifest schema",call.=FALSE)
   if (is.null(im$sources) || !length(im$sources) || is.null(names(im$sources))) stop("Source-input manifest contains no sources",call.=FALSE)
   current_paths <- vapply(im$sources,function(z)as.character(z[[1L]]),character(1))
+  if (xor(is.null(im$review_id),is.null(im$google_sheet_id)))
+    stop("Incomplete review-specific routing in W01 source manifest",call.=FALSE)
 } else if (length(inputs)) {
   if (any(!grepl("^[^=]+=",inputs))) stop("Each --input must be source=path",call.=FALSE)
   source_names <- sub("=.*$","",inputs)
@@ -157,7 +159,9 @@ union_inputs <- setNames(
 writeLines(toJSON(list(
   schema="living-evidence-map-workflow01-source-inputs-v1",
   status="validated_union",
-  sources=union_inputs
+  sources=union_inputs,
+  review_id=if (exists("im",inherits=FALSE)) im$review_id else NULL,
+  google_sheet_id=if (exists("im",inherits=FALSE)) im$google_sheet_id else NULL
 ),auto_unbox=TRUE,pretty=TRUE,null="null"),
 file.path(output_dir,"source_inputs.json"))
 
