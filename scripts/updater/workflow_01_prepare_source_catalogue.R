@@ -47,7 +47,7 @@ for (src in names(sources)) {
     )
     if (status != 0L) stop(sprintf("Manual RIS restore failed for %s",src),call.=FALSE)
     manual_restored[[src]] <- registry
-  } else if (!identical(kind,"workflow00_state")) {
+  } else if (!kind %in% c("workflow00_state","prepared_manual_ris")) {
     stop(sprintf("Unsupported catalogue source kind for %s: %s",src,kind),call.=FALSE)
   }
 
@@ -86,6 +86,15 @@ for (src in names(sources)) {
         src,expected_records,actual_records,prepared
       ),call.=FALSE)
     }
+  } else if (identical(kind,"prepared_manual_ris")) {
+    lines <- readLines(prepared,warn=FALSE,encoding="UTF-8")
+    actual_records <- sum(nzchar(trimws(lines)))
+    if (is.na(expected_records) || expected_records < 0L || actual_records != expected_records)
+      stop(sprintf("Prepared manual RIS count mismatch for %s: expected %s, found %d",src,as.character(expected_records),actual_records),call.=FALSE)
+    parsed <- lapply(lines[nzchar(trimws(lines))],jsonlite::fromJSON,simplifyVector=FALSE)
+    ids <- vapply(parsed,function(z)as.character(z$sidecar_identity$sidecar_record_id %||% ""),character(1))
+    if(any(!nzchar(ids)) || anyDuplicated(ids)) stop("Missing/duplicated manual RIS manifestation identity for ",src,call.=FALSE)
+    manual_restored[[src]] <- as.character(z$submission_id %||% "")
   } else if (file.info(prepared)$size <= 0) {
     stop(sprintf("Prepared source input is empty for %s without an authoritative zero-result count: %s",src,prepared),call.=FALSE)
   }
