@@ -101,7 +101,7 @@ env:
 
 jobs:
   review-input-preflight:
-    if: ${{ inputs.review_id != '' && inputs.review_sheet_id != '' }}
+    if: ${{ inputs.review_id != '' || inputs.review_sheet_id != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -122,8 +122,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$LEM_SHEET_ID"
-          test -n "$LEM_REVIEW_ID"
+          if [ -z "$LEM_SHEET_ID" ] || [ -z "$LEM_REVIEW_ID" ]; then
+            echo "Review-specific W01 requires both review_id and review_sheet_id" >&2
+            exit 1
+          fi
           test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-w01-credentials.json"
           chmod 600 "$RUNNER_TEMP/lem-w01-credentials.json"
@@ -198,7 +200,7 @@ jobs:
           rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
           echo "PASS: shared W01 review-specific receipt and input preflight; deduplication intentionally disabled"
   workflow01:
-    if: ${{ inputs.execution_pathway != 'shiny' }}
+    if: ${{ inputs.review_id == '' && inputs.review_sheet_id == '' && inputs.execution_pathway != 'shiny' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
