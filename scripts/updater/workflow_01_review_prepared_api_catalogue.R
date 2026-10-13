@@ -30,9 +30,22 @@ for(src in sources){
   ids<-character()
   for(line in lines){
     rec<-fromJSON(line,simplifyVector=FALSE)
-    if(is.null(rec$sidecar_identity$sidecar_record_id) || is.null(rec$mapped_fields))
-      stop("W00 ",src," has non-sidecar JSONL; existing W01 adapter must run first",call.=FALSE)
-    ids<-c(ids,as.character(rec$sidecar_identity$sidecar_record_id))
+    if(identical(src,"lens")) {
+      if(!is.list(rec$lens)) stop("Lens record lacks expected lens object",call.=FALSE)
+      rid <- rec$identity$lens_id
+      if(is.null(rid)) rid <- rec$identity$record_id
+    } else {
+      provider <- rec$source$provider
+      if(identical(as.character(provider),"agricola_via_europe_pmc")) provider <- "agricola"
+      if(identical(as.character(provider),"wos_starter")) provider <- "wos"
+      if(is.null(provider) || !identical(as.character(provider),src) ||
+         is.null(rec$sidecar_identity$sidecar_record_id))
+        stop("W00 ",src," has non-W01 JSONL or incorrect provider",call.=FALSE)
+      rid <- rec$sidecar_identity$sidecar_record_id
+    }
+    if(is.null(rid) || !nzchar(trimws(as.character(rid))))
+      stop("W00 ",src," contains a missing source identifier",call.=FALSE)
+    ids<-c(ids,as.character(rid))
   }
   if(anyDuplicated(ids))stop("Repeated sidecar identities in source ",src,call.=FALSE)
   z[[src]]<-list(kind="workflow00_state",source=src,prepared_path=present[[1L]],
