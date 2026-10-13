@@ -16,6 +16,14 @@ expected_prior <- suppressWarnings(as.integer(arg("--expected-prior-manifestatio
 output_dir <- arg("--output-dir")
 
 input_manifest_path <- arg("--input-manifest",NULL)
+expected_review_id <- arg("--expected-review-id",NULL)
+expected_sheet_id <- arg("--expected-sheet-id",NULL)
+if (xor(is.null(expected_review_id),is.null(expected_sheet_id)))
+  stop("Both --expected-review-id and --expected-sheet-id are required for review-specific W01 union",call.=FALSE)
+if (!is.null(expected_review_id) && (!nzchar(expected_review_id) || !nzchar(expected_sheet_id)))
+  stop("Review-specific W01 union requires non-empty review and Sheet identities",call.=FALSE)
+if (!is.null(expected_review_id) && is.null(input_manifest_path))
+  stop("Review-specific W01 union requires an authoritative --input-manifest",call.=FALSE)
 input_pos <- which(args == "--input")
 inputs <- if (length(input_pos)) vapply(input_pos,function(i) {
   if (i == length(args)) stop("Missing value after --input",call.=FALSE)
@@ -30,6 +38,10 @@ if (!is.null(input_manifest_path)) {
   current_paths <- vapply(im$sources,function(z)as.character(z[[1L]]),character(1))
   if (xor(is.null(im$review_id),is.null(im$google_sheet_id)))
     stop("Incomplete review-specific routing in W01 source manifest",call.=FALSE)
+  if (!is.null(expected_review_id) &&
+      (!identical(as.character(im$review_id),expected_review_id) ||
+       !identical(as.character(im$google_sheet_id),expected_sheet_id)))
+    stop("Review identity or Google Sheet mismatch at W01 union boundary",call.=FALSE)
 } else if (length(inputs)) {
   if (any(!grepl("^[^=]+=",inputs))) stop("Each --input must be source=path",call.=FALSE)
   source_names <- sub("=.*$","",inputs)
