@@ -38,3 +38,46 @@ if(is.null(receipt$zenodo_deposition_id)||!grepl("^[0-9]+$",as.character(receipt
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
 write_json(receipt,output,auto_unbox=TRUE,pretty=TRUE,null="null")
 cat("PASS: wrote validated review-specific W00 pointer to ",output,"\n",sep="")
+
+# Optional input manifest: a frozen list of references, not research records.
+manifest_flag <- match("--input-manifest",args)
+if(!is.na(manifest_flag)){
+  if(manifest_flag==length(args))stop("Missing --input-manifest value",call.=FALSE)
+  destination<-args[[manifest_flag+1L]]
+  manual<-list()
+  if("manual_search_registry" %in% sheet_names(sheet)){
+    tab<-as.data.frame(read_sheet(sheet,sheet="manual_search_registry",col_types="c"))
+    required<-c("review_key","submission_id","zenodo_record_id","zenodo_receipt_json",
+      "file_count","records_downloaded")
+    if(!all(required %in% names(tab)))stop("Invalid manual RIS registry schema",call.=FALSE)
+    # The registry's review_key is derived from the same review_id.
+    candidates<-tab[!is.na(tab$review_key) &
+      as.character(tab$review_key)==review,,drop=FALSE]
+    if(nrow(candidates)){
+      if(anyDuplicated(candidates$submission_id))stop("Duplicate manual RIS submission ID",call.=FALSE)
+      manual<-lapply(seq_len(nrow(candidates)),function(i){
+        z<-candidates[i,,drop=FALSE]
+        record_id<-as.character(z$zenodo_record_id[[1L]])
+        if(is.na(record_id)||!grepl("^[0-9]+$",record_id))
+          stop("Invalid manual RIS Zenodo record ID",call.=FALSE)
+        receipt_text<-as.character(z$zenodo_receipt_json[[1L]])
+        if(is.na(receipt_text)||!nzchar(receipt_text))
+          stop("Manual RIS submission is missing its Zenodo receipt",call.=FALSE)
+        receipt_data<-fromJSON(receipt_text,simplifyVector=FALSE)
+        list(submission_id=as.character(z$submission_id[[1L]]),
+          zenodo_record_id=record_id,
+          receipt=receipt_data,
+          file_count=as.integer(z$file_count[[1L]]),
+          records_downloaded=as.integer(z$records_downloaded[[1L]]))
+      })
+    }
+  }
+  manifest<-list(schema="living-evidence-map-workflow01-review-input-references-v1",
+    review_id=review,google_sheet_id=sheet,
+    w00=list(github_run_id=run,zenodo_record_id=record,receipt=receipt),
+    manual_ris=manual,
+    generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"))
+  dir.create(dirname(destination),recursive=TRUE,showWarnings=FALSE)
+  write_json(manifest,destination,auto_unbox=TRUE,pretty=TRUE,null="null")
+  cat("PASS: W01 input manifest includes ",length(manual)," manual RIS submission(s)\n",sep="")
+}
