@@ -24,6 +24,16 @@ x <- fromJSON(catalogue_path,simplifyVector=FALSE)
 if (!identical(x$schema,"living-evidence-map-workflow01-source-catalogue-v1")) {
   stop("Unsupported Workflow 01 source catalogue schema",call.=FALSE)
 }
+# Preserve explicit review routing in downstream W01 manifests, without changing legacy inputs.
+review_id <- x$review_id
+sheet_id <- x$google_sheet_id
+if (!is.null(review_id) || !is.null(sheet_id)) {
+  if (is.null(review_id) || is.null(sheet_id) ||
+      length(review_id)!=1L || length(sheet_id)!=1L ||
+      !nzchar(as.character(review_id)) || !nzchar(as.character(sheet_id))) {
+    stop("Review-specific catalogue requires both review_id and google_sheet_id",call.=FALSE)
+  }
+}
 sources <- x$sources
 if (is.null(sources) || !length(sources) || is.null(names(sources))) stop("Source catalogue contains no sources",call.=FALSE)
 
@@ -105,6 +115,8 @@ manifest <- list(
   schema="living-evidence-map-workflow01-source-inputs-v1",
   status="validated",
   sources=input_paths,
+  review_id=review_id,
+  google_sheet_id=sheet_id,
   manual_ris_registries=manual_restored,
   generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
