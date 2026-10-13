@@ -176,6 +176,23 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
 
+      - name: Prevent ambiguous review-specific production routing
+        env:
+          LEM_EXECUTION_PATHWAY: ${{ inputs.execution_pathway }}
+          LEM_REVIEW_ID: ${{ inputs.review_id }}
+          LEM_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$LEM_REVIEW_ID" ] || [ -n "$LEM_REVIEW_SHEET_ID" ]; then
+            test -n "$LEM_REVIEW_ID" && test -n "$LEM_REVIEW_SHEET_ID" || {
+              echo "W01 requires both review_id and review_sheet_id" >&2
+              exit 1
+            }
+            echo "Review-specific W01 processing must use the validated review input catalogue and Sheet routing; not yet enabled." >&2
+            exit 1
+          fi
+
       - name: Validate explicit first-run contract
         env:
           LEM_FIRST_RUN: ${{ inputs.first_run || false }}
