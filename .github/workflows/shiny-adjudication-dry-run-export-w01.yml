@@ -2,6 +2,19 @@ name: Export completed Shiny W01 decisions
 
 on:
   workflow_dispatch:
+    inputs:
+      review_id:
+        description: 'Review identity; must match Google Sheet review_metadata'
+        required: false
+        type: string
+      google_sheet_id:
+        description: 'Review-specific Google Sheet ID'
+        required: false
+        type: string
+      checkpoint_run_id:
+        description: 'Originating W01 GitHub run ID'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -23,7 +36,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-      LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+      LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+      W01_REVIEW_ID: ${{ inputs.review_id }}
+      W01_CHECKPOINT_RUN_ID: ${{ inputs.checkpoint_run_id }}
       DECISIONS_TAB: 'decisions'
       REPAIRS_TAB: 'w01_data_quality_repairs'
       WORKFLOW01_BRANCH: main
@@ -49,6 +64,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/w01-return"
           Rscript scripts/updater/workflow_01_select_pending_checkpoint.R \
+            --run-id "$W01_CHECKPOINT_RUN_ID" \
             --output "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json"
           FOUND="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(tolower(as.character(isTRUE(x$found))))' "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json")"
           echo "HAS_PENDING=$FOUND" >> "$GITHUB_ENV"
@@ -132,6 +148,15 @@ jobs:
 
           gs4_auth(path = Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"), cache = FALSE)
           sheet_id <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
+          review_id <- Sys.getenv("W01_REVIEW_ID")
+          if(!nzchar(sheet_id)) stop("W01 Google Sheet ID is missing")
+          if(nzchar(review_id)) {
+            meta <- read_sheet(sheet_id,sheet="review_metadata",col_types="cc")
+            if(!all(c("key","value") %in% names(meta))) stop("Invalid review_metadata schema")
+            actual <- as.character(meta$value[match("review_id",meta$key)])
+            if(length(actual)!=1L || is.na(actual) || !identical(actual,review_id))
+              stop("W01 review ID does not match Google Sheet review_metadata")
+          }
           tab <- Sys.getenv("DECISIONS_TAB")
           if (!tab %in% sheet_names(sheet_id)) stop("Google Sheet decisions tab is missing")
 
@@ -304,6 +329,8 @@ jobs:
             schema="living-evidence-map-workflow01-shiny-handoff-v1",
             status="ready",
             checkpoint_pointer_path=Sys.getenv("POINTER"),
+            review_id=Sys.getenv("W01_REVIEW_ID"),
+            google_sheet_id=Sys.getenv("LEM_GOOGLE_SHEET_ID"),
             checkpoint_run_id=as.character(em$checkpoint_run_id),
             checkpoint_zenodo_record_id=as.character(em$checkpoint_zenodo_record_id),
             queue_cases=as.integer(em$queue_cases),
