@@ -216,7 +216,18 @@ jobs:
              !identical(as.character(sources$google_sheet_id),as.character(union$google_sheet_id)) ||
              !identical(names(sources$sources),names(union$sources)))
             stop("W01 preflight union provenance mismatch",call.=FALSE)
-          cat("PASS: review-specific W01 union generated with preserved review identity and source order\n")
+          count_records <- function(path) sum(nzchar(trimws(readLines(path,warn=FALSE,encoding="UTF-8"))))
+          actual <- vapply(union$sources,function(z)count_records(as.character(z)),integer(1))
+          expected <- vapply(sources$sources,function(z)count_records(as.character(z)),integer(1))
+          if(!identical(actual,expected))
+            stop("W01 preflight union changed source manifestation counts",call.=FALSE)
+          summary <- read.csv(file.path(root,"w01-reviewed-union","union_source_counts.csv"),stringsAsFactors=FALSE)
+          if(!identical(as.character(summary$source),names(sources$sources)) ||
+             any(summary$preserved_old!=0L) ||
+             !identical(as.integer(summary$union_total),unname(actual)))
+            stop("W01 first-run union count reconciliation failed",call.=FALSE)
+          cat(sprintf("PASS: review-specific W01 union: %d sources, %d manifestations, stable review identity and source order\\n",
+                      length(actual),sum(actual)))
           RS
           rm -rf "$RUNNER_TEMP/w01-restored-w00" "$RUNNER_TEMP/w01-restored-manual-ris"
           rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
