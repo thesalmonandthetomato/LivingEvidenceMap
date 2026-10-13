@@ -30,6 +30,10 @@ previous_pointer <- arg("--previous-pointer")
 workflow00_pointer <- arg("--workflow00-pointer")
 output_dir <- arg("--output-dir")
 run_id <- arg("--run-id")
+expected_review_id <- arg("--review-id",NULL)
+expected_sheet_id <- arg("--review-sheet-id",NULL)
+if(xor(is.null(expected_review_id),is.null(expected_sheet_id)))
+  stop("Checkpoint requires both review ID and Google Sheet ID",call.=FALSE)
 required <- list(previous_root,current_seed_root,incremental_rescore,adjudications,review_package,
                  pre_summary,metadata_path,workflow00_pointer,output_dir,run_id)
 if(any(vapply(required,is.null,logical(1)))) stop("Missing required checkpoint argument",call.=FALSE)
@@ -60,6 +64,14 @@ if(!file.exists(source_inputs_path)) stop("Current seed lacks authoritative sour
 source_inputs <- fromJSON(source_inputs_path,simplifyVector=FALSE)
 if(!identical(source_inputs$schema,"living-evidence-map-workflow01-source-inputs-v1")) {
   stop("Unsupported current-seed source-input manifest schema",call.=FALSE)
+}
+if(!is.null(expected_review_id)) {
+  if(!nzchar(expected_review_id) || !nzchar(expected_sheet_id) ||
+     !identical(as.character(source_inputs$review_id),expected_review_id) ||
+     !identical(as.character(source_inputs$google_sheet_id),expected_sheet_id))
+    stop("Checkpoint source-input review identity mismatch",call.=FALSE)
+} else if(xor(is.null(source_inputs$review_id),is.null(source_inputs$google_sheet_id))) {
+  stop("Checkpoint source-input manifest has incomplete review identity",call.=FALSE)
 }
 source_order <- names(source_inputs$sources)
 if(is.null(source_order) || !length(source_order) || anyDuplicated(source_order)) {
@@ -150,12 +162,16 @@ file.copy(files,file.path(output_dir,"human_review_package"),recursive=TRUE,over
 prev <- if (first_run) NULL else fromJSON(previous_pointer,simplifyVector=FALSE)
 w00 <- fromJSON(workflow00_pointer,simplifyVector=FALSE)
 review_manifest <- fromJSON(file.path(output_dir,"human_review_package","review_manifest.json"),simplifyVector=FALSE)
+if(!is.null(expected_review_id) && !identical(as.character(w00$review_id),expected_review_id))
+  stop("Checkpoint W00 review identity mismatch",call.=FALSE)
 manifest <- list(
   schema="living-evidence-map-workflow01-pending-checkpoint-v1",
   workflow="01",
   state="pre_adjudication",
   github_run_id=as.character(run_id),
   first_run=first_run,
+  review_id=source_inputs$review_id,
+  google_sheet_id=source_inputs$google_sheet_id,
   previous_workflow01=if (first_run) NULL else list(
     github_run_id=as.character(prev$github_run_id),
     zenodo_record_id=as.character(prev$zenodo_record_id),
