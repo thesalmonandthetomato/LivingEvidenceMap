@@ -193,6 +193,7 @@ jobs:
               stop("W01 resume review identity and Sheet do not match")
           }
           if(!grepl("^[A-Za-z0-9_-]+$",sheet_id)) stop("Invalid W01 Sheet ID")
+          cat(paste0("LEM_REVIEW_ID=",review_id,"\n"),file=Sys.getenv("GITHUB_ENV"),append=TRUE)
           cat(paste0("LEM_GOOGLE_SHEET_ID=",sheet_id,"\n"),
               file=Sys.getenv("GITHUB_ENV"),append=TRUE)
 
@@ -219,6 +220,24 @@ jobs:
           test -s "$CHECKPOINT_DIR/checkpoint_manifest.json"
           FIRST_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("CHECKPOINT_DIR"),"checkpoint_manifest.json"));cat(tolower(as.character(isTRUE(x$first_run))))')"
           echo "LEM_FIRST_RUN=$FIRST_RUN" >> "$GITHUB_ENV"
+          # Bind the originating review to the restored checkpoint before any decisions are applied.
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(jsonlite))
+          cm <- fromJSON(file.path(Sys.getenv("CHECKPOINT_DIR"),"checkpoint_manifest.json"),simplifyVector=FALSE)
+          handoff_file <- "outputs/resume_inputs/handoff_selection.json"
+          h <- if(file.exists(handoff_file)) fromJSON(handoff_file,simplifyVector=FALSE) else list()
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          review <- as.character(h$review_id %||% "")
+          sheet <- as.character(h$google_sheet_id %||% "")
+          if(nzchar(review) || nzchar(sheet)) {
+            if(!nzchar(review) || !nzchar(sheet) ||
+               !identical(as.character(cm$review_id),review) ||
+               !identical(as.character(cm$google_sheet_id),sheet))
+              stop("W01 resume checkpoint and handoff review identities disagree",call.=FALSE)
+          } else if(!is.null(cm$review_id) || !is.null(cm$google_sheet_id)) {
+            stop("Review-specific checkpoint cannot resume without an identified handoff",call.=FALSE)
+          }
+          RS
           test -s "$CHECKPOINT_DIR/previous_workflow01_pointer.json"
           test -s "$CHECKPOINT_DIR/incremental_rescored_pairs.csv"
           test -s "$CHECKPOINT_DIR/all_adjudications.jsonl"
@@ -548,7 +567,7 @@ jobs:
             --message "Workflow 01 decisions applied; validated delta archived and registered."
 
       - name: Trigger Workflow 02 after resumed Workflow 01
-        if: ${{ env.LEM_FIRST_RUN != 'true' }}
+        if: ${{ env.LEM_FIRST_RUN != 'true' && env.LEM_REVIEW_ID == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
