@@ -146,7 +146,7 @@ jobs:
               --output-root "$RUNNER_TEMP/w01-restored-manual-ris"
           # Prepare each review-specific API source with its existing W01 adapter.
           mkdir -p "$RUNNER_TEMP/w01-prepared-api"
-          mapfile -t REVIEW_SOURCES < <(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(paste(unlist(x$sources,use.names=FALSE),collapse="\\n"))' "$RUNNER_TEMP/review-w00-pointer.json")
+          mapfile -t REVIEW_SOURCES < <(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(unlist(x$sources,use.names=FALSE),sep=intToUtf8(10))' "$RUNNER_TEMP/review-w00-pointer.json")
           for source in "${REVIEW_SOURCES[@]}"; do
             root="$RUNNER_TEMP/w01-restored-w00/$source"
             out="$RUNNER_TEMP/w01-prepared-api/$source"
