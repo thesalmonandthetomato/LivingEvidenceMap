@@ -176,7 +176,7 @@ jobs:
                   esac
                   Rscript scripts/updater/workflow_01x_europe_pmc_sidecar_adapter.R \
                     --input-dir "$root" --output-dir "$out" \
-                    --source-code "$code" --source-slug "$source" --source-collection "$source"
+                    --source-code "$code" --source-slug "$source" --source-collection "$source" --allow-empty true
                   mv "$out/${source}_sidecar_records.jsonl" "$out/records.jsonl"
                 fi
                 ;;
