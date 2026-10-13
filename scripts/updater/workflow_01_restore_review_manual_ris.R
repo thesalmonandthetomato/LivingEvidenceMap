@@ -55,7 +55,7 @@ for(j in seq_along(manual)){
   bucket <- as.character(dep$links$bucket)
   if(!grepl("^https://zenodo.org/",bucket))
     stop("Unexpected Zenodo download bucket",call.=FALSE)
-  folder <- file.path(output_root,sprintf("submission-%04d",j))
+  folder <- file.path(output_root,paste0("submission-",as.character(z$submission_id)))
   ris_dir <- file.path(folder,"ris")
   dir.create(ris_dir,recursive=TRUE)
   files <- rec$files
@@ -69,7 +69,7 @@ for(j in seq_along(manual)){
     if(!identical(tolower(digest(file=dest,algo="sha256",serialize=FALSE)),expected))
       stop("RIS archive checksum mismatch",call.=FALSE)
   }
-  source <- paste0("manual_",sprintf("%04d",j))
+  source <- paste0("manual_",substr(digest(as.character(z$submission_id),algo="sha256",serialize=FALSE),1L,16L))
   target <- file.path(folder,"records.jsonl")
   cmd <- system2(file.path(R.home("bin"),"Rscript"),
     c("scripts/updater/workflow_01_generic_ris_to_sidecar.R",
