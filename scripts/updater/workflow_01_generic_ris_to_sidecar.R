@@ -37,7 +37,7 @@ parse_ris <- function(path) {
   for(line in lines) {
     if(grepl("^TY  -",line)) {
       if(!is.null(current)) stop("Nested TY in ",basename(path),call.=FALSE)
-      current <- list(); last <- NULL
+      current <- list(TY=trimws(sub("^TY  -[[:space:]]?","",line))); last <- NULL
     } else if(grepl("^ER  -",line)) {
       if(is.null(current)) stop("Unexpected ER in ",basename(path),call.=FALSE)
       records[[length(records)+1L]] <- current
@@ -82,7 +82,7 @@ for(file in files) {
     pages <- first(x,c("PG"))
     if(is.null(pages) && !is.null(page_start))
       pages <- if(is.null(page_end)) page_start else paste0(page_start,"-",page_end)
-    stable_id <- paste(source,submission,hash,sprintf("%06d",i),sep=":")
+    stable_id <- paste(source,submission,basename(file),hash,sprintf("%06d",i),sep=":")
     out[[length(out)+1L]] <- list(
       sidecar_identity=list(sidecar_record_id=stable_id,source_record_id=origin_id,
         doi=doi),
