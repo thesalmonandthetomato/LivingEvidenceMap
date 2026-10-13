@@ -58,6 +58,20 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c("googlesheets4","jsonlite","digest","httr2"))
 
+      - name: Validate review-specific dispatch identity
+        env:
+          W01_EXPLICIT_REVIEW: ${{ inputs.review_id }}
+          W01_EXPLICIT_SHEET: ${{ inputs.google_sheet_id }}
+          W01_EXPLICIT_RUN: ${{ inputs.checkpoint_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$W01_EXPLICIT_REVIEW" ] || [ -n "$W01_EXPLICIT_SHEET" ] || [ -n "$W01_EXPLICIT_RUN" ]; then
+            test -n "$W01_EXPLICIT_REVIEW" || { echo "W01 review_id required for review-specific dispatch" >&2; exit 1; }
+            test -n "$W01_EXPLICIT_SHEET" || { echo "W01 google_sheet_id required for review-specific dispatch" >&2; exit 1; }
+            [[ "$W01_EXPLICIT_RUN" =~ ^[0-9]+$ ]] || { echo "W01 checkpoint_run_id required for review-specific dispatch" >&2; exit 1; }
+          fi
+
       - name: Select unresolved W01 checkpoint
         shell: bash
         run: |
