@@ -28,6 +28,8 @@ cm_path <- file.path(checkpoint_dir,"checkpoint_manifest.json")
 if(!file.exists(cm_path)) stop("checkpoint_manifest.json missing",call.=FALSE)
 cm <- fromJSON(cm_path,simplifyVector=FALSE)
 if(!identical(cm$schema,"living-evidence-map-workflow01-pending-checkpoint-v1")) stop("Unsupported checkpoint schema",call.=FALSE)
+if(xor(is.null(cm$review_id),is.null(cm$google_sheet_id)))
+  stop("Checkpoint has incomplete review-specific identity",call.=FALSE)
 
 archive_dir <- file.path(output_dir,"archive_files")
 dir.create(archive_dir,recursive=TRUE,showWarnings=FALSE)
@@ -49,6 +51,8 @@ manifest <- list(
   github_run_id=as.character(run_id),
   github_run_url=run_url,
   repository=repository,
+  review_id=cm$review_id,
+  google_sheet_id=cm$google_sheet_id,
   previous_workflow01=cm$previous_workflow01,
   workflow00=cm$workflow00,
   new_source_manifestations=cm$new_source_manifestations,
@@ -134,6 +138,8 @@ receipt <- list(
   state="pre_adjudication",
   github_run_id=as.character(run_id),
   github_run_url=run_url,
+  review_id=cm$review_id,
+  google_sheet_id=cm$google_sheet_id,
   previous_github_run_id=as.character(cm$previous_workflow01$github_run_id),
   previous_zenodo_record_id=as.character(cm$previous_workflow01$zenodo_record_id),
   previous_manifest_sha256=as.character(cm$previous_workflow01$manifest_sha256),
