@@ -65,7 +65,25 @@ if(!is.na(manifest_flag)){
         if(is.na(receipt_text)||!nzchar(receipt_text))
           stop("Manual RIS submission is missing its Zenodo receipt",call.=FALSE)
         receipt_data<-fromJSON(receipt_text,simplifyVector=FALSE)
-        list(submission_id=as.character(z$submission_id[[1L]]),
+        submission<-as.character(z$submission_id[[1L]])
+        if(!identical(as.character(receipt_data$status), "published") ||
+           !identical(as.character(receipt_data$review_id), review) ||
+           !identical(as.character(receipt_data$submission_id), submission) ||
+           !identical(as.character(receipt_data$zenodo_record_id), record_id))
+          stop("Manual RIS receipt does not match registered review/submission/record",call.=FALSE)
+        files<-receipt_data$files
+        nfiles<-suppressWarnings(as.integer(z$file_count[[1L]]))
+        nrecords<-suppressWarnings(as.integer(z$records_downloaded[[1L]]))
+        if(is.na(nfiles)||nfiles<1L||is.na(nrecords)||nrecords<0L||
+           length(files)!=nfiles)
+          stop("Manual RIS file or record counts do not match receipt",call.=FALSE)
+        names_in_archive<-vapply(files,function(x)as.character(x$archive_name),character(1))
+        hashes<-vapply(files,function(x)as.character(x$sha256),character(1))
+        if(any(!grepl("^[0-9]{3}_[A-Za-z0-9._-]+$",names_in_archive)) ||
+           anyDuplicated(names_in_archive) ||
+           any(!grepl("^[0-9a-fA-F]{64}$",hashes)))
+          stop("Manual RIS receipt contains invalid files or checksums",call.=FALSE)
+        list(submission_id=submission,
           zenodo_record_id=record_id,
           receipt=receipt_data,
           file_count=as.integer(z$file_count[[1L]]),
