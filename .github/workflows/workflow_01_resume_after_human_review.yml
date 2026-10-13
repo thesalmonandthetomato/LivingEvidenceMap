@@ -237,6 +237,8 @@ jobs:
           } else if(!is.null(cm$review_id) || !is.null(cm$google_sheet_id)) {
             stop("Review-specific checkpoint cannot resume without an identified handoff",call.=FALSE)
           }
+          if(nzchar(review))
+            stop("Review-specific W01 resume remains disabled until isolated publication and reporting are validated",call.=FALSE)
           RS
           test -s "$CHECKPOINT_DIR/previous_workflow01_pointer.json"
           test -s "$CHECKPOINT_DIR/incremental_rescored_pairs.csv"
