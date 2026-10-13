@@ -163,6 +163,39 @@ jobs:
             echo "REPAIRS=$INPUT_REPAIRS" >> "$GITHUB_ENV"
           fi
 
+      - name: Resolve review-specific adjudication destination
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          W01_FALLBACK_SHEET: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({
+            library(jsonlite)
+            library(googlesheets4)
+          })
+          handoff_path <- "outputs/resume_inputs/handoff_selection.json"
+          handoff <- if(file.exists(handoff_path)) fromJSON(handoff_path,simplifyVector=FALSE) else list()
+          sheet_id <- if(is.null(handoff$google_sheet_id)) "" else as.character(handoff$google_sheet_id)
+          review_id <- if(is.null(handoff$review_id)) "" else as.character(handoff$review_id)
+          if(!nzchar(sheet_id)) sheet_id <- Sys.getenv("W01_FALLBACK_SHEET")
+          if(!nzchar(sheet_id)) stop("W01 resume Google Sheet is not configured")
+          if(nzchar(review_id)) {
+            credential <- Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON")
+            credential_path <- tempfile(fileext=".json")
+            on.exit(unlink(credential_path),add=TRUE)
+            if(file.exists(credential)) credential_path <- credential
+            else writeLines(credential,credential_path)
+            gs4_auth(path=credential_path,cache=FALSE)
+            meta <- read_sheet(sheet_id,sheet="review_metadata",col_types="cc")
+            if(!all(c("key","value") %in% names(meta))) stop("Invalid review metadata")
+            actual <- as.character(meta$value[match("review_id",meta$key)])
+            if(length(actual)!=1L || is.na(actual) || !identical(actual,review_id))
+              stop("W01 resume review identity and Sheet do not match")
+          }
+          if(!grepl("^[A-Za-z0-9_-]+$",sheet_id)) stop("Invalid W01 Sheet ID")
+          cat(paste0("LEM_GOOGLE_SHEET_ID=",sheet_id,"\n"),
+              file=Sys.getenv("GITHUB_ENV"),append=TRUE)
+
       - name: Validate resume inputs
         shell: bash
         run: |
@@ -464,7 +497,6 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -495,7 +527,6 @@ jobs:
       - name: Acknowledge consumed W01 Shiny batch
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
