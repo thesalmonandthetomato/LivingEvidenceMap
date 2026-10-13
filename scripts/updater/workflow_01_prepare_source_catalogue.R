@@ -64,6 +64,15 @@ for (src in names(sources)) {
   if (!file.exists(prepared)) {
     stop(sprintf("Prepared source input missing for %s: %s",src,prepared),call.=FALSE)
   }
+  # Verify the prepared file is exactly the one approved by the source catalogue.
+  declared_sha <- as.character(z$sha256 %||% "")
+  if (nzchar(declared_sha)) {
+    if (!grepl("^[0-9a-fA-F]{64}$",declared_sha))
+      stop(sprintf("Invalid catalogue SHA256 for %s",src),call.=FALSE)
+    actual_sha <- digest::digest(file=prepared,algo="sha256",serialize=FALSE)
+    if (!identical(tolower(declared_sha),tolower(actual_sha)))
+      stop(sprintf("Prepared source checksum mismatch for %s",src),call.=FALSE)
+  }
 
   expected_records <- suppressWarnings(as.integer(z$expected_records %||% NA_integer_))
   if (identical(kind,"workflow00_state") && !is.na(expected_records)) {
