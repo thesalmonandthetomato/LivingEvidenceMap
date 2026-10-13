@@ -1160,7 +1160,7 @@ jobs:
           if-no-files-found: error
 
       - name: Trigger Workflow 02 after successful Workflow 01
-        if: ${{ inputs.first_run != true && steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ inputs.first_run != true && inputs.review_id == '' && steps.adjudication.outputs.pending_count == '0' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
