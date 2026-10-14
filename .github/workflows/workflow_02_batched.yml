@@ -536,6 +536,14 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      - name: Retain enriched corpus for optional missing-abstract review
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-abstract-review-source-${{ github.run_id }}
+          path: outputs/workflow02/enriched.jsonl
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Build Workflow 02 human-review package
         id: human_review
         shell: bash
