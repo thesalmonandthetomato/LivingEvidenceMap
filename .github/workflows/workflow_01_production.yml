@@ -102,7 +102,9 @@ permissions:
   actions: write
 
 concurrency:
-  group: workflow01-production
+  # Serialize W01 runs within a review, without blocking independent reviews.
+  # Retain the legacy group when no explicit review identity is supplied.
+  group: ${{ inputs.review_id != '' && format('workflow01-review-{0}', inputs.review_id) || 'workflow01-production' }}
   cancel-in-progress: false
 
 env:
