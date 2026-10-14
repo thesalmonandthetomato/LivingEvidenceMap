@@ -117,6 +117,10 @@ for (src in names(sources)) {
   } else if (file.info(prepared)$size <= 0) {
     stop(sprintf("Prepared source input is empty for %s without an authoritative zero-result count: %s",src,prepared),call.=FALSE)
   }
+  # A review-specific source catalogue must supply immutable source checksums
+  # wherever its authoritative prepared API adapter records them.
+  if (!is.null(review_id) && identical(kind,"workflow00_state") && !nzchar(declared_sha))
+    stop(sprintf("Review-specific API source %s has no verified SHA256",src),call.=FALSE)
   input_paths[[src]] <- prepared
 }
 
