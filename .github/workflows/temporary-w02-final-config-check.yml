@@ -1,0 +1,23 @@
+name: Temporary final W02 pause check
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temporary-w02-final-config-check.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Actions contract and zero-case acknowledgement
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          "$(go env GOPATH)/bin/actionlint" -shellcheck= -color=false \
+            .github/workflows/workflow_02_batched_production.yml \
+            .github/workflows/workflow_02_batched.yml \
+            .github/workflows/workflow_02_resume_after_human_review.yml \
+            .github/workflows/workflow_02_optional_missing_abstracts.yml
+          echo "PASS: W02 GitHub Actions validation"
