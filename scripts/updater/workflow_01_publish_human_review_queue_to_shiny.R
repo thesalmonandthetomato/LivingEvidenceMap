@@ -42,6 +42,13 @@ if(any(schemas!="living-evidence-map-workflow01-duplicate-adjudication-case-v1")
 }
 
 manifest <- fromJSON(manifest_path,simplifyVector=FALSE)
+if(xor(is.null(manifest$review_id),is.null(manifest$google_sheet_id)))
+  stop("Human-review manifest contains incomplete review identity",call.=FALSE)
+if(!is.null(manifest$review_id)) {
+  if(!nzchar(as.character(manifest$review_id)) ||
+     !identical(as.character(manifest$google_sheet_id),as.character(sheet_id)))
+    stop("Refusing to publish W01 human-review queue to another review's Google Sheet",call.=FALSE)
+}
 expected_sha <- as.character(manifest$queue_sha256)
 if(!nzchar(expected_sha)) stop("review_manifest.json has no queue_sha256",call.=FALSE)
 actual_sha <- digest(file=queue_path,algo="sha256",serialize=FALSE)
