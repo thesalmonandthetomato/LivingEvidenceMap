@@ -301,6 +301,64 @@ jobs:
           path: review_w01_handoff/
           retention-days: 7
           if-no-files-found: error
+  review-handoff-consumer:
+    # Validate the actual cross-job artifact boundary before review-specific
+    # production is enabled; this job never scores or publishes records.
+    needs: review-input-preflight
+    if: ${{ inputs.review_id != '' && inputs.review_sheet_id != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install handoff verification dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+      - uses: actions/download-artifact@v4
+        with:
+          name: workflow01-review-handoff-${{ github.run_id }}
+          path: review_w01_handoff
+      - name: Verify portable W01 handoff in a fresh production runner
+        env:
+          EXPECTED_REVIEW_ID: ${{ inputs.review_id }}
+          EXPECTED_SHEET_ID: ${{ inputs.review_sheet_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript - <<'RS'
+          library(jsonlite)
+          library(digest)
+          root <- "review_w01_handoff"
+          m <- fromJSON(file.path(root,"source_inputs.json"),simplifyVector=FALSE)
+          h <- fromJSON(file.path(root,"handoff_manifest.json"),simplifyVector=FALSE)
+          if(!identical(h$schema,"living-evidence-map-workflow01-portable-handoff-v1") ||
+             !identical(m$schema,"living-evidence-map-workflow01-source-inputs-v1") ||
+             !identical(as.character(h$review_id),Sys.getenv("EXPECTED_REVIEW_ID")) ||
+             !identical(as.character(m$review_id),Sys.getenv("EXPECTED_REVIEW_ID")) ||
+             !identical(as.character(h$google_sheet_id),Sys.getenv("EXPECTED_SHEET_ID")) ||
+             !identical(as.character(m$google_sheet_id),Sys.getenv("EXPECTED_SHEET_ID")))
+            stop("Review identity mismatch in downloaded W01 handoff",call.=FALSE)
+          if(!identical(digest(file=file.path(root,"source_inputs.json"),algo="sha256",serialize=FALSE),
+                        as.character(h$source_inputs_sha256)))
+            stop("Downloaded W01 source manifest checksum mismatch",call.=FALSE)
+          if(!identical(names(m$sources),names(h$sources)) ||
+             !identical(names(m$sources),unlist(h$source_order,use.names=FALSE)))
+            stop("W01 source order changed across Actions jobs",call.=FALSE)
+          for(src in names(m$sources)) {
+            declared <- as.character(m$sources[[src]])
+            if(!identical(declared,paste0("review_w01_handoff/sources/",src,".jsonl")) ||
+               !file.exists(declared) ||
+               !identical(digest(file=declared,algo="sha256",serialize=FALSE),
+                          as.character(h$sources[[src]])))
+              stop("Downloaded W01 source mismatch: ",src,call.=FALSE)
+          }
+          cat(sprintf("PASS: verified %d review-specific W01 sources across GitHub Actions jobs\\n",
+                      length(m$sources)))
+          RS
   workflow01:
     if: ${{ inputs.review_id == '' && inputs.review_sheet_id == '' && inputs.execution_pathway != 'shiny' }}
     runs-on: ubuntu-latest
