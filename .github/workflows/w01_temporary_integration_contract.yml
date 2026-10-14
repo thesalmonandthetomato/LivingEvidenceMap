@@ -1,0 +1,42 @@
+name: Temporary W01 Shiny integration contract check
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/w01_temporary_integration_contract.yml']
+permissions:
+  contents: read
+jobs:
+  integration-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check workflow YAML and review-specific launch/resume contracts
+        shell: python
+        run: |
+          from pathlib import Path
+          import yaml
+          root=Path('.github/workflows')
+          prod=(root/'workflow_01_production.yml').read_text()
+          resume=(root/'workflow_01_resume_after_human_review.yml').read_text()
+          export=(root/'shiny-adjudication-dry-run-export-w01.yml').read_text()
+          for name,source in [('production',prod),('resume',resume),('export',export)]:
+              parsed=yaml.safe_load(source)
+              assert 'jobs' in parsed and len(parsed['jobs']), name+' invalid jobs'
+          required_prod=['run_review_llm:', 'review-handoff-consumer:', 'review_w01_handoff/w00_pointer.json',
+                         'workflow_01_build_pending_checkpoint.R','workflow_01_archive_pending_checkpoint_to_zenodo.R',
+                         'workflow_01_publish_human_review_queue_to_shiny.R',
+                         'workflow_01_archive_state_to_zenodo.R',
+                         'docs/deduplication/reviews/']
+          for item in required_prod: assert item in prod, 'Production missing '+item
+          assert "inputs.review_id == '' && inputs.review_sheet_id == ''" in prod
+          assert 'inputs.run_review_llm == true' in prod
+          for item in ['LEM_REVIEW_ID','docs/deduplication/reviews/','review-sheet-id "$LEM_GOOGLE_SHEET_ID"',
+                       "env.LEM_REVIEW_ID == ''"]: 
+              assert item in resume, 'Resume missing '+item
+          for item in ['W01_REVIEW_ID','W01_CHECKPOINT_RUN_ID','--checkpoint-dir "$REVIEW_CHECKPOINT_DIR"',
+                       'workflow_01_select_pending_checkpoint.R']:
+              assert item in export, 'Export missing '+item
+          scripts=['workflow_01_build_pending_checkpoint.R','workflow_01_archive_pending_checkpoint_to_zenodo.R',
+                   'workflow_01_select_pending_checkpoint.R','workflow_01_select_ready_handoff.R']
+          for script in scripts: assert (Path('scripts/updater')/script).is_file(), 'Missing '+script
+          print('PASS: W01 review-scoped launch, checkpoint, export and resume contracts present; no deduplication executed')
