@@ -15,6 +15,10 @@ on:
         required: false
         default: ''
         type: string
+      execution_pathway:
+        required: false
+        default: 'github'
+        type: string
       previous_workflow02_pointer_path:
         required: false
         default: ''
@@ -72,6 +76,12 @@ on:
         required: false
         default: ''
         type: string
+      execution_pathway:
+        description: 'Inherited workflow execution pathway'
+        required: false
+        default: 'github'
+        type: choice
+        options: [github, shiny]
       workflow01_pointer_path:
         description: 'Authoritative Workflow 01 Zenodo pointer'
         required: true
