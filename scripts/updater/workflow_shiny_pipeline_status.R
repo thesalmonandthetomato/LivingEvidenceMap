@@ -45,7 +45,7 @@ if(is.null(stage)||!nzchar(stage)) stop("--stage is required",call.=FALSE)
 if(is.null(sheet_id)||!nzchar(sheet_id)||is.null(credential)||!file.exists(credential)) stop("Google Sheet credential/id missing",call.=FALSE)
 
 cols <- c(
-  "event_id","update_id","event_at_utc","stage","workflow_run_id",
+  "event_id","update_id","review_id","google_sheet_id","event_at_utc","stage","workflow_run_id",
   "last_search_date","canonical_existing","search_results_total","search_results_update",
   "deduplicated_records","enriched_records","retracted_records",
   "screened_include","screened_exclude","species_records",
@@ -54,6 +54,12 @@ cols <- c(
 )
 
 gs4_auth(path=credential,cache=FALSE)
+metadata <- read_sheet(sheet_id,sheet="review_metadata",col_types="cc")
+if(!all(c("key","value") %in% names(metadata))) stop("Invalid review metadata",call.=FALSE)
+review_id <- as.character(metadata$value[match("review_id",metadata$key)])
+if(length(review_id)!=1L || is.na(review_id) ||
+   !grepl("^[A-Za-z0-9._-]{3,128}$",review_id))
+  stop("Missing valid review_id in review_metadata",call.=FALSE)
 tabs <- sheet_names(sheet_id)
 if(!tab %in% tabs){
   sheet_add(sheet_id,sheet=tab)
@@ -72,7 +78,10 @@ if(length(miss)){
   cat(sprintf("PASS: migrated pipeline_run_status schema; added columns: %s\n",paste(miss,collapse=", ")))
 }
 if(nrow(x)){
-  prev <- x[as.character(x$update_id)==update_id,,drop=FALSE]
+  prev <- x[!is.na(x$review_id)&!is.na(x$google_sheet_id)&
+            as.character(x$review_id)==review_id&
+            as.character(x$google_sheet_id)==sheet_id&
+            as.character(x$update_id)==update_id,,drop=FALSE]
   latest <- if(nrow(prev)) prev[nrow(prev),,drop=FALSE] else NULL
 } else latest <- NULL
 
@@ -108,7 +117,7 @@ value <- function(nm){
 now <- format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 event_id <- paste0("pipeline-status-",substr(digest(paste(update_id,stage,workflow_run_id,now,sep="|"),algo="sha256",serialize=FALSE),1,24))
 row <- data.frame(
-  event_id=event_id,update_id=update_id,event_at_utc=now,stage=stage,
+  event_id=event_id,update_id=update_id,review_id=review_id,google_sheet_id=sheet_id,event_at_utc=now,stage=stage,
   workflow_run_id=as.character(workflow_run_id),
   last_search_date=value("last_search_date"),
   canonical_existing=value("canonical_existing"),
