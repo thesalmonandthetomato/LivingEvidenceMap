@@ -245,6 +245,44 @@ jobs:
           cat(sprintf("PASS: review-specific W01 union: %d sources, %d manifestations, stable review identity and source order\\n",
                       length(actual),sum(actual)))
           RS
+          # Export an immutable, portable copy of this verified 28-source handoff.
+          # The production job can consume this artefact without rerunning W00,
+          # and with no changes to the deduplication algorithms.
+          mkdir -p review_w01_handoff/sources
+          Rscript - <<'RS'
+          library(jsonlite)
+          library(digest)
+          root <- Sys.getenv("RUNNER_TEMP")
+          m <- fromJSON(file.path(root,"review-w01-source-inputs.json"),simplifyVector=FALSE)
+          if(!identical(m$schema,"living-evidence-map-workflow01-source-inputs-v1") ||
+             !nzchar(as.character(m$review_id)) ||
+             !nzchar(as.character(m$google_sheet_id)) ||
+             is.null(names(m$sources)) || !length(m$sources))
+            stop("Cannot export W01 handoff without validated review identity",call.=FALSE)
+          originals <- vapply(m$sources,as.character,character(1))
+          if(any(!grepl("^[a-z0-9][a-z0-9_-]*$",names(originals))))
+            stop("Invalid W01 handoff source identifier",call.=FALSE)
+          portable <- setNames(paste0("review_w01_handoff/sources/",names(originals),".jsonl"),names(originals))
+          hashes <- setNames(character(length(originals)),names(originals))
+          for(src in names(originals)) {
+            if(!file.exists(originals[[src]]) ||
+               !file.copy(originals[[src]],portable[[src]],overwrite=FALSE))
+              stop("Unable to stage verified W01 source ",src,call.=FALSE)
+            old_sha <- digest(file=originals[[src]],algo="sha256",serialize=FALSE)
+            new_sha <- digest(file=portable[[src]],algo="sha256",serialize=FALSE)
+            if(!identical(old_sha,new_sha)) stop("W01 handoff source checksum changed: ",src,call.=FALSE)
+            hashes[[src]] <- new_sha
+          }
+          m$sources <- as.list(portable)
+          write_json(m,"review_w01_handoff/source_inputs.json",auto_unbox=TRUE,pretty=TRUE,null="null")
+          write_json(list(
+            schema="living-evidence-map-workflow01-portable-handoff-v1",
+            review_id=m$review_id,google_sheet_id=m$google_sheet_id,
+            sources=as.list(hashes),source_order=names(portable),
+            source_inputs_sha256=digest(file="review_w01_handoff/source_inputs.json",algo="sha256",serialize=FALSE)
+          ),"review_w01_handoff/handoff_manifest.json",auto_unbox=TRUE,pretty=TRUE,null="null")
+          cat(sprintf("PASS: staged portable, checksum-verified W01 handoff for %d sources\\n",length(portable)))
+          RS
           # Keep preflight outputs ephemeral and do not publish research records.
           rm -rf "$RUNNER_TEMP/w01-reviewed-union" "$RUNNER_TEMP/w01-empty-prior" \
             "$RUNNER_TEMP/w01-prepared-api" "$RUNNER_TEMP/w01-restored-w00" \
@@ -256,6 +294,13 @@ jobs:
             "$RUNNER_TEMP/review-w01-source-inputs.json"
           rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
           echo "PASS: shared W01 review-specific receipt and input preflight; deduplication intentionally disabled"
+      - name: Retain portable W01 source handoff for downstream production
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-review-handoff-${{ github.run_id }}
+          path: review_w01_handoff/
+          retention-days: 7
+          if-no-files-found: error
   workflow01:
     if: ${{ inputs.review_id == '' && inputs.review_sheet_id == '' && inputs.execution_pathway != 'shiny' }}
     runs-on: ubuntu-latest
