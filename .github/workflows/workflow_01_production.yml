@@ -284,11 +284,17 @@ jobs:
           }
           m$sources <- as.list(portable)
           write_json(m,"review_w01_handoff/source_inputs.json",auto_unbox=TRUE,pretty=TRUE,null="null")
+          # Preserve the exact review-specific W00 receipt for later checkpoint
+          # creation and resume. Never fall back to the legacy salmon registry.
+          w00_receipt <- file.path(Sys.getenv("RUNNER_TEMP"),"review-w00-pointer.json")
+          if(!file.copy(w00_receipt,"review_w01_handoff/w00_pointer.json",overwrite=FALSE))
+            stop("Unable to include authoritative review W00 receipt",call.=FALSE)
           write_json(list(
             schema="living-evidence-map-workflow01-portable-handoff-v1",
             review_id=m$review_id,google_sheet_id=m$google_sheet_id,
             sources=as.list(hashes),source_order=names(portable),
-            source_inputs_sha256=digest(file="review_w01_handoff/source_inputs.json",algo="sha256",serialize=FALSE)
+            source_inputs_sha256=digest(file="review_w01_handoff/source_inputs.json",algo="sha256",serialize=FALSE),
+            w00_pointer_sha256=digest(file="review_w01_handoff/w00_pointer.json",algo="sha256",serialize=FALSE)
           ),"review_w01_handoff/handoff_manifest.json",auto_unbox=TRUE,pretty=TRUE,null="null")
           cat(sprintf("PASS: staged portable, checksum-verified W01 handoff for %d sources\\n",length(portable)))
           RS
@@ -362,6 +368,10 @@ jobs:
           if(!identical(digest(file=file.path(root,"source_inputs.json"),algo="sha256",serialize=FALSE),
                         as.character(h$source_inputs_sha256)))
             stop("Downloaded W01 source manifest checksum mismatch",call.=FALSE)
+          if(!file.exists(file.path(root,"w00_pointer.json")) ||
+             !identical(digest(file=file.path(root,"w00_pointer.json"),algo="sha256",serialize=FALSE),
+                        as.character(h$w00_pointer_sha256)))
+            stop("Review-specific W00 receipt was altered during handoff",call.=FALSE)
           if(!identical(names(m$sources),names(h$sources)) ||
              !identical(names(m$sources),unlist(h$source_order,use.names=FALSE)))
             stop("W01 source order changed across Actions jobs",call.=FALSE)
