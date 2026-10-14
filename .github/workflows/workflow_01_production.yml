@@ -853,6 +853,7 @@ jobs:
             --state final \
             --review-id "${{ inputs.review_id }}" \
             --review-sheet-id "${{ inputs.review_sheet_id }}" \
+            --execution-pathway "${{ inputs.execution_pathway }}" \
             --output-dir outputs/zenodo
 
 
