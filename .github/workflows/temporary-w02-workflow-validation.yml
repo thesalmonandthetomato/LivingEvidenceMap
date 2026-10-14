@@ -1,0 +1,31 @@
+name: Temporary W02 workflow configuration check
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/temporary-w02-workflow-validation.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate changed YAML workflows
+        shell: bash
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 - <<'PY'
+          import yaml
+          for path in (
+              ".github/workflows/workflow_02_batched_production.yml",
+              ".github/workflows/workflow_02_batched.yml",
+              ".github/workflows/workflow_02_resume_after_human_review.yml",
+              ".github/workflows/workflow_01_resume_after_human_review.yml",
+              ".github/workflows/workflow_01_production.yml",
+          ):
+              with open(path,encoding="utf-8") as f:
+                  doc=yaml.safe_load(f)
+              assert isinstance(doc,dict) and "jobs" in doc, path
+              print("PASS YAML",path)
+          PY
