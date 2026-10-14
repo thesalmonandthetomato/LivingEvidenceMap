@@ -74,6 +74,15 @@ payload <- data.frame(
 )
 
 gs4_auth(path=credential_path,cache=FALSE)
+if(!is.null(manifest$review_id)) {
+  meta <- read_sheet(sheet_id,sheet="review_metadata",col_types="cc")
+  if(!all(c("key","value") %in% names(meta)))
+    stop("Review destination has invalid review_metadata",call.=FALSE)
+  rows <- as.character(meta$value[which(as.character(meta$key)=="review_id")])
+  if(length(rows)!=1L || is.na(rows) ||
+     !identical(rows,as.character(manifest$review_id)))
+    stop("W01 adjudication destination review_metadata does not match its source review",call.=FALSE)
+}
 tabs <- sheet_names(sheet_id)
 if(!tab %in% tabs) sheet_add(sheet_id,sheet=tab)
 sheet_write(payload,ss=sheet_id,sheet=tab)
