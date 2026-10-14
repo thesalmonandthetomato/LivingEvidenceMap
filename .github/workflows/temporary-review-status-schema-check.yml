@@ -1,0 +1,25 @@
+name: Temporary review-status schema validation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temporary-review-status-schema-check.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Validate review-specific status publisher syntax
+        shell: Rscript {0}
+        run: |
+          parse(file="scripts/updater/workflow_shiny_pipeline_status.R")
+          text <- paste(readLines("scripts/updater/workflow_shiny_pipeline_status.R",warn=FALSE),collapse="\n")
+          stopifnot(grepl('review_metadata',text,fixed=TRUE),
+                    grepl('google_sheet_id',text,fixed=TRUE),
+                    grepl('review_id',text,fixed=TRUE))
+          cat("PASS review-specific pipeline status publisher syntax\n")
