@@ -637,6 +637,23 @@ jobs:
             --source-run-id "$GITHUB_RUN_ID" \
             --message "Workflow 02 enrichment paused for human review."
 
+      - name: Publish Shiny optional pause without artificial adjudication cases
+        if: ${{ inputs.execution_pathway == 'shiny' && steps.human_review.outputs.requires_human_review != 'true' }}
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SHEET_ID"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_02_publish_optional_pause_to_shiny.R \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --inventory outputs/workflow02/automated_inventory.json \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
       - name: Mark Workflow 02 awaiting human review
         if: ${{ steps.human_review.outputs.pause_required == 'true' }}
         env:
