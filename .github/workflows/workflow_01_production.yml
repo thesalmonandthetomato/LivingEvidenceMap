@@ -359,6 +359,33 @@ jobs:
           cat(sprintf("PASS: verified %d review-specific W01 sources across GitHub Actions jobs\\n",
                       length(m$sources)))
           RS
+
+      - name: Execute existing W01 manifestation union and candidate generation
+        env:
+          EXPECTED_REVIEW_ID: ${{ inputs.review_id }}
+          EXPECTED_SHEET_ID: ${{ inputs.review_sheet_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow01_union outputs/workflow01_candidates previous_state/workflow01_seed
+          Rscript scripts/updater/workflow_01_deduplication_build_union.R \
+            --first-run true \
+            --old-dir previous_state/workflow01_seed \
+            --input-manifest review_w01_handoff/source_inputs.json \
+            --expected-review-id "$EXPECTED_REVIEW_ID" \
+            --expected-sheet-id "$EXPECTED_SHEET_ID" \
+            --expected-prior-manifestations 0 \
+            --output-dir outputs/workflow01_union
+          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
+            --first-run true \
+            --output-dir outputs/workflow01_candidates \
+            --score-n 1 \
+            --workflow01-run-id "$GITHUB_RUN_ID"
+          test -s outputs/workflow01_candidates/normalised_metadata.csv
+          test -s outputs/workflow01_candidates/incremental_summary.json
+          echo "PASS: W01 candidate generation executed against validated review inputs; LLM and publication disabled"
+
   workflow01:
     if: ${{ inputs.review_id == '' && inputs.review_sheet_id == '' && inputs.execution_pathway != 'shiny' }}
     runs-on: ubuntu-latest
