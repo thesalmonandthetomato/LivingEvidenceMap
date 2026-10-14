@@ -1,0 +1,19 @@
+# Temporary, one-shot validator. Delete after checking the run.
+name: Temporary W01 review input handoff validation
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/w01_temporary_handoff_validation.yml
+permissions:
+  contents: write
+  actions: write
+jobs:
+  check-review-handoff:
+    uses: ./.github/workflows/workflow_01_production.yml
+    with:
+      execution_pathway: github
+      review_id: almeria-map
+      review_sheet_id: 1wii1QjB4jM9OzOqboIgZn4z8CAN7W4EAyIKIyGcGjeU
+      first_run: false
+    secrets: inherit
