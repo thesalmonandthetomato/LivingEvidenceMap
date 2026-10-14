@@ -1134,6 +1134,8 @@ jobs:
             --delta-dir outputs/delta \
             --run-id "$GITHUB_RUN_ID" \
             --repository "$GITHUB_REPOSITORY" \
+            --review-id "${{ inputs.review_id }}" \
+            --review-sheet-id "${{ inputs.review_sheet_id }}" \
             --output-dir outputs/zenodo
 
       - name: Register delta and final run report
