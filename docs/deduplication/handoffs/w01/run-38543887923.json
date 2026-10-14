@@ -1,0 +1,15 @@
+{
+  "schema": "living-evidence-map-workflow01-shiny-handoff-v1",
+  "status": "ready",
+  "checkpoint_pointer_path": "docs/deduplication/reviews/almeria-map/checkpoints/run-38543887923.json",
+  "review_id": "almeria-map",
+  "google_sheet_id": "1wii1QjB4jM9OzOqboIgZn4z8CAN7W4EAyIKIyGcGjeU",
+  "checkpoint_run_id": "38543887923",
+  "checkpoint_zenodo_record_id": "23363756",
+  "queue_cases": 82,
+  "queue_sha256": "8353393e6fa2783b22f6928a77b9961c0d1688b601c1ccd4efd9ee5ed1d46ad7",
+  "export_run_id": "38561642690",
+  "decisions_artifact": "workflow01-human-decisions-38543887923-38561642690",
+  "decisions_export_sha256": "4e73f3a886a4e9738cb4615e36a79148b6f32f2502144a9c1c7c7c2fc250807e",
+  "created_at_utc": "2026-10-14T12:11:43Z"
+}
