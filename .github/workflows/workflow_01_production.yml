@@ -476,13 +476,19 @@ jobs:
 
       - name: Verify review-only model execution authorisation
         if: ${{ inputs.run_review_llm == true }}
+        env:
+          W01_REVIEW_ID: ${{ inputs.review_id }}
+          W01_REVIEW_SHEET_ID: ${{ inputs.review_sheet_id }}
+          W01_FIRST_RUN: ${{ inputs.first_run }}
+          W01_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          W01_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${{ inputs.review_id }}" && test -n "${{ inputs.review_sheet_id }}"
-          test "${{ inputs.first_run }}" = "true"
-          test -n "${{ secrets.OPENAI_API_KEY }}"
-          test -n "${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}"
+          test -n "$W01_REVIEW_ID" && test -n "$W01_REVIEW_SHEET_ID"
+          test "$W01_FIRST_RUN" = "true"
+          test -n "$W01_OPENAI_API_KEY"
+          test -n "$W01_GOOGLE_SERVICE_ACCOUNT_JSON"
           echo "Review-specific first-run model route authorised; legacy production remains isolated"
 
       - name: Preflight LLM adjudication budget
