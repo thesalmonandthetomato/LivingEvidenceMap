@@ -3,7 +3,7 @@
   "update_id": "w00-run-38069704382",
   "branch": "main",
   "started_at_utc": "2026-10-10T17:17:28Z",
-  "last_updated_at_utc": "2026-10-14T15:56:31Z",
+  "last_updated_at_utc": "2026-10-14T16:18:22Z",
   "first_run": true,
   "baseline": {
     "release_update_id": null,
@@ -155,7 +155,7 @@
   "counts": {
     "search_results": 13449,
     "deduplicated_records": 4212,
-    "enriched_records": 367,
+    "enriched_records": 0,
     "retraction_exclusions": 1,
     "screened_include": 2869,
     "screened_exclude": 1342,
@@ -177,10 +177,10 @@
       "status": "complete"
     },
     "W02": {
-      "status": "active"
+      "status": "complete"
     },
     "W03": {
-      "status": "pending"
+      "status": "active"
     },
     "W04": {
       "status": "pending"
@@ -204,14 +204,14 @@
       "status": "pending"
     },
     "current_stage": "W02",
-    "completed_through": 2,
-    "active_position": 3,
-    "status_label": "Enrichment awaiting human review"
+    "completed_through": 3,
+    "active_position": 4,
+    "status_label": "Enrichment complete; awaiting retraction screening"
   },
   "workflow_runs": {
     "W00": "38069704382",
     "W01": "38123211165",
-    "W02": "38592323037",
+    "W02": "38596583779",
     "W03": "38138355889",
     "W04": "38141909882",
     "W05": "38144786847",
