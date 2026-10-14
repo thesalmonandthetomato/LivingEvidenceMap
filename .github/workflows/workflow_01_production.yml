@@ -393,6 +393,45 @@ jobs:
           test -s outputs/workflow01_candidates/normalised_metadata.csv
           test -s outputs/workflow01_candidates/incremental_summary.json
           echo "PASS: W01 candidate generation executed against validated review inputs; LLM and publication disabled"
+          # Run the same deterministic scoring and classification stages as
+          # legacy production, without invoking an LLM or writing any result.
+          mkdir -p outputs/workflow01_identifier_assist outputs/workflow01_prescore \
+            outputs/workflow01_incremental_score outputs/workflow01_incremental_rescore \
+            outputs/workflow01_incremental_assisted
+          Rscript scripts/updater/workflow_01_identifier_assist_build.R \
+            --input-manifest outputs/workflow01_union/source_inputs.json \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-manifestations 0 \
+            --output-dir outputs/workflow01_identifier_assist
+          Rscript scripts/updater/workflow_01_identifier_prescore_collapse.R \
+            --candidates outputs/workflow01_candidates/all_candidate_pairs.csv \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --safe-edges outputs/workflow01_identifier_assist/safe_identifier_edges.csv \
+            --output-dir outputs/workflow01_prescore
+          N="$(Rscript -e "x<-data.table::fread('outputs/workflow01_prescore/all_candidate_pairs.csv');cat(max(2000L,nrow(x)))")"
+          Rscript scripts/updater/workflow_01_deduplication_incremental_score.R \
+            --input-dir outputs/workflow01_prescore \
+            --upstream-dir outputs/workflow01_union \
+            --output-dir outputs/workflow01_incremental_score \
+            --target-n "$N" \
+            --sample-key "workflow01-review-$GITHUB_RUN_ID"
+          Rscript scripts/updater/workflow_01_deduplication_identifier_rescore.R \
+            --input-dir outputs/workflow01_incremental_score \
+            --output-dir outputs/workflow01_incremental_rescore \
+            --source-run-id ""
+          Rscript scripts/updater/workflow_01_identifier_inject_decisions.R \
+            --rescored outputs/workflow01_incremental_rescore/rescored_sample.csv \
+            --safe-edges outputs/workflow01_identifier_assist/safe_identifier_edges.csv \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --output outputs/workflow01_incremental_assisted/identifier_assisted_decisions.csv \
+            --audit outputs/workflow01_incremental_assisted/identifier_injection_summary.json
+          Rscript scripts/updater/workflow_01_title_assist_resolve.R \
+            --decisions outputs/workflow01_incremental_assisted/identifier_assisted_decisions.csv \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --output outputs/workflow01_incremental_assisted/final_incremental_decisions.csv \
+            --audit outputs/workflow01_incremental_assisted/title_assist_summary.json
+          test -s outputs/workflow01_incremental_assisted/title_assist_summary.json
+          echo "PASS: W01 deterministic identifier and duplicate scoring stages completed; LLM and publication disabled"
 
   workflow01:
     if: ${{ inputs.review_id == '' && inputs.review_sheet_id == '' && inputs.execution_pathway != 'shiny' }}
