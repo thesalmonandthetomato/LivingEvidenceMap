@@ -3,7 +3,7 @@
   "update_id": "w00-run-38069704382",
   "branch": "main",
   "started_at_utc": "2026-10-10T17:17:28Z",
-  "last_updated_at_utc": "2026-10-11T19:05:28Z",
+  "last_updated_at_utc": "2026-10-14T15:56:31Z",
   "first_run": true,
   "baseline": {
     "release_update_id": null,
@@ -177,40 +177,41 @@
       "status": "complete"
     },
     "W02": {
-      "status": "complete"
+      "status": "active"
     },
     "W03": {
-      "status": "complete"
+      "status": "pending"
     },
     "W04": {
-      "status": "complete"
+      "status": "pending"
     },
     "W05": {
-      "status": "complete"
+      "status": "pending"
     },
     "W06": {
-      "status": "complete"
+      "status": "pending"
     },
     "W07": {
-      "status": "complete"
+      "status": "pending"
     },
     "W08": {
-      "status": "complete"
+      "status": "pending"
     },
     "W09": {
-      "status": "complete"
+      "status": "pending"
     },
     "W10": {
-      "status": "complete"
+      "status": "pending"
     },
-    "current_stage": "W10",
-    "completed_through": 11,
-    "status_label": "Current update complete"
+    "current_stage": "W02",
+    "completed_through": 2,
+    "active_position": 3,
+    "status_label": "Enrichment awaiting human review"
   },
   "workflow_runs": {
     "W00": "38069704382",
     "W01": "38123211165",
-    "W02": "38137694653",
+    "W02": "38592323037",
     "W03": "38138355889",
     "W04": "38141909882",
     "W05": "38144786847",
