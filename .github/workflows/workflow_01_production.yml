@@ -432,6 +432,25 @@ jobs:
             --audit outputs/workflow01_incremental_assisted/title_assist_summary.json
           test -s outputs/workflow01_incremental_assisted/title_assist_summary.json
           echo "PASS: W01 deterministic identifier and duplicate scoring stages completed; LLM and publication disabled"
+          mkdir -p outputs/workflow01_pre_adjudication outputs/adjudication
+          Rscript scripts/updater/workflow_01_deduplication_merge_clusters.R \
+            --first-run true \
+            --old-decisions previous_state/identity_bound/final_pair_decisions.csv \
+            --new-decisions outputs/workflow01_incremental_assisted/final_incremental_decisions.csv \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --output-dir outputs/workflow01_pre_adjudication
+          N_REVIEW="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow01_pre_adjudication/summary.json");cat(x$manual_review_pairs)')"
+          if [ "$N_REVIEW" -eq 0 ]; then
+            : > outputs/adjudication/cases.jsonl
+          else
+            Rscript scripts/updater/workflow_01_build_duplicate_adjudication_cases.R \
+              --review-pairs outputs/workflow01_pre_adjudication/manual_review_pairs.csv \
+              --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+              --union-dir outputs/workflow01_union \
+              --output outputs/adjudication/cases.jsonl
+          fi
+          Rscript -e 'library(jsonlite);p<-"outputs/adjudication/cases.jsonl";m<-paste0(p,".manifest.json");stopifnot(file.exists(m));j<-fromJSON(m);n<-length(readLines(p,warn=FALSE));stopifnot(j$cases==n);cat(sprintf("PASS: %d LLM adjudication cases prepared, no API requests sent\\n",n))'
+
 
   workflow01:
     if: ${{ inputs.review_id == '' && inputs.review_sheet_id == '' && inputs.execution_pathway != 'shiny' }}
