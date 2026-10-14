@@ -802,7 +802,9 @@ jobs:
             --output-dir outputs/adjudication/human_review_package \
             --source-run-id "$GITHUB_RUN_ID" \
             --workflow-run-id "$GITHUB_RUN_ID" \
-            --repository "$GITHUB_REPOSITORY"
+            --repository "$GITHUB_REPOSITORY" \
+            --review-id "${{ inputs.review_id }}" \
+            --review-sheet-id "${{ inputs.review_sheet_id }}"
 
       - name: Build compact human-review checkpoint
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
