@@ -315,9 +315,9 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
-      - name: Install handoff verification dependencies
+      - name: Install W01 candidate-processing dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest'))
+        run: install.packages(c('jsonlite','digest','data.table','readr','stringdist','stringi'))
       - uses: actions/download-artifact@v4
         with:
           name: workflow01-review-handoff-${{ github.run_id }}
