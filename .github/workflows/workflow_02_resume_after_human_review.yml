@@ -309,6 +309,24 @@ jobs:
             --manifest outputs/w02_resume/human_application_manifest.json \
             --expected-queue-sha256 "$QUEUE_SHA"
 
+      - name: Apply optional manually entered abstracts before existing W02 replay
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_02_apply_optional_abstracts.R \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --patch outputs/workflow02/current_patch_human.jsonl \
+            --input source/prepared/outputs/workflow02/input_with_previous_state.jsonl \
+            --output-patch outputs/workflow02/current_patch_human_with_abstracts.jsonl
+          mv outputs/workflow02/current_patch_human_with_abstracts.jsonl \
+            outputs/workflow02/current_patch_human.jsonl
+
       - name: Exact replay human-adjudicated current patch
         shell: bash
         run: |
