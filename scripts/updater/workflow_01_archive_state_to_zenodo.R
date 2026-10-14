@@ -18,6 +18,12 @@ staging_root <- normalizePath(arg("--staging-root"),mustWork=TRUE)
 run_id <- arg("--run-id")
 repository <- arg("--repository")
 state <- arg("--state","pre_adjudication")
+review_id <- arg("--review-id","")
+review_sheet_id <- arg("--review-sheet-id","")
+if(xor(nzchar(review_id),nzchar(review_sheet_id)))
+  stop("State archive requires both review ID and Sheet ID",call.=FALSE)
+if(!nzchar(review_id)) review_id <- NULL
+if(!nzchar(review_sheet_id)) review_sheet_id <- NULL
 archive_only <- identical(tolower(arg("--archive-only","false")),"true")
 output_dir <- arg("--output-dir")
 if (any(vapply(list(run_id,repository,state,output_dir),is.null,logical(1)))) {
@@ -70,6 +76,8 @@ manifest <- list(
   github_run_id=run_id,
   github_run_url=run_url,
   repository=repository,
+  review_id=review_id,
+  google_sheet_id=review_sheet_id,
   source_manifestations=as.integer(summary$source_manifestations),
   preserved_pair_decisions=as.integer(summary$preserved_pair_decisions),
   incremental_candidate_rows=as.integer(summary$incremental_candidate_rows),
@@ -211,6 +219,8 @@ receipt <- list(
   state=state,
   github_run_id=run_id,
   github_run_url=run_url,
+  review_id=review_id,
+  google_sheet_id=review_sheet_id,
   source_manifestations=as.integer(summary$source_manifestations),
   preserved_pair_decisions=as.integer(summary$preserved_pair_decisions),
   incremental_candidate_rows=as.integer(summary$incremental_candidate_rows),
