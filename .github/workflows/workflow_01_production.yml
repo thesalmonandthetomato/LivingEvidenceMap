@@ -641,9 +641,20 @@ jobs:
             --pre-summary outputs/workflow01_pre_adjudication/summary.json \
             --metadata outputs/workflow01_candidates/normalised_metadata.csv \
             --previous-pointer "" \
+            --review-id "${{ inputs.review_id }}" \
+            --review-sheet-id "${{ inputs.review_sheet_id }}" \
             --workflow00-pointer review_w01_handoff/w00_pointer.json \
             --output-dir outputs/pending_checkpoint \
             --run-id "$GITHUB_RUN_ID"
+
+      - name: Snapshot review-specific configuration inside pre-adjudication checkpoint
+        if: ${{ inputs.run_review_llm == true && inputs.review_id != '' && inputs.first_run == true && steps.adjudication.outputs.pending_count != '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Resume uses this immutable snapshot rather than repo-wide manual inputs.
+          Rscript scripts/updater/workflow_01_project_config_snapshot.R \
+            --mode snapshot --archive-dir outputs/pending_checkpoint
 
       - name: Archive review-specific pre-adjudication checkpoint to restricted Zenodo
         if: ${{ inputs.run_review_llm == true && inputs.review_id != '' && inputs.first_run == true && steps.adjudication.outputs.pending_count != '0' }}
