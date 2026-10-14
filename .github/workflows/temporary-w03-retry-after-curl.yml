@@ -1,0 +1,27 @@
+name: Temporary W03 restart after curl fix
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temporary-w03-retry-after-curl.yml']
+permissions:
+  contents: read
+  actions: write
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resume existing W03 input without W02 rerun
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          p=json.load(open('docs/compaction/zenodo/run-38596583779.json'))
+          s=json.load(open('docs/current_run/current_run_status.json'))
+          assert p['status']=='published' and p['canonical_records']==3084
+          assert s['first_run'] is True
+          PY
+          gh workflow run workflow_03_production.yml --repo "$GITHUB_REPOSITORY" --ref main -f first_run=true -f limit=0 -f batch_size=100 -f publish=true -f lean_pointer_path=docs/compaction/zenodo/run-38596583779.json
