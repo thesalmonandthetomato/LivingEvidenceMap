@@ -317,7 +317,15 @@ jobs:
           use-public-rspm: true
       - name: Install W01 candidate-processing dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','data.table','readr','stringdist','stringi'))
+        run: |
+          # Match the actual imports of workflow_01_deduplication_build_union.R
+          # and workflow_01_deduplication_incremental_candidates.R.
+          required <- c('jsonlite','digest','data.table','readr','stringdist','stringi','xml2')
+          missing <- setdiff(required, rownames(installed.packages()))
+          if(length(missing)) install.packages(missing)
+          still_missing <- required[!vapply(required,requireNamespace,logical(1),quietly=TRUE)]
+          if(length(still_missing)) stop('Missing W01 packages: ',paste(still_missing,collapse=', '))
+          cat('PASS: all W01 candidate-stage R packages available\\n')
       - uses: actions/download-artifact@v4
         with:
           name: workflow01-review-handoff-${{ github.run_id }}
