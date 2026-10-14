@@ -20,7 +20,9 @@ refs<-read(reference);api<-read(api_catalogue);manual<-read(manual_manifest)
 if(!identical(refs$schema,"living-evidence-map-workflow01-review-input-references-v1") ||
    !identical(api$schema,"living-evidence-map-workflow01-source-catalogue-v1") ||
    !identical(manual$schema,"living-evidence-map-workflow01-restored-manual-ris-v1") ||
-   !identical(as.character(refs$review_id),as.character(manual$review_id)))
+   !identical(as.character(refs$review_id),as.character(manual$review_id)) ||
+   !identical(as.character(refs$review_id),as.character(api$review_id)) ||
+   !identical(as.character(refs$google_sheet_id),as.character(manual$google_sheet_id)))
   stop("W01 input manifest/review identity mismatch",call.=FALSE)
 sources<-api$sources
 if(is.null(sources)||!length(sources)||is.null(names(sources)))
