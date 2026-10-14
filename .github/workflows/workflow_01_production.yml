@@ -44,6 +44,10 @@ on:
         required: false
         default: 5000
         type: number
+      run_review_llm:
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       execution_pathway:
@@ -96,6 +100,11 @@ on:
         required: true
         default: 5000
         type: number
+      run_review_llm:
+        description: 'Enable review-specific LLM adjudication (costs API credits)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -320,7 +329,7 @@ jobs:
         run: |
           # Match the actual imports of workflow_01_deduplication_build_union.R
           # and workflow_01_deduplication_incremental_candidates.R.
-          required <- c('jsonlite','digest','data.table','readr','stringdist','stringi','xml2')
+          required <- c('jsonlite','digest','data.table','readr','stringdist','stringi','xml2','httr2','googlesheets4')
           missing <- setdiff(required, rownames(installed.packages()))
           if(length(missing)) install.packages(missing)
           still_missing <- required[!vapply(required,requireNamespace,logical(1),quietly=TRUE)]
@@ -450,6 +459,202 @@ jobs:
               --output outputs/adjudication/cases.jsonl
           fi
           Rscript -e 'library(jsonlite);p<-"outputs/adjudication/cases.jsonl";m<-paste0(p,".manifest.json");stopifnot(file.exists(m));j<-fromJSON(m);n<-length(readLines(p,warn=FALSE));stopifnot(j$cases==n);cat(sprintf("PASS: %d LLM adjudication cases prepared, no API requests sent\\n",n))'
+
+
+
+      - name: Verify review-only model execution authorisation
+        if: ${{ inputs.run_review_llm == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ inputs.review_id }}" && test -n "${{ inputs.review_sheet_id }}"
+          test "${{ inputs.first_run }}" = "true"
+          test -n "${{ secrets.OPENAI_API_KEY }}"
+          test -n "${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}"
+          echo "Review-specific first-run model route authorised; legacy production remains isolated"
+
+      - name: Preflight LLM adjudication budget
+        if: ${{ inputs.run_review_llm == true && inputs.review_id != '' && inputs.first_run == true }}
+        env:
+          MAX_LLM_CASES: ${{ inputs.max_llm_cases }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          p <- 'outputs/adjudication/cases.jsonl'
+          lines <- if(file.exists(p)) readLines(p,warn=FALSE,encoding='UTF-8') else character()
+          lines <- lines[nzchar(trimws(lines))]
+          n <- length(lines)
+          max_n <- as.integer(Sys.getenv('MAX_LLM_CASES'))
+          if(is.na(max_n) || max_n < 0L) stop('max_llm_cases must be a non-negative integer')
+          rows <- if(n) lapply(lines,fromJSON,simplifyVector=FALSE) else list()
+          rule <- if(n) vapply(rows,function(z) {
+            x <- z$deterministic_evidence$classifier_rule
+            if(is.null(x)||!length(x)||!nzchar(as.character(x[[1L]]))) '<missing>' else as.character(x[[1L]])
+          },character(1)) else character()
+          manifest_path <- paste0(p,'.manifest.json')
+          if(!file.exists(manifest_path)) stop('Adjudication case manifest is missing',call.=FALSE)
+          manifest <- fromJSON(manifest_path,simplifyVector=FALSE)
+          manifest_cases <- as.integer(manifest$cases)
+          manifest_records <- as.integer(manifest$unique_bibliographic_records)
+          if(is.na(manifest_cases) || manifest_cases != n) {
+            stop(sprintf('Case manifest count mismatch: JSONL=%d manifest=%s',n,as.character(manifest$cases)),call.=FALSE)
+          }
+          if(is.na(manifest_records) || manifest_records < 0L) stop('Invalid unique_bibliographic_records in case manifest',call.=FALSE)
+          s <- list(
+            schema='living-evidence-map-workflow01-llm-preflight-v1',
+            cases=n,
+            max_llm_cases=max_n,
+            unique_bibliographic_records=manifest_records,
+            classifier_rule_counts=as.list(table(rule)),
+            status=if(n<=max_n)'within_budget_ceiling' else 'blocked_over_budget_ceiling'
+          )
+          writeLines(toJSON(s,auto_unbox=TRUE,pretty=TRUE,null='null'),
+                     'outputs/adjudication/preflight_summary.json')
+          cat(sprintf('LLM PREFLIGHT: cases=%d hard_ceiling=%d status=%s\n',n,max_n,s$status))
+          if(length(rule)) {
+            print(sort(table(rule),decreasing=TRUE))
+          }
+          if(n > max_n) {
+            stop(sprintf('LLM safety ceiling exceeded: %d cases > %d. No LLM requests have been sent.',n,max_n),call.=FALSE)
+          }
+
+      - name: Run LLM adjudication
+        if: ${{ inputs.run_review_llm == true && inputs.review_id != '' && inputs.first_run == true }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_DUPLICATE_MODEL: ${{ inputs.model }}
+          AUTO_THRESHOLD: ${{ inputs.auto_threshold }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          N="$(Rscript -e "cat(length(readLines('outputs/adjudication/cases.jsonl',warn=FALSE)))")"
+          mkdir -p outputs/adjudication/chunks
+          if [ "$N" -gt 0 ]; then
+            start=1
+            chunk=0
+            while [ "$start" -le "$N" ]; do
+              end=$((start+499))
+              if [ "$end" -gt "$N" ]; then end="$N"; fi
+              chunk=$((chunk+1))
+              out="outputs/adjudication/chunks/chunk-$(printf '%03d' "$chunk")"
+              mkdir -p "$out"
+              Rscript scripts/updater/workflow_01_llm_adjudicate_duplicates.R \
+                --input outputs/adjudication/cases.jsonl \
+                --output "$out/adjudications.jsonl" \
+                --human-review-output "$out/human_review.jsonl" \
+                --model "$OPENAI_DUPLICATE_MODEL" \
+                --auto-threshold "$AUTO_THRESHOLD" \
+                --start-row "$start" \
+                --end-row "$end"
+              start=$((end+1))
+            done
+          fi
+
+      - name: Merge and validate LLM adjudication state
+        if: ${{ inputs.run_review_llm == true && inputs.review_id != '' && inputs.first_run == true }}
+        id: adjudication
+        env:
+          MODEL: ${{ inputs.model }}
+          AUTO_THRESHOLD: ${{ inputs.auto_threshold }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          library(digest)
+          lines <- readLines('outputs/adjudication/cases.jsonl',warn=FALSE)
+          lines <- lines[nzchar(trimws(lines))]
+          cases <- lapply(lines,fromJSON,simplifyVector=FALSE)
+          ids <- if(length(cases)) vapply(cases,function(z)z$review_case_id,character(1)) else character()
+          files <- list.files('outputs/adjudication/chunks',pattern='adjudications\\.jsonl$',recursive=TRUE,full.names=TRUE)
+          ml <- if(length(files)) unlist(lapply(files,readLines,warn=FALSE),use.names=FALSE) else character()
+          ml <- ml[nzchar(trimws(ml))]
+          model <- lapply(ml,fromJSON,simplifyVector=FALSE)
+          mids <- if(length(model)) vapply(model,function(z)z$review_case_id,character(1)) else character()
+          stopifnot(length(model)==length(cases),!anyDuplicated(mids),setequal(mids,ids))
+          if(length(model)) model <- model[match(ids,mids)]
+          technical <- sum(vapply(model,function(z)!is.null(z$technical_error),logical(1)))
+          if(technical>0L) stop(sprintf('%d technical LLM failures',technical))
+          human <- Filter(function(z)identical(z$promotion,'human_review'),model)
+          dir.create('outputs/adjudication/merged',recursive=TRUE,showWarnings=FALSE)
+          write_jsonl <- function(xs,p){
+            con<-file(p,'wt',encoding='UTF-8');on.exit(close(con),add=TRUE)
+            if(length(xs)) for(z in xs) writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null'),con,useBytes=TRUE)
+          }
+          write_jsonl(model,'outputs/adjudication/merged/all_adjudications.jsonl')
+          write_jsonl(human,'outputs/adjudication/merged/human_review.jsonl')
+          s <- list(
+            schema='living-evidence-map-workflow01-llm-adjudication-summary-v1',
+            status=if(length(human))'awaiting_human_review' else 'llm_adjudication_complete',
+            source_workflow01_run_id=Sys.getenv('GITHUB_RUN_ID'),
+            model=Sys.getenv('MODEL'),
+            auto_threshold=as.numeric(Sys.getenv('AUTO_THRESHOLD')),
+            total_cases=length(model),
+            automatic_duplicate=sum(vapply(model,function(z)identical(z$promotion,'duplicate'),logical(1))),
+            automatic_not_duplicate=sum(vapply(model,function(z)identical(z$promotion,'not_duplicate'),logical(1))),
+            human_review_required=length(human),
+            technical_failures=technical,
+            source_cases_sha256=digest(file='outputs/adjudication/cases.jsonl',algo='sha256',serialize=FALSE),
+            adjudications_sha256=digest(file='outputs/adjudication/merged/all_adjudications.jsonl',algo='sha256',serialize=FALSE)
+          )
+          writeLines(toJSON(s,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/adjudication/merged/summary.json')
+          cat(sprintf('pending_count=%d\n',length(human)),file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
+
+      - name: Build immutable human-review package
+        if: ${{ inputs.run_review_llm == true && inputs.review_id != '' && inputs.first_run == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_build_human_review_package.R \
+            --input outputs/adjudication/merged/human_review.jsonl \
+            --output-dir outputs/adjudication/human_review_package \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --review-id "${{ inputs.review_id }}" \
+            --review-sheet-id "${{ inputs.review_sheet_id }}"
+
+      - name: Upload Workflow 01 human-review package
+        id: upload_review
+        if: ${{ inputs.run_review_llm == true && inputs.review_id != '' && inputs.first_run == true && steps.adjudication.outputs.pending_count != '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-human-review-${{ github.run_id }}
+          path: outputs/adjudication/human_review_package/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish human-review queue to Shiny sidecar
+        if: ${{ inputs.run_review_llm == true && inputs.review_id != '' && inputs.first_run == true && steps.adjudication.outputs.pending_count != '0' }}
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: ${{ inputs.review_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+          QUEUE_TAB: 'queue_w01_active'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_01_publish_human_review_queue_to_shiny.R \
+            --queue outputs/adjudication/human_review_package/human_review_cases.jsonl \
+            --manifest outputs/adjudication/human_review_package/review_manifest.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --tab "$QUEUE_TAB" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+
+          BATCH_ID="w01-run-$GITHUB_RUN_ID"
+          QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/adjudication/human_review_package/review_manifest.json");cat(as.character(x$queue_sha256))')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "01" \
+            --batch-id "$BATCH_ID" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status published \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --message "Workflow 01 duplicate adjudication paused for human review."
 
 
   workflow01:
