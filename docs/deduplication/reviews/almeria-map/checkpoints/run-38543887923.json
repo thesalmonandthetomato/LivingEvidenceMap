@@ -1,0 +1,41 @@
+{
+  "status": "published",
+  "workflow": "01",
+  "state": "pre_adjudication",
+  "github_run_id": "38543887923",
+  "github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/38543887923",
+  "review_id": "almeria-map",
+  "google_sheet_id": "1wii1QjB4jM9OzOqboIgZn4z8CAN7W4EAyIKIyGcGjeU",
+  "previous_github_run_id": null,
+  "previous_zenodo_record_id": null,
+  "previous_manifest_sha256": null,
+  "workflow00": {
+    "github_run_id": "38304105258",
+    "zenodo_record_id": "23325949",
+    "manifest_sha256": "3b36ea3acf147d04ac3acce6d511c3918077bf96d0b60295bc76270f7f28cace"
+  },
+  "new_source_manifestations": 6948,
+  "pending_human_cases": 82,
+  "queue_sha256": "8353393e6fa2783b22f6928a77b9961c0d1688b601c1ccd4efd9ee5ed1d46ad7",
+  "zenodo_record_id": "23363756",
+  "zenodo_deposition_id": "23363756",
+  "doi": "10.5281/zenodo.23363756",
+  "record_url": "https://zenodo.org/records/23363756",
+  "visibility": "restricted",
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow01_run-38543887923_pre-adjudication-checkpoint.tar.gz",
+      "bytes": 9250475,
+      "sha256": "b212b2472d45f15aa89e5dc38a5969ddbb643603e03330a3045b763ddc42fd1e",
+      "zenodo_checksum": "md5:2b961ffb9f00b5de939d9bf86e792f43"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow01_run-38543887923_pre-adjudication-manifest.json",
+      "bytes": 1092,
+      "sha256": "54d03cb129fa39e3b941baa25e39baedda1ff0562bc1a79bc91b665a460adad9",
+      "zenodo_checksum": "md5:a8b01119b302df45dfbf822c1ac93410"
+    }
+  ],
+  "manifest_sha256": "54d03cb129fa39e3b941baa25e39baedda1ff0562bc1a79bc91b665a460adad9",
+  "published_at_utc": "2026-10-14T10:06:40Z"
+}
