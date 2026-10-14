@@ -3,6 +3,11 @@ name: Workflow 03 - Publication status
 on:
   workflow_call:
     inputs:
+      auto_launch_w04:
+        description: Automatically dispatch W04 after W03 (disable only for Shiny-managed review)
+        required: false
+        default: true
+        type: boolean
       first_run:
         description: Initialise an entirely new review, with no prior baseline
         required: false
@@ -37,6 +42,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      auto_launch_w04:
+        description: Automatically dispatch W04 after W03 (disable only for Shiny-managed review)
+        required: false
+        default: true
+        type: boolean
       first_run:
         description: Initialise an entirely new review, with no prior baseline
         required: false
@@ -286,7 +296,7 @@ jobs:
           if-no-files-found: error
 
       - name: Trigger Workflow 04 after successful Workflow 03
-        if: ${{ (github.event_name == 'push' || inputs.publish == true) && (github.event_name == 'push' || inputs.limit == '0') }}
+        if: ${{ (github.event_name == 'push' || inputs.publish == true) && (github.event_name == 'push' || inputs.limit == '0') && inputs.auto_launch_w04 != false }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
