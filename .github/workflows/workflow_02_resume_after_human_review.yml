@@ -162,6 +162,26 @@ jobs:
           test -f source/prepared/previous_cumulative_patch.jsonl
           test -s source/review/workflow02_human_review_manifest.json
 
+      - name: Identify optional-only W02 pause
+        id: review_type
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os
+          with open("source/review/workflow02_human_review_manifest.json",encoding="utf-8") as f:
+              m=json.load(f)
+          zero=m.get("schema")=="living-evidence-map-workflow02-optional-pause-v1"
+          if zero:
+              assert m.get("blocking_conflicts")==0
+              assert str(m.get("source_run_id"))==os.environ["SOURCE_RUN_ID"]
+          else:
+              assert m.get("schema")=="living-evidence-map-workflow02-human-review-package-v1"
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as f:
+              f.write("zero_cases="+str(zero).lower()+"\n")
+          print("W02 human-review cases absent:",zero)
+          PY
+
       - name: Prepare Google credential
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -174,6 +194,7 @@ jobs:
           echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
 
       - name: Export and validate matching Shiny queue and active decisions
+        if: ${{ steps.review_type.outputs.zero_cases != 'true' }}
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages({
@@ -297,6 +318,7 @@ jobs:
           echo "PASS: reconstructed source-run current W02 patch and enrichment report from immutable checkpoints"
 
       - name: Apply human decisions to current patch
+        if: ${{ steps.review_type.outputs.zero_cases != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -308,6 +330,23 @@ jobs:
             --output-patch outputs/workflow02/current_patch_human.jsonl \
             --manifest outputs/w02_resume/human_application_manifest.json \
             --expected-queue-sha256 "$QUEUE_SHA"
+
+      - name: Preserve original W02 patch when no normal adjudication is required
+        if: ${{ steps.review_type.outputs.zero_cases == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp outputs/workflow02/current_patch.jsonl outputs/workflow02/current_patch_human.jsonl
+          mkdir -p outputs/w02_resume
+          python3 - <<'PY'
+          import json,os
+          p="outputs/w02_resume/human_application_manifest.json"
+          with open(p,"w",encoding="utf-8") as f:
+              json.dump({"schema":"living-evidence-map-workflow02-optional-pause-resume-v1",
+                         "status":"PASS","source_run_id":os.environ["SOURCE_RUN_ID"],
+                         "human_decisions":0},f)
+          PY
+          echo "PASS: zero normal adjudication cases; untouched W02 patch retained"
 
       - name: Apply optional manually entered abstracts before existing W02 replay
         env:
@@ -422,7 +461,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+          LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -447,10 +486,10 @@ jobs:
           fi
 
       - name: Acknowledge consumed W02 Shiny batch
-        if: ${{ needs.prepare.outputs.publish == 'true' }}
+        if: ${{ needs.prepare.outputs.publish == 'true' && steps.review_type.outputs.zero_cases != 'true' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+          LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
