@@ -1,0 +1,27 @@
+name: Temporary W04 pathway recheck
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temporary-w04-pathway-gate-recheck.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate YAML and execution controls
+        shell: bash
+        run: |
+          ruby -e 'require "yaml"; ARGV.each{|p| YAML.parse_file(p); puts "PASS #{p}"}' .github/workflows/workflow_03_production.yml .github/workflows/workflow_02_resume_after_human_review.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          a=Path('.github/workflows/workflow_03_production.yml').read_text()
+          b=Path('.github/workflows/workflow_02_resume_after_human_review.yml').read_text()
+          assert a.count('auto_launch_w04:') == 2
+          assert 'inputs.auto_launch_w04 != false' in a
+          assert 'auto_launch_w04=$AUTO_W04' in b
+          assert '-f auto_launch_w04=' in b
+          assert 'needs.prepare.outputs.auto_launch_w04' in b
+          print('PASS automatic GitHub default with Shiny pause')
+          PY
