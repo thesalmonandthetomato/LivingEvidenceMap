@@ -20,6 +20,8 @@ repository <- arg("--repository")
 state <- arg("--state","pre_adjudication")
 review_id <- arg("--review-id","")
 review_sheet_id <- arg("--review-sheet-id","")
+execution_pathway <- arg("--execution-pathway",if(nzchar(review_id)) "shiny" else "github")
+if(!execution_pathway %in% c("shiny","github")) stop("Invalid execution pathway",call.=FALSE)
 if(xor(nzchar(review_id),nzchar(review_sheet_id)))
   stop("State archive requires both review ID and Sheet ID",call.=FALSE)
 if(!nzchar(review_id)) review_id <- NULL
@@ -78,6 +80,7 @@ manifest <- list(
   repository=repository,
   review_id=review_id,
   google_sheet_id=review_sheet_id,
+  execution_pathway=execution_pathway,
   source_manifestations=as.integer(summary$source_manifestations),
   preserved_pair_decisions=as.integer(summary$preserved_pair_decisions),
   incremental_candidate_rows=as.integer(summary$incremental_candidate_rows),
