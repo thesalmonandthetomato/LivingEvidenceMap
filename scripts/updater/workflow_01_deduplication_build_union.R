@@ -38,6 +38,9 @@ if (!is.null(input_manifest_path)) {
   current_paths <- vapply(im$sources,function(z)as.character(z[[1L]]),character(1))
   if (xor(is.null(im$review_id),is.null(im$google_sheet_id)))
     stop("Incomplete review-specific routing in W01 source manifest",call.=FALSE)
+  if (!is.null(im$review_id) &&
+      (!nzchar(as.character(im$review_id)) || !nzchar(as.character(im$google_sheet_id))))
+    stop("Empty review identity in W01 source manifest",call.=FALSE)
   if (!is.null(expected_review_id) &&
       (!identical(as.character(im$review_id),expected_review_id) ||
        !identical(as.character(im$google_sheet_id),expected_sheet_id)))
