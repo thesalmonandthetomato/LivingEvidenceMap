@@ -11,6 +11,10 @@ on:
       workflow01_pointer_path:
         required: true
         type: string
+      google_sheet_id:
+        required: false
+        default: ''
+        type: string
       previous_workflow02_pointer_path:
         required: false
         default: ''
@@ -63,6 +67,11 @@ on:
         required: false
         default: false
         type: boolean
+      google_sheet_id:
+        description: 'Review-specific Google Sheet ID (leave empty for legacy GitHub route)'
+        required: false
+        default: ''
+        type: string
       workflow01_pointer_path:
         description: 'Authoritative Workflow 01 Zenodo pointer'
         required: true
@@ -539,7 +548,7 @@ jobs:
         if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+          LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
           QUEUE_TAB: 'queue_w02_active'
         shell: bash
         run: |
@@ -576,7 +585,7 @@ jobs:
         if: ${{ steps.human_review.outputs.requires_human_review == 'true' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+          LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -667,7 +676,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+          LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
