@@ -44,10 +44,13 @@ for(z in rows){
   if(!grepl("^[a-z0-9][a-z0-9_-]*$",src) || src %in% names(sources) ||
      !file.exists(path) || is.na(expected_n) || expected_n<0L ||
      !identical(as.character(z$zenodo_record_id),as.character(ref$zenodo_record_id)) ||
-     !identical(expected_n,as.integer(ref$records_downloaded)))
+     !identical(expected_n,as.integer(ref$records_downloaded)) ||
+     !grepl("^[0-9a-fA-F]{64}$",as.character(z$sha256)) ||
+     !identical(tolower(as.character(z$sha256)),
+                tolower(digest::digest(file=path,algo="sha256",serialize=FALSE))))
     stop("Invalid manual RIS source manifest for submission ",submission,call.=FALSE)
   sources[[src]]<-list(kind="prepared_manual_ris",source=src,prepared_path=path,
-    expected_records=expected_n,submission_id=submission,
+    expected_records=expected_n,sha256=tolower(as.character(z$sha256)),submission_id=submission,
     zenodo_record_id=as.character(z$zenodo_record_id))
 }
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
