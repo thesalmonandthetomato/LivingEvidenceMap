@@ -18,6 +18,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          Rscript -e 'install.packages("jsonlite")'
           Rscript scripts/updater/workflow_validate_first_run.R --stage W03 --first-run true
           python3 - <<'PY'
           import pathlib
