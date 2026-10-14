@@ -517,6 +517,25 @@ jobs:
 
           Rscript -e "library(digest);a<-digest(file='outputs/workflow02/current_replayed.jsonl',algo='sha256',serialize=FALSE);b<-digest(file='outputs/workflow02/enriched.jsonl',algo='sha256',serialize=FALSE);stopifnot(a==b);cat('PASS: batched current patches and cumulative reconstruction are identical\n')"
 
+      - name: Inventory missing abstracts after automated enrichment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/workflow02
+          Rscript scripts/updater/workflow_02_inventory_state.R \
+            --input outputs/workflow02/enriched.jsonl \
+            --report outputs/workflow02/automated_inventory.json \
+            --missing-both-queue outputs/workflow02/automated_missing_both.jsonl
+          Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow02/automated_inventory.json");cat(sprintf("W02 remaining missing abstracts: %d of %d (%.1f%%)\\n",x$missing_abstract,x$canonical_records,if(x$canonical_records)100*x$missing_abstract/x$canonical_records else 0))'
+
+      - name: Retain post-enrichment abstract inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow02-missing-abstract-inventory-${{ github.run_id }}
+          path: outputs/workflow02/automated_inventory.json
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Build Workflow 02 human-review package
         id: human_review
         shell: bash
