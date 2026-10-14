@@ -1,0 +1,32 @@
+name: Temporary dispatch W03 Almeria
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temporary-dispatch-w03-almeria.yml']
+permissions:
+  contents: read
+  actions: write
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dispatch W03 with verified first run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LEAN_POINTER="docs/compaction/zenodo/run-38596583779.json"
+          test -s "$LEAN_POINTER"
+          Rscript -e 'stopifnot(requireNamespace("jsonlite",quietly=TRUE))' || true
+          python3 - <<'PY'
+          import json
+          x=json.load(open("docs/current_run/current_run_status.json"))
+          assert x["first_run"] is True
+          y=json.load(open("docs/compaction/zenodo/run-38596583779.json"))
+          assert y["status"]=="published" and y["canonical_records"]==3084
+          print("PASS: W03 source provenance")
+          PY
+          gh workflow run workflow_03_production.yml --repo "$GITHUB_REPOSITORY" --ref main -f first_run=true -f limit=0 -f batch_size=100 -f publish=true -f lean_pointer_path="$LEAN_POINTER"
+          echo "PASS: W03 dispatched from review-specific W02 checkpoint"
