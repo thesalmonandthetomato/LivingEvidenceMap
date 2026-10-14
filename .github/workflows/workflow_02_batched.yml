@@ -168,9 +168,20 @@ jobs:
           r-version: release
           use-public-rspm: true
 
+      - name: Install curl system dependency for Zenodo restoration
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libcurl4-openssl-dev
+
       - name: Install preparation dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2','stringdist','data.table'))
+        run: |
+          install.packages(c('jsonlite','digest','curl','httr2','stringdist','data.table'))
+          stopifnot(requireNamespace("curl",quietly=TRUE),
+                    requireNamespace("httr2",quietly=TRUE))
+          cat("PASS: Zenodo restore transport dependencies available\n")
 
       - name: Validate explicit first-run contract
         env:
