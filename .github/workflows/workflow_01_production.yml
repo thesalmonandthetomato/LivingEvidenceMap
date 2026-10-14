@@ -1,4 +1,5 @@
 name: Workflow 01 - Production deduplication and canonicalisation
+run-name: W01 ${{ inputs.review_id || 'legacy' }} ${{ inputs.shiny_request_id || github.run_id }}
 
 on:
   workflow_call:
@@ -6,6 +7,10 @@ on:
       execution_pathway:
         required: false
         default: github
+        type: string
+      shiny_request_id:
+        required: false
+        default: ""
         type: string
       review_id:
         required: false
@@ -47,6 +52,11 @@ on:
         default: github
         type: choice
         options: [github, shiny]
+      shiny_request_id:
+        description: "Unique launch request identifier for read-only run monitoring"
+        required: false
+        default: ""
+        type: string
       review_id:
         description: "Review identity for Shiny preflight"
         required: false
@@ -124,6 +134,10 @@ jobs:
           set -euo pipefail
           if [ -z "$LEM_SHEET_ID" ] || [ -z "$LEM_REVIEW_ID" ]; then
             echo "Review-specific W01 requires both review_id and review_sheet_id" >&2
+            exit 1
+          fi
+          if [ -n "${{ inputs.shiny_request_id }}" ] && ! [[ "${{ inputs.shiny_request_id }}" =~ ^[A-Za-z0-9._-]{8,80}$ ]]; then
+            echo "Invalid Shiny W01 request identifier" >&2
             exit 1
           fi
           test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
