@@ -23,7 +23,13 @@ for(path in paths){
   if(!identical(as.character(x$status),"ready")) next
   run_id <- as.character(x$checkpoint_run_id)
   if(!grepl("^[0-9]+$",run_id)) stop("Handoff has invalid checkpoint_run_id: ",path,call.=FALSE)
-  resolution <- file.path(resolution_dir,paste0("run-",run_id,".json"))
+  review_id <- if(is.null(x$review_id)) "" else as.character(x$review_id)
+  if(nzchar(review_id) && !grepl("^[A-Za-z0-9._-]{3,128}$",review_id))
+    stop("Ready handoff has invalid review_id: ",path,call.=FALSE)
+  resolved_dir <- if(nzchar(review_id)) {
+    file.path("docs/deduplication/reviews",review_id,"checkpoints","resolutions")
+  } else resolution_dir
+  resolution <- file.path(resolved_dir,paste0("run-",run_id,".json"))
   if(file.exists(resolution)){
     r <- fromJSON(resolution,simplifyVector=FALSE)
     if(identical(as.character(r$status),"resolved")) next
