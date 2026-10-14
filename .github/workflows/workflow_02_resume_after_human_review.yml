@@ -517,7 +517,6 @@ jobs:
 
       - name: Mark completed zero-conflict optional pause in review Sheet
         if: ${{ needs.prepare.outputs.publish == 'true' && steps.review_type.outputs.zero_cases == 'true' }}
-        env:
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages(library(googlesheets4))
