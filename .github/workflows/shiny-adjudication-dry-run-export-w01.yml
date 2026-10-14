@@ -77,7 +77,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/w01-return"
+          REVIEW_ARGS=()
+          if [ -n "$W01_REVIEW_ID" ]; then
+            REVIEW_CHECKPOINT_DIR="docs/deduplication/reviews/$W01_REVIEW_ID/checkpoints"
+            REVIEW_ARGS=(--checkpoint-dir "$REVIEW_CHECKPOINT_DIR" --resolution-dir "$REVIEW_CHECKPOINT_DIR/resolutions")
+          fi
           Rscript scripts/updater/workflow_01_select_pending_checkpoint.R \
+            "${REVIEW_ARGS[@]}" \
             --run-id "$W01_CHECKPOINT_RUN_ID" \
             --output "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json"
           FOUND="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(tolower(as.character(isTRUE(x$found))))' "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json")"
@@ -88,6 +94,9 @@ jobs:
           fi
           POINTER="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$pointer_path)' "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json")"
           CHECKPOINT_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);cat(x$checkpoint_run_id)' "$RUNNER_TEMP/w01-return/pending_checkpoint_selection.json")"
+          if [ -n "$W01_REVIEW_ID" ]; then
+            POINTER="$POINTER" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));stopifnot(identical(as.character(x$review_id),Sys.getenv("W01_REVIEW_ID")),identical(as.character(x$google_sheet_id),Sys.getenv("LEM_GOOGLE_SHEET_ID")))' 
+          fi
           echo "POINTER=$POINTER" >> "$GITHUB_ENV"
           echo "CHECKPOINT_RUN=$CHECKPOINT_RUN" >> "$GITHUB_ENV"
           echo "RETURN_ROOT=$RUNNER_TEMP/w01-return" >> "$GITHUB_ENV"
