@@ -1159,10 +1159,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          W01_REGISTRY="docs/deduplication/zenodo_registry.csv"
+          W01_POINTER_DIR="docs/deduplication/zenodo"
+          if [ -n "${{ inputs.review_id }}" ]; then
+            W01_REGISTRY="docs/deduplication/reviews/${{ inputs.review_id }}/zenodo_registry.csv"
+            W01_POINTER_DIR="docs/deduplication/reviews/${{ inputs.review_id }}/zenodo"
+          fi
           Rscript scripts/updater/workflow_01_update_zenodo_registry.R \
             --receipt outputs/zenodo/zenodo_receipt.json \
-            --registry docs/deduplication/zenodo_registry.csv \
-            --pointer-dir docs/deduplication/zenodo
+            --registry "$W01_REGISTRY" \
+            --pointer-dir "$W01_POINTER_DIR"
           mkdir -p docs/deduplication/runs
           Rscript scripts/updater/workflow_01_write_run_report.R \
             --summary outputs/final/summary.json \
