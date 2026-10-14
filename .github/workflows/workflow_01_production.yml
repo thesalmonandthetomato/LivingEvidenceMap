@@ -229,7 +229,15 @@ jobs:
           cat(sprintf("PASS: review-specific W01 union: %d sources, %d manifestations, stable review identity and source order\\n",
                       length(actual),sum(actual)))
           RS
-          rm -rf "$RUNNER_TEMP/w01-restored-w00" "$RUNNER_TEMP/w01-restored-manual-ris"
+          # Keep preflight outputs ephemeral and do not publish research records.
+          rm -rf "$RUNNER_TEMP/w01-reviewed-union" "$RUNNER_TEMP/w01-empty-prior" \
+            "$RUNNER_TEMP/w01-prepared-api" "$RUNNER_TEMP/w01-restored-w00" \
+            "$RUNNER_TEMP/w01-restored-manual-ris"
+          rm -f "$RUNNER_TEMP/review-w00-pointer.json" \
+            "$RUNNER_TEMP/review-w01-input-manifest.json" \
+            "$RUNNER_TEMP/review-w01-api-catalogue.json" \
+            "$RUNNER_TEMP/review-w01-combined-catalogue.json" \
+            "$RUNNER_TEMP/review-w01-source-inputs.json"
           rm -f "$RUNNER_TEMP/lem-w01-credentials.json"
           echo "PASS: shared W01 review-specific receipt and input preflight; deduplication intentionally disabled"
   workflow01:
