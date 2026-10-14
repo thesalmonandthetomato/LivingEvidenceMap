@@ -443,6 +443,8 @@ jobs:
             --delta-dir outputs/delta \
             --run-id "$GITHUB_RUN_ID" \
             --repository "$GITHUB_REPOSITORY" \
+            --review-id "$LEM_REVIEW_ID" \
+            --review-sheet-id "$LEM_GOOGLE_SHEET_ID" \
             --output-dir outputs/zenodo
 
       - name: Stage and archive initial full baseline after human review
@@ -466,7 +468,8 @@ jobs:
           mkdir -p outputs/zenodo
           Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \
             --staging-root "$ROOT" --run-id "$GITHUB_RUN_ID" --repository "$GITHUB_REPOSITORY" \
-            --state final --output-dir outputs/zenodo
+            --state final --review-id "$LEM_REVIEW_ID" --review-sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --output-dir outputs/zenodo
 
       - name: Register final delta and checkpoint resolution
         env:
@@ -474,24 +477,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ -n "$LEM_REVIEW_ID" ]; then
+            ROOT="docs/deduplication/reviews/$LEM_REVIEW_ID"
+          else
+            ROOT="docs/deduplication"
+          fi
+          REGISTRY="$ROOT/zenodo_registry.csv"
+          POINTER_DIR="$ROOT/zenodo"
+          REPORT_DIR="$ROOT/runs"
+          RESOLUTION_DIR="$ROOT/checkpoints/resolutions"
           Rscript scripts/updater/workflow_01_update_zenodo_registry.R \
             --receipt outputs/zenodo/zenodo_receipt.json \
-            --registry docs/deduplication/zenodo_registry.csv \
-            --pointer-dir docs/deduplication/zenodo
-          mkdir -p docs/deduplication/runs docs/deduplication/checkpoints/resolutions
+            --registry "$REGISTRY" \
+            --pointer-dir "$POINTER_DIR"
+          mkdir -p "$REPORT_DIR" "$RESOLUTION_DIR"
           Rscript scripts/updater/workflow_01_write_run_report.R \
             --summary outputs/final/summary.json \
             --canonical-manifest outputs/canonical/canonical_manifest.json \
             --zenodo-receipt outputs/zenodo/zenodo_receipt.json \
             --run-id "$GITHUB_RUN_ID" \
             --repository "$GITHUB_REPOSITORY" \
-            --out-md docs/deduplication/runs/run-$GITHUB_RUN_ID.md \
-            --out-json docs/deduplication/runs/run-$GITHUB_RUN_ID.json
+            --out-md "$REPORT_DIR/run-$GITHUB_RUN_ID.md" \
+            --out-json "$REPORT_DIR/run-$GITHUB_RUN_ID.json"
           CHECKPOINT_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CHECKPOINT_POINTER"));cat(x$github_run_id)')"
-          printf '{"checkpoint_run_id":"%s","resolved_by_run_id":"%s","status":"resolved"}\n' "$CHECKPOINT_RUN" "$GITHUB_RUN_ID" > "docs/deduplication/checkpoints/resolutions/run-$CHECKPOINT_RUN.json"
+          printf '{"checkpoint_run_id":"%s","resolved_by_run_id":"%s","status":"resolved"}\n' "$CHECKPOINT_RUN" "$GITHUB_RUN_ID" > "$RESOLUTION_DIR/run-$CHECKPOINT_RUN.json"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/deduplication/zenodo_registry.csv docs/deduplication/zenodo/ docs/deduplication/runs/ docs/deduplication/checkpoints/resolutions/
+          git add "$REGISTRY" "$POINTER_DIR/" "$REPORT_DIR/" "$RESOLUTION_DIR/"
           if ! git diff --cached --quiet; then
             git commit -m "Record resumed Workflow 01 delta run $GITHUB_RUN_ID"
             # Concurrent workflow commits may advance main while W01 is archiving.
@@ -514,7 +526,8 @@ jobs:
             done
           fi
 
-      - name: Update current-run live status through W01
+      - name: Update legacy current-run live status through W01
+        if: ${{ env.LEM_REVIEW_ID == '' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
