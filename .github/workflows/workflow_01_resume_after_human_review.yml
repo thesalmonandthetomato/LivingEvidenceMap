@@ -469,6 +469,7 @@ jobs:
           Rscript scripts/updater/workflow_01_archive_state_to_zenodo.R \
             --staging-root "$ROOT" --run-id "$GITHUB_RUN_ID" --repository "$GITHUB_REPOSITORY" \
             --state final --review-id "$LEM_REVIEW_ID" --review-sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --execution-pathway "$(if [ -n \"$LEM_REVIEW_ID\" ]; then echo shiny; else echo github; fi)" \
             --output-dir outputs/zenodo
 
       - name: Register final delta and checkpoint resolution
