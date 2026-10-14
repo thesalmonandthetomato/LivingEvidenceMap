@@ -111,9 +111,21 @@ jobs:
           r-version: '4.6.0'
           use-public-rspm: true
 
+      - name: Install Google Sheets transport system dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libcurl4-openssl-dev
+
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','readr','googlesheets4','httr2'))
+        run: |
+          install.packages(c('jsonlite','digest','readr','curl','googlesheets4','httr2'))
+          stopifnot(requireNamespace("curl",quietly=TRUE),
+                    requireNamespace("googlesheets4",quietly=TRUE),
+                    requireNamespace("httr2",quietly=TRUE))
+          cat("PASS: W02 resume Sheets dependencies available\n")
 
       - name: Parse resume scripts
         shell: Rscript {0}
@@ -191,7 +203,8 @@ jobs:
           test -n "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON"
           printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
           chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
-          echo "LEM_GOOGLE_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
+          Rscript -e 'x<-jsonlite::fromJSON(commandArgs(TRUE)[1]);stopifnot(identical(x$type,"service_account"),nzchar(x$client_email),nzchar(x$private_key));cat("PASS: service-account credential format\n")' "$RUNNER_TEMP/lem-google-service-account.json"
+          echo "LEM_GOOGLE_CREDENTIAL_FILE=$RUNNER_TEMP/lem-google-service-account.json" >> "$GITHUB_ENV"
 
       - name: Export and validate matching Shiny queue and active decisions
         if: ${{ steps.review_type.outputs.zero_cases != 'true' }}
@@ -211,7 +224,7 @@ jobs:
           decisions_tab <- Sys.getenv("W02_DECISIONS_TAB")
           expected_batch <- paste0("w02-run-", source_run_id)
 
-          gs4_auth(path=Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"), cache=FALSE)
+          gs4_auth(path=Sys.getenv("LEM_GOOGLE_CREDENTIAL_FILE"), cache=FALSE)
 
           tabs <- sheet_names(ss)
           if (!queue_tab %in% tabs) stop("W02 active queue tab does not exist")
@@ -349,17 +362,14 @@ jobs:
           echo "PASS: zero normal adjudication cases; untouched W02 patch retained"
 
       - name: Apply optional manually entered abstracts before existing W02 replay
-        env:
-          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
-          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          test -s "$LEM_GOOGLE_CREDENTIAL_FILE"
           Rscript scripts/updater/workflow_02_apply_optional_abstracts.R \
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
             --source-run-id "$SOURCE_RUN_ID" \
-            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --credential "$LEM_GOOGLE_CREDENTIAL_FILE" \
             --patch outputs/workflow02/current_patch_human.jsonl \
             --input source/prepared/outputs/workflow02/input_with_previous_state.jsonl \
             --output-patch outputs/workflow02/current_patch_human_with_abstracts.jsonl
@@ -460,7 +470,6 @@ jobs:
         if: ${{ needs.prepare.outputs.publish == 'true' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
           LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
@@ -468,12 +477,11 @@ jobs:
           Rscript scripts/updater/workflow_current_run_status_observer.R \
             --force-stage W02 \
             --pointer "docs/enrichment/zenodo/run-$GITHUB_RUN_ID.json"
-          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
-          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          test -s "$LEM_GOOGLE_CREDENTIAL_FILE"
           Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
             --status docs/current_run/current_run_status.json \
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
-            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+            --credential "$LEM_GOOGLE_CREDENTIAL_FILE"
           Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W02 --run-id "$GITHUB_RUN_ID"
           Rscript scripts/reporting/refresh_workflow09_input_manifest.R
           git config user.name "github-actions[bot]"
@@ -488,13 +496,11 @@ jobs:
       - name: Acknowledge consumed W02 Shiny batch
         if: ${{ needs.prepare.outputs.publish == 'true' && steps.review_type.outputs.zero_cases != 'true' }}
         env:
-          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
           LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
-          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          test -s "$LEM_GOOGLE_CREDENTIAL_FILE"
           QUEUE_SHA="$(cat outputs/w02_resume/queue_sha256.txt)"
           OUTPUT_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/workflow02/enriched.jsonl",algo="sha256",serialize=FALSE))')"
           Rscript scripts/updater/workflow_shiny_batch_status.R \
@@ -503,7 +509,7 @@ jobs:
             --queue-sha256 "$QUEUE_SHA" \
             --status consumed \
             --sheet-id "$LEM_GOOGLE_SHEET_ID" \
-            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --credential "$LEM_GOOGLE_CREDENTIAL_FILE" \
             --workflow-run-id "$GITHUB_RUN_ID" \
             --source-run-id "$SOURCE_RUN_ID" \
             --output-sha256 "$OUTPUT_SHA" \
@@ -512,12 +518,11 @@ jobs:
       - name: Mark completed zero-conflict optional pause in review Sheet
         if: ${{ needs.prepare.outputs.publish == 'true' && steps.review_type.outputs.zero_cases == 'true' }}
         env:
-          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages(library(googlesheets4))
           ss <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
-          gs4_auth(path=Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"))
+          gs4_auth(path=Sys.getenv("LEM_GOOGLE_CREDENTIAL_FILE"),cache=FALSE)
           tab <- "w02_optional_pause"
           if(!tab %in% sheet_names(ss)) stop("Missing zero-case W02 pause ledger")
           d <- read_sheet(ss,sheet=tab,col_types="c")
