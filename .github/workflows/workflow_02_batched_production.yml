@@ -21,6 +21,11 @@ on:
         required: false
         default: ''
         type: string
+      google_sheet_id:
+        description: 'Optional review-specific Google Sheet ID supplied by Shiny'
+        required: false
+        default: ''
+        type: string
       resume_run_id:
         description: 'Optional interrupted incremental run ID to resume'
         required: false
@@ -39,6 +44,7 @@ jobs:
       pointer: ${{ steps.select.outputs.pointer }}
       previous: ${{ steps.select.outputs.previous }}
       resume: ${{ steps.select.outputs.resume }}
+      sheet: ${{ steps.select.outputs.sheet }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,6 +56,7 @@ jobs:
           POINTER: ${{ inputs.workflow01_pointer_path }}
           PREVIOUS: ${{ inputs.previous_workflow02_pointer_path }}
           RESUME: ${{ inputs.resume_run_id }}
+          SHEET: ${{ inputs.google_sheet_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -68,12 +75,14 @@ jobs:
           echo "pointer=$POINTER" >> "$GITHUB_OUTPUT"
           echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
           echo "resume=$RESUME" >> "$GITHUB_OUTPUT"
+          echo "sheet=$SHEET" >> "$GITHUB_OUTPUT"
   production:
     needs: resolve
     uses: ./.github/workflows/workflow_02_batched.yml
     with:
       first_run: ${{ fromJSON(needs.resolve.outputs.first_run) }}
       workflow01_pointer_path: ${{ needs.resolve.outputs.pointer }}
+      google_sheet_id: ${{ needs.resolve.outputs.sheet }}
       previous_workflow02_pointer_path: ${{ needs.resolve.outputs.previous }}
       mode: 'incremental'
       resume_run_id: ${{ needs.resolve.outputs.resume }}
