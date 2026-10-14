@@ -509,6 +509,28 @@ jobs:
             --output-sha256 "$OUTPUT_SHA" \
             --message "Workflow 02 human decisions applied; resumed sparse state archived and registered."
 
+      - name: Mark completed zero-conflict optional pause in review Sheet
+        if: ${{ needs.prepare.outputs.publish == 'true' && steps.review_type.outputs.zero_cases == 'true' }}
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(googlesheets4))
+          ss <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
+          gs4_auth(path=Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"))
+          tab <- "w02_optional_pause"
+          if(!tab %in% sheet_names(ss)) stop("Missing zero-case W02 pause ledger")
+          d <- read_sheet(ss,sheet=tab,col_types="c")
+          run <- Sys.getenv("SOURCE_RUN_ID")
+          hits <- which(as.character(d$source_run_id)==run &
+                        as.character(d$google_sheet_id)==ss)
+          if(!length(hits)) stop("No matching zero-case W02 pause entry to acknowledge")
+          z <- d[hits[length(hits)],,drop=FALSE]
+          z$status <- "consumed"
+          z$created_at_utc <- format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
+          sheet_append(ss,data=z,sheet=tab)
+          cat("PASS: zero-conflict optional W02 pause marked consumed\n")
+
       - name: Build and publish post-W02 lean checkpoint after human resume
         if: ${{ needs.prepare.outputs.publish == 'true' }}
         env:
