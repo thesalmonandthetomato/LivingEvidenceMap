@@ -88,8 +88,13 @@ metadata <- list(metadata=list(
   publication_date=format(Sys.Date(),"%Y-%m-%d"),
   description=paste0(
     "<p>Compact pre-adjudication checkpoint for Living Evidence Map Workflow 01.</p>",
-    "<p>It stores only the incremental source manifestations, pair decisions, LLM adjudications and locked human-review queue required to resume from Workflow 01 Zenodo record ",
-    cm$previous_workflow01$zenodo_record_id,". It does not duplicate the full corpus.</p>",
+    if(isTRUE(cm$first_run)) {
+      "<p>First-run checkpoint containing the initial source manifestations, pair decisions, LLM adjudications and locked human-review queue.</p>"
+    } else {
+      paste0("<p>Incremental checkpoint for Workflow 01 Zenodo record ",
+             as.character(cm$previous_workflow01$zenodo_record_id),
+             " containing new manifestations, decisions and the locked human-review queue.</p>")
+    },
     "<p>Pending human-review cases: ",cm$pending_human_cases,".</p>"
   ),
   creators=list(list(name="Haddaway, Neal")),
@@ -140,9 +145,9 @@ receipt <- list(
   github_run_url=run_url,
   review_id=cm$review_id,
   google_sheet_id=cm$google_sheet_id,
-  previous_github_run_id=as.character(cm$previous_workflow01$github_run_id),
-  previous_zenodo_record_id=as.character(cm$previous_workflow01$zenodo_record_id),
-  previous_manifest_sha256=as.character(cm$previous_workflow01$manifest_sha256),
+  previous_github_run_id=if(isTRUE(cm$first_run)) NULL else as.character(cm$previous_workflow01$github_run_id),
+  previous_zenodo_record_id=if(isTRUE(cm$first_run)) NULL else as.character(cm$previous_workflow01$zenodo_record_id),
+  previous_manifest_sha256=if(isTRUE(cm$first_run)) NULL else as.character(cm$previous_workflow01$manifest_sha256),
   workflow00=cm$workflow00,
   new_source_manifestations=as.integer(cm$new_source_manifestations),
   pending_human_cases=as.integer(cm$pending_human_cases),
