@@ -1083,6 +1083,8 @@ jobs:
             --run-id "$GITHUB_RUN_ID" \
             --repository "$GITHUB_REPOSITORY" \
             --state final \
+            --review-id "${{ inputs.review_id }}" \
+            --review-sheet-id "${{ inputs.review_sheet_id }}" \
             --output-dir outputs/zenodo
 
       - name: Validate final state and build delta
