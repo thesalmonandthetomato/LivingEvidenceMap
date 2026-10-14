@@ -25,6 +25,12 @@ arg <- function(flag,default=NULL){
 delta_dir <- normalizePath(arg("--delta-dir"),mustWork=TRUE)
 run_id <- arg("--run-id")
 repository <- arg("--repository")
+review_id <- arg("--review-id","")
+review_sheet_id <- arg("--review-sheet-id","")
+if(xor(nzchar(review_id),nzchar(review_sheet_id)))
+  stop("Delta archive requires both review ID and Google Sheet ID",call.=FALSE)
+if(!nzchar(review_id)) review_id <- NULL
+if(!nzchar(review_sheet_id)) review_sheet_id <- NULL
 output_dir <- arg("--output-dir")
 if(any(vapply(list(run_id,repository,output_dir),is.null,logical(1)))) {
   stop("Required: --delta-dir --run-id --repository --output-dir",call.=FALSE)
@@ -65,6 +71,8 @@ manifest <- list(
   github_run_id=as.character(run_id),
   github_run_url=run_url,
   repository=repository,
+  review_id=review_id,
+  google_sheet_id=review_sheet_id,
   previous=dm$previous,
   target=dm$target,
   delta=dm$delta,
@@ -173,6 +181,8 @@ receipt <- list(
   state="delta",
   github_run_id=as.character(run_id),
   github_run_url=run_url,
+  review_id=review_id,
+  google_sheet_id=review_sheet_id,
   source_manifestations=as.integer(dm$target$source_manifestations),
   preserved_pair_decisions=as.integer(summary$preserved_pair_decisions %||% NA),
   incremental_pair_decisions=as.integer(summary$incremental_pair_decisions %||% NA),
