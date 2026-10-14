@@ -26,7 +26,7 @@ lines <- readLines(input,warn=FALSE,encoding="UTF-8")
 if(length(lines)!=as.integer(m$records)) stop("Canonical record count mismatch")
 seen <- character()
 con <- file(output,"wt",encoding="UTF-8")
-on.exit(close(con),add=TRUE)
+# Close the output explicitly before the caller checks its contents.
 for (ln in lines) {
   z <- fromJSON(ln,simplifyVector=FALSE)
   if(!isTRUE(z$deduplication$final)) stop("Non-final canonical record")
@@ -46,4 +46,5 @@ for (ln in lines) {
              "ER  - ","")
   writeLines(entry,con,useBytes=TRUE)
 }
+close(con)
 cat(sprintf("PASS: exported %d unique canonical works to RIS\\n",length(seen)))
