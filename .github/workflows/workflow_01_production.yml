@@ -896,7 +896,7 @@ jobs:
         if: ${{ steps.adjudication.outputs.pending_count != '0' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+          LEM_GOOGLE_SHEET_ID: ${{ inputs.review_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
           QUEUE_TAB: 'queue_w01_active'
         shell: bash
         run: |
