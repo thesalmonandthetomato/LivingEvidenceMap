@@ -20,7 +20,7 @@ field <- function(tag,val) {
   vals <- trimws(as.character(unlist(val,use.names=FALSE)))
   vals <- vals[!is.na(vals)&nzchar(vals)]
   if(!length(vals)) return(character())
-  paste0(tag,"  - ",gsub("[\\r\\n]+"," ",vals))
+  paste0(tag,"  - ",gsub("[[:cntrl:]]+", " ", vals))
 }
 lines <- readLines(input,warn=FALSE,encoding="UTF-8")
 if(length(lines)!=as.integer(m$records)) stop("Canonical record count mismatch")
