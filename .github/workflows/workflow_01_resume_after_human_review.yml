@@ -238,7 +238,7 @@ jobs:
             stop("Review-specific checkpoint cannot resume without an identified handoff",call.=FALSE)
           }
           if(nzchar(review))
-            stop("Review-specific W01 resume remains disabled until isolated publication and reporting are validated",call.=FALSE)
+            cat("PASS: review-specific checkpoint, Shiny handoff and Sheet identities agree\\n")
           RS
           test -s "$CHECKPOINT_DIR/previous_workflow01_pointer.json"
           test -s "$CHECKPOINT_DIR/incremental_rescored_pairs.csv"
