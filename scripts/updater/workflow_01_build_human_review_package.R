@@ -22,11 +22,12 @@ source_run_id <- arg("--source-run-id")
 recipient <- arg("--recipient","nealhaddaway@gmail.com")
 repository <- arg("--repository",Sys.getenv("GITHUB_REPOSITORY","thesalmonandthetomato/LivingEvidenceMap"))
 workflow_run_id <- arg("--workflow-run-id",Sys.getenv("GITHUB_RUN_ID",""))
-review_id <- arg("--review-id",NULL)
-review_sheet_id <- arg("--review-sheet-id",NULL)
-if(xor(is.null(review_id),is.null(review_sheet_id)) ||
-   (!is.null(review_id) && (!nzchar(review_id) || !nzchar(review_sheet_id))))
+review_id <- arg("--review-id","")
+review_sheet_id <- arg("--review-sheet-id","")
+if(xor(nzchar(review_id),nzchar(review_sheet_id)))
   stop("W01 human-review package requires both non-empty review identifiers",call.=FALSE)
+if(!nzchar(review_id)) review_id <- NULL
+if(!nzchar(review_sheet_id)) review_sheet_id <- NULL
 if (any(vapply(list(input_path,output_dir,source_run_id),is.null,logical(1)))) {
   stop("Required: --input --output-dir --source-run-id",call.=FALSE)
 }
