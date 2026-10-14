@@ -8,6 +8,11 @@ on:
       - 'docs/shiny_adjudication/w02_resume_requests/*.json'
   workflow_dispatch:
     inputs:
+      google_sheet_id:
+        description: 'Optional review-specific Google Sheet ID inherited from Shiny'
+        required: false
+        default: ''
+        type: string
       source_run_id:
         description: 'Stopped Workflow 02 batched run ID that created the Shiny review queue'
         required: true
@@ -33,7 +38,7 @@ concurrency:
 
 env:
   WORKFLOW02_BRANCH: main
-  LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+  LEM_GOOGLE_SHEET_ID: ${{ inputs.google_sheet_id || secrets.LEM_TEST_GOOGLE_SHEET_ID }}
   W02_QUEUE_TAB: 'queue_w02_active'
   W02_DECISIONS_TAB: 'decisions_w02'
 
