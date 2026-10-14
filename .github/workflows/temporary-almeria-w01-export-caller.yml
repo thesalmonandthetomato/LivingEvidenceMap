@@ -1,0 +1,22 @@
+name: Temporary Almeria W01 export caller
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/temporary-almeria-w01-export-caller.yml'
+permissions:
+  actions: write
+  contents: read
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch existing review-specific W01 export
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run shiny-adjudication-dry-run-export-w01.yml \
+            --repo "${{ github.repository }}" --ref main \
+            -f review_id=almeria-map \
+            -f google_sheet_id=1wii1QjB4jM9OzOqboIgZn4z8CAN7W4EAyIKIyGcGjeU \
+            -f checkpoint_run_id=38543887923
