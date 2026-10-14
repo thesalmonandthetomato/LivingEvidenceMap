@@ -1,0 +1,29 @@
+name: Temporary W01 RIS converter check
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/w01_temporary_ris_smoke.yml']
+permissions:
+  contents: read
+jobs:
+  ris-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Check new canonical RIS converter only
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'if(!requireNamespace("jsonlite",quietly=TRUE))install.packages("jsonlite")'
+          mkdir -p /tmp/w01-ris-smoke
+          echo '{"schema":"living-evidence-map-canonical-manifest-v1","workflow":"01","records":1}' > /tmp/w01-ris-smoke/manifest.json
+          echo '{"identity":{"record_id":"work-1"},"deduplication":{"final":true},"canonical":{"title":"Example unique publication","authors":["Example, A","Second, B"],"year":"2026","doi":"10.1234/example","abstract":"Example abstract"}}' > /tmp/w01-ris-smoke/records.jsonl
+          Rscript scripts/updater/workflow_01_canonical_to_ris.R --input /tmp/w01-ris-smoke/records.jsonl --manifest /tmp/w01-ris-smoke/manifest.json --output /tmp/w01-ris-smoke/out.ris
+          grep -q '^TY  - JOUR$' /tmp/w01-ris-smoke/out.ris
+          grep -q '^ID  - work-1$' /tmp/w01-ris-smoke/out.ris
+          test "$(grep -c '^ER  - ' /tmp/w01-ris-smoke/out.ris)" = 1
+          echo 'PASS: generated a single valid RIS entry from one synthetic canonical work'
