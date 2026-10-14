@@ -598,11 +598,13 @@ jobs:
           set -euo pipefail
           LEAN_POINTER="docs/compaction/zenodo/run-$GITHUB_RUN_ID.json"
           test -s "$LEAN_POINTER"
+          FIRST_RUN="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);stopifnot(is.logical(x$first_run),length(x$first_run)==1L);cat(tolower(as.character(x$first_run)))')"
           gh workflow run workflow_03_production.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$WORKFLOW02_BRANCH" \
             -f limit='0' \
             -f batch_size='100' \
+            -f first_run="$FIRST_RUN" \
             -f publish='true' \
             -f lean_pointer_path="$LEAN_POINTER"
           echo "PASS: dispatched Workflow 03 after resumed W02 run $GITHUB_RUN_ID"
