@@ -482,9 +482,21 @@ jobs:
           r-version: release
           use-public-rspm: true
 
+      - name: Install finalization curl system dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libcurl4-openssl-dev
+
       - name: Install finalization dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2','readr','googlesheets4'))
+        run: |
+          install.packages(c('jsonlite','digest','curl','httr2','readr','googlesheets4'))
+          stopifnot(requireNamespace("curl",quietly=TRUE),
+                    requireNamespace("httr2",quietly=TRUE),
+                    requireNamespace("googlesheets4",quietly=TRUE))
+          cat("PASS: W02 finalization Sheets transport dependencies available\n")
 
       - name: Download immutable finalization state
         uses: actions/download-artifact@v4
