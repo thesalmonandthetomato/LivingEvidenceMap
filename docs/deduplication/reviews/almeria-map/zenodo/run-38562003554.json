@@ -1,0 +1,41 @@
+{
+  "status": "published",
+  "workflow": "01",
+  "state": "final",
+  "github_run_id": "38562003554",
+  "github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/38562003554",
+  "review_id": "almeria-map",
+  "google_sheet_id": "1wii1QjB4jM9OzOqboIgZn4z8CAN7W4EAyIKIyGcGjeU",
+  "source_manifestations": 6948,
+  "preserved_pair_decisions": 0,
+  "incremental_candidate_rows": 9933,
+  "incremental_pair_decisions": 9933,
+  "exact_duplicate_candidate_rows_removed": 0,
+  "manual_review_pairs": 289,
+  "canonical_records": 3084,
+  "canonical_jsonl_sha256": "24a129185a87175afac42e3272223c246a14a46c38bef42fdc8fbbc5fbb66ec6",
+  "canonical_jsonl_bytes": 33051335,
+  "zenodo_record_id": "23367097",
+  "zenodo_deposition_id": "23367097",
+  "doi": "10.5281/zenodo.23367097",
+  "record_url": "https://zenodo.org/records/23367097",
+  "title": "Living Evidence Map deduplication state | Workflow 01 run 38562003554 | final",
+  "visibility": "restricted",
+  "total_bytes": 14765886,
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow01_run-38562003554_final-state.tar.gz",
+      "bytes": 14764819,
+      "sha256": "8b7a9b5628970c3ff0d3e44448375732169c47ff57371b299681912c61e0a4fe",
+      "zenodo_checksum": "md5:c97c0917a22bcd012b85e1f1d308c155"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow01_run-38562003554_manifest.json",
+      "bytes": 1067,
+      "sha256": "f545938a78de9c64ea72626cab9190fd4746fa0e9980ec859e1dd4d132dc8ef3",
+      "zenodo_checksum": "md5:0b93762cc615499fe4c4e13c28e9b743"
+    }
+  ],
+  "manifest_sha256": "f545938a78de9c64ea72626cab9190fd4746fa0e9980ec859e1dd4d132dc8ef3",
+  "published_at_utc": "2026-10-14T12:24:44Z"
+}
