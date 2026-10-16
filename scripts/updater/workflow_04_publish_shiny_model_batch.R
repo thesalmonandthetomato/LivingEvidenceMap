@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Publish a completed Shiny-launched W04 experiment without modifying the
 # production W04 state or replacing another experiment's resolution queue.
-suppressPackageStartupMessages({library(jsonlite);library(digest);library(googlesheets4)})
+suppressPackageStartupMessages({library(jsonlite);library(digest)})
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag,default=NULL) {i<-match(flag,args);if(is.na(i))return(default);if(i==length(args))stop("Missing ",flag,call.=FALSE);args[[i+1L]]}
 `%||%` <- function(x,y) if(is.null(x)||!length(x)) y else x
@@ -69,6 +69,7 @@ if(identical(arg("--dry-run","false"),"true")) {
     run_id,review_id,sheet_id,length(ids),sum(decisions=="uncertain")))
   quit(save="no",status=0L)
 }
+suppressPackageStartupMessages(library(googlesheets4))
 gs4_auth(path=credential,cache=FALSE)
 tabs <- sheet_names(sheet_id)
 if(index_tab%in%tabs) {
