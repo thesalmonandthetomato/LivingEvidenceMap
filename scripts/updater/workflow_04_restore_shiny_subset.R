@@ -6,6 +6,7 @@ suppressPackageStartupMessages({
   library(digest)
   library(httr2)
 })
+`%||%` <- function(x,y) if(is.null(x) || length(x)==0L) y else x
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag,default=NULL) {
   i <- match(flag,args)
@@ -21,7 +22,7 @@ canonical_path <- arg("--canonical")
 output_dir <- arg("--output-dir","inputs/shiny_w04")
 if(!grepl("^[0-9]+$",deposit_id %||% ""))
   stop("Invalid Zenodo prompt draft ID",call.=FALSE)
-if(!grepl("^w04-model-input-[0-9a-f]{20}\.json$",bundle_name %||% ""))
+if(!grepl("^w04-model-input-[0-9a-f]{20}[.]json$",bundle_name %||% ""))
   stop("Invalid immutable subset bundle filename",call.=FALSE)
 if(!grepl("^[0-9a-f]{64}$",bundle_sha))
   stop("Invalid bundle checksum",call.=FALSE)
@@ -31,7 +32,6 @@ if(is.null(canonical_path)||!file.exists(canonical_path))
   stop("Current W03 canonical checkpoint is missing",call.=FALSE)
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN",unset="")
 if(!nzchar(token)) stop("ZENODO_ACCESS_TOKEN is required",call.=FALSE)
-`%||%` <- function(x,y) if(is.null(x) || length(x)==0L) y else x
 fetch <- function(url) {
   req <- request(url) |>
     req_headers(Authorization=paste("Bearer",token)) |>
