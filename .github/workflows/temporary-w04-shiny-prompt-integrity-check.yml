@@ -17,6 +17,7 @@ jobs:
       - name: Verify parser, byte checksums and GitHub pathway
         shell: Rscript {0}
         run: |
+          if (!requireNamespace("digest", quietly=TRUE)) install.packages("digest",repos="https://cloud.r-project.org")
           parse("scripts/updater/workflow_04_restore_shiny_subset.R")
           source_text <- paste(readLines("scripts/updater/workflow_04_restore_shiny_subset.R",warn=FALSE),collapse="\n")
           workflow <- paste(readLines(".github/workflows/workflow_04_production.yml",warn=FALSE),collapse="\n")
