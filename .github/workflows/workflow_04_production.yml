@@ -625,6 +625,7 @@ jobs:
           chmod 600 "$RUNNER_TEMP/w04-publisher-credential.json"
           Rscript scripts/updater/workflow_04_publish_shiny_model_batch.R \
             --input-manifest prepared/inputs/shiny_w04/input_manifest.json \
+            --selected-ids prepared/inputs/shiny_w04/selected_record_ids.txt \
             --merged merged/workflow04_consensus_layer.jsonl \
             --resolution-queue outputs/workflow04_shiny_return/workflow04_resolution_queue.jsonl \
             --resolution-manifest outputs/workflow04_shiny_return/workflow04_resolution_queue_manifest.json \
