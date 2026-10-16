@@ -1,0 +1,54 @@
+name: Temporary W04 Shiny return validation
+on:
+  push:
+    paths: ['.github/workflows/temporary-w04-shiny-return-validation.yml']
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+      - name: Validate return publisher with no Google Sheets writes
+        shell: Rscript {0}
+        run: |
+          install.packages(c("jsonlite","digest"),repos="https://cloud.r-project.org",quiet=TRUE)
+          library(jsonlite)
+          library(digest)
+          parse(file="scripts/updater/workflow_04_publish_shiny_model_batch.R")
+          parse(file="scripts/updater/workflow_04_build_resolution_queue.R")
+          p <- tempfile("shiny-w04-")
+          dir.create(p)
+          input <- file.path(p,"input.json")
+          merged <- file.path(p,"merged.jsonl")
+          uncertain <- file.path(p,"queue.jsonl")
+          qm <- file.path(p,"queue_manifest.json")
+          cred <- file.path(p,"dummy-credential.json")
+          file.create(cred)
+          prompt_sha <- paste(rep("a",64),collapse="")
+          sheet <- paste(rep("S",40),collapse="")
+          write_json(list(schema="lem-w04-shiny-subset-restoration-v1",review_id="almeria-map",
+            review_sheet_id=sheet,subset_id=paste0("w04-subset-",paste(rep("b",20),collapse="")),
+            record_count=8,prompt_sha256=prompt_sha,prompt_version_id="synthetic"),
+            input,auto_unbox=TRUE)
+          rows <- lapply(1:8,function(i) list(record_id=paste0("r",i),
+            screening=list(decision=if(i<=2)"uncertain" else "retain",prompt_sha256=prompt_sha)))
+          writeLines(vapply(rows,toJSON,character(1),auto_unbox=TRUE),merged)
+          cases <- lapply(1:2,function(i)list(record_id=paste0("r",i),
+            review_case_id=paste0("w04-resolution-r",i),screening=rows[[i]]$screening))
+          writeLines(vapply(cases,toJSON,character(1),auto_unbox=TRUE),uncertain)
+          sha <- digest(file=uncertain,algo="sha256",serialize=FALSE)
+          write_json(list(queue_sha256=sha,source_run_id="123456"),qm,auto_unbox=TRUE)
+          cmd <- c("scripts/updater/workflow_04_publish_shiny_model_batch.R",
+            "--input-manifest",input,"--merged",merged,"--resolution-queue",uncertain,
+            "--resolution-manifest",qm,"--credential",cred,"--run-id","123456","--dry-run","true")
+          output <- suppressWarnings(system2("Rscript",cmd,stdout=TRUE,stderr=TRUE))
+          stopifnot(is.null(attr(output,"status")) || identical(attr(output,"status"),0L))
+          stopifnot(any(grepl("PASS dry-run:",output,fixed=TRUE)))
+          source <- paste(readLines(".github/workflows/workflow_04_production.yml"),collapse="\n")
+          stopifnot(grepl("publish-shiny-subset:",source,fixed=TRUE))
+          stopifnot(grepl("inputs.execution_pathway == 'shiny'",source,fixed=TRUE))
+          stopifnot(grepl("workflow_04_publish_shiny_model_batch.R",source,fixed=TRUE))
+          stopifnot(!grepl("--sheet-id",substr(source,regexpr("publish-shiny-subset:",source,fixed=TRUE)[1],
+            regexpr("  finalise:",source,fixed=TRUE)[1]),fixed=TRUE))
+          cat("PASS: batch-bound model return validates 8 records and 2 uncertainties without API access\n")
