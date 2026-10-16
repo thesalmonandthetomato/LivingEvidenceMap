@@ -64,6 +64,11 @@ if(any(decisions=="uncertain")) {
     case_json=qlines,review_mode=c("resolution",rep("",length(qlines)-1L)),
     source_run_id=c(run_id,rep("",length(qlines)-1L)),stringsAsFactors=FALSE)
 }
+if(identical(arg("--dry-run","false"),"true")) {
+  cat(sprintf("PASS dry-run: run %s, review %s, sheet %s, %d results, %d uncertain\\n",
+    run_id,review_id,sheet_id,length(ids),sum(decisions=="uncertain")))
+  quit(save="no",status=0L)
+}
 gs4_auth(path=credential,cache=FALSE)
 tabs <- sheet_names(sheet_id)
 if(index_tab%in%tabs) {
