@@ -7,12 +7,13 @@ arg <- function(flag,default=NULL) {i<-match(flag,args);if(is.na(i))return(defau
 `%||%` <- function(x,y) if(is.null(x)||!length(x)) y else x
 manifest_path <- arg("--input-manifest")
 merged_path <- arg("--merged")
+selected_ids_path <- arg("--selected-ids")
 resolution_path <- arg("--resolution-queue","")
 resolution_manifest_path <- arg("--resolution-manifest","")
 sheet_id <- arg("--sheet-id","")
 credential <- arg("--credential")
 run_id <- arg("--run-id")
-if(any(vapply(list(manifest_path,merged_path,credential,run_id),is.null,logical(1))))
+if(any(vapply(list(manifest_path,merged_path,selected_ids_path,credential,run_id),is.null,logical(1))))
   stop("Required Shiny W04 publisher argument missing",call.=FALSE)
 if(!grepl("^[0-9]+$",run_id) || !file.exists(credential))stop("Invalid run ID or credential",call.=FALSE)
 manifest <- fromJSON(manifest_path,simplifyVector=FALSE)
@@ -38,6 +39,12 @@ shas <- vapply(records,function(r)scalar((r$screening %||% list())$prompt_sha256
 if(any(!nzchar(ids))||anyDuplicated(ids)||any(!decisions%in%c("retain","exclude","uncertain")) ||
    any(shas!=prompt_sha)||length(ids)!=as.integer(manifest$record_count))
   stop("W04 model result identity/decision/prompt invariant failed",call.=FALSE)
+if(!file.exists(selected_ids_path)) stop("Registered W04 subset ID file missing",call.=FALSE)
+expected_ids <- readLines(selected_ids_path,warn=FALSE,encoding="UTF-8")
+if(length(expected_ids)!=as.integer(manifest$record_count) ||
+   any(!nzchar(expected_ids)) || anyDuplicated(expected_ids) ||
+   !setequal(expected_ids,ids))
+  stop("W04 merged results do not match registered subset record membership",call.=FALSE)
 model_sha <- digest(file=merged_path,algo="sha256",serialize=FALSE)
 result_tab <- paste0("w04_model_results_",run_id)
 queue_tab <- paste0("queue_w04_resolution_",run_id)
