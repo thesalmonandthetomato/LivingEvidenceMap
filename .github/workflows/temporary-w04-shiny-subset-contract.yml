@@ -1,0 +1,45 @@
+name: Temporary W04 Shiny subset workflow contract
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temporary-w04-shiny-subset-contract.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Test W04 input adapter and workflow wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --break-system-packages pyyaml
+          python3 - <<'PY'
+          import yaml
+          from pathlib import Path
+          d=Path('.github/workflows')
+          names=['workflow_03_production.yml','workflow_04_production.yml',
+                 'workflow_04_resume_after_shiny.yml','w04_shiny_subset_launcher.yml']
+          for n in names:
+              x=yaml.safe_load((d/n).read_text())
+              assert isinstance(x['jobs'],dict),n
+              print('YAML parsed',n)
+          p=(d/'workflow_04_production.yml').read_text()
+          assert 'inputs.execution_pathway == \'shiny\'' in p
+          assert "inputs.execution_pathway == 'github'" in p
+          assert 'inputs/shiny_w04/' in p
+          assert 'inputs/shiny_w04/selected_record_ids.txt' in p
+          assert 'screening_config.json' in p
+          assert 'needs.merge-new.result == \'success\' && inputs.execution_pathway == \'github\'' in p
+          wrapper=(d/'w04_shiny_subset_launcher.yml').read_text()
+          assert "uses: ./.github/workflows/workflow_04_production.yml" in wrapper
+          assert "publish: false" in wrapper
+          assert "execution_pathway: shiny" in wrapper
+          print('PASS W04 model logic shared; subset does not finalise or hand off to W05')
+          PY
+          Rscript -e "parse(file='scripts/updater/workflow_04_restore_shiny_subset.R');parse(file='scripts/updater/workflow_04_prepare_incremental.R');cat('PASS R script syntax\n')"
