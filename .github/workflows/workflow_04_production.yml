@@ -3,6 +3,11 @@ name: Workflow 04 - relevance screening production
 on:
   workflow_call:
     inputs:
+      execution_pathway:
+        description: Inherited pathway from W00-W03; github is the existing default
+        required: false
+        default: github
+        type: string
       first_run:
         description: Initialise an entirely new review, with no prior baseline
         required: false
@@ -48,6 +53,12 @@ on:
 
   workflow_dispatch:
     inputs:
+      execution_pathway:
+        description: Inherited pathway from the initiating review (github or shiny)
+        required: false
+        default: github
+        type: choice
+        options: [github, shiny]
       first_run:
         description: Initialise an entirely new review, with no prior baseline
         required: false
@@ -670,7 +681,7 @@ jobs:
       contents: write
       actions: write
     needs: finalise
-    if: ${{ needs.finalise.result == 'success' && needs.finalise.outputs.status == 'PASS' && inputs.publish == true }}
+    if: ${{ needs.finalise.result == 'success' && needs.finalise.outputs.status == 'PASS' && inputs.publish == true && inputs.execution_pathway == 'github' }}
     uses: ./.github/workflows/workflow_05_production.yml
     with:
       first_run: ${{ inputs.first_run }}
