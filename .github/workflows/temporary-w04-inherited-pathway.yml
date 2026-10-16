@@ -1,0 +1,40 @@
+name: Temporary W04 inherited pathway validation
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/temporary-w04-inherited-pathway.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate W03-W04 pathway guards
+        shell: bash
+        run: |
+          python3 -m pip install --quiet --break-system-packages pyyaml
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          base=Path('.github/workflows')
+          w03=(base/'workflow_03_production.yml').read_text()
+          w04=(base/'workflow_04_production.yml').read_text()
+          resume=(base/'workflow_04_resume_after_shiny.yml').read_text()
+          for name in ('workflow_03_production.yml','workflow_04_production.yml','workflow_04_resume_after_shiny.yml'):
+              value=yaml.safe_load((base/name).read_text())
+              assert isinstance(value.get('jobs'),dict)
+              print('Parsed',name)
+          assert '-f execution_pathway=github' in w03
+          assert w04.count('execution_pathway:') >= 2
+          assert "inputs.execution_pathway == 'github'" in w04
+          assert 'execution_pathway=Sys.getenv("LEM_EXECUTION_PATHWAY","github")' in w04
+          assert 'provenance.get("execution_pathway","github")' in resume
+          assert "needs.resume.outputs.execution_pathway == 'github'" in resume
+          assert 'workflow_05_production.yml' in w04
+          assert 'workflow_05_production.yml' in resume
+          for inherited, expected in [('github',True),('shiny',False)]:
+              assert (inherited=='github') is expected
+          print('PASS inherited pathway guards and W03 automatic dispatch contract')
+          PY
