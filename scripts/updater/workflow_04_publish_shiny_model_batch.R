@@ -107,8 +107,11 @@ registry_row <- data.frame(review_id=review_id,run_id=run_id,subset_id=subset_id
   uncertain=as.character(sum(decisions=="uncertain")),
   published_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
   stringsAsFactors=FALSE)
-if(!index_tab%in%sheet_names(sheet_id)) sheet_write(registry_row,ss=sheet_id,sheet=index_tab)
-else sheet_append(ss=sheet_id,data=registry_row,sheet=index_tab)
+if(!index_tab%in%sheet_names(sheet_id)) {
+  sheet_write(registry_row,ss=sheet_id,sheet=index_tab)
+} else {
+  sheet_append(ss=sheet_id,data=registry_row,sheet=index_tab)
+}
 idx <- as.data.frame(read_sheet(sheet_id,sheet=index_tab,col_types="c"))
 if(sum(as.character(idx$run_id)==run_id)!=1L)
   stop("W04 model batch registry publication not verified",call.=FALSE)
