@@ -85,6 +85,7 @@ w03map <- setNames(w03,wids)
 
 eligible_ids <- cids[!vapply(cids,function(id)w03_excluded(w03map[[id]]),logical(1))]
 eligible_ids <- sort(eligible_ids)
+full_w03_eligible_n <- length(eligible_ids)
 # Shiny validation uses a fixed registered subset. It must never silently
 # narrow membership or mix selected records with a previous W04 baseline.
 if(nzchar(selected_ids_path)){
@@ -233,8 +234,10 @@ manifest <- list(
   status="PASS",
   mode=mode,
   canonical_records=length(cids),
-  workflow03_excluded=length(cids)-length(eligible_ids),
-  workflow03_eligible=length(eligible_ids),
+  workflow03_excluded=length(cids)-full_w03_eligible_n,
+  workflow03_eligible=full_w03_eligible_n,
+  selected_subset_records=if(nzchar(selected_ids_path))length(eligible_ids)else NULL,
+  selected_subset_record_ids_sha256=if(nzchar(selected_ids_path))digest(file=selected_ids_path,algo="sha256",serialize=FALSE)else NULL,
   prior_workflow04_records=length(prior_ids),
   reusable_records=length(reuse_ids),
   screen_queue_records=length(queue_ids),
