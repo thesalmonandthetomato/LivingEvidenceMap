@@ -119,8 +119,10 @@ writeLines(vapply(rows,function(r)toJSON(r,auto_unbox=TRUE,null="null",
   na="null",digits=NA),character(1)),canonical_overlay_path,useBytes=TRUE)
 prompt_path <- file.path(output_dir,"screening_prompt.txt")
 cat(prompt,file=prompt_path)
-if(!identical(paste(readLines(prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\\n"),prompt))
-  stop("Selected W04 prompt cannot be reproduced byte-for-byte by the screening reader",call.=FALSE)
+# Verify the exact persisted prompt bytes. readLines() discards line terminators
+# and can reject a valid immutable prompt with a trailing newline.
+if(!identical(tolower(digest(file=prompt_path,algo="sha256",serialize=FALSE)),prompt_expected))
+  stop("Selected W04 prompt file SHA-256 differs from archived prompt",call.=FALSE)
 cfg <- fromJSON("user_input/workflow04_screening_config.json",
                 simplifyVector=FALSE)
 cfg$prompt_path <- prompt_path
