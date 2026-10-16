@@ -1,0 +1,61 @@
+name: Temporary W04 prompt merge validation
+on:
+  push:
+    paths:
+      - '.github/workflows/temporary-w04-prompt-merge-validation.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+      - name: Validate Shiny and GitHub merge using synthetic shards
+        shell: Rscript {0}
+        run: |
+          install.packages(c("digest","jsonlite"),repos="https://cloud.r-project.org",quiet=TRUE)
+          library(jsonlite)
+          library(digest)
+          script <- "scripts/updater/workflow_04_merge_consensus.R"
+          parse(file=script)
+          workflow <- paste(readLines(".github/workflows/workflow_04_production.yml",warn=FALSE),collapse="\n")
+          stopifnot(grepl("Download immutable Shiny prompt configuration for merge",workflow,fixed=TRUE),
+                    grepl("--screening-config inputs/shiny_w04/screening_config.json --execution-pathway shiny",workflow,fixed=TRUE),
+                    grepl("cp -R prepared/inputs/shiny_w04 inputs/shiny_w04",workflow,fixed=TRUE))
+          root <- tempfile("w04-merge-")
+          dir.create(root)
+          prompt <- file.path(root,"prompt.txt")
+          writeLines(c("Synthetic W04 instruction","Keep immutable bytes"),prompt,useBytes=TRUE)
+          file_sha <- digest(file=prompt,algo="sha256",serialize=FALSE)
+          text_sha <- digest(paste(readLines(prompt,warn=FALSE),collapse="\n"),algo="sha256",serialize=FALSE)
+          stopifnot(!identical(file_sha,text_sha))
+          test_path <- function(pathway,sha) {
+            work <- file.path(root,pathway)
+            shards <- file.path(work,"shards")
+            dir.create(shards,recursive=TRUE)
+            cfg <- file.path(work,"config.json")
+            write_json(list(expected_prompt_sha256=sha,prompt_path=prompt),cfg,auto_unbox=TRUE)
+            for(i in seq_len(8L)) {
+              d <- file.path(shards,paste0("shard-",i))
+              dir.create(d)
+              summary <- list(shard_index=i,shard_count=8,workflow03_eligible=8,
+                prompt_sha256=sha,pass1_records=1,pass2_records=0,third_pass_records=0,
+                two_of_two_agreement=1,model="synthetic",prompt_version="test")
+              write_json(summary,file.path(d,"summary.json"),auto_unbox=TRUE)
+              row <- list(record_id=paste0("rec-",i),
+                screening=list(decision="retain",prompt_sha256=sha))
+              writeLines(toJSON(row,auto_unbox=TRUE),file.path(d,"workflow04_consensus_layer.jsonl"))
+            }
+            out <- file.path(work,"merged")
+            args <- c(script,"--input-root",shards,"--output-dir",out,
+              "--expected-shards","8","--screening-config",cfg,
+              "--execution-pathway",pathway)
+            status <- suppressWarnings(system2("Rscript",args,stdout=TRUE,stderr=TRUE))
+            stopifnot(is.null(attr(status,"status")) || identical(attr(status,"status"),0L))
+            result <- fromJSON(file.path(out,"summary.json"))
+            stopifnot(identical(result$prompt_sha256,sha),result$consensus_records==8L,
+                      identical(result$status,"PASS"))
+          }
+          test_path("shiny",file_sha)
+          test_path("github",text_sha)
+          cat("PASS: both immutable Shiny and existing GitHub W04 merge pathways\n")
