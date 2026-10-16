@@ -1,0 +1,41 @@
+name: Temporary W04 membership validation
+on:
+  push:
+    paths: ['.github/workflows/temporary-w04-identity-integrity.yml']
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Validate W04 publisher exact membership (no writes)
+        shell: Rscript {0}
+        run: |
+          install.packages(c("jsonlite","digest"),repos="https://cloud.r-project.org",quiet=TRUE)
+          library(jsonlite)
+          p <- tempfile();dir.create(p)
+          manifest <- file.path(p,"manifest.json")
+          merged <- file.path(p,"merged.jsonl")
+          ids <- file.path(p,"selected.txt")
+          cred <- file.path(p,"cred.json");file.create(cred)
+          sha <- paste(rep("a",64),collapse="")
+          write_json(list(schema="lem-w04-shiny-subset-restoration-v1",review_id="demo",
+            review_sheet_id=paste(rep("S",40),collapse=""),
+            subset_id=paste0("w04-subset-",paste(rep("b",20),collapse="")),
+            record_count=2,prompt_sha256=sha),manifest,auto_unbox=TRUE)
+          writeLines(c("r1","r2"),ids)
+          rows <- lapply(c("r1","r2"),function(id)list(record_id=id,screening=list(decision="retain",prompt_sha256=sha)))
+          writeLines(vapply(rows,toJSON,character(1),auto_unbox=TRUE),merged)
+          args <- c("scripts/updater/workflow_04_publish_shiny_model_batch.R","--input-manifest",manifest,"--selected-ids",ids,"--merged",merged,"--credential",cred,"--run-id","12345","--dry-run","true")
+          ok <- suppressWarnings(system2("Rscript",args,stdout=TRUE,stderr=TRUE))
+          stopifnot(is.null(attr(ok,"status")) || attr(ok,"status")==0L)
+          stopifnot(any(grepl("PASS dry-run",ok,fixed=TRUE)))
+          rows[[2]]$record_id <- "r3"
+          writeLines(vapply(rows,toJSON,character(1),auto_unbox=TRUE),merged)
+          bad <- suppressWarnings(system2("Rscript",args,stdout=TRUE,stderr=TRUE))
+          stopifnot(!is.null(attr(bad,"status")) && attr(bad,"status")!=0L)
+          stopifnot(any(grepl("do not match registered subset",bad,fixed=TRUE)))
+          cat("PASS exact registered subset IDs and mismatch rejection\n")
