@@ -364,8 +364,14 @@ jobs:
             "inputs/shiny_w04/screening_config.json" else
             "user_input/workflow04_screening_config.json"
           cfg <- fromJSON(config_path, simplifyVector=FALSE)
-          prompt <- paste(readLines(cfg$prompt_path, warn=FALSE, encoding="UTF-8"), collapse="\n")
-          prompt_sha <- digest(prompt, algo="sha256", serialize=FALSE)
+          if (identical(Sys.getenv("LEM_EXECUTION_PATHWAY"), "shiny")) {
+            # Preserve the exact archived prompt bytes, including trailing newline.
+            prompt_sha <- digest(file=cfg$prompt_path, algo="sha256", serialize=FALSE)
+          } else {
+            # Keep the established GitHub pathway's prompt handling unchanged.
+            prompt <- paste(readLines(cfg$prompt_path, warn=FALSE, encoding="UTF-8"), collapse="\n")
+            prompt_sha <- digest(prompt, algo="sha256", serialize=FALSE)
+          }
           stopifnot(identical(prompt_sha, as.character(cfg$expected_prompt_sha256)))
           provenance <- list(
             schema="living-evidence-map-workflow04-prompt-provenance-v1",
