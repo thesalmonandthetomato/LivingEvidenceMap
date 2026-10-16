@@ -38,8 +38,15 @@ if(!nzchar(PROMPT_PATH)||!file.exists(PROMPT_PATH)) stop("Workflow 04 screening 
 if(!nzchar(PROMPT_VERSION)) stop("Workflow 04 screening config lacks prompt_version",call.=FALSE)
 if(!nzchar(RESPONSE_SCHEMA_NAME)) stop("Workflow 04 screening config lacks response_schema_name",call.=FALSE)
 if(!grepl("^[0-9a-f]{64}$",EXPECTED_PROMPT_SHA256)) stop("Workflow 04 screening config has invalid expected_prompt_sha256",call.=FALSE)
-SYSTEM_PROMPT <- paste(readLines(PROMPT_PATH,warn=FALSE,encoding="UTF-8"),collapse="\n")
-PROMPT_SHA256 <- digest::digest(SYSTEM_PROMPT,algo="sha256",serialize=FALSE)
+if(identical(screening_config_path,"inputs/shiny_w04/screening_config.json")) {
+  # Preserve archived Shiny prompt bytes including the final newline.
+  PROMPT_SHA256 <- digest::digest(file=PROMPT_PATH,algo="sha256",serialize=FALSE)
+  SYSTEM_PROMPT <- rawToChar(readBin(PROMPT_PATH,what="raw",n=file.info(PROMPT_PATH)$size))
+} else {
+  # Retain the established GitHub pathway's prompt handling.
+  SYSTEM_PROMPT <- paste(readLines(PROMPT_PATH,warn=FALSE,encoding="UTF-8"),collapse="\n")
+  PROMPT_SHA256 <- digest::digest(SYSTEM_PROMPT,algo="sha256",serialize=FALSE)
+}
 if(!identical(PROMPT_SHA256,EXPECTED_PROMPT_SHA256)){
   stop(sprintf("IMMUTABLE PROMPT CHECK FAILED: expected %s got %s",EXPECTED_PROMPT_SHA256,PROMPT_SHA256),call.=FALSE)
 }
