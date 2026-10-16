@@ -1,0 +1,43 @@
+name: Temporary W04 subset preparation functional check
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temporary-w04-subset-prepare-check.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Run R subset preparation regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'install.packages(c("jsonlite","digest"),repos="https://cloud.r-project.org")'
+          mkdir -p /tmp/w04test
+          Rscript - <<'RS'
+          library(jsonlite)
+          rec <- function(id) list(identity=list(record_id=id),canonical=list(title=paste("Title",id),abstract="Test abstract"))
+          state <- function(id) list(record_id=id,publication_status=list(exclude_from_workflow04=FALSE))
+          writeLines(vapply(c("a","b","c"),function(id) toJSON(rec(id),auto_unbox=TRUE),character(1)),"/tmp/w04test/canonical.jsonl")
+          writeLines(vapply(c("a","b","c"),function(id) toJSON(state(id),auto_unbox=TRUE),character(1)),"/tmp/w04test/w03.jsonl")
+          writeLines(c("b","a"),"/tmp/w04test/selected.txt")
+          writeLines(c("b","b"),"/tmp/w04test/duplicate.txt")
+          writeLines(c("b","absent"),"/tmp/w04test/unknown.txt")
+          RS
+          Rscript scripts/updater/workflow_04_prepare_incremental.R --canonical /tmp/w04test/canonical.jsonl --workflow03-status /tmp/w04test/w03.jsonl --selected-record-ids /tmp/w04test/selected.txt --output-dir /tmp/w04test/out
+          Rscript - <<'RS'
+          library(jsonlite)
+          stopifnot(identical(readLines("/tmp/w04test/out/screen_queue_record_ids.txt"),c("a","b")))
+          m <- fromJSON("/tmp/w04test/out/prepare_manifest.json")
+          stopifnot(m$screen_queue_records==2L,m$workflow03_eligible==3L,m$workflow03_excluded==0L,m$selected_subset_records==2L)
+          cat("PASS exact subset and full-review W03 counts\n")
+          RS
+          if Rscript scripts/updater/workflow_04_prepare_incremental.R --canonical /tmp/w04test/canonical.jsonl --workflow03-status /tmp/w04test/w03.jsonl --selected-record-ids /tmp/w04test/duplicate.txt --output-dir /tmp/w04test/duplicate; then exit 1; fi
+          if Rscript scripts/updater/workflow_04_prepare_incremental.R --canonical /tmp/w04test/canonical.jsonl --workflow03-status /tmp/w04test/w03.jsonl --selected-record-ids /tmp/w04test/unknown.txt --output-dir /tmp/w04test/unknown; then exit 1; fi
+          echo "PASS duplicate/unknown subset members rejected"
