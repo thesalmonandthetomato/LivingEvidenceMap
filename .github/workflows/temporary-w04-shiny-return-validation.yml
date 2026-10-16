@@ -52,3 +52,5 @@ jobs:
           stopifnot(!grepl("--sheet-id",substr(source,regexpr("publish-shiny-subset:",source,fixed=TRUE)[1],
             regexpr("  finalise:",source,fixed=TRUE)[1]),fixed=TRUE))
           cat("PASS: batch-bound model return validates 8 records and 2 uncertainties without API access\n")
+
+# Retry after publisher parse correction
