@@ -7,6 +7,8 @@ input_root<-arg("--input-root")
 output_dir<-arg("--output-dir","outputs/workflow04_consensus_merged")
 expected_shards<-as.integer(arg("--expected-shards","8"))
 screening_config_path<-arg("--screening-config","user_input/workflow04_screening_config.json")
+execution_pathway<-arg("--execution-pathway","github")
+if(!execution_pathway%in%c("github","shiny"))stop("Unsupported W04 merge execution pathway",call.=FALSE)
 if(is.null(input_root))stop("--input-root is required",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
@@ -31,7 +33,11 @@ expected_sha<-scalar(config$expected_prompt_sha256)
 if(!grepl("^[0-9a-f]{64}$",expected_sha))stop("Invalid configured W04 prompt checksum",call.=FALSE)
 prompt_path<-scalar(config$prompt_path)
 if(!nzchar(prompt_path)||!file.exists(prompt_path))stop("Configured W04 screening prompt missing",call.=FALSE)
-actual_sha<-digest::digest(paste(readLines(prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n"),algo="sha256",serialize=FALSE)
+actual_sha<-if(identical(execution_pathway,"shiny")) {
+  digest::digest(file=prompt_path,algo="sha256",serialize=FALSE)
+} else {
+  digest::digest(paste(readLines(prompt_path,warn=FALSE,encoding="UTF-8"),collapse="\n"),algo="sha256",serialize=FALSE)
+}
 if(!identical(actual_sha,expected_sha))stop("W04 screening prompt checksum does not match configuration",call.=FALSE)
 if(any(vapply(summaries,function(x)!identical(scalar(x$prompt_sha256),expected_sha),logical(1))))stop("Prompt SHA mismatch across shards",call.=FALSE)
 eligible_counts<-vapply(summaries,function(x)as.integer(x$workflow03_eligible),integer(1))
