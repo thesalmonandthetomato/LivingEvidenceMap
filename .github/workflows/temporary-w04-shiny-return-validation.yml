@@ -12,7 +12,7 @@ jobs:
       - name: Validate return publisher with no Google Sheets writes
         shell: Rscript {0}
         run: |
-          install.packages(c("jsonlite","digest"),repos="https://cloud.r-project.org",quiet=TRUE)
+          install.packages(c("jsonlite","digest","googlesheets4"),repos="https://cloud.r-project.org",quiet=TRUE)
           library(jsonlite)
           library(digest)
           parse(file="scripts/updater/workflow_04_publish_shiny_model_batch.R")
@@ -43,7 +43,7 @@ jobs:
             "--input-manifest",input,"--merged",merged,"--resolution-queue",uncertain,
             "--resolution-manifest",qm,"--credential",cred,"--run-id","123456","--dry-run","true")
           output <- suppressWarnings(system2("Rscript",cmd,stdout=TRUE,stderr=TRUE))
-          stopifnot(is.null(attr(output,"status")) || identical(attr(output,"status"),0L))
+          if(!is.null(attr(output,"status")) && attr(output,"status")!=0L)stop(paste(output,collapse="\\n"))
           stopifnot(any(grepl("PASS dry-run:",output,fixed=TRUE)))
           source <- paste(readLines(".github/workflows/workflow_04_production.yml"),collapse="\n")
           stopifnot(grepl("publish-shiny-subset:",source,fixed=TRUE))
