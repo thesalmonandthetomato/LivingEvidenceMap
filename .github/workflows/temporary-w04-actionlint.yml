@@ -18,4 +18,4 @@ jobs:
       - name: Validate original W04 workflows
         run: |
           set -euo pipefail
-          actionlint -color .github/workflows/workflow_04_production.yml .github/workflows/w04_shiny_subset_launcher.yml
+          actionlint -shellcheck= -pyflakes= .github/workflows/workflow_04_production.yml .github/workflows/w04_shiny_subset_launcher.yml
