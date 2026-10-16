@@ -9,6 +9,7 @@ w03_path <- arg("--workflow03-status")
 prior_w04_path <- arg("--prior-workflow04","")
 prior_canonical_path <- arg("--prior-canonical","")
 force_rescreen_path <- arg("--force-rescreen-record-ids","")
+selected_ids_path <- arg("--selected-record-ids","")
 output_dir <- arg("--output-dir","outputs/workflow04_prepare")
 
 if(is.null(canonical_path)||is.null(w03_path)) stop("Required: --canonical --workflow03-status",call.=FALSE)
@@ -16,6 +17,8 @@ if(!file.exists(canonical_path)||!file.exists(w03_path)) stop("Current canonical
 if(nzchar(prior_w04_path)&&!file.exists(prior_w04_path)) stop("Prior Workflow 04 layer not found",call.=FALSE)
 if(nzchar(prior_canonical_path)&&!file.exists(prior_canonical_path)) stop("Prior canonical input not found",call.=FALSE)
 if(nzchar(force_rescreen_path)&&!file.exists(force_rescreen_path)) stop("Forced rescreen record-id file not found",call.=FALSE)
+if(nzchar(selected_ids_path)&&!file.exists(selected_ids_path)) stop("Selected W04 record-ID file not found",call.=FALSE)
+if(nzchar(selected_ids_path)&&nzchar(prior_w04_path)) stop("Subset screening cannot reuse or update a prior W04 state",call.=FALSE)
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
 `%||%` <- function(x,y) if(is.null(x)) y else x
@@ -82,6 +85,17 @@ w03map <- setNames(w03,wids)
 
 eligible_ids <- cids[!vapply(cids,function(id)w03_excluded(w03map[[id]]),logical(1))]
 eligible_ids <- sort(eligible_ids)
+# Shiny validation uses a fixed registered subset. It must never silently
+# narrow membership or mix selected records with a previous W04 baseline.
+if(nzchar(selected_ids_path)){
+  requested <- trimws(readLines(selected_ids_path,warn=FALSE,encoding="UTF-8"))
+  requested <- requested[nzchar(requested)]
+  if(!length(requested)||anyDuplicated(requested))
+    stop("Selected W04 record IDs are empty or duplicated",call.=FALSE)
+  absent <- setdiff(requested,eligible_ids)
+  if(length(absent)) stop(sprintf("Selected W04 subset has %d non-eligible or unknown IDs",length(absent)),call.=FALSE)
+  eligible_ids <- sort(requested)
+}
 cmap <- setNames(canonical,cids)
 current_fp <- setNames(vapply(eligible_ids,function(id)fingerprint(cmap[[id]]),character(1)),eligible_ids)
 current_availability <- lapply(eligible_ids,function(id)screening_availability(cmap[[id]]))
