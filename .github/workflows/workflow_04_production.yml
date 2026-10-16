@@ -287,6 +287,8 @@ jobs:
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
       - name: Freeze screening prompt provenance
+        env:
+          LEM_EXECUTION_PATHWAY: ${{ inputs.execution_pathway }}
         shell: Rscript {0}
         run: |
           library(jsonlite)
@@ -300,6 +302,7 @@ jobs:
             prompt_path=cfg$prompt_path,
             prompt_version=cfg$prompt_version,
             prompt_sha256=prompt_sha,
+            execution_pathway=Sys.getenv("LEM_EXECUTION_PATHWAY","github"),
             source_github_run_id=Sys.getenv("GITHUB_RUN_ID"),
             source_github_sha=Sys.getenv("GITHUB_SHA")
           )
