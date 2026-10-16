@@ -12,7 +12,7 @@ jobs:
       - name: Validate return publisher with no Google Sheets writes
         shell: Rscript {0}
         run: |
-          install.packages(c("jsonlite","digest","googlesheets4"),repos="https://cloud.r-project.org",quiet=TRUE)
+          install.packages(c("jsonlite","digest"),repos="https://cloud.r-project.org",quiet=TRUE)
           library(jsonlite)
           library(digest)
           parse(file="scripts/updater/workflow_04_publish_shiny_model_batch.R")
