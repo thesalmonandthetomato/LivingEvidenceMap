@@ -1,0 +1,39 @@
+name: Temporary W04 prompt pathway regression
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temporary-w04-prompt-pathway-regression.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.6.0'
+          use-public-rspm: true
+      - name: Validate Shiny byte preservation and GitHub isolation
+        shell: Rscript {0}
+        run: |
+          if (!requireNamespace("digest",quietly=TRUE)) install.packages("digest",repos="https://cloud.r-project.org")
+          parse("scripts/updater/workflow_04_restore_shiny_subset.R")
+          parse("scripts/updater/workflow_04_luna_consensus.R")
+          p <- tempfile()
+          archived <- "Prompt\nwith trailing newline\n"
+          cat(archived,file=p)
+          sha <- digest::digest(archived,algo="sha256",serialize=FALSE)
+          stopifnot(identical(digest::digest(file=p,algo="sha256",serialize=FALSE),sha))
+          stopifnot(identical(rawToChar(readBin(p,what="raw",n=file.info(p)$size)),archived))
+          stopifnot(!identical(digest::digest(paste(readLines(p,warn=FALSE),collapse="\n"),algo="sha256",serialize=FALSE),sha))
+          unlink(p)
+          scr <- paste(readLines("scripts/updater/workflow_04_luna_consensus.R",warn=FALSE),collapse="\n")
+          wf <- paste(readLines(".github/workflows/workflow_04_production.yml",warn=FALSE),collapse="\n")
+          stopifnot(grepl('identical(screening_config_path,"inputs/shiny_w04/screening_config.json")',scr,fixed=TRUE))
+          stopifnot(grepl('PROMPT_SHA256 <- digest::digest(file=PROMPT_PATH',scr,fixed=TRUE))
+          stopifnot(grepl('SYSTEM_PROMPT <- paste(readLines(PROMPT_PATH',scr,fixed=TRUE))
+          stopifnot(grepl('identical(Sys.getenv("LEM_EXECUTION_PATHWAY"), "shiny")',wf,fixed=TRUE))
+          stopifnot(grepl('prompt_sha <- digest(file=cfg$prompt_path',wf,fixed=TRUE))
+          stopifnot(grepl('prompt <- paste(readLines(cfg$prompt_path',wf,fixed=TRUE))
+          cat("PASS: prompt checksum byte preservation and unchanged GitHub branches\n")
