@@ -460,10 +460,14 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
-          SCREENING_CONFIG: ${{ inputs.execution_pathway == 'shiny' && 'prepared/inputs/shiny_w04/screening_config.json' || 'user_input/workflow04_screening_config.json' }}
+          SCREENING_CONFIG: ${{ inputs.execution_pathway == 'shiny' && 'inputs/shiny_w04/screening_config.json' || 'user_input/workflow04_screening_config.json' }}
         shell: bash
         run: |
           set -euo pipefail
+          if [ -d prepared/inputs/shiny_w04 ]; then
+            mkdir -p inputs
+            cp -R prepared/inputs/shiny_w04 inputs/shiny_w04
+          fi
           Rscript scripts/updater/workflow_04_luna_consensus.R \
             --canonical prepared/outputs/workflow04_prepare/screen_queue_canonical.jsonl \
             --workflow03-status prepared/outputs/workflow04_prepare/screen_queue_workflow03.jsonl \
