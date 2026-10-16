@@ -40,7 +40,7 @@ jobs:
           assert "uses: ./.github/workflows/workflow_04_production.yml" in wrapper
           assert "publish: false" in wrapper
           assert "execution_pathway: shiny" in wrapper
-          assert "if: ${{ inputs.execution_pathway == 'github' }}" in p
+          assert p.count("inputs.execution_pathway == 'github'") >= 2
           assert "Validate first-run provenance" in p
           assert "Restore Shiny registered subset and prompt" in p
           print('PASS W04 model logic shared; subset does not finalise or hand off to W05')
