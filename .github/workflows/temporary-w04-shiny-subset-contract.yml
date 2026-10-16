@@ -40,6 +40,9 @@ jobs:
           assert "uses: ./.github/workflows/workflow_04_production.yml" in wrapper
           assert "publish: false" in wrapper
           assert "execution_pathway: shiny" in wrapper
+          assert "if: ${{ inputs.execution_pathway == 'github' }}" in p
+          assert "Validate first-run provenance" in p
+          assert "Restore Shiny registered subset and prompt" in p
           print('PASS W04 model logic shared; subset does not finalise or hand off to W05')
           PY
           Rscript -e "parse(file='scripts/updater/workflow_04_restore_shiny_subset.R');parse(file='scripts/updater/workflow_04_prepare_incremental.R');cat('PASS R script syntax\n')"
