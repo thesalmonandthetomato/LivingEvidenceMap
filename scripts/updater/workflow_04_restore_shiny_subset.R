@@ -60,7 +60,8 @@ if(!identical(digest(bundle_bytes,algo="sha256",serialize=FALSE),bundle_sha))
   stop("Shiny input bundle checksum mismatch",call.=FALSE)
 bundle <- fromJSON(rawToChar(bundle_bytes),simplifyVector=FALSE)
 if(!identical(bundle$schema,"lem-w04-shiny-subset-input-v1") ||
-   !identical(bundle$review_id,review_id))
+   !identical(bundle$review_id,review_id) ||
+   !grepl("^[A-Za-z0-9_-]{20,160}$",as.character(bundle$review_sheet_id %||% "")))
   stop("Shiny bundle schema or review identity mismatch",call.=FALSE)
 ids <- unlist(bundle$record_ids,use.names=FALSE)
 if(!is.character(ids)||!length(ids)||anyNA(ids)||any(!nzchar(ids))||
@@ -131,6 +132,7 @@ cfg$expected_prompt_sha256 <- prompt_expected
 config_path <- file.path(output_dir,"screening_config.json")
 write_json(cfg,config_path,auto_unbox=TRUE,pretty=TRUE)
 manifest <- list(schema="lem-w04-shiny-subset-restoration-v1",review_id=review_id,
+  review_sheet_id=bundle$review_sheet_id,
   subset_id=bundle$subset_id,queue_sha256=bundle$queue_sha256,
   source_checkpoint_sha256=source_sha,record_count=length(ids),
   correction_count=length(corrections),bundle_sha256=bundle_sha,
