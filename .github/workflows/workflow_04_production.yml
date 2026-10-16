@@ -526,11 +526,28 @@ jobs:
           path: shards
           merge-multiple: false
 
+      - name: Download immutable Shiny prompt configuration for merge
+        if: ${{ needs.prepare.outputs.queue_n != '0' && inputs.execution_pathway == 'shiny' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow04-prepared-${{ github.run_id }}
+          path: prepared
+
       - name: Merge new screening decisions
         if: ${{ needs.prepare.outputs.queue_n != '0' }}
         shell: bash
+        env:
+          W04_EXECUTION_PATHWAY: ${{ inputs.execution_pathway }}
         run: |
-          Rscript scripts/updater/workflow_04_merge_consensus.R             --input-root shards             --output-dir outputs/workflow04_new_consensus             --expected-shards 8
+          set -euo pipefail
+          ARGS=(--input-root shards --output-dir outputs/workflow04_new_consensus --expected-shards 8)
+          if [ "$W04_EXECUTION_PATHWAY" = "shiny" ]; then
+            test -s prepared/inputs/shiny_w04/screening_config.json
+            mkdir -p inputs
+            cp -R prepared/inputs/shiny_w04 inputs/shiny_w04
+            ARGS+=(--screening-config inputs/shiny_w04/screening_config.json --execution-pathway shiny)
+          fi
+          Rscript scripts/updater/workflow_04_merge_consensus.R "${ARGS[@]}"
 
       - name: Create empty new layer when nothing requires screening
         if: ${{ needs.prepare.outputs.queue_n == '0' }}
