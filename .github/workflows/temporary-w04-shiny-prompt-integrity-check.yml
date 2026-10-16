@@ -1,0 +1,33 @@
+name: Temporary W04 Shiny prompt integrity check
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temporary-w04-shiny-prompt-integrity-check.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.6.0'
+          use-public-rspm: true
+      - name: Verify parser, byte checksums and GitHub pathway
+        shell: Rscript {0}
+        run: |
+          parse("scripts/updater/workflow_04_restore_shiny_subset.R")
+          source_text <- paste(readLines("scripts/updater/workflow_04_restore_shiny_subset.R",warn=FALSE),collapse="\n")
+          workflow <- paste(readLines(".github/workflows/workflow_04_production.yml",warn=FALSE),collapse="\n")
+          stopifnot(grepl('digest(file=prompt_path,algo="sha256",serialize=FALSE)',source_text,fixed=TRUE))
+          stopifnot(grepl('digest(prompt,algo="sha256",serialize=FALSE)',source_text,fixed=TRUE))
+          stopifnot(!grepl('paste(readLines(prompt_path',source_text,fixed=TRUE))
+          stopifnot(grepl("inputs.execution_pathway == 'shiny'",workflow,fixed=TRUE))
+          stopifnot(grepl('Rscript scripts/updater/workflow_04_restore_shiny_subset.R',workflow,fixed=TRUE))
+          file <- tempfile()
+          prompt <- "First line\nSecond line\n"
+          cat(prompt,file=file)
+          stopifnot(identical(digest::digest(file=file,algo="sha256",serialize=FALSE),digest::digest(prompt,algo="sha256",serialize=FALSE)))
+          unlink(file)
+          cat("PASS: Shiny prompt byte integrity and normal pathway isolation\n")
