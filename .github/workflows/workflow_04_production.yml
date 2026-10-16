@@ -3,6 +3,22 @@ name: Workflow 04 - relevance screening production
 on:
   workflow_call:
     inputs:
+      shiny_review_id:
+        required: false
+        default: ''
+        type: string
+      shiny_prompt_draft_id:
+        required: false
+        default: ''
+        type: string
+      shiny_bundle_file:
+        required: false
+        default: ''
+        type: string
+      shiny_bundle_sha256:
+        required: false
+        default: ''
+        type: string
       execution_pathway:
         description: Inherited pathway from W00-W03; github is the existing default
         required: false
@@ -152,6 +168,7 @@ jobs:
           parse(file='scripts/updater/workflow_04_restore_recovery_pass1.R')
           parse(file='scripts/updater/workflow_04_seed_recovered_pass1.R')
           parse(file='scripts/updater/workflow_04_prepare_incremental.R')
+          parse(file='scripts/updater/workflow_04_restore_shiny_subset.R')
           parse(file='scripts/updater/workflow_04_luna_consensus.R')
           parse(file='scripts/updater/workflow_04_merge_consensus.R')
           parse(file='scripts/updater/workflow_04_merge_incremental.R')
@@ -159,6 +176,30 @@ jobs:
           parse(file='scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R')
           parse(file='scripts/updater/workflow_04_archive_state_to_zenodo.R')
           cat('PASS: W04 production scripts parse\n')
+
+      - name: Validate inherited W04 launch mode
+        env:
+          LEM_PATHWAY: ${{ inputs.execution_pathway }}
+          SHINY_REVIEW_ID: ${{ inputs.shiny_review_id }}
+          SHINY_DRAFT: ${{ inputs.shiny_prompt_draft_id }}
+          SHINY_BUNDLE: ${{ inputs.shiny_bundle_file }}
+          SHINY_SHA: ${{ inputs.shiny_bundle_sha256 }}
+          LEM_PUBLISH: ${{ inputs.publish }}
+          LEM_PRIOR: ${{ inputs.prior_workflow04_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$LEM_PATHWAY" in
+            github)
+              test -z "$SHINY_REVIEW_ID$SHINY_DRAFT$SHINY_BUNDLE$SHINY_SHA"
+              ;;
+            shiny)
+              test "$LEM_PUBLISH" = "false"
+              test "$LEM_PRIOR" = "none"
+              test -n "$SHINY_REVIEW_ID$SHINY_DRAFT$SHINY_BUNDLE$SHINY_SHA"
+              ;;
+            *) echo "Invalid inherited W04 pathway" >&2; exit 1 ;;
+          esac
 
       - name: Restore current W03 inputs
         env:
@@ -258,6 +299,25 @@ jobs:
             fi
           fi
 
+      - name: Restore Shiny registered subset and prompt
+        if: ${{ inputs.execution_pathway == 'shiny' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          SHINY_REVIEW_ID: ${{ inputs.shiny_review_id }}
+          SHINY_DRAFT: ${{ inputs.shiny_prompt_draft_id }}
+          SHINY_BUNDLE: ${{ inputs.shiny_bundle_file }}
+          SHINY_SHA: ${{ inputs.shiny_bundle_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_restore_shiny_subset.R \
+            --deposit-id "$SHINY_DRAFT" \
+            --bundle-file "$SHINY_BUNDLE" \
+            --bundle-sha256 "$SHINY_SHA" \
+            --review-id "$SHINY_REVIEW_ID" \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --output-dir inputs/shiny_w04
+
       - name: Prepare first-run/update queue
         id: queue
         env:
@@ -271,6 +331,10 @@ jobs:
             --workflow03-status inputs/current/publication_status.jsonl
             --output-dir outputs/workflow04_prepare
           )
+          if [ -s inputs/shiny_w04/selected_record_ids.txt ]; then
+            ARGS+=(--canonical inputs/shiny_w04/canonical_with_edits.jsonl)
+            ARGS+=(--selected-record-ids inputs/shiny_w04/selected_record_ids.txt)
+          fi
           if [ "$PRIOR_W04_INPUT" != "none" ] && [ -n "$PRIOR_W04_INPUT" ]; then
             ARGS+=(--prior-workflow04 inputs/prior_workflow04_layer.jsonl)
             if [ -f inputs/prior_canonical_lean.jsonl ]; then
@@ -293,7 +357,10 @@ jobs:
         run: |
           library(jsonlite)
           library(digest)
-          cfg <- fromJSON("user_input/workflow04_screening_config.json", simplifyVector=FALSE)
+          config_path <- if(file.exists("inputs/shiny_w04/screening_config.json"))
+            "inputs/shiny_w04/screening_config.json" else
+            "user_input/workflow04_screening_config.json"
+          cfg <- fromJSON(config_path, simplifyVector=FALSE)
           prompt <- paste(readLines(cfg$prompt_path, warn=FALSE, encoding="UTF-8"), collapse="\n")
           prompt_sha <- digest(prompt, algo="sha256", serialize=FALSE)
           stopifnot(identical(prompt_sha, as.character(cfg$expected_prompt_sha256)))
@@ -392,13 +459,14 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
+          SCREENING_CONFIG: ${{ inputs.execution_pathway == 'shiny' && 'prepared/inputs/shiny_w04/screening_config.json' || 'user_input/workflow04_screening_config.json' }}
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_04_luna_consensus.R \
             --canonical prepared/outputs/workflow04_prepare/screen_queue_canonical.jsonl \
             --workflow03-status prepared/outputs/workflow04_prepare/screen_queue_workflow03.jsonl \
-            --screening-config user_input/workflow04_screening_config.json \
+            --screening-config "$SCREENING_CONFIG" \
             --output-dir outputs/shard-${{ matrix.shard }} \
             --model gpt-5.6-luna \
             --shard-index ${{ matrix.shard }} \
@@ -468,7 +536,7 @@ jobs:
 
   finalise:
     needs: [prepare,merge-new]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.merge-new.result == 'success' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.merge-new.result == 'success' && inputs.execution_pathway == 'github' }}
     outputs:
       status: ${{ steps.status.outputs.status }}
     runs-on: ubuntu-latest
