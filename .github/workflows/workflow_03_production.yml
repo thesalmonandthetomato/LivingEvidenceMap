@@ -322,6 +322,7 @@ jobs:
           gh workflow run workflow_04_production.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
+            -f execution_pathway=github \
             -f first_run="$FIRST_RUN" \
             -f lean_pointer_path="$LEAN_POINTER" \
             -f workflow03_pointer_path="$W03_POINTER" \
