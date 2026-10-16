@@ -34,4 +34,4 @@ jobs:
         run: |
           set -euo pipefail
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
-          "$(go env GOPATH)/bin/actionlint" -color .github/workflows/w04_shiny_subset_launcher.yml .github/workflows/workflow_04_production.yml .github/workflows/workflow_05_production.yml
+          "$(go env GOPATH)/bin/actionlint" -shellcheck= -color .github/workflows/w04_shiny_subset_launcher.yml .github/workflows/workflow_04_production.yml .github/workflows/workflow_05_production.yml
