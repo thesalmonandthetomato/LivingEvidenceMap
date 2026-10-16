@@ -332,7 +332,7 @@ jobs:
             --output-dir outputs/workflow04_prepare
           )
           if [ -s inputs/shiny_w04/selected_record_ids.txt ]; then
-            ARGS+=(--canonical inputs/shiny_w04/canonical_with_edits.jsonl)
+            ARGS[1]="inputs/shiny_w04/canonical_with_edits.jsonl"
             ARGS+=(--selected-record-ids inputs/shiny_w04/selected_record_ids.txt)
           fi
           if [ "$PRIOR_W04_INPUT" != "none" ] && [ -n "$PRIOR_W04_INPUT" ]; then
@@ -404,6 +404,7 @@ jobs:
           path: |
             inputs/current/canonical_lean.jsonl
             inputs/current/publication_status.jsonl
+            inputs/shiny_w04/
             outputs/workflow04_prepare/
             outputs/workflow04_recovery_seed/
             inputs/current/manual_repair_application.json
