@@ -1,0 +1,50 @@
+name: W04 Shiny registered-subset model screening
+run-name: W04 Shiny subset ${{ inputs.review_id }} ${{ inputs.bundle_file }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      lean_pointer_path:
+        description: Review-bound post-W02 lean checkpoint pointer
+        required: true
+        type: string
+      workflow03_pointer_path:
+        description: Review-bound W03 status pointer
+        required: true
+        type: string
+      review_id:
+        description: Review ID inherited from the active Shiny review metadata
+        required: true
+        type: string
+      prompt_draft_id:
+        description: Existing review-specific restricted Zenodo W04 prompt draft
+        required: true
+        type: string
+      bundle_file:
+        description: Checksum-bound immutable Shiny input bundle filename
+        required: true
+        type: string
+      bundle_sha256:
+        description: SHA-256 digest of exact input bundle bytes
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  model-screen-subset:
+    uses: ./.github/workflows/workflow_04_production.yml
+    with:
+      execution_pathway: shiny
+      first_run: true
+      lean_pointer_path: ${{ inputs.lean_pointer_path }}
+      workflow03_pointer_path: ${{ inputs.workflow03_pointer_path }}
+      prior_workflow04_pointer_path: 'none'
+      publish: false
+      shiny_review_id: ${{ inputs.review_id }}
+      shiny_prompt_draft_id: ${{ inputs.prompt_draft_id }}
+      shiny_bundle_file: ${{ inputs.bundle_file }}
+      shiny_bundle_sha256: ${{ inputs.bundle_sha256 }}
+    secrets: inherit
