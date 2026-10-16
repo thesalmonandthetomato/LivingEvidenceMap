@@ -46,6 +46,7 @@ jobs:
   resume:
     outputs:
       source_run_id: ${{ steps.handoff.outputs.source_run_id }}
+      execution_pathway: ${{ steps.inherited_pathway.outputs.execution_pathway }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -131,6 +132,22 @@ jobs:
           test -s source/prepared/outputs/workflow04_prepare/prompt_provenance.json
           test -s source/prepared/inputs/current/canonical_lean.jsonl
           test -s source/prepared/inputs/current/publication_status.jsonl
+
+      - name: Resolve inherited W04 execution pathway
+        id: inherited_pathway
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          p="source/prepared/outputs/workflow04_prepare/prompt_provenance.json"
+          provenance=json.load(open(p,encoding="utf-8"))
+          # Pre-pathway W04 artefacts belong to the existing GitHub route.
+          pathway=provenance.get("execution_pathway","github")
+          if pathway not in ("github","shiny"):
+              raise ValueError("Invalid W04 inherited execution pathway")
+          print("execution_pathway="+pathway)
+          PY
 
       - name: Prepare Google credential
         env:
@@ -275,7 +292,7 @@ jobs:
       contents: write
       actions: write
     needs: resume
-    if: ${{ needs.resume.result == 'success' }}
+    if: ${{ needs.resume.result == 'success' && needs.resume.outputs.execution_pathway == 'github' }}
     uses: ./.github/workflows/workflow_05_production.yml
     with:
       first_run: true
