@@ -168,6 +168,13 @@ jobs:
             outputs/workflow10/dashboard-internal-data.js \
             inputs/workflow10/living_evidence_map_canonical_final.jsonl \
             outputs/workflow10/dashboard-data.js
+          # Restore the retained positional abstract index. The public table still contains snippets only.
+          Rscript R/workflow_10_build_search_trial.R \
+            outputs/workflow10/dashboard-data.js \
+            inputs/workflow10/living_evidence_map_canonical_final.jsonl \
+            outputs/workflow10/search-build-data.js \
+            outputs/workflow10/dashboard-search-index.js
+          rm outputs/workflow10/search-build-data.js
           cp docs/index.html outputs/workflow10/index.html
           Rscript scripts/reporting/workflow10_apply_dashboard_text.R \
             user_input/workflow10_dashboard_text.json outputs/workflow10/index.html
@@ -217,14 +224,15 @@ jobs:
           stopifnot(grepl('filter the database',html,fixed=TRUE))
           stopifnot(!grepl('Search and download',html,fixed=TRUE))
           stopifnot(!grepl('Download filtered results (.RIS)',html,fixed=TRUE))
-          stopifnot(!grepl('workflow10-search-trial-controller',html,fixed=TRUE))
-          stopifnot(!file.exists('outputs/workflow10/dashboard-search-index.js'))
+          stopifnot(grepl('./dashboard-search-index.js',html,fixed=TRUE))
+          stopifnot(grepl('id="booleanQuery"',html,fixed=TRUE))
+          stopifnot(file.exists('outputs/workflow10/dashboard-search-index.js'))
           stopifnot(!file.exists('outputs/workflow10/search-trial-manifest.json'))
 
           stopifnot(isTRUE(payload$public_projection$database_table))
           stopifnot(isFALSE(payload$public_projection$full_abstracts))
           stopifnot(as.integer(payload$public_projection$abstract_snippet_words)==30L)
-          stopifnot(isFALSE(payload$public_projection$search))
+          stopifnot(isFALSE(payload$public_projection$search)) # table payload has no embedded search data
           stopifnot(isFALSE(payload$public_projection$ris_download))
           stopifnot(isFALSE(payload$public_projection$abstract_index))
           required_table_fields <- c('record_id','title','abstract_snippet','doi','year','authors','journal','volume','pages','species','countries','iso3','topics','topic_paths','topic_stars')
@@ -282,6 +290,7 @@ jobs:
           path: |
             outputs/workflow10/index.html
             outputs/workflow10/dashboard-data.js
+            outputs/workflow10/dashboard-search-index.js
           retention-days: 30
           if-no-files-found: error
 
@@ -293,9 +302,11 @@ jobs:
           set -euo pipefail
           test -s outputs/workflow10/index.html
           test -s outputs/workflow10/dashboard-data.js
+          test -s outputs/workflow10/dashboard-search-index.js
 
           cp outputs/workflow10/index.html docs/index.html
           cp outputs/workflow10/dashboard-data.js docs/dashboard-data.js
+          cp outputs/workflow10/dashboard-search-index.js docs/dashboard-search-index.js
           # Keep both report links in the HTML template. Control their visibility
           # using the same publication flag as the underlying report pages.
           METHODSRESULTS="$METHODSRESULTS" Rscript - <<'RS'
@@ -329,7 +340,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html docs/dashboard-data.js docs/.nojekyll
+          git add docs/index.html docs/dashboard-data.js docs/dashboard-search-index.js docs/.nojekyll
           for page in docs/methodology.html docs/results.html; do
             if [ -e "$page" ] || git ls-files --error-unmatch "$page" >/dev/null 2>&1; then
               git add -A -- "$page"
