@@ -2,3 +2,4 @@ W10 finalisation retry
 methodsresults=false
 source_w09=38164718659
 reason=restore_active_status_after_git_stash
+validation_request=boolean_search_2026-10-17
