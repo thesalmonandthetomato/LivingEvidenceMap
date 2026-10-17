@@ -17,6 +17,7 @@ jobs:
           parse(file="scripts/updater/workflow_04_refine_prompt.R")
           x <- paste(readLines("scripts/updater/workflow_04_refine_prompt.R",warn=FALSE),collapse="\n")
           stopifnot(grepl('max_tries=1',x,fixed=TRUE))
+          stopifnot(grepl('w04-refinement-started-',x,fixed=TRUE))
           stopifnot(grepl('refusing a repeated paid call',x,fixed=TRUE))
           stopifnot(grepl('w04-refinement-response-',x,fixed=TRUE))
           cat("PASS W04 single-call workflow code parsing\n")
