@@ -112,7 +112,7 @@ function booleanSearchEngine(query){
     });
     index.record_ids.forEach((id,i)=>{
       const title=titleTokens[i];
-      const inTitle=title.some((_,at)=>terms.every((t,j)=>!quoted||at+j<title.length?wildcard(title[at+j]||'',t):false));
+      const inTitle=title.some((_,at)=>terms.every((t,j)=>(!quoted || at+j<title.length) && wildcard(title[at+j]||'',t)));
       const hits=abstractMaps[0].get(String(i));
       const inAbstract=hits&&[...hits].some(at=>terms.every((t,j)=>abstractMaps[j].get(String(i))?.has(at+j)));
       if(inTitle||inAbstract)result.add(String(id));
