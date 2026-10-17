@@ -34,10 +34,30 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
-      - name: Install one-call runtime dependencies
+      - name: Install native dependencies for HTTP and TLS
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libcurl4-openssl-dev libssl-dev pkg-config ca-certificates
+          pkg-config --modversion libcurl
+          pkg-config --modversion openssl
+      - name: Install and verify one-call R dependencies
         shell: Rscript {0}
         run: |
-          install.packages(c("jsonlite","httr2","digest"),repos="https://cloud.r-project.org",quiet=TRUE)
+          required <- c("jsonlite", "httr2", "digest")
+          # Use setup-r's Posit Package Manager repository where available.
+          install.packages(required, dependencies = c("Depends", "Imports", "LinkingTo"),
+                           quiet = FALSE)
+          failures <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
+          if (length(failures)) stop("Required R packages failed to load: ",
+                                     paste(failures, collapse = ", "), call. = FALSE)
+          for (package in required) {
+            suppressPackageStartupMessages(library(package, character.only = TRUE))
+            message("Verified R package: ", package,
+                    " ", as.character(packageVersion(package)))
+          }
       - name: Produce and archive proposed prompt
         shell: bash
         run: |
