@@ -2,6 +2,7 @@
 # One manually authorised OpenAI request. Input and output remain in the
 # restricted W04 prompt-development Zenodo draft; production W04 is untouched.
 suppressPackageStartupMessages({library(jsonlite);library(httr2);library(digest)})
+`%||%` <- function(x,y)if(is.null(x))y else x
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(flag) { i <- match(flag,args);if(is.na(i)||i==length(args)) stop("Missing ",flag,call.=FALSE);args[[i+1L]] }
 deposit <- arg("--draft-id"); name <- arg("--request-file"); sha <- tolower(arg("--request-sha"))
@@ -41,7 +42,6 @@ instruction <- paste(
   "Do not include markdown fences. Do not change any cases or their decisions.",sep=" ")
 payload <- toJSON(list(original_prompt=input$original_prompt,cases=input$cases,
   user_note=input$user_note %||% ""),auto_unbox=TRUE,null="null",digits=NA)
-`%||%` <- function(x,y)if(is.null(x))y else x
 model <- Sys.getenv("W04_PROMPT_REFINEMENT_MODEL","gpt-4.1-mini")
 message("Submitting exactly one W04 refinement API request")
 api <- request("https://api.openai.com/v1/chat/completions") |>
