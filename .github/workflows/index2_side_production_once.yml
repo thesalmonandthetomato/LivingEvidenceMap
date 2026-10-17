@@ -1,0 +1,100 @@
+name: Index2 side-production preview assets
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/index2_side_production_once.yml'
+permissions:
+  contents: read
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','readr','digest','httr2'))
+      - name: Build preview from side-production W08
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          TOPIC_ONTOLOGY_PATH: user_input/workflow07_topic_ontology.csv
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/index2 inputs/index2
+          Rscript - <<'RS'
+          library(jsonlite)
+          reg <- read.csv("docs/workflow08/zenodo_registry.csv")
+          row <- reg[reg$status=="authoritative",,drop=FALSE]
+          stopifnot(nrow(row)==1L,as.character(row$zenodo_record_id[[1]])=="23238386")
+          p <- sprintf("docs/workflow08/zenodo/run-%s.json",row$source_run_id[[1]])
+          pointer <- fromJSON(p)
+          flow <- fromJSON("docs/reporting/workflow_09/flow_counts.json")
+          stopifnot(pointer$canonical_records==22852L,
+                    flow$counts$combined_search_results==135566L,
+                    flow$counts$final_included==22852L)
+          writeLines(p,"inputs/index2/pointer_path.txt")
+          cat("PASS: verified side-production pointer and production figures\n")
+          RS
+          POINTER="$(cat inputs/index2/pointer_path.txt)"
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer "$POINTER" --output inputs/index2/canonical.jsonl
+          Rscript R/workflow_10_dashboard_from_canonical_jsonl.R \
+            inputs/index2/canonical.jsonl outputs/index2/internal.csv \
+            outputs/index2/internal-data.js "$POINTER"
+          Rscript R/workflow_10_make_public_dashboard.R \
+            outputs/index2/internal-data.js inputs/index2/canonical.jsonl outputs/index2/index2-data.js
+          Rscript R/workflow_10_build_search_trial.R \
+            outputs/index2/index2-data.js inputs/index2/canonical.jsonl \
+            outputs/index2/trial-data.js outputs/index2/dashboard-search-index.js
+      - name: Validate 135566 results and 22852 aligned included records
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          parse_js <- function(p,prefix) {
+            s <- paste(readLines(p,warn=FALSE),collapse="\n")
+            stopifnot(startsWith(s,prefix),endsWith(s,";"))
+            fromJSON(substr(s,nchar(prefix)+1L,nchar(s)-1L),simplifyVector=FALSE)
+          }
+          d <- parse_js("outputs/index2/index2-data.js","window.LIVING_EVIDENCE_MAP_DASHBOARD_DATA=")
+          ix <- parse_js("outputs/index2/dashboard-search-index.js","window.LIVING_EVIDENCE_MAP_ABSTRACT_INDEX=")
+          ids <- vapply(d$records,function(x)as.character(x$record_id),character(1))
+          stopifnot(length(ids)==22852L,length(ix$record_ids)==22852L,
+                    as.integer(d$metrics$search_results)==135566L,
+                    identical(ids,unlist(ix$record_ids,use.names=FALSE)),
+                    all(vapply(d$records,function(x)is.null(x[["abstract",exact=TRUE]]),logical(1))))
+          cat(sprintf("PASS: %d search results, %d records, indexed abstracts aligned\n",
+                      d$metrics$search_results,length(ids)))
+      - name: Checkout isolated public preview destination
+        uses: actions/checkout@v4
+        with:
+          repository: thesalmonandthetomato/salmonevidencemap
+          ref: main
+          token: ${{ secrets.SALMON_EVIDENCE_MAP_PUBLISH_TOKEN }}
+          path: public-preview
+          fetch-depth: 0
+      - name: Publish index2 assets without changing live dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public-preview/index2.html
+          grep -q './index2-data.js' public-preview/index2.html
+          grep -q './dashboard-search-index.js' public-preview/index2.html
+          cp outputs/index2/index2-data.js public-preview/index2-data.js
+          cp outputs/index2/dashboard-search-index.js public-preview/dashboard-search-index.js
+          cd public-preview
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index2-data.js dashboard-search-index.js
+          if ! git diff --cached --quiet; then
+            git commit -m "Update index2 preview to side-production evidence snapshot"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
