@@ -227,7 +227,7 @@ jobs:
           stopifnot(grepl('./dashboard-search-index.js',html,fixed=TRUE))
           stopifnot(grepl('id="booleanQuery"',html,fixed=TRUE))
           stopifnot(file.exists('outputs/workflow10/dashboard-search-index.js'))
-          stopifnot(!file.exists('outputs/workflow10/search-trial-manifest.json'))
+          stopifnot(file.exists('outputs/workflow10/search-trial-manifest.json'))
 
           stopifnot(isTRUE(payload$public_projection$database_table))
           stopifnot(isFALSE(payload$public_projection$full_abstracts))
