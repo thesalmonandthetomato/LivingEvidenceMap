@@ -120,14 +120,21 @@ jobs:
             --pointer "$PREV_W01_POINTER" \
             --pointer-dir docs/deduplication/zenodo \
             --output-root previous_state
-          test -s previous_state/workflow01_full_five_source/final_pair_decisions.csv
-          test -s previous_state/workflow01_full_five_source/manifestation_cluster_map.csv
-          test -s previous_state/workflow01_full_five_source/summary.json
-          test -s previous_state/canonical/records.jsonl
+          for required in \
+            previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            previous_state/workflow01_full_five_source/summary.json \
+            previous_state/canonical/records.jsonl; do
+            if [ ! -s "$required" ]; then
+              echo "Missing or empty required prior W01 state: $required" >&2
+              exit 1
+            fi
+          done
           seed_files=(previous_state/workflow01_seed/*_records_for_deduplication.jsonl)
           [ -e "${seed_files[0]}" ] || { echo "No previous Workflow 01 seed files found" >&2; exit 1; }
           for seed in "${seed_files[@]}"; do
-            test -s "$seed"
+            # Zero-hit historical search sources legitimately have empty seed files.
+            test -f "$seed" || { echo "Missing prior W01 seed file: $seed" >&2; exit 1; }
           done
 
       - name: Restore current Workflow 00 source subset
