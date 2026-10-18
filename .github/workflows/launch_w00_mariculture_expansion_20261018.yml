@@ -1,5 +1,5 @@
 name: Launch W00 mariculture concept expansion 2026-10-18
-# Attempt 2: restore query propagation from source search to W00 search-record writer.
+# Attempt 3: verified persistence and removed empty input override in search-record writer.
 on:
   push:
     branches: [workflow01-final-architecture]
