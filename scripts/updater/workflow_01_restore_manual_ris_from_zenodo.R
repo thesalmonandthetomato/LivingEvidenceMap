@@ -104,7 +104,7 @@ if (length(missing)) {
   if (length(missing) != length(required)) {
     stop(sprintf("Incomplete W00 derived-file set in Zenodo %s: %s",dep_id,paste(missing,collapse=", ")),call.=FALSE)
   }
-  ris_keys <- keys[grepl("\\\\.ris$",keys,ignore.case=TRUE)]
+  ris_keys <- keys[grepl("\\.ris$",keys,ignore.case=TRUE)]
   if (!length(ris_keys)) stop(sprintf("Zenodo %s has no W00 derived package or RIS files",dep_id),call.=FALSE)
   work <- tempfile(paste0("w00_new_ris_",expected_source,"_"))
   dir.create(work,recursive=TRUE)
@@ -128,7 +128,7 @@ if (length(missing)) {
   handoff <- file.path(target,"handoff","records.jsonl")
   manifest_path <- file.path(target,"manifest.json")
   if (!file.exists(handoff)) stop("No RIS handover was produced",call.=FALSE)
-  manifest_files <- list.files(target,pattern="manifest\\\\.json$",recursive=TRUE,full.names=TRUE)
+  manifest_files <- list.files(target,pattern="manifest\\.json$",recursive=TRUE,full.names=TRUE)
   if (!length(manifest_files)) stop("RIS normalization did not create a manifest",call.=FALSE)
   dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
   if (!file.copy(handoff,output_path,overwrite=TRUE)) stop("Cannot copy RIS handover",call.=FALSE)
