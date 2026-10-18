@@ -213,6 +213,22 @@ if(stage=="W00"){
   recs<-recs[parents==parent]
   baseline<-published_release_baseline()
   update_total<-sum(vapply(recs,function(z)as.integer(z$reported_search_results),integer(1)))
+  # Include manual RIS expansion events as separate W00 search results.
+  manual_sources <- list()
+  catalogue <- fromJSON("config/workflow01_source_catalogue.json",simplifyVector=FALSE)
+  if(length(catalogue$pending_manual_expansions)){
+    for(source in names(catalogue$pending_manual_expansions)){
+      registry_path <- clean(catalogue$pending_manual_expansions[[source]]$registry)
+      if(!nzchar(registry_path) || !file.exists(registry_path)) stop("Missing manual RIS expansion registry: ",source,call.=FALSE)
+      registry <- fromJSON(registry_path,simplifyVector=FALSE)
+      if(!identical(clean(registry$database$short_name),source)) stop("Manual RIS expansion source mismatch: ",source,call.=FALSE)
+      n <- as.integer(registry$search$reported_results)
+      if(length(n)!=1L || is.na(n) || n<0L) stop("Invalid manual RIS search result count: ",source,call.=FALSE)
+      manual_sources[[source]] <- list(reported_search_results=n,successfully_downloaded_results=n,
+        zenodo_doi=clean(registry$staging$reserved_doi),acquisition_method="ris_upload")
+    }
+  }
+  update_total <- update_total + sum(vapply(manual_sources,function(z)z$reported_search_results,integer(1)))
   prior_total<-as.integer(baseline$previous_counts$search_results)
   if(is.na(prior_total) || prior_total < 0L) stop("Published-release W00 baseline search-results total is invalid",call.=FALSE)
   total<-prior_total + update_total
@@ -221,6 +237,8 @@ if(stage=="W00"){
     reported_search_results=as.integer(z$reported_search_results),
     successfully_downloaded_results=as.integer(z$successfully_downloaded_results)
   )),vapply(recs,function(z)as.character(z$source),character(1)))
+  if(any(names(manual_sources) %in% names(src))) stop("Duplicate manual/API event source",call.=FALSE)
+  src<-c(src,manual_sources)
   s<-list(
     schema="living-evidence-map-current-run-status-v1",
     update_id=paste0("w00-run-",parent),
