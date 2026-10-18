@@ -1,0 +1,39 @@
+name: Temporary validate October RIS expansions
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/tmp_validate_manual_ris_20261018.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+      - name: Validate both new Zenodo RIS drafts (read-only)
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in cab proquest; do
+            if [ "$source" = cab ]; then registry=user_input/workflow00_ris_cab_mariculture_2026-10-18.json; else registry=user_input/workflow00_ris_proquest_mariculture_2026-10-18.json; fi
+            Rscript scripts/updater/workflow_00_complete_ris_zenodo_draft.R --registry "$registry" --validate-only true --output-dir "outputs/ris_validation/$source"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: october-ris-validation
+          path: outputs/ris_validation/
+          retention-days: 7
+          if-no-files-found: warn
