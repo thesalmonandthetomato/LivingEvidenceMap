@@ -226,10 +226,15 @@ jobs:
                   echo "ERROR: Unrecognised legacy W04 input checksum mismatch: $SHA expected $EXPECTED_SHA" >&2
                   exit 1
                 fi
-                mkdir -p inputs/current
-                cp "$P" inputs/current/canonical_lean.raw.jsonl
-                HUMAN_CORRECTIONS_POINTER="docs/workflow04/human_abstract_corrections/run-37511638503.json" Rscript scripts/updater/workflow_04_reconstruct_legacy_repaired_input.R
-                P="inputs/current/canonical_lean.jsonl"
+                # Never overwrite inputs/current: that is the NEW W03 canonical
+                # needed for the incremental W04 identity comparison.
+                mkdir -p inputs/prior_repair_sandbox/inputs/current
+                cp "$P" inputs/prior_repair_sandbox/inputs/current/canonical_lean.raw.jsonl
+                (
+                  cd inputs/prior_repair_sandbox
+                  HUMAN_CORRECTIONS_POINTER="$GITHUB_WORKSPACE/docs/workflow04/human_abstract_corrections/run-37511638503.json" Rscript "$GITHUB_WORKSPACE/scripts/updater/workflow_04_reconstruct_legacy_repaired_input.R"
+                )
+                P="inputs/prior_repair_sandbox/inputs/current/canonical_lean.jsonl"
                 SHA=$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')
                 if [ "$SHA" != "$EXPECTED_SHA" ]; then
                   echo "ERROR: Reconstructed legacy W04 input SHA $SHA differs from authoritative $EXPECTED_SHA" >&2
