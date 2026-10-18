@@ -1,0 +1,18 @@
+name: Resume W01 for W00 mariculture expansion 39127932051
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/launch_w01_mariculture_recovery_20261018.yml]
+permissions:
+  contents: write
+  actions: write
+jobs:
+  resume:
+    uses: ./.github/workflows/workflow_01_production.yml
+    with:
+      workflow00_pointer_path: docs/search_record/zenodo/run-39127932051.json
+      previous_workflow01_pointer_path: docs/deduplication/zenodo/run-37608813159.json
+      model: gpt-5.6-luna
+      auto_threshold: '0.95'
+      max_llm_cases: 5000
+    secrets: inherit
