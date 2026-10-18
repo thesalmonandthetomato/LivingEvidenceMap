@@ -381,6 +381,7 @@ jobs:
           git add docs/deduplication/zenodo_registry.csv docs/deduplication/zenodo/ docs/deduplication/runs/ docs/deduplication/checkpoints/resolutions/
           if ! git diff --cached --quiet; then
             git commit -m "Record resumed Workflow 01 delta run $GITHUB_RUN_ID"
+            git pull --rebase origin "$WORKFLOW01_BRANCH"
             git push origin "HEAD:$WORKFLOW01_BRANCH"
           fi
 
