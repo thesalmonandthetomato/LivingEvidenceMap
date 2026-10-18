@@ -428,7 +428,8 @@ jobs:
             mkdir -p "expansion_history/$source"
 
             registry="data/workflow00/source_id_registry/${source}_native_ids.txt"
-            if [ -s "$registry" ]; then
+            if [ -f "$registry" ]; then
+              # An existing zero-byte file is an authoritative zero-result registry.
               cp "$registry" "expansion_history/$source/known_native_ids.txt"
               echo "Using persistent registry for $source"
               continue
