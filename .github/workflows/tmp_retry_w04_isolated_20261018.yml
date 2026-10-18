@@ -1,0 +1,28 @@
+name: Temporary retry W04 with isolated legacy repair
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/tmp_retry_w04_isolated_20261018.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: workflow01-final-architecture}
+      - name: Dispatch W04 production from accepted W02 W03
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s docs/compaction/zenodo/run-39144383368.json
+          test -s docs/publication_status/zenodo/run-39147451019.json
+          gh workflow run workflow_04_production.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f lean_pointer_path=docs/compaction/zenodo/run-39144383368.json \
+            -f workflow03_pointer_path=docs/publication_status/zenodo/run-39147451019.json \
+            -f prior_workflow04_pointer_path=docs/workflow04/zenodo/run-37679581307.json \
+            -f prior_lean_pointer_path=docs/compaction/zenodo/run-37648955012.json \
+            -f publish=true
