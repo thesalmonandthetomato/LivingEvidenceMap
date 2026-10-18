@@ -22,8 +22,8 @@
       "Abstract"
     ],
     "limits": [],
-    "reported_results": null,
-    "notes": "Search metadata and result count to be confirmed against actual RIS exports before ingestion."
+    "reported_results": 41,
+    "notes": "Reported count confirmed against published restricted raw RIS and R W00 parsing in GitHub Actions run 39126358204. This is a concept expansion only; original September RIS is not reingested."
   },
   "field_semantics": {
     "ris_KW": "indexing_terms"
