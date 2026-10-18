@@ -277,6 +277,9 @@ jobs:
         run: |
           set -euo pipefail
           documented_query="$SEARCH_QUERY"
+          if [ "$SOURCE" = "ethos" ] && [ "$RUN_TYPE" = "full" ]; then
+            ADDITIONAL_SEARCH_TERM=""
+          fi
           if [ "$SOURCE" = "wos" ] && [ "$RUN_TYPE" = "fortnightly" ]; then
             documented_query="$SEARCH_QUERY ; modifiedTimeSpan=$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE"
           fi
