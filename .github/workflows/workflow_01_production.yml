@@ -270,12 +270,23 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p outputs
-          W00_SOURCES="$W00_SOURCES" Rscript -e '
+          W00_SOURCES="$W00_SOURCES" W00_POINTER="${{ inputs.workflow00_pointer_path }}" Rscript -e '
             library(jsonlite)
             p <- fromJSON("config/workflow01_source_catalogue.json", simplifyVector=FALSE)
             status <- fromJSON("docs/current_run/current_run_status.json", simplifyVector=FALSE)
             src <- trimws(strsplit(Sys.getenv("W00_SOURCES"), ",", fixed=TRUE)[[1L]])
             src <- src[nzchar(src)]
+            w00 <- fromJSON(file.path("workflow00_registry",Sys.getenv("W00_POINTER")),simplifyVector=FALSE)
+            if (identical(w00$run_type,"expansion")) {
+              # Incremental concept expansion: ingest only the new CAB/PQD&T archives.
+              # Historical September RIS inputs stay in the prior W01 baseline.
+              pending <- p$pending_manual_expansions
+              for (s in c("cab","proquest")) {
+                z <- pending[[s]]
+                if (is.null(z$registry) || !file.exists(z$registry)) stop(sprintf("Missing expansion RIS registry for %s",s),call.=FALSE)
+                p$sources[[s]]$registry <- z$registry
+              }
+            }
             adapter_sources <- c("lens","scopus","openalex","agricola","wos")
             for (s in src) {
               expected <- status$search$sources[[s]]$successfully_downloaded_results
