@@ -218,9 +218,24 @@ jobs:
               test -n "$P"
               SHA=$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')
               if [ "$SHA" != "$EXPECTED_SHA" ]; then
-                echo "ERROR: legacy W04 state needs its exact prior screening input to classify missing-to-present text safely." >&2
-                echo "Expected canonical SHA: $EXPECTED_SHA; fallback prior canonical SHA: $SHA" >&2
-                exit 1
+                # Historical integrity repair W04 37679581307 applied 157 protected
+                # human abstracts to the prior lean canonical before screening.
+                # Reconstruct only this identified legacy input, preserving an
+                # exact SHA-256 match as the mandatory acceptance criterion.
+                if [ "$PRIOR_RUN" != "37679581307" ]; then
+                  echo "ERROR: Unrecognised legacy W04 input checksum mismatch: $SHA expected $EXPECTED_SHA" >&2
+                  exit 1
+                fi
+                mkdir -p inputs/current
+                cp "$P" inputs/current/canonical_lean.raw.jsonl
+                HUMAN_CORRECTIONS_POINTER="docs/workflow04/human_abstract_corrections/run-37511638503.json" Rscript scripts/updater/workflow_04_reconstruct_legacy_repaired_input.R
+                P="inputs/current/canonical_lean.jsonl"
+                SHA=$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')
+                if [ "$SHA" != "$EXPECTED_SHA" ]; then
+                  echo "ERROR: Reconstructed legacy W04 input SHA $SHA differs from authoritative $EXPECTED_SHA" >&2
+                  exit 1
+                fi
+                echo "PASS: reconstructed exact historical W04 input including protected human abstract repairs"
               fi
               cp "$P" inputs/prior_canonical_lean.jsonl
               echo "PASS: restored exact prior W04 canonical input from fallback pointer"
