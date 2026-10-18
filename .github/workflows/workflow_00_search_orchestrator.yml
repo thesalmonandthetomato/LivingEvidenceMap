@@ -802,7 +802,7 @@ jobs:
             cp "$registry" "zenodo_staging/plan/manual_expansion_${source}_registry.json"
             echo "PASS: published $source expansion archive, $actual records"
           done
-          Rscript -e 'library(jsonlite); x<-list(schema="w00-manual-expansion-inputs-v1",run_type="expansion",additional_search_term="maricultur*",sources=list(cab=list(doi="10.5281/zenodo.23450362",record_count=41L),proquest=list(doi="10.5281/zenodo.23450377",record_count=5L)));writeLines(toJSON(x,pretty=TRUE,auto_unbox=TRUE),"zenodo_staging/plan/manual_expansion_manifest.json")'
+          Rscript -e 'library(jsonlite); x<-list(schema="w00-manual-expansion-inputs-v1",run_type="expansion",additional_search_term="maricultur*",sources=list(cab=list(doi="10.5281/zenodo.23453888",record_count=41L),proquest=list(doi="10.5281/zenodo.23453910",record_count=5L)));writeLines(toJSON(x,pretty=TRUE,auto_unbox=TRUE),"zenodo_staging/plan/manual_expansion_manifest.json")'
 
       - name: Publish restricted Zenodo search archive
         env:
