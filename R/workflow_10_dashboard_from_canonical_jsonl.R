@@ -196,12 +196,20 @@ if(length(iso_numeric)){
 }
 flow_counts<-fromJSON(flow_counts_path,simplifyVector=FALSE)
 flow_c<-flow_counts$counts%||%list()
-database_n<-length(flow_c$sources%||%list())
+# The W00-derived cumulative source-search ledger is authoritative for database coverage.
+# Do not use the last W00 source selection, which may contain only an update subset.
+source_searches <- flow_c$source_searches %||% list()
+source_codes <- vapply(source_searches,function(z) clean(z$code),character(1))
+source_hits <- vapply(source_searches,function(z) suppressWarnings(as.numeric(z$hits %||% NA_real_)),numeric(1))
+if(!length(source_codes) || any(!nzchar(source_codes)) || anyDuplicated(source_codes) ||
+   any(is.na(source_hits)) || any(source_hits < 0)) stopf("W00 cumulative source-search ledger is missing or invalid")
+# Zero-result searches remain in the audit, but do not contribute records to the map.
+database_n <- sum(source_hits > 0)
 search_results_n<-as.integer(flow_c$combined_search_results%||%NA_integer_)
 unique_records_n<-as.integer(flow_c$deduplicated_records%||%NA_integer_)
 screened_n<-as.integer(flow_c$title_abstract_screened%||%NA_integer_)
 search_update_date<-clean(flow_counts$search_update_date)
-if(database_n<1L || is.null(names(flow_c$sources)) || any(!nzchar(names(flow_c$sources)))) stopf("Workflow 09 source list is missing or invalid")
+if(database_n<1L) stopf("W00 cumulative source-search ledger contains no contributing databases")
 if(is.na(search_results_n)||search_results_n<1L) stopf("Workflow 09 search-results count is missing or invalid")
 if(is.na(unique_records_n)||unique_records_n<1L) stopf("Workflow 09 deduplicated-record count is missing or invalid")
 if(is.na(screened_n)||screened_n<0L) stopf("Workflow 09 screened count is missing or invalid")
