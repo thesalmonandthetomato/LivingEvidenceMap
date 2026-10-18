@@ -1,0 +1,44 @@
+{
+  "schema_version": "workflow00-source-registry-v1",
+  "acquisition": {
+    "method": "ris_upload",
+    "source_format": "RIS",
+    "notes": "Supplementary maricultur* expansion; raw RIS files staged in a new restricted Zenodo draft."
+  },
+  "database": {
+    "name": "ProQuest Dissertations & Theses Global",
+    "short_name": "proquest",
+    "platform": "ProQuest",
+    "database_scope": [
+      "ProQuest Dissertations & Theses Global"
+    ]
+  },
+  "search": {
+    "description": "Salmon farming search expansion with maricultur* only; excludes the original farming term block.",
+    "search_date": "2026-10-18",
+    "search_string": "(salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND maricultur* NOT (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)",
+    "search_fields": [
+      "Title",
+      "Abstract",
+      "DISKW (author keywords)"
+    ],
+    "limits": [],
+    "reported_results": null,
+    "notes": "Search metadata and result count to be confirmed against actual RIS exports before ingestion."
+  },
+  "field_semantics": {
+    "ris_KW": "indexing_terms"
+  },
+  "staging": {
+    "method": "zenodo_draft",
+    "reserved_doi": "10.5281/zenodo.23450377",
+    "deposition_id": "23450377",
+    "publish_after_validation": false,
+    "notes": "Complete existing draft in place; do not publish before validation."
+  },
+  "input": {
+    "expected_chunk_count": null,
+    "encoding": "UTF-8",
+    "files": []
+  }
+}
