@@ -44,7 +44,7 @@
   "search": {
     "workflow00_run_id": "39127932051",
     "search_date": "2026-10-18",
-    "search_results": 461,
+    "search_results": 507,
     "sources": {
       "agricola": {
         "reported_search_results": 2,
@@ -121,6 +121,18 @@
       "wos": {
         "reported_search_results": 26,
         "successfully_downloaded_results": 26
+      },
+      "cab": {
+        "reported_search_results": 41,
+        "successfully_downloaded_results": 41,
+        "zenodo_doi": "10.5281/zenodo.23453888",
+        "acquisition_method": "ris_upload"
+      },
+      "proquest": {
+        "reported_search_results": 5,
+        "successfully_downloaded_results": 5,
+        "zenodo_doi": "10.5281/zenodo.23453910",
+        "acquisition_method": "ris_upload"
       }
     }
   },
@@ -130,7 +142,7 @@
     "deduplicated_records": null
   },
   "counts": {
-    "search_results": 136027,
+    "search_results": 136073,
     "deduplicated_records": 50440,
     "enriched_records": 2101,
     "retraction_exclusions": 13,
