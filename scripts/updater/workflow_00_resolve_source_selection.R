@@ -108,7 +108,11 @@ if (run_type=="full") {
     if (length(unknown)) stop(sprintf("Published W00 registry contains unsupported source(s): %s",paste(unknown,collapse=", ")),call.=FALSE)
     # EThOS has not had a baseline search: it needs its own full run.
     if ("ethos" %in% previous) stop("EThOS already appears in the published W00 registry; reassess full-vs-expansion search plan",call.=FALSE)
-    selected <- supported[supported %in% unique(c(selected,previous))]
+    # Explicit first-time additions are searched using the original full query.
+    new_full_sources <- parse_source_list(Sys.getenv("W00_NEW_FULL_SOURCES"))
+    if (length(setdiff(new_full_sources,"ethos"))) stop("Only EThOS is currently authorised as a first-time full source in an expansion",call.=FALSE)
+    if (any(new_full_sources %in% previous)) stop("A declared first-time full source already has a published W00 search",call.=FALSE)
+    selected <- supported[supported %in% unique(c(selected,previous,new_full_sources))]
     origin <- "cumulative_published_w00_search_registry"
   }
 }
@@ -124,6 +128,7 @@ out <- list(
   excluded_sources=unname(excluded_sources),
   selected_sources=unname(selected),
   selected_source_count=length(selected),
+  new_full_sources=if(run_type=="expansion") unname(new_full_sources) else character(),
   generated_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 )
 writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null="null"),output_path)
