@@ -85,7 +85,7 @@ extract_record <- function(r, expected_source, fallback) {
   mapped <- if (expected_source=="lens") (r$canonical %||% list()) else (r$mapped_fields %||% list())
   raw <- if (expected_source=="lens") ((r$lens %||% list())$raw_payload %||% list()) else {
     container <- r[[expected_source]] %||% list()
-    container$raw_payload %||% list()
+    container[["raw_payload", exact=TRUE]] %||% list()
   }
   enrich <- r$abstract_enrichment %||% list()
 
