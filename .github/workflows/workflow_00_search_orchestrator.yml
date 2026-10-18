@@ -58,6 +58,10 @@ on:
         required: false
         default: ''
         type: string
+      new_full_sources:
+        required: false
+        default: ''
+        type: string
       resume_run_id:
         required: false
         default: ''
@@ -139,6 +143,11 @@ on:
         type: string
       additional_search_term:
         description: 'Expansion only: add one search term to the farm/aquaculture concept'
+        required: false
+        default: ''
+        type: string
+      new_full_sources:
+        description: 'Expansion only: first-time full source (ethos)'
         required: false
         default: ''
         type: string
@@ -247,6 +256,7 @@ jobs:
           W00_GROUP_SPORT_TOURISM: ${{ inputs.group_sport_tourism }}
           W00_GROUP_GREY_PREPRINTS: ${{ inputs.group_grey_preprints }}
           W00_ADDITIONAL_SOURCES: ${{ inputs.additional_sources }}
+          W00_NEW_FULL_SOURCES: ${{ inputs.new_full_sources }}
           W00_EXCLUDE_SOURCES: ${{ inputs.exclude_sources }}
         shell: bash
         run: |
@@ -319,7 +329,7 @@ jobs:
     uses: ./.github/workflows/_workflow_00_orchestrated_source_child.yml
     with:
       source: ${{ matrix.source }}
-      run_type: ${{ inputs.run_type }}
+      run_type: ${{ inputs.run_type == 'expansion' && matrix.source == 'ethos' && inputs.new_full_sources == 'ethos' && 'full' || inputs.run_type }}
       query: ''
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
@@ -374,6 +384,10 @@ jobs:
               *",$source,"*) ;;
               *) continue ;;
             esac
+            if [ "$source" = "ethos" ] && [ '${{ inputs.new_full_sources }}' = "ethos" ]; then
+              echo "EThOS is a first-time full search, not an expansion reconciliation source"
+              continue
+            fi
             mkdir -p "expansion_current/$source"
             gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
               --name "workflow00-${source}-harvest-${GITHUB_RUN_ID}" \
@@ -407,6 +421,10 @@ jobs:
               *",$source,"*) ;;
               *) continue ;;
             esac
+            if [ "$source" = "ethos" ] && [ '${{ inputs.new_full_sources }}' = "ethos" ]; then
+              echo "EThOS is a first-time full search, not an expansion reconciliation source"
+              continue
+            fi
             mkdir -p "expansion_history/$source"
 
             registry="data/workflow00/source_id_registry/${source}_native_ids.txt"
@@ -446,6 +464,10 @@ jobs:
               *",$source,"*) ;;
               *) continue ;;
             esac
+            if [ "$source" = "ethos" ] && [ '${{ inputs.new_full_sources }}' = "ethos" ]; then
+              echo "EThOS is a first-time full search, not an expansion reconciliation source"
+              continue
+            fi
             out="outputs/updater/expansion_reconciliation/$source"
             if [[ "$source" == ebsco_* ]]; then
               registry="expansion_history/$source/known_native_ids.txt"
