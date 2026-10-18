@@ -1,0 +1,40 @@
+name: Temporary diagnose W04 W03 identity mismatch
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/tmp_diagnose_w04_identity_20261018.yml]
+permissions: {contents: read}
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: workflow01-final-architecture}
+      - uses: r-lib/actions/setup-r@v2
+        with: {r-version: release, use-public-rspm: true}
+      - run: Rscript -e 'install.packages(c("jsonlite","digest","httr2"))'
+      - name: Restore exact accepted W02 and W03 publications
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R --pointer docs/compaction/zenodo/run-39144383368.json --output-dir /tmp/w02
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R --pointer docs/publication_status/zenodo/run-39147451019.json --output-dir /tmp/w03
+      - name: Compare record identifiers and source schema
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          a<-list.files("/tmp/w02",pattern="canonical_lean.jsonl",recursive=TRUE,full.names=TRUE)
+          b<-list.files("/tmp/w03",pattern="publication_status.jsonl",recursive=TRUE,full.names=TRUE)
+          stopifnot(length(a)==1L,length(b)==1L)
+          read_ids<-function(p,f){v<-readLines(p,warn=FALSE);v<-v[nzchar(trimws(v))];vapply(v,function(z){x<-fromJSON(z,simplifyVector=FALSE);f(x)},character(1))}
+          cids<-read_ids(a,function(x)if(is.null(x$identity$record_id)) "" else as.character(x$identity$record_id))
+          wids<-read_ids(b,function(x)if(is.null(x$record_id)) "" else as.character(x$record_id))
+          cat("Current canonical count:",length(cids),"unique:",length(unique(cids)),"blank:",sum(!nzchar(cids)),"\n")
+          cat("Current W03 count:",length(wids),"unique:",length(unique(wids)),"blank:",sum(!nzchar(wids)),"\n")
+          cat("Missing W03 IDs:",length(setdiff(cids,wids)),"Unexpected W03 IDs:",length(setdiff(wids,cids)),"\n")
+          if(length(setdiff(cids,wids)))cat("Representative missing:",paste(head(setdiff(cids,wids),5),collapse=","),"\n")
+          if(length(setdiff(wids,cids)))cat("Representative unexpected:",paste(head(setdiff(wids,cids),5),collapse=","),"\n")
+          stopifnot(length(cids)==length(wids),!anyDuplicated(cids),!anyDuplicated(wids),setequal(cids,wids))
