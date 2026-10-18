@@ -298,7 +298,7 @@ jobs:
           sel <- unlist(s$selected_sources,use.names=FALSE)
           missing <- setdiff(sel,names(q))
           if (length(missing)) stop(sprintf('Selected source(s) lack generated query: %s',paste(missing,collapse=', ')))
-          matrix <- lapply(sel,function(src) list(source=src,query=q[[src]]))
+          matrix <- lapply(sel,function(src) list(source=src))
           emit('source_matrix_json',toJSON(matrix,auto_unbox=TRUE,null='null'))
 
       - name: Upload Workflow 00 plan
@@ -320,7 +320,7 @@ jobs:
     with:
       source: ${{ matrix.source }}
       run_type: ${{ inputs.run_type }}
-      query: ${{ matrix.query }}
+      query: ''
       parent_run_id: ${{ github.run_id }}
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
