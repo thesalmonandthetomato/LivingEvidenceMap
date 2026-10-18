@@ -1,0 +1,65 @@
+{
+  "schema": "living-evidence-map-workflow06-geography-archive-v2",
+  "workflow": "06",
+  "state": "semantic_geography_coding",
+  "source_github_run_id": "39160841782",
+  "source_github_commit": "caea35de698b8af23a913211dea9e668fbadc0b2",
+  "publication_github_run_id": "39160841782",
+  "source_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39160841782",
+  "repository": "thesalmonandthetomato/LivingEvidenceMap",
+  "upstream_workflow05_zenodo_record_id": "23458662",
+  "upstream_workflow05_species_layer_sha256": "b8bca2f143a2217d15cdc5411bd74634cd930c7ecf8ff2744e317de802df1154",
+  "records": 23316,
+  "model": "gpt-5.6-luna",
+  "reasoning": "low",
+  "prompt_sha256": "2ef4a9f2099878ae825395f3f09b329f219bfd3a185d3704a8662c52bcff70ed",
+  "resolved_n": 9690,
+  "none_n": 13032,
+  "unresolved_n": 594,
+  "evidence_not_grounded_n": 161,
+  "llm_failures_n": 8,
+  "exact_agreement_discrepancy_class_n": 18797,
+  "qc_discrepancies_n": 4519,
+  "reused_records": 23149,
+  "newly_screened_records": 167,
+  "workflow06_geography_layer_sha256": "68242b5a7d45d83b83c373d69452997f033e29aec029785eca86079399f8d8bc",
+  "geography_semantic_jsonl_sha256": "1d26f2aa4f0a86425fd9f61be726ecd82f101e9bb590bde858de96f915cd6dae",
+  "geography_unresolved_sha256": "5df3837b16334055476a8e369385744167a59bab994f959ec5f7c9c850fd7c88",
+  "geography_ungrounded_evidence_sha256": "1fee8b2642311f1052aa059906001ee453f7ae40bd90c5c6e1ee1bbb0bf8ffff",
+  "geography_llm_failures_sha256": "9c7f02dee21197db6a9c674fda713772f9fe1e421f153bd7c558d8db58533e24",
+  "geography_qc_discrepancies_sha256": "b25c814ab48f44f4f0e1db26d6edbedad1eaeddd1666f31095dec5d3c92c7185",
+  "discrepancy_patterns_sha256": "0c555793b674315d9ba31e2b8f4a8eb5e0522abe653ceaa28fdf7765d4432c75",
+  "geography_status_counts_sha256": "ec092a864255d968d98c7200e3df149a7ac25d79acee2380c05a6e9407a7f6ed",
+  "validated_summary_sha256": "ee44d183d729915d64b1920743b8aec8e680b0294712a4d10b9a6175e1ec654f",
+  "prompt_file_sha256": "2ef4a9f2099878ae825395f3f09b329f219bfd3a185d3704a8662c52bcff70ed",
+  "file_visibility": "restricted",
+  "files": {
+    "state_archive": {
+      "filename": "LivingEvidenceMap_workflow06_run-39160841782_geography_state.tar.gz",
+      "bytes": 26520520,
+      "sha256": "6ebbca13ef5cf2ce11ead9f3035ba5757b5b3d40525b0f3eac716d9ccaacb726"
+    }
+  },
+  "status": "published",
+  "zenodo_record_id": "23459040",
+  "zenodo_deposition_id": "23459040",
+  "doi": "10.5281/zenodo.23459040",
+  "record_url": "https://zenodo.org/records/23459040",
+  "visibility": "restricted",
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow06_run-39160841782_geography_state.tar.gz",
+      "bytes": 26520520,
+      "sha256": "6ebbca13ef5cf2ce11ead9f3035ba5757b5b3d40525b0f3eac716d9ccaacb726",
+      "zenodo_checksum": "md5:08fe2d1c6aa08a3c3f651f1d3255bc11"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow06_run-39160841782_manifest.json",
+      "bytes": 2350,
+      "sha256": "722d64819b7ede7aa4566bdea54b37db1374c2f69e24e6d2c5c1c8c53e1c8d43",
+      "zenodo_checksum": "md5:4117407677e0f6b595d2b985816b2f2e"
+    }
+  ],
+  "manifest_sha256": "722d64819b7ede7aa4566bdea54b37db1374c2f69e24e6d2c5c1c8c53e1c8d43",
+  "published_at_utc": "2026-10-18T20:40:56Z"
+}
