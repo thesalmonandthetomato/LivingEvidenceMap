@@ -406,6 +406,51 @@ scopus_lookup <- function(d){
   )
 }
 
+
+# Supplementary DOI-based metadata sources, only for abstracts still absent after
+# Europe PMC and Scopus. Never use title-only matches to attach abstract text.
+crossref_abstract_lookup <- function(d){
+  req <- request(paste0("https://api.crossref.org/works/",URLencode(d,reserved=TRUE))) |>
+    req_headers(Accept="application/json", \`User-Agent\`="LivingEvidenceMap-Workflow02/1.0 (bibliographic metadata recovery)") |>
+    req_timeout(45)
+  z <- perform_retry(req,max_attempts=2L)
+  st <- resp_status(z$resp)
+  if(st>=400L) return(list(status=st,outcome=paste0("http_",st),returned_doi=NULL,title=NULL,abstract=NULL))
+  h <- resp_body_json(z$resp,simplifyVector=FALSE)$message
+  title <- clean_text((h$title %||% list())[[1L]])
+  list(status=st,outcome="found",returned_doi=norm_doi(h$DOI),title=title,
+       abstract=clean_abstract(h$abstract),url=paste0("https://api.crossref.org/works/",URLencode(d,reserved=TRUE)))
+}
+openalex_abstract_lookup <- function(d){
+  req <- request("https://api.openalex.org/works") |>
+    req_url_query(filter=paste0("doi:",d),per_page=2,
+                  select="id,doi,title,abstract_inverted_index") |>
+    req_headers(Accept="application/json", \`User-Agent\`="LivingEvidenceMap-Workflow02/1.0") |>
+    req_timeout(45)
+  z <- perform_retry(req,max_attempts=2L)
+  st <- resp_status(z$resp)
+  if(st>=400L) return(list(status=st,outcome=paste0("http_",st),returned_doi=NULL,title=NULL,abstract=NULL))
+  hits <- resp_body_json(z$resp,simplifyVector=FALSE)$results %||% list()
+  matches <- Filter(function(h)identical(norm_doi(h$doi),d),hits)
+  if(length(matches)!=1L) return(list(status=st,outcome="no_unique_exact_doi",returned_doi=NULL,title=NULL,abstract=NULL))
+  h <- matches[[1L]]
+  inv <- h$abstract_inverted_index
+  abstract <- NULL
+  if(is.list(inv) && length(inv)){
+    positions <- unlist(inv,use.names=FALSE)
+    words <- rep(NA_character_,length(positions))
+    for(word in names(inv)){
+      for(p in unlist(inv[[word]],use.names=FALSE)){
+        k <- as.integer(p)+1L
+        if(!is.na(k) && k>=1L && k<=length(words)) words[[k]]<-word
+      }
+    }
+    if(length(words) && !anyNA(words)) abstract<-clean_abstract(paste(words,collapse=" "))
+  }
+  list(status=st,outcome="found",returned_doi=norm_doi(h$doi),title=clean_text(h$title),
+       abstract=abstract,url=clean_text(h$id))
+}
+
 read_jsonl <- function(path){
   lines <- readLines(path,warn=FALSE,encoding="UTF-8")
   lines <- lines[nzchar(trimws(lines))]
@@ -433,6 +478,7 @@ counts <- list(
   scopus_author_keywords_attempted=0L,
   scopus_author_keywords_filled=0L,
   scopus_http_404=0L,
+  supplementary_abstract_filled=0L,
   conflicts_quarantined=0L,
   still_missing_after=0L,
   deferred_recent_attempts=0L,
@@ -605,6 +651,34 @@ for(i in seq_along(rows)){
     }
   }
 
+  # Supplement Europe PMC/Scopus with Crossref and OpenAlex for DOI-bearing
+  # records still lacking an abstract. Both exact DOI and title agreement are
+  # mandatory; missing provider titles cannot silently bypass identity guards.
+  supplementary <- list()
+  if(is_missing(r$canonical$abstract)){
+    for(provider in c("crossref","openalex")){
+      lookup <- if(provider=="crossref")crossref_abstract_lookup else openalex_abstract_lookup
+      result <- tryCatch(lookup(d),error=function(e)list(outcome="technical_error",error=conditionMessage(e)))
+      supplementary[[provider]] <- result
+      if(!is.null(result$abstract)){
+        sim <- title_similarity(r$canonical$title,result$title)
+        if(identical(result$returned_doi,d) && !is.na(sim) && sim>=0.90){
+          r$canonical$abstract <- result$abstract
+          rec_audit$applied <- c(rec_audit$applied,list(list(
+            provider=provider,field="abstract",identity_guard="exact_doi_and_title",
+            title_similarity=sim,source_url=result$url)))
+          counts$supplementary_abstract_filled <- counts$supplementary_abstract_filled+1L
+          break
+        }
+        counts$conflicts_quarantined <- counts$conflicts_quarantined+1L
+        rec_audit$quarantined <- c(rec_audit$quarantined,list(list(
+          provider=provider,field="abstract",reason="supplementary_identity_guard_failed",
+          returned_doi=result$returned_doi,title_similarity=sim)))
+      }
+    }
+  }
+  rec_audit$supplementary <- supplementary
+
   still_missing_title <- is_missing(r$canonical$title)
   still_missing_abstract <- is_missing(r$canonical$abstract)
   still_missing_author_keywords <- keywords_missing(r$canonical$author_keywords)
@@ -655,14 +729,15 @@ for(i in seq_along(rows)){
 
   technical_error <- identical(clean_text(ep$outcome),"technical_error") ||
     (!is.null(rec_audit$scopus) && identical(clean_text(rec_audit$scopus$outcome),"technical_error")) ||
-    (!is.null(rec_audit$scopus_keywords) && identical(clean_text(rec_audit$scopus_keywords$outcome),"technical_error"))
+    (!is.null(rec_audit$scopus_keywords) && identical(clean_text(rec_audit$scopus_keywords$outcome),"technical_error")) ||
+    any(vapply(supplementary,function(z)identical(clean_text(z$outcome),"technical_error"),logical(1)))
   if(technical_error) counts$technical_error_records <- counts$technical_error_records + 1L
   filled_fields <- vapply(rec_audit$applied,function(z) clean_text(z$field) %||% "",character(1))
   filled_fields <- unique(filled_fields[nzchar(filled_fields)])
   r$metadata_enrichment <- list(
     workflow="workflow_02_metadata_enrichment",
     implementation_language="R",
-    providers=c("europe_pmc","scopus"),
+    providers=c("europe_pmc","scopus","crossref","openalex"),
     completed_at=now_utc(),
     doi=d,
     title_missing_after=still_missing_title,
@@ -671,6 +746,7 @@ for(i in seq_along(rows)){
     europe_pmc_outcome=clean_text(ep$outcome),
     scopus_outcome=if(is.null(rec_audit$scopus)) NULL else clean_text(rec_audit$scopus$outcome),
     scopus_keywords_outcome=if(is.null(rec_audit$scopus_keywords)) NULL else clean_text(rec_audit$scopus_keywords$outcome),
+    supplementary_outcomes=lapply(supplementary,function(z)clean_text(z$outcome)),
     technical_error=technical_error,
     filled_fields=filled_fields,
     recheck_after_days=recheck_after_days
@@ -692,7 +768,7 @@ report <- list(
   schema="living-evidence-map-workflow02-metadata-enrichment-v1",
   workflow="02_metadata_enrichment",
   implementation_language="R",
-  provider_order=if(skip_scopus)c("europe_pmc") else c("europe_pmc","scopus"),
+  provider_order=if(skip_scopus)c("europe_pmc","crossref","openalex") else c("europe_pmc","scopus","crossref","openalex"),
   policy=list(
     eligibility=if(enrich_author_keywords)"DOI present and title, abstract, or author keywords missing" else "DOI present and title or abstract missing",
     overwrite_existing_fields=FALSE,
