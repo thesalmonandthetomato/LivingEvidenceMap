@@ -335,7 +335,7 @@ jobs:
       search_version: ${{ needs.validate-and-plan.outputs.search_version }}
       fortnightly_from_date: ${{ needs.validate-and-plan.outputs.fortnightly_from_date }}
       fortnightly_to_date: ${{ needs.validate-and-plan.outputs.fortnightly_to_date }}
-      additional_search_term: ${{ inputs.additional_search_term }}
+      additional_search_term: ${{ inputs.run_type == 'expansion' && matrix.source == 'ethos' && inputs.new_full_sources == 'ethos' && '' || inputs.additional_search_term }}
     secrets: inherit
 
   reconcile-expansion:
