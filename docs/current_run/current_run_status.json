@@ -24,7 +24,7 @@
     "canonical_records": 22852,
     "canonical_sha256": "d606655533536f602548e9a22854081d33bcb08b6016d67644295ec139c63164",
     "previous_counts": {
-      "search_results": 17039,
+      "search_results": 135566,
       "deduplicated_records": 50440,
       "enriched_records": 2101,
       "retraction_exclusions": 13,
@@ -130,7 +130,7 @@
     "deduplicated_records": null
   },
   "counts": {
-    "search_results": 17500,
+    "search_results": 136027,
     "deduplicated_records": 50440,
     "enriched_records": 2101,
     "retraction_exclusions": 13,
