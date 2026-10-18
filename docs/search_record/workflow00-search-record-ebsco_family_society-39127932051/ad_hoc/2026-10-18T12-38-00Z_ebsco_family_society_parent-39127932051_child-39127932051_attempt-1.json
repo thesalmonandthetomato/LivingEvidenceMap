@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-18T12:38:00Z",
+  "source": "ebsco_family_society",
+  "run_type": "expansion",
+  "search_version": "v1",
+  "additional_search_term": "maricultur*",
+  "search_string": "(((TI (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR AB (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR KW (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\")) AND (TI (maricultur*) OR AB (maricultur*) OR KW (maricultur*))) AND NOT (TI (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR AB (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*) OR KW (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*)))",
+  "database_scope": {
+    "provider": "EBSCOhost EIT",
+    "database_code": "flh",
+    "database_name": "Family & Society Studies Worldwide",
+    "field_scope": [
+      "TI",
+      "AB",
+      "KW"
+    ]
+  },
+  "search_window": null,
+  "reported_search_results": 0,
+  "successfully_downloaded_results": 0,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "39127932051",
+    "child_workflow_run_id": "39127932051",
+    "run_attempt": "1",
+    "ref": "workflow01-final-architecture",
+    "triggering_sha": "4ac237123e28659b2b524801d82c20a12fa2c9b9",
+    "orchestrator_sha": "4ac237123e28659b2b524801d82c20a12fa2c9b9",
+    "source_handler_sha": "4ac237123e28659b2b524801d82c20a12fa2c9b9"
+  },
+  "artifact_name": "workflow00-ebsco_family_society-harvest-39127932051"
+}

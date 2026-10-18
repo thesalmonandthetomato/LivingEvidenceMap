@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-18T12:38:00Z",
+  "source": "ethos",
+  "run_type": "full",
+  "search_version": "v1",
+  "additional_search_term": null,
+  "search_string": "SRC:ETH AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial*))",
+  "database_scope": null,
+  "search_window": null,
+  "reported_search_results": 212,
+  "successfully_downloaded_results": 212,
+  "complete_download": true,
+  "native_id_reconciliation": null,
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "39127932051",
+    "child_workflow_run_id": "39127932051",
+    "run_attempt": "1",
+    "ref": "workflow01-final-architecture",
+    "triggering_sha": "4ac237123e28659b2b524801d82c20a12fa2c9b9",
+    "orchestrator_sha": "4ac237123e28659b2b524801d82c20a12fa2c9b9",
+    "source_handler_sha": "4ac237123e28659b2b524801d82c20a12fa2c9b9"
+  },
+  "artifact_name": "workflow00-ethos-harvest-39127932051"
+}
