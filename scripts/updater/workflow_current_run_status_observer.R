@@ -109,7 +109,14 @@ published_release_baseline <- function(){
     canonical_records=auth$records,
     canonical_sha256=auth$sha256,
     previous_counts=list(
-      search_results=as.integer(summaries$W00$metrics$search_results),
+      search_results={
+        flow_path <- "docs/reporting/workflow_09/flow_counts.json"
+        if(!file.exists(flow_path)) stop("Cumulative W09 search totals unavailable: ",flow_path,call.=FALSE)
+        flow <- fromJSON(flow_path,simplifyVector=FALSE)
+        n <- as.integer(flow$counts$combined_search_results)
+        if(length(n)!=1L || is.na(n) || n<0L) stop("Invalid cumulative W09 search total",call.=FALSE)
+        n
+      },
       deduplicated_records=as.integer(summaries$W01$metrics$canonical_records),
       enriched_records=as.integer(summaries$W02$metrics$enriched_records),
       retraction_exclusions=as.integer(summaries$W03$metrics$retraction_exclusions),
@@ -295,7 +302,8 @@ if(stage=="W01"){
   # reconstruction and matches the dashboard labels shown to the user.
   s$cohort$record_ids_sha256<-NULL
   s$cohort$deduplicated_records<-as.integer(p$canonical_records)
-  s$counts$search_results<-as.integer(p$source_manifestations)
+  # W01 source manifestations measure deduplication input, not cumulative
+  # database search hits. Preserve the W00 search KPI unchanged.
   s$counts$deduplicated_records<-as.integer(p$canonical_records)
   s<-set_run(s,"W01",run_id,2L,3L,"Deduplication complete; Workflow 02 enrichment in progress")
   save_status(s)
