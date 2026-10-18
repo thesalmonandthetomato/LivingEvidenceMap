@@ -411,13 +411,13 @@ scopus_lookup <- function(d){
 # Europe PMC and Scopus. Never use title-only matches to attach abstract text.
 crossref_abstract_lookup <- function(d){
   req <- request(paste0("https://api.crossref.org/works/",URLencode(d,reserved=TRUE))) |>
-    req_headers(Accept="application/json", \`User-Agent\`="LivingEvidenceMap-Workflow02/1.0 (bibliographic metadata recovery)") |>
+    req_headers(Accept="application/json", `User-Agent`="LivingEvidenceMap-Workflow02/1.0 (bibliographic metadata recovery)") |>
     req_timeout(45)
   z <- perform_retry(req,max_attempts=2L)
   st <- resp_status(z$resp)
   if(st>=400L) return(list(status=st,outcome=paste0("http_",st),returned_doi=NULL,title=NULL,abstract=NULL))
   h <- resp_body_json(z$resp,simplifyVector=FALSE)$message
-  title <- clean_text((h$title %||% list())[[1L]])
+  title <- if(length(h$title %||% list())) clean_text(h$title[[1L]]) else NULL
   list(status=st,outcome="found",returned_doi=norm_doi(h$DOI),title=title,
        abstract=clean_abstract(h$abstract),url=paste0("https://api.crossref.org/works/",URLencode(d,reserved=TRUE)))
 }
@@ -425,7 +425,7 @@ openalex_abstract_lookup <- function(d){
   req <- request("https://api.openalex.org/works") |>
     req_url_query(filter=paste0("doi:",d),per_page=2,
                   select="id,doi,title,abstract_inverted_index") |>
-    req_headers(Accept="application/json", \`User-Agent\`="LivingEvidenceMap-Workflow02/1.0") |>
+    req_headers(Accept="application/json", `User-Agent`="LivingEvidenceMap-Workflow02/1.0") |>
     req_timeout(45)
   z <- perform_retry(req,max_attempts=2L)
   st <- resp_status(z$resp)
