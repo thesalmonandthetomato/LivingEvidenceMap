@@ -31,10 +31,10 @@
   },
   "staging": {
     "method": "zenodo_draft",
-    "reserved_doi": "10.5281/zenodo.23450377",
-    "deposition_id": "23450377",
+    "reserved_doi": "10.5281/zenodo.23453910",
+    "deposition_id": "23453910",
     "publish_after_validation": false,
-    "notes": "Complete existing draft in place; do not publish before validation."
+    "notes": "New restricted Zenodo draft for W00 validation and completion; publish only after successful ingestion."
   },
   "input": {
     "expected_chunk_count": null,
