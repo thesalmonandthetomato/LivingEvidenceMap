@@ -1,0 +1,29 @@
+name: Temporary validate W04 legacy input reconstruction
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/tmp_validate_w04_legacy_20261018.yml]
+permissions: {contents: read}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+      HUMAN_CORRECTIONS_POINTER: docs/workflow04/human_abstract_corrections/run-37511638503.json
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: workflow01-final-architecture}
+      - uses: r-lib/actions/setup-r@v2
+        with: {r-version: release, use-public-rspm: true}
+      - run: Rscript -e 'install.packages(c("jsonlite","digest","httr2"))'
+      - name: Parse recovery code and retrieve exact prior lean canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'parse(file="scripts/updater/workflow_04_reconstruct_legacy_repaired_input.R")'
+          mkdir -p inputs/current inputs/prior_canonical
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R --pointer docs/compaction/zenodo/run-37648955012.json --output-dir inputs/prior_canonical
+          cp "$(find inputs/prior_canonical -type f -name canonical_lean.jsonl -print -quit)" inputs/current/canonical_lean.raw.jsonl
+          Rscript scripts/updater/workflow_04_reconstruct_legacy_repaired_input.R
+          Rscript -e 's<-digest::digest(file="inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE);stopifnot(identical(s,"2151741e96809c65176e96e33cfd3a1bd8290d81b3d35b25059a1cb4f6c9d42f"));cat("PASS: exact W04 prior input reconstructed",s,"\n")'
