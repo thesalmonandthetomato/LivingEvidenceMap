@@ -225,7 +225,21 @@ jobs:
             n="$(delta_n "$source")"
             if [ -n "$d" ] && [ "$n" = "0" ]; then : > "$out"; return; fi
             if [ -n "$d" ]; then p="$(find_handoff_jsonl "$d")"; else p="$(find_handoff_jsonl "current_workflow00/$source")"; fi
-            [ -n "$p" ] || { echo "No normalized records.jsonl handoff found for API source $source" >&2; exit 1; }
+            if [ -z "$p" ]; then
+              case "$source" in
+                ethos) code=ETH; collection=EThOS ;;
+                pubmed) code=MED; collection=PubMed ;;
+                cba) code=CBA; collection="Chinese Biological Abstracts" ;;
+                epmc_preprints) code=PPR; collection="Europe PMC preprints" ;;
+                *) echo "No normalized records.jsonl handoff found for API source $source" >&2; exit 1 ;;
+              esac
+              raw_root="current_workflow00/$source"
+              if [ -n "$d" ] && [ -d "$d/raw" ]; then raw_root="$d"; fi
+              Rscript scripts/updater/workflow_01x_europe_pmc_sidecar_adapter.R \
+                --input-dir "$raw_root" --output-dir "current_sources/$source" \
+                --source-code "$code" --source-slug "$source" --source-collection "$collection"
+              p="current_sources/$source/${source}_sidecar_records.jsonl"
+            fi
             cp "$p" "$out"
           }
 
