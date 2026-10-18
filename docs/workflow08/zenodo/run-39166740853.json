@@ -1,0 +1,52 @@
+{
+  "status": "published",
+  "workflow": "08",
+  "state": "corrected_final_adjudicated_canonical",
+  "supersedes_zenodo_record_id": "23238386",
+  "supersedes_doi": "10.5281/zenodo.23238386",
+  "source_github_run_id": "39166740853",
+  "source_github_commit": null,
+  "source_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39166740853",
+  "source_canonical_population": 50551,
+  "canonical_records": 22911,
+  "excluded_records": 27640,
+  "w08_decision_issues": 159,
+  "canonical_schema_version": "living-evidence-map-canonical-v1",
+  "annotation_preservation": "lossless-upstream-handoff-v2",
+  "final_canonical_jsonl_sha256": "fa52cf8179399ac8b28d10a22f1479999a7c1fe0c3487b4e18f29dfb05cbda1e",
+  "final_canonical_jsonl_bytes": 287429785,
+  "excluded_records_csv_sha256": "d5c2ba596639ffac034e2c9988923cd56841f20ef7546fc6cb621e6b6b9bacd2",
+  "adjudication_ledger_sha256": "7fa9f6126b19375b715d0e953127b1d543a1bd852ee9e4b4e032f870e76e3396",
+  "zenodo_record_id": "23459613",
+  "zenodo_deposition_id": "23459613",
+  "doi": "10.5281/zenodo.23459613",
+  "record_url": "https://zenodo.org/records/23459613",
+  "visibility": "restricted",
+  "files": [
+    {
+      "filename": "living_evidence_map_canonical_final.jsonl",
+      "bytes": 287429785,
+      "sha256": "fa52cf8179399ac8b28d10a22f1479999a7c1fe0c3487b4e18f29dfb05cbda1e",
+      "zenodo_checksum": "md5:0a117ff39294151b6389ff7704c67b52"
+    },
+    {
+      "filename": "workflow08_excluded_records.csv",
+      "bytes": 7398465,
+      "sha256": "d5c2ba596639ffac034e2c9988923cd56841f20ef7546fc6cb621e6b6b9bacd2",
+      "zenodo_checksum": "md5:42822aa50ac371c916c06a368854657b"
+    },
+    {
+      "filename": "workflow08_adjudication_ledger.jsonl",
+      "bytes": 126655,
+      "sha256": "7fa9f6126b19375b715d0e953127b1d543a1bd852ee9e4b4e032f870e76e3396",
+      "zenodo_checksum": "md5:9584b4a9c36f2ea2d7c6470f1d9bb67d"
+    },
+    {
+      "filename": "workflow08_final_manifest.json",
+      "bytes": 2626,
+      "sha256": "61e87f9e88616a5d067c0b2985b5e16658813db80bf111db71ab67f109540b1c",
+      "zenodo_checksum": "md5:7dee278f71d8c710d51e57e95497a6d3"
+    }
+  ],
+  "published_at_utc": "2026-10-18T21:27:32Z"
+}
