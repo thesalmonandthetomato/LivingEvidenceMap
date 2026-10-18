@@ -267,7 +267,6 @@ jobs:
         env:
           SOURCE: ${{ inputs.source }}
           RUN_TYPE: ${{ inputs.run_type }}
-          SEARCH_QUERY: ${{ inputs.query }}
           PARENT_RUN_ID: ${{ inputs.parent_run_id }}
           SEARCH_VERSION: ${{ inputs.search_version }}
           ADDITIONAL_SEARCH_TERM: ${{ inputs.additional_search_term }}
