@@ -1,0 +1,38 @@
+name: Temporary W00 query handover regression test
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/tmp_validate_w00_query_handover_20261018.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - name: Check source writer does not reset archived query
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          x=Path('.github/workflows/_workflow_00_orchestrated_source_child.yml').read_text()
+          p=x.split('      - name: Write child search archive record',1)[1].split('      - name:',1)[0]
+          assert 'SEARCH_QUERY: ${{ inputs.query }}' not in p, 'Empty workflow input overrides persisted query'
+          assert 'SEARCH_QUERY<<W00_SEARCH_QUERY_EOF' in x
+          PY
+      - name: Write representative exact query into GITHUB_ENV
+        shell: bash
+        run: |
+          q='SRC:ETH AND TITLE_ABS:((salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") AND (farm* OR aquacultur*))'
+          printf 'SEARCH_QUERY<<W00_SEARCH_QUERY_EOF\n%s\nW00_SEARCH_QUERY_EOF\n' "$q" >> "$GITHUB_ENV"
+      - name: Read query from next workflow step
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SEARCH_QUERY"
+          [[ "$SEARCH_QUERY" == SRC:ETH* ]]
+          [[ "$SEARCH_QUERY" == *aquacultur* ]]
+          echo 'PASS: exact W00 query survived across GitHub job steps'
