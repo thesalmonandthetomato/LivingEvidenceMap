@@ -138,16 +138,18 @@ jobs:
           dir.create('fixture',showWarnings=FALSE)
           writejl <- function(x,p){con<-file(p,'wt',encoding='UTF-8');on.exit(close(con));for(z in x)writeLines(toJSON(z,auto_unbox=TRUE,null='null',na='null',digits=NA),con)}
           inp<-lapply(seq_len(10),function(i)list(identity=list(record_id=paste0('fixture-',i)),canonical=list(title=paste('Salmon research',i),doi=paste0('10.1234/fixture-',i),abstract=NULL),manifestations=list()))
-          out<-lapply(inp,function(x)x)
+          out<-lapply(inp,function(x)fromJSON(toJSON(x,auto_unbox=TRUE,null='null'),simplifyVector=FALSE))
           now<-format(Sys.time(),tz='UTC',format='%Y-%m-%dT%H:%M:%SZ')
           audit<-lapply(seq_along(out),function(i){
             if(i<=2L)out[[i]]$canonical$abstract<-paste('Verified fixture abstract for record',i)
             out[[i]]$metadata_enrichment<-list(workflow='workflow_02_metadata_enrichment',completed_at=now,technical_error=FALSE,title_missing_after=FALSE,abstract_missing_after=i>2L)
             list(record_id=paste0('fixture-',i),doi=paste0('10.1234/fixture-',i),europe_pmc=list(outcome='no_abstract'),scopus=list(outcome='no_abstract'),applied=if(i<=2L)list(list(provider='europe_pmc',field='abstract')) else list())
           })
+          stopifnot(is.null(inp[[1]]$metadata_enrichment),is.null(inp[[1]]$canonical$abstract),!is.null(out[[1]]$canonical$abstract),!is.null(out[[10]]$metadata_enrichment))
           writejl(inp,'fixture/real_sample_10.jsonl')
           writejl(out,'fixture/enriched_10.jsonl')
           writejl(audit,'fixture/enrichment_audit.jsonl')
+          stopifnot(!identical(readLines('fixture/real_sample_10.jsonl'),readLines('fixture/enriched_10.jsonl')))
           write_json(list(processed_eligible_records=10L,counts=list(eligible_doi_missing_metadata=10L,deferred_recent_attempts=0L),trial_limit=NULL),'fixture/enrichment_report.json',auto_unbox=TRUE)
           cat('PASS: deterministic fixture generated without expired historical artefact\n')
 
