@@ -190,7 +190,11 @@ jobs:
           stopifnot(as.integer(payload$metrics$search_results)==as.integer(flow$counts$combined_search_results))
           stopifnot(as.integer(payload$metrics$unique_records_screened)==as.integer(flow$counts$deduplicated_records))
           stopifnot(as.integer(payload$metrics$candidate_search_results_screened)==as.integer(flow$counts$title_abstract_screened))
-          stopifnot(as.integer(payload$metrics$databases_searched)==length(flow$counts$sources))
+          source_searches <- flow$counts$source_searches
+          source_codes <- vapply(source_searches,function(x)as.character(x$code),character(1))
+          source_hits <- vapply(source_searches,function(x)as.numeric(x$hits),numeric(1))
+          stopifnot(length(source_codes)>0L,!anyDuplicated(source_codes),all(nzchar(source_codes)),all(is.finite(source_hits)),all(source_hits>=0))
+          stopifnot(as.integer(payload$metrics$databases_searched)==sum(source_hits>0))
           stopifnot(as.character(payload$source$zenodo_record_id)==as.character(pointer$zenodo_record_id))
           stopifnot(tolower(as.character(payload$source$canonical_sha256))==expected_sha)
 
