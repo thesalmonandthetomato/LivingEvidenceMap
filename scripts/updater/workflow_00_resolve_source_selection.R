@@ -14,6 +14,7 @@ saved_path <- arg("--saved","data/workflow00/source_selection.json")
 output_path <- arg("--output","outputs/updater/workflow00_plan/source_selection.json")
 ebsco_config <- arg("--ebsco-config","config/workflow00_ebsco_sources.json")
 group_config <- arg("--group-config","config/workflow00_source_groups.json")
+search_registry <- arg("--search-registry","docs/search_record/zenodo_registry.csv")
 
 if (!(run_type %in% c("full","fortnightly","expansion"))) stop("Invalid run type",call.=FALSE)
 
@@ -91,6 +92,25 @@ if (run_type=="full") {
   excluded_sources <- if (is.null(saved$excluded_sources)) character() else as.character(unlist(saved$excluded_sources,use.names=FALSE))
   origin <- "saved_full_run"
   baseline_run_id <- as.character(saved$baseline_run_id)
+
+  if (run_type == "expansion") {
+    # Expansion covers every API database with a previously published W00 search,
+    # not merely the selection from the last (possibly partial) full run.
+    if (!file.exists(search_registry)) stop(sprintf("W00 search registry missing: %s",search_registry),call.=FALSE)
+    events <- read.csv(search_registry,stringsAsFactors=FALSE,check.names=FALSE)
+    needed <- c("sources","zenodo_record_id","published_at_utc")
+    if (!all(needed %in% names(events))) stop("W00 search registry missing required columns",call.=FALSE)
+    completed <- nzchar(trimws(events$zenodo_record_id)) & nzchar(trimws(events$published_at_utc))
+    if (!any(completed)) stop("W00 search registry has no published search events",call.=FALSE)
+    previous <- unique(trimws(unlist(strsplit(paste(events$sources[completed],collapse=";"),";",fixed=TRUE))))
+    previous <- previous[nzchar(previous)]
+    unknown <- setdiff(previous,supported)
+    if (length(unknown)) stop(sprintf("Published W00 registry contains unsupported source(s): %s",paste(unknown,collapse=", ")),call.=FALSE)
+    # EThOS has not had a baseline search: it needs its own full run.
+    if ("ethos" %in% previous) stop("EThOS already appears in the published W00 registry; reassess full-vs-expansion search plan",call.=FALSE)
+    selected <- supported[supported %in% unique(c(selected,previous))]
+    origin <- "cumulative_published_w00_search_registry"
+  }
 }
 
 dir.create(dirname(output_path),recursive=TRUE,showWarnings=FALSE)
