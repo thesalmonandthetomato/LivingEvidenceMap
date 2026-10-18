@@ -107,6 +107,8 @@ jobs:
           # Read each query directly from the archived parent plan, not GitHub job outputs.
           SEARCH_QUERY="$(Rscript -e 'x<-jsonlite::fromJSON("parent_search_plan/search_plan.json",simplifyVector=FALSE);s<-Sys.getenv("SOURCE");q<-x$source_queries[[s]];sel<-unlist(x$source_selection$selected_sources,use.names=FALSE);if(is.null(q)||!(s %in% sel)||!is.character(q)||length(q)!=1L||!nzchar(q))stop("Missing/unselected source query in parent W00 search plan",call.=FALSE);cat(q)')"
           test -n "$SEARCH_QUERY"
+          # Preserve the exact archived query for later job steps (including search documentation).
+          printf 'SEARCH_QUERY<<W00_SEARCH_QUERY_EOF\n%s\nW00_SEARCH_QUERY_EOF\n' "$SEARCH_QUERY" >> "$GITHUB_ENV"
           mkdir -p outputs/updater/source_child
           case "$SOURCE" in
             lens)
