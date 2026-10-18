@@ -78,7 +78,11 @@ europe_pmc_query <- function(source_code) {
 }
 agricola_query <- europe_pmc_query("AGR")
 pubmed_query <- europe_pmc_query("MED")
-ethos_query <- europe_pmc_query("ETH")
+# For a first-time EThOS search accompanying a concept expansion, search the
+# complete established strategy rather than only the new expansion concept.
+ethos_query <- if (run_type=="expansion") {
+  sprintf("SRC:ETH AND TITLE_ABS:((%s) AND (%s))",species,old_farm)
+} else europe_pmc_query("ETH")
 cba_query <- europe_pmc_query("CBA")
 epmc_preprints_query <- europe_pmc_query("PPR")
 
