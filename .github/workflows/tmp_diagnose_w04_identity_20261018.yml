@@ -26,9 +26,9 @@ jobs:
         shell: Rscript {0}
         run: |
           library(jsonlite)
-          a<-list.files("/tmp/w02",pattern="canonical_lean.jsonl",recursive=TRUE,full.names=TRUE)
-          b<-list.files("/tmp/w03",pattern="publication_status.jsonl",recursive=TRUE,full.names=TRUE)
-          stopifnot(length(a)==1L,length(b)==1L)
+          a<-"/tmp/w02/canonical_lean.jsonl"
+          b<-"/tmp/w03/publication_status.jsonl"
+          stopifnot(file.exists(a),file.exists(b))
           read_ids<-function(p,f){v<-readLines(p,warn=FALSE);v<-v[nzchar(trimws(v))];vapply(v,function(z){x<-fromJSON(z,simplifyVector=FALSE);f(x)},character(1))}
           cids<-read_ids(a,function(x)if(is.null(x$identity$record_id)) "" else as.character(x$identity$record_id))
           wids<-read_ids(b,function(x)if(is.null(x$record_id)) "" else as.character(x$record_id))
