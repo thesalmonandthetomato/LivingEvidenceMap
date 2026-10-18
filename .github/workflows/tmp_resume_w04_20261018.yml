@@ -1,0 +1,36 @@
+name: Temporary resume W04 after verified historical repair
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/tmp_resume_w04_20261018.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: workflow01-final-architecture}
+      - name: Verify prerequisite published pointers and dispatch W04
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s docs/compaction/zenodo/run-39144383368.json
+          test -s docs/publication_status/zenodo/run-39147451019.json
+          test -s docs/workflow04/zenodo/run-37679581307.json
+          test -s docs/compaction/zenodo/run-37648955012.json
+          gh workflow run workflow_04_production.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref workflow01-final-architecture \
+            -f lean_pointer_path=docs/compaction/zenodo/run-39144383368.json \
+            -f workflow03_pointer_path=docs/publication_status/zenodo/run-39147451019.json \
+            -f prior_workflow04_pointer_path=docs/workflow04/zenodo/run-37679581307.json \
+            -f prior_lean_pointer_path=docs/compaction/zenodo/run-37648955012.json \
+            -f manual_decisions_path='' \
+            -f manual_repair_zenodo_record_id='' \
+            -f recovery_pass1_zenodo_record_id='' \
+            -f publish=true
+          echo "PASS: W04 production retry dispatched without replaying W00-W03"
