@@ -22,7 +22,7 @@ jobs:
           use-public-rspm: true
       - name: Install only required packages
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2'))
+        run: install.packages(c('jsonlite','digest','httr2','data.table','stringdist'))
       - name: Restore current W01 from immutable pointer
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
