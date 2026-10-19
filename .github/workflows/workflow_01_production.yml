@@ -337,6 +337,7 @@ jobs:
                   next
                 }
                 p$sources[[source]]$registry <- reg_path
+                p$sources[[source]]$kind <- "optional_manual_ris"
               }
             }
             if (identical(w00$run_type,"expansion")) {
