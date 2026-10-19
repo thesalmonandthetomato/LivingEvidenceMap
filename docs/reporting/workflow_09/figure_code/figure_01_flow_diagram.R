@@ -83,38 +83,10 @@ n_species_none <- metric(w05, "none_records")
 n_w07_late <- metric(w07, "late_automatic_exclusions")
 n_final_included <- metric(w08, "canonical_records")
 n_excluded <- metric(w08, "excluded_records")
-# The W08 stage summary currently carries pre-final W04-retained annotation
-# totals from current_run_status.json. They are NOT counts of W08 final included
-# records. Derive manuscript counts from the authoritative W08 included-only
-# canonical JSONL, exactly as long_form_results.Rmd does.
-source(here::here("visualisations", "canonical_figure_data.R"))
-final_master <- load_figure_master()
-if (nrow(final_master) != n_final_included) {
-  stop(sprintf(
-    "W08 canonical included population (%d) differs from W08 pointer (%d)",
-    nrow(final_master), n_final_included
-  ), call. = FALSE)
-}
-geo_status <- toupper(trimws(as.character(final_master$geography_status)))
-n_geography_coded <- sum(!is.na(geo_status) & geo_status == "RESOLVED")
-n_geography_uncoded <- sum(!is.na(geo_status) & geo_status == "NONE")
-if (n_geography_coded + n_geography_uncoded != n_final_included) {
-  unexpected <- sort(unique(geo_status[is.na(geo_status) | !geo_status %in% c("RESOLVED", "NONE")]))
-  stop(sprintf(
-    "Final canonical geography states do not partition included records: resolved=%d none=%d total=%d unexpected=%s",
-    n_geography_coded, n_geography_uncoded, n_final_included,
-    paste(unexpected, collapse = ", ")
-  ), call. = FALSE)
-}
-has_topic <- !is.na(final_master$topic_hierarchy_paths) &
-  nzchar(trimws(as.character(final_master$topic_hierarchy_paths)))
-n_topic_coded <- sum(has_topic)
-n_topic_uncoded <- n_final_included - n_topic_coded
-message(sprintf(
-  "W09 final canonical annotation counts: geography resolved=%d none=%d; topics coded=%d uncoded=%d (n=%d)",
-  n_geography_coded, n_geography_uncoded, n_topic_coded, n_topic_uncoded, n_final_included
-))
-rm(final_master)
+n_geography_coded <- metric(w08, "geography_with")
+n_geography_uncoded <- metric(w08, "geography_without")
+n_topic_coded <- metric(w08, "topic_with")
+n_topic_uncoded <- metric(w08, "topic_without")
 
 # Final post-screening exclusions are recorded separately from W04 because they
 # arise during species/topic/final adjudication rather than title/abstract screening.

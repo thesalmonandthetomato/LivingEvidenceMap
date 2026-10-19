@@ -1,24 +1,24 @@
 {
   "schema": "living-evidence-map-workflow09-flow-counts-v3",
-  "generated_at_utc": "2026-10-08T18:26:59Z",
-  "search_update_date": "2026-10-05",
+  "generated_at_utc": "2026-10-19T11:29:09Z",
+  "search_update_date": "2026-10-18",
   "input_mode": "compact_workflow_reporting_snapshots",
   "input_directory": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/docs/reporting/workflow_09_inputs/current",
   "source_runs": {
-    "W00": "37346236893",
-    "W01": "37608813159",
-    "W02": "37648955012",
-    "W03": "37654051293",
-    "W04": "37679581307",
-    "W05": "37739192921",
-    "W06": "37744038306",
-    "W07": "37751063787",
-    "W08": "37772061455"
+    "W00": "39127932051",
+    "W01": "39140209398",
+    "W02": "39144383368",
+    "W03": "39147451019",
+    "W04": "39150923062",
+    "W05": "39160841782",
+    "W06": "39160841782",
+    "W07": "39160841782",
+    "W08": "39166740853"
   },
   "counts": {
     "sources": {
-      "AGRICOLA": 2744,
-      "CAB Abstracts": 26816,
+      "AGRICOLA": 2746,
+      "CAB Abstracts": 26848,
       "Ebsco Africa Wide": 431,
       "Ebsco Amed": 3,
       "Ebsco Biological Agricultural Index": 2913,
@@ -31,145 +31,152 @@
       "Ebsco Political Science": 30,
       "Ebsco Psycinfo": 97,
       "Ebsco Waters Oceans": 5256,
-      "OpenAlex": 28134,
-      "ProQuest/PQD&T": 1574,
-      "Scopus": 19948,
-      "The Lens": 24135,
-      "WoSCC": 15176
+      "Ethos": 212,
+      "OpenAlex": 28184,
+      "ProQuest/PQD&T": 1576,
+      "Scopus": 20015,
+      "The Lens": 24175,
+      "WoSCC": 15202
     },
     "source_searches": [
       {
         "code": "agricola",
         "database": "AGRICOLA",
-        "hits": 2744,
+        "hits": 2746,
         "search_date": "2026-09-23"
       },
       {
         "code": "cab",
         "database": "CAB Abstracts",
-        "hits": 26816,
+        "hits": 26848,
         "search_date": "2026-09-30"
       },
       {
         "code": "ebsco_africa_wide",
         "database": "Ebsco Africa Wide",
         "hits": 431,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_amed",
         "database": "Ebsco Amed",
         "hits": 3,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_biological_agricultural_index",
         "database": "Ebsco Biological Agricultural Index",
         "hits": 2913,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_cinahl",
         "database": "Ebsco Cinahl",
         "hits": 102,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_econlit",
         "database": "Ebsco Econlit",
         "hits": 311,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_family_society",
         "database": "Ebsco Family Society",
         "hits": 121,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_greenfile",
         "database": "Ebsco Greenfile",
         "hits": 916,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_medline",
         "database": "Ebsco Medline",
         "hits": 6854,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_mla",
         "database": "Ebsco Mla",
         "hits": 5,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_political_science",
         "database": "Ebsco Political Science",
         "hits": 30,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_psycinfo",
         "database": "Ebsco Psycinfo",
         "hits": 97,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
       },
       {
         "code": "ebsco_waters_oceans",
         "database": "Ebsco Waters Oceans",
         "hits": 5256,
-        "search_date": "2026-10-05"
+        "search_date": "2026-10-18"
+      },
+      {
+        "code": "ethos",
+        "database": "Ethos",
+        "hits": 212,
+        "search_date": "2026-10-18"
       },
       {
         "code": "openalex",
         "database": "OpenAlex",
-        "hits": 28134,
+        "hits": 28184,
         "search_date": "2026-09-23"
       },
       {
         "code": "proquest",
         "database": "ProQuest/PQD&T",
-        "hits": 1574,
-        "search_date": "2026-09-30"
+        "hits": 1576,
+        "search_date": "2026-10-18"
       },
       {
         "code": "scopus",
         "database": "Scopus",
-        "hits": 19948,
+        "hits": 20015,
         "search_date": "2026-09-23"
       },
       {
         "code": "lens",
         "database": "The Lens",
-        "hits": 24135,
+        "hits": 24175,
         "search_date": "2026-09-23"
       },
       {
         "code": "wos",
         "database": "WoSCC",
-        "hits": 15176,
+        "hits": 15202,
         "search_date": "2026-09-23"
       }
     ],
-    "combined_search_results": 135566,
-    "duplicates_removed": 85126,
-    "deduplicated_records": 50440,
-    "records_enriched_workflow02": 2101,
+    "combined_search_results": 135997,
+    "duplicates_removed": 85446,
+    "deduplicated_records": 50551,
+    "records_enriched_workflow02": 2113,
     "retractions_excluded": 13,
-    "title_abstract_screened": 50427,
-    "workflow04_exclusions": 27172,
-    "title_abstract_retained": 23255,
+    "title_abstract_screened": 50538,
+    "workflow04_exclusions": 27222,
+    "title_abstract_retained": 23316,
     "species_none_deterministic_exclusions": 228,
-    "workflow07_late_exclusions": 150,
+    "workflow07_late_exclusions": 152,
     "workflow08_other_exclusions": 25,
-    "post_workflow04_exclusions_total": 403,
-    "final_geography_coded": 9499,
-    "final_geography_uncoded": 13353,
-    "final_topic_coded": 22548,
+    "post_workflow04_exclusions_total": 405,
+    "final_geography_coded": 9522,
+    "final_geography_uncoded": 13389,
+    "final_topic_coded": 22607,
     "final_topic_uncoded": 304,
-    "final_included": 22852,
-    "final_excluded": 27588
+    "final_included": 22911,
+    "final_excluded": 27640
   }
 }
