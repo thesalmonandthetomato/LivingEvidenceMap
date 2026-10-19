@@ -37,15 +37,26 @@ for (src in names(sources)) {
   prepared <- as.character(z$prepared_path %||% "")
   if (!nzchar(prepared)) stop(sprintf("Catalogue source %s lacks prepared_path",src),call.=FALSE)
 
-  if (identical(kind,"manual_ris")) {
+  if (kind %in% c("manual_ris","optional_manual_ris")) {
+    optional <- identical(kind,"optional_manual_ris")
     registry <- as.character(z$registry %||% "")
-    if (!nzchar(registry) || !file.exists(registry)) stop(sprintf("Manual RIS registry missing for %s: %s",src,registry),call.=FALSE)
+    if (!nzchar(registry) || !file.exists(registry)) {
+      if (optional) {warning(sprintf("SKIP optional manual source %s: no validated registry",src));next}
+      stop(sprintf("Manual RIS registry missing for %s: %s",src,registry),call.=FALSE)
+    }
     dir.create(dirname(prepared),recursive=TRUE,showWarnings=FALSE)
-    status <- system2(
+    status <- tryCatch(system2(
       rscript,
       c(restore_script,"--registry",registry,"--source",src,"--output",prepared)
-    )
-    if (status != 0L) stop(sprintf("Manual RIS restore failed for %s",src),call.=FALSE)
+    ),error=function(e) 1L)
+    if (!identical(as.integer(status),0L)) {
+      if (optional) {
+        if (file.exists(prepared)) unlink(prepared)
+        warning(sprintf("SKIP optional manual source %s: archive could not be validated/restored",src))
+        next
+      }
+      stop(sprintf("Manual RIS restore failed for %s",src),call.=FALSE)
+    }
     manual_restored[[src]] <- registry
   } else if (!identical(kind,"workflow00_state")) {
     stop(sprintf("Unsupported catalogue source kind for %s: %s",src,kind),call.=FALSE)
