@@ -216,7 +216,7 @@ if(stage=="W00"){
   # Include manual RIS expansion events as separate W00 search results.
   manual_sources <- list()
   catalogue <- fromJSON("config/workflow01_source_catalogue.json",simplifyVector=FALSE)
-  if(length(catalogue$pending_manual_expansions)){
+  if(all(vapply(recs,function(z)identical(clean(z$run_type),"expansion"),logical(1))) && length(catalogue$pending_manual_expansions)){
     for(source in names(catalogue$pending_manual_expansions)){
       registry_path <- clean(catalogue$pending_manual_expansions[[source]]$registry)
       if(!nzchar(registry_path) || !file.exists(registry_path)) stop("Missing manual RIS expansion registry: ",source,call.=FALSE)
