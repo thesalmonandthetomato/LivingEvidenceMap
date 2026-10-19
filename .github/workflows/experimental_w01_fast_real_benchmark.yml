@@ -1,4 +1,4 @@
-name: Experimental W01-Fast October read-only benchmark
+name: Experimental W01-Fast October candidate parity run
 on:
   push:
     branches: [workflow01-final-architecture]
