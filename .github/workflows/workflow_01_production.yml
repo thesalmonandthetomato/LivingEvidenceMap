@@ -299,21 +299,44 @@ jobs:
             src <- src[nzchar(src)]
             w00 <- fromJSON(file.path("workflow00_registry",Sys.getenv("W00_POINTER")),simplifyVector=FALSE)
             if (identical(w00$run_type,"monthly")) {
-              pending <- p$pending_manual_monthly
-              if (is.null(pending) || !setequal(names(pending),c("cab","proquest"))) {
-                stop("Monthly manual RIS catalogue must identify CAB and PQD&T",call.=FALSE)
+              # Never re-import historical September RIS sources in a monthly update.
+              # Manual inputs are optional and independent of API harvesting.
+              manual_path <- "user_input/monthly_manual_ris.json"
+              manual <- if (file.exists(manual_path)) tryCatch(
+                fromJSON(manual_path,simplifyVector=FALSE),
+                error=function(e) {warning(sprintf("Invalid optional DOI file: %s",conditionMessage(e)));NULL}
+              ) else NULL
+              month <- format(Sys.Date(),"%Y-%m")
+              if (!is.null(manual) && !identical(manual$update_month,month)) {
+                warning(sprintf("Manual DOI month %s does not match %s; skipping manual updates",
+                                manual$update_month,month))
+                manual <- NULL
               }
-              for (s in c("cab","proquest")) {
-                z <- pending[[s]]
-                if (is.null(z$registry) || !file.exists(z$registry)) {
-                  stop(sprintf("Monthly RIS registry for %s has not been validated and committed: %s",s,z$registry),call.=FALSE)
+              for (source in c("cab","proquest")) {
+                doi <- if (is.null(manual)) "" else as.character(if (is.null(manual$sources[[source]]$zenodo_doi)) "" else manual$sources[[source]]$zenodo_doi)
+                if (!nzchar(doi)) {
+                  p$sources[[source]] <- NULL
+                  message(sprintf("SKIP: %s monthly DOI not supplied",source))
+                  next
                 }
-                reg <- fromJSON(z$registry,simplifyVector=FALSE)
-                if (!identical(reg$staging$reserved_doi,z$doi) ||
-                    !identical(reg$database$short_name,s)) {
-                  stop(sprintf("Monthly %s registry DOI/source mismatch",s),call.=FALSE)
+                # Require a prepared, validated source-specific registry. Never
+                # mistake an unvalidated Zenodo draft for a published archive.
+                reg_path <- sprintf("user_input/workflow00_ris_%s_monthly_%s.json",
+                                    source,gsub("-","",month))
+                if (!file.exists(reg_path)) {
+                  p$sources[[source]] <- NULL
+                  warning(sprintf("SKIP: %s DOI supplied but registry not validated: %s",source,doi))
+                  next
                 }
-                p$sources[[s]]$registry <- z$registry
+                reg <- tryCatch(fromJSON(reg_path,simplifyVector=FALSE),error=function(e)NULL)
+                if (is.null(reg) ||
+                    !identical(reg$staging$reserved_doi,doi) ||
+                    !identical(reg$database$short_name,source)) {
+                  p$sources[[source]] <- NULL
+                  warning(sprintf("SKIP: %s monthly registry mismatches DOI/source",source))
+                  next
+                }
+                p$sources[[source]]$registry <- reg_path
               }
             }
             if (identical(w00$run_type,"expansion")) {
