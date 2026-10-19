@@ -1,6 +1,11 @@
 name: Monthly CAB and PQD&T search reminder
 
 on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - 'user_input/monthly_ris_reminder_trigger.txt'
   workflow_dispatch:
 
 permissions:
