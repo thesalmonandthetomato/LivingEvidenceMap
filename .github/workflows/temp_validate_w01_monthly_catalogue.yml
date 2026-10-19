@@ -1,0 +1,34 @@
+name: Temporary W01 monthly catalogue shell validation
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - .github/workflows/temp_validate_w01_monthly_catalogue.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - name: Validate actual production embedded Bash and R quotation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          content = Path('.github/workflows/workflow_01_production.yml').read_text()
+          anchor = "          W00_SOURCES=\"$W00_SOURCES\" W00_POINTER="
+          start = content.index(anchor)
+          end = content.index("\n          Rscript scripts/updater/workflow_01_prepare_source_catalogue.R",start)
+          lines = content[start:end].splitlines()
+          bash_code = "\n".join(line[10:] for line in lines) + "\n"
+          Path('/tmp/w01_runtime_catalogue.sh').write_text("set -euo pipefail\n" + bash_code)
+          assert '\\\"rainbow trout\\\"' in bash_code, 'R string quotes must be escaped'
+          print('Extracted actual W01 production command for Bash syntax check')
+          PY
+          bash -n /tmp/w01_runtime_catalogue.sh
+          echo 'PASS: W01 production runtime source catalogue Bash syntax'
