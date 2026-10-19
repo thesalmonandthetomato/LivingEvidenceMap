@@ -1,5 +1,5 @@
 {
-  "search_version": "v1",
+  "search_version": "v2",
   "species_terms": [
     "salmon",
     "salmonid*",
@@ -14,7 +14,8 @@
     "penned",
     "pen",
     "aquacultur*",
-    "commercial*"
+    "commercial*",
+    "maricultur*"
   ],
   "expansion_policy": {
     "allowed_target": "farm_terms_only",
