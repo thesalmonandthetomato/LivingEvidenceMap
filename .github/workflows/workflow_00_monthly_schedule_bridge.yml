@@ -1,0 +1,16 @@
+name: Monthly W00 scheduling bridge
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - user_input/monthly_w00_schedule_trigger.txt
+permissions:
+  contents: write
+  actions: write
+jobs:
+  scheduled-monthly-w00:
+    uses: ./.github/workflows/workflow_00_search_orchestrator.yml
+    with:
+      run_type: monthly
+    secrets: inherit
