@@ -134,10 +134,10 @@ if (run_type %in% c("fortnightly","monthly")) {
                         lens_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
   scopus_query <- sprintf("(%s) AND ORIG-LOAD-DATE AFT %s",
                           scopus_query,format(from_date,"%Y%m%d"))
-  current_year <- as.integer(format(today,"%Y"))
-  next_year <- current_year + 1L
+  first_year <- as.integer(format(from_date,"%Y"))
+  next_year <- as.integer(format(today,"%Y")) + 1L
   openalex_query <- sprintf("%s and year >= (%d) and year <= (%d)",
-                            openalex_query,current_year,next_year)
+                            openalex_query,first_year,next_year)
   agricola_query <- sprintf("(%s) AND FIRST_PDATE:[%s TO %s]",
                             agricola_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
   creation_window <- sprintf("CREATION_DATE:[%s TO %s]",format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
