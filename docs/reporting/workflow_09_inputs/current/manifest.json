@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-input-manifest-v1",
-  "generated_at_utc": "2026-10-18T21:04:33Z",
+  "generated_at_utc": "2026-10-19T08:03:10Z",
   "stages": [
     {
       "stage": "W00",
@@ -44,7 +44,7 @@
     },
     {
       "stage": "W08",
-      "source_run_id": "37772061455",
+      "source_run_id": "39166740853",
       "file": "w08_summary.json"
     }
   ],
@@ -56,23 +56,23 @@
     },
     {
       "file": "w01_source_intersections.csv",
-      "bytes": 24742,
-      "sha256": "b9a4a29e8387f2e18e8797d3e02e748a298647f9154e3ba8e8176765cc805d14"
+      "bytes": 25047,
+      "sha256": "8e481f926a29bdd24a899df02880179ab2becc38080d9ab45c70b95359426f3e"
     },
     {
       "file": "w01_source_manifest.json",
       "bytes": 796,
-      "sha256": "995be3941d2d7111ebd71435e0aab67981c3b846d21069770a77dadc27b5df3e"
+      "sha256": "6b5c1669bdf25e98b3ae8ffca22cfe19976ff312a1c70c7516d0da4d0002b8c8"
     },
     {
       "file": "w01_source_membership.csv",
-      "bytes": 2336537,
-      "sha256": "f0c253356e3bf8cbbad1a6b50da03faaac0978d891ae2926dc279a55cd5c2236"
+      "bytes": 2342059,
+      "sha256": "f3efa6dc8961035c5cfee1fcbc0c1c8883fdb3e5e0e85556870e13b93a64b325"
     },
     {
       "file": "w01_source_summary.csv",
-      "bytes": 1107,
-      "sha256": "1d94349cfb4ae76107beba6704e4abea68e813f0fe92750dc875bab2c66c114a"
+      "bytes": 1144,
+      "sha256": "337141839226ee665df111809a4cd4b05e308f45cb61729af6f9c3c27f9403f7"
     },
     {
       "file": "w01_summary.json",
@@ -111,23 +111,23 @@
     },
     {
       "file": "w08_source_intersections.csv",
-      "bytes": 20650,
-      "sha256": "69cd39ebf1002660948863b0cdb8b4366fd53df9a63a8378ea137a98807dd2b5"
+      "bytes": 20885,
+      "sha256": "424602cf5bc448ae2545ac14424a97d32c7b31a402634493375f85c281de541a"
     },
     {
       "file": "w08_source_manifest.json",
       "bytes": 796,
-      "sha256": "eab951252cf57e353e428c32faaccdb4c5e9354daea8067415a5e8ce1d0206cb"
+      "sha256": "d80596ffc8efead5c5de641b23f24599662d8675cf6782cc58a20e2f889f1f3c"
     },
     {
       "file": "w08_source_summary.csv",
-      "bytes": 1076,
-      "sha256": "4057e26f5fa6f61e37a306fd2f3880c1cda61380f8b4bbc44323cd0dd76d007c"
+      "bytes": 1112,
+      "sha256": "09dbc9467e959d0d2754d5bb1c02fc9303dc3d73f8bcd0ae0c90d5e49697353f"
     },
     {
       "file": "w08_summary.json",
       "bytes": 833,
-      "sha256": "bd5564c008c94e2cd2246696af084c829f08ec60d2090cc84efb7255485113cd"
+      "sha256": "8ed4c06cdd03ee34de0d6cdcaab450932441194a748baae7c743c4442b5f8a87"
     }
   ]
 }
