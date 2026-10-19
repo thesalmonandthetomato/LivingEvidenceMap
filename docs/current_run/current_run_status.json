@@ -1,147 +1,136 @@
 {
   "schema": "living-evidence-map-current-run-status-v1",
-  "update_id": "w00-run-39127932051",
+  "update_id": "w00-run-39298022062",
   "branch": "workflow01-final-architecture",
-  "started_at_utc": "2026-10-18T12:46:22Z",
-  "last_updated_at_utc": "2026-10-19T14:22:17Z",
+  "started_at_utc": "2026-10-19T18:03:02Z",
+  "last_updated_at_utc": "2026-10-19T18:03:02Z",
   "baseline": {
-    "release_update_id": "w00-run-37346236893",
-    "workflow01_source_run_id": "37608813159",
-    "workflow01_pointer": "docs/deduplication/zenodo/run-37608813159.json",
-    "workflow02_source_run_id": "37648955012",
-    "workflow02_pointer": "docs/enrichment/zenodo/run-37648955012.json",
-    "lean_pointer": "docs/compaction/zenodo/run-37648955012.json",
-    "workflow04_source_run_id": "37679581307",
-    "workflow04_pointer": "docs/workflow04/zenodo/run-37679581307.json",
-    "workflow05_source_run_id": "37739192921",
-    "workflow05_pointer": "docs/workflow05/zenodo/run-37739192921.json",
-    "workflow06_source_run_id": "37744038306",
-    "workflow06_pointer": "docs/workflow06/zenodo/run-37744038306.json",
-    "workflow07_source_run_id": "37751063787",
-    "workflow07_pointer": "docs/workflow07/zenodo/run-37751063787.json",
-    "workflow08_pointer": "docs/workflow08/zenodo/run-37772061455.json",
-    "workflow08_source_run_id": "37772061455",
-    "canonical_records": 22852,
-    "canonical_sha256": "d606655533536f602548e9a22854081d33bcb08b6016d67644295ec139c63164",
+    "release_update_id": "w00-run-39127932051",
+    "workflow01_source_run_id": "39140209398",
+    "workflow01_pointer": "docs/deduplication/zenodo/run-39140209398.json",
+    "workflow02_source_run_id": "39144383368",
+    "workflow02_pointer": "docs/enrichment/zenodo/run-39144383368.json",
+    "lean_pointer": "docs/compaction/zenodo/run-39144383368.json",
+    "workflow04_source_run_id": "39150923062",
+    "workflow04_pointer": "docs/workflow04/zenodo/run-39150923062.json",
+    "workflow05_source_run_id": "39160841782",
+    "workflow05_pointer": "docs/workflow05/zenodo/run-39160841782.json",
+    "workflow06_source_run_id": "39160841782",
+    "workflow06_pointer": "docs/workflow06/zenodo/run-39160841782.json",
+    "workflow07_source_run_id": "39160841782",
+    "workflow07_pointer": "docs/workflow07/zenodo/run-39160841782.json",
+    "workflow08_pointer": "docs/workflow08/zenodo/run-39166740853.json",
+    "workflow08_source_run_id": "39166740853",
+    "canonical_records": 22911,
+    "canonical_sha256": "fa52cf8179399ac8b28d10a22f1479999a7c1fe0c3487b4e18f29dfb05cbda1e",
     "previous_counts": {
-      "search_results": 135566,
-      "deduplicated_records": 50440,
-      "enriched_records": 2101,
+      "search_results": 135997,
+      "deduplicated_records": 50551,
+      "enriched_records": 2113,
       "retraction_exclusions": 13,
-      "screened_include": 23255,
-      "screened_exclude": 27172,
-      "species_records": 23255,
+      "screened_include": 23316,
+      "screened_exclude": 27222,
+      "species_records": 23316,
       "geography": {
-        "with": 9499,
-        "without": 13353
+        "with": 9522,
+        "without": 13389
       },
       "topics": {
-        "with": 22548,
+        "with": 22607,
         "without": 304
       }
     }
   },
   "search": {
-    "workflow00_run_id": "39127932051",
-    "search_date": "2026-10-18",
-    "search_results": 507,
+    "workflow00_run_id": "39298022062",
+    "search_date": "2026-10-19",
+    "search_results": 19007,
     "sources": {
       "agricola": {
-        "reported_search_results": 2,
-        "successfully_downloaded_results": 2
+        "reported_search_results": 7,
+        "successfully_downloaded_results": 7
       },
       "ebsco_africa_wide": {
-        "reported_search_results": 2,
-        "successfully_downloaded_results": 2
+        "reported_search_results": 432,
+        "successfully_downloaded_results": 432
       },
       "ebsco_amed": {
-        "reported_search_results": 0,
-        "successfully_downloaded_results": 0
+        "reported_search_results": 3,
+        "successfully_downloaded_results": 3
       },
       "ebsco_atla_religion": {
         "reported_search_results": 0,
         "successfully_downloaded_results": 0
       },
       "ebsco_biological_agricultural_index": {
-        "reported_search_results": 9,
-        "successfully_downloaded_results": 9
+        "reported_search_results": 2918,
+        "successfully_downloaded_results": 2918
       },
       "ebsco_cinahl": {
-        "reported_search_results": 0,
-        "successfully_downloaded_results": 0
+        "reported_search_results": 102,
+        "successfully_downloaded_results": 102
       },
       "ebsco_econlit": {
-        "reported_search_results": 1,
-        "successfully_downloaded_results": 1
+        "reported_search_results": 311,
+        "successfully_downloaded_results": 311
       },
       "ebsco_family_society": {
-        "reported_search_results": 0,
-        "successfully_downloaded_results": 0
+        "reported_search_results": 121,
+        "successfully_downloaded_results": 121
       },
       "ebsco_greenfile": {
-        "reported_search_results": 0,
-        "successfully_downloaded_results": 0
+        "reported_search_results": 916,
+        "successfully_downloaded_results": 916
       },
       "ebsco_medline": {
-        "reported_search_results": 15,
-        "successfully_downloaded_results": 15
+        "reported_search_results": 6883,
+        "successfully_downloaded_results": 6883
       },
       "ebsco_mla": {
-        "reported_search_results": 0,
-        "successfully_downloaded_results": 0
+        "reported_search_results": 5,
+        "successfully_downloaded_results": 5
       },
       "ebsco_political_science": {
-        "reported_search_results": 0,
-        "successfully_downloaded_results": 0
+        "reported_search_results": 30,
+        "successfully_downloaded_results": 30
       },
       "ebsco_psycinfo": {
+        "reported_search_results": 97,
+        "successfully_downloaded_results": 97
+      },
+      "ebsco_waters_oceans": {
+        "reported_search_results": 5297,
+        "successfully_downloaded_results": 5297
+      },
+      "ethos": {
         "reported_search_results": 0,
         "successfully_downloaded_results": 0
       },
-      "ebsco_waters_oceans": {
-        "reported_search_results": 35,
-        "successfully_downloaded_results": 35
-      },
-      "ethos": {
-        "reported_search_results": 212,
-        "successfully_downloaded_results": 212
-      },
       "lens": {
-        "reported_search_results": 42,
-        "successfully_downloaded_results": 42
+        "reported_search_results": 130,
+        "successfully_downloaded_results": 130
       },
       "openalex": {
-        "reported_search_results": 50,
-        "successfully_downloaded_results": 50
+        "reported_search_results": 1346,
+        "successfully_downloaded_results": 1346
       },
       "scopus": {
-        "reported_search_results": 67,
-        "successfully_downloaded_results": 67
+        "reported_search_results": 120,
+        "successfully_downloaded_results": 120
       },
       "wos": {
-        "reported_search_results": 26,
-        "successfully_downloaded_results": 26
-      },
-      "cab": {
-        "reported_search_results": 41,
-        "successfully_downloaded_results": 41,
-        "zenodo_doi": "10.5281/zenodo.23453888",
-        "acquisition_method": "ris_upload"
-      },
-      "proquest": {
-        "reported_search_results": 5,
-        "successfully_downloaded_results": 5,
-        "zenodo_doi": "10.5281/zenodo.23453910",
-        "acquisition_method": "ris_upload"
+        "reported_search_results": 289,
+        "successfully_downloaded_results": 289
       }
     }
   },
   "cohort": {
     "record_ids_path": "docs/current_run/current_run_record_ids.txt",
-    "deduplicated_records": 50551
+    "record_ids_sha256": null,
+    "deduplicated_records": null
   },
   "counts": {
-    "search_results": 136073,
+    "search_results": 155004,
     "deduplicated_records": 50551,
     "enriched_records": 2113,
     "retraction_exclusions": 13,
@@ -149,12 +138,12 @@
     "screened_exclude": 27222,
     "species_records": 23316,
     "geography": {
-      "with": 9690,
-      "without": 13626
+      "with": 9522,
+      "without": 13389
     },
     "topics": {
-      "with": 22819,
-      "without": 497
+      "with": 22607,
+      "without": 304
     }
   },
   "progress": {
@@ -162,50 +151,41 @@
       "status": "complete"
     },
     "W01": {
-      "status": "complete"
+      "status": "active"
     },
     "W02": {
-      "status": "complete"
+      "status": "pending"
     },
     "W03": {
-      "status": "complete"
+      "status": "pending"
     },
     "W04": {
-      "status": "complete"
+      "status": "pending"
     },
     "W05": {
-      "status": "complete"
+      "status": "pending"
     },
     "W06": {
-      "status": "complete"
+      "status": "pending"
     },
     "W07": {
-      "status": "complete"
+      "status": "pending"
     },
     "W08": {
-      "status": "complete"
+      "status": "pending"
     },
     "W09": {
-      "status": "complete"
+      "status": "pending"
     },
     "W10": {
-      "status": "complete"
+      "status": "pending"
     },
-    "current_stage": "W10",
-    "completed_through": 11,
-    "status_label": "Current update complete"
+    "current_stage": "W00",
+    "completed_through": 1,
+    "active_position": 2,
+    "status_label": "Search complete; awaiting deduplication"
   },
   "workflow_runs": {
-    "W00": "39127932051",
-    "W01": "39140209398",
-    "W02": "39144383368",
-    "W03": "39147451019",
-    "W04": "39150923062",
-    "W05": "39160841782",
-    "W06": "39160841782",
-    "W07": "39160841782",
-    "W08": "39160841782",
-    "W09": "39244022069",
-    "W10": "39265196023"
+    "W00": "39298022062"
   }
 }
