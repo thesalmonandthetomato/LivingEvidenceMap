@@ -1,4 +1,4 @@
-name: Temporary restart October W01 validated handoff
+name: Temporary restart October W01 zero-case validated
 on:
   push:
     branches: [workflow01-final-architecture]
