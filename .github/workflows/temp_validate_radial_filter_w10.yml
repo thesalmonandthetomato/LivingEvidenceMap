@@ -1,0 +1,63 @@
+name: Temporary W10 radial filter validation
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/temp_validate_radial_filter_w10.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - name: Validate proposed exact dashboard modification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path("docs/index.html").read_text()
+          old="""function filterWithoutJump(topic){
+  state.species='__all__';state.country='__all__';state.topic=null;state.year=null;state.q='';
+  state.topic=topic;state.page=1;syncControls();table();
+}"""
+          new="""function filterWithoutJump(topic){
+  state.species=document.getElementById('radialSpecies').value;
+  state.country=document.getElementById('radialCountry').value;
+  state.topic=null;state.year=null;state.q='';
+  state.topic=topic;state.page=1;syncControls();table();
+}"""
+          assert src.count(old)==1, "Original radial function not unique"
+          updated=src.replace(old,new)
+          assert updated.replace(new,old)==src, "Changes outside permitted function"
+          Path("/tmp/proposed-index.html").write_text(updated)
+          extracted=updated[updated.index("function filterWithoutJump(topic){"):].split("\n}",1)[0]+"\n}"
+          Path("/tmp/radial-function.js").write_text(extracted)
+          print("PASS: canonical HTML two-assignment-only replacement")
+          PY
+          node --check /tmp/radial-function.js
+          node - <<'JS'
+          const fs=require('fs'),vm=require('vm'),assert=require('assert');
+          const code=fs.readFileSync('/tmp/radial-function.js','utf8');
+          for(const species of ['__all__','Salmo salar'])
+            for(const country of ['__all__','AFG']){
+              const state={species:'x',country:'x',topic:null,year:2024,q:'old',page:5};
+              const controls={radialSpecies:{value:species},radialCountry:{value:country}};
+              let sync=0,render=0;
+              const sandbox={state,document:{getElementById:id=>controls[id]},syncControls:()=>sync++,table:()=>render++};
+              vm.createContext(sandbox);
+              vm.runInContext(code+';filterWithoutJump("Environment > Physical environment")',sandbox);
+              assert.strictEqual(state.species,species);
+              assert.strictEqual(state.country,country);
+              assert.strictEqual(state.topic,'Environment > Physical environment');
+              assert.strictEqual(state.year,null);
+              assert.strictEqual(state.q,'');
+              assert.strictEqual(state.page,1);
+              assert.strictEqual(sync,1);
+              assert.strictEqual(render,1);
+            }
+          console.log('PASS: four combinations preserve species/country and existing resets');
+          JS
