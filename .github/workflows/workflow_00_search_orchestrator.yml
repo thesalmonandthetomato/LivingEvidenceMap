@@ -279,6 +279,29 @@ jobs:
             --config user_input/workflow00_search_strategy.json \
             --output-dir outputs/updater/workflow00_plan
 
+      - name: Validate monthly source roster, coverage and query plan
+        if: ${{ inputs.run_type == 'monthly' }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- fromJSON('outputs/updater/workflow00_plan/search_plan.json',simplifyVector=FALSE)
+          s <- fromJSON('outputs/updater/workflow00_plan/source_selection.json',simplifyVector=FALSE)
+          src <- as.character(unlist(s$selected_sources,use.names=FALSE))
+          stopifnot(
+            identical(p$run_type,'monthly'),
+            length(src)==19L,
+            !anyDuplicated(src),
+            all(src %in% names(p$source_queries)),
+            'maricultur*' %in% unlist(p$base_farm_terms,use.names=FALSE),
+            !is.null(p$monthly_window$from),
+            !is.null(p$monthly_window$to),
+            as.Date(p$monthly_window$from)<=as.Date(p$monthly_window$to)
+          )
+          queries <- vapply(src,function(id) as.character(p$source_queries[[id]]),character(1))
+          if(any(!grepl('maricultur',queries,fixed=TRUE))) stop('Monthly query missing mariculture term',call.=FALSE)
+          cat(sprintf('PASS: monthly preflight %d API databases, %s through %s; all queries include maricultur*\\n',
+                      length(src),p$monthly_window$from,p$monthly_window$to))
+
       - name: Record selected databases
         shell: Rscript {0}
         run: |
