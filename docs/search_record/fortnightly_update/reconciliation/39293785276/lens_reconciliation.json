@@ -1,0 +1,21 @@
+{
+  "workflow": "00_native_id_reconciliation",
+  "status": "success",
+  "reconciled_at": "2026-10-19T17:26:38Z",
+  "run_type": "monthly",
+  "source": "lens",
+  "reconciliation_key": "Lens ID",
+  "current_raw_records": 130,
+  "current_unique_records": 130,
+  "exact_duplicate_ids_suppressed": 0,
+  "duplicate_native_ids": [],
+  "historical_unique_native_ids": 23894,
+  "already_known_native_ids": 1,
+  "new_native_ids": 129,
+  "records_passed_downstream": 129,
+  "filtered_source_root": "filtered_source",
+  "bibliographic_deduplication_performed": false,
+  "doi_matching_performed": false,
+  "fuzzy_matching_performed": false,
+  "downstream_deduplication": "Workflow 01"
+}
