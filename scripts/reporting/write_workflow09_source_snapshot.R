@@ -195,7 +195,12 @@ if (stage == "W01") {
     stop("Invalid W01 source membership file", call. = FALSE)
   }
 
-  included_ids <- if (nzchar(included_ids_path)) {\n    ids <- readLines(included_ids_path, warn = FALSE, encoding = "UTF-8")\n    ids <- ids[nzchar(trimws(ids))]\n    if (!length(ids) || anyDuplicated(ids)) stop("Invalid or duplicate included IDs", call. = FALSE)\n    ids\n  } else read_canonical_ids(input)
+  included_ids <- if (nzchar(included_ids_path)) {
+    ids <- readLines(included_ids_path, warn = FALSE, encoding = "UTF-8")
+    ids <- ids[nzchar(trimws(ids))]
+    if (!length(ids) || anyDuplicated(ids)) stop("Invalid or duplicate included IDs", call. = FALSE)
+    ids
+  } else read_canonical_ids(input)
   missing_ids <- setdiff(included_ids, membership$record_id)
   if (length(missing_ids)) {
     stop(sprintf(
