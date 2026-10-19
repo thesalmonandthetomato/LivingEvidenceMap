@@ -297,6 +297,32 @@ jobs:
             --output outputs/workflow09_data/living_evidence_map_canonical_final.ris \
             --manifest outputs/workflow09_data/living_evidence_map_canonical_final.ris.manifest.json
 
+      - name: Reconcile final annotation counts using W08 included canonical
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          source("visualisations/canonical_figure_data.R", local = TRUE)
+          canonical <- "workflow08_reporting_state/living_evidence_map_canonical_final.jsonl"
+          x <- read_canonical_records(canonical)
+          summary_path <- "docs/reporting/workflow_09_inputs/current/w08_summary.json"
+          summary <- fromJSON(summary_path, simplifyVector = FALSE)
+          n <- nrow(x)
+          expected <- as.integer(summary$metrics$canonical_records)
+          stopifnot(n == expected, !anyDuplicated(x$record_id))
+          geo_with <- sum(nzchar(trimws(x$final_primary_country_iso3c)))
+          topic_with <- sum(x$topic_count > 0L)
+          stopifnot(geo_with >= 0L, geo_with <= n, topic_with >= 0L, topic_with <= n)
+          summary$metrics$geography_with <- as.integer(geo_with)
+          summary$metrics$geography_without <- as.integer(n - geo_with)
+          summary$metrics$topic_with <- as.integer(topic_with)
+          summary$metrics$topic_without <- as.integer(n - topic_with)
+          summary$metrics$annotation_count_source <- "final_W08_included_canonical"
+          writeLines(toJSON(summary, auto_unbox = TRUE, pretty = TRUE, null = "null"), summary_path, useBytes = TRUE)
+          cat(sprintf("PASS: final W08 annotation population=%d geography=%d/%d topics=%d/%d\\n",
+            n, geo_with, n - geo_with, topic_with, n - topic_with))
+          system2("Rscript", "scripts/reporting/refresh_workflow09_input_manifest.R", stdout = TRUE, stderr = TRUE) -> status
+          stopifnot(identical(status, 0L))
+
       - name: Render manuscript figures from authoritative pipeline data
         env:
           CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
