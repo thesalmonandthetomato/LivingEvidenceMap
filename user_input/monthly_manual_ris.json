@@ -1,11 +1,11 @@
 {
-  "update_month": "2026-11",
+  "update_month": "2026-10",
   "sources": {
     "cab": {
-      "zenodo_doi": ""
+      "zenodo_doi": "10.5281/zenodo.23474710"
     },
     "proquest": {
-      "zenodo_doi": ""
+      "zenodo_doi": "10.5281/zenodo.23474888"
     }
   }
 }
