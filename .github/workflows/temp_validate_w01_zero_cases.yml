@@ -1,0 +1,51 @@
+name: Temporary W01 zero-adjudication preflight validation
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/temp_validate_w01_zero_cases.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install minimal dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","digest"))
+      - name: Execute actual production zero-case branch and preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path(".github/workflows/workflow_01_production.yml").read_text()
+          a=s.index('          if [ "$N" -eq 0 ]; then',s.index('- name: Build LLM adjudication cases'))
+          b=s.index('          else\n',a)
+          chunk=s[a:b]
+          assert 'unique_bibliographic_records=0L' in chunk
+          script="set -euo pipefail\nN=0\n"+chunk+"          fi\n"
+          Path("/tmp/w01_zero.sh").write_text(script)
+          assert script.count("cases.jsonl.manifest.json")==0
+          PY
+          mkdir -p outputs/adjudication outputs/workflow01_pre_adjudication outputs/workflow01_candidates
+          printf 'record_i,record_j\n' > outputs/workflow01_pre_adjudication/manual_review_pairs.csv
+          printf 'idx,source\n' > outputs/workflow01_candidates/normalised_metadata.csv
+          bash -n /tmp/w01_zero.sh
+          bash /tmp/w01_zero.sh
+          Rscript - <<'RS'
+          library(jsonlite)
+          p <- "outputs/adjudication/cases.jsonl"
+          m <- fromJSON(paste0(p,".manifest.json"),simplifyVector=FALSE)
+          stopifnot(file.exists(p),file.size(p)==0L,identical(as.integer(m$cases),0L),
+                    identical(as.integer(m$unique_bibliographic_records),0L),
+                    identical(m$schema,"living-evidence-map-workflow01-adjudication-input-manifest-v1"))
+          stopifnot(identical(m$output_sha256,digest::digest(file=p,algo="sha256",serialize=FALSE)))
+          cat("PASS: zero-case production branch generated valid empty input and manifest; no LLM call\n")
+          RS
