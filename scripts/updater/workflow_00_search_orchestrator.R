@@ -15,8 +15,8 @@ config_path <- arg("--config","user_input/workflow00_search_strategy.json")
 ebsco_config_path <- arg("--ebsco-config","config/workflow00_ebsco_sources.json")
 output_dir <- arg("--output-dir","outputs/updater/workflow00_plan")
 
-if (!(run_type %in% c("full","fortnightly","expansion"))) {
-  stop("--run-type must be full, fortnightly, or expansion", call.=FALSE)
+if (!(run_type %in% c("full","fortnightly","monthly","expansion"))) {
+  stop("--run-type must be full, fortnightly, monthly, or expansion", call.=FALSE)
 }
 
 cfg <- fromJSON(config_path, simplifyVector=TRUE)
@@ -120,9 +120,16 @@ names(ebsco_queries) <- names(ebsco_cfg$sources)
 
 # Fortnightly date windows are source-specific. Only fields whose day-level semantics
 # have been explicitly verified are encoded here.
-today <- Sys.Date()
-from_date <- today - 14L
-if (run_type=="fortnightly") {
+today <- as.Date(arg("--to-date",as.character(Sys.Date())))
+if(is.na(today)) stop("Invalid --to-date",call.=FALSE)
+from_date <- if(run_type=="monthly") seq(today,by="-1 month",length.out=2L)[[2L]] - 5L else today - 14L
+explicit_from <- arg("--from-date","")
+if(nzchar(explicit_from)){
+  from_date <- as.Date(explicit_from)
+  if(is.na(from_date)) stop("Invalid --from-date",call.=FALSE)
+}
+if(from_date > today) stop("from-date must not exceed to-date",call.=FALSE)
+if (run_type %in% c("fortnightly","monthly")) {
   lens_query <- sprintf("(%s) AND created:[%s TO %s]",
                         lens_query,format(from_date,"%Y-%m-%d"),format(today,"%Y-%m-%d"))
   scopus_query <- sprintf("(%s) AND ORIG-LOAD-DATE AFT %s",
@@ -210,19 +217,19 @@ update_methods <- list(
 )
 
 support <- list(
-  lens=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
-  scopus=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
-  openalex=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
-  agricola=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
-  pubmed=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
-  ethos=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
-  cba=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
-  epmc_preprints=list(full=TRUE,fortnightly=TRUE,expansion=TRUE),
-  wos=list(full=TRUE,fortnightly=TRUE,expansion=TRUE)
+  lens=list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE),
+  scopus=list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE),
+  openalex=list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE),
+  agricola=list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE),
+  pubmed=list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE),
+  ethos=list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE),
+  cba=list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE),
+  epmc_preprints=list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE),
+  wos=list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE)
 )
 
 for (src_name in names(ebsco_cfg$sources)) {
-  support[[src_name]] <- list(full=TRUE,fortnightly=TRUE,expansion=TRUE)
+  support[[src_name]] <- list(full=TRUE,fortnightly=TRUE,monthly=TRUE,expansion=TRUE)
   update_methods[[src_name]] <- list(
     retrieval_filter="none; complete EBSCO query is re-harvested",
     field_scope=unlist(ebsco_cfg$sources[[src_name]]$search_fields,use.names=FALSE),
@@ -249,8 +256,9 @@ plan <- list(
     retrieval_rule=if(run_type=="expansion") "immutable species block AND new farm term AND NOT existing farm block; exact native source-ID reconciliation removes already-known manifestations before Workflow 01" else NULL
   ),
   fortnightly_window=if(run_type=="fortnightly") list(from=as.character(from_date),to=as.character(today)) else NULL,
+  monthly_window=if(run_type=="monthly") list(from=as.character(from_date),to=as.character(today),overlap_days=5L) else NULL,
   source_queries=queries,
-  source_update_methods=if(run_type=="fortnightly") update_methods else NULL,
+  source_update_methods=if(run_type %in% c("fortnightly","monthly")) update_methods else NULL,
   source_mode_support=support
 )
 
