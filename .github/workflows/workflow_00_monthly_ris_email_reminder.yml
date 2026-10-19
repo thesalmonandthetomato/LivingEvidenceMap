@@ -1,0 +1,62 @@
+name: Monthly CAB and PQD&T search reminder
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install email dependency
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+
+      - name: Prepare reminder email
+        env:
+          REVIEW_EMAIL: ${{ secrets.REVIEW_EMAIL }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          recipient <- Sys.getenv("REVIEW_EMAIL")
+          if(!nzchar(recipient)) recipient <- Sys.getenv("SMTP_USERNAME")
+          if(!nzchar(recipient)) stop("No reminder recipient configured")
+          d <- list(
+            pending_count=1L,
+            recipient=recipient,
+            subject="Monthly CAB Abstracts and PQD&T searches due",
+            body_text=paste(
+              "Please run the monthly CAB Abstracts and PQD&T searches, upload RIS files",
+              "to restricted Zenodo drafts and enter the two DOIs in",
+              "user_input/monthly_manual_ris.json on workflow01-final-architecture.",
+              "",
+              "The monthly API update is scheduled for the 19th at 09:00 UK time.",
+              "Missing optional manual archives will be skipped, not block API harvesting.",
+              sep="\n"
+            )
+          )
+          dir.create("outputs/reminder",recursive=TRUE,showWarnings=FALSE)
+          writeLines(toJSON(d,pretty=TRUE,auto_unbox=TRUE),"outputs/reminder/email_payload.json")
+
+      - name: Send reminder using existing SMTP sender
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        shell: bash
+        run: |
+          Rscript scripts/updater/workflow_01_send_review_email.R --payload outputs/reminder/email_payload.json
