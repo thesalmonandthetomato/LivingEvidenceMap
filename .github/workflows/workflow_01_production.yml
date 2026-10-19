@@ -372,11 +372,22 @@ jobs:
             }
             adapter_sources <- c("lens","scopus","openalex","agricola","wos")
             for (s in src) {
-              expected <- status$search$sources[[s]]$successfully_downloaded_results
-              if (is.null(expected) || is.na(as.integer(expected))) {
+              reported <- status$search$sources[[s]]$successfully_downloaded_results
+              if (is.null(reported) || length(reported)!=1L || is.na(as.integer(reported))) {
                 stop(sprintf("Current-run status lacks W00 downloaded count for %s",s),call.=FALSE)
               }
-              expected <- as.integer(expected)
+              # W01 receives newly identified source records, not all W00 hits.
+              # The authoritative count is recorded in W00 native-ID reconciliation.
+              manifest_path <- file.path("current_workflow00",s,"source_delta","reconciliation_manifest.json")
+              if (!file.exists(manifest_path)) stop(sprintf("Missing W00 native-ID reconciliation manifest for %s",s),call.=FALSE)
+              delta <- fromJSON(manifest_path,simplifyVector=FALSE)
+              expected <- as.integer(delta$new_native_ids)
+              if (length(expected)!=1L || is.na(expected) || expected<0L ||
+                  expected>as.integer(reported) ||
+                  !identical(as.character(delta$source),s) ||
+                  !identical(as.character(delta$status),"success")) {
+                stop(sprintf("Invalid W00 native-ID reconciliation count for %s",s),call.=FALSE)
+              }
               if (is.null(p$sources[[s]])) {
                 p$sources[[s]] <- list(
                   kind="workflow00_state",
@@ -384,8 +395,8 @@ jobs:
                   prepared_path=file.path("current_sources",s,"records.jsonl"),
                   expected_records=expected
                 )
-              } else if (s %in% adapter_sources && expected == 0L) {
-                p$sources[[s]]$expected_records <- 0L
+              } else {
+                p$sources[[s]]$expected_records <- expected
               }
             }
             writeLines(toJSON(p,auto_unbox=TRUE,pretty=TRUE,null="null"),
