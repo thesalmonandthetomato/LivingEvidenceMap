@@ -46,7 +46,8 @@ jobs:
             body_text=paste(
               "Please run the monthly CAB Abstracts and PQD&T searches, upload RIS files",
               "to restricted Zenodo drafts and enter the two DOIs in",
-              "user_input/monthly_manual_ris.json on workflow01-final-architecture.",
+              "Edit the monthly DOI file on the production branch:",
+              "https://github.com/thesalmonandthetomato/LivingEvidenceMap/edit/workflow01-final-architecture/user_input/monthly_manual_ris.json",
               "",
               "The monthly API update is scheduled for the 19th at 09:00 UK time.",
               "Missing optional manual archives will be skipped, not block API harvesting.",
