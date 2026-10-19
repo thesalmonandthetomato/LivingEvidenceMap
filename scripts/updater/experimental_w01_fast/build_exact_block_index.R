@@ -34,7 +34,7 @@ postings <- rbindlist(lapply(blocks,function(b) {
 setcolorder(postings,c("block","key","idx"));setkey(postings,block,key)
 saveRDS(postings,file.path(out,"historical_postings.rds"),compress="xz")
 # Generate only new-to-historical and new-to-new exact-block candidates.
-new <- m[seq.int(prior_n+1L,nrow(m)),]
+new <- if(prior_n<nrow(m)) m[seq.int(prior_n+1L,nrow(m)),] else m[0L,]
 pair_chunks <- vector("list",length(blocks))
 for(k in seq_along(blocks)){
   b <- blocks[[k]]
