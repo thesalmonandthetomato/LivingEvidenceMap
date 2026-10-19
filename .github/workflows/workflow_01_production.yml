@@ -325,7 +325,7 @@ jobs:
                 registry <- fromJSON(base_path,simplifyVector=FALSE)
                 registry$search$search_date <- paste0(update_month,"-19")
                 registry$search$search_string <- paste(
-                  '(salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout")',
+                  "(salmon OR salmonid* OR Salmo OR Oncorhynchus OR \\\"rainbow trout\\\")",
                   "AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*)"
                 )
                 registry$search$reported_results <- NULL
