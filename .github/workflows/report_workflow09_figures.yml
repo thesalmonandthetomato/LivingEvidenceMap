@@ -171,20 +171,20 @@ jobs:
             w02_run, w08_run, w08_final_n, w08_excluded_n, search_date
           ))
 
-      - name: Restore latest authoritative Workflow 08 final state
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+      - name: Refresh compact W01 summary and authoritative W08 provenance before validation
         shell: bash
         run: |
           set -euo pipefail
-          git pull --ff-only origin workflow01-final-architecture
-          test -n "$W08_POINTER"
-          Rscript scripts/reporting/restore_workflow08_reporting_state.R \
-            --pointer "$W08_POINTER" \
-            --output-dir workflow08_reporting_state
-          test -s workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
-          test -s workflow08_reporting_state/workflow08_excluded_records.csv
-
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W01 --run-id 39140209398 --pointer "$W01_POINTER"
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+          Rscript -e '
+            library(jsonlite)
+            s <- fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE)
+            w <- fromJSON(Sys.getenv("W08_POINTER"),simplifyVector=FALSE)
+            if (!identical(as.character(w$source_github_run_id),"39166740853")) stop("Unexpected W08 authoritative pointer")
+            s$workflow_runs$W08 <- as.character(w$source_github_run_id)
+            writeLines(toJSON(s,auto_unbox=TRUE,pretty=TRUE,null="null"),"docs/current_run/current_run_status.json")
+          '
       - name: Validate compact Workflow 00-08 reporting inputs
         shell: Rscript {0}
         run: |
@@ -250,6 +250,20 @@ jobs:
             expected_runs[["W01"]], expected_runs[["W02"]], expected_runs[["W03"]], expected_runs[["W04"]],
             expected_runs[["W05"]], expected_runs[["W06"]], expected_runs[["W07"]], expected_runs[["W08"]]
           ))
+
+      - name: Restore latest authoritative Workflow 08 final state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin workflow01-final-architecture
+          test -n "$W08_POINTER"
+          Rscript scripts/reporting/restore_workflow08_reporting_state.R \
+            --pointer "$W08_POINTER" \
+            --output-dir workflow08_reporting_state
+          test -s workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
+          test -s workflow08_reporting_state/workflow08_excluded_records.csv
 
       - name: Build human validation report
         env:
