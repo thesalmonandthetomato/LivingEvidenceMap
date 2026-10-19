@@ -21,15 +21,15 @@ jobs:
           from pathlib import Path
           src=Path("docs/index.html").read_text()
           old="""function filterWithoutJump(topic){
-  state.species='__all__';state.country='__all__';state.topic=null;state.year=null;state.q='';
-  state.topic=topic;state.page=1;syncControls();table();
-}"""
+            state.species='__all__';state.country='__all__';state.topic=null;state.year=null;state.q='';
+            state.topic=topic;state.page=1;syncControls();table();
+          }"""
           new="""function filterWithoutJump(topic){
-  state.species=document.getElementById('radialSpecies').value;
-  state.country=document.getElementById('radialCountry').value;
-  state.topic=null;state.year=null;state.q='';
-  state.topic=topic;state.page=1;syncControls();table();
-}"""
+            state.species=document.getElementById('radialSpecies').value;
+            state.country=document.getElementById('radialCountry').value;
+            state.topic=null;state.year=null;state.q='';
+            state.topic=topic;state.page=1;syncControls();table();
+          }"""
           assert src.count(old)==1, "Original radial function not unique"
           updated=src.replace(old,new)
           assert updated.replace(new,old)==src, "Changes outside permitted function"
