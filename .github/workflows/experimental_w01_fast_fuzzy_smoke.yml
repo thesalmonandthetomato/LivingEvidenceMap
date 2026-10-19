@@ -1,0 +1,59 @@
+name: Experimental W01-Fast fuzzy matching validation
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/experimental_w01_fast_fuzzy_smoke.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install R packages
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest"))
+      - name: Compare incremental indexed candidate pairs with original all-pair construction
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          titles <- c("salmon aquaculture impact","salmon aquaculture effects","coastal vegetation","salmon aquaculture impact","rainbow trout farms","rainbow trout farming","short",NA)
+          m <- data.table(idx=seq_along(titles),title_norm=titles)
+          p <- tempfile(fileext=".csv")
+          d <- tempfile(pattern="w01fast-fuzzy")
+          fwrite(m,p)
+          status <- system2(file.path(R.home("bin"),"Rscript"),
+            c("scripts/updater/experimental_w01_fast/build_fuzzy_candidates.R",
+              "--metadata",p,"--prior-n","4","--output-dir",d))
+          stopifnot(status==0L)
+          got <- fread(file.path(d,"fuzzy_candidates.csv"))
+          # Independent reference reproducing production's full-corpus q-gram self-join.
+          q <- rbindlist(lapply(seq_along(titles),function(i){
+            s <- titles[[i]]
+            if(is.na(s)||nchar(s)<4L) return(NULL)
+            data.table(idx=i,qgram=unique(vapply(seq_len(nchar(s)-3L),
+              function(k)substr(s,k,k+3L),character(1))))
+          }))
+          df <- q[,.(df=uniqueN(idx)),by=qgram]
+          setkey(df,qgram)
+          q<-df[q,on="qgram"]
+          setorder(q,idx,df,qgram)
+          sig<-q[,head(.SD,10L),by=idx]
+          setkey(sig,qgram)
+          reference<-sig[sig,allow.cartesian=TRUE,nomatch=0L][idx<i.idx,
+             .(shared_rare_qgrams=.N),by=.(record_i=idx,record_j=i.idx)]
+          reference<-reference[shared_rare_qgrams>=2L]
+          lens<-nchar(titles)
+          reference[,len_ratio:=pmin(lens[record_i],lens[record_j])/pmax(lens[record_i],lens[record_j])]
+          reference<-reference[is.finite(len_ratio)&len_ratio>=0.75]
+          reference<-reference[record_i>4L|record_j>4L]
+          setorder(reference,record_i,record_j)
+          stopifnot(identical(got[,.(record_i,record_j,shared_rare_qgrams)],reference[,.(record_i,record_j,shared_rare_qgrams)]),
+                    !any(got$record_i<=4L & got$record_j<=4L))
+          cat("PASS: W01-Fast fuzzy candidate parity with production-style full-corpus self-join\\n")
