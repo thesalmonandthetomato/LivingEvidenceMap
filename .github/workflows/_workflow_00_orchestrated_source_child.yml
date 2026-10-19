@@ -157,7 +157,7 @@ jobs:
               fi
               ;;
             wos)
-              if [ "$RUN_TYPE" = "fortnightly" ]; then
+              if [ "$RUN_TYPE" = "fortnightly" ] || [ "$RUN_TYPE" = "monthly" ]; then
                 [ -n "$FORTNIGHTLY_FROM_DATE" ] && [ -n "$FORTNIGHTLY_TO_DATE" ] || { echo "Missing fortnightly date window for WoS" >&2; exit 2; }
                 Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$SEARCH_QUERY" --modified-time-span "$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE" --page-size 50 --start-page 1 --output-dir outputs/updater/source_child
               else
@@ -213,7 +213,7 @@ jobs:
           test -f outputs/updater/source_delta/updated_native_ids.txt
 
       - name: Reconcile fortnightly harvest by native source ID
-        if: ${{ inputs.run_type == 'fortnightly' }}
+        if: ${{ inputs.run_type == 'fortnightly' || inputs.run_type == 'monthly' }}
         env:
           SOURCE: ${{ inputs.source }}
         shell: bash
@@ -281,12 +281,12 @@ jobs:
           if [ "$SOURCE" = "ethos" ] && [ "$RUN_TYPE" = "full" ]; then
             ADDITIONAL_SEARCH_TERM=""
           fi
-          if [ "$SOURCE" = "wos" ] && [ "$RUN_TYPE" = "fortnightly" ]; then
+          if [ "$SOURCE" = "wos" ] && { [ "$RUN_TYPE" = "fortnightly" ] || [ "$RUN_TYPE" = "monthly" ]; }; then
             documented_query="$SEARCH_QUERY ; modifiedTimeSpan=$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE"
           fi
           implementation_sha="$(git rev-parse HEAD)"
           native_args=()
-          if [ "$RUN_TYPE" = "fortnightly" ]; then
+          if [ "$RUN_TYPE" = "fortnightly" ] || [ "$RUN_TYPE" = "monthly" ]; then
             known_native="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/updater/source_delta/reconciliation_manifest.json");cat(as.integer(x$already_known_native_ids))')"
             new_native="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/updater/source_delta/reconciliation_manifest.json");cat(as.integer(x$new_native_ids))')"
             native_args=(--known-native-results "$known_native" --new-native-results "$new_native")
