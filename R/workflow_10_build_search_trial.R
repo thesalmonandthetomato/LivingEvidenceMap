@@ -133,6 +133,16 @@ for(i in seq_along(payload$records)){
 token_keys <- sort(ls(postings,all.names=TRUE))
 postings_list <- setNames(lapply(token_keys,function(k)get(k,envir=postings,inherits=FALSE)),token_keys)
 
+payload$public_projection <- list(
+  schema="living-evidence-map-workflow10-public-dashboard-table-v1",
+  database_table=TRUE,
+  full_abstracts=FALSE,
+  abstract_snippet_words=30L,
+  search=TRUE,
+  ris_download=FALSE,
+  abstract_index=TRUE
+)
+
 index_payload <- list(
   schema="living-evidence-map-abstract-inverted-index-v1",
   position_unit="whitespace_token_0_based",
