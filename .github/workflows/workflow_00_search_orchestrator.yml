@@ -80,6 +80,7 @@ on:
         options:
           - full
           - fortnightly
+          - monthly
           - expansion
       group_core_multidisciplinary:
         description: 'Core multidisciplinary — Lens, Scopus, WoS, OpenAlex'
@@ -184,7 +185,7 @@ jobs:
         run: |
           set -euo pipefail
           case '${{ inputs.run_type }}' in
-            full|fortnightly|expansion) ;;
+            full|fortnightly|monthly|expansion) ;;
             *) echo 'Unsupported Workflow 00 run type' >&2; exit 2 ;;
           esac
 
@@ -302,8 +303,8 @@ jobs:
             cat(sprintf('%s<<EOF\n%s\nEOF\n',name,value),file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
           }
           emit('search_version',p$search_version)
-          emit('fortnightly_from_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$from)
-          emit('fortnightly_to_date', if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$to)
+          emit('fortnightly_from_date', if (!is.null(p$monthly_window)) p$monthly_window$from else if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$from)
+          emit('fortnightly_to_date', if (!is.null(p$monthly_window)) p$monthly_window$to else if (is.null(p$fortnightly_window)) '' else p$fortnightly_window$to)
           s <- fromJSON('outputs/updater/workflow00_plan/source_selection.json', simplifyVector=FALSE)
           sel <- unlist(s$selected_sources,use.names=FALSE)
           missing <- setdiff(sel,names(q))
@@ -595,7 +596,7 @@ jobs:
           path: downloaded_expansion_reconciliation
 
       - name: Download fortnightly native-ID reconciliation outputs
-        if: ${{ inputs.run_type == 'fortnightly' }}
+        if: ${{ inputs.run_type == 'fortnightly' || inputs.run_type == 'monthly' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -671,7 +672,7 @@ jobs:
             done
           fi
 
-          if [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
+          if [ '${{ inputs.run_type }}' = 'fortnightly' ] || [ '${{ inputs.run_type }}' = 'monthly' ]; then
             mkdir -p data/workflow00/source_id_registry
             mkdir -p "docs/search_record/fortnightly_update/reconciliation/$GITHUB_RUN_ID"
             IFS=',' read -ra SOURCES <<< "$SELECTED_SOURCES"
@@ -687,7 +688,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/search_record
-          if [ '${{ inputs.run_type }}' = 'full' ] || [ '${{ inputs.run_type }}' = 'expansion' ] || [ '${{ inputs.run_type }}' = 'fortnightly' ]; then
+          if [ '${{ inputs.run_type }}' = 'full' ] || [ '${{ inputs.run_type }}' = 'expansion' ] || [ '${{ inputs.run_type }}' = 'fortnightly' ] || [ '${{ inputs.run_type }}' = 'monthly' ]; then
             git add data/workflow00/source_id_registry
           fi
           if [ '${{ inputs.run_type }}' = 'full' ]; then
