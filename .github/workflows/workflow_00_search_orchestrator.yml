@@ -297,6 +297,19 @@ jobs:
             !is.null(p$monthly_window$to),
             as.Date(p$monthly_window$from)<=as.Date(p$monthly_window$to)
           )
+          catalogue <- fromJSON('config/workflow01_source_catalogue.json',simplifyVector=FALSE)
+          monthly <- catalogue$pending_manual_monthly
+          for (source in c('cab','proquest')) {
+            entry <- monthly[[source]]
+            if (is.null(entry) || !file.exists(entry$registry)) {
+              stop(sprintf('Monthly manual RIS registry not ready for %s',source),call.=FALSE)
+            }
+            reg <- fromJSON(entry$registry,simplifyVector=FALSE)
+            if (!identical(reg$database$short_name,source) ||
+                !identical(reg$staging$reserved_doi,entry$doi)) {
+              stop(sprintf('Monthly manual RIS DOI mismatch for %s',source),call.=FALSE)
+            }
+          }
           queries <- vapply(src,function(id) as.character(p$source_queries[[id]]),character(1))
           if(any(!grepl('maricultur',queries,fixed=TRUE))) stop('Monthly query missing mariculture term',call.=FALSE)
           cat(sprintf('PASS: monthly preflight %d API databases, %s through %s; all queries include maricultur*\\n',
