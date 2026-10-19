@@ -1,2 +1,2 @@
 Monthly W00 schedule trigger for 2026-10
-Retry after targeted monthly compatibility corrections
+Fresh independent run after successful EThOS full-search native-ID baseline
