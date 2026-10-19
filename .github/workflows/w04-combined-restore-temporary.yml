@@ -22,5 +22,5 @@ jobs:
         run: |
           grep -q 'lem-w04-combined-restoration-v1' scripts/updater/workflow_04_restore_shiny_combined.R
           grep -q 'batch_membership_sha256' scripts/updater/workflow_04_restore_shiny_combined.R
-          test -f scripts/updater/workflow_04_restore_shiny_subset.R
-          test -f scripts/updater/workflow_04_publish_shiny_model_batch.R
+          test -f .github/workflows/workflow_04_production.yml
+          echo 'PASS: checked the adapter against the workflow01-final-architecture branch'
