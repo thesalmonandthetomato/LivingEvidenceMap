@@ -22,7 +22,10 @@ jobs:
           use-public-rspm: true
       - name: Install small dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2'))
+        run: |
+          install.packages(c('jsonlite','digest','httr2'))
+          parse(file='scripts/reporting/write_workflow09_source_snapshot.R')
+          cat('PASS: reporting source parses before data operations\n')
       - name: Restore verified W01 membership from previous recovery artefact
         env:
           GH_TOKEN: ${{ github.token }}
