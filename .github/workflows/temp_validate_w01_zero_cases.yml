@@ -25,12 +25,13 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
           s=Path(".github/workflows/workflow_01_production.yml").read_text()
           a=s.index('          if [ "$N" -eq 0 ]; then',s.index('- name: Build LLM adjudication cases'))
           b=s.index('          else\n',a)
           chunk=s[a:b]
           assert 'unique_bibliographic_records=0L' in chunk
-          script="set -euo pipefail\nN=0\n"+chunk+"          fi\n"
+          script="set -euo pipefail\nN=0\n"+dedent(chunk)+"fi\n"
           Path("/tmp/w01_zero.sh").write_text(script)
           assert script.count("cases.jsonl.manifest.json")==0
           PY
