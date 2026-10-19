@@ -40,24 +40,24 @@ jobs:
           use-public-rspm: true
       - name: Install required R packages
         shell: Rscript {0}
-        run: install.packages(c("data.table","jsonlite","digest","httr2","readr","stringdist","stringi","xml2","googlesheets4"))
+        run: install.packages(c("data.table","jsonlite","digest","httr2","readr","stringdist","stringi","xml2","googlesheets4","yaml"))
       - name: Confirm pinned authoritative inputs
-        shell: bash
+        shell: Rscript {0}
         run: |
-          set -euo pipefail
-          test -s "workflow00_registry/$W00_POINTER"
-          test -s "$PREV_W01_POINTER"
-          python3 - <<'PY'
-          import json,os
-          x=json.load(open(os.path.join("workflow00_registry",os.environ["W00_POINTER"])))
-          assert x["github_run_id"]=="39298022062"
-          assert x["run_type"]=="monthly"
-          assert list(x["sources"])==os.environ["W00_SOURCES"].split(",")
-          print("PASS: pinned October W00 input and source order")
-          PY
+          library(jsonlite)
+          w00 <- file.path("workflow00_registry",Sys.getenv("W00_POINTER"))
+          w01 <- Sys.getenv("PREV_W01_POINTER")
+          stopifnot(file.exists(w00),file.info(w00)$size>0L,
+                    file.exists(w01),file.info(w01)$size>0L)
+          x <- fromJSON(w00,simplifyVector=FALSE)
+          stopifnot(identical(as.character(x$github_run_id),"39298022062"),
+                    identical(x$run_type,"monthly"),
+                    identical(as.character(unlist(x$sources,use.names=FALSE)),
+                              strsplit(Sys.getenv("W00_SOURCES"),",",fixed=TRUE)[[1L]]))
+          cat("PASS: pinned October W00 inputs and source order\\n")
       - name: Run isolated real-data candidate benchmark
         shell: bash
-        run: python3 scripts/updater/experimental_w01_fast/run_real_benchmark.py
+        run: Rscript scripts/updater/experimental_w01_fast/run_real_benchmark.R
       - name: Upload read-only benchmark report and parity differences
         if: always()
         uses: actions/upload-artifact@v4
