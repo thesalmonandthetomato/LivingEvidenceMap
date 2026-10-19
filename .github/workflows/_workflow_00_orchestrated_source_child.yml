@@ -224,14 +224,14 @@ jobs:
           if [[ "$SOURCE" == ebsco_* ]]; then
             Rscript scripts/updater/workflow_00_ebsco_native_id_reconcile.R \
               --source "$SOURCE" \
-              --run-type fortnightly \
+              --run-type "${{ inputs.run_type }}" \
               --current-root outputs/updater/source_child \
               --registry "$registry" \
               --output-dir outputs/updater/source_delta
           else
             Rscript scripts/updater/workflow_00_native_id_reconcile.R \
               --source "$SOURCE" \
-              --run-type fortnightly \
+              --run-type "${{ inputs.run_type }}" \
               --current-root outputs/updater/source_child \
               --registry "$registry" \
               --output-dir outputs/updater/source_delta
