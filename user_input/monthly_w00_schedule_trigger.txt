@@ -1,2 +1,2 @@
 Monthly W00 schedule trigger for 2026-10
-Fresh independent run after successful EThOS full-search native-ID baseline
+Fresh independent run after passing W00 monthly status regression validation
