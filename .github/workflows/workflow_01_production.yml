@@ -298,6 +298,24 @@ jobs:
             src <- trimws(strsplit(Sys.getenv("W00_SOURCES"), ",", fixed=TRUE)[[1L]])
             src <- src[nzchar(src)]
             w00 <- fromJSON(file.path("workflow00_registry",Sys.getenv("W00_POINTER")),simplifyVector=FALSE)
+            if (identical(w00$run_type,"monthly")) {
+              pending <- p$pending_manual_monthly
+              if (is.null(pending) || !setequal(names(pending),c("cab","proquest"))) {
+                stop("Monthly manual RIS catalogue must identify CAB and PQD&T",call.=FALSE)
+              }
+              for (s in c("cab","proquest")) {
+                z <- pending[[s]]
+                if (is.null(z$registry) || !file.exists(z$registry)) {
+                  stop(sprintf("Monthly RIS registry for %s has not been validated and committed: %s",s,z$registry),call.=FALSE)
+                }
+                reg <- fromJSON(z$registry,simplifyVector=FALSE)
+                if (!identical(reg$staging$reserved_doi,z$doi) ||
+                    !identical(reg$database$short_name,s)) {
+                  stop(sprintf("Monthly %s registry DOI/source mismatch",s),call.=FALSE)
+                }
+                p$sources[[s]]$registry <- z$registry
+              }
+            }
             if (identical(w00$run_type,"expansion")) {
               # Incremental concept expansion: ingest only the new CAB/PQD&T archives.
               # Historical September RIS inputs stay in the prior W01 baseline.
