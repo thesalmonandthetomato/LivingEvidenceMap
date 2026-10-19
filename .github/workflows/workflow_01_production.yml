@@ -315,7 +315,7 @@ jobs:
                 p$sources[[source]] <- NULL
                 doi <- if(is.null(config) || is.null(config$sources[[source]]$zenodo_doi)) "" else
                   trimws(as.character(config$sources[[source]]$zenodo_doi))
-                if (!grepl("^10\\\\.5281/zenodo\\\\.[0-9]+$",doi)) {
+                if (!grepl("^10[.]5281/zenodo[.][0-9]+$",doi)) {
                   message(sprintf("SKIP optional %s: no valid Zenodo draft DOI",source))
                   next
                 }
@@ -325,7 +325,7 @@ jobs:
                 registry <- fromJSON(base_path,simplifyVector=FALSE)
                 registry$search$search_date <- paste0(update_month,"-19")
                 registry$search$search_string <- paste(
-                  "(salmon OR salmonid* OR Salmo OR Oncorhynchus OR \\"rainbow trout\\")",
+                  '(salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout")',
                   "AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*)"
                 )
                 registry$search$reported_results <- NULL
