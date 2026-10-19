@@ -49,5 +49,17 @@
       "doi": "10.5281/zenodo.23453910",
       "status": "awaiting_w00_validation_completion_and_publication"
     }
+  },
+  "pending_manual_monthly": {
+    "cab": {
+      "registry": "user_input/workflow00_ris_cab_monthly_2026-10-19.json",
+      "doi": "10.5281/zenodo.23474710",
+      "status": "draft_requires_validation_and_publication"
+    },
+    "proquest": {
+      "registry": "user_input/workflow00_ris_proquest_monthly_2026-10-19.json",
+      "doi": "10.5281/zenodo.23474888",
+      "status": "draft_requires_validation_and_publication"
+    }
   }
 }
