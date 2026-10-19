@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-19T17:56:23Z",
+  "source": "wos",
+  "run_type": "monthly",
+  "search_version": "v2",
+  "additional_search_term": null,
+  "search_string": "(TI=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*))) OR (AB=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*))) OR (AK=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*))) ; modifiedTimeSpan=2026-09-14+2026-10-19",
+  "database_scope": {
+    "platform": "Web of Science",
+    "api_product": "Web of Science Starter API",
+    "endpoint": "https://api.clarivate.com/apis/wos-starter/v1/documents",
+    "database_parameter": "WOS",
+    "databases_searched": [
+      {
+        "code": "WOS",
+        "name": "Web of Science Core Collection"
+      }
+    ],
+    "selection_method": "Explicit db=WOS API parameter",
+    "recorded_at_utc": "2026-10-19T17:56:15Z",
+    "institutional_coverage_note": "The content, editions and historical coverage available within the Web of Science Core Collection are determined by the institutional/API entitlement active at query time and may change.",
+    "core_collection_editions": "Not exposed or independently verified by this Starter API request"
+  },
+  "search_window": {
+    "from": "2026-09-14",
+    "to": "2026-10-19"
+  },
+  "reported_search_results": 289,
+  "successfully_downloaded_results": 289,
+  "complete_download": true,
+  "native_id_reconciliation": {
+    "already_known": 289,
+    "new": 0,
+    "matching": "exact source-native identifier",
+    "records_passed_downstream": 0
+  },
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "39298022062",
+    "child_workflow_run_id": "39298022062",
+    "run_attempt": "1",
+    "ref": "workflow01-final-architecture",
+    "triggering_sha": "ac1837a8ace0b2e69136bb3ad43a6816b9dd9fd1",
+    "orchestrator_sha": "ac1837a8ace0b2e69136bb3ad43a6816b9dd9fd1",
+    "source_handler_sha": "ac1837a8ace0b2e69136bb3ad43a6816b9dd9fd1"
+  },
+  "artifact_name": "workflow00-wos-harvest-39298022062"
+}

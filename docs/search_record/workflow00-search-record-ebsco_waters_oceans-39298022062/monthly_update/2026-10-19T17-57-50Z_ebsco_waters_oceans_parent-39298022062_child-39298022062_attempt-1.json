@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-10-19T17:57:50Z",
+  "source": "ebsco_waters_oceans",
+  "run_type": "monthly",
+  "search_version": "v2",
+  "additional_search_term": null,
+  "search_string": "((TI (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR AB (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") OR KW (salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\")) AND (TI (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*) OR AB (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*) OR KW (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*)))",
+  "database_scope": {
+    "provider": "EBSCOhost EIT",
+    "database_code": "wrw",
+    "database_name": "Waters & Oceans Worldwide",
+    "field_scope": [
+      "TI",
+      "AB",
+      "KW"
+    ]
+  },
+  "search_window": {
+    "from": "2026-09-14",
+    "to": "2026-10-19"
+  },
+  "reported_search_results": 5297,
+  "successfully_downloaded_results": 5297,
+  "complete_download": true,
+  "native_id_reconciliation": {
+    "already_known": 5297,
+    "new": 0,
+    "matching": "exact source-native identifier",
+    "records_passed_downstream": 0
+  },
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "39298022062",
+    "child_workflow_run_id": "39298022062",
+    "run_attempt": "1",
+    "ref": "workflow01-final-architecture",
+    "triggering_sha": "ac1837a8ace0b2e69136bb3ad43a6816b9dd9fd1",
+    "orchestrator_sha": "ac1837a8ace0b2e69136bb3ad43a6816b9dd9fd1",
+    "source_handler_sha": "ac1837a8ace0b2e69136bb3ad43a6816b9dd9fd1"
+  },
+  "artifact_name": "workflow00-ebsco_waters_oceans-harvest-39298022062"
+}

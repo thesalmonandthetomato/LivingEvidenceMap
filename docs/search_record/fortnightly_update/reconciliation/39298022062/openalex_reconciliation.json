@@ -1,0 +1,21 @@
+{
+  "workflow": "00_native_id_reconciliation",
+  "status": "success",
+  "reconciled_at": "2026-10-19T17:56:23Z",
+  "run_type": "monthly",
+  "source": "openalex",
+  "reconciliation_key": "OpenAlex Work ID",
+  "current_raw_records": 1346,
+  "current_unique_records": 1344,
+  "exact_duplicate_ids_suppressed": 2,
+  "duplicate_native_ids": ["W7164758326", "W7202123227"],
+  "historical_unique_native_ids": 28336,
+  "already_known_native_ids": 1344,
+  "new_native_ids": 0,
+  "records_passed_downstream": 0,
+  "filtered_source_root": "filtered_source",
+  "bibliographic_deduplication_performed": false,
+  "doi_matching_performed": false,
+  "fuzzy_matching_performed": false,
+  "downstream_deduplication": "Workflow 01"
+}
