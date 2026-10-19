@@ -42,6 +42,14 @@ jobs:
             --stage W01 --run-id 39140209398 \
             --canonical recovered_w01/canonical/records.jsonl
           Rscript -e 'library(jsonlite);m<-fromJSON("docs/reporting/workflow_09_inputs/current/w01_source_manifest.json");stopifnot(m$canonical_records==50551L);x<-read.csv("docs/reporting/workflow_09_inputs/current/w01_source_membership.csv");stopifnot(nrow(x)==50551L,!anyDuplicated(x$record_id));cat("PASS: regenerated 50551 W01 source memberships\n")'
+      - name: Preserve checked W01 membership as recovery artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08-recovery-verified-membership-${{ github.run_id }}
+          path: |
+            docs/reporting/workflow_09_inputs/current/w01_source_*.csv
+            docs/reporting/workflow_09_inputs/current/w01_source_manifest.json
+          retention-days: 30
       - name: Restore published W08 canonical without rerunning annotation
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
@@ -50,15 +58,16 @@ jobs:
           library(httr2);library(jsonlite);library(digest)
           pointer<-fromJSON("docs/workflow08/zenodo/run-39166740853.json",simplifyVector=FALSE)
           stopifnot(pointer$status=="published",pointer$canonical_records==22911L)
-          url<-sprintf("https://zenodo.org/api/records/%s",pointer$zenodo_record_id)
+          url<-sprintf("https://zenodo.org/api/deposit/depositions/%s",pointer$zenodo_deposition_id)
           auth<-function(r) req_headers(r,Authorization=paste("Bearer",Sys.getenv("ZENODO_ACCESS_TOKEN")))
-          r<-auth(request(url)) |> req_timeout(60) |> req_perform()
+          r<-auth(request(url)) |> req_timeout(90) |> req_perform()
           stopifnot(resp_status(r)==200L)
           z<-resp_body_json(r,simplifyVector=FALSE)
-          f<-Filter(function(x)identical(x$key,"living_evidence_map_canonical_final.jsonl"),z$files)
+          stopifnot(isTRUE(z$submitted),nzchar(z$links$bucket))
+          filename<-"living_evidence_map_canonical_final.jsonl"
+          f<-Filter(function(x)identical(x$filename,filename),pointer$files)
           stopifnot(length(f)==1L)
-          link<-f[[1]]$links$content
-          stopifnot(nzchar(link))
+          link<-paste0(sub("/$","",z$links$bucket),"/",URLencode(filename,reserved=TRUE))
           dir.create("outputs/workflow08",recursive=TRUE)
           target<-"outputs/workflow08/living_evidence_map_canonical_final.jsonl"
           rr<-auth(request(link)) |> req_timeout(1800) |> req_perform(path=target)
