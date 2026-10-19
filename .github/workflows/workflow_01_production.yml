@@ -518,6 +518,21 @@ jobs:
           N="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow01_pre_adjudication/summary.json");cat(x$manual_review_pairs)')"
           if [ "$N" -eq 0 ]; then
             : > outputs/adjudication/cases.jsonl
+            Rscript - <<'RS'
+          suppressPackageStartupMessages({library(jsonlite);library(digest)})
+          p <- "outputs/adjudication/cases.jsonl"
+          manifest <- list(
+            schema="living-evidence-map-workflow01-adjudication-input-manifest-v1",
+            cases=0L,
+            unique_bibliographic_records=0L,
+            source_counts=list(),
+            review_pairs_sha256=digest(file="outputs/workflow01_pre_adjudication/manual_review_pairs.csv",algo="sha256",serialize=FALSE),
+            metadata_sha256=digest(file="outputs/workflow01_candidates/normalised_metadata.csv",algo="sha256",serialize=FALSE),
+            output_sha256=digest(file=p,algo="sha256",serialize=FALSE)
+          )
+          writeLines(toJSON(manifest,auto_unbox=TRUE,pretty=TRUE,null="null"),
+                     paste0(p,".manifest.json"))
+          RS
           else
             Rscript scripts/updater/workflow_01_build_duplicate_adjudication_cases.R \
               --review-pairs outputs/workflow01_pre_adjudication/manual_review_pairs.csv \
