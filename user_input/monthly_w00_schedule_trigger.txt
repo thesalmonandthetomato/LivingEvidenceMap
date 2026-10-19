@@ -1,1 +1,2 @@
 Monthly W00 schedule trigger for 2026-10
+Retry after targeted monthly compatibility corrections
