@@ -44,7 +44,7 @@ jobs:
           # positive expansion and negative monthly cases, without executing
           # any historical archive downloads or changing pipeline state.
           rule_text <- trimws(rule[[1L]])
-          rule_expr <- parse(text=sub("\\)\\{\\s*$",")",rule_text))[[1L]]
+          rule_expr <- parse(text=sub("\\)\\{\\s*$",") TRUE else FALSE",rule_text))[[1L]]
           clean <- function(x) if (is.null(x) || !length(x)) "" else as.character(x[[1L]])
           catalogue <- list(pending_manual_expansions=list(cab=list(),proquest=list()))
           recs <- list(list(run_type="expansion"),list(run_type="expansion"))
