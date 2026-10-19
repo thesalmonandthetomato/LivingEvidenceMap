@@ -266,7 +266,20 @@ if (!count_matches_pages) stop("Validation failure: raw-page recount does not ma
 if (length(duplicate_ids) > 0L) {
   message(sprintf("NOTE: %d repeated OpenAlex Work IDs occurred across live cursor pages; raw responses remain unchanged and exact-ID repeats will be collapsed downstream.", length(duplicate_ids)))
 }
-if (expected_complete && !isTRUE(count_matches_reported_total) && !isTRUE(reported_total_changed)) {
+# Raw pages may contain repeated Work IDs under live cursor pagination.
+# Accept only when the unique-ID count exactly equals the reported total;
+# preserve the raw-row discrepancy, IDs and unchanged API responses in validation.
+duplicate_only_count_difference <- expected_complete &&
+  !isTRUE(count_matches_reported_total) &&
+  identical(as.integer(unique_id_count), as.integer(reported_total)) &&
+  length(duplicate_ids) > 0L
+validation$duplicate_only_count_difference <- duplicate_only_count_difference
+write_json(validation, validation_path)
+if (isTRUE(duplicate_only_count_difference)) {
+  message(sprintf("NOTE: %d raw OpenAlex rows contain %d repeated Work IDs; %d distinct IDs match first-page reported total. Raw responses and repeated IDs retained for audit.",
+                  recount, length(duplicate_ids), unique_id_count))
+}
+if (expected_complete && !isTRUE(count_matches_reported_total) && !isTRUE(reported_total_changed) && !isTRUE(duplicate_only_count_difference)) {
   stop(sprintf("Validation failure: full harvest retrieved %d records but OpenAlex first page reported %d without observed live-index count drift",
                recount, reported_total))
 }
