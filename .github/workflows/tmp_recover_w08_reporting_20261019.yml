@@ -1,4 +1,4 @@
-name: Recovery - W08 reporting from published immutable state
+name: Recovery - W08 reporting small verified inputs
 on:
   push:
     branches: [workflow01-final-architecture]
@@ -8,9 +8,9 @@ permissions:
   contents: write
   actions: write
 jobs:
-  repair:
+  reporting:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,87 +20,59 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
-      - name: Install only required packages
+      - name: Install small dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2','data.table','stringdist'))
-      - name: Restore current W01 from immutable pointer
+        run: install.packages(c('jsonlite','digest','httr2'))
+      - name: Restore verified W01 membership from previous recovery artefact
         env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_01_restore_current_state.R \
-            --pointer docs/deduplication/zenodo/run-39140209398.json \
-            --pointer-dir docs/deduplication/zenodo \
-            --output-root recovered_w01
-          test -s recovered_w01/canonical/records.jsonl
-      - name: Regenerate W01 source membership from current cohort
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
-            --stage W01 --run-id 39140209398 \
-            --canonical recovered_w01/canonical/records.jsonl
-          Rscript -e 'library(jsonlite);m<-fromJSON("docs/reporting/workflow_09_inputs/current/w01_source_manifest.json");stopifnot(m$canonical_records==50551L);x<-read.csv("docs/reporting/workflow_09_inputs/current/w01_source_membership.csv");stopifnot(nrow(x)==50551L,!anyDuplicated(x$record_id));cat("PASS: regenerated 50551 W01 source memberships\n")'
-      - name: Preserve checked W01 membership as recovery artefact
-        uses: actions/upload-artifact@v4
-        with:
-          name: w08-recovery-verified-membership-${{ github.run_id }}
-          path: |
-            docs/reporting/workflow_09_inputs/current/w01_source_*.csv
-            docs/reporting/workflow_09_inputs/current/w01_source_manifest.json
-          retention-days: 30
-      - name: Restore published W08 canonical without rerunning annotation
+          gh run download 39216718164 --repo "$GITHUB_REPOSITORY" --name w08-recovery-verified-membership-39216718164 --dir downloaded
+          cp downloaded/w01_source_* docs/reporting/workflow_09_inputs/current/
+          Rscript -e 'library(jsonlite);library(digest);p<-"docs/reporting/workflow_09_inputs/current/";m<-fromJSON(paste0(p,"w01_source_manifest.json"));x<-read.csv(paste0(p,"w01_source_membership.csv"));stopifnot(nrow(x)==50551L,!anyDuplicated(x$record_id),m$canonical_records==50551L,identical(digest(file=paste0(p,"w01_source_membership.csv"),algo="sha256",serialize=FALSE),m$w01_source_membership_sha256));cat("PASS: 50551 verified W01 memberships reused without Zenodo download\n")'
+      - name: Retrieve only 7MB W08 exclusion ledger and derive included IDs
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: Rscript {0}
         run: |
           library(httr2);library(jsonlite);library(digest)
-          pointer<-fromJSON("docs/workflow08/zenodo/run-39166740853.json",simplifyVector=FALSE)
-          stopifnot(pointer$status=="published",pointer$canonical_records==22911L)
-          url<-sprintf("https://zenodo.org/api/deposit/depositions/%s",pointer$zenodo_deposition_id)
-          auth<-function(r) req_headers(r,Authorization=paste("Bearer",Sys.getenv("ZENODO_ACCESS_TOKEN")))
-          r<-auth(request(url)) |> req_timeout(90) |> req_perform()
-          stopifnot(resp_status(r)==200L)
-          z<-resp_body_json(r,simplifyVector=FALSE)
+          p<-fromJSON('docs/workflow08/zenodo/run-39166740853.json',simplifyVector=FALSE)
+          stopifnot(p$status=='published',p$canonical_records==22911L,p$excluded_records==27640L)
+          auth<-function(r)req_headers(r,Authorization=paste('Bearer',Sys.getenv('ZENODO_ACCESS_TOKEN')))
+          z<-auth(request(sprintf('https://zenodo.org/api/deposit/depositions/%s',p$zenodo_deposition_id))) |> req_timeout(60) |> req_perform() |> resp_body_json(simplifyVector=FALSE)
           stopifnot(isTRUE(z$submitted),nzchar(z$links$bucket))
-          filename<-"living_evidence_map_canonical_final.jsonl"
-          f<-Filter(function(x)identical(x$filename,filename),pointer$files)
-          stopifnot(length(f)==1L)
-          link<-paste0(sub("/$","",z$links$bucket),"/",URLencode(filename,reserved=TRUE))
-          dir.create("outputs/workflow08",recursive=TRUE)
-          target<-"outputs/workflow08/living_evidence_map_canonical_final.jsonl"
-          rr<-auth(request(link)) |> req_timeout(1800) |> req_perform(path=target)
-          stopifnot(resp_status(rr)==200L,
-                    identical(tolower(digest(file=target,algo="sha256",serialize=FALSE)),
-                              tolower(pointer$final_canonical_jsonl_sha256)))
-          cat("PASS: recovered archived W08 canonical, verified SHA256\n")
-      - name: Validate W08 membership and rebuild W08 reporting
+          filename<-'workflow08_excluded_records.csv'
+          url<-paste0(sub('/$','',z$links$bucket),'/',filename)
+          r<-auth(request(url)) |> req_timeout(300) |> req_perform(path='w08_excluded.csv')
+          stopifnot(resp_status(r)==200L,identical(digest(file='w08_excluded.csv',algo='sha256',serialize=FALSE),p$excluded_records_csv_sha256))
+          exclusions<-read.csv('w08_excluded.csv',stringsAsFactors=FALSE)
+          membership<-read.csv('docs/reporting/workflow_09_inputs/current/w01_source_membership.csv',stringsAsFactors=FALSE)
+          stopifnot(nrow(exclusions)==27640L,!anyDuplicated(exclusions$record_id),all(exclusions$record_id %in% membership$record_id))
+          included<-setdiff(membership$record_id,exclusions$record_id)
+          stopifnot(length(included)==22911L)
+          writeLines(included,'w08_included_ids.txt',useBytes=TRUE)
+          cat('PASS: all 50551 W01 records partition into 27640 W08 exclusions and 22911 included IDs\n')
+      - name: Write verified W08 reporting and publish
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id 39166740853
-          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
-            --stage W08 --run-id 39166740853 \
-            --canonical outputs/workflow08/living_evidence_map_canonical_final.jsonl
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id 39166740853 --pointer docs/workflow08/zenodo/run-39166740853.json
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R --stage W08 --run-id 39166740853 --included-ids w08_included_ids.txt --canonical-sha256 fa52cf8179399ac8b28d10a22f1479999a7c1fe0c3487b4e18f29dfb05cbda1e --canonical unused-not-downloaded.jsonl
           Rscript scripts/reporting/refresh_workflow09_input_manifest.R
-          Rscript -e 'library(jsonlite);m<-fromJSON("docs/reporting/workflow_09_inputs/current/w08_source_manifest.json");stopifnot(m$canonical_records==22911L);cat("PASS: 22911 W08 records reconcile with current W01 source membership\n")'
-      - name: Commit reporting snapshot without touching canonical or screening state
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          Rscript -e 'library(jsonlite);x<-fromJSON("docs/reporting/workflow_09_inputs/current/w08_source_manifest.json");stopifnot(x$canonical_records==22911L,x$source_run_id=="39166740853");cat("PASS: reporting snapshot complete\n")'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/reporting/workflow_09_inputs/current
           if ! git diff --cached --quiet; then
-            git commit -m "Rebuild current W01 membership and W08 reporting from immutable archives [skip ci]"
-            git pull --rebase origin workflow01-final-architecture
-            git push origin HEAD:workflow01-final-architecture
+            git commit -m 'Repair W01 and W08 source reporting snapshots from verified small inputs [skip ci]'
+            bash scripts/updater/workflow01_push_with_retry.sh workflow01-final-architecture
           fi
-      - name: Dispatch W09 only after successful verified reporting
+      - name: Dispatch W09 after complete reporting validation
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           gh workflow run report_workflow09_figures.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture
-          echo "PASS: W09 requested following verified W01/W08 reconciliation"
+          echo 'PASS: dispatched W09'
