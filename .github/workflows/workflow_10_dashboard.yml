@@ -9,6 +9,7 @@ on:
       - 'docs/reporting/.run_workflow10_dashboard'
       - 'R/workflow_10_dashboard_from_canonical_jsonl.R'
       - 'R/workflow_10_make_public_dashboard.R'
+      - 'R/workflow_10_build_search_trial.R'
       - 'scripts/reporting/workflow_10_build_internal_output_registry.R'
       - 'scripts/updater/workflow_10_restore_canonical_from_zenodo.R'
       - 'docs/index.html'
@@ -72,6 +73,7 @@ jobs:
           parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
           parse(file='R/workflow_10_dashboard_from_canonical_jsonl.R')
           parse(file='R/workflow_10_make_public_dashboard.R')
+          parse(file='R/workflow_10_build_search_trial.R')
           parse(file='scripts/reporting/workflow_10_build_internal_output_registry.R')
           cat('PASS: Workflow 10 scripts parse\n')
 
@@ -161,6 +163,12 @@ jobs:
             outputs/workflow10/dashboard-internal-data.js \
             inputs/workflow10/living_evidence_map_canonical_final.jsonl \
             outputs/workflow10/dashboard-data.js
+          Rscript R/workflow_10_build_search_trial.R \
+            outputs/workflow10/dashboard-data.js \
+            inputs/workflow10/living_evidence_map_canonical_final.jsonl \
+            outputs/workflow10/dashboard-search-data.js \
+            outputs/workflow10/dashboard-search-index.js
+          mv outputs/workflow10/dashboard-search-data.js outputs/workflow10/dashboard-data.js
           cp docs/index.html outputs/workflow10/index.html
 
       - name: Validate Workflow 10 output
@@ -213,15 +221,21 @@ jobs:
           stopifnot(!grepl('Search and download',html,fixed=TRUE))
           stopifnot(!grepl('Download filtered results (.RIS)',html,fixed=TRUE))
           stopifnot(!grepl('workflow10-search-trial-controller',html,fixed=TRUE))
-          stopifnot(!file.exists('outputs/workflow10/dashboard-search-index.js'))
-          stopifnot(!file.exists('outputs/workflow10/search-trial-manifest.json'))
+          index_js <- paste(readLines('outputs/workflow10/dashboard-search-index.js',warn=FALSE,encoding='UTF-8'),collapse='\n')
+          index_prefix <- 'window.LIVING_EVIDENCE_MAP_ABSTRACT_INDEX='
+          stopifnot(startsWith(index_js,index_prefix),endsWith(index_js,';'))
+          index_payload <- fromJSON(substr(index_js,nchar(index_prefix)+1L,nchar(index_js)-1L),simplifyVector=FALSE)
+          index_ids <- vapply(index_payload$record_ids,as.character,character(1))
+          data_ids <- vapply(payload$records,function(r)as.character(r$record_id),character(1))
+          stopifnot(identical(index_ids,data_ids),length(index_ids)==expected_n)
+          stopifnot(grepl('./dashboard-search-index.js',html,fixed=TRUE))
 
           stopifnot(isTRUE(payload$public_projection$database_table))
           stopifnot(isFALSE(payload$public_projection$full_abstracts))
           stopifnot(as.integer(payload$public_projection$abstract_snippet_words)==30L)
-          stopifnot(isFALSE(payload$public_projection$search))
+          stopifnot(isTRUE(payload$public_projection$search))
           stopifnot(isFALSE(payload$public_projection$ris_download))
-          stopifnot(isFALSE(payload$public_projection$abstract_index))
+          stopifnot(isTRUE(payload$public_projection$abstract_index))
           required_table_fields <- c('record_id','title','abstract_snippet','doi','year','authors','journal','volume','pages','species','countries','iso3','topics','topic_paths','topic_stars')
           stopifnot(all(vapply(payload$records,function(r)all(required_table_fields %in% names(r)),logical(1))))
           stopifnot(all(vapply(payload$records,function(r)is.null(r[['abstract']]),logical(1))))
@@ -308,6 +322,7 @@ jobs:
           path: |
             outputs/workflow10/index.html
             outputs/workflow10/dashboard-data.js
+            outputs/workflow10/dashboard-search-index.js
           retention-days: 30
           if-no-files-found: error
 
@@ -328,12 +343,14 @@ jobs:
 
           test -s outputs/workflow10/index.html
           test -s outputs/workflow10/dashboard-data.js
+          test -s outputs/workflow10/dashboard-search-index.js
           test -s docs/reporting/workflow_09/manuscript/methods.html
           test -s docs/reporting/workflow_09/manuscript/results.html
           # Structural, provenance and record-count validation is performed in the preceding W10 validation step.
 
           cp outputs/workflow10/index.html public-site/index.html
           cp outputs/workflow10/dashboard-data.js public-site/dashboard-data.js
+          cp outputs/workflow10/dashboard-search-index.js public-site/dashboard-search-index.js
           cp docs/reporting/workflow_09/manuscript/methods.html public-site/methodology.html
           cp docs/reporting/workflow_09/manuscript/results.html public-site/results.html
           touch public-site/.nojekyll
@@ -345,7 +362,7 @@ jobs:
           cd public-site
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html dashboard-data.js methodology.html results.html .nojekyll
+          git add index.html dashboard-data.js dashboard-search-index.js methodology.html results.html .nojekyll
 
           if git diff --cached --quiet; then
             echo "Public salmon evidence map is already current."
