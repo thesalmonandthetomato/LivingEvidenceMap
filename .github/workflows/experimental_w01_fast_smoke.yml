@@ -1,4 +1,4 @@
-name: Experimental W01-Fast index smoke test
+name: Experimental W01-Fast exact-index smoke test
 on:
   push:
     branches: [workflow01-final-architecture]
