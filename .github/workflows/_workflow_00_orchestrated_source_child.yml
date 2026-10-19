@@ -220,6 +220,13 @@ jobs:
         run: |
           set -euo pipefail
           registry="data/workflow00/source_id_registry/${SOURCE}_native_ids.txt"
+          # EThOS is a new full-source addition without a prior native-ID registry.
+          # Initialise an empty in-job baseline only for EThOS; preserve all
+          # existing per-source registries and the normal reconciliation logic.
+          if [ "$SOURCE" = "ethos" ] && [ ! -f "$registry" ]; then
+            registry="/tmp/workflow00_ethos_initial_native_ids.txt"
+            : > "$registry"
+          fi
           test -f "$registry"
           if [[ "$SOURCE" == ebsco_* ]]; then
             Rscript scripts/updater/workflow_00_ebsco_native_id_reconcile.R \
