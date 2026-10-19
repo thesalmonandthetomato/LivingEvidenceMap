@@ -93,6 +93,24 @@ if (run_type=="full") {
   origin <- "saved_full_run"
   baseline_run_id <- as.character(saved$baseline_run_id)
 
+  if (run_type == "monthly") {
+    # Use the accepted current update's actual API source roster, not the
+    # possibly partial saved selection from the October full-run test.
+    status_path <- "docs/current_run/current_run_status.json"
+    if (!file.exists(status_path)) stop("Monthly run requires current-run source provenance",call.=FALSE)
+    status <- fromJSON(status_path,simplifyVector=FALSE)
+    if (!identical(as.character(status$progress$W10$status),"complete")) stop("Previous pipeline update is not marked complete",call.=FALSE)
+    api_sources <- intersect(names(status$search$sources),supported)
+    if (length(api_sources)!=19L || anyDuplicated(api_sources)) {
+      stop(sprintf("Expected exactly 19 previously searched API sources, found %d",length(api_sources)),call.=FALSE)
+    }
+    selected <- supported[supported %in% api_sources]
+    selected_groups <- character()
+    additional_sources <- selected
+    excluded_sources <- character()
+    origin <- "previous_complete_update_api_sources"
+  }
+
   if (run_type == "expansion") {
     # Expansion covers every API database with a previously published W00 search,
     # not merely the selection from the last (possibly partial) full run.
