@@ -320,7 +320,7 @@ jobs:
           writeLines(toJSON(summary, auto_unbox = TRUE, pretty = TRUE, null = "null"), summary_path, useBytes = TRUE)
           cat(sprintf("PASS: final W08 annotation population=%d geography=%d/%d topics=%d/%d\\n",
             n, geo_with, n - geo_with, topic_with, n - topic_with))
-          system2("Rscript", "scripts/reporting/refresh_workflow09_input_manifest.R", stdout = TRUE, stderr = TRUE) -> status
+          status <- system2("Rscript", "scripts/reporting/refresh_workflow09_input_manifest.R")
           stopifnot(identical(status, 0L))
 
       - name: Render manuscript figures from authoritative pipeline data
