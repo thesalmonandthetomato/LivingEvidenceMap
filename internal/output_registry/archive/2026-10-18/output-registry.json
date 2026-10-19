@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-internal-output-registry-v1",
-  "generated_at_utc": "2026-10-19T11:39:22Z",
+  "generated_at_utc": "2026-10-19T12:01:42Z",
   "search_date": "2026-10-18",
   "update_id": "w00-run-39127932051",
   "note": "Internal repository registry. Not intended for publication.",
@@ -1064,15 +1064,15 @@
       "description": "W10 internal dashboard data payload",
       "format": "JS",
       "bytes": 72168638,
-      "sha256": "7bcc2df3417820305f23c8adb03d764546fcbe6c8830db1ec20305d5f3cc139e"
+      "sha256": "6a28c72e3cb39e4207c91ef6188e4741f45eef69e9c344fd21e3d330bcc1a64a"
     },
     {
       "category": "W10 build artefact",
       "path": "outputs/workflow10/dashboard-data.js",
       "description": "W10 public-projection dashboard data payload",
       "format": "JS",
-      "bytes": 41868668,
-      "sha256": "9a09345cffeb794b27bde8d4fdc6be615f43d04d5ecc6498308b6be3641a5b07"
+      "bytes": 41868666,
+      "sha256": "d7d9c7ab8ab6a22cd06cf32a3442621e731a0e5110174a09e74a5cfd3891debd"
     },
     {
       "category": "W10 build artefact",
