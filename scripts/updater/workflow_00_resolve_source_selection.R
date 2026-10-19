@@ -16,7 +16,7 @@ ebsco_config <- arg("--ebsco-config","config/workflow00_ebsco_sources.json")
 group_config <- arg("--group-config","config/workflow00_source_groups.json")
 search_registry <- arg("--search-registry","docs/search_record/zenodo_registry.csv")
 
-if (!(run_type %in% c("full","fortnightly","expansion"))) stop("Invalid run type",call.=FALSE)
+if (!(run_type %in% c("full","fortnightly","monthly","expansion"))) stop("Invalid run type",call.=FALSE)
 
 ebsco_cfg <- fromJSON(ebsco_config,simplifyVector=FALSE)
 group_cfg <- fromJSON(group_config,simplifyVector=FALSE)
