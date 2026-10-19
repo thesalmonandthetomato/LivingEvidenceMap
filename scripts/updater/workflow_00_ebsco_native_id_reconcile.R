@@ -19,7 +19,7 @@ if (is.null(source)||is.null(current_root)||is.null(registry_path)||is.null(outp
   stop("--source, --current-root, --registry and --output-dir are required",call.=FALSE)
 }
 if (!grepl("^ebsco_[a-z0-9_]+$",source)) stop("Unsupported EBSCO source slug",call.=FALSE)
-if (!(run_type %in% c("full","fortnightly","expansion"))) stop("Invalid --run-type",call.=FALSE)
+if (!(run_type %in% c("full","fortnightly","monthly","expansion"))) stop("Invalid --run-type",call.=FALSE)
 if (!file.exists(registry_path)) stop(sprintf("Native-ID registry not found: %s",registry_path),call.=FALSE)
 
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
