@@ -1,0 +1,58 @@
+name: Temporary W01 native-ID count contract validation
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/temp_validate_w01_delta_counts.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install test dependency
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+      - name: Extract exact production count-to-catalogue logic
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path(".github/workflows/workflow_01_production.yml").read_text()
+          start=s.index('            adapter_sources <- c("lens","scopus","openalex","agricola","wos")')
+          end=s.index('            writeLines(toJSON(p,auto_unbox=TRUE,pretty=TRUE,null="null"),',start)
+          block="\n".join(x[12:] for x in s[start:end].splitlines())
+          Path("/tmp/actual_w01_counts.R").write_text(block+"\n")
+          PY
+      - name: Test zero, positive, missing and inconsistent reconciliation counts
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          code <- parse("/tmp/actual_w01_counts.R")
+          stopifnot(length(code)>0L)
+          run_case <- function(new_n, reported_n=130L, expected_error=FALSE, status="success", source="lens", missing=FALSE) {
+            dir.create("current_workflow00/lens/source_delta",recursive=TRUE,showWarnings=FALSE)
+            path <- "current_workflow00/lens/source_delta/reconciliation_manifest.json"
+            if(file.exists(path)) unlink(path)
+            if(!missing) writeLines(toJSON(list(source=source,status=status,new_native_ids=new_n),auto_unbox=TRUE),path)
+            e <- new.env(parent=globalenv())
+            e$p <- list(sources=list(lens=list(kind="workflow00_state",source="lens",prepared_path="current_sources/lens/records.jsonl")))
+            e$src <- "lens"
+            e$status <- list(search=list(sources=list(lens=list(successfully_downloaded_results=reported_n))))
+            result <- tryCatch({eval(code,envir=e);e$p$sources$lens$expected_records},error=function(err)err)
+            if(expected_error) stopifnot(inherits(result,"error")) else stopifnot(identical(as.integer(result),as.integer(new_n)))
+          }
+          run_case(0L)
+          run_case(17L)
+          run_case(131L,expected_error=TRUE)
+          run_case(-1L,expected_error=TRUE)
+          run_case(5L,status="failed",expected_error=TRUE)
+          run_case(5L,source="openalex",expected_error=TRUE)
+          run_case(0L,missing=TRUE,expected_error=TRUE)
+          cat("PASS: actual W01 production count logic verified against seven test cases\n")
