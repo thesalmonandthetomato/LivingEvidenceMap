@@ -1,0 +1,43 @@
+name: Experimental W01-Fast combined candidate validation
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/experimental_w01_fast_combined_smoke.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install test dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest"))
+      - name: Compare union of candidate sources to reference
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          d<-tempfile(pattern="w01fast-combined-")
+          dir.create(d)
+          e<-file.path(d,"exact.csv")
+          f<-file.path(d,"fuzzy.csv")
+          o<-file.path(d,"combined.csv")
+          fwrite(data.table(record_i=c(1L,1L,3L),record_j=c(3L,4L,4L),
+            blocks=c("bramer_F;doi_norm","bramer_F","doi_norm")),e)
+          fwrite(data.table(record_i=c(1L,2L),record_j=c(3L,4L),
+            shared_rare_qgrams=c(3L,2L),len_ratio=c(1,0.85)),f)
+          stopifnot(system2(file.path(R.home("bin"),"Rscript"),
+            c("scripts/updater/experimental_w01_fast/combine_candidates.R",
+              "--exact",e,"--fuzzy",f,"--output",o))==0L)
+          actual<-fread(o)
+          expected<-data.table(record_i=c(1L,1L,2L,3L),record_j=c(3L,4L,4L,4L),
+            blocks=c("bramer_F;doi_norm;rare_qgram_title","bramer_F",
+              "rare_qgram_title","doi_norm"))
+          stopifnot(identical(actual,expected))
+          cat("PASS: deduplicated candidate union and block provenance\n")
