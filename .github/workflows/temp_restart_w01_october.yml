@@ -1,4 +1,4 @@
-name: Temporary restart October W01 zero-case validated
+name: Temporary restart October W01 retry after runner shutdown
 on:
   push:
     branches: [workflow01-final-architecture]
