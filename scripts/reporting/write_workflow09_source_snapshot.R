@@ -26,7 +26,12 @@ run_id <- req(arg("--run-id", Sys.getenv("GITHUB_RUN_ID", "")), "--run-id")
 status_path <- arg("--status", "docs/current_run/current_run_status.json")
 output_dir <- arg("--output-dir", "docs/reporting/workflow_09_inputs/current")
 membership_path <- arg("--membership", file.path(output_dir, "w01_source_membership.csv"))
-if (!file.exists(input)) stop("Canonical JSONL not found: ", input, call. = FALSE)
+included_ids_path <- arg("--included-ids", "")
+canonical_sha_override <- arg("--canonical-sha256", "")
+if (stage == "W01" && nzchar(included_ids_path)) stop("--included-ids only supports W08", call. = FALSE)
+if (nzchar(included_ids_path) && !grepl("^[0-9a-f]{64}$", canonical_sha_override)) stop("--canonical-sha256 required with --included-ids", call. = FALSE)
+
+if (!nzchar(included_ids_path) && !file.exists(input)) stop("Canonical JSONL not found: ", input, call. = FALSE)
 
 known_labels <- c(
   lens = "The Lens",
@@ -190,7 +195,7 @@ if (stage == "W01") {
     stop("Invalid W01 source membership file", call. = FALSE)
   }
 
-  included_ids <- read_canonical_ids(input)
+  included_ids <- if (nzchar(included_ids_path)) {\n    ids <- readLines(included_ids_path, warn = FALSE, encoding = "UTF-8")\n    ids <- ids[nzchar(trimws(ids))]\n    if (!length(ids) || anyDuplicated(ids)) stop("Invalid or duplicate included IDs", call. = FALSE)\n    ids\n  } else read_canonical_ids(input)
   missing_ids <- setdiff(included_ids, membership$record_id)
   if (length(missing_ids)) {
     stop(sprintf(
@@ -263,7 +268,7 @@ manifest <- list(
   canonical_records = n_records,
   source_count = nrow(source_summary),
   intersection_count = nrow(intersection_summary),
-  canonical_sha256 = digest(file = input, algo = "sha256", serialize = FALSE),
+  canonical_sha256 = if (nzchar(included_ids_path)) canonical_sha_override else digest(file = input, algo = "sha256", serialize = FALSE),
   source_summary_file = basename(source_csv),
   source_summary_sha256 = digest(file = source_csv, algo = "sha256", serialize = FALSE),
   intersections_file = basename(intersection_csv),
