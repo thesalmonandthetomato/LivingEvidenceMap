@@ -1,0 +1,41 @@
+name: W01-Fast October candidate reference extraction
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_prepare_candidate_extraction.yml
+      - scripts/updater/experimental_w01_fast/extract_w01_prepare_candidates.R
+permissions:
+  contents: read
+  actions: read
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-development
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install minimal JSON support
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+      - name: Fetch only candidate and stable-identity metadata ZIP members
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ulimit -f 140000
+          Rscript scripts/updater/experimental_w01_fast/extract_w01_prepare_candidates.R
+      - name: Preserve small October candidate files
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-october-candidate-reference
+          path: selected_w01_prepare_candidates/
+          retention-days: 7
+          if-no-files-found: error
