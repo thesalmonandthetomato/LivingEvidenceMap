@@ -71,6 +71,9 @@ jobs:
       - name: Test unchanged historical canonical record recombination
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_recombine_canonical_jsonl.R
+      - name: Test immutable content-addressed state snapshots
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_state_snapshot.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
