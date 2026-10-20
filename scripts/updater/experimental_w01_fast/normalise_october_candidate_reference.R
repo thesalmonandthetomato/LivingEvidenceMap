@@ -5,7 +5,8 @@ suppressPackageStartupMessages({library(data.table);library(digest);library(json
 base<-commandArgs(trailingOnly=TRUE)
 root<-if(length(base))base[[1]] else "reference"
 meta_path<-file.path(root,"outputs/workflow01_candidates/normalised_metadata.csv")
-pairs_path<-file.path(root,"outputs/workflow01_candidates/all_candidate_pairs.csv")
+pairs_path<-if(length(base)>=2L)base[[2L]] else file.path(root,"outputs/workflow01_candidates/all_candidate_pairs.csv")
+out_dir<-if(length(base)>=3L)base[[3L]] else "candidate_identity_audit"
 meta<-fread(meta_path,colClasses=list(character=c("source","source_record_id")))
 pairs<-fread(pairs_path)
 required<-c("idx","source","source_record_id")
@@ -35,13 +36,14 @@ key<-paste0(nchar(pmin(ka,kb),type="bytes"),":",pmin(ka,kb),
  nchar(pmax(ka,kb),type="bytes"),":",pmax(ka,kb))
 if(anyDuplicated(key))stop("Duplicate candidate stable identities")
 setorder(stable,source_a,source_record_id_a,source_b,source_record_id_b)
-dir.create("candidate_identity_audit",showWarnings=FALSE)
-fwrite(stable,"candidate_identity_audit/reference_pairs.csv")
+if(dir.exists(out_dir))stop("Refusing overwrite")
+dir.create(out_dir,recursive=TRUE)
+fwrite(stable,file.path(out_dir,"reference_pairs.csv"))
 jsonlite::write_json(list(schema="w01-fast-october-candidate-reference-v1",
  metadata_rows=nrow(meta),candidate_pairs=nrow(pairs),
  unique_stable_pairs=uniqueN(key),
  metadata_sha256=digest(file=meta_path,algo="sha256"),
  candidate_sha256=digest(file=pairs_path,algo="sha256"),
  independently_generated_fast_pairs_compared=FALSE),
- "candidate_identity_audit/report.json",auto_unbox=TRUE,pretty=TRUE)
+ file.path(out_dir,"report.json"),auto_unbox=TRUE,pretty=TRUE)
 cat(sprintf("PASS: %d production pairs mapped to stable source identities against %d source records\n",nrow(pairs),nrow(meta)))
