@@ -5,6 +5,7 @@ a<-commandArgs(trailingOnly=TRUE)
 arg<-function(k,optional=FALSE){i<-match(k,a);if(is.na(i)){if(optional)return(NULL);stop(paste("Missing",k))};if(i==length(a))stop(paste("Missing value",k));a[[i+1L]]}
 historic<-arg("--historical-ledger",TRUE);delta<-arg("--new-decisions")
 identity_file<-arg("--manifestations");output<-arg("--output")
+historical_identity_file<-arg("--historical-manifestations",TRUE)
 if(file.exists(output))stop("Refusing to overwrite an existing ledger",call.=FALSE)
 m<-fread(identity_file,na.strings=c("","NA"))
 stopifnot(all(c("idx","source","source_record_id")%in%names(m)),
@@ -14,6 +15,16 @@ stopifnot(all(c("idx","source","source_record_id")%in%names(m)),
 cols<-c("record_i","record_j","rescored_classification")
 fresh<-fread(delta,na.strings=c("","NA"))
 if(!all(cols%in%names(fresh)))stop("Missing mandatory decision fields")
+if(!is.null(historic)){
+ if(is.null(historical_identity_file))stop("Historical ledger requires historical manifestation identity snapshot",call.=FALSE)
+ hm<-fread(historical_identity_file,na.strings=c("","NA"))
+ if(!all(c("idx","source","source_record_id")%in%names(hm)) ||
+    nrow(hm)>nrow(m) ||
+    !identical(as.integer(hm$idx),seq_len(nrow(hm))) ||
+    !identical(as.character(hm$source),as.character(m$source[seq_len(nrow(hm))])) ||
+    !identical(as.character(hm$source_record_id),as.character(m$source_record_id[seq_len(nrow(hm))])))
+   stop("Historical manifestation identity/order mismatch",call.=FALSE)
+}
 if(is.null(historic)){
  old<-fresh[0]
 }else{
@@ -43,6 +54,7 @@ writeLines(toJSON(list(schema="experimental-w01-fast-decision-ledger-v1",
  total_decisions=nrow(merged),manifestations=nrow(m),
  source_sha256=digest(file=identity_file,algo="sha256"),
  historical_ledger_sha256=if(is.null(historic))NULL else digest(file=historic,algo="sha256"),
+ historical_identity_sha256=if(is.null(historic))NULL else digest(file=historical_identity_file,algo="sha256"),
  production_publication_allowed=FALSE),auto_unbox=TRUE,pretty=TRUE),
  paste0(output,".manifest.json"))
 cat(sprintf("PASS: immutable ledger %d prior + %d new decisions\n",nrow(old),nrow(fresh)))
