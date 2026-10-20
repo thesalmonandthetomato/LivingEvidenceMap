@@ -60,10 +60,9 @@ env:
   WORKFLOW00_REPORTING_BRANCH: workflow01-final-architecture
 
 jobs:
-  workflow01:
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-
+    timeout-minutes: 55
     steps:
       - name: Checkout Workflow 01 implementation
         uses: actions/checkout@v4
@@ -430,6 +429,56 @@ jobs:
             --score-n 1 \
             --workflow01-run-id "$GITHUB_RUN_ID"
 
+      - name: Record handoff integrity (prepare)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum previous_state/workflow01_full_five_source/summary.json outputs/workflow01_union/source_inputs.json outputs/workflow01_candidates/normalised_metadata.csv outputs/workflow01_candidates/all_candidate_pairs.csv > outputs/workflow01_stage_prepare_checksums.txt
+      - name: Transfer stage prepare working state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-stage-prepare-${{ github.run_id }}
+          path: |
+            previous_state/
+            current_workflow00/
+            current_sources/
+            outputs/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+
+  adjudicate:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    outputs:
+      pending_count: ${{ steps.adjudication.outputs.pending_count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
+      - name: Restore validated handoff from prepare
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow01-stage-prepare-${{ github.run_id }}
+          path: .
+      - name: Validate restored handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s previous_state/workflow01_full_five_source/summary.json
+          test -s outputs/workflow01_union/source_inputs.json
+          test -s outputs/workflow01_candidates/normalised_metadata.csv
+          test -s outputs/workflow01_candidates/all_candidate_pairs.csv
+          sha256sum -c outputs/workflow01_stage_prepare_checksums.txt
       - name: Build guarded identifier-assisted duplicate edges
         shell: bash
         run: |
@@ -664,6 +713,54 @@ jobs:
           writeLines(toJSON(s,auto_unbox=TRUE,pretty=TRUE,null='null'),'outputs/adjudication/merged/summary.json')
           cat(sprintf('pending_count=%d\n',length(human)),file=Sys.getenv('GITHUB_OUTPUT'),append=TRUE)
 
+      - name: Record handoff integrity (adjudicate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum previous_state/workflow01_full_five_source/summary.json outputs/workflow01_union/source_inputs.json outputs/workflow01_candidates/normalised_metadata.csv outputs/workflow01_candidates/all_candidate_pairs.csv outputs/adjudication/merged/summary.json > outputs/workflow01_stage_adjudicate_checksums.txt
+      - name: Transfer stage adjudicate working state
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-stage-adjudicate-${{ github.run_id }}
+          path: |
+            previous_state/
+            current_workflow00/
+            current_sources/
+            outputs/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+
+  canonicalise:
+    needs: adjudicate
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
+      - name: Restore validated handoff from adjudicate
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow01-stage-adjudicate-${{ github.run_id }}
+          path: .
+      - name: Validate restored handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s previous_state/workflow01_full_five_source/summary.json
+          test -s outputs/workflow01_union/source_inputs.json
+          test -s outputs/workflow01_candidates/normalised_metadata.csv
+          test -s outputs/workflow01_candidates/all_candidate_pairs.csv
+          sha256sum -c outputs/workflow01_stage_adjudicate_checksums.txt
       - name: Build immutable human-review package
         shell: bash
         run: |
@@ -676,7 +773,7 @@ jobs:
             --repository "$GITHUB_REPOSITORY"
 
       - name: Build compact human-review checkpoint
-        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count != '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -694,7 +791,7 @@ jobs:
             --run-id "$GITHUB_RUN_ID"
 
       - name: Archive compact human-review checkpoint
-        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count != '0' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
@@ -708,7 +805,7 @@ jobs:
             --output-dir outputs/checkpoint_zenodo
 
       - name: Register human-review checkpoint pointer
-        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count != '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -742,7 +839,7 @@ jobs:
 
       - name: Upload Workflow 01 human-review package
         id: upload_review
-        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count != '0' }}
         uses: actions/upload-artifact@v4
         with:
           name: workflow01-human-review-${{ github.run_id }}
@@ -751,7 +848,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish human-review queue to Shiny sidecar
-        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count != '0' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
           LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
@@ -784,7 +881,7 @@ jobs:
             --message "Workflow 01 duplicate adjudication paused for human review."
 
       - name: Mark Workflow 01 awaiting human review
-        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count != '0' }}
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
           LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
@@ -809,7 +906,7 @@ jobs:
           fi
 
       - name: Build Workflow 01 review notification email
-        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count != '0' }}
         env:
           REVIEW_EMAIL: ${{ secrets.REVIEW_EMAIL }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
@@ -824,7 +921,7 @@ jobs:
             --output outputs/adjudication/human_review_package/email_payload.json
 
       - name: Email Workflow 01 review notification
-        if: ${{ steps.adjudication.outputs.pending_count != '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count != '0' }}
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -836,7 +933,7 @@ jobs:
           Rscript scripts/updater/workflow_01_send_review_email.R \
             --payload outputs/adjudication/human_review_package/email_payload.json
       - name: Create empty human-review gate for automatic continuation
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -858,7 +955,7 @@ jobs:
             --require-complete true
 
       - name: Apply final adjudications with stable work IDs
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -876,7 +973,7 @@ jobs:
             --output-dir outputs/final
 
       - name: Preserve incremental metrics and cumulative repair provenance
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -893,7 +990,7 @@ jobs:
             --output-strips outputs/final/abstract_strip_actions.jsonl
 
       - name: Build source-agnostic canonical JSONL
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -908,8 +1005,59 @@ jobs:
             --output outputs/canonical/records.jsonl \
             --manifest outputs/canonical/canonical_manifest.json
 
+      - name: Record handoff integrity (canonicalise)
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum previous_state/workflow01_full_five_source/summary.json outputs/workflow01_union/source_inputs.json outputs/workflow01_candidates/normalised_metadata.csv outputs/workflow01_candidates/all_candidate_pairs.csv outputs/canonical/canonical_manifest.json > outputs/workflow01_stage_canonicalise_checksums.txt
+      - name: Transfer stage canonicalise working state
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-stage-canonicalise-${{ github.run_id }}
+          path: |
+            previous_state/
+            current_workflow00/
+            current_sources/
+            outputs/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+
+  publish:
+    needs: [adjudicate, canonicalise]
+    if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
+      - name: Restore validated handoff from canonicalise
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow01-stage-canonicalise-${{ github.run_id }}
+          path: .
+      - name: Validate restored handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s previous_state/workflow01_full_five_source/summary.json
+          test -s outputs/workflow01_union/source_inputs.json
+          test -s outputs/workflow01_candidates/normalised_metadata.csv
+          test -s outputs/workflow01_candidates/all_candidate_pairs.csv
+          sha256sum -c outputs/workflow01_stage_canonicalise_checksums.txt
       - name: Validate final state and build delta
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -927,7 +1075,7 @@ jobs:
             --run-id "$GITHUB_RUN_ID"
 
       - name: Replay delta and require exact reconstruction
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -937,7 +1085,7 @@ jobs:
             --output-root outputs/replayed
 
       - name: Archive only the validated delta to Zenodo
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
@@ -951,7 +1099,7 @@ jobs:
             --output-dir outputs/zenodo
 
       - name: Register delta and final run report
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -977,7 +1125,7 @@ jobs:
           fi
 
       - name: Update current-run live status through W01
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -1009,7 +1157,7 @@ jobs:
           fi
 
       - name: Upload validated Workflow 01 handoff cache
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         uses: actions/upload-artifact@v4
         with:
           name: workflow01-handoff-${{ github.run_id }}
@@ -1020,7 +1168,7 @@ jobs:
           if-no-files-found: error
 
       - name: Trigger Workflow 02 after successful Workflow 01
-        if: ${{ steps.adjudication.outputs.pending_count == '0' }}
+        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
