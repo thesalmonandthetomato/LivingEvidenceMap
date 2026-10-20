@@ -26,7 +26,7 @@ jobs:
         run: |
           library(yaml)
           oldpath<-tempfile(fileext=".yml")
-          code<-system(paste("git show c84a3b6c6384c4d336e655f68e980712ea156bdf:.github/workflows/workflow_01_production.yml >",shQuote(oldpath)))
+          code<-system(paste("git show 9fef7381e965f5b47ae3c49874457e420e27cb4f:.github/workflows/workflow_01_production.yml >",shQuote(oldpath)))
           stopifnot(code==0L)
           old<-read_yaml(oldpath)
           now<-read_yaml(".github/workflows/workflow_01_production.yml")
