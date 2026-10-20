@@ -52,3 +52,14 @@ writeLines("tampered",current_path)
 check_current(FALSE)
 writeLines(saved,current_path)
 check_current()
+
+# A previous interrupted commit with an unresolved backup must not be
+# overwritten or silently accepted as a successful state transition.
+backup<-paste0(pointer,".bak")
+stopifnot(file.copy(pointer,backup,overwrite=FALSE))
+before_interruption<-digest(file=pointer,algo="sha256")
+call(second,before_interruption,FALSE)
+stopifnot(identical(before_interruption,digest(file=pointer,algo="sha256")),
+ file.exists(backup))
+unlink(backup)
+check_current()
