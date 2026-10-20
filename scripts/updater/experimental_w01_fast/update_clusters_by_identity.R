@@ -39,7 +39,7 @@ left<-if(nrow(dec))key(dec$source_i,dec$source_record_id_i)else character()
 right<-if(nrow(dec))key(dec$source_j,dec$source_record_id_j)else character()
 if(any(!left%in%all_keys)||any(!right%in%all_keys)||any(left==right))
  stop("Unknown or self-paired identity")
-pair_keys<-paste0(pmin(left,right),"|",pmax(left,right))
+pair_keys<-paste0(nchar(pmin(left,right),type="bytes"),":",pmin(left,right),nchar(pmax(left,right),type="bytes"),":",pmax(left,right))
 if(anyDuplicated(pair_keys))stop("Repeated incremental identity pair")
 if(any(left%in%old_keys & right%in%old_keys))
  stop("Old-to-old decision is not an incremental edge")
@@ -57,13 +57,10 @@ result[,cluster_id:=NA_character_];result[,cluster_size:=NA_integer_]
 for(members in components){
  loc<-unname(lookup[members])
  original_members<-intersect(members,old_keys)
- preserved<-NULL
- if(length(original_members)==length(members)){
-   # An unchanged historical component retains its authoritative prior ID.
-   previous_ids<-unique(prior$cluster_id[match(original_members,old_keys)])
-   if(length(previous_ids)==1L &&
-      setequal(members,by_cluster[[previous_ids]]))preserved<-previous_ids
- }
+ previous_ids<-unique(prior$cluster_id[match(original_members,old_keys)])
+ if(length(previous_ids)>1L)stop("Merger of distinct historical clusters requires explicit adjudication")
+ # Preserve existing work IDs when a cluster gains new manifestations.
+ preserved<-if(length(previous_ids)==1L)previous_ids else NULL
  result[loc,cluster_id:=if(is.null(preserved))fingerprint(members)else preserved]
  result[loc,cluster_size:=length(members)]
 }
