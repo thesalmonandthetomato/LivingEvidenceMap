@@ -59,6 +59,7 @@ bundle_bytes <- get_file(bundle_name)
 if(!identical(digest(bundle_bytes,algo="sha256",serialize=FALSE),bundle_sha))
   stop("Shiny input bundle checksum mismatch",call.=FALSE)
 bundle <- fromJSON(rawToChar(bundle_bytes),simplifyVector=FALSE)
+reconstructed <- identical(as.character(bundle$selection_type %||% ""), "reconstructed")
 if(!identical(bundle$schema,"lem-w04-shiny-subset-input-v1") ||
    !identical(bundle$review_id,review_id) ||
    !grepl("^[A-Za-z0-9_-]{20,160}$",as.character(bundle$review_sheet_id %||% "")))
@@ -70,6 +71,18 @@ if(!is.character(ids)||!length(ids)||anyNA(ids)||any(!nzchar(ids))||
 if(!grepl("^w04-subset-[0-9a-f]{20}$",as.character(bundle$subset_id %||% "")) ||
    !grepl("^[0-9a-f]{64}$",as.character(bundle$queue_sha256 %||% "")))
   stop("Missing registered subset provenance",call.=FALSE)
+if(reconstructed) {
+  membership <- digest(paste(sort(ids),collapse="\n"),algo="sha256",serialize=FALSE)
+  expected_id <- paste0("w04-subset-",substr(digest(paste(review_id,
+    tolower(as.character(bundle$source_checkpoint_sha256 %||% "")),membership,sep=":"),
+    algo="sha256",serialize=FALSE),1L,20L))
+  if(!identical(as.character(bundle$membership_sha256 %||% ""),membership) ||
+     !identical(as.character(bundle$queue_sha256),membership) ||
+     !identical(as.character(bundle$subset_id),expected_id) ||
+     length(bundle$abstract_corrections %||% list())!=0L ||
+     !identical(as.integer(bundle$human_decision_count %||% -1L),0L))
+    stop("Reconstructed selection membership or model-only provenance mismatch",call.=FALSE)
+}
 source_sha <- tolower(as.character(bundle$source_checkpoint_sha256 %||% ""))
 if(!grepl("^[0-9a-f]{64}$",source_sha) ||
    !identical(digest(file=canonical_path,algo="sha256",serialize=FALSE),source_sha))
@@ -132,6 +145,7 @@ cfg$expected_prompt_sha256 <- prompt_expected
 config_path <- file.path(output_dir,"screening_config.json")
 write_json(cfg,config_path,auto_unbox=TRUE,pretty=TRUE)
 manifest <- list(schema="lem-w04-shiny-subset-restoration-v1",review_id=review_id,
+  selection_type=if(reconstructed)"reconstructed" else "registered",
   review_sheet_id=bundle$review_sheet_id,
   subset_id=bundle$subset_id,queue_sha256=bundle$queue_sha256,
   source_checkpoint_sha256=source_sha,record_count=length(ids),
