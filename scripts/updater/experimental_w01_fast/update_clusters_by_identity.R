@@ -23,7 +23,8 @@ old_keys<-key(prior$source,prior$source_record_id)
 if(anyDuplicated(all_keys)||anyDuplicated(old_keys))stop("Duplicated manifestation identity")
 if(any(!old_keys%in%all_keys))stop("Historical manifestation is missing")
 # This mapping is local only. Never expose ephemeral offsets as identities.
-lookup<-setNames(seq_along(all_keys),all_keys)
+old_positions<-match(old_keys,all_keys)
+oldid_for_current<-prior$cluster_id[match(all_keys,old_keys)]
 parent<-seq_along(all_keys);height<-integer(length(all_keys))
 root<-function(x){while(parent[[x]]!=x){parent[[x]]<<-parent[[parent[[x]]]];x<-parent[[x]]};x}
 unite<-function(x,y){x<-root(x);y<-root(y);if(x==y)return(invisible(NULL))
@@ -31,10 +32,9 @@ unite<-function(x,y){x<-root(x);y<-root(y);if(x==y)return(invisible(NULL))
  else if(height[[x]]>height[[y]])parent[[y]]<<-x
  else{parent[[y]]<<-x;height[[x]]<<-height[[x]]+1L}}
 # Historical clusters are authoritative; never recreate historical pair decisions.
-by_cluster<-split(old_keys,prior$cluster_id)
-old_cluster_lookup<-setNames(prior$cluster_id,old_keys)
+by_cluster<-split(old_positions,prior$cluster_id)
 for(members in by_cluster)if(length(members)>1L)
- for(k in members[-1L])unite(lookup[[members[[1L]]]],lookup[[k]])
+ for(k in members[-1L])unite(members[[1L]],k)
 # Unordered pair keys are stable even if input rows or pair orientations change.
 left<-if(nrow(dec))key(dec$source_i,dec$source_record_id_i)else character()
 right<-if(nrow(dec))key(dec$source_j,dec$source_record_id_j)else character()
@@ -45,8 +45,9 @@ if(anyDuplicated(pair_keys))stop("Repeated incremental identity pair")
 if(any(left%in%old_keys & right%in%old_keys))
  stop("Old-to-old decision is not an incremental edge")
 approved<-which(dec$rescored_classification=="duplicate")
-for(i in approved)unite(lookup[[left[[i]]]],lookup[[right[[i]]]])
-components<-split(all_keys,vapply(seq_along(all_keys),root,integer(1)))
+left_positions<-match(left,all_keys);right_positions<-match(right,all_keys)
+for(i in approved)unite(left_positions[[i]],right_positions[[i]])
+components<-split(seq_along(all_keys),vapply(seq_along(all_keys),root,integer(1)))
 # Unambiguous component encoding. No row offsets and no delimiter collisions.
 fingerprint<-function(members){
  z<-sort(members)
@@ -55,9 +56,9 @@ fingerprint<-function(members){
 }
 result<-meta[,.(source,source_record_id)]
 result[,cluster_id:=NA_character_];result[,cluster_size:=NA_integer_]
-for(members in components){
- loc<-unname(lookup[members])
- original_ids<-unname(old_cluster_lookup[members])
+for(loc in components){
+ members<-all_keys[loc]
+ original_ids<-oldid_for_current[loc]
  previous_ids<-unique(original_ids[!is.na(original_ids)])
  if(length(previous_ids)>1L)stop("Merger of distinct historical clusters requires explicit adjudication")
  # Preserve existing work IDs when a cluster gains new manifestations.
