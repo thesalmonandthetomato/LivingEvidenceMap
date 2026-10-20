@@ -22,9 +22,8 @@ historical<-c("abcdefghijklmn","abcdxxxxxxxxxx","efghyyyyyyyyyy")
 fresh<-c(historical,"ijklzzzzzzzzzz")
 before<-signature(historical)
 after<-signature(fresh)
-stopifnot(any(after[idx<=length(historical),df]!=
-  before[after[idx<=length(historical)],on=.(idx,qgram),df],na.rm=TRUE) ||
-  !identical(before[idx==1L,qgram],after[idx==1L,qgram]))
+stopifnot(before[idx==1L & qgram=="ijkl",df]==1L,
+          after[idx==1L & qgram=="ijkl",df]==2L)
 # Verify that rebuilding from scratch remains deterministic.
 stopifnot(identical(after,signature(fresh)))
 cat("PASS: corpus-wide rarity changes detected; historical signatures require reassessment\\n")
