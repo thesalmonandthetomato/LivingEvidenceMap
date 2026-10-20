@@ -21,7 +21,7 @@ run<-function(dest,ok=TRUE){
 dest<-file.path(root,"filtered");run(dest)
 lines<-readLines(file.path(dest,"lens.jsonl"))
 stopifnot(length(lines)==2L,
- identical(vapply(lines,function(s)fromJSON(s)$identity$lens_id,character(1)),
+ identical(unname(vapply(lines,function(s)fromJSON(s)$identity$lens_id,character(1))),
  c("A","C")))
 # Selection must depend on immutable identity, not map row position.
 fwrite(m[2:1],map);second<-file.path(root,"permuted");run(second)
