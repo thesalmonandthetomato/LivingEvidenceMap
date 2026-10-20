@@ -58,3 +58,9 @@ The October production W01 has not published; available full canonicalisation re
 - URL: https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39425290424
 - This proves synthetic regression controls and structural inventory execution, not full file-level scientific equivalence.
 - Task 4 design constraint: existing exact block builder reads and recreates whole historical postings; fuzzy title signature rarity currently uses full-corpus document frequencies. Incremental index must preserve full-corpus rarity or explicitly defer fuzzy production equivalence until tested.
+
+## Persistent exact-index prototype
+- Commits `2f418ae`, `1c2faf7`, `e3d0fe7`: isolated experimental persistent exact posting index and test against existing experimental exact builder.
+- Run 39425788073 FAILED: initial metadata fingerprint caused false rejection of unchanged historical records.
+- Corrected to canonical ordered column-value fingerprint in commit `3ab1cd3`; validation run: https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39425979488 (outcome pending at write time).
+- The index is exact-block only. Rare-q-gram full-corpus rarity, historical repairs, real-corpus parity, scientific classification and full canonicalisation remain unsupported and must not be described as completed.
