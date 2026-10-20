@@ -68,6 +68,9 @@ jobs:
       - name: Compare unchanged canonical builder on full and identity-filtered sources
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_canonical_builder_filtered_parity.R
+      - name: Test unchanged historical canonical record recombination
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_recombine_canonical_jsonl.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
