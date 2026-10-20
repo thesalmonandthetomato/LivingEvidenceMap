@@ -45,7 +45,6 @@ if(mode=="init"){
     identities=m[,.(source,source_record_id)],
     metadata_sha256=digest(file=input,algo="sha256",serialize=FALSE),
     postings=posting,blocks=blocks)
- saveRDS(state,state_path,compress="xz")
  pairs<-empty_pairs()
 }else{
  if(!file.exists(state_path))stop("Missing authoritative experimental state",call.=FALSE)
@@ -88,6 +87,7 @@ if(mode=="init"){
  state$metadata_sha256<-digest(file=input,algo="sha256",serialize=FALSE)
 }
 # Store row fingerprint for fail-closed historical metadata repair detection.
+# Both init and append emit a single successor snapshot; never write the input state.
 state$historical_rows_sha256<-digest(m,algo="sha256")
 # Do not overwrite input state. Append outputs to a separate, versioned path.
 next_state<-file.path(out,"next_exact_index.rds")
