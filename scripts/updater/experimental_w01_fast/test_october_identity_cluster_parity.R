@@ -50,13 +50,26 @@ setkey(actual,identity);setkey(final,identity)
 joined<-merge(actual[,.(identity,actual_cluster=cluster_id,actual_size=cluster_size)],
  final[,.(identity,reference_cluster=cluster_id,reference_size=cluster_size)],by="identity")
 if(nrow(joined)!=nrow(final))stop("Missing manifestations")
-mismatch<-joined[actual_cluster!=reference_cluster|actual_size!=reference_size]
+# Compare cluster partitions independently of their labels. A bijection between
+# actual and reference cluster IDs proves identical manifestation membership.
+bridge<-unique(joined[,.(actual_cluster,reference_cluster)])
+actual_splits<-bridge[, .N,by=actual_cluster][N!=1L]
+reference_splits<-bridge[, .N,by=reference_cluster][N!=1L]
+size_mismatches<-joined[actual_size!=reference_size]
+membership_mismatches<-nrow(actual_splits)+nrow(reference_splits)+nrow(size_mismatches)
+id_mismatches<-joined[actual_cluster!=reference_cluster]
+mismatch<-joined[actual_size!=reference_size |
+ actual_cluster%in%actual_splits$actual_cluster |
+ reference_cluster%in%reference_splits$reference_cluster]
+
 fwrite(mismatch,"october_identity_parity/mismatches.csv")
 report<-list(schema="w01-fast-october-identity-cluster-replay-v1",
  historical=nrow(old),appended=nrow(appended),total=nrow(final),
- reference_derived_duplicate_links=nrow(dec),mismatches=nrow(mismatch),
+ reference_derived_duplicate_links=nrow(dec),membership_mismatches=membership_mismatches,
+ cluster_id_mismatches=nrow(id_mismatches),clusters_with_label_mapping=nrow(bridge),
+ exact_work_id_parity=nrow(id_mismatches)==0L,
  reference_derived_edges=TRUE,independent_matching_validated=FALSE,
  production_publication_allowed=FALSE)
 write_json(report,"october_identity_parity/report.json",auto_unbox=TRUE,pretty=TRUE)
-if(nrow(mismatch))stop(sprintf("October clustering mismatches: %d",nrow(mismatch)))
-cat(sprintf("PASS: identity-based October reference replay matched %d manifestations using %d reference-derived links\n",nrow(final),nrow(dec)))
+if(membership_mismatches)stop(sprintf("October membership mismatches: %d",membership_mismatches))
+cat(sprintf("PASS: October membership parity across %d manifestations; %d cluster-ID label differences (not ID parity)\\n",nrow(final),nrow(id_mismatches)))
