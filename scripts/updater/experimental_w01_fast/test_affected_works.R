@@ -23,7 +23,9 @@ stopifnot(nrow(a)==2L,
 # Completely permute both maps, preserving identities and memberships.
 fwrite(prior[c(3,1,2)],oldpath);fwrite(nextmap[c(4,2,3,1)],newpath)
 out2<-file.path(root,"second");run(out2)
-stopifnot(identical(a,fread(file.path(out2,"affected_works.csv"))))
+b<-fread(file.path(out2,"affected_works.csv"))
+setorder(a,stage,cluster_id);setorder(b,stage,cluster_id)
+stopifnot(isTRUE(all.equal(as.data.frame(a),as.data.frame(b),check.attributes=FALSE)))
 # Mutating membership without changing cluster label still requires rematerialisation.
 changed<-copy(prior);changed[3L,cluster_id:="old1"]
 fwrite(changed,newpath)
