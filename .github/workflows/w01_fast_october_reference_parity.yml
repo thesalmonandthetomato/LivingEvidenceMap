@@ -7,6 +7,7 @@ on:
       - .github/workflows/w01_fast_october_reference_parity.yml
       - scripts/updater/experimental_w01_fast/validate_october_real_cluster_reference.R
       - scripts/updater/experimental_w01_fast/test_october_identity_cluster_parity.R
+      - scripts/updater/experimental_w01_fast/update_clusters_by_identity.R
 permissions:
   contents: read
   actions: read
