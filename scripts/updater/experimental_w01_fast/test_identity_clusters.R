@@ -43,3 +43,13 @@ third<-fread(file.path(c,"identity_cluster_map.csv"))
 setorder(third,source,source_record_id)
 stopifnot(identical(first,third))
 cat("PASS: undirected identity edges are orientation-invariant\\n")
+
+# With no approved new edge, historical cluster identifiers must remain unchanged.
+empty<-dec[0]
+fwrite(empty,dp)
+unchanged_out<-file.path(root,"unchanged");run(unchanged_out)
+unchanged<-fread(file.path(unchanged_out,"identity_cluster_map.csv"))
+historic<-merge(unchanged,prior,by=c("source","source_record_id"),
+ suffixes=c("_actual","_original"))
+stopifnot(all(historic$cluster_id_actual==historic$cluster_id_original))
+cat("PASS: unchanged historical cluster IDs are preserved\\n")
