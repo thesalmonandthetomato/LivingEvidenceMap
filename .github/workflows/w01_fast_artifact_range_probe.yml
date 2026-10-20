@@ -35,16 +35,7 @@ jobs:
           if (( filesize > 1048576 )); then
             echo "Unsafe remote response size"; exit 1
           fi
-          python3 - <<'PY'
-          from pathlib import Path
-          h=Path('probe/headers.txt').read_text(errors='replace')
-          chunks=[x for x in h.replace('\r','').split('\n\n') if x.strip()]
-          last=chunks[-1] if chunks else ''
-          safe=[x for x in last.splitlines() if x.lower().startswith(('http/','content-range:','content-length:','accept-ranges:','content-type:'))]
-          print('Remote response:',*safe,sep='\n')
-          if not last.startswith(('HTTP/2 206','HTTP/1.1 206')):
-              raise SystemExit('Byte ranges not confirmed; do not download large archive')
-          PY
+          Rscript -e 'h <- readLines("probe/headers.txt", warn=FALSE); status <- grep("^HTTP/", h, value=TRUE); print(tail(status, 2L)); if (!length(status) || !grepl(" 206 ", tail(status, 1L))) stop("Byte ranges not confirmed; full archive download prohibited")'
       - name: Upload small range probe only
         if: always()
         uses: actions/upload-artifact@v4
