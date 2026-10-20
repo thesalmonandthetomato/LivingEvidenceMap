@@ -25,4 +25,21 @@ stopifnot(identical(readLines(file.path(out,manifest$objects$clusters$object)),
  "cluster_id,source\nstable,a")==FALSE)
 stopifnot(identical(digest(file=file.path(out,manifest$objects$clusters$object),algo="sha256"),
  manifest$objects$clusters$sha256))
-cat("PASS: immutable snapshots, checksums, refusal to overwrite\n")
+
+verify<-function(ok=TRUE){
+ z<-suppressWarnings(system2(file.path(R.home("bin"),"Rscript"),
+ c("scripts/updater/experimental_w01_fast/verify_state_snapshot.R",
+ "--snapshot-dir",out),stdout=TRUE,stderr=TRUE))
+ status<-attr(z,"status");if(is.null(status))status<-0L
+ if((status==0L)!=ok)stop(paste("Unexpected snapshot verification status",status))
+}
+verify()
+object_path<-file.path(out,manifest$objects$clusters$object)
+original<-readLines(object_path)
+writeLines("corrupted",object_path)
+verify(FALSE)
+writeLines(original,object_path)
+verify()
+unlink(file.path(out,manifest$objects$decisions$object))
+verify(FALSE)
+cat("PASS: immutable snapshots, independent verification, corruption detection\\n")
