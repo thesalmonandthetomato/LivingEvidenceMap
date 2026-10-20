@@ -21,21 +21,21 @@ jobs:
           set -euo pipefail
           endpoint="https://api.github.com/repos/thesalmonandthetomato/LivingEvidenceMap/actions/artifacts/12259032049/zip"
           mkdir -p probe
-          # A range probe is intentionally capped to 1 MiB. No full archive transfer.
-          curl --silent --show-error --location --fail \
-            --retry 1 --max-time 100 --max-filesize 1048576 \
+          # Fetch only GitHub's redirect headers; never follow to the 27 GB body.
+          curl --silent --show-error --head --fail --max-time 30 \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "Range: bytes=-65536" \
+            --dump-header probe/redirect.txt --output /dev/null "$endpoint"
+          Rscript -e 'h<-readLines("probe/redirect.txt",warn=FALSE); x<-grep("^location: ",h,value=TRUE,ignore.case=TRUE); if(length(x)!=1L)stop("Expected one download redirect"); u<-trimws(sub("^[^:]+: ","",x)); if(!startsWith(u,"https://productionresult") || !grepl(".blob.core.windows.net/",u,fixed=TRUE))stop("Unexpected storage redirect"); writeLines(u,"probe/signed_url.txt")'
+          signed_url="$(cat probe/signed_url.txt)"
+          curl --silent --show-error --fail --max-time 60 \
+            --range -65536 --max-filesize 1048576 \
             --dump-header probe/headers.txt \
-            --output probe/tail.bin "$endpoint"
+            --output probe/tail.bin "$signed_url"
+          rm -f probe/signed_url.txt probe/redirect.txt
           filesize=$(wc -c < probe/tail.bin)
-          echo "Returned byte count: $filesize"
-          if (( filesize > 1048576 )); then
-            echo "Unsafe remote response size"; exit 1
-          fi
-          Rscript -e 'h <- readLines("probe/headers.txt", warn=FALSE); status <- grep("^HTTP/", h, value=TRUE); print(tail(status, 2L)); if (!length(status) || !grepl(" 206 ", tail(status, 1L))) stop("Byte ranges not confirmed; full archive download prohibited")'
+          echo "Remote ZIP tail bytes fetched: $filesize"
+          Rscript -e 'h <- readLines("probe/headers.txt", warn=FALSE); status <- grep("^HTTP/",h,value=TRUE); print(tail(status,2L)); if(!length(status) || !grepl(" 206 ",tail(status,1L))) stop("Direct blob range request did not return 206")'
       - name: Upload small range probe only
         if: always()
         uses: actions/upload-artifact@v4
