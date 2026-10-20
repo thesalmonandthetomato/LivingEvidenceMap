@@ -1,0 +1,33 @@
+name: Temporary W04 safe receipt validation
+on:
+  push:
+    paths:
+      - '.github/workflows/w04-safe-receipt-temporary.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install minimal test dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+      - name: Check no record-level output artifact and test W04 to W05
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          wf = yaml.safe_load(Path('.github/workflows/w04_shiny_reconciled_validation.yml').read_text())
+          steps = wf['jobs']['validate-reconciled']['steps']
+          uploads = [s for s in steps if s.get('uses','').startswith('actions/upload-artifact')]
+          assert len(uploads)==1
+          assert uploads[0]['with']['path']=='outputs/validation_receipt/receipt.json'
+          assert 'outputs/workflow04_final/' not in uploads[0]['with']['path']
+          print('PASS: Only non-record-level W04 validation receipt is uploaded')
+          PY
+          Rscript tests/test_w04_reconciled_offline_handoff.R
