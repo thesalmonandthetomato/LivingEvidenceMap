@@ -1,0 +1,36 @@
+name: W01-Fast adjudication archive directory probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_adjudication_directory_probe.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read ZIP central directory tail only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p probe
+          endpoint=https://api.github.com/repos/thesalmonandthetomato/LivingEvidenceMap/actions/artifacts/12257626610/zip
+          curl --silent --show-error --head --fail --max-time 30 -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" --dump-header probe/redirect.txt --output /dev/null "$endpoint"
+          signed_url="$(sed -n 's/^[Ll]ocation: //p' probe/redirect.txt | tr -d '\r')"
+          case "$signed_url" in https://productionresult*.blob.core.windows.net/*) ;; *) echo 'Unexpected storage URL'; exit 1;; esac
+          curl --silent --show-error --fail --max-time 50 -H 'x-ms-range: bytes=18178910310-18178975845' --max-filesize 1048576 --dump-header probe/headers.txt --output probe/tail.bin "$signed_url"
+          test "$(wc -c < probe/tail.bin)" -eq 65536
+          rm -f probe/redirect.txt
+      - name: Preserve small ZIP directory tail
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-adjudication-directory-tail
+          path: probe/tail.bin
+          retention-days: 2
+          if-no-files-found: error
