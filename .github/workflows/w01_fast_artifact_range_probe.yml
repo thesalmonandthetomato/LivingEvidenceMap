@@ -1,0 +1,55 @@
+name: W01-Fast read-only archive range probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_artifact_range_probe.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Inspect remote ZIP range support without downloading archive
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          endpoint="https://api.github.com/repos/thesalmonandthetomato/LivingEvidenceMap/actions/artifacts/12259032049/zip"
+          mkdir -p probe
+          # A range probe is intentionally capped to 1 MiB. No full archive transfer.
+          curl --silent --show-error --location --fail \
+            --retry 1 --max-time 100 --max-filesize 1048576 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Range: bytes=-65536" \
+            --dump-header probe/headers.txt \
+            --output probe/tail.bin "$endpoint"
+          filesize=$(wc -c < probe/tail.bin)
+          echo "Returned byte count: $filesize"
+          if (( filesize > 1048576 )); then
+            echo "Unsafe remote response size"; exit 1
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          h=Path('probe/headers.txt').read_text(errors='replace')
+          chunks=[x for x in h.replace('\r','').split('\n\n') if x.strip()]
+          last=chunks[-1] if chunks else ''
+          safe=[x for x in last.splitlines() if x.lower().startswith(('http/','content-range:','content-length:','accept-ranges:','content-type:'))]
+          print('Remote response:',*safe,sep='\n')
+          if not last.startswith(('HTTP/2 206','HTTP/1.1 206')):
+              raise SystemExit('Byte ranges not confirmed; do not download large archive')
+          PY
+      - name: Upload small range probe only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-archive-range-probe
+          path: probe/headers.txt
+          retention-days: 2
+          if-no-files-found: warn
