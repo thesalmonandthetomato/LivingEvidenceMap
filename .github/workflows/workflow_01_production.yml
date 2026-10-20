@@ -440,9 +440,12 @@ jobs:
           name: workflow01-stage-prepare-${{ github.run_id }}
           path: |
             previous_state/
-            current_workflow00/
             current_sources/
-            outputs/
+            outputs/monthly_manual/
+            outputs/workflow01_source_inputs.json
+            outputs/workflow01_union/
+            outputs/workflow01_candidates/
+            outputs/workflow01_stage_prepare_checksums.txt
           retention-days: 3
           compression-level: 0
           if-no-files-found: error
@@ -724,9 +727,16 @@ jobs:
           name: workflow01-stage-adjudicate-${{ github.run_id }}
           path: |
             previous_state/
-            current_workflow00/
             current_sources/
-            outputs/
+            outputs/monthly_manual/
+            outputs/workflow01_source_inputs.json
+            outputs/workflow01_union/
+            outputs/workflow01_candidates/normalised_metadata.csv
+            outputs/workflow01_candidates/all_candidate_pairs.csv
+            outputs/workflow01_candidates/pathological_abstract_strip_actions.jsonl
+            outputs/workflow01_pre_adjudication/
+            outputs/adjudication/
+            outputs/workflow01_stage_adjudicate_checksums.txt
           retention-days: 3
           compression-level: 0
           if-no-files-found: error
@@ -1010,7 +1020,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sha256sum previous_state/workflow01_full_five_source/summary.json outputs/workflow01_union/source_inputs.json outputs/workflow01_candidates/normalised_metadata.csv outputs/workflow01_candidates/all_candidate_pairs.csv outputs/canonical/canonical_manifest.json > outputs/workflow01_stage_canonicalise_checksums.txt
+          sha256sum previous_state/workflow01_full_five_source/summary.json outputs/workflow01_union/source_inputs.json outputs/final/summary.json outputs/final/manifestation_cluster_map.csv outputs/final/final_pair_decisions.csv outputs/canonical/records.jsonl outputs/canonical/canonical_manifest.json > outputs/workflow01_stage_canonicalise_checksums.txt
       - name: Transfer stage canonicalise working state
         if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
         uses: actions/upload-artifact@v4
@@ -1018,9 +1028,11 @@ jobs:
           name: workflow01-stage-canonicalise-${{ github.run_id }}
           path: |
             previous_state/
-            current_workflow00/
-            current_sources/
-            outputs/
+            outputs/workflow01_union/
+            outputs/final/
+            outputs/canonical/
+            outputs/human_gate/normalised/data_quality_repairs.normalised.jsonl
+            outputs/workflow01_stage_canonicalise_checksums.txt
           retention-days: 3
           compression-level: 0
           if-no-files-found: error
@@ -1053,8 +1065,9 @@ jobs:
           set -euo pipefail
           test -s previous_state/workflow01_full_five_source/summary.json
           test -s outputs/workflow01_union/source_inputs.json
-          test -s outputs/workflow01_candidates/normalised_metadata.csv
-          test -s outputs/workflow01_candidates/all_candidate_pairs.csv
+          test -s outputs/final/summary.json
+          test -s outputs/final/manifestation_cluster_map.csv
+          test -s outputs/canonical/records.jsonl
           sha256sum -c outputs/workflow01_stage_canonicalise_checksums.txt
       - name: Validate final state and build delta
         if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
