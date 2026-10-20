@@ -25,3 +25,13 @@ jobs:
       - name: Validate frozen reference and development boundaries
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/validate_development_guardrails.R
+      - name: Inventory unchanged production W01 interfaces
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/audit_production_interfaces.R
+      - name: Preserve interface inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-interface-inventory
+          path: scripts/updater/experimental_w01_fast/audits/production_interface_inventory.json
+          retention-days: 7
+          if-no-files-found: error
