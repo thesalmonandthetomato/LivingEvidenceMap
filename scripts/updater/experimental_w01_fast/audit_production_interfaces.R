@@ -10,7 +10,7 @@ for(job in c("prepare","adjudicate","canonicalise","publish")){
    code<-if(is.null(s$run))"" else s$run
    lines<-strsplit(code,"\n",fixed=TRUE)[[1L]]
    scripts<-unique(unlist(regmatches(lines,gregexpr("scripts/[A-Za-z0-9_./-]+[.]R",lines,perl=TRUE))))
-   options<-unique(unlist(regmatches(lines,gregexpr("--(input|output|old|previous|current|metadata|candidates|rescored|decisions|manifest|pair|cluster|human|repair|delta|queue|strip)[A-Za-z-]*[ ]+[^ \\]+",lines,perl=TRUE))))
+   options<-unique(unlist(regmatches(lines,gregexpr("--[A-Za-z][A-Za-z-]*[ ]+[^[:space:]]+",lines,perl=TRUE))))
    list(step=if(is.null(s$name))"" else s$name,
         execution=if(is.null(s$uses))"shell" else s$uses,
         scripts=as.list(scripts),file_arguments=as.list(options))
