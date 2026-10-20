@@ -52,3 +52,9 @@ The October production W01 has not published; available full canonicalisation re
 - Extended isolated read-only CI to execute the cluster identity tests. Commit `5383800ff759820ced8f733859a8e1c4851c5b89`.
 - Verification status: repository commits confirmed; new CI execution/results NOT confirmed. Do not claim passing tests, Task 3 completion, real-data parity, or readiness to move to production.
 - Next: inspect latest workflow results using Actions, correct any fixture failures only on development branch, complete file-level interface audit, then proceed to Task 4 persistent indices.
+
+## Verified validation checkpoint
+- Run 39425290424 (job 118636200670) passed on `809a9fbaaeb6ee14aa6b3014b9c1e5d6e4cfc9f2` on 20 October 2026. Guardrails, interface inventory, comparator negative controls, cluster identity tests and inventory artifact all succeeded.
+- URL: https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39425290424
+- This proves synthetic regression controls and structural inventory execution, not full file-level scientific equivalence.
+- Task 4 design constraint: existing exact block builder reads and recreates whole historical postings; fuzzy title signature rarity currently uses full-corpus document frequencies. Incremental index must preserve full-corpus rarity or explicitly defer fuzzy production equivalence until tested.
