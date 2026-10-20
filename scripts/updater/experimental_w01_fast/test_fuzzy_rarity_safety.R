@@ -29,5 +29,6 @@ canonical <- function(x) {
   y <- as.data.frame(x[,.(idx,qgram,df)])
   rownames(y) <- NULL
   y
-}\nstopifnot(identical(canonical(after),canonical(signature(fresh))))
+}
+stopifnot(identical(canonical(after),canonical(signature(fresh))))
 cat("PASS: corpus-wide rarity changes detected; historical signatures require reassessment\\n")
