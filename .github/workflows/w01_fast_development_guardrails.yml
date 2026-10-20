@@ -21,13 +21,16 @@ jobs:
           use-public-rspm: true
       - name: Install minimal R audit dependencies
         shell: Rscript {0}
-        run: install.packages(c("yaml","jsonlite"))
+        run: install.packages(c("yaml","jsonlite","data.table","digest"))
       - name: Validate frozen reference and development boundaries
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/validate_development_guardrails.R
       - name: Inventory unchanged production W01 interfaces
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/audit_production_interfaces.R
+      - name: Test candidate and cluster comparator regression controls
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_regression_comparators.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
