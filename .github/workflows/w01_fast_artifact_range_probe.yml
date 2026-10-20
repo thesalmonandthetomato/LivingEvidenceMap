@@ -32,7 +32,7 @@ jobs:
           Rscript -e 'h<-readLines("probe/redirect.txt",warn=FALSE); x<-grep("^location: ",h,value=TRUE,ignore.case=TRUE); if(length(x)!=1L)stop("Expected one download redirect"); u<-trimws(sub("^[^:]+: ","",x)); if(!startsWith(u,"https://productionresult") || !grepl(".blob.core.windows.net/",u,fixed=TRUE))stop("Unexpected storage redirect"); writeLines(u,"probe/signed_url.txt")'
           signed_url="$(cat probe/signed_url.txt)"
           curl --silent --show-error --fail --max-time 60 \
-            --range -65536 --max-filesize 1048576 \
+            -H "x-ms-range: bytes=27460422827-27460488362" --max-filesize 1048576 \
             --dump-header probe/headers.txt \
             --output probe/tail.bin "$signed_url"
           rm -f probe/signed_url.txt probe/redirect.txt
