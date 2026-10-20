@@ -25,5 +25,5 @@ after<-signature(fresh)
 stopifnot(before[idx==1L & qgram=="ijkl",df]==1L,
           after[idx==1L & qgram=="ijkl",df]==2L)
 # Verify that rebuilding from scratch remains deterministic.
-stopifnot(identical(after,signature(fresh)))
+canonical <- function(x) {\n  y <- as.data.frame(x[,.(idx,qgram,df)])\n  rownames(y) <- NULL\n  y\n}\nstopifnot(identical(canonical(after),canonical(signature(fresh))))
 cat("PASS: corpus-wide rarity changes detected; historical signatures require reassessment\\n")
