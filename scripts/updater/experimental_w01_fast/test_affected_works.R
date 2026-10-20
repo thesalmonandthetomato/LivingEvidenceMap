@@ -35,3 +35,17 @@ stopifnot(nrow(z)==3L,
  all(c("old1","old2")%in%z[stage=="prior",cluster_id]),
  "old1"%in%z[stage=="successor",cluster_id])
 cat("PASS: affected work detection by immutable membership, regardless of row position\n")
+
+# Splitting a historical cluster must invalidate its old canonical work
+# and identify both successor works by stable membership.
+split<-data.table(source="a",source_record_id=c("A","B","C"),
+ cluster_id=c("split1","split2","old2"))
+fwrite(prior,oldpath);fwrite(split,newpath)
+split_out<-file.path(root,"split");run(split_out)
+split_result<-fread(file.path(split_out,"affected_works.csv"))
+stopifnot(setequal(split_result[stage=="prior",cluster_id],"old1"),
+ setequal(split_result[stage=="successor",cluster_id],c("split1","split2")))
+# Historical manifestation disappearance must fail closed.
+fwrite(split[1:2],newpath)
+run(file.path(root,"missing_historic"),FALSE)
+cat("PASS: split detection and historical manifestation preservation\\n")
