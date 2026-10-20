@@ -74,9 +74,6 @@ jobs:
       - name: Test immutable content-addressed state snapshots
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_state_snapshot.R
-      - name: Test independent verification and corruption detection of state snapshots
-        shell: bash
-        run: Rscript scripts/updater/experimental_w01_fast/test_state_snapshot.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
