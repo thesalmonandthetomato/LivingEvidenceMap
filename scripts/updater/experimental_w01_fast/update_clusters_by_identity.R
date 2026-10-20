@@ -56,7 +56,15 @@ result<-meta[,.(source,source_record_id)]
 result[,cluster_id:=NA_character_];result[,cluster_size:=NA_integer_]
 for(members in components){
  loc<-unname(lookup[members])
- result[loc,cluster_id:=fingerprint(members)]
+ original_members<-intersect(members,old_keys)
+ preserved<-NULL
+ if(length(original_members)==length(members)){
+   # An unchanged historical component retains its authoritative prior ID.
+   previous_ids<-unique(prior$cluster_id[match(original_members,old_keys)])
+   if(length(previous_ids)==1L &&
+      setequal(members,by_cluster[[previous_ids]]))preserved<-previous_ids
+ }
+ result[loc,cluster_id:=if(is.null(preserved))fingerprint(members)else preserved]
  result[loc,cluster_size:=length(members)]
 }
 if(dir.exists(out)||file.exists(out))stop("Refusing to replace prior cluster outputs")
