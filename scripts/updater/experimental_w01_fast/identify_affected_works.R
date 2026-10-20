@@ -28,9 +28,9 @@ new_members<-nextmap[,.(members=list(sort(key))),by=cluster_id]
 old_signatures<-setNames(vapply(old_members$members,paste,collapse="\u001f",FUN.VALUE=character(1)),old_members$cluster_id)
 new_signatures<-setNames(vapply(new_members$members,paste,collapse="\u001f",FUN.VALUE=character(1)),new_members$cluster_id)
 affected_old<-names(old_signatures)[!names(old_signatures)%in%names(new_signatures) |
- vapply(names(old_signatures),function(id)!identical(old_signatures[[id]],new_signatures[[id]]),logical(1))]
+ vapply(names(old_signatures),function(id)!identical(unname(old_signatures[[id]]),unname(new_signatures[id])),logical(1))]
 affected_new<-names(new_signatures)[!names(new_signatures)%in%names(old_signatures) |
- vapply(names(new_signatures),function(id)!identical(new_signatures[[id]],old_signatures[[id]]),logical(1))]
+ vapply(names(new_signatures),function(id)!identical(unname(new_signatures[[id]]),unname(old_signatures[id])),logical(1))]
 out_rows<-rbindlist(list(
  data.table(stage="prior",cluster_id=affected_old),
  data.table(stage="successor",cluster_id=affected_new)))
