@@ -71,5 +71,6 @@ report<-list(schema="w01-fast-october-identity-cluster-replay-v1",
  reference_derived_edges=TRUE,independent_matching_validated=FALSE,
  production_publication_allowed=FALSE)
 write_json(report,"october_identity_parity/report.json",auto_unbox=TRUE,pretty=TRUE)
-if(membership_mismatches)stop(sprintf("October membership mismatches: %d",membership_mismatches))
+if(membership_mismatches || nrow(id_mismatches))
+ stop(sprintf("October parity failed: membership=%d, work IDs=%d",membership_mismatches,nrow(id_mismatches)))
 cat(sprintf("PASS: October membership parity across %d manifestations; %d cluster-ID label differences (not ID parity)\\n",nrow(final),nrow(id_mismatches)))
