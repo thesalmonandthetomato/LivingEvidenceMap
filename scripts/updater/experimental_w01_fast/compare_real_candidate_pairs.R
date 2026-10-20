@@ -10,6 +10,8 @@ read_pairs<-function(path){
  x<-fread(path,colClasses="character")
  required<-c("source_a","source_record_id_a","source_b","source_record_id_b")
  if(!all(required%in%names(x)))stop("Missing immutable source pair identities")
+ if(any(c("idx","record_i","record_j","row_id","row_index")%in%names(x)))
+  stop("Positional identifiers are forbidden in authoritative parity inputs")
  if(anyNA(x[,..required])||any(!nzchar(unlist(x[,..required],use.names=FALSE))))
   stop("Null/empty identity")
  enc<-function(s,id)paste0(nchar(s,type="bytes"),":",s,nchar(id,type="bytes"),":",id)
