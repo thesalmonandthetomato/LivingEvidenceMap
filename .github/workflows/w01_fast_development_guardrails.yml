@@ -34,6 +34,9 @@ jobs:
       - name: Test incremental cluster identity protections
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_incremental_cluster_identity.R
+      - name: Validate persistent exact index against reference builder
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_persistent_exact_index.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
