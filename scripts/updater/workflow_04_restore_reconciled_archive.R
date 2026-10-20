@@ -52,7 +52,7 @@ if(anyDuplicated(ids)||any(!nzchar(ids)) ||
  stop("Invalid reconciled canonical ID decisions",call.=FALSE)
 payload<-vapply(rows,function(x)jsonlite::toJSON(x,auto_unbox=TRUE,
  null="null",na="null",digits=NA),character(1))
-if(!identical(digest::digest(paste(payload,collapse="\\n"),
+if(!identical(digest::digest(paste(payload,collapse="\n"),
   algo="sha256",serialize=FALSE),as.character(bundle$records_sha256)))
  stop("Reconciliation content digest mismatch",call.=FALSE)
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
