@@ -83,6 +83,9 @@ jobs:
       - name: Test verified checkpoint replay and tamper rejection
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_replay_verified_state.R
+      - name: Test guarded verified checkpoint advancement
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_commit_verified_state.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
