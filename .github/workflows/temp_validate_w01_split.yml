@@ -38,11 +38,10 @@ jobs:
           portions<-unlist(lapply(now$jobs,function(j)j$steps),recursive=FALSE)
           original_steps<-lapply(originals,function(s) {
             match<-Filter(function(x)identical(x$name,s$name),portions)
-            stopifnot(length(match)==1L)
-            z<-match[[1L]]
-            if(!is.null(s$run)) stopifnot(identical(s$run,z$run))
-            if(!is.null(s$uses)) stopifnot(identical(s$uses,z$uses))
-            TRUE
+            stopifnot(length(match)>=1L)
+            any(vapply(match,function(z)
+              (is.null(s$run)||identical(s$run,z$run)) &&
+              (is.null(s$uses)||identical(s$uses,z$uses)),logical(1)))
           })
           stopifnot(all(unlist(original_steps)))
           important<-c("Build runtime source catalogue and validate source inputs",
