@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/w01_fast_october_reference_parity.yml
       - scripts/updater/experimental_w01_fast/validate_october_real_cluster_reference.R
+      - scripts/updater/experimental_w01_fast/test_october_identity_cluster_parity.R
 permissions:
   contents: read
   actions: read
@@ -34,11 +35,17 @@ jobs:
       - name: Verify complete immutable-identity cluster reference
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/validate_october_real_cluster_reference.R reference
+      - name: Replay reference-derived October edges using stable identities
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_october_identity_cluster_parity.R
       - name: Preserve small audited report
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: w01-fast-october-cluster-reference-audit
-          path: real_parity_report/october_cluster_reference.json
+          path: |
+            real_parity_report/october_cluster_reference.json
+            october_identity_parity/report.json
+            october_identity_parity/mismatches.csv
           retention-days: 7
           if-no-files-found: error
