@@ -89,6 +89,8 @@ jobs:
       - name: Test real-data candidate parity comparator negative controls
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_compare_real_candidate_pairs.R
+      - name: Test immutable-identity decision comparator fail-closed behaviour
+        run: Rscript scripts/updater/experimental_w01_fast/test_october_decision_comparator.R
       - name: Test stable-identity cluster growth and historical ID retention
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_identity_cluster_growth.R
