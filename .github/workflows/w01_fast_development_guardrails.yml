@@ -47,6 +47,9 @@ jobs:
       - name: Validate persisted fuzzy candidate parity
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_persistent_qgram_candidates.R
+      - name: Validate append-only pair decision ledger
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_append_pair_decisions.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
