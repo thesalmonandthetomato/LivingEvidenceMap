@@ -1,4 +1,4 @@
-name: Temporary restart October W01 split four-stage run
+name: Temporary restart October W01 reduced handoffs
 on:
   push:
     branches: [workflow01-final-architecture]
