@@ -50,6 +50,9 @@ jobs:
       - name: Validate append-only pair decision ledger
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_append_pair_decisions.R
+      - name: Test identity-keyed clustering and row permutations
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_identity_clusters.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
