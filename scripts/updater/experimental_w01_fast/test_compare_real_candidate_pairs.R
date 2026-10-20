@@ -30,4 +30,6 @@ for(col in c("source","source_record_id")){
 }
 fwrite(y,new)
 run(file.path(root,"swapped"))
-cat("PASS: read-only candidate parity detects evidence drift, missing and duplicate pairs\n")
+y[,idx:=seq_len(.N)];fwrite(y,new)
+run(file.path(root,"positional-identity"),FALSE)
+cat("PASS: candidate parity detects drift, missing and duplicate pairs, and forbids positional IDs\\n")
