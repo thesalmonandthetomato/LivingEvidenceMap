@@ -1,5 +1,6 @@
 name: W01-Fast isolated development guardrails
 on:
+  workflow_dispatch:
   push:
     branches: [w01-fast-development]
     paths:
