@@ -1,0 +1,56 @@
+name: W01-Fast independent October candidate parity
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_october_independent_candidates.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-development
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install minimal R packages
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest","stringdist","stringi"))
+      - name: Download frozen October candidate metadata and reference pairs
+        uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-october-candidate-reference
+          run-id: 39491644597
+          github-token: ${{ github.token }}
+          path: reference
+      - name: Independently generate W01-Fast candidates from frozen metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=scripts/updater/experimental_w01_fast
+          metadata=reference/outputs/workflow01_candidates/normalised_metadata.csv
+          Rscript "$base/build_exact_block_index.R" --metadata "$metadata" --prior-n 135997 --output-dir fast/exact
+          Rscript "$base/build_fuzzy_candidates.R" --metadata "$metadata" --prior-n 135997 --output-dir fast/fuzzy
+          Rscript "$base/combine_candidates.R" --exact fast/exact/exact_block_candidates.csv --fuzzy fast/fuzzy/fuzzy_candidates.csv --output fast/combined.csv
+          Rscript "$base/normalise_october_candidate_reference.R" reference reference/outputs/workflow01_candidates/all_candidate_pairs.csv stable_reference
+          Rscript "$base/normalise_october_candidate_reference.R" reference fast/combined.csv stable_fast
+          Rscript "$base/compare_real_candidate_pairs.R" --reference stable_reference/reference_pairs.csv --candidate stable_fast/reference_pairs.csv --output-dir stable_parity
+      - name: Preserve small parity reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-october-independent-candidate-parity
+          path: |
+            fast/combined.csv.manifest.json
+            stable_reference/report.json
+            stable_fast/report.json
+            stable_parity/
+          retention-days: 7
+          if-no-files-found: warn
