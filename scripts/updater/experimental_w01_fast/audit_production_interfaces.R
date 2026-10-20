@@ -16,6 +16,18 @@ for(job in c("prepare","adjudicate","canonicalise","publish")){
         scripts=as.list(scripts),file_arguments=as.list(options))
  })
 }
+# Detect inventory omissions rather than silently reporting a complete audit.
+all_scripts <- unique(unlist(lapply(out$jobs,function(steps)
+  unlist(lapply(steps,function(step)unlist(step$scripts,use.names=FALSE)),
+    use.names=FALSE)),use.names=FALSE))
+missing_scripts <- all_scripts[!file.exists(all_scripts)]
+if(length(missing_scripts))stop(sprintf("Referenced R scripts missing: %s",
+  paste(missing_scripts,collapse=", ")),call.=FALSE)
+out$validation <- list(referenced_r_scripts=length(all_scripts),
+  missing_referenced_r_scripts=as.list(missing_scripts),
+  shell_steps=sum(vapply(out$jobs,function(steps)
+    sum(vapply(steps,function(step)identical(step$execution,"shell"),logical(1))),
+    integer(1))))
 dir.create("scripts/updater/experimental_w01_fast/audits",recursive=TRUE,showWarnings=FALSE)
 path<-"scripts/updater/experimental_w01_fast/audits/production_interface_inventory.json"
 writeLines(toJSON(out,pretty=TRUE,auto_unbox=TRUE,null="null"),path)
