@@ -33,3 +33,13 @@ run(file.path(root,"unknown"),FALSE)
 dec[1,source_record_id_j:="A"];fwrite(dec,dp)
 run(file.path(root,"old_pair"),FALSE)
 cat("PASS: clustering invariant to row positions; invalid identity edges fail closed\n")
+
+# Swapping the order and orientation of the decision must not change clusters.
+dec<-data.table(source_i="a",source_record_id_i="D",
+ source_j="a",source_record_id_j="B",rescored_classification="duplicate")
+fwrite(dec,dp)
+c<-file.path(root,"reversed_decision");run(c)
+third<-fread(file.path(c,"identity_cluster_map.csv"))
+setorder(third,source,source_record_id)
+stopifnot(identical(first,third))
+cat("PASS: undirected identity edges are orientation-invariant\\n")
