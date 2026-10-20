@@ -27,7 +27,7 @@ endpoint <- paste0("https://api.github.com/repos/",repo,"/actions/artifacts/",ar
 redirect <- tempfile()
 curl(c("--silent","--show-error","--head","--fail","--max-time","30",
  "-H",shQuote(paste("Authorization: Bearer",token)),
- "-H","Accept: application/vnd.github+json",
+ "-H",shQuote("Accept: application/vnd.github+json"),
  "--dump-header",shQuote(redirect),"--output","/dev/null",shQuote(endpoint)))
 h<-readLines(redirect,warn=FALSE);unlink(redirect)
 loc<-grep("^location: ",h,value=TRUE,ignore.case=TRUE)
