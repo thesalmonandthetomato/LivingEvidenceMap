@@ -86,6 +86,9 @@ jobs:
       - name: Test guarded verified checkpoint advancement
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_commit_verified_state.R
+      - name: Test real-data candidate parity comparator negative controls
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_compare_real_candidate_pairs.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
