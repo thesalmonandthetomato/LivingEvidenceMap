@@ -60,3 +60,20 @@ stopifnot(length(all)==2L,length(part)==1L,
 stopifnot(identical(readLines(file.path(root,"full","repair_audit.jsonl")),
  readLines(file.path(root,"partial","repair_audit.jsonl"))))
 cat("PASS: unchanged canonical builder parity including strip action and approved repair\\n")
+
+
+# Verify a complete isolated incremental assembly against the unchanged full
+# builder. Original records must remain byte-for-byte unchanged.
+affected_manifest<-file.path(root,"affected_works.csv")
+writeLines(c("stage,cluster_id","prior,work-affected","successor,work-affected"),
+ affected_manifest)
+assembled_dir<-file.path(root,"assembled")
+run("scripts/updater/experimental_w01_fast/recombine_canonical_jsonl.R",
+ c("--prior",file.path(root,"full","canonical.jsonl"),
+ "--changed",file.path(root,"partial","canonical.jsonl"),
+ "--affected-works",affected_manifest,"--output-dir",assembled_dir))
+assembled<-readLines(file.path(assembled_dir,"canonical.jsonl"))
+baseline<-readLines(file.path(root,"full","canonical.jsonl"))
+stopifnot(setequal(assembled,baseline),
+ length(assembled)==length(baseline))
+cat("PASS: complete affected-only canonical assembly reproduces full-corpus JSONL\\n")
