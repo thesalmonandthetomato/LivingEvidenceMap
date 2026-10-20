@@ -82,9 +82,30 @@ jobs:
             --canonical inputs/current/canonical_lean.jsonl \
             --included-ids outputs/workflow04_final/workflow04_included_record_ids.txt \
             --output outputs/workflow04_final/w05_input_check.jsonl
-      - name: Preserve validated outputs as GitHub artifact only
+      - name: Prepare non-record-level validation receipt
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/validation_receipt
+          Rscript -e '
+            library(jsonlite); library(digest)
+            s <- fromJSON("outputs/workflow04_final/summary.json",simplifyVector=FALSE)
+            stopifnot(identical(s$status,"PASS"),as.integer(s$unresolved)==0L)
+            receipt <- list(
+              schema="lem-w04-reconciled-validation-receipt-v1",
+              validation_status="PASS",
+              workflow03_eligible=as.integer(s$workflow03_eligible),
+              final_retain=as.integer(s$final_retain),
+              final_exclude=as.integer(s$final_exclude),
+              final_layer_sha256=digest(file="outputs/workflow04_final/workflow04_final_screening_layer.jsonl",algo="sha256",serialize=FALSE),
+              included_ids_sha256=digest(file="outputs/workflow04_final/workflow04_included_record_ids.txt",algo="sha256",serialize=FALSE),
+              w05_materialised_sha256=digest(file="outputs/workflow04_final/w05_input_check.jsonl",algo="sha256",serialize=FALSE)
+            )
+            write_json(receipt,"outputs/validation_receipt/receipt.json",auto_unbox=TRUE,pretty=TRUE)
+            cat(toJSON(receipt,auto_unbox=TRUE,pretty=TRUE),"\n")
+          '
+      - name: Upload validation receipt only (no canonical or screening records)
         uses: actions/upload-artifact@v4
         with:
           name: w04-reconciled-validation-${{ github.run_id }}
-          path: outputs/workflow04_final/
+          path: outputs/validation_receipt/receipt.json
           retention-days: 7
