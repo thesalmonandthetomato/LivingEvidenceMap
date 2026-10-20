@@ -1,4 +1,4 @@
-name: Temporary restart October W01 retry after runner shutdown
+name: Temporary restart October W01 split four-stage run
 on:
   push:
     branches: [workflow01-final-architecture]
