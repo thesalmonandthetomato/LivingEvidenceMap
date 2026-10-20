@@ -1,0 +1,41 @@
+name: W01-Fast bounded final decision extraction
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_final_decision_extraction.yml
+      - scripts/updater/experimental_w01_fast/extract_w01_final_decisions.R
+permissions:
+  contents: read
+  actions: read
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-development
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install JSON support
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+      - name: Extract bounded W01 final decisions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ulimit -f 210000
+          Rscript scripts/updater/experimental_w01_fast/extract_w01_final_decisions.R
+      - name: Preserve final decision reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-october-final-decisions
+          path: selected_w01_final_decisions/
+          retention-days: 7
+          if-no-files-found: error
