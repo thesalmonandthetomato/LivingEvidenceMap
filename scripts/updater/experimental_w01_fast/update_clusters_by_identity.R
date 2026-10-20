@@ -32,6 +32,7 @@ unite<-function(x,y){x<-root(x);y<-root(y);if(x==y)return(invisible(NULL))
  else{parent[[y]]<<-x;height[[x]]<<-height[[x]]+1L}}
 # Historical clusters are authoritative; never recreate historical pair decisions.
 by_cluster<-split(old_keys,prior$cluster_id)
+old_cluster_lookup<-setNames(prior$cluster_id,old_keys)
 for(members in by_cluster)if(length(members)>1L)
  for(k in members[-1L])unite(lookup[[members[[1L]]]],lookup[[k]])
 # Unordered pair keys are stable even if input rows or pair orientations change.
@@ -56,8 +57,8 @@ result<-meta[,.(source,source_record_id)]
 result[,cluster_id:=NA_character_];result[,cluster_size:=NA_integer_]
 for(members in components){
  loc<-unname(lookup[members])
- original_members<-intersect(members,old_keys)
- previous_ids<-unique(prior$cluster_id[match(original_members,old_keys)])
+ original_ids<-unname(old_cluster_lookup[members])
+ previous_ids<-unique(original_ids[!is.na(original_ids)])
  if(length(previous_ids)>1L)stop("Merger of distinct historical clusters requires explicit adjudication")
  # Preserve existing work IDs when a cluster gains new manifestations.
  preserved<-if(length(previous_ids)==1L)previous_ids else NULL
