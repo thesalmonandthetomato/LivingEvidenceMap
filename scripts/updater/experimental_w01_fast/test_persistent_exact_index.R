@@ -64,3 +64,13 @@ run(script,c("--mode","append","--metadata",full,
  "--state",file.path(next_out,"next_exact_index.rds"),"--output-dir",zero_out))
 stopifnot(nrow(fread(file.path(zero_out,"exact_block_candidates.csv")))==0L)
 cat("PASS: persistent index, consecutive updates, zero update and history guards\\n")
+
+# Integration check: read-only parity harness covers exact and fuzzy evidence.
+parity_dir<-file.path(root,"combined_parity")
+run("scripts/updater/experimental_w01_fast/validate_persistent_candidate_parity.R",
+ c("--metadata",full,"--prior-n","2","--output-dir",parity_dir))
+manifest<-fromJSON(file.path(parity_dir,"validated_parity_manifest.json"))
+stopifnot(isTRUE(manifest$identities_and_evidence_equal),
+ !isTRUE(manifest$includes_full_scientific_parity),
+ manifest$historical_manifestations==2L)
+cat("PASS: frozen-metadata parity harness exercised on local fixture\\n")
