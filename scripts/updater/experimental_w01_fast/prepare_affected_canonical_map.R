@@ -29,6 +29,8 @@ writeLines(toJSON(list(schema="experimental-w01-fast-canonical-scope-v1",
  affected_successor_works=length(selected),affected_manifestations=nrow(subset),
  successor_map_sha256=digest(file=map_path,algo="sha256"),
  affected_works_sha256=digest(file=affected_path,algo="sha256"),
- production_publication_allowed=FALSE),pretty=TRUE,auto_unbox=TRUE),
+ production_publication_allowed=FALSE,
+ compatible_with_unmodified_production_builder=FALSE,
+ reason="Production canonical builder requires all input manifestations to appear in cluster map; partial scope requires targeted adapter and repair-audit parity"),pretty=TRUE,auto_unbox=TRUE),
  file.path(out,"scope_manifest.json"))
 cat(sprintf("PASS: staged %d changed works and %d manifestations\n",length(selected),nrow(subset)))
