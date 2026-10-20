@@ -62,6 +62,9 @@ jobs:
       - name: Test identity-filtered canonical source streams
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_filter_canonical_source_inputs.R
+      - name: Test identity-filtered canonical repair and strip directives
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_filter_canonical_directives.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
