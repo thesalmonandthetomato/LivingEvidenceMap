@@ -19,10 +19,6 @@ on:
         required: false
         default: ''
         type: string
-      combined_batch_index:
-        required: false
-        default: '0'
-        type: string
       execution_pathway:
         description: Inherited pathway from W00-W03; github is the existing default
         required: false
@@ -176,8 +172,6 @@ jobs:
           parse(file='scripts/updater/workflow_04_seed_recovered_pass1.R')
           parse(file='scripts/updater/workflow_04_prepare_incremental.R')
           parse(file='scripts/updater/workflow_04_restore_shiny_subset.R')
-          parse(file='scripts/updater/workflow_04_restore_shiny_combined.R')
-          parse(file='scripts/updater/workflow_04_validate_combined_return.R')
           parse(file='scripts/updater/workflow_04_luna_consensus.R')
           parse(file='scripts/updater/workflow_04_merge_consensus.R')
           parse(file='scripts/updater/workflow_04_merge_incremental.R')
@@ -201,11 +195,6 @@ jobs:
           case "$LEM_PATHWAY" in
             github)
               test -z "$SHINY_REVIEW_ID$SHINY_DRAFT$SHINY_BUNDLE$SHINY_SHA"
-              ;;
-            shiny_combined)
-              test "$LEM_PUBLISH" = "false"
-              test "$LEM_PRIOR" = "none"
-              test -n "$SHINY_REVIEW_ID" && test -n "$SHINY_DRAFT" && test -n "$SHINY_BUNDLE" && test -n "$SHINY_SHA"
               ;;
             shiny)
               test "$LEM_PUBLISH" = "false"
@@ -313,27 +302,6 @@ jobs:
             fi
           fi
 
-      - name: Restore combined Shiny batch and prompt
-        if: ${{ inputs.execution_pathway == 'shiny_combined' }}
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          SHINY_REVIEW_ID: ${{ inputs.shiny_review_id }}
-          SHINY_DRAFT: ${{ inputs.shiny_prompt_draft_id }}
-          SHINY_BUNDLE: ${{ inputs.shiny_bundle_file }}
-          SHINY_SHA: ${{ inputs.shiny_bundle_sha256 }}
-          BATCH_INDEX: ${{ inputs.combined_batch_index }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_04_restore_shiny_combined.R \
-            --deposit-id "$SHINY_DRAFT" \
-            --manifest-file "$SHINY_BUNDLE" \
-            --manifest-sha256 "$SHINY_SHA" \
-            --batch-index "$BATCH_INDEX" \
-            --review-id "$SHINY_REVIEW_ID" \
-            --canonical inputs/current/canonical_lean.jsonl \
-            --output-dir inputs/shiny_w04
-
       - name: Restore Shiny registered subset and prompt
         if: ${{ inputs.execution_pathway == 'shiny' }}
         env:
@@ -367,9 +335,7 @@ jobs:
             --output-dir outputs/workflow04_prepare
           )
           if [ -s inputs/shiny_w04/selected_record_ids.txt ]; then
-            if [ -s inputs/shiny_w04/canonical_with_edits.jsonl ]; then
-              ARGS[1]="inputs/shiny_w04/canonical_with_edits.jsonl"
-            fi
+            ARGS[1]="inputs/shiny_w04/canonical_with_edits.jsonl"
             ARGS+=(--selected-record-ids inputs/shiny_w04/selected_record_ids.txt)
           fi
           if [ "$PRIOR_W04_INPUT" != "none" ] && [ -n "$PRIOR_W04_INPUT" ]; then
@@ -398,7 +364,7 @@ jobs:
             "inputs/shiny_w04/screening_config.json" else
             "user_input/workflow04_screening_config.json"
           cfg <- fromJSON(config_path, simplifyVector=FALSE)
-          if (Sys.getenv("LEM_EXECUTION_PATHWAY") %in% c("shiny","shiny_combined")) {
+          if (identical(Sys.getenv("LEM_EXECUTION_PATHWAY"), "shiny")) {
             # Preserve the exact archived prompt bytes, including trailing newline.
             prompt_sha <- digest(file=cfg$prompt_path, algo="sha256", serialize=FALSE)
           } else {
@@ -503,7 +469,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_RELEVANCE_MODEL: gpt-5.6-luna
-          SCREENING_CONFIG: ${{ inputs.execution_pathway != 'github' && 'inputs/shiny_w04/screening_config.json' || 'user_input/workflow04_screening_config.json' }}
+          SCREENING_CONFIG: ${{ inputs.execution_pathway == 'shiny' && 'inputs/shiny_w04/screening_config.json' || 'user_input/workflow04_screening_config.json' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -575,7 +541,7 @@ jobs:
         run: |
           set -euo pipefail
           ARGS=(--input-root shards --output-dir outputs/workflow04_new_consensus --expected-shards 8)
-          if [ "$W04_EXECUTION_PATHWAY" = "shiny" ] || [ "$W04_EXECUTION_PATHWAY" = "shiny_combined" ]; then
+          if [ "$W04_EXECUTION_PATHWAY" = "shiny" ]; then
             test -s prepared/inputs/shiny_w04/screening_config.json
             mkdir -p inputs
             cp -R prepared/inputs/shiny_w04 inputs/shiny_w04
