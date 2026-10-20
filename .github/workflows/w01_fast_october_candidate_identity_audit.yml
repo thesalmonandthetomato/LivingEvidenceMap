@@ -1,0 +1,43 @@
+name: W01-Fast October candidate identity audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_october_candidate_identity_audit.yml
+      - scripts/updater/experimental_w01_fast/normalise_october_candidate_reference.R
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-development
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install small R audit dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest"))
+      - name: Restore previously extracted October reference
+        uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-october-candidate-reference
+          run-id: 39491644597
+          github-token: ${{ github.token }}
+          path: reference
+      - name: Audit stable source identities of production candidates
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/normalise_october_candidate_reference.R reference
+      - name: Preserve stable-identity candidate reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-october-candidate-stable-identity-reference
+          path: candidate_identity_audit/
+          retention-days: 7
+          if-no-files-found: error
