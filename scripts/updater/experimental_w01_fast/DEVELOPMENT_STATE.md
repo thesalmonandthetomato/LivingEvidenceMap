@@ -46,3 +46,9 @@ The October production W01 has not published; available full canonicalisation re
 - Latest comparator test result remains unverified; do not mark Task 3 passed until successful CI and negative-control assertions.
 - Task 2 interface inventory still needs content audit (including file outputs and dependencies), beyond structural extraction.
 - All changes confined to `w01-fast-development`; no external state writes, production triggers or migration.
+
+## Continuation checkpoint (20 October 2026)
+- Added `test_incremental_cluster_identity.R` to exercise synthetic cluster merge and negative controls for changed historical source-record identity, old-old pair decisions, and repeated new decisions. Commit `1c5451dd754808aebfc6cc25c4c990171cc807d9`.
+- Extended isolated read-only CI to execute the cluster identity tests. Commit `5383800ff759820ced8f733859a8e1c4851c5b89`.
+- Verification status: repository commits confirmed; new CI execution/results NOT confirmed. Do not claim passing tests, Task 3 completion, real-data parity, or readiness to move to production.
+- Next: inspect latest workflow results using Actions, correct any fixture failures only on development branch, complete file-level interface audit, then proceed to Task 4 persistent indices.
