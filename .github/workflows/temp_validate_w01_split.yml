@@ -1,0 +1,66 @@
+name: Temporary validate W01 split without running production
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - .github/workflows/temp_validate_w01_split.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install YAML parser
+        shell: Rscript {0}
+        run: install.packages("yaml")
+      - name: Verify exact original processing steps and split dependencies
+        shell: Rscript {0}
+        run: |
+          library(yaml)
+          oldpath<-tempfile(fileext=".yml")
+          code<-system2("git",c("show","c84a3b6c6384c4d336e655f68e980712ea156bdf:.github/workflows/workflow_01_production.yml"),stdout=oldpath)
+          stopifnot(code==0L)
+          old<-read_yaml(oldpath)
+          now<-read_yaml(".github/workflows/workflow_01_production.yml")
+          stopifnot(identical(names(now$jobs),c("prepare","adjudicate","canonicalise","publish")),
+                    identical(now$jobs$adjudicate$needs,"prepare"),
+                    identical(now$jobs$canonicalise$needs,"adjudicate"),
+                    identical(unlist(now$jobs$publish$needs),c("adjudicate","canonicalise")))
+          originals<-Filter(function(s)!is.null(s$name),old$jobs$workflow01$steps)
+          portions<-unlist(lapply(now$jobs,function(j)j$steps),recursive=FALSE)
+          original_steps<-lapply(originals,function(s) {
+            match<-Filter(function(x)identical(x$name,s$name),portions)
+            stopifnot(length(match)==1L)
+            z<-match[[1L]]
+            if(!is.null(s$run)) stopifnot(identical(s$run,z$run))
+            if(!is.null(s$uses)) stopifnot(identical(s$uses,z$uses))
+            TRUE
+          })
+          stopifnot(all(unlist(original_steps)))
+          important<-c("Build runtime source catalogue and validate source inputs",
+            "Generate incremental duplicate candidates","Build LLM adjudication cases",
+            "Run LLM adjudication","Apply final adjudications with stable work IDs",
+            "Build source-agnostic canonical JSONL","Validate final state and build delta",
+            "Replay delta and require exact reconstruction",
+            "Archive only the validated delta to Zenodo",
+            "Trigger Workflow 02 after successful Workflow 01")
+          stopifnot(all(important%in%vapply(portions,function(z) if(is.null(z$name)) "" else z$name,character(1))))
+          stopifnot(identical(now$jobs$adjudicate$outputs$pending_count,
+            "${{ steps.adjudication.outputs.pending_count }}"))
+          for(job in c("canonicalise","publish")){
+            src<-paste(capture.output(str(now$jobs[[job]])),collapse=" ")
+            stopifnot(!grepl("steps.adjudication.outputs.pending_count",src,fixed=TRUE))
+          }
+          for(job in c("adjudicate","canonicalise","publish")){
+            steps<-now$jobs[[job]]$steps
+            stopifnot(any(vapply(steps,function(z)identical(z$uses,"actions/download-artifact@v4"),logical(1))))
+          }
+          cat("PASS: all original W01 processing commands unchanged; split job dependencies and handoffs valid\n")
