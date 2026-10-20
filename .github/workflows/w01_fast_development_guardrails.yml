@@ -56,6 +56,9 @@ jobs:
       - name: Test identity-based affected work identification
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_affected_works.R
+      - name: Test identity-scoped canonicalisation staging
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_prepare_affected_canonical_map.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
