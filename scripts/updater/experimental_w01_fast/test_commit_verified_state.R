@@ -63,3 +63,21 @@ stopifnot(identical(before_interruption,digest(file=pointer,algo="sha256")),
  file.exists(backup))
 unlink(backup)
 check_current()
+
+# Diagnostic must not change either pointer and must fail closed on ambiguity.
+inspect<-function(ok=TRUE){
+ z<-suppressWarnings(system2(runner,c(
+ "scripts/updater/experimental_w01_fast/inspect_interrupted_state.R",
+ "--state-dir",state),stdout=TRUE,stderr=TRUE))
+ code<-attr(z,"status");if(is.null(code))code<-0L
+ if((code==0L)!=ok)stop(paste("Unexpected diagnostic status",code))
+}
+inspect()
+stopifnot(file.copy(pointer,backup,overwrite=FALSE))
+current_hash<-digest(file=pointer,algo="sha256")
+backup_hash<-digest(file=backup,algo="sha256")
+inspect(FALSE)
+stopifnot(identical(current_hash,digest(file=pointer,algo="sha256")),
+ identical(backup_hash,digest(file=backup,algo="sha256")))
+unlink(backup)
+inspect()
