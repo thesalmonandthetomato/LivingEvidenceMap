@@ -20,7 +20,7 @@ if (!nzchar(token)) stop("Missing read-only Actions token")
 dir.create(out)
 dir.create(file.path(out,"metadata"))
 curl <- function(args, result=NULL) {
- code <- suppressWarnings(system2("curl",args,stdout=if(is.null(result))"" else result,stderr=FALSE))
+ code <- suppressWarnings(system(paste("curl",paste(args,collapse=" "),"1>/dev/null"),intern=FALSE,ignore.stderr=FALSE))
  if (!identical(as.integer(code),0L)) stop("Bounded remote request failed: curl exit ",code)
 }
 endpoint <- paste0("https://api.github.com/repos/",repo,"/actions/artifacts/",artifact_id,"/zip")
