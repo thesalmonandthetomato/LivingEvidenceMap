@@ -89,6 +89,9 @@ jobs:
       - name: Test real-data candidate parity comparator negative controls
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_compare_real_candidate_pairs.R
+      - name: Test stable-identity cluster growth and historical ID retention
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_identity_cluster_growth.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
