@@ -16,6 +16,7 @@ required<-c("idx","source","source_record_id","title_norm","doi_norm","doi_famil
 stopifnot(all(required%in%names(m)),identical(as.integer(m$idx),seq_len(nrow(m))),
  !anyNA(m$source),!anyNA(m$source_record_id),
  !anyDuplicated(paste(m$source,m$source_record_id,sep="::")))
+fingerprint<-function(dt) digest(lapply(required,function(k)as.character(dt[[k]])),algo="sha256")
 make_key<-function(...){xs<-list(...);z<-rep(NA_character_,length(xs[[1L]]))
  ok<-Reduce(`&`,lapply(xs,function(x)!is.na(x)&nzchar(as.character(x))))
  if(any(ok))z[ok]<-do.call(paste,c(lapply(xs,function(x)as.character(x[ok])),sep="::"))
@@ -59,7 +60,7 @@ if(mode=="init"){
  # Historical metadata mutations require separately reviewed affected-index rebuilding.
  # No silent restoration of stale postings after a historical repair.
  prior<-m[seq_len(old_n)]
- if(!identical(digest(prior,algo="sha256"),state$historical_rows_sha256))
+ if(!identical(fingerprint(prior),state$historical_rows_sha256))
    stop("Historical normalised metadata changed: bounded index rebuild required",call.=FALSE)
  new<-if(old_n<nrow(m))m[seq.int(old_n+1L,nrow(m))]else m[0L]
  add<-derive(new)
@@ -88,7 +89,7 @@ if(mode=="init"){
 }
 # Store row fingerprint for fail-closed historical metadata repair detection.
 # Both init and append emit a single successor snapshot; never write the input state.
-state$historical_rows_sha256<-digest(m,algo="sha256")
+state$historical_rows_sha256<-fingerprint(m)
 # Do not overwrite input state. Append outputs to a separate, versioned path.
 next_state<-file.path(out,"next_exact_index.rds")
 if(normalizePath(dirname(state_path),mustWork=FALSE)==normalizePath(out,mustWork=FALSE)&&
