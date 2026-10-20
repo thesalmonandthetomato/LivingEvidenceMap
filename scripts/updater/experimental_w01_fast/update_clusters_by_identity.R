@@ -49,9 +49,10 @@ left_positions<-match(left,all_keys);right_positions<-match(right,all_keys)
 for(i in approved)unite(left_positions[[i]],right_positions[[i]])
 components<-split(seq_along(all_keys),vapply(seq_along(all_keys),root,integer(1)))
 # Unambiguous component encoding. No row offsets and no delimiter collisions.
-fingerprint<-function(members){
- z<-sort(members)
- paste0("work-",substr(digest(paste0(nchar(z,type="bytes"),":",z,collapse=""),
+fingerprint<-function(loc){
+ # Exact frozen W01 allocation rule. Identity lookups above remain length-prefixed.
+ keys_colon<-paste(meta$source[loc],meta$source_record_id[loc],sep=":")
+ paste0("work-",substr(digest(paste(sort(keys_colon),collapse="|"),
   algo="sha256",serialize=FALSE),1,16))
 }
 result<-meta[,.(source,source_record_id)]
@@ -63,7 +64,7 @@ for(loc in components){
  if(length(previous_ids)>1L)stop("Merger of distinct historical clusters requires explicit adjudication")
  # Preserve existing work IDs when a cluster gains new manifestations.
  preserved<-if(length(previous_ids)==1L)previous_ids else NULL
- result[loc,cluster_id:=if(is.null(preserved))fingerprint(members)else preserved]
+ result[loc,cluster_id:=if(is.null(preserved))fingerprint(loc)else preserved]
  result[loc,cluster_size:=length(members)]
 }
 if(dir.exists(out)||file.exists(out))stop("Refusing to replace prior cluster outputs")
