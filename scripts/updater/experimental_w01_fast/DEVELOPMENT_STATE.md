@@ -37,3 +37,12 @@
 
 ## Explicit limitations
 The October production W01 has not published; available full canonicalisation results are from a cancelled run. The 8.2x improvement applies to candidate generation only. Full scientific parity is not yet established.
+
+## 20 October 2026 continuation
+- Confirmed protected branch still identical to frozen `8febc7b99ce1f7752c7553ed6023976a643f8621` via commit comparison.
+- Run `39418612392`: passed. Run `39418703657`: failed because `jsonlite` was not installed. Subsequent development workflow already declared both `yaml` and `jsonlite`; verification pending.
+- Added isolated negative-control regression fixture `test_regression_comparators.R` in commit `089d21cce452e56de1bad085201e87239b4755e4`.
+- CI dependency declaration extended to `data.table` and `digest`, and regression test step added in commit `0fc342412a664fc50ffae787f505de63a771f221`.
+- Latest comparator test result remains unverified; do not mark Task 3 passed until successful CI and negative-control assertions.
+- Task 2 interface inventory still needs content audit (including file outputs and dependencies), beyond structural extraction.
+- All changes confined to `w01-fast-development`; no external state writes, production triggers or migration.
