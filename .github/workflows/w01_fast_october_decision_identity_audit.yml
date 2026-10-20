@@ -1,0 +1,55 @@
+name: W01-Fast October decision identity reference audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_october_decision_identity_audit.yml
+      - scripts/updater/experimental_w01_fast/audit_october_incremental_decisions.R
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-development
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install small R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest"))
+      - uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-october-decision-csv-header
+          run-id: 39495739444
+          github-token: ${{ github.token }}
+          path: header
+      - uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-october-decision-csv-tail
+          run-id: 39494626848
+          github-token: ${{ github.token }}
+          path: tail
+      - uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-october-candidate-reference
+          run-id: 39491644597
+          github-token: ${{ github.token }}
+          path: metadata
+      - name: Match October automatic decisions to source identities and candidate pairs
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/audit_october_incremental_decisions.R
+      - name: Preserve compact decision identity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-october-stable-identity-decisions
+          path: october_decision_identity_audit/
+          retention-days: 7
+          if-no-files-found: warn
