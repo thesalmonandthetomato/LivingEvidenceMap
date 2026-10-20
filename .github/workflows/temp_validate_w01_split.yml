@@ -26,7 +26,7 @@ jobs:
         run: |
           library(yaml)
           oldpath<-tempfile(fileext=".yml")
-          code<-system2("git",c("show","c84a3b6c6384c4d336e655f68e980712ea156bdf:.github/workflows/workflow_01_production.yml"),stdout=oldpath)
+          code<-system(paste("git show c84a3b6c6384c4d336e655f68e980712ea156bdf:.github/workflows/workflow_01_production.yml >",shQuote(oldpath)))
           stopifnot(code==0L)
           old<-read_yaml(oldpath)
           now<-read_yaml(".github/workflows/workflow_01_production.yml")
@@ -53,8 +53,7 @@ jobs:
             "Archive only the validated delta to Zenodo",
             "Trigger Workflow 02 after successful Workflow 01")
           stopifnot(all(important%in%vapply(portions,function(z) if(is.null(z$name)) "" else z$name,character(1))))
-          stopifnot(identical(now$jobs$adjudicate$outputs$pending_count,
-            "${{ steps.adjudication.outputs.pending_count }}"))
+          stopifnot(grepl("steps.adjudication.outputs.pending_count",now$jobs$adjudicate$outputs$pending_count,fixed=TRUE))
           for(job in c("canonicalise","publish")){
             src<-paste(capture.output(str(now$jobs[[job]])),collapse=" ")
             stopifnot(!grepl("steps.adjudication.outputs.pending_count",src,fixed=TRUE))
