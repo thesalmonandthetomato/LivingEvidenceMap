@@ -16,7 +16,9 @@ run<-function(dest,ok=TRUE){
 }
 one<-file.path(root,"one");run(one)
 first<-fread(file.path(one,"affected_cluster_map.csv"))
-stopifnot(nrow(first)==3L,!any(first$source_record_id=="C"),
+scope<-jsonlite::fromJSON(file.path(one,"scope_manifest.json"))
+stopifnot(identical(scope$compatible_with_unmodified_production_builder,FALSE),
+          nrow(first)==3L,!any(first$source_record_id=="C"),
  all(first$cluster_id=="changed"))
 fwrite(m[c(4,2,3,1)],mp)
 two<-file.path(root,"two");run(two)
