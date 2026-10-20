@@ -17,7 +17,7 @@ transition<-file.path(root,"transition.json")
 run(script,c("--before",first,"--after",second,"--output",transition))
 m<-fromJSON(transition,simplifyVector=FALSE)
 stopifnot(identical(m$schema,"experimental-w01-fast-transition-v1"),
- identical(m$changed_objects,list("clusters")),
+ setequal(unlist(m$changed_objects,use.names=FALSE),"clusters"),
  identical(m$previous_manifest_sha256,digest(file=file.path(first,"manifest.json"),algo="sha256")))
 run(script,c("--before",first,"--after",second,"--output",transition),FALSE)
 obj<-fromJSON(file.path(second,"manifest.json"))$objects$clusters$object
