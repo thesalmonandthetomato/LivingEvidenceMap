@@ -41,6 +41,9 @@ jobs:
       - name: Verify fuzzy-title rarity depends on full corpus
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_fuzzy_rarity_safety.R
+      - name: Compare incremental q-gram frequencies with full rebuild
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_persistent_qgram_frequency.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
