@@ -1,0 +1,90 @@
+name: W04 Shiny reconciled offline finalisation validation
+run-name: W04 reconciled validation ${{ inputs.review_id }} ${{ inputs.bundle_file }}
+on:
+  workflow_dispatch:
+    inputs:
+      lean_pointer_path:
+        required: true
+        type: string
+      workflow03_pointer_path:
+        required: true
+        type: string
+      review_id:
+        required: true
+        type: string
+      prompt_draft_id:
+        required: true
+        type: string
+      bundle_file:
+        required: true
+        type: string
+      bundle_sha256:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  validate-reconciled:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install offline dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+      - name: Restore immutable W03 sources and reconciled input
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path }}
+          W03_POINTER: ${{ inputs.workflow03_pointer_path }}
+          REVIEW: ${{ inputs.review_id }}
+          DEPOSIT: ${{ inputs.prompt_draft_id }}
+          BUNDLE: ${{ inputs.bundle_file }}
+          BUNDLE_SHA: ${{ inputs.bundle_sha256 }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer "$LEAN_POINTER" --output-dir inputs/current/canonical
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
+            --pointer "$W03_POINTER" --output-dir inputs/current/w03
+          CAN=$(find inputs/current/canonical -type f -name canonical_lean.jsonl -print -quit)
+          STA=$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)
+          test -n "$CAN"; test -n "$STA"
+          mkdir -p inputs/current
+          cp "$CAN" inputs/current/canonical_lean.jsonl
+          cp "$STA" inputs/current/publication_status.jsonl
+          Rscript scripts/updater/workflow_04_restore_reconciled_archive.R \
+            --deposit-id "$DEPOSIT" --bundle-file "$BUNDLE" \
+            --bundle-sha256 "$BUNDLE_SHA" --review-id "$REVIEW" \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --output inputs/reconciled/verified.jsonl
+      - name: Build W04 final state using existing merge
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_prepare_reconciled_offline.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --workflow03-status inputs/current/publication_status.jsonl \
+            --reconciled inputs/reconciled/verified.jsonl \
+            --output-dir inputs/reconciled/prepared
+          Rscript scripts/updater/workflow_04_merge_incremental.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --workflow03-status inputs/current/publication_status.jsonl \
+            --reused-layer inputs/reconciled/prepared/reused_workflow04_layer.jsonl \
+            --new-consensus inputs/reconciled/prepared/workflow04_consensus_layer.jsonl \
+            --prepare-manifest inputs/reconciled/prepared/prepare_manifest.json \
+            --output-dir outputs/workflow04_final
+          Rscript -e 's<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");stopifnot(s$status=="PASS",s$unresolved==0,s$final_retain+s$final_exclude==s$workflow03_eligible)'
+          Rscript scripts/updater/workflow_05_materialise_retained.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --included-ids outputs/workflow04_final/workflow04_included_record_ids.txt \
+            --output outputs/workflow04_final/w05_input_check.jsonl
+      - name: Preserve validated outputs as GitHub artifact only
+        uses: actions/upload-artifact@v4
+        with:
+          name: w04-reconciled-validation-${{ github.run_id }}
+          path: outputs/workflow04_final/
+          retention-days: 7
