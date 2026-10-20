@@ -39,7 +39,7 @@ request<-function(start,end,path,cap){
  if(start<0||end<start||(end-start+1)>cap)stop("Unsafe byte range")
  curl(c("--silent","--show-error","--fail","--max-time","120",
  "-H",shQuote(sprintf("x-ms-range: bytes=%.0f-%.0f",start,end)),
- "--max-filesize",as.character(cap),
+ paste0("--max-filesize=",as.integer(cap)),
  "--output",shQuote(path),shQuote(signed)))
  if (!file.exists(path)||file.info(path)$size != (end-start+1))
   stop("Storage did not honour exact range")
