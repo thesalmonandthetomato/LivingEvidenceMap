@@ -1,0 +1,55 @@
+name: Experimental W01-Fast cluster parity validation
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [.github/workflows/experimental_w01_fast_cluster_smoke.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","digest","jsonlite"))
+      - name: Compare incremental clusters against production full-clustering R script
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          d<-tempfile("w01fast-cluster-");dir.create(d)
+          paths<-file.path(d,c("prior.csv","meta.csv","old.csv","new.csv"))
+          meta<-data.table(idx=1:7,source=c("a","b","c","d","e","f","g"),
+                           source_record_id=letters[1:7])
+          old<-data.table(record_i=c(1L,2L),record_j=c(2L,3L),
+                          rescored_classification=c("duplicate","not_duplicate"),
+                          review_route=c("automatic","automatic"),source_row_index=1:2)
+          new<-data.table(record_i=c(1L,2L,4L,5L),record_j=c(5L,6L,7L,7L),
+                          rescored_classification=c("duplicate","not_duplicate","duplicate","not_duplicate"),
+                          review_route=rep("automatic",4),source_row_index=1:4)
+          # Prior cluster [1,2] and singleton 3,4; new [5,6,7].
+          prior<-meta[1:4,.(idx,source,source_record_id)]
+          ids<-vapply(list(c(1L,2L),3L,4L),function(g)
+            paste0("work-",substr(digest::digest(paste(sort(paste(prior$source[g],prior$source_record_id[g],sep=":")),collapse="|"),algo="sha256",serialize=FALSE),1,16)),character(1))
+          prior[,cluster_id:=c(ids[1],ids[1],ids[2],ids[3])]
+          fwrite(prior,paths[1]);fwrite(meta,paths[2]);fwrite(old,paths[3]);fwrite(new,paths[4])
+          fast<-file.path(d,"fast");ref<-file.path(d,"ref")
+          rc<-system2("Rscript",c("scripts/updater/experimental_w01_fast/update_clusters.R",
+            "--prior-map",paths[1],"--metadata",paths[2],"--incremental-decisions",paths[4],
+            "--output-dir",fast))
+          stopifnot(rc==0L)
+          rc<-system2("Rscript",c("scripts/updater/workflow_01_deduplication_merge_clusters.R",
+            "--old-decisions",paths[3],"--new-decisions",paths[4],
+            "--metadata",paths[2],"--output-dir",ref))
+          stopifnot(rc==0L)
+          a<-fread(file.path(fast,"manifestation_cluster_map.csv"))
+          b<-fread(file.path(ref,"manifestation_cluster_map.csv"))
+          stopifnot(identical(a,b))
+          cat("PASS: same membership, stable hashed IDs, sizes and record ordering as production clustering\n")
