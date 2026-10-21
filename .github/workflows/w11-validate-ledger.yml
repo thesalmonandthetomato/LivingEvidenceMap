@@ -1,0 +1,43 @@
+name: W11 validate historical canonical-fulltext links
+on:
+  push:
+    branches:
+      - W11-full-text-retrieval
+    paths:
+      - '.github/workflows/w11-validate-ledger.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: W11-full-text-retrieval
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+      - run: Rscript -e 'install.packages(c("jsonlite","httr2"),repos="https://cloud.r-project.org")'
+      - name: Fetch validated first-stage W11 ledger (no full-text downloads)
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39598519118
+          name: W11-canonical-fulltext-ledger-39598519118
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: initial
+      - name: Verify 40 Zenodo file inventories and classify DOI conflicts
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+        run: Rscript scripts/W11/validate_fulltext_ledger.R
+      - name: Export validated restricted ledger
+        uses: actions/upload-artifact@v4
+        with:
+          name: W11-validated-canonical-fulltext-ledger-${{ github.run_id }}
+          path: outputs/W11/validated/
+          if-no-files-found: error
+          retention-days: 90
