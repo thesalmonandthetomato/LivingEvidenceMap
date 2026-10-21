@@ -1,0 +1,191 @@
+name: W04 Shiny reconciled publication only
+run-name: W04 Shiny only publication ${{ inputs.review_id }} ${{ inputs.bundle_file }}
+on:
+  workflow_dispatch:
+    inputs:
+      lean_pointer_path:
+        required: true
+        type: string
+      workflow03_pointer_path:
+        required: true
+        type: string
+      review_id:
+        required: true
+        type: string
+      prompt_draft_id:
+        required: true
+        type: string
+      bundle_file:
+        required: true
+        type: string
+      bundle_sha256:
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish-reconciled:
+    outputs:
+      first_run: ${{ steps.origin.outputs.first_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install offline dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','readr','googlesheets4'))
+      - name: Preserve first-run provenance for W05
+        id: origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);stopifnot(is.logical(x$first_run),length(x$first_run)==1L);cat("first_run=",tolower(as.character(x$first_run)),"\n",file=Sys.getenv("GITHUB_OUTPUT"),sep="",append=TRUE)'
+      - name: Restore immutable W03 sources and reconciled input
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEAN_POINTER: ${{ inputs.lean_pointer_path }}
+          W03_POINTER: ${{ inputs.workflow03_pointer_path }}
+          REVIEW: ${{ inputs.review_id }}
+          DEPOSIT: ${{ inputs.prompt_draft_id }}
+          BUNDLE: ${{ inputs.bundle_file }}
+          BUNDLE_SHA: ${{ inputs.bundle_sha256 }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R \
+            --pointer "$LEAN_POINTER" --output-dir inputs/current/canonical
+          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R \
+            --pointer "$W03_POINTER" --output-dir inputs/current/w03
+          CAN=$(find inputs/current/canonical -type f -name canonical_lean.jsonl -print -quit)
+          STA=$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)
+          test -n "$CAN"; test -n "$STA"
+          mkdir -p inputs/current
+          cp "$CAN" inputs/current/canonical_lean.jsonl
+          cp "$STA" inputs/current/publication_status.jsonl
+          Rscript scripts/updater/workflow_04_restore_reconciled_archive.R \
+            --deposit-id "$DEPOSIT" --bundle-file "$BUNDLE" \
+            --bundle-sha256 "$BUNDLE_SHA" --review-id "$REVIEW" \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --output inputs/reconciled/verified.jsonl
+      - name: Build W04 final state using existing merge
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_prepare_reconciled_offline.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --workflow03-status inputs/current/publication_status.jsonl \
+            --reconciled inputs/reconciled/verified.jsonl \
+            --output-dir inputs/reconciled/prepared
+          Rscript scripts/updater/workflow_04_merge_incremental.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --workflow03-status inputs/current/publication_status.jsonl \
+            --reused-layer inputs/reconciled/prepared/reused_workflow04_layer.jsonl \
+            --new-consensus inputs/reconciled/prepared/workflow04_consensus_layer.jsonl \
+            --prepare-manifest inputs/reconciled/prepared/prepare_manifest.json \
+            --output-dir outputs/workflow04_final
+          Rscript -e 's<-jsonlite::fromJSON("outputs/workflow04_final/summary.json");stopifnot(s$status=="PASS",s$unresolved==0,s$final_retain+s$final_exclude==s$workflow03_eligible)'
+          Rscript scripts/updater/workflow_05_materialise_retained.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --included-ids outputs/workflow04_final/workflow04_included_record_ids.txt \
+            --output outputs/workflow04_final/w05_input_check.jsonl
+      - name: Prepare non-record-level validation receipt
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/validation_receipt
+          Rscript -e '
+            library(jsonlite); library(digest)
+            s <- fromJSON("outputs/workflow04_final/summary.json",simplifyVector=FALSE)
+            stopifnot(identical(s$status,"PASS"),as.integer(s$unresolved)==0L)
+            receipt <- list(
+              schema="lem-w04-reconciled-validation-receipt-v1",
+              validation_status="PASS",
+              workflow03_eligible=as.integer(s$workflow03_eligible),
+              final_retain=as.integer(s$final_retain),
+              final_exclude=as.integer(s$final_exclude),
+              final_layer_sha256=digest(file="outputs/workflow04_final/workflow04_final_screening_layer.jsonl",algo="sha256",serialize=FALSE),
+              included_ids_sha256=digest(file="outputs/workflow04_final/workflow04_included_record_ids.txt",algo="sha256",serialize=FALSE),
+              w05_materialised_sha256=digest(file="outputs/workflow04_final/w05_input_check.jsonl",algo="sha256",serialize=FALSE)
+            )
+            write_json(receipt,"outputs/validation_receipt/receipt.json",auto_unbox=TRUE,pretty=TRUE)
+            cat(toJSON(receipt,auto_unbox=TRUE,pretty=TRUE),"\n")
+          '
+      - name: Verify selected prompt provenance and prepare publisher input
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          DEPOSIT: ${{ inputs.prompt_draft_id }}
+          BUNDLE: ${{ inputs.bundle_file }}
+          BUNDLE_SHA: ${{ inputs.bundle_sha256 }}
+          REVIEW: ${{ inputs.review_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The same authenticated immutable bundle was validated above.
+          # Download it once again for the complete run/prompt manifest.
+          Rscript scripts/updater/workflow_04_shiny_prompt_provenance.R \
+            --deposit-id "$DEPOSIT" --bundle-file "$BUNDLE" \
+            --bundle-sha256 "$BUNDLE_SHA" --review-id "$REVIEW" \
+            --output outputs/workflow04_final/prompt_provenance.json
+      - name: Publish reconciled W04 state to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W03_POINTER: ${{ inputs.workflow03_pointer_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LEAN_SHA="$(Rscript -e 'cat(digest::digest(file="inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
+          W03_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W03_POINTER"),simplifyVector=FALSE);v<-tolower(as.character(x$publication_status_sha256));stopifnot(grepl("^[0-9a-f]{64}$",v));stopifnot(identical(v,digest::digest(file="inputs/current/publication_status.jsonl",algo="sha256",serialize=FALSE)));cat(v)')"
+          PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/prompt_provenance.json");cat(x$prompt_sha256)')"
+          mkdir -p outputs/workflow04_zenodo
+          Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R \
+            --state-dir outputs/workflow04_final \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir outputs/workflow04_zenodo \
+            --upstream-lean-sha256 "$LEAN_SHA" \
+            --upstream-workflow03-sha256 "$W03_SHA" \
+            --prompt-sha256 "$PROMPT_SHA"
+      - name: Register publication and update Shiny pipeline status
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
+          Rscript scripts/updater/workflow_04_update_zenodo_registry.R \
+            --receipt outputs/workflow04_zenodo/zenodo_receipt.json \
+            --registry docs/workflow04/zenodo_registry.csv \
+            --pointer-dir docs/workflow04/zenodo
+          POINTER="docs/workflow04/zenodo/run-$GITHUB_RUN_ID.json"
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W04 --pointer "$POINTER"
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W04 --run-id "$GITHUB_RUN_ID"
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+          git add docs/workflow04/zenodo_registry.csv docs/workflow04/zenodo/ docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish reconciled W04 from Shiny [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Upload validation receipt only (no canonical or screening records)
+        uses: actions/upload-artifact@v4
+        with:
+          name: w04-reconciled-validation-${{ github.run_id }}
+          path: outputs/validation_receipt/receipt.json
+          retention-days: 7
