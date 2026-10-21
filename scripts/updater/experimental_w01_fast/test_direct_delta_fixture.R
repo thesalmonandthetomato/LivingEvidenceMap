@@ -87,3 +87,17 @@ writeLines(character(),file.path(final,'abstract_strip_actions.jsonl'))
 a[which(a=='--output-dir')+1L]<-file.path(t,'reject-removed-strip')
 stopifnot(run(writer,a)!=0L)
 cat('PASS: historical provenance alteration and disappearance rejected\\n')
+# Duplicate provenance identities must not be silently accepted.
+writeLines(toJSON(strip,auto_unbox=TRUE),
+ file.path(final,'abstract_strip_actions.jsonl'))
+writeLines(rep(toJSON(repair,auto_unbox=TRUE),2L),
+ file.path(final,'cumulative_data_quality_repairs.jsonl'))
+a[which(a=='--output-dir')+1L]<-file.path(t,'reject-duplicate-repair')
+stopifnot(run(writer,a)!=0L)
+writeLines(toJSON(repair,auto_unbox=TRUE),
+ file.path(final,'cumulative_data_quality_repairs.jsonl'))
+writeLines(rep(toJSON(strip,auto_unbox=TRUE),2L),
+ file.path(final,'abstract_strip_actions.jsonl'))
+a[which(a=='--output-dir')+1L]<-file.path(t,'reject-duplicate-strip')
+stopifnot(run(writer,a)!=0L)
+cat('PASS: duplicate provenance identities rejected\\n')
