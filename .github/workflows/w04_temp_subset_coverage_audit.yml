@@ -88,8 +88,8 @@ jobs:
               length(unique(all_ids)),eligible))
           cat(sprintf("PASS W03 eligible=%d W04 unique model coverage=%d duplicate overlap=2\\n",
             eligible,length(unique(all_ids))))
-          if(!identical(sort(vapply(representative,length,integer(1))),c(100L,100L,2885L)))
+          if(!identical(unname(sort(vapply(representative,length,integer(1)))),c(100L,100L,2885L)))
             stop("Registered subset size pattern disagrees with approved 100+100+remaining design")
           if(!"39551137733"%in%reg$run_id)stop("Expected 2885-record final batch missing")
-          cat(sprintf("PASS review=%s unique_subsets=%d unique_model_covered_records=%d registered_runs=%d no_subsets_overlap=true\n",
+          cat(sprintf("PASS review=%s unique_subsets=%d unique_model_covered_records=%d registered_runs=%d expected_overlap_verified=true\n",
                       review,length(groups),length(all_ids),nrow(reg)))
