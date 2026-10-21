@@ -32,16 +32,34 @@ validate_index<-function(dt,limit){
 }
 oi<-validate_index(old,nrow(prev));ni<-validate_index(fresh,nrow(m))
 if(!all(old$record_i==oi$i&old$record_j==oi$j))stop("Historical pair indices not integral")
+mismatches<-list()
 for(side in c("i","j")){
  idx<-if(side=="i")oi$i else oi$j
  source_field<-paste0("source_",side)
  id_field<-paste0("source_record_id_",side)
- if(source_field%in%names(old) &&
- (anyNA(old[[source_field]])||any(old[[source_field]]!=m$source[idx])))
- stop("Historical source namespace does not match trusted original index")
- if(id_field%in%names(old) &&
- (anyNA(old[[id_field]])||any(old[[id_field]]!=m$source_record_id[idx])))
- stop("Historical source ID does not match trusted original index")
+ for(field in c(source_field,id_field)){
+  if(!field%in%names(old))next
+  expected<-if(field==source_field)m$source[idx] else m$source_record_id[idx]
+  actual<-old[[field]]
+  bad<-which(is.na(actual)|actual!=expected)
+  if(length(bad)){
+   sample_rows<-head(bad,20L)
+   mismatches[[field]]<-list(count=length(bad),samples=lapply(sample_rows,function(k)
+    list(pair_row=k,record_i=as.character(old$record_i[k]),
+     record_j=as.character(old$record_j[k]),
+     actual=as.character(actual[k]),expected=as.character(expected[k]))))
+  }
+ }
+}
+if(length(mismatches)){
+ report<-paste0(out,".historical_identity_mismatch.json")
+ dir.create(dirname(report),recursive=TRUE,showWarnings=FALSE)
+ write_json(list(schema="w01-fast-historic-index-conflict-v1",
+  historical_decisions=nrow(old),total_mismatched_fields=sum(vapply(mismatches,
+  function(z)z$count,numeric(1))),details=mismatches,
+  stopped_before_publication=TRUE),report,pretty=TRUE,auto_unbox=TRUE)
+ cat(sprintf("HISTORICAL IDENTITY CONFLICT: %s\\n",report),file=stderr())
+ stop("Historical index conflicts: see forensic diagnostic; legacy state cannot be blindly merged")
 }
 if(any(ni$i<=nrow(prev)&ni$j<=nrow(prev)))
  stop("Fast update rescored historical pair; abort")
