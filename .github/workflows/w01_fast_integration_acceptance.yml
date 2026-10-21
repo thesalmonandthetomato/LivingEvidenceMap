@@ -2,10 +2,6 @@ name: W01-Fast frozen production-contract acceptance
 # Read-only acceptance after canonical manifest argument regression test passed (39633732965).
 on:
   workflow_dispatch:
-  push:
-    branches: [w01-fast-integration]
-    paths:
-      - '.github/workflows/w01_fast_integration_acceptance.yml'
 permissions:
   contents: read
   actions: read
