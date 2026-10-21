@@ -1,7 +1,8 @@
 #!/usr/bin/env Rscript
 # Real October scientific builder smoke test on all 16 newly created singleton works.
 # Input is independently preserved reference maps and tail slices from existing Actions.
-suppressPackageStartupMessages({library(data.table);library(jsonlite);library(digest)})\n`%||%`<-function(a,b)if(is.null(a))b else a
+suppressPackageStartupMessages({library(data.table);library(jsonlite);library(digest)})
+`%||%`<-function(a,b)if(is.null(a))b else a
 mapz<-"reference/outputs/final/manifestation_cluster_map.csv"
 priorz<-"reference/previous_state/workflow01_full_five_source/manifestation_cluster_map.csv"
 tails<-"tails/outputs/workflow01_union"
