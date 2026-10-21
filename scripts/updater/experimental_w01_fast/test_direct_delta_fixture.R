@@ -69,6 +69,7 @@ stopifnot(length(readLines(file.path(t,'replayed-provenance','provenance','cumul
 stopifnot(length(readLines(file.path(t,'replayed-provenance','workflow01_full_five_source','abstract_strip_actions.jsonl')))==1L)
 
 # Existing approvals and strip actions are immutable, even when identity keys agree.
+dir.create(file.path(p,'provenance'),recursive=TRUE,showWarnings=FALSE)
 writeLines(toJSON(repair,auto_unbox=TRUE),
  file.path(p,'provenance','cumulative_data_quality_repairs.jsonl'))
 modified_repair<-modifyList(repair,list(reason='silently changed historical approval'))
