@@ -1,0 +1,39 @@
+name: W06 Shiny isolated execution validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'shiny_w06/**'
+      - '.github/workflows/w06_shiny_subset.yml'
+      - '.github/workflows/w06_shiny_validation.yml'
+permissions:
+  contents: read
+jobs:
+  validate-w06-shiny:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Parse isolated W06 model worker
+        shell: Rscript {0}
+        run: |
+          parse(file="shiny_w06/scripts/w06_shiny_subset.R")
+          cat("PASS W06 R parse\n")
+      - name: Verify isolation and exact abstract access
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'can[["abstract",exact=TRUE]]' shiny_w06/scripts/w06_shiny_subset.R
+          grep -Fq 'w06-approved-' shiny_w06/scripts/w06_shiny_subset.R
+          grep -Fq 'isTRUE(source_dep$submitted)' shiny_w06/scripts/w06_shiny_subset.R
+          grep -Fq 'mode="subset_test"' shiny_w06/scripts/w06_shiny_subset.R
+          if grep -Eq '(almer[ií]a|Andaluc[ií]a|salmon|trout)' shiny_w06/scripts/w06_shiny_subset.R; then
+            echo 'W06 Shiny worker has a review-specific rule' >&2
+            exit 1
+          fi
+          echo 'PASS W06 prompt-controlled topic-agnostic isolated model worker'
