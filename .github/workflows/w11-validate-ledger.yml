@@ -25,8 +25,8 @@ jobs:
       - name: Fetch validated first-stage W11 ledger (no full-text downloads)
         uses: actions/download-artifact@v4
         with:
-          run-id: 39598519118
-          name: W11-canonical-fulltext-ledger-39598519118
+          run-id: 39601017091
+          name: W11-canonical-fulltext-ledger-39601017091
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: initial
       - name: Verify 40 Zenodo file inventories and classify DOI conflicts
