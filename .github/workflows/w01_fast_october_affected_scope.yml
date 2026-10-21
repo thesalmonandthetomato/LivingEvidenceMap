@@ -1,0 +1,44 @@
+name: W01-Fast October affected work scope
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_october_affected_scope.yml
+      - scripts/updater/experimental_w01_fast/test_october_affected_scope.R
+permissions:
+  contents: read
+  actions: read
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-development
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install small R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite"))
+      - name: Restore small frozen October cluster maps only
+        uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-october-real-reference
+          run-id: 39482948683
+          github-token: ${{ github.token }}
+          path: reference
+      - name: Establish exact affected historical work scope
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_october_affected_scope.R
+      - name: Preserve scope and source-identity audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-october-affected-scope
+          path: october_affected_scope/
+          if-no-files-found: warn
+          retention-days: 7
