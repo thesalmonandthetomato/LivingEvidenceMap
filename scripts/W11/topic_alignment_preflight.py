@@ -13,7 +13,18 @@ def norm(s):return re.sub(r"^https?://(?:dx\.)?doi\.org/","",str(s or "").lower(
 def file_from_deposit(dep,token,name):
     matches=[f for f in dep["files"] if f["filename"]==name]
     if len(matches)!=1:raise RuntimeError("Expected one Zenodo file: "+name)
-    return get_bytes(matches[0]["links"]["download"],token)
+    return download_from_entry(matches[0],dep,token)
+def download_from_entry(f,dep,token):
+    import urllib.parse
+    links=f.get("links",{})
+    urls=[links.get("download"),links.get("self"),links.get("content")]
+    if dep.get("links",{}).get("bucket"):
+        urls.append(dep["links"]["bucket"].rstrip("/")+"/"+urllib.parse.quote(f["filename"],safe=""))
+    for url in urls:
+        if not url:continue
+        try:return get_bytes(url,token)
+        except Exception as e:print("Restricted Zenodo endpoint unavailable; trying next",type(e).__name__,flush=True)
+    raise RuntimeError("All authenticated Zenodo endpoints failed for "+f["filename"])
 def from_archive(blob,archive_name,filename):
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         files=[n for n in z.namelist() if n.endswith("/"+filename) or n==filename]
@@ -39,7 +50,7 @@ def main():
     dep=get_json("https://zenodo.org/api/deposit/depositions/23459613",token)
     can=[f for f in dep["files"] if re.search(r"canonical.*\.jsonl$",f["filename"],re.I)]
     if len(can)!=1:raise RuntimeError("Cannot uniquely identify authoritative W08 canonical JSONL")
-    body=get_bytes(can[0]["links"]["download"],token)
+    body=download_from_entry(can[0],dep,token)
     lines=body.decode("utf-8").splitlines()
     if len(lines)!=len(ledger):raise RuntimeError("Canonical row count not equal to W11 ledger")
     candidates=[]
