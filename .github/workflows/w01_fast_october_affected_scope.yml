@@ -7,13 +7,14 @@ on:
       - .github/workflows/w01_fast_october_affected_scope.yml
       - scripts/updater/experimental_w01_fast/test_october_affected_scope.R
       - scripts/updater/experimental_w01_fast/recover_october_affected_history.R
+      - scripts/updater/experimental_w01_fast/compare_october_affected_manifestations.R
 permissions:
   contents: read
   actions: read
 jobs:
   scope:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 16
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +41,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: Rscript scripts/updater/experimental_w01_fast/recover_october_affected_history.R
+      - name: Verify historical manifestation preservation in 44 final works
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: Rscript scripts/updater/experimental_w01_fast/compare_october_affected_manifestations.R
       - name: Preserve scope and source-identity audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -49,5 +55,6 @@ jobs:
             october_affected_scope/
             october_historical_affected_source/audit/report.json
             october_historical_affected_source/historic_affected_canonical_records.jsonl
+            october_affected_manifestation_comparison/audit/report.json
           if-no-files-found: warn
           retention-days: 7
