@@ -58,9 +58,16 @@ stopifnot(run('scripts/updater/experimental_w01_fast/write_direct_delta.R',args)
 dm<-fromJSON(file.path(t,'delta','delta_manifest.json'))
 stopifnot(dm$delta$new_source_manifestations==1L,
  dm$delta$canonical_retired_ids==1L,dm$delta$cluster_map_upserts==3L)
-stopifnot(run('scripts/updater/workflow_01_replay_delta.R',c(
+replay_status<-run('scripts/updater/workflow_01_replay_delta.R',c(
  '--previous-root',p,'--delta-dir',file.path(t,'delta'),
- '--output-root',file.path(t,'replayed')))==0L)
+ '--output-root',file.path(t,'replayed')))
+if(replay_status!=0L){
+ a<-fread(file.path(t,'replayed','workflow01_full_five_source','manifestation_cluster_map.csv'),colClasses='character')
+ b<-fread(file.path(final,'manifestation_cluster_map.csv'),colClasses='character')
+ cat('REPLAY MAP DIAGNOSTIC\\n')
+ print(list(replayed_columns=names(a),target_columns=names(b),replayed=a,target=b))
+}
+stopifnot(replay_status==0L)
 stopifnot(identical(sha(file.path(t,'replayed','canonical','records.jsonl')),
  sha(file.path(canon,'records.jsonl'))))
 # Removing a changed historical manifestation from affected scope must be rejected.
