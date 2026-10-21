@@ -5,6 +5,8 @@ on:
     branches: [w01-fast-development]
     paths:
       - .github/workflows/w01_fast_full_frozen_october_shadow.yml
+      - scripts/updater/experimental_w01_fast/run_real_benchmark.R
+      - scripts/updater/experimental_w01_fast/run_full_incremental_update.R
 permissions:
   contents: read
   actions: read
