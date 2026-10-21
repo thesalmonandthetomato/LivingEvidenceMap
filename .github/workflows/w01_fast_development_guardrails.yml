@@ -96,6 +96,9 @@ jobs:
       - name: Test stable-identity cluster growth and historical ID retention
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_identity_cluster_growth.R
+      - name: Reject incomplete or invalid scientific run evidence
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_run_readiness.R
       - name: Preserve interface inventory
         uses: actions/upload-artifact@v4
         with:
