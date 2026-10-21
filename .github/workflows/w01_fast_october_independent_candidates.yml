@@ -5,6 +5,7 @@ on:
     branches: [w01-fast-development]
     paths:
       - .github/workflows/w01_fast_october_independent_candidates.yml
+      - scripts/updater/experimental_w01_fast/benchmark_october_candidate_stage.R
 permissions:
   contents: read
   actions: read
@@ -42,6 +43,9 @@ jobs:
           Rscript "$base/normalise_october_candidate_reference.R" reference reference/outputs/workflow01_candidates/all_candidate_pairs.csv stable_reference
           Rscript "$base/normalise_october_candidate_reference.R" reference fast/combined.csv stable_fast
           Rscript "$base/compare_real_candidate_pairs.R" --reference stable_reference/reference_pairs.csv --candidate stable_fast/reference_pairs.csv --output-dir stable_parity
+      - name: Measure actual October incremental candidate-stage runtime
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/benchmark_october_candidate_stage.R
       - name: Preserve small parity reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -52,5 +56,6 @@ jobs:
             stable_reference/report.json
             stable_fast/report.json
             stable_parity/
+            october_candidate_benchmark/benchmark.json
           retention-days: 7
           if-no-files-found: warn
