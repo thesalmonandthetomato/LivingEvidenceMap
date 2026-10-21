@@ -1,0 +1,74 @@
+name: Temporary W04 real subset coverage audit
+on:
+  push:
+    paths:
+      - .github/workflows/w04_temp_subset_coverage_audit.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install Sheets reader
+        shell: Rscript {0}
+        run: install.packages(c("googlesheets4","jsonlite","digest"))
+      - name: Check recorded W04 batch membership, with no mutations
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(googlesheets4);library(jsonlite);library(digest)})
+          token <- Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON")
+          sheet <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
+          if(!nzchar(token)||!nzchar(sheet))stop("Missing review-specific Sheets credentials")
+          credential <- tempfile(fileext=".json")
+          on.exit(unlink(credential),add=TRUE)
+          writeLines(token,credential)
+          gs4_auth(path=credential,cache=FALSE)
+          tabs <- sheet_names(sheet)
+          meta <- as.data.frame(read_sheet(sheet,sheet="review_metadata",col_types="c"))
+          review <- as.character(meta$value[match("review_id",meta$key)])
+          if(!identical(review,"almeria-map"))stop("Wrong review")
+          reg <- as.data.frame(read_sheet(sheet,sheet="w04_model_batch_registry",col_types="c"))
+          reg <- reg[reg$review_id==review,,drop=FALSE]
+          if(nrow(reg)!=9L || length(unique(reg$subset_id))!=3L)
+            stop("W04 model registry cardinality changed; do not assume 3 subsets")
+          ids <- vector("list",nrow(reg))
+          for(i in seq_len(nrow(reg))) {
+            tab <- as.character(reg$result_tab[i])
+            if(!tab%in%tabs)stop("Missing run result tab")
+            rows <- as.data.frame(read_sheet(sheet,sheet=tab,col_types="c"))
+            if(!all(c("record_id","decision","run_id","subset_id")%in%names(rows)))
+              stop("Result tab schema mismatch")
+            id <- as.character(rows$record_id)
+            if(length(id)!=as.integer(reg$total[i]) || any(!nzchar(id)) ||
+               anyDuplicated(id) || any(!rows$decision%in%c("retain","exclude","uncertain")) ||
+               any(rows$run_id!=reg$run_id[i]) || any(rows$subset_id!=reg$subset_id[i]))
+              stop(paste("Invalid batch content:",reg$run_id[i]))
+            ids[[i]] <- sort(id)
+          }
+          groups <- split(seq_len(nrow(reg)),reg$subset_id)
+          representative <- list()
+          for(key in names(groups)) {
+            g <- groups[[key]]
+            reference <- ids[[g[[1L]]]]
+            for(i in g)if(!identical(ids[[i]],reference))
+              stop("Model reruns within a subset have different record memberships")
+            representative[[key]] <- reference
+            cat(sprintf("SUBSET size=%d runs=%s\n",length(reference),
+                paste(reg$run_id[g],collapse=",")))
+          }
+          all_ids <- unlist(representative,use.names=FALSE)
+          if(anyDuplicated(all_ids))stop("Registered W04 subsets overlap")
+          if(!identical(sort(vapply(representative,length,integer(1))),c(100L,100L,2885L)))
+            stop("Registered subset size pattern disagrees with approved 100+100+remaining design")
+          if(!"39551137733"%in%reg$run_id)stop("Expected 2885-record final batch missing")
+          cat(sprintf("PASS review=%s unique_subsets=%d unique_model_covered_records=%d registered_runs=%d no_subsets_overlap=true\n",
+                      review,length(groups),length(all_ids),nrow(reg)))
