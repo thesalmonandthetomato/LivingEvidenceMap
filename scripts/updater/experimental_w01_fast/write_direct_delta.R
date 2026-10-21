@@ -45,14 +45,14 @@ oldmap<-fread(pmap,select=c('source','source_record_id'),colClasses='character')
 if(anyDuplicated(oldmap))stop('Invalid historical manifestation identity')
 oldid<-paste(oldmap$source,oldmap$source_record_id,sep='\u001f')
 setkeyv(map,c('source','source_record_id'))
-mu<-map[af,on=.(source,source_record_id),nomatch=0L][,..names(map)]
+mu<-map[af,on=.(source,source_record_id),nomatch=0L][,names(map),with=FALSE]
 if(nrow(mu)!=nrow(af))stop('Affected identity missing')
 fresh<-map[!paste(source,source_record_id,sep='\u001f')%in%oldid]
 mu<-unique(rbindlist(list(mu,fresh),fill=TRUE),by=c('source','source_record_id'))
 # A direct delta must cover every changed historic cluster assignment as well as new rows.
 prior_map_full<-fread(pmap,na.strings=c('','NA'),colClasses='character')
 setkeyv(prior_map_full,c('source','source_record_id'))
-common<-map[prior_map_full,on=.(source,source_record_id),nomatch=0L][,..names(map)]
+common<-map[prior_map_full,on=.(source,source_record_id),nomatch=0L][,names(map),with=FALSE]
 prior_for_current<-prior_map_full[common,on=.(source,source_record_id)]
 changed_cols<-intersect(names(prior_map_full),names(map))
 changed_cols<-setdiff(changed_cols,c('source','source_record_id'))
