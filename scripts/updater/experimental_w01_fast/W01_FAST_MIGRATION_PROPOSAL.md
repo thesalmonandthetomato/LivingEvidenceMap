@@ -74,3 +74,9 @@ Thus the previous blocker described as missing abstracts for the independent can
 - [Base decision reference comparison](https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39555464339)
 - [Deterministic rescore comparison](https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39556497858)
 
+
+## October affected-work scope audit
+
+- Frozen real-data scope validation run [39569560726](https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39569560726): **PASS**. Stable source identities establish exactly 44 existing works affected, comprising 177 retained historical manifestations and 44 October additions (221 manifestations requiring affected-only canonicalisation); 16 further additions create singleton works. No historical manifestation was removed or reassigned.
+- The scope artifact includes an affected-only cluster map. It is an input-selection audit, **not** full canonical scientific/provenance parity. The 44 work records still require an independent builder comparison using appropriate original source records, repairs, and strip actions.
+- The purpose of keeping both routes remains: immutable complete-reconstruction W01 Full and separate W01-Fast update pathway. Neither route is changed by these experimental audits.
