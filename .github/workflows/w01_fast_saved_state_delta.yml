@@ -43,11 +43,46 @@ jobs:
           test -f outputs/workflow01_candidates/normalised_metadata.csv
           test -f outputs/workflow01_union/source_inputs.json
           test -f previous_state/workflow01_full_five_source/final_pair_decisions.csv
-      - name: Regenerate missing W01-Fast outputs and validate actual delta and replay
+      - name: W01-Fast scoring phase
         shell: bash
         run: |
           set -euo pipefail
           Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --phase scoring \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --previous-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --source-manifest outputs/workflow01_union/source_inputs.json \
+            --current-seed-root outputs/workflow01_union \
+            --prior-canonical previous_state/canonical/records.jsonl \
+            --previous-root previous_state \
+            --previous-pointer docs/deduplication/zenodo/run-39140209398.json \
+            --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/saved_state_delta
+      - name: W01-Fast canonical phase
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --phase canonical \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --previous-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --source-manifest outputs/workflow01_union/source_inputs.json \
+            --current-seed-root outputs/workflow01_union \
+            --prior-canonical previous_state/canonical/records.jsonl \
+            --previous-root previous_state \
+            --previous-pointer docs/deduplication/zenodo/run-39140209398.json \
+            --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/saved_state_delta
+      - name: Build and replay original production delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --phase delta \
             --metadata outputs/workflow01_candidates/normalised_metadata.csv \
             --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
             --previous-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
