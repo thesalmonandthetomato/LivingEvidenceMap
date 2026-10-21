@@ -27,3 +27,11 @@ identical(a$canonical_jsonl_sha256,digest(file=file("valid/records.jsonl"),algo=
 m[2L,cluster_id:="work-2"];fwrite(m,file("map.csv"))
 b<-suppressWarnings(call(file("invalid")));stopifnot(!is.null(attr(b,"status")),attr(b,"status")!=0L)
 cat("PASS: canonical contract staging and mismatched identity rejection\\n")
+
+# Verify the orchestrator supplies the complete required production canonical contract.
+orchestrator<-paste(readLines("scripts/updater/experimental_w01_fast/run_full_incremental_update.R",warn=FALSE),collapse="\n")
+section<-strsplit(orchestrator,'run("stage_canonical_contract"',fixed=TRUE)[[1L]]
+stopifnot(length(section)==2L)
+contract_call<-strsplit(section[[2L]],'# Validate persistence',fixed=TRUE)[[1L]][[1L]]
+stopifnot(grepl('"--previous-canonical-manifest"',contract_call,fixed=TRUE),
+          grepl('file.path(previous_root,"canonical","canonical_manifest.json")',contract_call,fixed=TRUE))
