@@ -7,6 +7,7 @@ on:
       - .github/workflows/w01_fast_full_frozen_october_shadow.yml
       - scripts/updater/experimental_w01_fast/run_real_benchmark.R
       - scripts/updater/experimental_w01_fast/run_full_incremental_update.R
+      - scripts/updater/experimental_w01_fast/compare_october_all_changed_works.R
 permissions:
   contents: read
   actions: read
@@ -66,6 +67,13 @@ jobs:
             --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
             --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
             --output-dir outputs/experimental_w01_fast/full_update
+      - name: Compare all 60 changed canonical works against frozen October W01
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/compare_october_all_changed_works.R
       - name: Keep compact execution report only
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,5 +84,6 @@ jobs:
             outputs/experimental_w01_fast/full_update/run_report.json
             outputs/experimental_w01_fast/full_update/affected/manifest.json
             outputs/experimental_w01_fast/full_update/final/recombination_audit.json
+            outputs/experimental_w01_fast/full_canonical_comparison/audit/comparison.json
           if-no-files-found: warn
           retention-days: 7
