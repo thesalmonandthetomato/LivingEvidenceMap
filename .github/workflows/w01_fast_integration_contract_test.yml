@@ -50,12 +50,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/updater/workflow_01_restore_current_state.R \\
-            --pointer docs/deduplication/zenodo/run-39140209398.json \\
-            --pointer-dir docs/deduplication/zenodo \\
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-39140209398.json \
+            --pointer-dir docs/deduplication/zenodo \
             --output-root previous_state
-          Rscript scripts/updater/experimental_w01_fast/audit_prior_pair_indices.R \\
-            --previous-root previous_state \\
+          Rscript scripts/updater/experimental_w01_fast/audit_prior_pair_indices.R \
+            --previous-root previous_state \
             --output-dir forensic
       - name: Upload compact read-only historic index audit
         if: always()
