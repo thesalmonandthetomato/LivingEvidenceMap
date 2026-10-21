@@ -92,3 +92,31 @@ run("scripts/updater/experimental_w01_fast/verify_current_state.R",c("--state-di
 snapshot_manifest<-fromJSON(file.path(snapshot,"manifest.json"))
 stopifnot(identical(snapshot_manifest$batch_id,"canonical-fixture-1"))
 cat("PASS: canonical scientific builder -> unchanged-record assembly -> verified checkpoint -> guarded current pointer\\n")
+
+# Repeat identical canonical state as a second batch. Verify transition, replay,
+# pointer advancement, and no byte-level canonical drift.
+snapshot2<-file.path(root,"canonical-checkpoint-2")
+run("scripts/updater/experimental_w01_fast/create_state_snapshot.R",
+ c("--batch-id","canonical-fixture-2",
+ "--artifact",paste0("canonical=",file.path(assembled_dir,"canonical.jsonl")),
+ "--output-dir",snapshot2))
+link<-file.path(root,"transition.json")
+run("scripts/updater/experimental_w01_fast/link_state_transition.R",
+ c("--before",snapshot,"--after",snapshot2,"--output",link))
+run("scripts/updater/experimental_w01_fast/verify_transition_chain.R",
+ c("--snapshot",snapshot,"--snapshot",snapshot2,"--transition",link))
+parent_hash<-digest::digest(file=file.path(state,"CURRENT.json"),algo="sha256")
+run("scripts/updater/experimental_w01_fast/commit_verified_state.R",
+ c("--state-dir",state,"--snapshot-dir",snapshot2,
+ "--expected-parent-sha256",parent_hash))
+run("scripts/updater/experimental_w01_fast/verify_current_state.R",c("--state-dir",state))
+replay_dir<-file.path(root,"canonical-replayed")
+run("scripts/updater/experimental_w01_fast/replay_verified_state.R",
+ c("--snapshot",snapshot,"--snapshot",snapshot2,"--transition",link,
+ "--target-batch","canonical-fixture-2","--output-dir",replay_dir))
+m2<-fromJSON(file.path(snapshot2,"manifest.json"),simplifyVector=FALSE)
+obj<-m2$objects$canonical$object
+stopifnot(identical(digest::digest(file=file.path(snapshot2,obj),algo="sha256"),
+ digest::digest(file=file.path(replay_dir,obj),algo="sha256")),
+ identical(readLines(file.path(replay_dir,obj),warn=FALSE),assembled))
+cat("PASS: repeat-batch canonical checkpoint transition and replay preserve exact bytes\\n")
