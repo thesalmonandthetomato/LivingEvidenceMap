@@ -10,6 +10,8 @@ strips<-arg("--strip-actions");repairs<-arg("--repairs")
 previous_decisions<-arg("--previous-decisions");previous_root<-arg("--previous-root")
 previous_pointer<-arg("--previous-pointer");seed_root<-arg("--current-seed-root")
 output<-arg("--output-dir")
+delta_writer<-arg("--delta-writer",optional=TRUE);if(is.null(delta_writer))delta_writer<-"legacy"
+if(!delta_writer%in%c("legacy","direct"))stop("Unknown delta writer")
 phase<-arg("--phase",optional=TRUE);if(is.null(phase))phase<-"all"
 if(!phase%in%c("all","scoring","canonical","delta"))stop("Unsupported W01-Fast phase")
 if(phase%in%c("all","scoring") && (dir.exists(output)||file.exists(output)))stop("Refuse overwrite output")
@@ -144,6 +146,19 @@ if(!file.exists(file.path(output,"production_canonical","canonical_manifest.json
 if(phase%in%c("all","delta")){
 if(!file.exists(file.path(output,"production_canonical","canonical_manifest.json")) || !file.exists(file.path(output,"production_final","final_pair_decisions.csv")))stop("Missing canonical checkpoint")
 # Validate persistence using the unmodified W01 delta generator and replay engine.
+if(delta_writer=="direct"){
+ run("build_direct_delta",file.path(base,"write_direct_delta.R"),
+ c("--previous-root",previous_root,"--current-seed-root",seed_root,
+ "--current-final-root",file.path(output,"production_final"),
+ "--current-canonical",file.path(output,"production_canonical","records.jsonl"),
+ "--current-canonical-manifest",file.path(output,"production_canonical","canonical_manifest.json"),
+ "--previous-pointer",previous_pointer,
+ "--new-decisions",file.path(output,"rescored","rescored_sample.csv"),
+ "--affected-map",file.path(output,"canonical_scope","affected_cluster_map.csv"),
+ "--canonical-changes",file.path(output,"changed_canonical.jsonl"),
+ "--affected-works",file.path(output,"affected","affected_works.csv"),
+ "--output-dir",file.path(output,"delta"),"--run-id","w01-fast-frozen-shadow"))
+}else{
 run("build_delta","scripts/updater/workflow_01_build_delta.R",
  c("--previous-root",previous_root,"--current-seed-root",seed_root,
  "--current-final-root",file.path(output,"production_final"),
@@ -153,6 +168,7 @@ run("build_delta","scripts/updater/workflow_01_build_delta.R",
  "--repair-audit",file.path(output,"production_canonical","data_quality_repair_application.jsonl"),
  "--repair-ledger",repairs,
  "--output-dir",file.path(output,"delta"),"--run-id","w01-fast-frozen-shadow"))
+}
 run("replay_delta","scripts/updater/workflow_01_replay_delta.R",
  c("--previous-root",previous_root,"--delta-dir",file.path(output,"delta"),
  "--output-root",file.path(output,"replayed")))
