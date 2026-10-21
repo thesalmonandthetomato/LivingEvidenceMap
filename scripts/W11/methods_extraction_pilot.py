@@ -21,7 +21,9 @@ def extract(xml):
     body=bodies[0]
     top=[e for e in body.iter() if lname(e.tag)=="div"]
     matches=[d for d in top if any(lname(c.tag)=="head" and is_methods(owntext(c)) for c in list(d))]
-    if len(matches)!=1:raise RuntimeError("Expected exactly one Methods section; found "+str(len(matches)))
+    if len(matches)!=1:
+        headings=[owntext(c)[:130] for d in top for c in list(d) if lname(c.tag)=="head"]
+        raise RuntimeError("Expected one Methods section; found "+str(len(matches))+"; available XML section headings: "+repr(headings[:60]))
     target=matches[0]
     # Paragraphs preceding heading in document order (excluding table/figure material).
     para=[x for x in body.iter() if lname(x.tag)=="p"]
