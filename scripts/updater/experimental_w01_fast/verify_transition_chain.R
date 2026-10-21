@@ -32,7 +32,7 @@ for(i in seq_along(transitions)){
  after<-vapply(b$objects,function(x)x$sha256,character(1))
  if(!identical(sort(names(before)),sort(names(after))))stop("Unexpected state schema migration")
  expected<-sort(names(after)[before[names(after)]!=after])
- recorded<-sort(unlist(t$changed_objects,use.names=FALSE))
+ recorded<-sort(as.character(unlist(t$changed_objects,use.names=FALSE)))
  if(!identical(expected,recorded))stop("Incorrect changed-object delta in transition")
 }
 cat(sprintf("PASS: validated %d snapshots and %d transition links\n",
