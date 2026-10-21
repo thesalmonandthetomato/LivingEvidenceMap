@@ -59,3 +59,15 @@ write_json(list(schema="w01-fast-october-independent-base-scoring-v1",
  complete_production_decision_parity=FALSE,route_parity=FALSE),
  "october_recovered_scoring/report.json",auto_unbox=TRUE,pretty=TRUE)
 cat("PASS: original production base scorer independently scored 1719 October pairs from recovered canonical abstract text\\n")
+
+# Apply the same unchanged deterministic post-score rescorer that production uses.
+rescore_args<-c("scripts/updater/workflow_01_deduplication_identifier_rescore.R",
+ "--input-dir","october_recovered_scoring/base",
+ "--output-dir","october_recovered_scoring/rescore",
+ "--source-run-id","39400566861")
+rescore_log<-suppressWarnings(system2(file.path(R.home("bin"),"Rscript"),rescore_args,stdout=TRUE,stderr=TRUE))
+rescore_status<-attr(rescore_log,"status");if(is.null(rescore_status))rescore_status<-0L
+if(rescore_status!=0L)stop("Unmodified rescorer failed: ",paste(tail(rescore_log,30L),collapse=" | "))
+rescore_data<-fread("october_recovered_scoring/rescore/rescored_sample.csv")
+if(nrow(rescore_data)!=1719L)stop("Expected all 1719 candidates after deterministic rescoring")
+cat("PASS: unchanged deterministic rescorer independently processed 1719 October candidates\\n")
