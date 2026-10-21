@@ -1,0 +1,63 @@
+name: Temporary W04 live read-only registry audit
+on:
+  push:
+    paths:
+      - .github/workflows/w04_temp_live_registry_audit.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install read-only Sheets dependencies
+        shell: Rscript {0}
+        run: install.packages(c("googlesheets4","jsonlite"))
+      - name: Audit W04 live review registry and uncertainty decisions
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: ${{ secrets.LEM_TEST_GOOGLE_SHEET_ID }}
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages({library(googlesheets4);library(jsonlite)})
+          credential <- Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON")
+          sheet <- Sys.getenv("LEM_GOOGLE_SHEET_ID")
+          if(!nzchar(credential)||!nzchar(sheet))stop("Google Sheet credentials not configured")
+          path <- tempfile(fileext=".json")
+          on.exit(unlink(path),add=TRUE)
+          writeLines(credential,path)
+          gs4_auth(path=path,cache=FALSE)
+          tabs <- sheet_names(sheet)
+          if(!all(c("review_metadata","w04_model_batch_registry","decisions_w04_resolution")%in%tabs))
+            stop("Required review registry or resolution tabs unavailable")
+          meta <- as.data.frame(read_sheet(sheet,sheet="review_metadata",col_types="c"))
+          if(!all(c("key","value")%in%names(meta)))stop("Review metadata schema mismatch")
+          review <- as.character(meta$value[match("review_id",meta$key)])
+          if(!identical(review,"almeria-map"))stop("Not the expected almeria-map review")
+          batches <- as.data.frame(read_sheet(sheet,sheet="w04_model_batch_registry",col_types="c"))
+          batches <- batches[batches$review_id==review,,drop=FALSE]
+          if(!nrow(batches)||anyDuplicated(batches$run_id))stop("Missing or duplicated W04 model batches")
+          specific <- batches[batches$run_id=="39551137733",,drop=FALSE]
+          if(nrow(specific)!=1L || as.integer(specific$total)!=2885L ||
+             as.integer(specific$uncertain)!=7L)
+            stop("Known W04 remaining-corpus batch registry mismatch")
+          queue <- as.data.frame(read_sheet(sheet,sheet=as.character(specific$resolution_tab),col_types="c"))
+          if(nrow(queue)!=7L||anyDuplicated(queue$review_case_id))
+            stop("Expected seven unique saved uncertainty queue cases")
+          decisions <- as.data.frame(read_sheet(sheet,sheet="decisions_w04_resolution",col_types="c"))
+          needed <- c("review_case_id","queue_sha256","record_id","decision","resolved_at_utc")
+          if(!all(needed%in%names(decisions)))stop("Resolution decision schema missing fields")
+          active <- decisions[decisions$queue_sha256==specific$resolution_queue_sha256,,drop=FALSE]
+          active <- active[active$decision%in%c("retain","exclude"),,drop=FALSE]
+          active <- active[order(active$resolved_at_utc),,drop=FALSE]
+          active <- active[!duplicated(active$review_case_id,fromLast=TRUE),,drop=FALSE]
+          if(nrow(active)!=7L || !setequal(active$review_case_id,queue$review_case_id))
+            stop(sprintf("Seven adjudications not verified: %d distinct substantive decisions",nrow(active)))
+          message(sprintf("PASS review=%s registered_model_runs=%d subset_groups=%d remaining_corpus_run=%s records=%d uncertainties=%d verified_adjudications=%d",
+            review,nrow(batches),length(unique(batches$subset_id)),specific$run_id,
+            as.integer(specific$total),as.integer(specific$uncertain),nrow(active)))
