@@ -51,6 +51,7 @@ jobs:
         run: |
           python scripts/W11/methods_extraction_pilot.py --manifest outputs/W11/methods_pilot/sample_manifest.json --schema scripts/fulltext_coding/coding_schema_v3.json --out outputs/W11/methods_pilot/preflight --extract-only
       - name: Extract 25 methods-focused variables
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
