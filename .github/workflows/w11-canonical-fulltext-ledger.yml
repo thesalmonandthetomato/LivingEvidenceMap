@@ -1,5 +1,11 @@
 name: W11 full-text canonical ledger (read only)
 on:
+  push:
+    branches:
+      - W11-full-text-retrieval
+    paths:
+      - 'scripts/W11/**'
+      - '.github/workflows/w11-canonical-fulltext-ledger.yml'
   workflow_dispatch:
     inputs:
       canonical_zenodo_deposit:
@@ -11,7 +17,7 @@ permissions:
 jobs:
   ledger:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,14 +25,14 @@ jobs:
       - uses: r-lib/actions/setup-r@v2
         with:
           use-public-rspm: true
-      - name: Install ledger dependencies
-        run: Rscript -e 'install.packages(c("jsonlite","httr2"),repos="https://cloud.r-project.org")'
       - name: Install curl libraries
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+      - name: Install ledger dependencies
+        run: Rscript -e 'install.packages(c("jsonlite","httr2"),repos="https://cloud.r-project.org")'
       - name: Prepare canonical snapshot and historic retrieval manifest
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          CANONICAL_DEPOSIT: ${{ inputs.canonical_zenodo_deposit }}
+          CANONICAL_DEPOSIT: ${{ inputs.canonical_zenodo_deposit || '23211736' }}
         run: Rscript scripts/W11/prepare_inputs.R
       - name: Build W11 linked ledger
         run: |
