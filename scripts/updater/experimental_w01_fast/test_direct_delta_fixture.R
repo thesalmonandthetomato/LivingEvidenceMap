@@ -67,3 +67,22 @@ stopifnot(run('scripts/updater/workflow_01_replay_delta.R',c(
  '--output-root',file.path(t,'replayed-provenance')))==0L)
 stopifnot(length(readLines(file.path(t,'replayed-provenance','provenance','cumulative_data_quality_repairs.jsonl')))==1L)
 stopifnot(length(readLines(file.path(t,'replayed-provenance','workflow01_full_five_source','abstract_strip_actions.jsonl')))==1L)
+
+# Existing approvals and strip actions are immutable, even when identity keys agree.
+writeLines(toJSON(repair,auto_unbox=TRUE),
+ file.path(p,'provenance','cumulative_data_quality_repairs.jsonl'))
+modified_repair<-modifyList(repair,list(reason='silently changed historical approval'))
+writeLines(toJSON(modified_repair,auto_unbox=TRUE),
+ file.path(final,'cumulative_data_quality_repairs.jsonl'))
+a[which(a=='--output-dir')+1L]<-file.path(t,'reject-modified-repair')
+stopifnot(run(writer,a)!=0L)
+# Restore repair; make an existing strip action disappear from successor.
+writeLines(toJSON(repair,auto_unbox=TRUE),
+ file.path(final,'cumulative_data_quality_repairs.jsonl'))
+writeLines(toJSON(strip,auto_unbox=TRUE),
+ file.path(p,'workflow01_full_five_source','abstract_strip_actions.jsonl'))
+file.create(file.path(final,'abstract_strip_actions.jsonl'),showWarnings=FALSE)
+writeLines(character(),file.path(final,'abstract_strip_actions.jsonl'))
+a[which(a=='--output-dir')+1L]<-file.path(t,'reject-removed-strip')
+stopifnot(run(writer,a)!=0L)
+cat('PASS: historical provenance alteration and disappearance rejected\\n')
