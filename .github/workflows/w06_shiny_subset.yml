@@ -1,0 +1,52 @@
+name: W06 Shiny review-specific geography subset (isolated)
+run-name: W06 Shiny subset ${{ inputs.review_id }} n=${{ inputs.subset_count }}
+on:
+  workflow_dispatch:
+    inputs:
+      review_id:
+        required: true
+        type: string
+      w05_deposit_id:
+        required: true
+        type: string
+      prompt_deposit_id:
+        required: true
+        type: string
+      prompt_sha256:
+        required: true
+        type: string
+      subset_count:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  shiny-w06-subset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install W06 topic-agnostic R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","digest","httr2"))
+      - name: Verify published W05 and approved W06 prompt; code isolated subset
+        working-directory: shiny_w06
+        shell: Rscript {0}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          W06_REVIEW_ID: ${{ inputs.review_id }}
+          W06_W05_DEPOSIT_ID: ${{ inputs.w05_deposit_id }}
+          W06_PROMPT_DEPOSIT_ID: ${{ inputs.prompt_deposit_id }}
+          W06_PROMPT_SHA: ${{ inputs.prompt_sha256 }}
+          W06_SUBSET_COUNT: ${{ inputs.subset_count }}
+        run: source("scripts/w06_shiny_subset.R")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w06-shiny-subset-${{ github.run_id }}
+          path: ${{ runner.temp }}/w06-shiny-results/
+          retention-days: 30
