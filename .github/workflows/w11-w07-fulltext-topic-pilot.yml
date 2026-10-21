@@ -1,0 +1,66 @@
+name: W11 pilot W07 full-text topic alignment
+on:
+  workflow_dispatch:
+    inputs:
+      n_papers:
+        description: 'Number of pilot papers (maximum 20)'
+        required: true
+        default: '10'
+        type: string
+      model:
+        description: 'OpenAI model'
+        required: true
+        default: 'gpt-5.6-luna'
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: w11-w07-fulltext-topic-pilot
+  cancel-in-progress: false
+jobs:
+  topic_pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: W11-full-text-retrieval
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download W11 included-only historical archive ledger
+        uses: actions/download-artifact@v4
+        with:
+          name: W11-openalex-availability-39603902230
+          run-id: 39603902230
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: input
+      - name: Select ten verified included XMLs and inspect W07 evidence
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          python scripts/W11/topic_alignment_preflight.py \
+            --ledger input/canonical_w11_fulltext_availability_ledger.csv \
+            --output outputs/W11/w07_pilot \
+            --n "${{ inputs.n_papers || '10' }}"
+      - name: Test topic-only OpenAI coding and W07 paired comparison
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/W11/run_w07_fulltext_topic_pilot.py \
+            --manifest outputs/W11/w07_pilot/sample_manifest.json \
+            --out outputs/W11/w07_pilot/results \
+            --n "${{ inputs.n_papers || '10' }}" \
+            --model "${{ inputs.model || 'gpt-5.6-luna' }}"
+      - name: Preserve study selection, checkpoints and paired comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: W11-W07-fulltext-topic-pilot-${{ github.run_id }}
+          path: |
+            outputs/W11/w07_pilot/sample_manifest.json
+            outputs/W11/w07_pilot/pilot_w07_field_structure.json
+            outputs/W11/w07_pilot/results/
+          if-no-files-found: warn
+          retention-days: 90
