@@ -26,7 +26,7 @@ concurrency:
 jobs:
   topic_pilot:
     runs-on: ubuntu-latest
-    timeout-minutes: 109
+    timeout-minutes: 108
     steps:
       - uses: actions/checkout@v4
         with:
