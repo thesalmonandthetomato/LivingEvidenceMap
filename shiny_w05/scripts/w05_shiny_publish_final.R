@@ -74,9 +74,32 @@ verify_file <- function(deposition,name,path) {
     stop(sprintf("W05 Zenodo file %s missing or duplicated",name),call.=FALSE)
   expected <- unname(tools::md5sum(path))
   actual <- md5_value(matching[[1L]]$checksum)
-  if(is.na(actual) || !identical(actual,expected))
-    stop(sprintf("W05 Zenodo checksum mismatch for %s (expected md5 %s; received %s); publication blocked",
-      name,expected,as.character(matching[[1L]]$checksum %||% "<missing>")),call.=FALSE)
+  if(is.na(actual))
+    stop(sprintf("W05 Zenodo checksum unrecognised for %s: %s",name,
+      as.character(matching[[1L]]$checksum %||% "<missing>")),call.=FALSE)
+  if(!identical(actual,expected)) {
+    if(!identical(name,"w05-final-manifest.json"))
+      stop(sprintf("W05 Zenodo checksum mismatch for %s (expected md5 %s; received %s); publication blocked",
+        name,expected,as.character(matching[[1L]]$checksum %||% "<missing>")),call.=FALSE)
+    # A rerun differs only in its generated timestamp; validate the stored
+    # manifest's *actual bytes* against the checksum and all substantive fields.
+    url <- as.character(matching[[1L]]$links$download %||% "")
+    if(!startsWith(url,"https://zenodo.org/api/"))
+      stop("Cannot securely retrieve existing final W05 manifest",call.=FALSE)
+    bytes <- httr2::resp_body_raw(call(url))
+    tmp <- tempfile(fileext=".json")
+    writeBin(bytes,tmp)
+    on.exit(unlink(tmp),add=TRUE)
+    if(!identical(unname(tools::md5sum(tmp)),actual))
+      stop("Existing W05 manifest does not match Zenodo advertised checksum",call.=FALSE)
+    stored <- jsonlite::fromJSON(tmp,simplifyVector=FALSE)
+    generated <- jsonlite::fromJSON(path,simplifyVector=FALSE)
+    stored$created_at_utc <- NULL
+    generated$created_at_utc <- NULL
+    if(!identical(stored,generated))
+      stop("Existing W05 final manifest differs beyond generated timestamp",call.=FALSE)
+    cat("PASS existing W05 final manifest equivalent excluding creation timestamp\\n")
+  }
 }
 # Idempotent only for byte-identical outputs. Never replace existing files.
 for(i in seq_along(paths)) {
