@@ -1,0 +1,60 @@
+name: W11 ten-paper full XML 25-field pilot
+on:
+  push:
+    branches: [W11-full-text-retrieval]
+    paths: ['.github/workflows/w11-full-xml-25field-pilot.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  full_xml_pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: W11-full-text-retrieval
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: W11-openalex-availability-39603902230
+          run-id: 39603902230
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: input
+      - uses: actions/download-artifact@v4
+        with:
+          name: W11-W07-fulltext-topic-pilot-39635086521
+          run-id: 39635086521
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: baseline
+      - name: Verify ten original XMLs and checksums
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          python scripts/W11/topic_alignment_preflight.py --ledger input/canonical_w11_fulltext_availability_ledger.csv --output outputs/W11/full_xml_25field --n 10
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          old=json.loads(Path("baseline/sample_manifest.json").read_text())
+          new=json.loads(Path("outputs/W11/full_xml_25field/sample_manifest.json").read_text())
+          assert [(x["canonical_record_id"],x["xml_sha256"]) for x in old]==[(x["canonical_record_id"],x["xml_sha256"]) for x in new]
+          print("All ten original document identities and XML checksums validated.")
+          PY
+      - name: Extract 25 fields from original complete XMLs
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/W11/full_xml_25field_pilot.py --manifest outputs/W11/full_xml_25field/sample_manifest.json --schema scripts/fulltext_coding/coding_schema_v3.json --out outputs/W11/full_xml_25field/results
+      - name: Archive extractions and actual token use
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: W11-full-xml-25field-${{ github.run_id }}
+          path: |
+            outputs/W11/full_xml_25field/sample_manifest.json
+            outputs/W11/full_xml_25field/results/
+          retention-days: 90
+          if-no-files-found: warn
