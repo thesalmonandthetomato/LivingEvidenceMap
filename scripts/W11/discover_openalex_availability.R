@@ -2,7 +2,7 @@
 # W11 OpenAlex availability-only refresh. No full-text download, no Zenodo write.
 suppressPackageStartupMessages(library(jsonlite))
 suppressPackageStartupMessages(library(httr2))
-input <- "input/canonical_fulltext_ledger.csv"
+input <- "input/ledger/canonical_fulltext_ledger.csv"
 if(!file.exists(input)) stop("Missing pinned 22,911-record W11 ledger")
 x <- read.csv(input,stringsAsFactors=FALSE,check.names=FALSE,colClasses="character")
 x[is.na(x)] <- ""
