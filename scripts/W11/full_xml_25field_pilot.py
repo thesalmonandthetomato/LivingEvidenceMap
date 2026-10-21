@@ -36,7 +36,7 @@ def run():
   if hashlib.sha256(blob).hexdigest()!=m["xml_sha256"]:raise RuntimeError("XML changed "+m["canonical_record_id"])
   xml=blob.decode("utf-8",errors="replace")
   if len(xml)<1500 or len(xml)>500000:raise RuntimeError("XML outside verified pilot size envelope for "+m["canonical_record_id"])
-  payload={"model":"gpt-5.6-luna","input":[{"role":"system","content":prompt},{"role":"user","content":json.dumps({"record_id":m["canonical_record_id"],"full_article_xml":xml,"schema":schema},ensure_ascii=False)}]}
+  payload={"model":"gpt-5.6-luna","text":{"format":{"type":"json_object"}},"input":[{"role":"system","content":prompt},{"role":"user","content":json.dumps({"record_id":m["canonical_record_id"],"full_article_xml":xml,"schema":schema},ensure_ascii=False)}]}
   req=urllib.request.Request(os.environ.get("OPENAI_BASE_URL","https://api.openai.com/v1").rstrip("/")+"/responses",data=json.dumps(payload).encode(),headers={"Authorization":"Bearer "+os.environ["OPENAI_API_KEY"],"Content-Type":"application/json"},method="POST")
   with urllib.request.urlopen(req,timeout=500) as response:r=json.load(response)
   pref=out/("%02d"%i)
