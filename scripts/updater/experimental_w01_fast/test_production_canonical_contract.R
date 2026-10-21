@@ -35,3 +35,13 @@ stopifnot(length(section)==2L)
 contract_call<-strsplit(section[[2L]],'# Validate persistence',fixed=TRUE)[[1L]][[1L]]
 stopifnot(grepl('"--previous-canonical-manifest"',contract_call,fixed=TRUE),
           grepl('file.path(previous_root,"canonical","canonical_manifest.json")',contract_call,fixed=TRUE))
+
+
+# The production delta generator and replayer must agree on the manifest filename.
+builder<-paste(readLines("scripts/updater/workflow_01_build_delta.R",warn=FALSE),collapse="\n")
+replayer<-paste(readLines("scripts/updater/workflow_01_replay_delta.R",warn=FALSE),collapse="\n")
+acceptance<-paste(readLines(".github/workflows/w01_fast_integration_acceptance.yml",warn=FALSE),collapse="\n")
+stopifnot(grepl('file.path(output_dir,"delta_manifest.json")',builder,fixed=TRUE),
+          grepl('file.path(delta_dir,"delta_manifest.json")',replayer,fixed=TRUE),
+          grepl("file.path(base,'delta','delta_manifest.json')",acceptance,fixed=TRUE),
+          !grepl("file.path(base,'delta','manifest.json')",acceptance,fixed=TRUE))
