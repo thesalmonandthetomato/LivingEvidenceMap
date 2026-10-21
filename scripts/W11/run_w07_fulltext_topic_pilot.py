@@ -23,8 +23,8 @@ def w07_codes(x,allowed):
         elif isinstance(v,dict):
             code=v.get("path_id") or v.get("topic_path_id")
             if isinstance(code,str) and code in allowed:
-                n=v.get("support_count",v.get("support",v.get("copies",None)))
-                kept=v.get("retained_for_analysis",None)
+                n=v.get("workflow07_score",{}).get("confidence_n") if isinstance(v.get("workflow07_score"),dict) else v.get("support_count",v.get("support",v.get("copies",None)))
+                kept=v.get("workflow07_score",{}).get("retained_for_analysis") if isinstance(v.get("workflow07_score"),dict) else v.get("retained_for_analysis",None)
                 found.setdefault(code,{"support":n,"retained_for_analysis":kept})
             for z in v.values():walk(z)
     walk(x)
@@ -50,7 +50,7 @@ def main():
     valid={r["path_id"] for r in ontology}
     # Refuse blind calls if W07 source assignments cannot be extracted.
     scores={m["canonical_record_id"]:w07_codes(m["w07_raw_source"],valid) for m in manifest}
-    if not any(scores.values()):
+    if not all(scores.values()):
         raise RuntimeError("No W07 path_id assignments extracted; inspect pilot_w07_field_structure.json before model calls")
     system=("Classify the focal salmon aquaculture article into the supplied frozen W07 v3.6 ontology. "
        "Use article OBJECTIVES, METHODS and RESULTS as controlling evidence. Do not classify incidental "
