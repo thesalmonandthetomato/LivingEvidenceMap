@@ -1,0 +1,52 @@
+name: W01-Fast actual October new work canonicalisation
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_october_new_work_canonical.yml
+      - scripts/updater/experimental_w01_fast/test_october_new_works_canonical.R
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-development
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install canonical builder dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest","stringi"))
+      - uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-october-real-reference
+          run-id: 39482948683
+          github-token: ${{ github.token }}
+          path: reference
+      - uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-october-record-tails
+          run-id: 39551148154
+          github-token: ${{ github.token }}
+          path: tails
+      - name: Materialise all 16 new real October singleton works
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_october_new_works_canonical.R
+      - name: Retain compact real-data canonical audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-october-16-real-canonical-works
+          path: |
+            real_new_work_fixture/report.json
+            real_new_work_fixture/new_works.csv
+            real_new_work_fixture/canonical_manifest.json
+          retention-days: 7
+          if-no-files-found: warn
