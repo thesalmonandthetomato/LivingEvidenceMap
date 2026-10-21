@@ -1,0 +1,70 @@
+name: W01-Fast full October isolated shadow run
+on:
+  workflow_dispatch:
+  push:
+    branches: [w01-fast-development]
+    paths:
+      - .github/workflows/w01_fast_full_frozen_october_shadow.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  full-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    concurrency:
+      group: w01-fast-one-frozen-october-shadow
+      cancel-in-progress: false
+    env:
+      W00_POINTER: docs/search_record/zenodo/run-39298022062.json
+      PREV_W01_POINTER: docs/deduplication/zenodo/run-39140209398.json
+      W00_SOURCES: lens,scopus,openalex,agricola,ethos,wos,ebsco_africa_wide,ebsco_amed,ebsco_psycinfo,ebsco_atla_religion,ebsco_biological_agricultural_index,ebsco_cinahl,ebsco_econlit,ebsco_family_society,ebsco_greenfile,ebsco_medline,ebsco_mla,ebsco_political_science,ebsco_waters_oceans
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      WORKFLOW01_BRANCH: workflow01-final-architecture
+      WORKFLOW00_REPORTING_BRANCH: workflow01-final-architecture
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-development
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          path: workflow00_registry
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install existing W01 R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest","httr2","readr","stringdist","stringi","xml2","googlesheets4","yaml"))
+      - name: Recover frozen W00 and prior W01 and stage original source streams
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_real_benchmark.R
+      - name: Execute complete isolated incremental deduplication and canonicalisation
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --source-manifest outputs/workflow01_union/source_inputs.json \
+            --prior-canonical previous_state/canonical/records.jsonl \
+            --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/full_update
+      - name: Keep compact execution report only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-complete-shadow-${{ github.run_id }}
+          path: |
+            outputs/experimental_w01_fast/benchmark-stages.json
+            outputs/experimental_w01_fast/full_update/run_report.json
+            outputs/experimental_w01_fast/full_update/affected/manifest.json
+            outputs/experimental_w01_fast/full_update/final/recombination_audit.json
+          if-no-files-found: warn
+          retention-days: 7
