@@ -1,11 +1,5 @@
 name: W11 full-text canonical ledger (read only)
 on:
-  push:
-    branches:
-      - W11-full-text-retrieval
-    paths:
-      - 'scripts/W11/**'
-      - '.github/workflows/w11-canonical-fulltext-ledger.yml'
   workflow_dispatch:
     inputs:
       canonical_zenodo_deposit:
