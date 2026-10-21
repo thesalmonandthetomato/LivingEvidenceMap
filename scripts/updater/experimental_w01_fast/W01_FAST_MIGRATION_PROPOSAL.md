@@ -54,3 +54,23 @@ The original 12 tasks remain the scope. No new feature or additional workflow is
 - Confirmed the frozen production ref remains `8febc7b99ce1f7752c7553ed6023976a643f8621` at inspection.
 - The remaining real October decision parity must execute production-equivalent scoring independently on the appropriate actual source abstracts, then compare all 1,719 stable-identity pairs, rules and review routes with the strict comparator.
 - Do not rerun costly production workflows or retrieve 8–27 GB archives merely to extend these checks; if bounded source access is not possible, document that evidence limit and retain production as the fallback.
+
+## Verified real October decisions (21 October 2026)
+
+Runs `39554714511`, `39555077509`, `39555464339` and `39556497858` provide read-only independent scientific checks, with compact archived audit reports.
+
+- All **1,738 distinct manifestations** in the 1,719 October candidate pairs were located in the October canonical archive through bounded archive reads; zero manifestation identities missing. **436 manifestations have null abstract text in this canonical source**. This is an observed data property, not an extraction failure; original raw-source text parity remains a separate limitation.
+- The unchanged production base-scoring script independently scored **1,719 of 1,719** pairs using those recovered individual abstracts and frozen metadata. Its base classifications and rules agreed on all pairs except **160 rule labels**, for which **the classification still agreed**.
+- Those 160 pairs were labelled `identifier_safe_preresolve` by production. Independent base scoring instead selected `exact_doi_exact_title` on 121 and `bramer_A` on 39; **every one was classified as duplicate by both paths**.
+- The unchanged production deterministic rescorer then independently reproduced the final **rescored classification of every pair (0/1,719 disagreements)**. The 15 initially `review` pairs independently became `duplicate` exactly as in production. **1,559 pairs matched all three fields**: classification, rescored rule, and review route. Only the 160 separately injected identifier-assistance pairs had different rules and routes; their duplicate/non-duplicate classifications agreed.
+- Crucially, identifier-safe edge generation itself has **not** been independently validated against the complete original October identifier registry and guards. Do not report complete rule/route parity or migration readiness.
+- The actual October final cluster mapping establishes 44 newly appended manifestations joining **44 existing works with 177 historical manifestations**, plus 16 new singleton works. The 16 singleton scientific canonical fields match production; the 44 affected historical works still require affected-only materialisation parity.
+
+Thus the previous blocker described as missing abstracts for the independent candidate scoring is **resolved**. Remaining blockers are independently verifying identifier-assisted *rule provenance* and routes; canonicalising and comparing 44 affected existing works; and completing appropriate end-to-end recovery and performance acceptance. No production or downstream changes are authorised.
+
+### Verification URLs
+
+- [Candidate abstract recovery and original scoring](https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39555077509)
+- [Base decision reference comparison](https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39555464339)
+- [Deterministic rescore comparison](https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39556497858)
+
