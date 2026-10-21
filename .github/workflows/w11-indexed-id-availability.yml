@@ -1,0 +1,37 @@
+name: W11 indexed ID availability
+on:
+  workflow_dispatch:
+  push:
+    branches: [W11-full-text-retrieval]
+    paths: ['.github/workflows/w11-indexed-id-availability.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+      - run: Rscript -e 'install.packages(c("jsonlite","httr2"),repos="https://cloud.r-project.org")'
+      - uses: actions/download-artifact@v4
+        with:
+          name: W11-openalex-availability-39603902230
+          run-id: 39603902230
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: input
+      - name: Find indexed OpenAlex records
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: Rscript scripts/W11/discover_openalex_indexed_ids.R
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: W11-indexed-id-results-${{ github.run_id }}
+          path: outputs/W11/identifier_discovery/
+          retention-days: 90
