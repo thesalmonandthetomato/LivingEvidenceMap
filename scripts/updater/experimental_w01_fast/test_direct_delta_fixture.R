@@ -38,3 +38,12 @@ fwrite(bad,file.path(t,'scored.csv'))
 a[which(a=='--output-dir')+1L]<-file.path(t,'invalid')
 stopifnot(run(writer,a)!=0L)
 cat('PASS: direct delta reproduces production fixture and rejects historical pair overwrite\n')
+
+# Explicit opt-in only: original legacy builder remains default.
+parent<-'scripts/updater/experimental_w01_fast/run_full_incremental_update.R'
+stopifnot(length(parse(file=parent))>0L)
+source_text<-paste(readLines(parent,warn=FALSE),collapse='\\n')
+stopifnot(grepl('delta_writer<-\"legacy\"',source_text,fixed=TRUE),
+ grepl('if(delta_writer==\"direct\")',source_text,fixed=TRUE),
+ grepl('write_direct_delta.R',source_text,fixed=TRUE),
+ grepl('workflow_01_build_delta.R',source_text,fixed=TRUE))
