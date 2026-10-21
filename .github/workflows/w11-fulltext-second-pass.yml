@@ -1,0 +1,70 @@
+name: W11 second independent fulltext ontology pass
+on:
+  push:
+    branches: [W11-full-text-retrieval]
+    paths: ['.github/workflows/w11-fulltext-second-pass.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: w11-fulltext-ontology-second-pass
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: W11-full-text-retrieval
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download included W11 ledger
+        uses: actions/download-artifact@v4
+        with:
+          name: W11-openalex-availability-39603902230
+          run-id: 39603902230
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: input
+      - name: Download immutable first model pass
+        uses: actions/download-artifact@v4
+        with:
+          name: W11-W07-fulltext-topic-pilot-39635086521
+          run-id: 39635086521
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: first_pass
+      - name: Reconstruct and verify same ten XMLs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          python scripts/W11/topic_alignment_preflight.py --ledger input/canonical_w11_fulltext_availability_ledger.csv --output outputs/W11/second_pass --n 10
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          original=json.loads(Path('first_pass/sample_manifest.json').read_text())
+          fresh=json.loads(Path('outputs/W11/second_pass/sample_manifest.json').read_text())
+          identity=lambda x:[(r['canonical_record_id'],r['xml_sha256'],r['doi']) for r in x]
+          assert identity(original)==identity(fresh), 'Study identity/hash mismatch: do not run OpenAI'
+          print('Same ten records and exact same XML checksums verified.')
+          PY
+      - name: Independently rerun same OpenAI topic-only prompt
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/W11/run_w07_fulltext_topic_pilot.py --manifest outputs/W11/second_pass/sample_manifest.json --out outputs/W11/second_pass/results --model gpt-5.6-luna --n 10
+      - name: Compare pass 1 versus pass 2 versus W07
+        run: |
+          python scripts/W11/compare_fulltext_topic_passes.py --first first_pass/results/paired_results.json --second outputs/W11/second_pass/results/paired_results.json --out outputs/W11/second_pass/comparison
+      - name: Upload second pass, raw responses and comparisons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: W11-fulltext-second-pass-${{ github.run_id }}
+          path: |
+            outputs/W11/second_pass/sample_manifest.json
+            outputs/W11/second_pass/results/
+            outputs/W11/second_pass/comparison/
+          retention-days: 90
+          if-no-files-found: warn
