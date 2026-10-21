@@ -38,6 +38,13 @@ jobs:
           run-id: 39551148154
           github-token: ${{ github.token }}
           path: tails
+      - name: Download frozen October candidate metadata and pair identities
+        uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-october-candidate-reference
+          run-id: 39491644597
+          github-token: ${{ github.token }}
+          path: reference
       - name: Materialise all 16 new real October singleton works
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_october_new_works_canonical.R
