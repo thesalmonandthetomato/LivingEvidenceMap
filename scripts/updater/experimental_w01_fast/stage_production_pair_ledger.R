@@ -41,7 +41,9 @@ for(side in c("i","j")){
   if(!field%in%names(old))next
   expected<-if(field==source_field)m$source[idx] else m$source_record_id[idx]
   actual<-old[[field]]
-  bad<-which(is.na(actual)|actual!=expected)
+  # Historical optional source labels may be blank. Check every populated value.
+  populated<-!is.na(actual)&nzchar(trimws(as.character(actual)))
+  bad<-which(populated & actual!=expected)
   if(length(bad)){
    sample_rows<-head(bad,20L)
    mismatches[[field]]<-list(count=length(bad),samples=lapply(sample_rows,function(k)
@@ -59,7 +61,7 @@ if(length(mismatches)){
   function(z)z$count,numeric(1))),details=mismatches,
   stopped_before_publication=TRUE),report,pretty=TRUE,auto_unbox=TRUE)
  cat(sprintf("HISTORICAL IDENTITY CONFLICT: %s\\n",report),file=stderr())
- stop("Historical index conflicts: see forensic diagnostic; legacy state cannot be blindly merged")
+ stop("Populated historical source labels contradict original indices; see forensic report")
 }
 if(any(ni$i<=nrow(prev)&ni$j<=nrow(prev)))
  stop("Fast update rescored historical pair; abort")
