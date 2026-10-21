@@ -66,15 +66,28 @@ jobs:
                 paste(reg$run_id[g],collapse=",")))
           }
           all_ids <- unlist(representative,use.names=FALSE)
-          if(anyDuplicated(all_ids)) {
-            keys <- names(representative)
-            for(i in seq_along(keys))for(j in seq_along(keys))if(i<j) {
-              n <- length(intersect(representative[[i]],representative[[j]]))
-              cat(sprintf("OVERLAP group_i_size=%d group_j_size=%d shared_records=%d\\n",
-                length(representative[[i]]),length(representative[[j]]),n))
-            }
-            stop("Registered W04 subsets overlap; finalisation must not proceed")
+          keys <- names(representative)
+          overlap <- integer()
+          for(i in seq_along(keys))for(j in seq_along(keys))if(i<j) {
+            n <- length(intersect(representative[[i]],representative[[j]]))
+            overlap <- c(overlap,n)
+            cat(sprintf("OVERLAP group_i_size=%d group_j_size=%d shared_records=%d\\n",
+              length(representative[[i]]),length(representative[[j]]),n))
           }
+          if(!identical(sort(overlap),c(0L,0L,2L)))
+            stop("Unexpected W04 subset overlap pattern")
+          w03 <- read.csv("docs/publication_status/zenodo_registry.csv",
+                          stringsAsFactors=FALSE)
+          authoritative <- w03[w03$source_github_run_id==38601922839,,drop=FALSE]
+          if(nrow(authoritative)!=1L || !identical(authoritative$visibility[[1L]],"restricted"))
+            stop("Review-bound W03 publication receipt unavailable")
+          eligible <- as.integer(authoritative$records[[1L]]) -
+            as.integer(authoritative$exclude_from_workflow04[[1L]])
+          if(length(unique(all_ids))!=eligible)
+            stop(sprintf("W04 union covers %d of %d eligible W03 records",
+              length(unique(all_ids)),eligible))
+          cat(sprintf("PASS W03 eligible=%d W04 unique model coverage=%d duplicate overlap=2\\n",
+            eligible,length(unique(all_ids))))
           if(!identical(sort(vapply(representative,length,integer(1))),c(100L,100L,2885L)))
             stop("Registered subset size pattern disagrees with approved 100+100+remaining design")
           if(!"39551137733"%in%reg$run_id)stop("Expected 2885-record final batch missing")
