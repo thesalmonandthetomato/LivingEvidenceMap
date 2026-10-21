@@ -32,6 +32,7 @@ jobs:
       - name: Prepare canonical snapshot and historic retrieval manifest
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
           CANONICAL_DEPOSIT: ${{ inputs.canonical_zenodo_deposit || '23211736' }}
         run: Rscript scripts/W11/prepare_inputs.R
       - name: Build W11 linked ledger
