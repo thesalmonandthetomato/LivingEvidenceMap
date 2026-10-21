@@ -8,6 +8,7 @@ on:
       - 'scripts/updater/experimental_w01_fast/stage_production_pair_ledger.R'
       - 'scripts/updater/experimental_w01_fast/test_production_pair_ledger.R'
       - '.github/workflows/w01_fast_integration_contract_test.yml'
+      - 'scripts/updater/workflow_01_validate_delta_fixture.R'
       - 'scripts/updater/experimental_w01_fast/audit_prior_pair_indices.R'
       - 'scripts/updater/experimental_w01_fast/stage_production_pair_ledger.R'
   workflow_dispatch:
@@ -30,6 +31,11 @@ jobs:
         run: |
           Rscript scripts/updater/experimental_w01_fast/test_production_canonical_contract.R
           Rscript scripts/updater/experimental_w01_fast/test_production_pair_ledger.R
+      - name: Validate original production delta builder and replay in isolated fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_validate_delta_fixture.R
 
   prior-index-forensics:
     if: github.event_name == 'workflow_dispatch'
