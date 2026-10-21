@@ -40,19 +40,13 @@ token<-resolved$token
 fs<-d$files
 if(!length(fs)) stop("Canonical deposit has no files")
 names<-vapply(fs,function(z) as.character(z$filename),character(1))
-candidates<-which(grepl("workflow01.*(tar\\.gz|tgz)$",names,ignore.case=TRUE))
-if(length(candidates)!=1L) stop("Expected one original Workflow 01 state tar.gz: ",paste(names,collapse=", "))
+# W08 archives contain the final included canonical JSONL as a direct Zenodo file.
+candidates<-which(grepl("\\.jsonl$",names,ignore.case=TRUE) & grepl("canonical",names,ignore.case=TRUE))
+if(length(candidates)!=1L) stop("Expected exactly one W08 included canonical JSONL; found: ",paste(names,collapse=", "))
 f<-fs[[candidates]]
-dest<-tempfile(fileext=".tar.gz")
-download_deposit_file(f,d,token,dest)
 dir.create(file.path(out,"canonical"),recursive=TRUE,showWarnings=FALSE)
 target<-file.path(out,"canonical/records.jsonl")
-members<-untar(dest,list=TRUE)
-candidates2<-members[grepl("(^|/)canonical/records\\.jsonl$",members)]
-if(length(candidates2)!=1L) stop("Archive must contain exactly one canonical/records.jsonl")
-root<-tempfile("w11-canonical-");dir.create(root)
-untar(dest,files=candidates2,exdir=root)
-if(!file.copy(file.path(root,candidates2),target,overwrite=TRUE)) stop("Failed to stage canonical JSONL")
+download_deposit_file(f,d,token,target)
 
 stopifnot(file.exists(target),file.info(target)$size>0)
 # Pin fulltexttest's completed historical audit by immutable commit, not its moving main branch.
@@ -89,7 +83,7 @@ m<-rbind(m,add)
 m<-m[order(as.integer(m$batch),as.integer(m$record_index)),,drop=FALSE]
 if(nrow(m)!=3935L||anyDuplicated(paste(m$batch,m$record_index))) stop("Incorrect W11 retrieval manifest")
 write.csv(m,manifest_file,row.names=FALSE,na="")
-write_json(list(canonical_deposit=id,canonical_zip=names[candidates],canonical_path="canonical/records.jsonl",
+write_json(list(canonical_deposit=id,canonical_source_filename=names[candidates],canonical_path="canonical/records.jsonl",
  canonical_bytes=unname(file.info(target)$size),historical_retrieval_rows=nrow(m),
  source_39_batch_commit="74d06e2c8a9b179f2ea35b221fd8510b7531264d",
  batch_39_deposit_id=id39),file.path(out,"input_provenance.json"),pretty=TRUE,auto_unbox=TRUE)
