@@ -1,0 +1,45 @@
+name: W11 full-text canonical ledger (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      canonical_zenodo_deposit:
+        description: 'Restricted Zenodo deposit containing the selected canonical/records.jsonl snapshot (no automatic latest assumption)'
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: W11-full-text-retrieval
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install ledger dependencies
+        run: Rscript -e 'install.packages(c("jsonlite","httr2"),repos="https://cloud.r-project.org")'
+      - name: Install curl libraries
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+      - name: Prepare canonical snapshot and historic retrieval manifest
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          CANONICAL_DEPOSIT: ${{ inputs.canonical_zenodo_deposit }}
+        run: Rscript scripts/W11/prepare_inputs.R
+      - name: Build W11 linked ledger
+        run: |
+          Rscript scripts/W11/build_fulltext_ledger.R \
+            --canonical outputs/W11/inputs/canonical/records.jsonl \
+            --retrieval outputs/W11/inputs/historical_fulltext_all_records.csv \
+            --output outputs/W11/ledger
+      - name: Publish private diagnostic artifact only
+        uses: actions/upload-artifact@v4
+        with:
+          name: W11-canonical-fulltext-ledger-${{ github.run_id }}
+          path: |
+            outputs/W11/ledger/
+            outputs/W11/inputs/input_provenance.json
+          if-no-files-found: error
+          retention-days: 30
