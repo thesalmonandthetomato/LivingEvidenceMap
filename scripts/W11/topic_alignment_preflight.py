@@ -51,15 +51,26 @@ def main():
     can=[f for f in dep["files"] if re.search(r"canonical.*\.jsonl$",f["filename"],re.I)]
     if len(can)!=1:raise RuntimeError("Cannot uniquely identify authoritative W08 canonical JSONL")
     body=download_from_entry(can[0],dep,token)
-    lines=body.decode("utf-8").splitlines()
-    if len(lines)!=len(ledger):raise RuntimeError("Canonical row count not equal to W11 ledger")
+    lines=[ln for ln in body.decode("utf-8").splitlines() if ln.strip()]
+    canonical_by_id={}
+    for line in lines:
+        rec=json.loads(line)
+        rid=str(rec.get("identity",{}).get("record_id",""))
+        if not rid or rid in canonical_by_id:raise RuntimeError("Missing or duplicate record ID in W08 JSONL")
+        canonical_by_id[rid]=rec
+    ledger_ids=[r["canonical_record_id"] for r in ledger]
+    if len(set(ledger_ids))!=len(ledger_ids):raise RuntimeError("Duplicate IDs in W11 ledger")
+    overlap=len(set(ledger_ids)&set(canonical_by_id))
+    print(f"W08 included JSONL records={len(canonical_by_id)}, ledger records={len(ledger)}, ID overlap={overlap}",flush=True)
+    if overlap<0.95*len(ledger):
+        raise RuntimeError("W08/W11 ID overlap <95%; source snapshots are incompatible")
     candidates=[]
-    for i,row in enumerate(ledger):
-        if not (row.get("historical_archive_link_accepted")=="TRUE" or row.get("historical_archive_link_accepted")=="True"):continue
+    for row in ledger:
+        if row.get("historical_archive_link_accepted","").lower()!="true":continue
         if row.get("source_format","").lower() not in ("grobid_xml","xml","tei_xml"):continue
         if not row.get("zenodo_deposit_id") or not row.get("archive_filename") or not row.get("within_zip_filename"):continue
-        rec=json.loads(lines[i])
-        if str(rec.get("identity",{}).get("record_id",""))!=row["canonical_record_id"]:raise RuntimeError("Canonical identity mismatch at row "+str(i))
+        rec=canonical_by_id.get(row["canonical_record_id"])
+        if rec is None:continue
         details=w07_entries(rec)
         if not details:continue
         candidates.append((row,rec,details))
