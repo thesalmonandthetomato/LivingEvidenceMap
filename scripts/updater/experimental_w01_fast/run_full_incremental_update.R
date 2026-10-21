@@ -10,7 +10,10 @@ strips<-arg("--strip-actions");repairs<-arg("--repairs")
 previous_decisions<-arg("--previous-decisions");previous_root<-arg("--previous-root")
 previous_pointer<-arg("--previous-pointer");seed_root<-arg("--current-seed-root")
 output<-arg("--output-dir")
-if(dir.exists(output)||file.exists(output))stop("Refuse overwrite output")
+phase<-arg("--phase",optional=TRUE);if(is.null(phase))phase<-"all"
+if(!phase%in%c("all","scoring","canonical","delta"))stop("Unsupported W01-Fast phase")
+if(phase%in%c("all","scoring") && (dir.exists(output)||file.exists(output)))stop("Refuse overwrite output")
+if(phase%in%c("canonical","delta") && !dir.exists(output))stop("Missing staged W01-Fast output; cannot resume")
 inputs<-c(metadata,prior,source_manifest,prior_canonical,strips,repairs,previous_decisions,previous_pointer)
 if(any(!dir.exists(c(previous_root,seed_root)))||any(!file.exists(inputs)))stop("Required original inputs missing; refusing partial/fabricated canonical output")
 m<-fread(metadata,colClasses=list(character=c("source","source_record_id")))
@@ -47,6 +50,7 @@ run<-function(name,script,opts){
  if(status!=0L)stop(sprintf("Stage %s failed: %s",name,paste(tail(z,16L),collapse=" | ")))
 }
 # Raw metadata and source files stay untouched; work only in the isolated output root.
+if(phase%in%c("all","scoring")){
 candidate<-file.path(output,"candidates");dir.create(candidate)
 file.copy(metadata,file.path(candidate,"normalised_metadata.csv"))
 nold<-as.character(nrow(prev))
@@ -83,6 +87,10 @@ run("stage_cumulative_ledger",file.path(base,"stage_production_pair_ledger.R"),
  "--previous-map",prior,
  "--scored-decisions",file.path(output,"rescored","rescored_sample.csv"),
  "--metadata",metadata,"--output",file.path(output,"cumulative_decisions.csv")))
+if(!file.exists(file.path(output,"cumulative_decisions.csv")) || !file.exists(file.path(output,"stable_decisions.csv")))stop("Scoring phase did not produce required verified decision files")
+}
+if(phase%in%c("all","canonical")){
+if(!file.exists(file.path(output,"cumulative_decisions.csv")) || !file.exists(file.path(output,"stable_decisions.csv")))stop("Missing scoring checkpoint")
 run("clusters",file.path(base,"update_clusters_by_identity.R"),
  c("--prior-map",prior,"--metadata",metadata,
  "--incremental-decisions",file.path(output,"stable_decisions.csv"),
@@ -131,6 +139,10 @@ run("stage_canonical_contract",file.path(base,"stage_production_canonical_contra
  "--repair-ledger",file.path(output,"production_final","cumulative_data_quality_repairs.jsonl"),
  "--repair-audit",file.path(output,"repair_audit.jsonl"),
  "--previous-canonical-manifest",file.path(previous_root,"canonical","canonical_manifest.json")))
+if(!file.exists(file.path(output,"production_canonical","canonical_manifest.json")))stop("Canonical phase did not produce production manifest")
+}
+if(phase%in%c("all","delta")){
+if(!file.exists(file.path(output,"production_canonical","canonical_manifest.json")) || !file.exists(file.path(output,"production_final","final_pair_decisions.csv")))stop("Missing canonical checkpoint")
 # Validate persistence using the unmodified W01 delta generator and replay engine.
 run("build_delta","scripts/updater/workflow_01_build_delta.R",
  c("--previous-root",previous_root,"--current-seed-root",seed_root,
@@ -146,4 +158,5 @@ run("replay_delta","scripts/updater/workflow_01_replay_delta.R",
  "--output-root",file.path(output,"replayed")))
 
 write_report("PASS_SHADOW_NO_PUBLICATION")
+}
 cat("PASS: isolated W01-Fast complete output contract, delta build and replay; NO publication or W02 dispatch\\n")
