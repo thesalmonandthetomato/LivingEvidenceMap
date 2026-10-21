@@ -49,6 +49,23 @@ mu<-map[af,on=.(source,source_record_id),nomatch=0L]
 if(nrow(mu)!=nrow(af))stop('Affected identity missing')
 fresh<-map[!paste(source,source_record_id,sep='\u001f')%in%oldid]
 mu<-unique(rbindlist(list(mu,fresh),fill=TRUE),by=c('source','source_record_id'))
+# A direct delta must cover every changed historic cluster assignment as well as new rows.
+prior_map_full<-fread(pmap,na.strings=c('','NA'),colClasses='character')
+setkeyv(prior_map_full,c('source','source_record_id'))
+common<-map[prior_map_full,on=.(source,source_record_id),nomatch=0L]
+prior_for_current<-prior_map_full[common,on=.(source,source_record_id)]
+changed_cols<-intersect(names(prior_map_full),names(map))
+changed_cols<-setdiff(changed_cols,c('source','source_record_id'))
+diff<-rep(FALSE,nrow(common))
+for(col in changed_cols){
+ x<-as.character(common[[col]]);y<-as.character(prior_for_current[[col]])
+ diff<-diff | (is.na(x)!=is.na(y)) | (!is.na(x)&!is.na(y)&x!=y)
+}
+changed_historic<-common[diff]
+included<-paste(mu$source,mu$source_record_id,sep='\u001f')
+required_changed<-paste(changed_historic$source,changed_historic$source_record_id,sep='\u001f')
+if(any(!required_changed%in%included))stop('Affected map omitted changed historical cluster assignments')
+
 setcolorder(mu,names(map))
 if('idx'%in%names(mu))setorder(mu,idx)
 # New and affected rows must be all that the replay changes.
