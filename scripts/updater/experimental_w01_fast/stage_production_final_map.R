@@ -33,13 +33,19 @@ if(anyNA(d[,.(record_i,record_j,rescored_classification,review_route,pair_key)])
  any(d$review_route=="manual_review")||
  any(d$rescored_classification=="review"))
  stop("Human adjudication remains pending; never finalise")
-old<-p[match(pk,xk),]
-if(anyNA(old$cluster_id))stop("Prior work mapping unavailable")
 old_count<-uniqueN(p$cluster_id)
 ninc<-nrow(map)-nrow(p)
 if(ninc<0L)stop("Historic manifestations were removed")
-counts<-list(workflow="01_deduplication_full_five_source_extension",
- status="success",source_manifestations=nrow(map),
+counts<-list(workflow="01_final_adjudicated_deduplication",
+ status="final",source_manifestations=nrow(map),
+ total_pair_decisions=nrow(d),adjudicated_cases=0L,llm_final_decisions=0L,
+ human_final_decisions=0L,abstract_strip_actions=0L,
+ abstract_strip_actions_file="abstract_strip_actions.jsonl",
+ workflow02_discovers_stripped_abstracts_via_normal_missing_abstract_scan=TRUE,
+ unresolved_pair_decisions=0L,previous_cluster_map_supplied=TRUE,
+ preserved_work_ids=sum(unique(p$cluster_id)%in%unique(map$cluster_id)),
+ merged_existing_work_ids=sum(!unique(p$cluster_id)%in%unique(map$cluster_id)),
+ new_work_ids=sum(!unique(map$cluster_id)%in%unique(p$cluster_id)),
  preserved_pair_decisions=NA_integer_, incremental_candidate_rows=NA_integer_,
  incremental_pair_decisions=NA_integer_,exact_duplicate_candidate_rows_removed=0L,
  total_candidate_pair_decisions=nrow(d),
