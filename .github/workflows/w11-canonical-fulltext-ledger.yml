@@ -1,5 +1,10 @@
 name: W11 full-text canonical ledger (read only)
 on:
+  push:
+    branches:
+      - W11-full-text-retrieval
+    paths:
+      - '.github/workflows/w11-canonical-fulltext-ledger.yml'
   workflow_dispatch:
     inputs:
       canonical_zenodo_deposit:
@@ -27,7 +32,7 @@ jobs:
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
-          CANONICAL_DEPOSIT: ${{ inputs.canonical_zenodo_deposit || '23211736' }}
+          CANONICAL_DEPOSIT: ${{ inputs.canonical_zenodo_deposit || '23459613' }}
         run: Rscript scripts/W11/prepare_inputs.R
       - name: Build W11 linked ledger
         run: |
