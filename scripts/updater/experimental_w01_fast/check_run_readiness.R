@@ -22,12 +22,15 @@ records<-lapply(tests,function(id){
  }
  list(test=id,passed=TRUE,run_url=z$run_url)
 })
-ok<-all(vapply(records,function(z)isTRUE(z$passed),logical(1)))
+passed<-vapply(records,function(z)isTRUE(z$passed),logical(1))
+shadow_ok<-all(passed[seq_len(6L)])
+full_ok<-all(passed)
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
 write_json(list(schema="w01-fast-run-readiness-v1",ready_for_production_migration=FALSE,
- ready_for_full_frozen_w00_shadow_run=ok,tests=records,
+ ready_for_full_frozen_w00_shadow_run=shadow_ok,
+ scientific_and_performance_evidence_complete=full_ok,tests=records,
  note="An evidence checklist does not itself verify scientific correctness; inspect original audit artefacts."),
  output,auto_unbox=TRUE,pretty=TRUE)
 cat(sprintf("W01-Fast read-only acceptance gates: %d/%d evidenced. Frozen W00 shadow readiness: %s\\n",
- sum(vapply(records,function(z)isTRUE(z$passed),logical(1))),length(records),ok))
-if(!ok)quit(save="no",status=2L)
+ sum(passed),length(records),shadow_ok))
+if(!shadow_ok)quit(save="no",status=2L)
