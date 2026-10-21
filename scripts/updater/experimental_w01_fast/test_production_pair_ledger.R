@@ -44,6 +44,13 @@ stopifnot(summ$source_manifestations==3L,summ$clusters==2L,
  summ$preserved_pair_decisions==1L,summ$incremental_pair_decisions==1L)
 stage_map<-fread(file("final/manifestation_cluster_map.csv"))
 stopifnot(identical(stage_map$idx,1:3),identical(stage_map$cluster_id,map$cluster_id))
+# Historical optional source fields may legitimately be unpopulated.
+p[,source_i:=""];p[,source_j:=""];fwrite(p,file("old.csv"))
+stopifnot(run(file("historical_blanks.csv"))==0L)
+# But populated, contradictory source labels must still fail closed.
+p[,source_i:="incorrect_source"];fwrite(p,file("old.csv"))
+stopifnot(run(file("incorrect_source.csv"))!=0L)
+p[,source_i:="a"];p[,source_j:="b"]
 p[,source_record_id_i:="wrong"];fwrite(p,file("old.csv"))
 stopifnot(run(file("bad.csv"))!=0L)
 cat("PASS: validated immutable identities, consistent production schema, and refusal of mismatched previous state\\n")
