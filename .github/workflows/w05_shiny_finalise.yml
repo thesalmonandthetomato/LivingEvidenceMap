@@ -57,6 +57,16 @@ jobs:
         run: |
           set -euo pipefail
           Rscript scripts/w05_crop_worker.R --input "$RUNNER_TEMP/w05-shiny/input.jsonl" --dictionary "$RUNNER_TEMP/w05-shiny/dictionary.csv" --output-dir "$RUNNER_TEMP/w05-shiny-results" --full-corpus
+      - name: Validate and publish full-corpus W05 to restricted Zenodo
+        working-directory: shiny_w05
+        shell: Rscript {0}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W05_REVIEW_ID: ${{ inputs.review_id }}
+          W05_DRAFT_ID: ${{ inputs.zenodo_draft_id }}
+          W05_INPUT_SHA: ${{ inputs.input_sha256 }}
+          W05_DICT_SHA: ${{ inputs.dictionary_sha256 }}
+        run: source("scripts/w05_shiny_publish_final.R")
       - uses: actions/upload-artifact@v4
         with:
           name: w05-shiny-full-corpus-${{ github.run_id }}
