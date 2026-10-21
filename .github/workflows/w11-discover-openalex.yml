@@ -1,4 +1,4 @@
-name: W11 discover remaining OpenAlex XML and PDF availability
+name: W11 discover additional OpenAlex indexed IDs
 on:
   push:
     branches:
@@ -35,12 +35,12 @@ jobs:
         # Input ledger is under the artifact's ledger/ subdirectory
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
-        run: Rscript scripts/W11/discover_openalex_availability.R
+        run: Rscript scripts/W11/discover_openalex_indexed_ids.R
       - name: Preserve availability ledger and recovery evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: W11-openalex-availability-${{ github.run_id }}
-          path: outputs/W11/openalex_discovery/
+          name: W11-indexed-id-availability-${{ github.run_id }}
+          path: outputs/W11/identifier_discovery/
           if-no-files-found: warn
           retention-days: 90
