@@ -48,5 +48,6 @@ jobs:
           path: |
             october_affected_scope/
             october_historical_affected_source/audit/report.json
+            october_historical_affected_source/historic_affected_canonical_records.jsonl
           if-no-files-found: warn
           retention-days: 7
