@@ -1,4 +1,5 @@
 name: W01-Fast direct delta small fixture
+# Temporary validation trigger; remove after verified success.
 on:
   push:
     branches: [w01-fast-direct-delta]
