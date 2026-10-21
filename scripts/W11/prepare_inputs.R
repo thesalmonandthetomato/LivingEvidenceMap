@@ -11,22 +11,21 @@ d<-fromJSON(resp_body_string(r),simplifyVector=FALSE)
 fs<-d$files
 if(!length(fs)) stop("Canonical deposit has no files")
 names<-vapply(fs,function(z) as.character(z$filename),character(1))
-candidates<-which(grepl("\\.zip$",names,ignore.case=TRUE)|grepl("records\\.jsonl$",names,ignore.case=TRUE))
-if(length(candidates)!=1L) stop("Ambiguous canonical deposit files: ",paste(names,collapse=", "))
+candidates<-which(grepl("workflow01.*(tar\\.gz|tgz)$",names,ignore.case=TRUE))
+if(length(candidates)!=1L) stop("Expected one original Workflow 01 state tar.gz: ",paste(names,collapse=", "))
 f<-fs[[candidates]]
-dest<-tempfile(fileext=if(grepl("\\.zip$",names[candidates])) ".zip" else ".jsonl")
+dest<-tempfile(fileext=".tar.gz")
 req_perform(request(f$links$download) |> req_headers(Authorization=paste("Bearer",token)) |>
- req_timeout(900) |> req_retry(max_tries=3),path=dest)
+ req_timeout(1500) |> req_retry(max_tries=3),path=dest)
 dir.create(file.path(out,"canonical"),recursive=TRUE,showWarnings=FALSE)
 target<-file.path(out,"canonical/records.jsonl")
-if(grepl("\\.zip$",names[candidates],ignore.case=TRUE)) {
- z<-unzip(dest,list=TRUE)
- candidates2<-z$Name[grepl("(^|/)canonical/records\\.jsonl$|^records\\.jsonl$",z$Name)]
- if(length(candidates2)!=1L) stop("Archive must contain exactly one canonical/records.jsonl: ",paste(candidates2,collapse=","))
- root<-tempfile("w11-canonical-");dir.create(root)
- unzip(dest,files=candidates2,exdir=root)
- file.copy(file.path(root,candidates2),target,overwrite=TRUE)
-} else file.copy(dest,target,overwrite=TRUE)
+members<-untar(dest,list=TRUE)
+candidates2<-members[grepl("(^|/)canonical/records\\.jsonl$",members)]
+if(length(candidates2)!=1L) stop("Archive must contain exactly one canonical/records.jsonl")
+root<-tempfile("w11-canonical-");dir.create(root)
+untar(dest,files=candidates2,exdir=root)
+if(!file.copy(file.path(root,candidates2),target,overwrite=TRUE)) stop("Failed to stage canonical JSONL")
+
 stopifnot(file.exists(target),file.info(target)$size>0)
 # Pin fulltexttest's completed historical audit by immutable commit, not its moving main branch.
 manifest_url<-"https://raw.githubusercontent.com/thesalmonandthetomato/fulltexttest/74d06e2c8a9b179f2ea35b221fd8510b7531264d/audit_results/historical_fulltext_doi_log_39_batches.csv"
