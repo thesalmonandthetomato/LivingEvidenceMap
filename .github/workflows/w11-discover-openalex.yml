@@ -27,14 +27,15 @@ jobs:
       - name: Read included-only W11 ledger
         uses: actions/download-artifact@v4
         with:
-          name: W11-canonical-fulltext-ledger-39601017091
-          run-id: 39601017091
+          name: W11-openalex-availability-39603902230
+          run-id: 39603902230
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: input
       - name: Discover XML and PDF availability without downloading content
         # Input ledger is under the artifact's ledger/ subdirectory
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: Rscript scripts/W11/discover_openalex_indexed_ids.R
       - name: Preserve availability ledger and recovery evidence
         if: always()
