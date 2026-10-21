@@ -1,4 +1,5 @@
 name: W01-Fast frozen production-contract acceptance
+# Read-only rerun after verification of optional historical source labels.
 on:
   workflow_dispatch:
   push:
