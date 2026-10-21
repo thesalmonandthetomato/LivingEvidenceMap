@@ -107,13 +107,34 @@ wlines(changed,file.path(out,'canonical_upserts.jsonl'))
 wlines(retired,file.path(out,'canonical_retired_ids.txt'))
 if(!file.copy(file.path(final,'summary.json'),file.path(out,'target_summary.json'))||
  !file.copy(cm_path,file.path(out,'target_canonical_manifest.json')))stop('Cannot stage target contract')
-# Unsupported changes to repair/strip ledgers fail closed; never drop approved history.
-for(spec in list(c(file.path(prev,'provenance','cumulative_data_quality_repairs.jsonl'),file.path(final,'cumulative_data_quality_repairs.jsonl'),'data_quality_repair_upserts.jsonl'),
- c(file.path(prev,'workflow01_full_five_source','abstract_strip_actions.jsonl'),file.path(final,'abstract_strip_actions.jsonl'),'abstract_strip_action_upserts.jsonl'))){
- historic<-lines(spec[[1]]);current<-lines(spec[[2]])
- if(!identical(historic,current))stop('Changed repair/strip history requires separately audited delta logic')
- wlines(character(),file.path(out,spec[[3]]))
+# Provenance upserts use the exact identity keys implemented by production replay.
+# Preserve existing bytes and reject deletions or modified historical approvals.
+key_repair<-function(line){
+ z<-fromJSON(line,simplifyVector=FALSE)
+ paste(as.character(if(is.null(z$review_case_id))'' else z$review_case_id),
+  as.character(z$source),as.character(z$source_record_id),as.character(z$action),sep='|')
 }
+key_strip<-function(line){
+ z<-fromJSON(line,simplifyVector=FALSE)
+ paste(as.character(z$source),as.character(z$source_record_id),sep='::')
+}
+stage_provenance<-function(old_path,current_path,filename,key_fun){
+ historical<-lines(old_path);current<-lines(current_path)
+ hk<-if(length(historical))vapply(historical,key_fun,character(1))else character()
+ ck<-if(length(current))vapply(current,key_fun,character(1))else character()
+ if(anyNA(hk)||anyNA(ck)||anyDuplicated(hk)||anyDuplicated(ck)||
+  any(!nzchar(hk))||any(!nzchar(ck)))stop('Invalid or duplicate provenance identity: ',filename)
+ if(any(!hk%in%ck))stop('Historical provenance entry disappeared: ',filename)
+ hm<-setNames(historical,hk);cm<-setNames(current,ck)
+ if(any(unname(hm[hk])!=unname(cm[hk])))stop('Historical provenance entry was altered: ',filename)
+ added<-sort(setdiff(ck,hk))
+ wlines(unname(cm[added]),file.path(out,filename))
+ length(added)
+}
+repair_n<-stage_provenance(file.path(prev,'provenance','cumulative_data_quality_repairs.jsonl'),
+ file.path(final,'cumulative_data_quality_repairs.jsonl'),'data_quality_repair_upserts.jsonl',key_repair)
+strip_n<-stage_provenance(file.path(prev,'workflow01_full_five_source','abstract_strip_actions.jsonl'),
+ file.path(final,'abstract_strip_actions.jsonl'),'abstract_strip_action_upserts.jsonl',key_strip)
 audit<-file.path(final,'data_quality_repair_application.jsonl')
 if(file.exists(audit))file.copy(audit,file.path(out,'data_quality_repair_application.jsonl'))
 delta<-list(schema='living-evidence-map-workflow01-delta-v1',workflow='01',state='delta',github_run_id=rid,
@@ -128,7 +149,7 @@ delta<-list(schema='living-evidence-map-workflow01-delta-v1',workflow='01',state
  cluster_map_upserts=nrow(mu),new_manifestations=nrow(fresh),
  changed_existing_manifestations=nrow(mu)-nrow(fresh),
  canonical_upserts=length(changed),canonical_retired_ids=length(retired),
- data_quality_repair_upserts=0L,abstract_strip_action_upserts=0L),
+ data_quality_repair_upserts=repair_n,abstract_strip_action_upserts=strip_n),
  files=list(pair_decision_upserts_sha256=sha(file.path(out,'pair_decision_upserts.csv')),
  cluster_map_upserts_sha256=sha(file.path(out,'cluster_map_upserts.csv')),
  cluster_id_aliases_sha256=sha(file.path(out,'cluster_id_aliases.csv')),
