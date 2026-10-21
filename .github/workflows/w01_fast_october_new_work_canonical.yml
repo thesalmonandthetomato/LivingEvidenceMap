@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/w01_fast_october_new_work_canonical.yml
       - scripts/updater/experimental_w01_fast/test_october_new_works_canonical.R
+      - scripts/updater/experimental_w01_fast/compare_october_real_canonical_by_ranges.R
 permissions:
   contents: read
   actions: read
@@ -39,6 +40,14 @@ jobs:
       - name: Materialise all 16 new real October singleton works
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_october_new_works_canonical.R
+      - name: Compare 16 real works to original W01 canonical archive via bounded ranges
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ulimit -f 2000
+          Rscript scripts/updater/experimental_w01_fast/compare_october_real_canonical_by_ranges.R
       - name: Retain compact real-data canonical audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -48,5 +57,6 @@ jobs:
             real_new_work_fixture/report.json
             real_new_work_fixture/new_works.csv
             real_new_work_fixture/canonical_manifest.json
+            actual_october_canonical_comparison/audit/comparison.json
           retention-days: 7
           if-no-files-found: warn
