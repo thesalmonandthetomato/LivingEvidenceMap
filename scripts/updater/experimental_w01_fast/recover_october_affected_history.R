@@ -123,6 +123,7 @@ historic<-o[cluster_id%in%selected]
 wanted<-key(historic$source,historic$source_record_id)
 seen<-character()
 records<-vector("list",length(selected))
+recovered_work_records<-vector("list",length(selected))
 for(i in seq_along(selected)){
  work<-find_work(selected[[i]])
  mans<-work$manifestations
@@ -130,6 +131,7 @@ for(i in seq_along(selected)){
  if(anyDuplicated(keys)||!setequal(keys,wanted[historic$cluster_id==selected[[i]]]))
   stop("Historical canonical member identity mismatch: ",selected[[i]])
  seen<-c(seen,keys)
+ recovered_work_records[[i]]<-work
  records[[i]]<-list(work_id=selected[[i]],historical_manifestations=length(keys),
   complete_canonical_record_recovered=TRUE)
  if(i%%10L==0L||i==length(selected))cat(sprintf("Recovered historic work %d/%d; transfer %.1f MiB\\n",i,length(selected),total_bytes/1048576))
@@ -137,6 +139,8 @@ for(i in seq_along(selected)){
 if(length(seen)!=177L||anyDuplicated(seen)||!setequal(seen,wanted))
  stop("Missing or duplicated historical manifestation from archived canonical works")
 dir.create(file.path(out,"audit"),recursive=TRUE)
+writeLines(vapply(recovered_work_records,function(w)toJSON(w,auto_unbox=TRUE,null="null"),character(1)),
+ file.path(out,"historic_affected_canonical_records.jsonl"),useBytes=TRUE)
 write_json(list(schema="w01-fast-october-historical-affected-source-v1",
  recovered_historical_works=length(records),recovered_historical_manifestations=length(seen),
  archived_canonical_bytes_transferred=total_bytes,
