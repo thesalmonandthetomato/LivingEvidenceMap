@@ -12,6 +12,7 @@ on:
       - scripts/updater/experimental_w01_fast/compare_october_recovered_base_scores.R
       - scripts/updater/experimental_w01_fast/compare_october_recovered_rescoring.R
       - scripts/updater/experimental_w01_fast/audit_october_identifier_assist_consistency.R
+      - scripts/updater/experimental_w01_fast/test_october_independent_scored_clusters.R
 permissions:
   contents: read
   actions: read
@@ -88,6 +89,9 @@ jobs:
       - name: Validate identifier-assisted scientific consistency independently
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/audit_october_identifier_assist_consistency.R
+      - name: Validate independent scoring through complete October cluster reconstruction
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/test_october_independent_scored_clusters.R
       - name: Retain compact real-data canonical audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -103,5 +107,7 @@ jobs:
             october_recovered_scoring/base_comparison/
             october_recovered_scoring/rescore_comparison/
             october_identifier_assist_consistency/report.json
+            october_independent_scored_clusters/report.json
+            october_independent_scored_clusters/cluster_differences.csv
           retention-days: 7
           if-no-files-found: warn
