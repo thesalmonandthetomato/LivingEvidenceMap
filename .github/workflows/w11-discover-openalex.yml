@@ -1,0 +1,43 @@
+name: W11 discover remaining OpenAlex XML and PDF availability
+on:
+  push:
+    branches:
+      - W11-full-text-retrieval
+    paths:
+      - '.github/workflows/w11-discover-openalex.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: W11-full-text-retrieval
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install R dependencies
+        run: Rscript -e 'install.packages(c("jsonlite","httr2"),repos="https://cloud.r-project.org")'
+      - name: Read included-only W11 ledger
+        uses: actions/download-artifact@v4
+        with:
+          name: W11-canonical-fulltext-ledger-39601017091
+          run-id: 39601017091
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: input
+      - name: Discover XML and PDF availability without downloading content
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        run: Rscript scripts/W11/discover_openalex_availability.R
+      - name: Preserve availability ledger and recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: W11-openalex-availability-${{ github.run_id }}
+          path: outputs/W11/openalex_discovery/
+          if-no-files-found: warn
+          retention-days: 90
