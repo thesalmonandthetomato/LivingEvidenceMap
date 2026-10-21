@@ -23,7 +23,6 @@ run<-function(out){
 stopifnot(run(file("unmapped.csv"))!=0L)
 p[,classification:="duplicate"];p[,rule:="bramer_A"]
 fwrite(p,file("old.csv"))
-n[,classification:=NULL];n[,rule:=NULL]
 fwrite(n,file("new.csv"))
 stopifnot(run(file("ledger.csv"))==0L)
 z<-fread(file("ledger.csv"));stopifnot(nrow(z)==2L,z$source_j[[2L]]=="c",z$source_record_id_j[[2L]]=="c1")
