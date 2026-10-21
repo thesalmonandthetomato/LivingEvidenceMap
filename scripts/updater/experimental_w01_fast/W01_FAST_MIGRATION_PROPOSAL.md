@@ -80,3 +80,11 @@ Thus the previous blocker described as missing abstracts for the independent can
 - Frozen real-data scope validation run [39569560726](https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39569560726): **PASS**. Stable source identities establish exactly 44 existing works affected, comprising 177 retained historical manifestations and 44 October additions (221 manifestations requiring affected-only canonicalisation); 16 further additions create singleton works. No historical manifestation was removed or reassigned.
 - The scope artifact includes an affected-only cluster map. It is an input-selection audit, **not** full canonical scientific/provenance parity. The 44 work records still require an independent builder comparison using appropriate original source records, repairs, and strip actions.
 - The purpose of keeping both routes remains: immutable complete-reconstruction W01 Full and separate W01-Fast update pathway. Neither route is changed by these experimental audits.
+
+## October historic manifestation preservation acceptance
+
+- Read-only historical/final archived canonical comparison [GitHub Actions run 39571193715](https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39571193715): **PASS**.
+- Independently sought and compared all **44** affected historical work records against their October final successors, using exact stable manifestation identities and complete historical manifestation JSON objects; **177/177 identical**, zero historical content differences and **44** additional source manifestations present in precisely the expected clusters.
+- Bounded historical recovery transferred **42.8 MiB**, and final canonical comparison transferred **40.0 MiB**, not full multi-GB W01 archives.
+- This establishes that the unchanged **historical manifestation content** survives the October update. It does **not** prove independent canonical rebuilding from original raw sources, that full affected-work canonical/provenance selections agree, or that identifier-assistance rule/route provenance was reproduced.
+- The original complete-reconstruction pathway remains required and untouched. W01-Fast requires an integrated real frozen-W00 shadow execution, recovery/idempotence validation and performance measurements before any migration proposal is actionable.
