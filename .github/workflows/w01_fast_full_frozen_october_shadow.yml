@@ -46,6 +46,14 @@ jobs:
         run: |
           set -euo pipefail
           Rscript scripts/updater/experimental_w01_fast/run_real_benchmark.R
+      - name: Assert production scoring vocabulary before full execution
+        shell: Rscript {0}
+        run: |
+          x <- c('duplicate','unresolved','review')
+          stopifnot(all(c('duplicate','unresolved') %in% x),
+                    identical(setdiff(x, c('duplicate','unresolved','review')),character()))
+          src <- readLines('scripts/updater/experimental_w01_fast/run_full_incremental_update.R')
+          stopifnot(any(grepl('c("duplicate","unresolved","review")',src,fixed=TRUE)))
       - name: Execute complete isolated incremental deduplication and canonicalisation
         shell: bash
         run: |
