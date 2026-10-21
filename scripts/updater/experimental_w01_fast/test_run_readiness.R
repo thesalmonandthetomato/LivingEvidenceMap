@@ -7,7 +7,7 @@ command<-c(script,"--evidence-dir",file.path(temp,"none"),"--output",out)
 suppressWarnings(system2(file.path(R.home("bin"),"Rscript"),command,stdout=TRUE,stderr=TRUE))->z
 status<-attr(z,"status")
 if(is.null(status)||status!=2L)stop("Absent acceptance evidence must fail closed")
-report<-fromJSON(out)
+report<-fromJSON(out,simplifyVector=FALSE)
 if(report$ready_for_full_frozen_w00_shadow_run||report$ready_for_production_migration||
  any(vapply(report$tests,function(z)isTRUE(z$passed),logical(1))))
  stop("Unsafe acceptance without evidence")
@@ -19,5 +19,5 @@ out2<-file.path(temp,"report2.json")
 z<-suppressWarnings(system2(file.path(R.home("bin"),"Rscript"),
  c(script,"--evidence-dir",file.path(temp,"fake"),"--output",out2),stdout=TRUE,stderr=TRUE))
 if(!identical(attr(z,"status"),2L))stop("Invalid acceptance URL must fail")
-if(fromJSON(out2)$tests$passed[[1L]])stop("Invalid proof accepted")
+if(isTRUE(fromJSON(out2,simplifyVector=FALSE)$tests[[1L]]$passed))stop("Invalid proof accepted")
 cat("PASS: W01-Fast readiness fails closed with missing or invalid scientific evidence\\n")
