@@ -3,13 +3,17 @@
 # selected model-run/prompt map. The aggregate hash is a provenance-map hash,
 # not the hash of any single model prompt.
 suppressPackageStartupMessages({library(httr2);library(jsonlite);library(digest)})
+`%||%` <- function(x,y)if(is.null(x)||!length(x))y else x
 args <- commandArgs(trailingOnly=TRUE)
 arg <- function(k) {i<-match(k,args);if(is.na(i)||i==length(args))stop("Missing ",k,call.=FALSE);args[[i+1L]]}
 deposit <- arg("--deposit-id"); filename <- arg("--bundle-file")
 sha <- tolower(arg("--bundle-sha256")); output <- arg("--output")
+review <- arg("--review-id")
 if(!grepl("^[0-9]+$",deposit) ||
    !grepl("^w04-model-input-[0-9a-f]{20}\\.json$",filename) ||
-   !grepl("^[0-9a-f]{64}$",sha))stop("Invalid immutable W04 bundle identity",call.=FALSE)
+   !grepl("^[0-9a-f]{64}$",sha) ||
+   !grepl("^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$",review))
+  stop("Invalid immutable W04 bundle identity",call.=FALSE)
 token <- Sys.getenv("ZENODO_ACCESS_TOKEN",unset="")
 if(!nzchar(token))stop("Restricted Zenodo token required",call.=FALSE)
 get <- function(url) {
@@ -20,7 +24,10 @@ get <- function(url) {
 }
 draft <- fromJSON(rawToChar(get(paste0("https://zenodo.org/api/deposit/depositions/",deposit))),
                   simplifyVector=FALSE)
-if(isTRUE(draft$submitted))stop("Shiny draft was already submitted",call.=FALSE)
+if(isTRUE(draft$submitted) ||
+   !identical(as.character(draft$metadata$title %||% ""),
+     paste("Living Evidence Map W04 prompt development |",review)))
+  stop("Unexpected review-specific Zenodo draft",call.=FALSE)
 hits <- Filter(function(x)identical(as.character(x$filename),filename),draft$files)
 if(length(hits)!=1L)stop("Archived W04 bundle not unique",call.=FALSE)
 url <- as.character(hits[[1L]]$links$download)
@@ -29,7 +36,8 @@ bytes <- get(url)
 if(!identical(digest(bytes,algo="sha256",serialize=FALSE),sha))
   stop("W04 bundle checksum mismatch",call.=FALSE)
 bundle <- fromJSON(rawToChar(bytes),simplifyVector=FALSE)
-if(!identical(bundle$schema,"lem-w04-reconciled-finalise-input-v1"))
+if(!identical(bundle$schema,"lem-w04-reconciled-finalise-input-v1") ||
+   !identical(as.character(bundle$review_id),review))
   stop("Unexpected W04 reconciliation schema",call.=FALSE)
 runs <- bundle$selected_model_runs
 if(is.null(runs)||!length(runs))stop("No selected model runs archived",call.=FALSE)
