@@ -47,3 +47,23 @@ stopifnot(grepl('delta_writer<-\"legacy\"',source_text,fixed=TRUE),
  grepl('if(delta_writer==\"direct\")',source_text,fixed=TRUE),
  grepl('write_direct_delta.R',source_text,fixed=TRUE),
  grepl('workflow_01_build_delta.R',source_text,fixed=TRUE))
+
+# Provenance: append new approved repair and strip action with stable identities.
+fwrite(data.table(record_i=integer(),record_j=integer()),file.path(t,'scored.csv'))
+a[which(a=='--output-dir')+1L]<-file.path(t,'with-provenance')
+p<-file.path(root,'previous')
+final<-file.path(t,'final-provenance');dir.create(final)
+file.copy(list.files(file.path(root,'current_final'),full.names=TRUE),final)
+repair<-list(review_case_id='approved-1',source='lens',source_record_id='L1',action='correct')
+strip<-list(source='lens',source_record_id='L2',action='strip_abstract')
+writeLines(toJSON(repair,auto_unbox=TRUE),file.path(final,'cumulative_data_quality_repairs.jsonl'))
+writeLines(toJSON(strip,auto_unbox=TRUE),file.path(final,'abstract_strip_actions.jsonl'))
+a[which(a=='--current-final-root')+1L]<-final
+stopifnot(run(writer,a)==0L)
+dm<-fromJSON(file.path(t,'with-provenance','delta_manifest.json'))
+stopifnot(dm$delta$data_quality_repair_upserts==1L,dm$delta$abstract_strip_action_upserts==1L)
+stopifnot(run('scripts/updater/workflow_01_replay_delta.R',c(
+ '--previous-root',p,'--delta-dir',file.path(t,'with-provenance'),
+ '--output-root',file.path(t,'replayed-provenance')))==0L)
+stopifnot(length(readLines(file.path(t,'replayed-provenance','provenance','cumulative_data_quality_repairs.jsonl')))==1L)
+stopifnot(length(readLines(file.path(t,'replayed-provenance','workflow01_full_five_source','abstract_strip_actions.jsonl')))==1L)
