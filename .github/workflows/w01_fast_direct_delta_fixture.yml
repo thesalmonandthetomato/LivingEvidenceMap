@@ -6,6 +6,7 @@ on:
       - '.github/workflows/w01_fast_direct_delta_fixture.yml'
       - 'scripts/updater/experimental_w01_fast/write_direct_delta.R'
       - 'scripts/updater/experimental_w01_fast/test_direct_delta_fixture.R'
+      - 'scripts/updater/experimental_w01_fast/test_direct_delta_merge_fixture.R'
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,4 +23,6 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('data.table','jsonlite','digest'))
       - name: Execute original replay and new direct-delta fixture
-        run: Rscript scripts/updater/experimental_w01_fast/test_direct_delta_fixture.R
+        run: |
+          Rscript scripts/updater/experimental_w01_fast/test_direct_delta_fixture.R
+          Rscript scripts/updater/experimental_w01_fast/test_direct_delta_merge_fixture.R
