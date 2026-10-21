@@ -67,8 +67,8 @@ run("base_scoring","scripts/updater/workflow_01_deduplication_incremental_score.
 run("rescoring","scripts/updater/workflow_01_deduplication_identifier_rescore.R",
  c("--input-dir",file.path(output,"scored"),"--output-dir",file.path(output,"rescored")))
 d<-fread(file.path(output,"rescored","rescored_sample.csv"))
-if(any(!d$rescored_classification%in%c("duplicate","non_duplicate","review")))stop("Unknown scoring classification")
-if(any(d$rescored_classification=="review"))stop("Unresolved scientific review cases; never merge automatically")
+if(any(!d$rescored_classification%in%c("duplicate","unresolved","review")))stop("Unknown scoring classification")
+if(anyNA(d$rescored_classification)||any(d$rescored_classification=="review"))stop("Unresolved scientific review cases; never merge automatically")
 l<-match(d$record_i,m$idx);rr<-match(d$record_j,m$idx)
 if(anyNA(l)||anyNA(rr))stop("Decision identity mismatch")
 stable<-data.table(source_i=m$source[l],source_record_id_i=m$source_record_id[l],
