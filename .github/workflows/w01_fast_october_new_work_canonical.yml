@@ -10,6 +10,7 @@ on:
       - scripts/updater/experimental_w01_fast/recover_october_candidate_abstracts.R
       - scripts/updater/experimental_w01_fast/run_october_recovered_scoring.R
       - scripts/updater/experimental_w01_fast/compare_october_recovered_base_scores.R
+      - scripts/updater/experimental_w01_fast/compare_october_recovered_rescoring.R
 permissions:
   contents: read
   actions: read
@@ -80,6 +81,9 @@ jobs:
       - name: Compare independent base scores to production
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/compare_october_recovered_base_scores.R
+      - name: Compare independently rerun production deterministic rescoring
+        shell: bash
+        run: Rscript scripts/updater/experimental_w01_fast/compare_october_recovered_rescoring.R
       - name: Retain compact real-data canonical audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,5 +97,6 @@ jobs:
             october_abstract_recovery/report.json
             october_recovered_scoring/report.json
             october_recovered_scoring/base_comparison/
+            october_recovered_scoring/rescore_comparison/
           retention-days: 7
           if-no-files-found: warn
