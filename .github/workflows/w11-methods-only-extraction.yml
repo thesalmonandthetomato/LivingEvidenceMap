@@ -1,0 +1,68 @@
+name: W11 ten-paper methods-only extraction
+on:
+  push:
+    branches: [W11-full-text-retrieval]
+    paths: ['.github/workflows/w11-methods-only-extraction.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: w11-methods-only-pilot
+  cancel-in-progress: false
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: W11-full-text-retrieval
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: W11-openalex-availability-39603902230
+          run-id: 39603902230
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: input
+      - uses: actions/download-artifact@v4
+        with:
+          name: W11-W07-fulltext-topic-pilot-39635086521
+          run-id: 39635086521
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: baseline
+      - name: Retrieve the same ten verified XMLs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          python scripts/W11/topic_alignment_preflight.py --ledger input/canonical_w11_fulltext_availability_ledger.csv --output outputs/W11/methods_pilot --n 10
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          first=json.loads(Path("baseline/sample_manifest.json").read_text())
+          now=json.loads(Path("outputs/W11/methods_pilot/sample_manifest.json").read_text())
+          identity=lambda arr:[(m["canonical_record_id"],m["xml_sha256"]) for m in arr]
+          assert identity(first)==identity(now),"Pilot XML identity or checksum drift"
+          print("Verified original ten XML identities and content checksums.")
+          PY
+      - name: Validate section extraction without API calls
+        run: |
+          python scripts/W11/methods_extraction_pilot.py --manifest outputs/W11/methods_pilot/sample_manifest.json --schema scripts/fulltext_coding/coding_schema_v3.json --out outputs/W11/methods_pilot/preflight --extract-only
+      - name: Extract 25 methods-focused variables
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/W11/methods_extraction_pilot.py --manifest outputs/W11/methods_pilot/sample_manifest.json --schema scripts/fulltext_coding/coding_schema_v3.json --out outputs/W11/methods_pilot/extractions
+      - name: Preserve method text, model responses and usage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: W11-methods-only-${{ github.run_id }}
+          path: |
+            outputs/W11/methods_pilot/preflight/
+            outputs/W11/methods_pilot/extractions/
+            outputs/W11/methods_pilot/sample_manifest.json
+          retention-days: 90
+          if-no-files-found: warn
