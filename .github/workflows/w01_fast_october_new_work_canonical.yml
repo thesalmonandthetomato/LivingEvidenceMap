@@ -8,13 +8,14 @@ on:
       - scripts/updater/experimental_w01_fast/test_october_new_works_canonical.R
       - scripts/updater/experimental_w01_fast/compare_october_real_canonical_by_ranges.R
       - scripts/updater/experimental_w01_fast/recover_october_candidate_abstracts.R
+      - scripts/updater/experimental_w01_fast/run_october_recovered_scoring.R
 permissions:
   contents: read
   actions: read
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,7 +26,7 @@ jobs:
           use-public-rspm: true
       - name: Install canonical builder dependencies
         shell: Rscript {0}
-        run: install.packages(c("data.table","jsonlite","digest","stringi"))
+        run: install.packages(c("data.table","jsonlite","digest","stringi","stringdist","xml2"))
       - uses: actions/download-artifact@v4
         with:
           name: w01-fast-october-real-reference
@@ -63,6 +64,11 @@ jobs:
         run: |
           set -euo pipefail
           Rscript scripts/updater/experimental_w01_fast/recover_october_candidate_abstracts.R
+      - name: Independently score October candidate pairs using original production rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_october_recovered_scoring.R
       - name: Retain compact real-data canonical audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,5 +80,6 @@ jobs:
             real_new_work_fixture/canonical_manifest.json
             actual_october_canonical_comparison/audit/comparison.json
             october_abstract_recovery/report.json
+            october_recovered_scoring/report.json
           retention-days: 7
           if-no-files-found: warn
