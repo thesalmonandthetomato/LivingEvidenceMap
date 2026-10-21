@@ -63,6 +63,16 @@ fresh<-map[!paste(source,source_record_id,sep='\u001f')%in%oldid]
 mu<-unique(rbindlist(list(mu,fresh),fill=TRUE),by=c('source','source_record_id'))
 # A direct delta must cover every changed historic cluster assignment as well as new rows.
 prior_map_full<-fread(pmap,na.strings=c('','NA'),colClasses='character')
+# Numeric indices are only safe when each historical stable identity retains its index.
+if('idx'%in%names(prior_map_full)&&'idx'%in%names(map)){
+ if(anyNA(map$idx)||anyDuplicated(map$idx)||any(!nzchar(map$idx)))
+  stop('Invalid final manifestation indices')
+ old_indices<-prior_map_full[,.(source,source_record_id,previous_idx=idx)]
+ mapped_indices<-map[old_indices,on=.(source,source_record_id),nomatch=0L]
+ if(nrow(mapped_indices)!=nrow(prior_map_full)||
+  any(as.character(mapped_indices$idx)!=as.character(mapped_indices$previous_idx)))
+  stop('Historical manifestation indices were reassigned')
+}
 setkeyv(prior_map_full,c('source','source_record_id'))
 common<-map[prior_map_full,on=.(source,source_record_id),nomatch=0L][,names(map),with=FALSE]
 prior_for_current<-prior_map_full[common,on=.(source,source_record_id)]
