@@ -138,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           LEAN_SHA="$(Rscript -e 'cat(digest::digest(file="inputs/current/canonical_lean.jsonl",algo="sha256",serialize=FALSE))')"
-          W03_SHA="$(Rscript -e 'cat(digest::digest(file="inputs/current/publication_status.jsonl",algo="sha256",serialize=FALSE))')"
+          W03_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W03_POINTER"),simplifyVector=FALSE);v<-tolower(as.character(x$publication_status_sha256));stopifnot(grepl("^[0-9a-f]{64}$",v));stopifnot(identical(v,digest::digest(file="inputs/current/publication_status.jsonl",algo="sha256",serialize=FALSE)));cat(v)')"
           PROMPT_SHA="$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_final/prompt_provenance.json");cat(x$prompt_sha256)')"
           mkdir -p outputs/workflow04_zenodo
           Rscript scripts/updater/workflow_04_archive_state_to_zenodo.R \
