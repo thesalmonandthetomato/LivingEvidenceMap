@@ -13,6 +13,26 @@ fetch_deposit<-function(identifier) {
   }
   stop("No configured Zenodo token can access restricted deposit ",identifier," through depositions API")
 }
+download_deposit_file<-function(entry,dep,auth_token,destination) {
+ links<-entry$links
+ alternatives<-unique(Filter(nzchar,c(
+   if(is.null(links$download)) "" else as.character(links$download),
+   if(is.null(links$self)) "" else as.character(links$self),
+   if(is.null(links$content)) "" else as.character(links$content),
+   if(is.null(dep$links$bucket)) "" else paste0(as.character(dep$links$bucket),"/",utils::URLencode(as.character(entry$filename),reserved=TRUE))
+ )))
+ for(url in alternatives) {
+   unlink(destination)
+   ok<-tryCatch({
+     req_perform(request(url) |> req_headers(Authorization=paste("Bearer",auth_token)) |>
+       req_timeout(1500) |> req_retry(max_tries=2),path=destination)
+     file.exists(destination)&&file.info(destination)$size>0
+   },error=function(e) FALSE)
+   if(ok) return(invisible(TRUE))
+ }
+ stop("All authenticated Zenodo file endpoints failed for deposit ",dep$id," file ",entry$filename)
+}
+
 out<-"outputs/W11/inputs";dir.create(out,recursive=TRUE,showWarnings=FALSE)
 resolved<-fetch_deposit(id)
 d<-resolved$data
@@ -24,8 +44,7 @@ candidates<-which(grepl("workflow01.*(tar\\.gz|tgz)$",names,ignore.case=TRUE))
 if(length(candidates)!=1L) stop("Expected one original Workflow 01 state tar.gz: ",paste(names,collapse=", "))
 f<-fs[[candidates]]
 dest<-tempfile(fileext=".tar.gz")
-req_perform(request(f$links$download) |> req_headers(Authorization=paste("Bearer",token)) |>
- req_timeout(1500) |> req_retry(max_tries=3),path=dest)
+download_deposit_file(f,d,token,dest)
 dir.create(file.path(out,"canonical"),recursive=TRUE,showWarnings=FALSE)
 target<-file.path(out,"canonical/records.jsonl")
 members<-untar(dest,list=TRUE)
@@ -52,8 +71,7 @@ if(length(fs39)!=1L) stop("Expected exactly one archived ZIP for batch 39")
 nm39<-as.character(fs39[[1]]$filename)
 if(!identical(nm39,"LivingEvidenceMap_fulltext_batch_039_run-36457592665.zip")) stop("Unexpected batch 39 archive: ",nm39)
 zip39<-tempfile(fileext=".zip")
-req_perform(request(fs39[[1]]$links$download) |> req_headers(Authorization=paste("Bearer",token39)) |>
- req_timeout(900) |> req_retry(max_tries=3),path=zip39)
+download_deposit_file(fs39[[1]],d39,token39,zip39)
 z39<-unzip(zip39,list=TRUE)
 if(sum(grepl("\\.pdf$",z39$Name,ignore.case=TRUE))!=100L) stop("Batch 39 PDF count mismatch")
 mn<-z39$Name[grepl("(^|/)download_manifest\\.csv$",z39$Name)]
