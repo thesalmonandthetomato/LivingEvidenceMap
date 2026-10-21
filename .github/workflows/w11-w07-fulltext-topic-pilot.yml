@@ -26,7 +26,7 @@ concurrency:
 jobs:
   topic_pilot:
     runs-on: ubuntu-latest
-    timeout-minutes: 108
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,6 +50,7 @@ jobs:
             --output outputs/W11/w07_pilot \
             --n "${{ inputs.n_papers || '10' }}"
       - name: Test topic-only OpenAI coding and W07 paired comparison
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.model != 'preflight-only' }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
