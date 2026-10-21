@@ -10,7 +10,7 @@ permissions:
 jobs:
   full_xml_pilot:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 64
     steps:
       - uses: actions/checkout@v4
         with:
