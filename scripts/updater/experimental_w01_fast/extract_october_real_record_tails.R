@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Read-only ZIP64 STORED member extraction with hard transfer/size caps.
 # Never downloads or unpacks the complete 27 GB GitHub Actions archive.
-artifact_id <- "12257626610"
+artifact_id <- "12259032049"
 repo <- "thesalmonandthetomato/LivingEvidenceMap"
 selected <- c(
  "previous_state/canonical/records.jsonl",
@@ -39,7 +39,7 @@ request<-function(start,end,path,cap){
  if (!file.exists(path)||file.info(path)$size != (end-start+1))
   stop("Storage did not honour exact range")
 }
-total<-18178975846
+total<-27460488363
 tail_path<-tempfile();request(total-65536,total-1,tail_path,65536)
 b<-readBin(tail_path,"raw",n=65536);unlink(tail_path)
 num<-function(x,p,n){
