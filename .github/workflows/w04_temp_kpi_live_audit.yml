@@ -69,4 +69,29 @@ jobs:
               sub("^w04-model-run-","",z$batch_id),
               as.character(z$complete_n),as.character(z$kappa)))
           }
+          cells <- matrix(0,nrow=3L,ncol=3L,
+            dimnames=list(c("retain","exclude","uncertain"),
+                          c("retain","exclude","uncertain")))
+          for(z in latest) {
+            raters <- as.character(fromJSON(as.character(z$rater_ids_json[[1L]])))
+            if(length(raters)!=2L || sum(raters=="model")!=1L)
+              stop("Latest comparison has invalid model-human rater order")
+            pats <- fromJSON(as.character(z$patterns_json[[1L]]),simplifyVector=FALSE)
+            for(pat in pats) {
+              decisions <- strsplit(as.character(pat$pattern)," \\| ")[[1L]]
+              if(length(decisions)!=2L)stop("Invalid comparison pattern")
+              if(!identical(raters[[1L]],"model"))decisions <- rev(decisions)
+              if(any(!decisions%in%rownames(cells)))stop("Invalid comparison decision")
+              cells[decisions[[1L]],decisions[[2L]]] <-
+                cells[decisions[[1L]],decisions[[2L]]] + as.integer(pat$n)
+            }
+          }
+          n <- sum(cells)
+          if(n!=200L)stop("Latest comparison pattern counts do not cover 200 records")
+          po <- sum(diag(cells))/n
+          pe <- sum(rowSums(cells)*colSums(cells))/n^2
+          if(pe>=1)stop("Cumulative kappa is undefined")
+          pooled <- (po-pe)/(1-pe)
+          cat(sprintf("PASS latest-per-subset cumulative_Cohen_kappa=%.9f n=%d\\n",
+            pooled,n))
           cat("PASS W04 live KPI data present and review-scoped\\n")
