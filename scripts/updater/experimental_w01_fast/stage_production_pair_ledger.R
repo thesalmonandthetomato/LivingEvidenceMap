@@ -66,8 +66,8 @@ missing_fields<-setdiff(names(old),names(fresh))
 # identifier/title-assist finding in publication provenance.
 for(k in missing_fields)fresh[[k]]<-NA
 discarded_fresh<-setdiff(names(fresh),names(old))
-setcolorder(fresh,names(old))
-all<-rbindlist(list(old,fresh[,..names(old)]),use.names=TRUE)
+fresh<-fresh[,names(old),with=FALSE]
+all<-rbindlist(list(old,fresh),use.names=TRUE)
 if(anyDuplicated(all$pair_key)||nrow(all)!=nrow(old)+nrow(fresh))
  stop("Cumulative ledger count or pair-key integrity failure")
 dir.create(dirname(out),recursive=TRUE,showWarnings=FALSE)
