@@ -1,0 +1,82 @@
+#!/usr/bin/env Rscript
+# Synthetic new manifestation + historical cluster merge, using original replay.
+suppressPackageStartupMessages({library(data.table);library(jsonlite);library(digest)})
+stopifnot(system2('Rscript','scripts/updater/workflow_01_validate_delta_fixture.R')==0L)
+root<-'outputs/workflow01_delta_fixture';p<-file.path(root,'previous')
+t<-tempfile('w01-fast-merge-');dir.create(t)
+on.exit(unlink(t,recursive=TRUE,force=TRUE),add=TRUE)
+seed<-file.path(t,'seed');final<-file.path(t,'final');dir.create(seed);dir.create(final)
+file.copy(list.files(file.path(root,'current_seed'),full.names=TRUE),seed)
+lens<-file.path(seed,'lens_records_for_deduplication.jsonl')
+newrec<-list(source='lens',source_record_id='L3',title='Gamma',abstract='G',doi='10.1/g')
+cat(toJSON(newrec,auto_unbox=TRUE),file=lens,append=TRUE,sep='\n')
+oldmap<-fread(file.path(p,'workflow01_full_five_source','manifestation_cluster_map.csv'))
+oldmap[cluster_id=='work-b',cluster_id:='work-a']
+oldmap[cluster_id=='work-a',cluster_size:=3L]
+newmap<-rbindlist(list(oldmap,data.table(idx=3L,source='lens',source_record_id='L3',
+ cluster_id='work-a',cluster_size=3L,cluster_id_origin='incremental')),fill=TRUE)
+fwrite(newmap,file.path(final,'manifestation_cluster_map.csv'))
+oldpairs<-fread(file.path(p,'workflow01_full_five_source','final_pair_decisions.csv'))
+fresh<-data.table(pair_key='1::3',record_i=1L,record_j=3L,
+ rescored_classification='duplicate',rescored_rule='fixture_new_link',review_route='automatic')
+fwrite(rbindlist(list(oldpairs,fresh),fill=TRUE),file.path(final,'final_pair_decisions.csv'))
+fwrite(data.table(retired_cluster_id='work-b',surviving_cluster_id='work-a',reason='new_link'),
+ file.path(final,'cluster_id_aliases.csv'))
+file.copy(file.path(p,'workflow01_full_five_source','abstract_strip_actions.jsonl'),final)
+file.create(file.path(final,'cumulative_data_quality_repairs.jsonl'))
+file.copy(file.path(p,'provenance','cumulative_data_quality_repairs.jsonl'),
+ file.path(final,'cumulative_data_quality_repairs.jsonl'),overwrite=TRUE)
+writeLines('{}',file.path(final,'summary.json'))
+canon<-file.path(t,'canon');dir.create(canon)
+old<-readLines(file.path(p,'canonical','records.jsonl'),warn=FALSE)
+z<-fromJSON(old[[1]],simplifyVector=FALSE)
+other<-fromJSON(old[[2]],simplifyVector=FALSE)
+z$manifestations<-c(z$manifestations,other$manifestations,list(newrec))
+z$deduplication<-list(cluster_id='work-a',member_count=3L)
+z$provenance$workflow01_run_id<-NULL;z$provenance$generated_at_utc<-NULL
+outrec<-toJSON(z,auto_unbox=TRUE,null='null')
+writeLines(outrec,file.path(canon,'records.jsonl'),useBytes=TRUE)
+sha<-function(p)digest(file=p,algo='sha256',serialize=FALSE)
+man<-list(schema='living-evidence-map-canonical-manifest-v1',workflow='01',
+ records=1L,source_manifestations=3L,canonical_jsonl_sha256=sha(file.path(canon,'records.jsonl')),
+ canonical_jsonl_bytes=as.numeric(file.info(file.path(canon,'records.jsonl'))$size))
+writeLines(toJSON(man,auto_unbox=TRUE,pretty=TRUE),file.path(canon,'canonical_manifest.json'))
+fwrite(fresh,file.path(t,'scored.csv'))
+fwrite(newmap,file.path(t,'affected_map.csv'))
+fwrite(data.table(stage=c('prior','prior','successor'),cluster_id=c('work-a','work-b','work-a')),
+ file.path(t,'affected_works.csv'))
+writeLines(outrec,file.path(t,'changed.jsonl'))
+args<-c('--previous-root',p,'--current-seed-root',seed,'--current-final-root',final,
+ '--current-canonical',file.path(canon,'records.jsonl'),
+ '--current-canonical-manifest',file.path(canon,'canonical_manifest.json'),
+ '--previous-pointer',file.path(root,'previous_pointer.json'),
+ '--new-decisions',file.path(t,'scored.csv'),'--affected-map',file.path(t,'affected_map.csv'),
+ '--canonical-changes',file.path(t,'changed.jsonl'),'--affected-works',file.path(t,'affected_works.csv'),
+ '--output-dir',file.path(t,'delta'),'--run-id','merge-fixture')
+run<-function(script,a)system2('Rscript',c(script,shQuote(a)))
+stopifnot(run('scripts/updater/experimental_w01_fast/write_direct_delta.R',args)==0L)
+dm<-fromJSON(file.path(t,'delta','delta_manifest.json'))
+stopifnot(dm$delta$new_source_manifestations==1L,
+ dm$delta$canonical_retired_ids==1L,dm$delta$cluster_map_upserts==3L)
+replay_status<-run('scripts/updater/workflow_01_replay_delta.R',c(
+ '--previous-root',p,'--delta-dir',file.path(t,'delta'),
+ '--output-root',file.path(t,'replayed')))
+if(replay_status!=0L){
+ a<-fread(file.path(t,'replayed','workflow01_full_five_source','manifestation_cluster_map.csv'),colClasses='character')
+ b<-fread(file.path(final,'manifestation_cluster_map.csv'),colClasses='character')
+ cat('REPLAY MAP DIAGNOSTIC\\n')
+ print(list(replayed_columns=names(a),target_columns=names(b),replayed=a,target=b))
+}
+stopifnot(replay_status==0L)
+stopifnot(identical(sha(file.path(t,'replayed','canonical','records.jsonl')),
+ sha(file.path(canon,'records.jsonl'))))
+# Removing a changed historical manifestation from affected scope must be rejected.
+fwrite(newmap[source_record_id!='L2'],file.path(t,'affected_map.csv'))
+args[which(args=='--output-dir')+1L]<-file.path(t,'invalid')
+stopifnot(run('scripts/updater/experimental_w01_fast/write_direct_delta.R',args)!=0L)
+# A final map cannot drop an established historical identity.
+fwrite(newmap[source_record_id!='L1'],file.path(final,'manifestation_cluster_map.csv'))
+fwrite(newmap,file.path(t,'affected_map.csv'))
+args[which(args=='--output-dir')+1L]<-file.path(t,'invalid-missing-history')
+stopifnot(run('scripts/updater/experimental_w01_fast/write_direct_delta.R',args)!=0L)
+cat('PASS: new manifestation merges two historical works; missing affected member rejected\n')
