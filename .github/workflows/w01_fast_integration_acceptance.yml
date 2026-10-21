@@ -117,7 +117,7 @@ jobs:
           s <- fromJSON(file.path(base,'production_final','summary.json'))
           stopifnot(m$source_manifestations==136057L,m$records==50567L,
                     s$source_manifestations==136057L,s$clusters==50567L,
-                    s$status=='final',file.exists(file.path(base,'delta','manifest.json')))
+                    s$status=='final',file.exists(file.path(base,'delta','delta_manifest.json')))
           cat('PASS: production-format W01 state and verified replay match frozen October counts\\n')
       - name: Upload bounded read-only acceptance evidence
         if: always()
@@ -130,6 +130,6 @@ jobs:
             outputs/experimental_w01_fast/final_acceptance/cumulative_decisions.csv.audit.json
             outputs/experimental_w01_fast/final_acceptance/production_final/summary.json
             outputs/experimental_w01_fast/final_acceptance/production_canonical/canonical_manifest.json
-            outputs/experimental_w01_fast/final_acceptance/delta/manifest.json
+            outputs/experimental_w01_fast/final_acceptance/delta/delta_manifest.json
           retention-days: 7
           if-no-files-found: warn
