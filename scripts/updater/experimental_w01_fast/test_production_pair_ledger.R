@@ -26,6 +26,23 @@ fwrite(p,file("old.csv"))
 fwrite(n,file("new.csv"))
 stopifnot(run(file("ledger.csv"))==0L)
 z<-fread(file("ledger.csv"));stopifnot(nrow(z)==2L,z$source_j[[2L]]=="c",z$source_record_id_j[[2L]]=="c1")
+# Stage the full W01 map/output shape from validated pair ledger.
+map<-data.table(source=c("a","b","c"),source_record_id=c("a1","b1","c1"),
+cluster_id=c("work-a","work-a","work-c"),cluster_size=c(2L,2L,1L))
+fwrite(map,file("clusters.csv"))
+oldmap<-map[1:2,.(source,source_record_id,cluster_id,cluster_size)]
+fwrite(oldmap,file("prior_map.csv"))
+final_script<-"scripts/updater/experimental_w01_fast/stage_production_final_map.R"
+stage<-suppressWarnings(system2(file.path(R.home("bin"),"Rscript"),
+ c(final_script,"--metadata",file("metadata.csv"),"--clusters",file("clusters.csv"),
+ "--final-decisions",file("ledger.csv"),"--prior-map",file("prior_map.csv"),
+ "--output-dir",file("final")),stdout=TRUE,stderr=TRUE))
+stopifnot(is.null(attr(stage,"status"))||attr(stage,"status")==0L)
+summ<-fromJSON(file("final/summary.json"))
+stopifnot(summ$source_manifestations==3L,summ$clusters==2L,
+ summ$preserved_pair_decisions==1L,summ$incremental_pair_decisions==1L)
+stage_map<-fread(file("final/manifestation_cluster_map.csv"))
+stopifnot(identical(stage_map$idx,1:3),identical(stage_map$cluster_id,map$cluster_id))
 p[,source_record_id_i:="wrong"];fwrite(p,file("old.csv"))
 stopifnot(run(file("bad.csv"))!=0L)
 cat("PASS: validated immutable identities, consistent production schema, and refusal of mismatched previous state\\n")
