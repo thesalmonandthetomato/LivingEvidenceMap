@@ -55,21 +55,45 @@ if(!startsWith(bucket,"https://zenodo.org/api/files/"))
   stop("Unexpected restricted Zenodo W05 bucket",call.=FALSE)
 names <- c("w05-final-assignments.csv","w05-final-frequencies.csv",
            "w05-final-manifest.json","w05-final-unspecified-evidence.csv")
+# Zenodo deposition checksums are MD5 digests; the API may return a bare
+# digest or an md5:-prefixed digest. Never accept any other checksum algorithm.
+md5_value <- function(x) {
+  v <- tolower(as.character(x %||% ""))
+  v <- sub("^md5:", "", v)
+  if(length(v)!=1L || !grepl("^[0-9a-f]{32}$",v)) return(NA_character_)
+  v
+}
+`%||%` <- function(x,y) if(is.null(x)||!length(x)) y else x
+matching_file <- function(deposition,name) {
+  files <- deposition$files %||% list()
+  Filter(function(f)identical(as.character(f$filename %||% ""),name),files)
+}
+verify_file <- function(deposition,name,path) {
+  matching <- matching_file(deposition,name)
+  if(length(matching)!=1L)
+    stop(sprintf("W05 Zenodo file %s missing or duplicated",name),call.=FALSE)
+  expected <- unname(tools::md5sum(path))
+  actual <- md5_value(matching[[1L]]$checksum)
+  if(is.na(actual) || !identical(actual,expected))
+    stop(sprintf("W05 Zenodo checksum mismatch for %s (expected md5 %s; received %s); publication blocked",
+      name,expected,as.character(matching[[1L]]$checksum %||% "<missing>")),call.=FALSE)
+}
+# Idempotent only for byte-identical outputs. Never replace existing files.
 for(i in seq_along(paths)) {
-  existing <- Filter(function(f)identical(as.character(f$filename),names[[i]]),deposit$files)
-  if(length(existing))stop("W05 final output already exists in draft; fail closed",call.=FALSE)
+  existing <- matching_file(deposit,names[[i]])
+  if(length(existing)>1L)
+    stop(sprintf("Duplicate final W05 filename: %s",names[[i]]),call.=FALSE)
+  if(length(existing)==1L) {
+    verify_file(deposit,names[[i]],paths[[i]])
+    cat(sprintf("PASS reuse checksum-verified existing W05 file %s\\n",names[[i]]))
+  } else {
+    call(paste0(sub("/$","",bucket),"/",names[[i]]),"PUT",paths[[i]])
+    cat(sprintf("Uploaded new W05 final file %s\\n",names[[i]]))
+  }
 }
-for(i in seq_along(paths)){
-  call(paste0(sub("/$","",bucket),"/",names[[i]]),"PUT",paths[[i]])
-}
-# Re-read draft and verify all final files were persisted before publishing.
+# Re-read draft and verify every file before publication.
 verified <- resp_body_json(call(base),simplifyVector=FALSE)
-for(i in seq_along(paths)){
-  found <- Filter(function(f)identical(as.character(f$filename),names[[i]]),verified$files)
-  if(length(found)!=1L || !identical(as.character(found[[1L]]$checksum),
-        paste0("md5:",unname(tools::md5sum(paths[[i]])))))
-    stop("Zenodo W05 uploaded file checksum mismatch; do not publish",call.=FALSE)
-}
+for(i in seq_along(paths)) verify_file(verified,names[[i]],paths[[i]])
 published <- resp_body_json(call(paste0(base,"/actions/publish"),"POST"),simplifyVector=FALSE)
 if(!isTRUE(published$submitted))
   stop("Zenodo did not confirm final W05 publication",call.=FALSE)
