@@ -107,7 +107,8 @@ run("canonicalise","scripts/updater/workflow_01_build_canonical_jsonl.R",
  "--data-quality-repairs",file.path(output,"directives","data_quality_repairs.jsonl"),
  "--output",file.path(output,"changed_canonical.jsonl"),
  "--manifest",file.path(output,"changed_canonical_manifest.json"),
- "--repair-audit",file.path(output,"repair_audit.jsonl")))
+ "--repair-audit",file.path(output,"repair_audit.jsonl"),
+ "--previous-canonical-manifest",file.path(previous_root,"canonical","canonical_manifest.json")))
 run("recombine",file.path(base,"recombine_canonical_jsonl.R"),
  c("--prior",prior_canonical,"--changed",file.path(output,"changed_canonical.jsonl"),
  "--affected-works",file.path(output,"affected","affected_works.csv"),
