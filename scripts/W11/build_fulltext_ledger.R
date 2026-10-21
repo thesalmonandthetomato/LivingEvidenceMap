@@ -24,7 +24,8 @@ find_first<-function(r,keys) {
  ""
 }
 extract_meta<-function(r) {
- nested<-r$metadata
+ nested<-r$canonical
+ if(is.null(nested)||!is.list(nested)) nested<-r$metadata
  if(is.null(nested)||!is.list(nested)) nested<-list()
  doi<-find_first(r,c("doi","DOI","publication_doi","article_doi"))
  if(!nzchar(doi)) doi<-find_first(nested,c("doi","DOI"))
@@ -35,17 +36,22 @@ extract_meta<-function(r) {
  oa<-find_first(r,c("openalex_id","openalex_work_id"))
  if(!nzchar(oa)) oa<-find_first(nested,c("openalex_id","openalex_work_id"))
  id<-find_first(r,c("canonical_id","canonical_record_id","record_id","record_uuid","id","unique_id"))
+ if(!nzchar(id)) id<-find_first(r$identity,c("record_id","id"))
  if(!nzchar(id)) id<-find_first(nested,c("canonical_id","record_id","id"))
  list(doi=normalize_doi(doi),title=title,year=year,openalex_id=sub("^https?://openalex.org/","",oa),record_id=id)
 }
 lines<-readLines(canonical_path,warn=FALSE,encoding="UTF-8")
 lines<-lines[nzchar(trimws(lines))]
 if(!length(lines)) stop("Empty canonical JSONL")
+`%||%`<-function(x,y) if(is.null(x)) y else x
 records<-lapply(seq_along(lines),function(i) {
  x<-tryCatch(fromJSON(lines[[i]],simplifyVector=FALSE),error=function(e) stop("JSONL line ",i,": ",conditionMessage(e)))
  if(!is.list(x)) stop("Non-object JSONL at line ",i)
  m<-extract_meta(x)
- m$line<-i;m
+ m$line<-i
+ m$manifestation_dois<-unique(Filter(nzchar,vapply(x$manifestations %||% list(),function(z) normalize_doi(z$doi),character(1))))
+ m$manifestation_openalex<-unique(Filter(nzchar,vapply(x$manifestations %||% list(),function(z) scalar((z$manifestation_metadata$identifiers %||% list())$openalex_id),character(1))))
+ m
 })
 retrieval<-read.csv(retrieval_path,stringsAsFactors=FALSE,check.names=FALSE,colClasses="character")
 required<-c("batch","github_run_id","zenodo_deposit_id","record_index","doi","openalex_id","format","source_url","status","bytes","sha256","filename")
@@ -64,23 +70,25 @@ retrieval$available<-retrieval$status %in% c("downloaded","already_present")
 items<-vector("list",length(records))
 for(i in seq_along(records)) {
  r<-records[[i]]
- candidates<-if(nzchar(r$doi)) which(retrieval$doi==r$doi) else integer()
- method<-if(length(candidates)) "exact_normalized_doi" else "unmatched"
+ known_dois<-unique(Filter(nzchar,c(r$doi,r$manifestation_dois)))
+ candidates<-which(retrieval$doi %in% known_dois & nzchar(retrieval$doi))
+ method<-if(length(candidates)&&nzchar(r$doi)&&any(retrieval$doi[candidates]==r$doi)) "exact_normalized_doi" else if(length(candidates)) "manifestation_doi" else "unmatched"
  # OpenAlex ID is a supplementary identifier; never equate unverified ID matches with a verified DOI match.
  if(!length(candidates)&&nzchar(r$openalex_id)) {
    candidates<-which(retrieval$openalex_id==r$openalex_id)
    if(length(candidates)) method<-"openalex_id_needs_bibliographic_review"
  }
- confirmed<-length(candidates)==1L && retrieval$available[candidates] && method=="exact_normalized_doi"
+ confirmed<-length(candidates)==1L && retrieval$available[candidates] && method %in% c("exact_normalized_doi","manifestation_doi")
  if(length(candidates)>1L) method<-"ambiguous_multiple_retrievals"
  idx<-if(length(candidates)==1L) candidates else NA_integer_
  f<-function(col) if(is.na(idx)) "" else scalar(retrieval[[col]][idx])
  id<-if(nzchar(r$record_id)) r$record_id else sprintf("jsonl_line_%d",r$line)
  items[[i]]<-data.frame(canonical_record_id=id,canonical_jsonl_line=r$line,
    canonical_doi=r$doi,canonical_title=r$title,canonical_year=r$year,
+   canonical_manifestation_dois=paste(r$manifestation_dois,collapse=";"),
    canonical_openalex_id=r$openalex_id,
    retrieval_doi=f("doi"),retrieval_openalex_id=f("openalex_id"),
-   match_method=method,metadata_verification=if(confirmed) "doi_confirmed_other_metadata_not_available" else "needs_review",
+   match_method=method,metadata_verification=if(confirmed) "canonical_or_manifestation_doi_verified_metadata_pending" else "needs_review",
    match_status=if(confirmed) "matched" else if(length(candidates)>1) "ambiguous" else "unmatched_or_review",
    retrieval_status=f("status"),source_format=f("format"),source_url=f("source_url"),
    zenodo_deposit_id=f("zenodo_deposit_id"),zenodo_record_doi=f("zenodo_record_doi"),
