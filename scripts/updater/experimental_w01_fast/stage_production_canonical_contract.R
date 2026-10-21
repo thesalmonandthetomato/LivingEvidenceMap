@@ -6,7 +6,8 @@ arg<-function(n){i<-match(n,argv);if(is.na(i)||i==length(argv))stop("Missing ",n
 map_path<-arg("--cluster-map");canonical_path<-arg("--canonical")
 output<-arg("--output-dir");run_id<-arg("--run-id")
 strips_path<-arg("--strip-actions");repairs_path<-arg("--repair-ledger")
-required<-c(map_path,canonical_path,strips_path,repairs_path)
+audit_path<-arg("--repair-audit")
+required<-c(map_path,canonical_path,strips_path,repairs_path,audit_path)
 if(any(!file.exists(required))||dir.exists(output)||file.exists(output))
  stop("Missing required inputs or output already exists")
 m<-fread(map_path,colClasses=list(character=c("source","source_record_id","cluster_id")))
@@ -34,10 +35,19 @@ if(any(sizes$n!=count[match(sizes$cluster_id,ids)])||
 if(anyDuplicated(m[,.(source,source_record_id)]))stop("Duplicate manifestation")
 nstrips<-sum(nzchar(trimws(readLines(strips_path,warn=FALSE))))
 nrepairs<-sum(nzchar(trimws(readLines(repairs_path,warn=FALSE))))
+audit_lines<-readLines(audit_path,warn=FALSE)
+audit_lines<-audit_lines[nzchar(trimws(audit_lines))]
+if(length(audit_lines)!=nrepairs)stop("Repair audit and ledger counts disagree; cannot claim successful application")
+if(length(audit_lines)){
+  audits<-lapply(audit_lines,fromJSON,simplifyVector=FALSE)
+  if(!all(vapply(audits,function(x)identical(x$status,"applied"),logical(1))))
+   stop("Not all approved repairs verified as applied")
+}
 sc<-m[,.(N=.N),by=source][order(source)]
 sources<-setNames(as.list(sc$N),sc$source)
 dir.create(output,recursive=TRUE)
 file.copy(canonical_path,file.path(output,"records.jsonl"))
+file.copy(audit_path,file.path(output,"data_quality_repair_application.jsonl"))
 manifest<-list(schema="living-evidence-map-canonical-manifest-v1",
  canonical_schema_version="living-evidence-map-canonical-v1",
  workflow="01",github_run_id=run_id,records=length(ids),
