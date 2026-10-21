@@ -129,7 +129,8 @@ run("stage_canonical_contract",file.path(base,"stage_production_canonical_contra
  "--run-id","w01-fast-frozen-shadow",
  "--strip-actions",file.path(output,"production_final","abstract_strip_actions.jsonl"),
  "--repair-ledger",file.path(output,"production_final","cumulative_data_quality_repairs.jsonl"),
- "--repair-audit",file.path(output,"repair_audit.jsonl")))
+ "--repair-audit",file.path(output,"repair_audit.jsonl"),
+ "--previous-canonical-manifest",file.path(previous_root,"canonical","canonical_manifest.json")))
 # Validate persistence using the unmodified W01 delta generator and replay engine.
 run("build_delta","scripts/updater/workflow_01_build_delta.R",
  c("--previous-root",previous_root,"--current-seed-root",seed_root,
