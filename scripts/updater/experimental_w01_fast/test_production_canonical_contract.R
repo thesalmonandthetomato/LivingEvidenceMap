@@ -11,11 +11,13 @@ canonical=list(title="Fixture"),deduplication=list(cluster_id="work-1",member_co
 manifestations=list(list(source="a",source_record_id="x",abstract="a"),list(source="b",source_record_id="y",abstract="b")))
 writeLines(toJSON(z,auto_unbox=TRUE,null="null"),file("canonical.jsonl"))
 file.create(file("strips.jsonl"));file.create(file("repairs.jsonl"));file.create(file("audit.jsonl"))
+write_json(list(approved_data_quality_repairs=0L,applied_data_quality_repairs=0L),file("prev_manifest.json"),auto_unbox=TRUE)
 script<-"scripts/updater/experimental_w01_fast/stage_production_canonical_contract.R"
 call<-function(out)system2(file.path(R.home("bin"),"Rscript"),
 c(script,"--cluster-map",file("map.csv"),"--canonical",file("canonical.jsonl"),
 "--output-dir",out,"--run-id","fixture","--strip-actions",file("strips.jsonl"),
-"--repair-ledger",file("repairs.jsonl"),"--repair-audit",file("audit.jsonl")),
+"--repair-ledger",file("repairs.jsonl"),"--repair-audit",file("audit.jsonl"),
+ "--previous-canonical-manifest",file("prev_manifest.json")),
 stdout=TRUE,stderr=TRUE)
 x<-call(file("valid"));stopifnot(is.null(attr(x,"status"))||attr(x,"status")==0L)
 a<-fromJSON(file("valid/canonical_manifest.json"))
