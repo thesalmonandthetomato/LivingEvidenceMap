@@ -77,3 +77,18 @@ baseline<-readLines(file.path(root,"full","canonical.jsonl"))
 stopifnot(setequal(assembled,baseline),
  length(assembled)==length(baseline))
 cat("PASS: complete affected-only canonical assembly reproduces full-corpus JSONL\\n")
+
+# Integrate assembled canonical output into versioned snapshot and guarded state.
+# This validates the handoff, without using production source data or publishing.
+snapshot<-file.path(root,"canonical-checkpoint")
+run("scripts/updater/experimental_w01_fast/create_state_snapshot.R",
+ c("--batch-id","canonical-fixture-1",
+ "--artifact",paste0("canonical=",file.path(assembled_dir,"canonical.jsonl")),
+ "--output-dir",snapshot))
+state<-file.path(root,"state")
+run("scripts/updater/experimental_w01_fast/commit_verified_state.R",
+ c("--state-dir",state,"--snapshot-dir",snapshot,"--expected-parent-sha256","NONE"))
+run("scripts/updater/experimental_w01_fast/verify_current_state.R",c("--state-dir",state))
+snapshot_manifest<-fromJSON(file.path(snapshot,"manifest.json"))
+stopifnot(identical(snapshot_manifest$batch_id,"canonical-fixture-1"))
+cat("PASS: canonical scientific builder -> unchanged-record assembly -> verified checkpoint -> guarded current pointer\\n")
