@@ -7,10 +7,12 @@ arg<-function(k,optional=FALSE){i<-match(k,args);if(is.na(i)){if(optional)return
 metadata<-arg("--metadata");prior<-arg("--prior-map")
 source_manifest<-arg("--source-manifest");prior_canonical<-arg("--prior-canonical")
 strips<-arg("--strip-actions");repairs<-arg("--repairs")
+previous_decisions<-arg("--previous-decisions");previous_root<-arg("--previous-root")
+previous_pointer<-arg("--previous-pointer");seed_root<-arg("--current-seed-root")
 output<-arg("--output-dir")
 if(dir.exists(output)||file.exists(output))stop("Refuse overwrite output")
-inputs<-c(metadata,prior,source_manifest,prior_canonical,strips,repairs)
-if(any(!file.exists(inputs)))stop("Required original inputs missing; refusing partial/fabricated canonical output")
+inputs<-c(metadata,prior,source_manifest,prior_canonical,strips,repairs,previous_decisions,previous_pointer)
+if(any(!dir.exists(c(previous_root,seed_root)))||any(!file.exists(inputs)))stop("Required original inputs missing; refusing partial/fabricated canonical output")
 m<-fread(metadata,colClasses=list(character=c("source","source_record_id")))
 prev<-fread(prior,colClasses=list(character=c("source","source_record_id","cluster_id")))
 if(!all(c("idx","source","source_record_id")%in%names(m))||
@@ -76,6 +78,10 @@ stable<-data.table(source_i=m$source[l],source_record_id_i=m$source_record_id[l]
  rescored_classification=d$rescored_classification,rescored_rule=d$rescored_rule,
  review_route=d$review_route)
 fwrite(stable,file.path(output,"stable_decisions.csv"))
+run("stage_cumulative_ledger",file.path(base,"stage_production_pair_ledger.R"),
+ c("--previous-decisions",previous_decisions,
+ "--scored-decisions",file.path(output,"rescored","rescored_sample.csv"),
+ "--metadata",metadata,"--output",file.path(output,"cumulative_decisions.csv")))
 run("clusters",file.path(base,"update_clusters_by_identity.R"),
  c("--prior-map",prior,"--metadata",metadata,
  "--incremental-decisions",file.path(output,"stable_decisions.csv"),
@@ -106,5 +112,35 @@ run("recombine",file.path(base,"recombine_canonical_jsonl.R"),
  c("--prior",prior_canonical,"--changed",file.path(output,"changed_canonical.jsonl"),
  "--affected-works",file.path(output,"affected","affected_works.csv"),
  "--output-dir",file.path(output,"final")))
+# Assemble exact production file paths without publishing or updating pointer registries.
+run("stage_final_state",file.path(base,"stage_production_final_map.R"),
+ c("--metadata",metadata,"--clusters",next_map,
+ "--final-decisions",file.path(output,"cumulative_decisions.csv"),
+ "--prior-map",prior,"--output-dir",file.path(output,"production_final")))
+if(!file.copy(strips,file.path(output,"production_final","abstract_strip_actions.jsonl")) ||
+ !file.copy(repairs,file.path(output,"production_final","cumulative_data_quality_repairs.jsonl")))
+ stop("Cannot retain cumulative provenance in final state")
+run("stage_canonical_contract",file.path(base,"stage_production_canonical_contract.R"),
+ c("--cluster-map",file.path(output,"production_final","manifestation_cluster_map.csv"),
+ "--canonical",file.path(output,"final","canonical.jsonl"),
+ "--output-dir",file.path(output,"production_canonical"),
+ "--run-id","w01-fast-frozen-shadow",
+ "--strip-actions",file.path(output,"production_final","abstract_strip_actions.jsonl"),
+ "--repair-ledger",file.path(output,"production_final","cumulative_data_quality_repairs.jsonl"),
+ "--repair-audit",file.path(output,"repair_audit.jsonl")))
+# Validate persistence using the unmodified W01 delta generator and replay engine.
+run("build_delta","scripts/updater/workflow_01_build_delta.R",
+ c("--previous-root",previous_root,"--current-seed-root",seed_root,
+ "--current-final-root",file.path(output,"production_final"),
+ "--current-canonical",file.path(output,"production_canonical","records.jsonl"),
+ "--current-canonical-manifest",file.path(output,"production_canonical","canonical_manifest.json"),
+ "--previous-pointer",previous_pointer,
+ "--repair-audit",file.path(output,"production_canonical","data_quality_repair_application.jsonl"),
+ "--repair-ledger",repairs,
+ "--output-dir",file.path(output,"delta"),"--run-id","w01-fast-frozen-shadow"))
+run("replay_delta","scripts/updater/workflow_01_replay_delta.R",
+ c("--previous-root",previous_root,"--delta-dir",file.path(output,"delta"),
+ "--output-root",file.path(output,"replayed")))
+
 write_report("PASS_SHADOW_NO_PUBLICATION")
-cat("PASS: isolated W01-Fast end-to-end update, no production publication or W02 dispatch\\n")
+cat("PASS: isolated W01-Fast complete output contract, delta build and replay; NO publication or W02 dispatch\\n")
