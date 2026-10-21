@@ -51,7 +51,7 @@ def main():
     can=[f for f in dep["files"] if re.search(r"canonical.*\.jsonl$",f["filename"],re.I)]
     if len(can)!=1:raise RuntimeError("Cannot uniquely identify authoritative W08 canonical JSONL")
     body=download_from_entry(can[0],dep,token)
-    lines=[ln for ln in body.decode("utf-8").splitlines() if ln.strip()]
+    lines=[ln for ln in body.decode("utf-8").split(chr(10)) if ln.strip()]
     canonical_by_id={}
     for line in lines:
         rec=json.loads(line)
