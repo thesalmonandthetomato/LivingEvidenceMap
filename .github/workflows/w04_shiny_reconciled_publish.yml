@@ -121,6 +121,7 @@ jobs:
           DEPOSIT: ${{ inputs.prompt_draft_id }}
           BUNDLE: ${{ inputs.bundle_file }}
           BUNDLE_SHA: ${{ inputs.bundle_sha256 }}
+          REVIEW: ${{ inputs.review_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -128,7 +129,7 @@ jobs:
           # Download it once again for the complete run/prompt manifest.
           Rscript scripts/updater/workflow_04_shiny_prompt_provenance.R \
             --deposit-id "$DEPOSIT" --bundle-file "$BUNDLE" \
-            --bundle-sha256 "$BUNDLE_SHA" \
+            --bundle-sha256 "$BUNDLE_SHA" --review-id "$REVIEW" \
             --output outputs/workflow04_final/prompt_provenance.json
       - name: Publish reconciled W04 state to restricted Zenodo
         env:
