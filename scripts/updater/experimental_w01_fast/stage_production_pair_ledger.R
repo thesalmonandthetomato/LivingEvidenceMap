@@ -62,10 +62,14 @@ for(side in c("i","j")){
  if(id_field%in%names(old))fresh[[id_field]]<-m$source_record_id[idx]
 }
 missing_fields<-setdiff(names(old),names(fresh))
+if(any(c("classification","rule")%in%missing_fields))
+ stop("Core scientific decision rule/classification missing from new scoring")
 # Null means not evaluated by Fast. It must NOT be described as a positive
 # identifier/title-assist finding in publication provenance.
 for(k in missing_fields)fresh[[k]]<-NA
 discarded_fresh<-setdiff(names(fresh),names(old))
+if(any(c("classification","rule")%in%discarded_fresh))
+ stop("Production historical ledger lacks core scientific decision columns; no silent schema downgrade")
 fresh<-fresh[,names(old),with=FALSE]
 all<-rbindlist(list(old,fresh),use.names=TRUE)
 if(anyDuplicated(all$pair_key)||nrow(all)!=nrow(old)+nrow(fresh))
