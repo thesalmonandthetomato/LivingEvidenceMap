@@ -80,6 +80,7 @@ stable<-data.table(source_i=m$source[l],source_record_id_i=m$source_record_id[l]
 fwrite(stable,file.path(output,"stable_decisions.csv"))
 run("stage_cumulative_ledger",file.path(base,"stage_production_pair_ledger.R"),
  c("--previous-decisions",previous_decisions,
+ "--previous-map",prior,
  "--scored-decisions",file.path(output,"rescored","rescored_sample.csv"),
  "--metadata",metadata,"--output",file.path(output,"cumulative_decisions.csv")))
 run("clusters",file.path(base,"update_clusters_by_identity.R"),
