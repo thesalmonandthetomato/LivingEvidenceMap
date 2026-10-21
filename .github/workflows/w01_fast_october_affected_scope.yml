@@ -6,13 +6,14 @@ on:
     paths:
       - .github/workflows/w01_fast_october_affected_scope.yml
       - scripts/updater/experimental_w01_fast/test_october_affected_scope.R
+      - scripts/updater/experimental_w01_fast/recover_october_affected_history.R
 permissions:
   contents: read
   actions: read
 jobs:
   scope:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,11 +35,18 @@ jobs:
       - name: Establish exact affected historical work scope
         shell: bash
         run: Rscript scripts/updater/experimental_w01_fast/test_october_affected_scope.R
+      - name: Recover real affected historical canonical records by bounded range reads
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: Rscript scripts/updater/experimental_w01_fast/recover_october_affected_history.R
       - name: Preserve scope and source-identity audit
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: w01-fast-october-affected-scope
-          path: october_affected_scope/
+          path: |
+            october_affected_scope/
+            october_historical_affected_source/audit/report.json
           if-no-files-found: warn
           retention-days: 7
