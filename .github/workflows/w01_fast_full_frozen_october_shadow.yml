@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 90
     concurrency:
       group: w01-fast-one-frozen-october-shadow
-      cancel-in-progress: false
+      cancel-in-progress: true
     env:
       W00_POINTER: docs/search_record/zenodo/run-39298022062.json
       PREV_W01_POINTER: docs/deduplication/zenodo/run-39140209398.json
