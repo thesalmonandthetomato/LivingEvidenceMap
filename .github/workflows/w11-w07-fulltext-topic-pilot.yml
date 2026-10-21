@@ -1,5 +1,10 @@
 name: W11 pilot W07 full-text topic alignment
 on:
+  push:
+    branches:
+      - W11-full-text-retrieval
+    paths:
+      - '.github/workflows/w11-w07-fulltext-topic-pilot.yml'
   workflow_dispatch:
     inputs:
       n_papers:
