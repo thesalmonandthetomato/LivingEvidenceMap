@@ -9,6 +9,7 @@ on:
       - 'scripts/updater/experimental_w01_fast/test_production_pair_ledger.R'
       - '.github/workflows/w01_fast_integration_contract_test.yml'
       - 'scripts/updater/experimental_w01_fast/audit_prior_pair_indices.R'
+      - 'scripts/updater/experimental_w01_fast/stage_production_pair_ledger.R'
   workflow_dispatch:
 permissions:
   contents: read
