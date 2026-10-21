@@ -47,15 +47,29 @@ jobs:
           assert identity(first)==identity(now),"Pilot XML identity or checksum drift"
           print("Verified original ten XML identities and content checksums.")
           PY
-      - name: Validate section extraction without API calls
+      - name: Inspect actual structure of all ten XMLs
         run: |
-          python scripts/W11/methods_extraction_pilot.py --manifest outputs/W11/methods_pilot/sample_manifest.json --schema scripts/fulltext_coding/coding_schema_v3.json --out outputs/W11/methods_pilot/preflight --extract-only
-      - name: Extract 25 methods-focused variables
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          python scripts/W11/methods_extraction_pilot.py --manifest outputs/W11/methods_pilot/sample_manifest.json --schema scripts/fulltext_coding/coding_schema_v3.json --out outputs/W11/methods_pilot/extractions
+          python - <<'PY'
+          import collections,json,xml.etree.ElementTree as ET
+          from pathlib import Path
+          def local(tag):return tag.rsplit('}',1)[-1]
+          manifest=json.loads(Path('outputs/W11/methods_pilot/sample_manifest.json').read_text())
+          report=[]
+          for m in manifest:
+              root=ET.parse(m['xml_file']).getroot()
+              counts=collections.Counter(local(x.tag) for x in root.iter())
+              headings=[]
+              for el in root.iter():
+                  if local(el.tag).lower() in ('head','title','section-title','h1','h2','h3'):
+                      txt=' '.join(' '.join(el.itertext()).split())
+                      if txt:headings.append({'tag':local(el.tag),'text':txt[:160]})
+              bodies=[el for el in root.iter() if local(el.tag).lower()=='body']
+              record={'record_id':m['canonical_record_id'],'doi':m['doi'],'root':local(root.tag),'body_count':len(bodies),'tags':counts.most_common(22),'headings':headings[:100],'body_beginning':' '.join(' '.join(bodies[0].itertext()).split())[:400] if bodies else ''}
+              report.append(record)
+              print(json.dumps(record,ensure_ascii=False),flush=True)
+          dest=Path('outputs/W11/methods_pilot/xml_structure_report.json')
+          dest.write_text(json.dumps(report,indent=2,ensure_ascii=False))
+          PY
       - name: Preserve method text, model responses and usage
         if: always()
         uses: actions/upload-artifact@v4
@@ -65,5 +79,6 @@ jobs:
             outputs/W11/methods_pilot/preflight/
             outputs/W11/methods_pilot/extractions/
             outputs/W11/methods_pilot/sample_manifest.json
+            outputs/W11/methods_pilot/xml_structure_report.json
           retention-days: 90
           if-no-files-found: warn
