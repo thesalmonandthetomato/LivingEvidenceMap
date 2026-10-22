@@ -5,7 +5,7 @@ on:
   push:
     branches: [w01-fast-direct-delta]
     paths:
-      - '.github/workflows/w01_fast_direct_october_equivalence.yml'
+      - '.github/workflows/w01_fast_w02_handoff_isolated.yml'
   workflow_dispatch:
 permissions:
   contents: read
