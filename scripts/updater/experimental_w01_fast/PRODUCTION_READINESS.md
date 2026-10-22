@@ -39,3 +39,11 @@ The W02 parser fix in `scripts/updater/workflow_02_validate_canonical_handoff.R`
 - The separate stage_production_handoff.R copies final/canonical outputs but does **not** create the complete canonicalise job artifact: historical state, source union, human-review provenance and checksum file must come from authenticated original processing, not fabricated defaults.
 - **Release block:** the experimental workflow copy explicitly rejects selecting Fast. The adapter does not currently enter the live publication job, and must not be treated as production-ready until the full end-to-end contract is established.
 - Do not merge to workflow01-final-architecture or enable production Fast based only on the synthetic contract audit. No repeat full October scientific run required if preserving validated scientific algorithms; a targeted authoritative handoff test remains necessary.
+
+## Final acceptance dependency check (22 October 2026)
+
+- Frozen October preparation artifact from run 39643422706 is no longer available through GitHub Actions. Full real-data acceptance cannot reuse that artifact.
+- Frozen October outputs retained for run 39783072131 consist of a small report artifact, not full restored/processed state.
+- Therefore the combined Fast-output -> publication-shadow validation **cannot** currently be claimed as complete, despite passing synthetic tests and prior full-replay tests.
+- Real-output acceptance requires re-creating frozen source state, executing W01-Fast with the verified direct-delta writer, and staging the outputs with genuine review provenance. There is no verified normalised human-repair ledger in the retained reports. Do not substitute historical cumulative repairs for current normalised review decisions, or silently create an empty ledger without substantiated zero-review evidence.
+- Even if the final acceptance passes, the production workflow's experimental Fast engine remains explicitly disabled. Enabling production requires separate review of executable routing, human-adjudication handling and the existing Zenodo/W02 lifecycle. This should not be described as just a validation checkbox.
