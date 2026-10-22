@@ -1,0 +1,73 @@
+name: W01-Fast isolated October state restore check
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_real_state_restore_check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: w01-fast-isolated-real-state-restore
+      cancel-in-progress: false
+    env:
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+      PREV_W01_POINTER: docs/deduplication/zenodo/run-39140209398.json
+    steps:
+      - name: Checkout isolated implementation (read-only)
+        uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install restoration dependencies only
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','readr','data.table'))
+      - name: Confirm frozen October pointer
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x<-fromJSON(Sys.getenv('PREV_W01_POINTER'))
+          stopifnot(x$status=='published',x$visibility=='restricted',
+                    x$state=='delta',as.character(x$github_run_id)=='39140209398',
+                    as.integer(x$source_manifestations)==135997L,
+                    nchar(x$canonical_jsonl_sha256)==64L)
+          cat('PASS: October pointer pinned, published and restricted\n')
+      - name: Restore archived prior W01 state without modifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ZENODO_ACCESS_TOKEN"
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$PREV_W01_POINTER" \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root previous_state
+      - name: Validate authoritative historical state and hashes
+        shell: Rscript {0}
+        run: |
+          library(jsonlite); library(digest); library(data.table)
+          p<-fromJSON(Sys.getenv('PREV_W01_POINTER'))
+          m<-fread('previous_state/workflow01_full_five_source/manifestation_cluster_map.csv',
+                   colClasses=list(character=c('source','source_record_id','cluster_id')))
+          stopifnot(nrow(m)==as.integer(p$source_manifestations),
+                    !anyDuplicated(m[,.(source,source_record_id)]),
+                    uniqueN(m$cluster_id)==as.integer(p$canonical_records))
+          c<-'previous_state/canonical/records.jsonl'
+          stopifnot(file.exists(c),
+                    identical(digest(file=c,algo='sha256',serialize=FALSE),
+                              p$canonical_jsonl_sha256))
+          cat('PASS: ',nrow(m),' stable historical identities, ',
+              uniqueN(m$cluster_id),' canonical works and exact archived SHA256\n',sep='')
+      - name: Report only (no corpus artifact, publication or W02)
+        if: always()
+        shell: bash
+        run: |
+          echo "Restoration check complete; no outputs published and no downstream dispatch."
