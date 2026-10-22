@@ -1,0 +1,33 @@
+name: W01-Fast isolated engine switch smoke
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_integration_switch_smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  switch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Verify legacy default and opt-in Fast routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/select_w01_engine.R --purpose preflight
+          Rscript scripts/updater/experimental_w01_fast/select_w01_engine.R --purpose preflight --engine fast
+          if Rscript scripts/updater/experimental_w01_fast/select_w01_engine.R --purpose preflight --engine unknown; then
+            echo 'Invalid engine unexpectedly accepted' >&2; exit 1
+          fi
+          if Rscript scripts/updater/experimental_w01_fast/select_w01_engine.R --engine fast --purpose publish; then
+            echo 'Publishing unexpectedly accepted' >&2; exit 1
+          fi
+          echo 'PASS: default, explicit Fast, unknown engine and publication guard'
