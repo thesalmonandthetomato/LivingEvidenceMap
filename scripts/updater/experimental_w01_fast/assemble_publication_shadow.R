@@ -15,7 +15,9 @@ must<-c(file.path(previous,"workflow01_full_five_source","summary.json"),
  file.path(seed,"source_inputs.json"),repairs,
  p("delta","delta_manifest.json"),p("replayed","workflow01_delta_replay_audit.json"))
 if(any(!file.exists(must)))stop("Missing authoritative previous-state, source-union, human or delta inputs")
-stage<-file.path(out,"_staged")
+stage<-file.path(tempdir(),paste0("w01-fast-adapter-",Sys.getpid()))
+if(file.exists(stage)||dir.exists(stage))stop("Refusing stage path collision")
+on.exit(unlink(stage,recursive=TRUE,force=TRUE),add=TRUE)
 # Validate the existing adapter before copying anything else.
 cmd<-c("scripts/updater/experimental_w01_fast/stage_production_handoff.R",
  "--fast-root",fast,"--output-root",stage)
