@@ -4,6 +4,7 @@ suppressPackageStartupMessages({library(httr2);library(jsonlite);library(digest)
 source("shiny_w07/R/w05_w07_bridge.R")
 source("shiny_w07/R/w07_shiny_trial_gate.R")
 source("shiny_w07/R/w07_shiny_evidence.R")
+source("shiny_w07/R/w07_shiny_relevance.R")
 getenv <- function(k) Sys.getenv(k,unset="")
 review <- getenv("W07_REVIEW_ID")
 w05 <- getenv("W07_W05_DEPOSIT_ID")
@@ -85,8 +86,13 @@ response_schema <- list(type="object",properties=list(
     confidence=list(type="string",enum=c("high","medium","low"))
   ),required=c("path_id","evidence","explanation","confidence"),additionalProperties=FALSE)),
   human_review=list(type="boolean"),
-  ambiguity=list(type="string")
-),required=c("assignments","human_review","ambiguity"),additionalProperties=FALSE)
+  ambiguity=list(type="string"),
+  relevance=list(type="object",properties=list(
+    status=list(type="string",enum=c("CODED_IN_SCOPE","IN_SCOPE_ONTOLOGY_GAP","OUT_OF_SCOPE","INSUFFICIENT_INFORMATION")),
+    explanation=list(type="string"),
+    candidate_category=list(type="string")
+  ),required=c("status","explanation","candidate_category"),additionalProperties=FALSE)
+),required=c("assignments","human_review","ambiguity","relevance"),additionalProperties=FALSE)
 extract_response <- function(x) {
   for(item in x$output %||% list())
     for(part in item$content %||% list())
@@ -101,7 +107,7 @@ for(i in seq_len(n)) {
   payload <- list(model=model,store=FALSE,reasoning=list(effort="low"),
     input=list(
       list(role="system",content=list(list(type="input_text",
-        text=paste(prompt,"\n\nONTOLOGY (the only authorised topic codes):",
+        text=paste(prompt,"\n\nSTRUCTURED RELEVANCE OUTPUT IS MANDATORY: Use relevance.status=CODED_IN_SCOPE whenever one or more valid topic codes are assigned. When no codes apply, critically assess relevance and choose IN_SCOPE_ONTOLOGY_GAP, OUT_OF_SCOPE, or INSUFFICIENT_INFORMATION, with an evidence-based relevance.explanation. For an ontology gap, fill relevance.candidate_category with a proposed label; otherwise use an empty string. Never infer relevance from location alone. Do not add a topic code merely to avoid a zero-code outcome. Preserve human_review and ambiguity for classification uncertainty.\n\nONTOLOGY (the only authorised topic codes):",
                    ontology_json)))),
       list(role="user",content=list(list(type="input_text",
         text=paste("RECORD ID:",rec$record_id,"TITLE:",rec$title,
@@ -114,7 +120,8 @@ for(i in seq_len(n)) {
       req_timeout(120) |> req_retry(max_tries=3))
     body <- resp_body_json(res,simplifyVector=FALSE)
     coding <- fromJSON(extract_response(body),simplifyVector=FALSE)
-    issues <- w07_validate_model_coding(coding,allowed,rec$title,rec$abstract)
+    issues <- c(w07_validate_model_coding(coding,allowed,rec$title,rec$abstract),
+                w07_relevance_validate(coding))
     list(status=if(length(issues))"needs_review" else "ok",
          coding=coding,validation_issues=issues,
          usage=body$usage %||% list())
