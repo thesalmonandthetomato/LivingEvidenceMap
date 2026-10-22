@@ -29,3 +29,13 @@
 Review and approve how the isolated implementation is wired into the production entry point, with a rollback to the existing W01 path. Run a final non-publishing smoke test of that **integration**, not another whole-corpus scientific rebuild unless the integration materially changes computation.
 
 The W02 parser fix in `scripts/updater/workflow_02_validate_canonical_handoff.R` is present **only on the experimental branch**; it must not be silently promoted into production as part of W01-Fast.
+
+
+## Publication contract follow-up (22 October 2026)
+
+- Isolated runtime publication-contract audit validated against a complete synthetic handoff (Actions run 39816392978, PASS). It rejects modified stage checksums, replay failure and absent repair ledger.
+- Earlier full October scientific equivalence and legacy W02 handoff were validated in Actions runs 39751536887 and 39783072131 (PASS).
+- Inspection of retained artifacts for those runs shows small reports only, **not** the full restored manifestation, canonical, human-gate and delta input state. A further *real-state* publication-contract audit would therefore require an authoritative read-only restoration; no existing retained artifact is sufficient.
+- The separate stage_production_handoff.R copies final/canonical outputs but does **not** create the complete canonicalise job artifact: historical state, source union, human-review provenance and checksum file must come from authenticated original processing, not fabricated defaults.
+- **Release block:** the experimental workflow copy explicitly rejects selecting Fast. The adapter does not currently enter the live publication job, and must not be treated as production-ready until the full end-to-end contract is established.
+- Do not merge to workflow01-final-architecture or enable production Fast based only on the synthetic contract audit. No repeat full October scientific run required if preserving validated scientific algorithms; a targeted authoritative handoff test remains necessary.
