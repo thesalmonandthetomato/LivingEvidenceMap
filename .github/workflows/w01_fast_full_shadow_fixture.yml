@@ -1,0 +1,66 @@
+name: W01-Fast complete shadow assembly fixture
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_full_shadow_fixture.yml']
+permissions:
+  contents: read
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    container:
+      image: rocker/r-ver:4.4.3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - name: Run full adapter, assembler and publication audit in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e "install.packages(c('jsonlite','digest','data.table'),repos='https://cloud.r-project.org')"
+          Rscript - <<'RS'
+          library(jsonlite);library(digest);library(data.table)
+          root<-tempfile("w01-shadow-fixture");dir.create(root)
+          fast<-file.path(root,"fast");prev<-file.path(root,"previous_state")
+          seed<-file.path(root,"union");out<-file.path(root,"shadow")
+          wr<-function(base,path,v){f<-file.path(base,path);dir.create(dirname(f),recursive=TRUE,showWarnings=FALSE);writeLines(v,f,useBytes=TRUE)}
+          js<-function(base,path,v)wr(base,path,toJSON(v,auto_unbox=TRUE,null="null"))
+          sha<-function(p)digest(file=p,algo="sha256",serialize=FALSE)
+          map<-data.table(idx=1L,source="lens",source_record_id="a",cluster_id="work-1",cluster_size=1L)
+          dir.create(file.path(fast,"production_final"),recursive=TRUE)
+          fwrite(map,file.path(fast,"production_final","manifestation_cluster_map.csv"))
+          fwrite(data.table(pair_key=character()),file.path(fast,"production_final","final_pair_decisions.csv"))
+          fwrite(data.table(retired_cluster_id=character(),surviving_cluster_id=character()),file.path(fast,"production_final","cluster_id_aliases.csv"))
+          wr(fast,"production_final/abstract_strip_actions.jsonl","")
+          wr(fast,"production_final/cumulative_data_quality_repairs.jsonl","")
+          wr(fast,"production_canonical/data_quality_repair_application.jsonl","")
+          canon<-toJSON(list(schema_version="living-evidence-map-canonical-v1",
+            identity=list(record_id="work-1"),manifestations=list(list(source="lens",source_record_id="a")),
+            deduplication=list(cluster_id="work-1",member_count=1L)),auto_unbox=TRUE)
+          wr(fast,"production_canonical/records.jsonl",canon)
+          wr(fast,"replayed/canonical/records.jsonl",canon)
+          h<-sha(file.path(fast,"replayed/canonical/records.jsonl"))
+          js(fast,"run_report.json",list(status="PASS_SHADOW_NO_PUBLICATION"))
+          js(fast,"production_final/summary.json",list(source_manifestations=1L,clusters=1L))
+          js(fast,"production_canonical/canonical_manifest.json",list(records=1L,source_manifestations=1L,canonical_jsonl_sha256=h))
+          js(fast,"replayed/workflow01_delta_replay_audit.json",list(status="PASS",source_manifestations=1L,canonical_records=1L,canonical_jsonl_sha256=h))
+          js(fast,"delta/delta_manifest.json",list(target=list(source_manifestations=1L,canonical_records=1L)))
+          js(prev,"workflow01_full_five_source/summary.json",list(source_manifestations=1L))
+          fwrite(map,file.path(prev,"workflow01_full_five_source","manifestation_cluster_map.csv"))
+          wr(prev,"canonical/records.jsonl",canon)
+          js(seed,"source_inputs.json",list(schema="living-evidence-map-workflow01-source-inputs-v1",sources=list(lens="records.jsonl")))
+          repairs<-file.path(root,"normalised_repairs.jsonl");writeLines("",repairs)
+          cmd<-c("scripts/updater/experimental_w01_fast/assemble_publication_shadow.R",
+            "--fast-root",fast,"--previous-root",prev,"--current-seed-root",seed,
+            "--normalised-human-repairs",repairs,"--output-root",out)
+          stopifnot(system2("Rscript",cmd)==0L)
+          manifest<-fromJSON(file.path(out,"publication_shadow_manifest.json"))
+          stopifnot(manifest$status=="PASS_SHADOW_NO_PUBLICATION",
+                    isFALSE(manifest$publication_allowed),isFALSE(manifest$workflow02_dispatch_allowed))
+          stopifnot(file.exists(file.path(out,"outputs/final/final_pair_decisions.csv")))
+          stopifnot(system2("Rscript",cmd,stdout=FALSE,stderr=FALSE)!=0L)
+          cat("PASS: full assembly and audit, manifest prohibitions and overwrite rejection\n")
+          RS
