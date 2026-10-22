@@ -24,7 +24,18 @@ mk<-key(m);xk<-key(x);pk<-key(p)
 if(!setequal(mk,xk)||any(!pk%in%mk))stop("Missing historic or final manifestation")
 map<-x[match(mk,xk)]
 map[,idx:=m$idx]
-setcolorder(map,c("idx","source","source_record_id","cluster_id","cluster_size"))
+# The unchanged production replay retains every previous map column.
+# Carry historical descriptive columns forward by stable identity so that
+# target and replay schemas, as well as values, remain identical.
+historic_extra <- setdiff(names(p),c("idx","source","source_record_id","cluster_id","cluster_size"))
+if(length(historic_extra)){
+  prev_rows <- match(mk,pk)
+  for(nm in historic_extra){
+    if(nm %in% names(map)) stop(sprintf("Unexpected existing map column: %s",nm))
+    map[[nm]] <- p[[nm]][prev_rows]
+  }
+}
+setcolorder(map,c("idx","source","source_record_id","cluster_id","cluster_size",historic_extra))
 setorder(map,idx)
 sizes<-map[,.(count=.N),by=cluster_id]
 if(any(map$cluster_size!=sizes$count[match(map$cluster_id,sizes$cluster_id)]))
