@@ -1,0 +1,36 @@
+name: W01-Fast publication contract static smoke
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_publication_contract_smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - name: Verify isolation and completeness of contract gate
+        shell: python
+        run: |
+          from pathlib import Path
+          a=Path('scripts/updater/experimental_w01_fast/audit_publication_contract.R').read_text()
+          b=Path('scripts/updater/experimental_w01_fast/stage_production_handoff.R').read_text()
+          y=Path('.github/workflows/workflow_01_production.yml').read_text()
+          for x in ['previous_state/workflow01_full_five_source/summary.json',
+                    'outputs/workflow01_union/source_inputs.json',
+                    'outputs/human_gate/normalised/data_quality_repairs.normalised.jsonl',
+                    'outputs/workflow01_stage_canonicalise_checksums.txt',
+                    'outputs/delta/delta_manifest.json',
+                    'outputs/replayed/workflow01_delta_replay_audit.json']:
+              assert x in a,x
+          assert 'checksum mismatch' in a and 'replay disag' in a.lower() or 'delta and replay disagree' in a
+          assert 'NOT READY' in a and 'stop(' in a
+          assert 'publication_allowed=FALSE' in b and 'workflow02_dispatch_allowed=FALSE' in b
+          assert 'fast) echo' in y and 'exit 1' in y.split('fast) echo',1)[1].split('      - name: Checkout Workflow 01 implementation',1)[0]
+          print('PASS: publication contract audit covers stage dependencies and Fast remains disabled')
