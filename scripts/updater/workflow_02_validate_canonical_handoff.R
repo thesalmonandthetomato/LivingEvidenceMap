@@ -16,7 +16,8 @@ arg <- function(flag,default=NULL){
 input_path <- arg("--input")
 sample_path <- arg("--sample")
 report_path <- arg("--report")
-sample_n <- as.integer(arg("--sample-n","10"))\nenrich_author_keywords <- tolower(arg("--enrich-author-keywords","false")) %in% c("true","1","yes")
+sample_n <- as.integer(arg("--sample-n","10"))
+enrich_author_keywords <- tolower(arg("--enrich-author-keywords","false")) %in% c("true","1","yes")
 expected_records <- as.integer(arg("--expected-records","32292"))
 expected_manifestations <- as.integer(arg("--expected-manifestations","90137"))
 if(any(vapply(list(input_path,sample_path,report_path),is.null,logical(1)))) {
