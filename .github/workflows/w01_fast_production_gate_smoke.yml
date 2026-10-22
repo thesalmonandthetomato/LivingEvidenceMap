@@ -1,0 +1,32 @@
+name: W01-Fast production engine gate (isolated smoke)
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_production_gate_smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - name: Verify default legacy and fail-closed Fast contract
+        shell: python
+        run: |
+          from pathlib import Path
+          s=Path('.github/workflows/workflow_01_production.yml').read_text()
+          assert s.count('      w01_engine:')==2, 'workflow_call and dispatch must both declare engine'
+          assert s.count('        default: legacy')>=2
+          guard=s.split('      - name: Enforce safe engine selection before any processing',1)[1]
+          guard=guard.split('      - name: Checkout Workflow 01 implementation',1)[0]
+          assert 'legacy) echo' in guard
+          assert 'fast) echo' in guard and 'exit 1' in guard.split('fast) echo',1)[1]
+          assert '*) echo' in guard and 'exit 1' in guard.split('*) echo',1)[1]
+          assert s.index('      - name: Enforce safe engine selection before any processing') < s.index('      - name: Checkout Workflow 01 implementation')
+          assert 'ref: ${{ env.WORKFLOW01_BRANCH }}' in s, 'original production checkout must remain unchanged'
+          print('PASS: experimental production entry point defaults to legacy and refuses Fast before processing')
