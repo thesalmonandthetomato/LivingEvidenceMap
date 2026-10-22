@@ -3,6 +3,7 @@
 suppressPackageStartupMessages({library(httr2);library(jsonlite);library(digest)})
 source("shiny_w07/R/w05_w07_bridge.R")
 source("shiny_w07/R/w07_shiny_trial_gate.R")
+source("shiny_w07/R/w07_shiny_evidence.R")
 getenv <- function(k) Sys.getenv(k,unset="")
 review <- getenv("W07_REVIEW_ID")
 w05 <- getenv("W07_W05_DEPOSIT_ID")
@@ -113,17 +114,10 @@ for(i in seq_len(n)) {
       req_timeout(120) |> req_retry(max_tries=3))
     body <- resp_body_json(res,simplifyVector=FALSE)
     coding <- fromJSON(extract_response(body),simplifyVector=FALSE)
-    ids <- vapply(coding$assignments %||% list(),
-                  function(x)as.character(x$path_id),character(1))
-    if(anyDuplicated(ids)||any(!ids %in% allowed))
-      stop("Model returned duplicate or unknown ontology codes",call.=FALSE)
-    source_text <- paste(rec$title,rec$abstract)
-    for(a in coding$assignments %||% list()) {
-      evidence <- trimws(as.character(a$evidence %||% ""))
-      if(!nzchar(evidence)||!grepl(evidence,source_text,fixed=TRUE))
-        stop("Unverifiable topic evidence quotation",call.=FALSE)
-    }
-    list(status="ok",coding=coding,usage=body$usage %||% list())
+    issues <- w07_validate_model_coding(coding,allowed,rec$title,rec$abstract)
+    list(status=if(length(issues))"needs_review" else "ok",
+         coding=coding,validation_issues=issues,
+         usage=body$usage %||% list())
   },error=function(e)list(status="needs_review",error=conditionMessage(e)))
   results[[i]] <- c(list(record_id=rec$record_id,title=rec$title,
     abstract=rec$abstract),result)
