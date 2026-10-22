@@ -29,7 +29,27 @@ download_item <- function(dep,name) {
   if(length(selected)!=1L)stop("Expected exactly one Zenodo file: ",name,call.=FALSE)
   url <- as.character(selected[[1L]]$links$download %||% "")
   if(!startsWith(url,"https://zenodo.org/"))stop("Untrusted Zenodo file URL",call.=FALSE)
-  resp_body_raw(req_perform(request(url) |> req_auth_bearer_token(token) |> req_timeout(180)))
+  fetch_bytes <- function(target) {
+    req <- request(target) |> req_auth_bearer_token(token) |> req_timeout(180)
+    res <- req_perform(req_error(req,is_error=function(resp)FALSE))
+    if(resp_status(res)!=200L)return(NULL)
+    resp_body_raw(res)
+  }
+  bytes <- fetch_bytes(url)
+  # A published restricted deposition may expose a stale draft-bucket link.
+  # Try the versioned record-file content endpoint, without changing any data.
+  if(is.null(bytes) && isTRUE(dep$submitted)) {
+    id <- as.character(dep$id %||% "")
+    if(!grepl("^[0-9]+$",id))
+      stop("Published Zenodo record identity missing",call.=FALSE)
+    target <- paste0("https://zenodo.org/api/records/",id,
+      "/files/",utils::URLencode(name,reserved=TRUE),"/content")
+    bytes <- fetch_bytes(target)
+  }
+  if(is.null(bytes))
+    stop("Zenodo file retrieval failed for ",name,
+         "; checked the deposition link and published-record content endpoint",call.=FALSE)
+  bytes
 }
 sha <- function(x)digest(x,algo="sha256",serialize=FALSE)
 source_dep <- get_json(w05_id)
