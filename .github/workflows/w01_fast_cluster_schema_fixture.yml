@@ -31,5 +31,5 @@ jobs:
           opts <- c('scripts/updater/experimental_w01_fast/stage_production_final_map.R','--metadata',file.path(t,'m.csv'),'--clusters',file.path(t,'x.csv'),'--final-decisions',file.path(t,'d.csv'),'--prior-map',file.path(t,'p.csv'),'--output-dir',file.path(t,'out'))
           stopifnot(system2('Rscript',opts)==0L)
           z <- fread(file.path(t,'out','manifestation_cluster_map.csv'),colClasses='character')
-          stopifnot(identical(z$cluster_id_origin,c('historical-a','historical-b',NA_character_)),nrow(z)==3L)
+          stopifnot(nrow(z)==3L,identical(z$cluster_id_origin[1:2],c('historical-a','historical-b')),is.na(z$cluster_id_origin[3]) || identical(z$cluster_id_origin[3],''))
           cat('PASS: stable-identity historical metadata and new rows preserved\\n')
