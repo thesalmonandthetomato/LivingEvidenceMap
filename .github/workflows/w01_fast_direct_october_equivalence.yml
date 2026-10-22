@@ -1,4 +1,5 @@
 name: W01-Fast direct-delta October equivalence (isolated)
+# Recheck full October after schema fixture passed
 # Validate preparation against current split-job W01 workflow
 on:
   push:
