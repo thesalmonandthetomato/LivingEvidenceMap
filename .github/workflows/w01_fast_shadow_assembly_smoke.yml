@@ -1,0 +1,35 @@
+name: W01-Fast publication shadow assembly smoke
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_shadow_assembly_smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: rocker/r-ver:4.4.3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - name: Parse and enforce missing-authoritative-input guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e "parse(file='scripts/updater/experimental_w01_fast/assemble_publication_shadow.R')"
+          mkdir -p /tmp/w01-fast-shadow-fast /tmp/w01-fast-shadow-prev /tmp/w01-fast-shadow-seed
+          if Rscript scripts/updater/experimental_w01_fast/assemble_publication_shadow.R \
+              --fast-root /tmp/w01-fast-shadow-fast \
+              --previous-root /tmp/w01-fast-shadow-prev \
+              --current-seed-root /tmp/w01-fast-shadow-seed \
+              --normalised-human-repairs /tmp/w01-fast-shadow-repairs.jsonl \
+              --output-root /tmp/w01-fast-shadow-output; then
+            echo 'ERROR: Missing authoritative inputs were accepted' >&2; exit 1
+          fi
+          test ! -e /tmp/w01-fast-shadow-output
+          echo 'PASS: shadow script parses and rejects missing authoritative state without creating output'
