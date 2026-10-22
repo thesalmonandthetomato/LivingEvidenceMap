@@ -1,0 +1,31 @@
+name: W07 Shiny isolated bridge validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'shiny_w07/**'
+      - '.github/workflows/w07_shiny_validation.yml'
+permissions:
+  contents: read
+jobs:
+  verify-w05-bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install offline test dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest'))
+      - name: Parse isolated W07 modules
+        shell: Rscript {0}
+        run: |
+          parse(file="shiny_w07/R/w05_w07_bridge.R")
+          parse(file="shiny_w07/scripts/w07_shiny_restore_w05.R")
+      - name: Verify direct W05 handover without network or model usage
+        shell: Rscript {0}
+        run: source("shiny_w07/tests/test_w05_w07_bridge.R")
