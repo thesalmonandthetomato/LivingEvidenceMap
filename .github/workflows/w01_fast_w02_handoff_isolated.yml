@@ -75,7 +75,7 @@ jobs:
           set -euo pipefail
           ROOT=outputs/experimental_w01_fast/full_update
           test -s "$ROOT/replayed/canonical/records.jsonl"
-          read -r COUNTS WORKS < <(Rscript -e 'library(jsonlite);x<-fromJSON("outputs/experimental_w01_fast/full_update/production_final/summary.json");cat(as.integer(x$source_manifestations),as.integer(x$clusters))')
+          read -r COUNTS WORKS < <(Rscript -e 'library(jsonlite);x<-fromJSON("outputs/experimental_w01_fast/full_update/production_final/summary.json");cat(as.integer(x$source_manifestations),as.integer(x$clusters),"\n")')
           Rscript scripts/updater/workflow_02_validate_canonical_handoff.R \
             --input "$ROOT/replayed/canonical/records.jsonl" \
             --sample "$ROOT/w02_handoff/sample_10.jsonl" \
