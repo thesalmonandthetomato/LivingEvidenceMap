@@ -58,7 +58,7 @@ jobs:
   acceptance:
     needs: prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
       W00_POINTER: docs/search_record/zenodo/run-39298022062.json
@@ -127,18 +127,24 @@ jobs:
             --fast-root outputs/experimental_w01_fast/final_acceptance \
             --prior-repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
             --output-dir outputs/experimental_w01_fast/verified_review
-      - name: Assemble and audit real non-publishing shadow
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/experimental_w01_fast/assemble_publication_shadow.R \
-            --fast-root outputs/experimental_w01_fast/final_acceptance \
-            --previous-root previous_state \
-            --current-seed-root outputs/workflow01_union \
-            --normalised-human-repairs outputs/experimental_w01_fast/verified_review/data_quality_repairs.normalised.jsonl \
-            --output-root outputs/experimental_w01_fast/publication_shadow
-          Rscript -e 'library(jsonlite); m<-fromJSON("outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json"); stopifnot(m$status=="PASS_SHADOW_NO_PUBLICATION",identical(m$publication_allowed,FALSE),identical(m$workflow02_dispatch_allowed,FALSE))'
-          echo 'PASS: authoritative October W01-Fast handoff meets read-only publication contract'
+      - name: Checkpoint verified Fast output for independent publication audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-m1-audit-inputs-${{ github.run_id }}
+          path: |
+            previous_state/workflow01_full_five_source/summary.json
+            previous_state/workflow01_full_five_source/manifestation_cluster_map.csv
+            previous_state/canonical/records.jsonl
+            outputs/workflow01_union/source_inputs.json
+            outputs/experimental_w01_fast/final_acceptance/run_report.json
+            outputs/experimental_w01_fast/final_acceptance/production_final/
+            outputs/experimental_w01_fast/final_acceptance/production_canonical/
+            outputs/experimental_w01_fast/final_acceptance/delta/
+            outputs/experimental_w01_fast/final_acceptance/replayed/
+            outputs/experimental_w01_fast/verified_review/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
       - name: Upload bounded read-only acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -152,6 +158,62 @@ jobs:
             outputs/experimental_w01_fast/final_acceptance/production_canonical/canonical_manifest.json
             outputs/experimental_w01_fast/final_acceptance/delta/delta_manifest.json
             outputs/experimental_w01_fast/verified_review/certificate.json
-            outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json
           retention-days: 7
           if-no-files-found: warn
+
+  publication_audit:
+    needs: acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install audit dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest"))
+      - name: Recover genuine Fast checkpoint from acceptance
+        uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-m1-audit-inputs-${{ github.run_id }}
+          path: .
+      - name: Validate checkpoint provenance before assembly
+        shell: Rscript {0}
+        run: |
+          library(jsonlite);library(digest)
+          base <- 'outputs/experimental_w01_fast/final_acceptance'
+          m <- fromJSON(file.path(base,'production_canonical','canonical_manifest.json'))
+          p <- fromJSON('docs/deduplication/zenodo/run-39140209398.json')
+          r <- fromJSON(file.path(base,'run_report.json'))
+          cert <- fromJSON('outputs/experimental_w01_fast/verified_review/certificate.json')
+          stopifnot(m$source_manifestations == 136057L, m$records == 50567L,
+                    r$status == 'PASS_SHADOW_NO_PUBLICATION',
+                    cert$status == 'PASS_NO_CURRENT_REVIEW',
+                    digest(file='previous_state/canonical/records.jsonl',
+                           algo='sha256',serialize=FALSE)==p$canonical_jsonl_sha256,
+                    identical(cert$previous_repair_sha256,cert$current_cumulative_repair_sha256))
+          cat('PASS: direct-delta Fast output, archived prior hash, and reviewed provenance checkpoint\n')
+      - name: Assemble and audit authoritative handoff without publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/assemble_publication_shadow.R \
+            --fast-root outputs/experimental_w01_fast/final_acceptance \
+            --previous-root previous_state \
+            --current-seed-root outputs/workflow01_union \
+            --normalised-human-repairs outputs/experimental_w01_fast/verified_review/data_quality_repairs.normalised.jsonl \
+            --output-root outputs/experimental_w01_fast/publication_shadow
+          Rscript -e 'library(jsonlite); m<-fromJSON("outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json");stopifnot(identical(m$status,"PASS_SHADOW_NO_PUBLICATION"),identical(m$publication_allowed,FALSE),identical(m$workflow02_dispatch_allowed,FALSE))'
+          echo 'PASS: authoritative W01-Fast publication handoff, no Zenodo writes or W02 dispatch'
+      - name: Upload final audit proof only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-m1-audit-result-${{ github.run_id }}
+          path: outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json
+          if-no-files-found: warn
+          retention-days: 14
