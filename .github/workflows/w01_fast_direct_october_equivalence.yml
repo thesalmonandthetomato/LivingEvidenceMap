@@ -1,4 +1,5 @@
 name: W01-Fast direct-delta October equivalence (isolated)
+# Validate preparation against current split-job W01 workflow
 on:
   push:
     branches: [w01-fast-direct-delta]
