@@ -100,11 +100,11 @@ for(i in seq_len(n)) {
   payload <- list(model=model,store=FALSE,reasoning=list(effort="low"),
     input=list(
       list(role="system",content=list(list(type="input_text",
-        text=paste(prompt,"\\n\\nONTOLOGY (the only authorised topic codes):",
+        text=paste(prompt,"\n\nONTOLOGY (the only authorised topic codes):",
                    ontology_json)))),
       list(role="user",content=list(list(type="input_text",
         text=paste("RECORD ID:",rec$record_id,"TITLE:",rec$title,
-                   "ABSTRACT:",rec$abstract,sep="\\n"))))),
+                   "ABSTRACT:",rec$abstract,sep="\n"))))),
     text=list(verbosity="low",format=list(type="json_schema",
       name="w07_substantive_topics",strict=TRUE,schema=response_schema)))
   result <- tryCatch({
@@ -134,5 +134,5 @@ summary <- c(prepared$manifest,list(model=model,
   completed=sum(vapply(results,function(x)identical(x$status,"ok"),logical(1))),
   needs_review=sum(vapply(results,function(x)identical(x$status,"needs_review"),logical(1)))))
 write_json(summary,file.path(out,"w07_subset_manifest.json"),auto_unbox=TRUE,pretty=TRUE)
-cat(sprintf("PASS experimental W07 subset %d records: %d coded, %d need review\\n",
+cat(sprintf("PASS experimental W07 subset %d records: %d coded, %d need review\n",
  n,summary$completed,summary$needs_review))
