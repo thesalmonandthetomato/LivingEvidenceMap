@@ -25,7 +25,9 @@ run_step <- function(name, executable, args) {
   if (!identical(as.integer(code),0L)) stop(sprintf("Benchmark stage failed: %s",name),call.=FALSE)
 }
 workflow <- yaml::read_yaml(".github/workflows/workflow_01_production.yml")
-steps <- workflow$jobs$workflow01$steps
+# Current production workflow splits preparation into its own job.
+steps <- workflow$jobs$prepare$steps
+if (is.null(steps)) stop("Missing production prepare job stages")
 required <- c(
   "Restore latest Workflow 01 state from baseline plus deltas",
   "Restore current Workflow 00 source subset",
