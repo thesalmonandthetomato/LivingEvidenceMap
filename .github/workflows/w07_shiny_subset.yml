@@ -1,0 +1,57 @@
+name: W07 Shiny experimental topic subset
+on:
+  workflow_dispatch:
+    inputs:
+      review_id:
+        required: true
+        type: string
+      w05_deposit_id:
+        required: true
+        type: string
+      config_deposit_id:
+        required: true
+        type: string
+      ontology_sha:
+        required: true
+        type: string
+      prompt_sha:
+        required: true
+        type: string
+      subset_count:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  w07-subset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install isolated topic worker dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite','digest'))
+      - name: Validate approved versions and code experimental subset
+        shell: Rscript {0}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          W07_REVIEW_ID: ${{ inputs.review_id }}
+          W07_W05_DEPOSIT_ID: ${{ inputs.w05_deposit_id }}
+          W07_CONFIG_DEPOSIT_ID: ${{ inputs.config_deposit_id }}
+          W07_ONTOLOGY_SHA: ${{ inputs.ontology_sha }}
+          W07_PROMPT_SHA: ${{ inputs.prompt_sha }}
+          W07_SUBSET_COUNT: ${{ inputs.subset_count }}
+        run: source("shiny_w07/scripts/w07_shiny_subset.R")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w07-shiny-subset-${{ github.run_id }}
+          path: ${{ runner.temp }}/w07-shiny-results/
+          retention-days: 30
+          if-no-files-found: error
