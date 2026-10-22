@@ -27,6 +27,7 @@ jobs:
           parse(file="shiny_w07/R/w05_w07_bridge.R")
           parse(file="shiny_w07/scripts/w07_shiny_restore_w05.R")
           parse(file="shiny_w07/R/w07_shiny_trial_gate.R")
+          parse(file="shiny_w07/scripts/w07_shiny_subset.R")
       - name: Verify direct W05 handover without network or model usage
         shell: Rscript {0}
         run: |
