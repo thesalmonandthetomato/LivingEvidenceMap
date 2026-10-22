@@ -9,6 +9,10 @@ on:
       previous_workflow01_pointer_path:
         required: true
         type: string
+      w01_engine:
+        required: false
+        default: legacy
+        type: string
       model:
         required: false
         default: gpt-5.6-luna
@@ -31,6 +35,12 @@ on:
         description: 'Latest Workflow 01 pointer path (full baseline or delta)'
         required: true
         type: string
+      w01_engine:
+        description: 'Execution engine: legacy (Fast integration not yet enabled)'
+        required: false
+        default: legacy
+        type: choice
+        options: [legacy, fast]
       model:
         description: 'Duplicate adjudication model'
         required: true
@@ -64,6 +74,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
+      - name: Enforce safe engine selection before any processing
+        env:
+          W01_ENGINE: ${{ inputs.w01_engine || 'legacy' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$W01_ENGINE" in
+            legacy) echo "PASS: unchanged legacy W01 execution selected";;
+            fast) echo "::error::W01-Fast is not yet wired to the production adjudication and publication lifecycle; refusing to run legacy under a Fast request"; exit 1;;
+            *) echo "::error::Unsupported W01 engine"; exit 1;;
+          esac
+
       - name: Checkout Workflow 01 implementation
         uses: actions/checkout@v4
         with:
