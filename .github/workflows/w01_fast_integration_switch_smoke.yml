@@ -9,14 +9,16 @@ permissions:
 jobs:
   switch:
     runs-on: ubuntu-latest
+    container:
+      image: rocker/r-ver:4.4.3
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           ref: w01-fast-direct-delta
           persist-credentials: false
-      - name: Verify runner provides Rscript without package setup
-        run: command -v Rscript
+      - name: Verify container provides Rscript
+        run: Rscript --version
       - name: Verify legacy default and opt-in Fast routing
         shell: bash
         run: |
