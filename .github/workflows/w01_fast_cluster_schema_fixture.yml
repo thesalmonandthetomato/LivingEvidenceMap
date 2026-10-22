@@ -1,0 +1,35 @@
+name: W01-Fast cluster schema microfixture
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths:
+      - '.github/workflows/w01_fast_cluster_schema_fixture.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Check historical metadata retained by identity
+        shell: Rscript {0}
+        run: |
+          install.packages(c('data.table','jsonlite','digest'))
+          library(data.table); library(jsonlite)
+          t <- tempfile(); dir.create(t)
+          m <- data.table(idx=1:3,source=c('A','A','B'),source_record_id=c('old1','old2','new3'))
+          x <- data.table(source=m$source,source_record_id=m$source_record_id,cluster_id=c('c1','c2','c1'),cluster_size=c(2L,1L,2L))
+          p <- data.table(idx=1:2,source=c('A','A'),source_record_id=c('old1','old2'),cluster_id=c('c1','c2'),cluster_size=c(1L,1L),cluster_id_origin=c('historical-a','historical-b'))
+          d <- data.table(record_i=1L,record_j=3L,rescored_classification='duplicate',review_route='automatic',pair_key='1::3')
+          for(nm in c('m','x','p','d')) fwrite(get(nm),file.path(t,paste0(nm,'.csv')))
+          write_json(list(final_decisions=1L,historical_decisions=0L,incremental_decisions=1L),file.path(t,'d.csv.audit.json'),auto_unbox=TRUE)
+          opts <- c('scripts/updater/experimental_w01_fast/stage_production_final_map.R','--metadata',file.path(t,'m.csv'),'--clusters',file.path(t,'x.csv'),'--final-decisions',file.path(t,'d.csv'),'--prior-map',file.path(t,'p.csv'),'--output-dir',file.path(t,'out'))
+          stopifnot(system2('Rscript',opts)==0L)
+          z <- fread(file.path(t,'out','manifestation_cluster_map.csv'),colClasses='character')
+          stopifnot(identical(z$cluster_id_origin,c('historical-a','historical-b',NA_character_)),nrow(z)==3L)
+          cat('PASS: stable-identity historical metadata and new rows preserved\\n')
