@@ -1,0 +1,157 @@
+name: W01-Fast milestone 1 real publication shadow
+# Read-only acceptance after canonical manifest argument regression test passed (39633732965).
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_milestone1_real_shadow.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: w01-fast-milestone1-real-shadow
+  cancel-in-progress: false
+# This workflow has a runner shutdown boundary near 45 minutes; isolate restoration from processing.
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      W00_POINTER: docs/search_record/zenodo/run-39298022062.json
+      PREV_W01_POINTER: docs/deduplication/zenodo/run-39140209398.json
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+      WORKFLOW01_BRANCH: workflow01-final-architecture
+      WORKFLOW00_REPORTING_BRANCH: workflow01-final-architecture
+      W00_SOURCES: lens,scopus,openalex,agricola,ethos,wos,ebsco_africa_wide,ebsco_amed,ebsco_psycinfo,ebsco_atla_religion,ebsco_biological_agricultural_index,ebsco_cinahl,ebsco_econlit,ebsco_family_society,ebsco_greenfile,ebsco_medline,ebsco_mla,ebsco_political_science,ebsco_waters_oceans
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          path: workflow00_registry
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install original W01 dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest","httr2","readr","stringdist","stringi","xml2","googlesheets4","yaml"))
+      - name: Restore October W00 and prior W01 with metadata-only normalisation
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/prepare_frozen_w00_fast.R
+      - name: Checkpoint frozen previous state and source inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-m1-prepare-${{ github.run_id }}
+          path: |
+            previous_state/
+            outputs/
+          compression-level: 1
+          retention-days: 2
+          if-no-files-found: error
+  acceptance:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      W00_POINTER: docs/search_record/zenodo/run-39298022062.json
+      PREV_W01_POINTER: docs/deduplication/zenodo/run-39140209398.json
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+      WORKFLOW01_BRANCH: workflow01-final-architecture
+      WORKFLOW00_REPORTING_BRANCH: workflow01-final-architecture
+      W00_SOURCES: lens,scopus,openalex,agricola,ethos,wos,ebsco_africa_wide,ebsco_amed,ebsco_psycinfo,ebsco_atla_religion,ebsco_biological_agricultural_index,ebsco_cinahl,ebsco_econlit,ebsco_family_society,ebsco_greenfile,ebsco_medline,ebsco_mla,ebsco_political_science,ebsco_waters_oceans
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install original W01 dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest","httr2","readr","stringdist","stringi","xml2","googlesheets4","yaml"))
+      - name: Restore exact frozen preparatory state from earlier job
+        uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-m1-prepare-${{ github.run_id }}
+          path: .
+      - name: Validate restored preparatory state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f previous_state/canonical/records.jsonl
+          test -f previous_state/canonical/canonical_manifest.json
+          test -f outputs/workflow01_candidates/normalised_metadata.csv
+          test -f outputs/workflow01_union/source_inputs.json
+      - name: Run fast W01 and verify original production delta replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --delta-writer direct \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --previous-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --source-manifest outputs/workflow01_union/source_inputs.json \
+            --current-seed-root outputs/workflow01_union \
+            --prior-canonical previous_state/canonical/records.jsonl \
+            --previous-root previous_state \
+            --previous-pointer docs/deduplication/zenodo/run-39140209398.json \
+            --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/final_acceptance
+      - name: Verify frozen October authoritative output counts
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          base <- 'outputs/experimental_w01_fast/final_acceptance'
+          m <- fromJSON(file.path(base,'production_canonical','canonical_manifest.json'))
+          s <- fromJSON(file.path(base,'production_final','summary.json'))
+          stopifnot(m$source_manifestations==136057L,m$records==50567L,
+                    s$source_manifestations==136057L,s$clusters==50567L,
+                    s$status=='final',file.exists(file.path(base,'delta','delta_manifest.json')))
+          cat('PASS: production-format W01 state and verified replay match frozen October counts\\n')
+      - name: Certify genuine zero current-run review provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/certify_zero_review_ledger.R \
+            --fast-root outputs/experimental_w01_fast/final_acceptance \
+            --prior-repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/verified_review
+      - name: Assemble and audit real non-publishing shadow
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/assemble_publication_shadow.R \
+            --fast-root outputs/experimental_w01_fast/final_acceptance \
+            --previous-root previous_state \
+            --current-seed-root outputs/workflow01_union \
+            --normalised-human-repairs outputs/experimental_w01_fast/verified_review/data_quality_repairs.normalised.jsonl \
+            --output-root outputs/experimental_w01_fast/publication_shadow
+          Rscript -e 'library(jsonlite); m<-fromJSON("outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json"); stopifnot(m$status=="PASS_SHADOW_NO_PUBLICATION",identical(m$publication_allowed,FALSE),identical(m$workflow02_dispatch_allowed,FALSE))'
+          echo 'PASS: authoritative October W01-Fast handoff meets read-only publication contract'
+      - name: Upload bounded read-only acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-m1-real-shadow-${{ github.run_id }}
+          path: |
+            outputs/experimental_w01_fast/benchmark-stages.json
+            outputs/experimental_w01_fast/final_acceptance/run_report.json
+            outputs/experimental_w01_fast/final_acceptance/cumulative_decisions.csv.audit.json
+            outputs/experimental_w01_fast/final_acceptance/production_final/summary.json
+            outputs/experimental_w01_fast/final_acceptance/production_canonical/canonical_manifest.json
+            outputs/experimental_w01_fast/final_acceptance/delta/delta_manifest.json
+            outputs/experimental_w01_fast/verified_review/certificate.json
+            outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json
+          retention-days: 7
+          if-no-files-found: warn
