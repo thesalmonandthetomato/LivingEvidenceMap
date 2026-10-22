@@ -69,6 +69,10 @@ jobs:
             --current-seed-root outputs/workflow01_union \
             --delta-writer direct \
             --output-dir outputs/experimental_w01_fast/full_update
+      - name: Diagnose cluster-map replay mismatch without changing checks
+        if: failure()
+        run: |
+          Rscript scripts/updater/experimental_w01_fast/diagnose_replayed_cluster_map.R
       - name: Compare rebuilt works with frozen production scientific fields
         run: |
           set -euo pipefail
@@ -80,6 +84,7 @@ jobs:
           name: w01-direct-october-validation-${{ github.run_id }}
           path: |
             outputs/experimental_w01_fast/benchmark-stages.json
+            outputs/experimental_w01_fast/full_update/cluster_map_replay_diagnostic.json
             outputs/experimental_w01_fast/full_update/run_report.json
             outputs/experimental_w01_fast/full_update/affected/manifest.json
             outputs/experimental_w01_fast/full_update/final/recombination_audit.json
