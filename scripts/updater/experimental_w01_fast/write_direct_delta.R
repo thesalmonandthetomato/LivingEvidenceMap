@@ -87,6 +87,11 @@ changed_historic<-common[diff]
 included<-paste(mu$source,mu$source_record_id,sep='\u001f')
 required_changed<-paste(changed_historic$source,changed_historic$source_record_id,sep='\u001f')
 if(any(!required_changed%in%included))stop('Affected map omitted changed historical cluster assignments')
+# Canonical-only repairs require a canonical upsert, not a redundant unchanged map upsert.
+# Preserve every new manifestation and every genuinely changed historic map row.
+new_ids<-paste(fresh$source,fresh$source_record_id,sep='\u001f')
+upsert_ids<-unique(c(required_changed,new_ids))
+mu<-mu[paste(source,source_record_id,sep='\u001f')%in%upsert_ids]
 
 setcolorder(mu,names(map))
 if('idx'%in%names(mu))setorder(mu,idx)
