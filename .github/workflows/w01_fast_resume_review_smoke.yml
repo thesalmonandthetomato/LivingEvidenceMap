@@ -1,4 +1,4 @@
-name: W01-Fast verified human title edit regression
+name: W01-Fast verified repair manifest syntax regression
 on:
   push:
     branches: [w01-fast-direct-delta]
