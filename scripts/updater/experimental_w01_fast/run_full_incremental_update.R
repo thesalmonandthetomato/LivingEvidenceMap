@@ -76,7 +76,31 @@ run("rescoring","scripts/updater/workflow_01_deduplication_identifier_rescore.R"
  c("--input-dir",file.path(output,"scored"),"--output-dir",file.path(output,"rescored")))
 d<-fread(file.path(output,"rescored","rescored_sample.csv"))
 if(any(!d$rescored_classification%in%c("duplicate","unresolved","review")))stop("Unknown scoring classification")
-if(anyNA(d$rescored_classification)||any(d$rescored_classification=="review"))stop("Unresolved scientific review cases; never merge automatically")
+if(anyNA(d$rescored_classification))stop("Missing scientific classification; refusing incomplete review queue")
+if(any(d$rescored_classification=="review")){
+  # Preserve the existing Shiny review-case schema; never finalise or write a delta.
+  review<-d[rescored_classification=="review"]
+  required<-c("record_i","record_j","pair_key","rescored_rule","title_similarity","blocks")
+  missing<-setdiff(required,names(review))
+  if(length(missing))stop("Cannot generate authentic review queue; absent columns: ",paste(missing,collapse=", "))
+  if(anyNA(review[,..required])||anyDuplicated(review$pair_key))
+    stop("Ambiguous or incomplete Fast review cases")
+  review_root<-file.path(output,"adjudication")
+  dir.create(review_root,recursive=TRUE)
+  review_csv<-file.path(review_root,"manual_review_pairs.csv")
+  fwrite(review,review_csv)
+  run("build_review_cases","scripts/updater/workflow_01_build_duplicate_adjudication_cases.R",
+      c("--review-pairs",review_csv,"--metadata",metadata,
+        "--union-dir",seed_root,"--output",file.path(review_root,"cases.jsonl")))
+  source_run<-basename(previous_pointer)
+  run("build_review_package","scripts/updater/workflow_01_build_human_review_package.R",
+      c("--input",file.path(review_root,"cases.jsonl"),
+        "--output-dir",file.path(review_root,"human_review_package"),
+        "--source-run-id",source_run))
+  write_report("AWAITING_HUMAN_REVIEW")
+  cat(sprintf("PAUSE: %d unresolved duplicate pairs; Shiny-format human review package generated. No canonical changes, delta, publication or W02 dispatch.\\n",nrow(review)))
+  quit(save="no",status=0L)
+}
 l<-match(d$record_i,m$idx);rr<-match(d$record_j,m$idx)
 if(anyNA(l)||anyNA(rr))stop("Decision identity mismatch")
 stable<-data.table(source_i=m$source[l],source_record_id_i=m$source_record_id[l],
