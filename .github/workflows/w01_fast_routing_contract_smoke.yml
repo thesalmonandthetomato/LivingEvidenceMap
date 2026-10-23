@@ -1,4 +1,4 @@
-name: W01-Fast isolated routing checkout and preparation smoke
+name: W01-Fast isolated routing, handoff and preparation smoke
 on:
   push:
     branches: [w01-fast-direct-delta]
