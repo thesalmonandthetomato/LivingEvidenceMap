@@ -1,4 +1,4 @@
-name: W01-Fast isolated return workflow contract
+name: W01-Fast verified return canonical replay safety
 on:
   push:
     branches: [w01-fast-direct-delta]
