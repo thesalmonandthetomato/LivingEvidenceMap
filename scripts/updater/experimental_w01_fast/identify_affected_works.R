@@ -4,7 +4,7 @@
 suppressPackageStartupMessages({library(data.table);library(jsonlite);library(digest)})
 a<-commandArgs(trailingOnly=TRUE)
 arg<-function(k){i<-match(k,a);if(is.na(i)||i==length(a))stop(paste("Missing",k));a[[i+1L]]}
-old_path<-arg("--prior-map");next_path<-arg("--next-map");out<-arg("--output-dir"); repairs_path<-arg("--repairs",FALSE)
+old_path<-arg("--prior-map");next_path<-arg("--next-map");out<-arg("--output-dir"); repairs_path<-arg("--repairs")
 readmap<-function(path){
  x<-fread(path,colClasses=list(character=c("source","source_record_id","cluster_id")))
  required<-c("source","source_record_id","cluster_id")
