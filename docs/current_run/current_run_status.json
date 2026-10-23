@@ -3,7 +3,7 @@
   "update_id": "w00-run-39298022062",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-19T18:03:02Z",
-  "last_updated_at_utc": "2026-10-23T18:50:04Z",
+  "last_updated_at_utc": "2026-10-23T20:25:33Z",
   "baseline": {
     "release_update_id": "w00-run-39127932051",
     "workflow01_source_run_id": "39140209398",
@@ -156,10 +156,10 @@
       "status": "complete"
     },
     "W03": {
-      "status": "active"
+      "status": "complete"
     },
     "W04": {
-      "status": "pending"
+      "status": "active"
     },
     "W05": {
       "status": "pending"
@@ -179,14 +179,15 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W02",
-    "completed_through": 3,
-    "active_position": 4,
-    "status_label": "Enrichment complete; awaiting retraction screening"
+    "current_stage": "W03",
+    "completed_through": 4,
+    "active_position": 5,
+    "status_label": "Retraction screening complete; awaiting relevance screening"
   },
   "workflow_runs": {
     "W00": "39298022062",
     "W01": "39990028078",
-    "W02": "40000668150"
+    "W02": "40000668150",
+    "W03": "40015813902"
   }
 }
