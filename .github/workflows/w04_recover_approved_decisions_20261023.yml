@@ -1,0 +1,20 @@
+name: W04 recover approved screening and protected abstracts
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/w04_recover_approved_decisions_20261023.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  recover:
+    uses: ./.github/workflows/workflow_04_production.yml
+    with:
+      lean_pointer_path: docs/compaction/zenodo/run-40000668150.json
+      workflow03_pointer_path: docs/publication_status/zenodo/run-40015813902.json
+      prior_workflow04_pointer_path: docs/workflow04/zenodo/run-39150923062.json
+      prior_lean_pointer_path: docs/compaction/zenodo/run-39144383368.json
+      publish: true
+    secrets: inherit
