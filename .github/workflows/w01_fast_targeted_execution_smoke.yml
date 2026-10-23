@@ -1,4 +1,4 @@
-name: W01-Fast repair canonical direct replay execution
+name: W01-Fast canonical-only delta upsert regression
 on:
   push:
     branches: [w01-fast-direct-delta]
