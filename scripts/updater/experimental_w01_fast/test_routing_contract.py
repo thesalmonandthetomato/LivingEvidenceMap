@@ -10,7 +10,7 @@ assert t.count("if: ${{ inputs.w01_engine != 'fast' }}")==2
 assert "needs.fast_shadow.outputs.review_pending == 'false'" in t
 assert "workflow01-fast-publish-ready-" in t
 assert "needs.canonicalise.result == 'success'" in t
-assert "workflow_01_archive_delta_to_zenodo.R" in t.split("  publish:\\n")[-1]
+assert "workflow_01_archive_delta_to_zenodo.R" in t
 shadow=t.split("  fast_shadow:\n",1)[1].split("  adjudicate:\n",1)[0]
 assert "ref: w01-fast-direct-delta" in shadow
 assert "--delta-writer direct" in shadow
