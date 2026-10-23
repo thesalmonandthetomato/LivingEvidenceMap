@@ -92,7 +92,7 @@ if(any(d$rescored_classification=="review")){
   run("build_review_cases","scripts/updater/workflow_01_build_duplicate_adjudication_cases.R",
       c("--review-pairs",review_csv,"--metadata",metadata,
         "--union-dir",seed_root,"--output",file.path(review_root,"cases.jsonl")))
-  source_run<-basename(previous_pointer)
+  source_run<-Sys.getenv("GITHUB_RUN_ID","experimental-fast")
   run("build_review_package","scripts/updater/workflow_01_build_human_review_package.R",
       c("--input",file.path(review_root,"cases.jsonl"),
         "--output-dir",file.path(review_root,"human_review_package"),
