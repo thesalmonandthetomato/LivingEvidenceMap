@@ -1,4 +1,4 @@
-name: W01-Fast adjudication package contract smoke
+name: W01-Fast reviewed continuation contract smoke
 on:
   push:
     branches: [w01-fast-direct-delta]
