@@ -29,12 +29,18 @@ decision<-list(review_case_id=id,queue_sha256=sha,decision="duplicate",
  rationale="Verified same article",reviewer="fixture",resolved_at_utc="2026-10-23T00:00:00Z")
 writeLines(toJSON(decision,auto_unbox=TRUE),at("decisions.jsonl"))
 file.create(at("repairs.jsonl"))
+write_json(list(schema="w01-fast-shiny-return-verified-v1",status="VERIFIED_SHINY_RETURN",queue_sha256=sha,
+ decision_sha256=digest(file=at("decisions.jsonl"),algo="sha256"),
+ repair_sha256=digest(file=at("repairs.jsonl"),algo="sha256"),
+ production_publication_allowed=FALSE,workflow02_dispatch_allowed=FALSE),at("verified_shiny.json"),auto_unbox=TRUE)
+
 exe<-"scripts/updater/experimental_w01_fast/resume_review_decisions.R"
 call<-function(out,decisions=at("decisions.jsonl"),repairs=at("repairs.jsonl")){
  z<-suppressWarnings(system2(file.path(R.home("bin"),"Rscript"),c(exe,
  "--fast-root",at("fast"),"--metadata",at("meta.csv"),
  "--previous-map",at("oldmap.csv"),"--previous-decisions",at("old.csv"),
  "--queue",qp,"--decisions",decisions,"--repairs",repairs,
+ "--verified-shiny-return",at("verified_shiny.json"),
  "--output-dir",out),stdout=TRUE,stderr=TRUE))
  if(is.null(attr(z,"status")))0L else as.integer(attr(z,"status"))
 }
