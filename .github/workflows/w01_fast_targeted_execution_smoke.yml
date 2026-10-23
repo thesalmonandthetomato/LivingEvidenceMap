@@ -26,6 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/test_repair_affected_works.R
           Rscript scripts/updater/experimental_w01_fast/test_human_summary.R
           Rscript scripts/updater/experimental_w01_fast/test_production_pair_ledger.R
           Rscript scripts/updater/experimental_w01_fast/test_production_canonical_contract.R
