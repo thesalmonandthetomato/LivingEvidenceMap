@@ -567,6 +567,20 @@ jobs:
             --output-root outputs/experimental_w01_fast/publication_shadow
           test -s outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json
           echo 'PASS: non-publishing W01-Fast handoff; legacy publication and W02 remain disabled'
+      - name: Save recoverable pending Fast review checkpoint
+        if: ${{ steps.fast_execution.outputs.review_pending == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-review-checkpoint-${{ github.run_id }}
+          path: |
+            outputs/experimental_w01_fast/shadow/
+            outputs/workflow01_candidates/normalised_metadata.csv
+            outputs/workflow01_union/source_inputs.json
+            outputs/workflow01_union/
+            previous_state/
+          retention-days: 14
+          compression-level: 0
+          if-no-files-found: error
       - name: Upload isolated Fast evidence (never publish)
         if: always()
         uses: actions/upload-artifact@v4
