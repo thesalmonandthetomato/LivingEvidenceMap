@@ -1,4 +1,4 @@
-name: W01-Fast verified review repair merge regression
+name: W01-Fast verified human title edit regression
 on:
   push:
     branches: [w01-fast-direct-delta]
