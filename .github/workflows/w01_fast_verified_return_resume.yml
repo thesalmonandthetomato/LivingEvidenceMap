@@ -10,6 +10,10 @@ on:
         description: 'Completed W01 Shiny export GitHub run ID'
         required: true
         type: string
+      previous_pointer_path:
+        description: 'Existing published prior W01 pointer JSON path in this branch'
+        required: true
+        type: string
       handoff_path:
         description: 'Path to externally issued W01 Shiny handoff JSON in experimental branch'
         required: true
@@ -86,6 +90,70 @@ jobs:
             --repairs restored/export/data_quality_repairs.jsonl \
             --output-dir restored/verified_resume
           test -s restored/verified_resume/COMPLETE.json
+      - name: Restore frozen working layout and finish isolated canonical/direct replay
+        shell: bash
+        env:
+          PREVIOUS_POINTER: ${{ inputs.previous_pointer_path }}
+        run: |
+          set -euo pipefail
+          [[ "$PREVIOUS_POINTER" =~ ^[A-Za-z0-9_./-]+\\.json$ ]] || exit 1
+          [[ "$PREVIOUS_POINTER" != /* && "$PREVIOUS_POINTER" != *../* ]] || exit 1
+          test -s "$PREVIOUS_POINTER"
+          test ! -e outputs/workflow01_union
+          test ! -e outputs/experimental_w01_fast/shadow
+          test ! -e previous_state
+          cp -a restored/checkpoint/. .
+          test -s outputs/workflow01_union/source_inputs.json
+          test -s previous_state/canonical/records.jsonl
+          test -s previous_state/canonical/canonical_manifest.json
+          test -f previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl
+          test -f previous_state/provenance/cumulative_data_quality_repairs.jsonl
+          test -s restored/verified_resume/reviewed/resume_manifest.json
+          Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --phase canonical --reviewed-root restored/verified_resume/reviewed \
+            --delta-writer direct \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --previous-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --source-manifest outputs/workflow01_union/source_inputs.json \
+            --current-seed-root outputs/workflow01_union \
+            --prior-canonical previous_state/canonical/records.jsonl \
+            --previous-root previous_state --previous-pointer "$PREVIOUS_POINTER" \
+            --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/shadow
+          Rscript - <<'RS'
+          library(jsonlite)
+          library(digest)
+          root<-"outputs/experimental_w01_fast/shadow"
+          rep<-fromJSON(file.path(root,"run_report.json"))
+          stopifnot(identical(rep$status,"PASS_SHADOW_NO_PUBLICATION"),
+                    identical(rep$production_publication_allowed,FALSE))
+          a<-file.path(root,"production_canonical","records.jsonl")
+          b<-file.path(root,"replayed","canonical","records.jsonl")
+          stopifnot(file.exists(a),file.exists(b),
+                    identical(digest(file=a,algo="sha256"),digest(file=b,algo="sha256")))
+          write_json(list(schema="w01-fast-reviewed-canonical-replay-acceptance-v1",
+                          status="PASS_SHADOW_NO_PUBLICATION",
+                          canonical_sha256=digest(file=a,algo="sha256"),
+                          publication_allowed=FALSE,workflow02_dispatch_allowed=FALSE),
+                     "restored/verified_resume/CANONICAL_REPLAY_PASS.json",
+                     pretty=TRUE,auto_unbox=TRUE)
+          RS
+      - name: Archive isolated final reviewed delta and replay
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-reviewed-delta-${{ inputs.checkpoint_run_id }}-${{ github.run_id }}
+          path: |
+            restored/verified_resume/COMPLETE.json
+            restored/verified_resume/CANONICAL_REPLAY_PASS.json
+            outputs/experimental_w01_fast/shadow/run_report.json
+            outputs/experimental_w01_fast/shadow/production_canonical/
+            outputs/experimental_w01_fast/shadow/production_final/
+            outputs/experimental_w01_fast/shadow/delta/
+            outputs/experimental_w01_fast/shadow/replayed/
+          retention-days: 90
+          if-no-files-found: error
       - name: Archive isolated verified return checkpoint
         uses: actions/upload-artifact@v4
         with:
