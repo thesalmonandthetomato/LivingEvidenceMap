@@ -1,0 +1,48 @@
+name: W01-Fast targeted execution path smoke
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_targeted_execution_smoke.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install minimal test dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest'))
+      - name: Verify actual Fast execution wiring
+        run: python3 scripts/updater/experimental_w01_fast/test_routing_contract.py
+      - name: Exercise Fast persistence staging using small fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/test_production_pair_ledger.R
+          Rscript scripts/updater/experimental_w01_fast/test_production_canonical_contract.R
+      - name: Reject invalid Fast command input before any mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+          if Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+             --delta-writer direct --metadata "$root/missing_metadata.csv" \
+             --prior-map "$root/missing_prior.csv" --previous-decisions "$root/missing_decisions.csv" \
+             --source-manifest "$root/missing_sources.json" --current-seed-root "$root/no_seed" \
+             --prior-canonical "$root/no_canonical.jsonl" --previous-root "$root/no_previous" \
+             --previous-pointer "$root/no_pointer.json" --strip-actions "$root/no_strips.jsonl" \
+             --repairs "$root/no_repairs.jsonl" --output-dir "$root/output"; then
+            echo 'FAIL: Fast accepted missing source provenance' >&2
+            exit 1
+          fi
+          test ! -e "$root/output"
+          echo 'PASS: Fast rejects missing authoritative inputs without creating output'
