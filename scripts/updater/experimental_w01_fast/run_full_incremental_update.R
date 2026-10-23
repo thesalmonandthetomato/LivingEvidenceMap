@@ -142,7 +142,7 @@ if(phase=="canonical"&&!is.null(reviewed_root)){
  }
 }
 if(phase%in%c("all","canonical")){
-if(!file.exists(file.path(output,"cumulative_decisions.csv") || !file.exists(file.path(output,"stable_decisions.csv")))stop("Missing scoring checkpoint")
+if(!file.exists(file.path(output,"cumulative_decisions.csv")) || !file.exists(file.path(output,"stable_decisions.csv"))) stop("Missing scoring checkpoint")
 run("clusters",file.path(base,"update_clusters_by_identity.R"),
  c("--prior-map",prior,"--metadata",metadata,
  "--incremental-decisions",file.path(output,"stable_decisions.csv"),
