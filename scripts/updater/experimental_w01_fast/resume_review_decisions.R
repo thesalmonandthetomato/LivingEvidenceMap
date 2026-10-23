@@ -96,7 +96,8 @@ status<-system2(file.path(R.home("bin"),"Rscript"),
  "--metadata",meta,"--output",ledger))
 if(status!=0L)stop("Cumulative ledger rejected human decisions")
 write_json(list(schema="w01-fast-reviewed-scoring-v1",status="VALIDATED_RESUME_READY",
-queue_sha256=sha,decision_count=length(h),repair_count=repair_count,\nreview_repairs_sha256=digest(file=repairs,algo="sha256"),
+queue_sha256=sha,decision_count=length(h),repair_count=repair_count,
+review_repairs_sha256=digest(file=repairs,algo="sha256"),
 original_scoring_sha256=digest(file=scored,algo="sha256"),
 resolved_scoring_sha256=digest(file=resolved,algo="sha256"),
 publication_allowed=FALSE),file.path(out,"resume_manifest.json"),pretty=TRUE,auto_unbox=TRUE)
