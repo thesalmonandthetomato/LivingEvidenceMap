@@ -150,7 +150,10 @@ if(nzchar(force_rescreen_path)){
   force_without_prior <- setdiff(force_ids,prior_ids)
   if(length(force_without_prior)) stop(sprintf("Forced rescreen list contains %d IDs without a prior W04 decision; new records must not be force-listed",length(force_without_prior)),call.=FALSE)
 }
-rescreen_existing_ids <- sort(unique(c(refresh_ids,force_ids)))
+# Metadata enrichment never invalidates an already approved substantive W04 decision.
+# Preserve changed-input diagnostics, but only explicit human repair requests may
+# cause a previously screened record to be screened again.
+rescreen_existing_ids <- sort(force_ids)
 reuse_ids <- sort(setdiff(known,rescreen_existing_ids))
 queue_ids <- sort(unique(c(new_ids,rescreen_existing_ids)))
 
