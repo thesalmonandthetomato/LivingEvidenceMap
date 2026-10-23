@@ -1,4 +1,4 @@
-name: W01-Fast adjudication checkpoint routing smoke
+name: W01-Fast adjudication package contract smoke
 on:
   push:
     branches: [w01-fast-direct-delta]
