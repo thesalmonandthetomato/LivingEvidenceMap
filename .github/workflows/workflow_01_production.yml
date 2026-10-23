@@ -522,6 +522,7 @@ jobs:
           test -s outputs/workflow01_candidates/normalised_metadata.csv
           test -s outputs/workflow01_union/source_inputs.json
       - name: Execute W01-Fast in isolated non-publishing mode
+        id: fast_execution
         shell: bash
         run: |
           set -euo pipefail
@@ -538,11 +539,23 @@ jobs:
             --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
             --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
             --output-dir outputs/experimental_w01_fast/shadow
+          STATUS="$(Rscript -e 'cat(jsonlite::fromJSON("outputs/experimental_w01_fast/shadow/run_report.json")$status)')"
+          if [ "$STATUS" = "AWAITING_HUMAN_REVIEW" ]; then
+            echo "review_pending=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Fast generated review cases for the existing Shiny contract; no publishing or finalisation permitted"
+            exit 0
+          fi
+          if [ "$STATUS" != "PASS_SHADOW_NO_PUBLICATION" ]; then
+            echo "::error::Unexpected Fast status: $STATUS"
+            exit 1
+          fi
+          echo "review_pending=false" >> "$GITHUB_OUTPUT"
           Rscript scripts/updater/experimental_w01_fast/certify_zero_review_ledger.R \
             --fast-root outputs/experimental_w01_fast/shadow \
             --prior-repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
             --output-dir outputs/experimental_w01_fast/verified_review
       - name: Stage production-format Fast handoff without publication
+        if: ${{ steps.fast_execution.outputs.review_pending == 'false' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -565,6 +578,9 @@ jobs:
             outputs/experimental_w01_fast/shadow/production_canonical/canonical_manifest.json
             outputs/experimental_w01_fast/shadow/delta/delta_manifest.json
             outputs/experimental_w01_fast/verified_review/certificate.json
+            outputs/experimental_w01_fast/shadow/adjudication/cases.jsonl
+            outputs/experimental_w01_fast/shadow/adjudication/cases.jsonl.manifest.json
+            outputs/experimental_w01_fast/shadow/adjudication/human_review_package/
             outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json
           retention-days: 7
           if-no-files-found: warn
