@@ -39,6 +39,7 @@ if(!is.null(repairs_path)){
  lines<-readLines(repairs_path,warn=FALSE,encoding="UTF-8")
  lines<-lines[nzchar(trimws(lines))]
  next_by_key<-setNames(nextmap$cluster_id,nextmap$key)
+ old_by_key<-setNames(old$cluster_id,old$key)
  for(line in lines){
   z<-fromJSON(line,simplifyVector=FALSE)
   source<-as.character(z$source);record<-as.character(z$source_record_id)
@@ -48,8 +49,8 @@ if(!is.null(repairs_path)){
   work<-next_by_key[[k]]
   if(is.null(work))stop("Approved repair references absent manifestation")
   repair_works<-c(repair_works,work)
-  old_work<-setNames(old$cluster_id,old$key)[[k]]
-  if(!is.null(old_work))repair_prior_works<-c(repair_prior_works,old_work)
+  old_work<-unname(old_by_key[k])
+  if(length(old_work)==1L&&!is.na(old_work))repair_prior_works<-c(repair_prior_works,old_work)
  }
 }
 affected_old<-sort(unique(c(affected_old,repair_prior_works)))
