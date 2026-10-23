@@ -186,7 +186,7 @@ for(i in seq_along(meta)){
     publication_status=list(
       code=code,
       exclude_from_workflow04=excl,
-      needs_review=grepl("^http_",oa$lookup_status%||%""),
+      needs_review=grepl("^(http_|transport_error$)",oa$lookup_status%||%""),
       evidence_conflict=isTRUE(res$conflict),
       multiple_positive_signals=isTRUE(res$multiple_positive_signals),
       positive_codes=if(length(res$positive_codes))res$positive_codes else list(),
