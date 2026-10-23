@@ -26,7 +26,20 @@ if(!identical(fromJSON(report)$status,"AWAITING_HUMAN_REVIEW")||
  !identical(digest(file=original,algo="sha256"),digest(file=queue,algo="sha256")))
  stop("Review input differs from frozen pending checkpoint")
 q<-readj(queue);h<-readj(decisions)
-if(length(readj(repairs)))stop("Nonempty human repair provenance not yet supported")
+# Reuse production W01's full review-state integrity gate before applying any decisions.
+# Never silently drop an accepted edit from the Shiny repairs ledger.
+integrity<-tempfile("w01-fast-review-integrity-",fileext=".json")
+on.exit(unlink(integrity),add=TRUE)
+gate<-suppressWarnings(system2(file.path(R.home("bin"),"Rscript"),
+ c("scripts/updater/workflow_01_validate_human_review_state.R",
+ "--queue",queue,"--decisions",decisions,"--repairs",repairs,
+ "--output",integrity,"--expected-queue-sha256",digest(file=queue,algo="sha256"),
+ "--require-complete","true"),stdout=TRUE,stderr=TRUE))
+if(!is.null(attr(gate,"status"))&&attr(gate,"status")!=0L)
+ stop("Production W01 human review integrity check failed: ",paste(gate,collapse=" | "))
+if(!file.exists(integrity)||!isTRUE(fromJSON(integrity)$resume_allowed))
+ stop("Production W01 integrity gate did not approve review continuation")
+if(length(readj(repairs)))stop("Validated human repairs remain unsupported by Fast canonical delta; refusing to lose them")
 ids<-vapply(q,function(z)as.character(z$review_case_id),character(1))
 did<-vapply(h,function(z)as.character(z$review_case_id),character(1))
 if(!length(ids)||length(ids)!=length(did)||anyDuplicated(ids)||anyDuplicated(did)||
