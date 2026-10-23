@@ -30,3 +30,11 @@ assert "files+=(outputs/workflow01_candidates/all_candidate_pairs.csv)" in prepa
 assert "sha256sum \"${files[@]}\"" in prepare
 assert "ref: ${{ inputs.w01_engine == 'fast' && 'w01-fast-direct-delta' || env.WORKFLOW01_BRANCH }}" in prepare
 print("PASS: legacy default, isolated Fast routing, no Fast publication or W02 dispatch")
+
+orchestrator=Path("scripts/updater/experimental_w01_fast/run_full_incremental_update.R").read_text()
+assert 'if(any(d$rescored_classification=="review"))' in orchestrator
+assert 'workflow_01_build_duplicate_adjudication_cases.R' in orchestrator
+assert 'workflow_01_build_human_review_package.R' in orchestrator
+assert 'write_report("AWAITING_HUMAN_REVIEW")' in orchestrator
+assert orchestrator.index('write_report("AWAITING_HUMAN_REVIEW")') < orchestrator.index('run("stage_cumulative_ledger"')
+assert 'quit(save="no",status=0L)' in orchestrator
