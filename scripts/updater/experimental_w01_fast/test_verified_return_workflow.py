@@ -13,6 +13,8 @@ assert "--delta-writer direct" in w
 assert "CANONICAL_REPLAY_PASS.json" in w
 assert "w01-fast-reviewed-delta-" in w
 assert "previous_pointer_path:" in w
+assert "sha256sum -c outputs/workflow01_stage_prepare_checksums.txt" in w
+assert r"run-[0-9]+\\.json$" in w
 assert "contents: read" in w and "actions: read" in w
 for forbidden in ("gh workflow run", "ZENODO_ACCESS_TOKEN", "workflow_01_archive_delta_to_zenodo.R",
                   "workflow_02_batched_production.yml", "git push", "sheet_write(", "gh release"):
