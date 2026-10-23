@@ -13,6 +13,8 @@ output<-arg("--output-dir")
 delta_writer<-arg("--delta-writer",optional=TRUE);if(is.null(delta_writer))delta_writer<-"legacy"
 if(!delta_writer%in%c("legacy","direct"))stop("Unknown delta writer")
 phase<-arg("--phase",optional=TRUE);if(is.null(phase))phase<-"all"
+reviewed_root<-arg("--reviewed-root",optional=TRUE)
+if(!is.null(reviewed_root)&&phase!="canonical")stop("Reviewed inputs may only enter canonical resume phase")
 if(!phase%in%c("all","scoring","canonical","delta"))stop("Unsupported W01-Fast phase")
 if(phase%in%c("all","scoring") && (dir.exists(output)||file.exists(output)))stop("Refuse overwrite output")
 if(phase%in%c("canonical","delta") && !dir.exists(output))stop("Missing staged W01-Fast output; cannot resume")
@@ -115,8 +117,32 @@ run("stage_cumulative_ledger",file.path(base,"stage_production_pair_ledger.R"),
  "--metadata",metadata,"--output",file.path(output,"cumulative_decisions.csv")))
 if(!file.exists(file.path(output,"cumulative_decisions.csv")) || !file.exists(file.path(output,"stable_decisions.csv")))stop("Scoring phase did not produce required verified decision files")
 }
+if(phase=="canonical"&&!is.null(reviewed_root)){
+ # Resume only from the independently verified Shiny review adapter.
+ manifest_path<-file.path(reviewed_root,"resume_manifest.json")
+ original_report<-file.path(output,"run_report.json")
+ original_scores<-file.path(output,"rescored","rescored_sample.csv")
+ reviewed_scores<-file.path(reviewed_root,"resolved_scoring.csv")
+ required_review<-c(manifest_path,original_report,original_scores,reviewed_scores,
+   file.path(reviewed_root,"stable_decisions.csv"),
+   file.path(reviewed_root,"cumulative_decisions.csv"),
+   file.path(reviewed_root,"cumulative_decisions.csv.audit.json"))
+ if(any(!file.exists(required_review)))stop("Missing verified human review resume checkpoint")
+ mr<-fromJSON(manifest_path);original_status<-fromJSON(original_report)$status
+ if(!identical(original_status,"AWAITING_HUMAN_REVIEW")||
+    !identical(mr$status,"VALIDATED_RESUME_READY")||
+    !identical(mr$publication_allowed,FALSE)||
+    !identical(mr$original_scoring_sha256,digest(file=original_scores,algo="sha256"))||
+    !identical(mr$resolved_scoring_sha256,digest(file=reviewed_scores,algo="sha256")))
+   stop("Reviewed continuation does not match immutable Fast scoring checkpoint")
+ if(any(file.exists(file.path(output,c("stable_decisions.csv","cumulative_decisions.csv",
+   "cumulative_decisions.csv.audit.json")))))stop("Existing continuation; refuse overwrite")
+ for(nm in c("stable_decisions.csv","cumulative_decisions.csv","cumulative_decisions.csv.audit.json")){
+    if(!file.copy(file.path(reviewed_root,nm),file.path(output,nm)))stop("Cannot stage ",nm)
+ }
+}
 if(phase%in%c("all","canonical")){
-if(!file.exists(file.path(output,"cumulative_decisions.csv")) || !file.exists(file.path(output,"stable_decisions.csv")))stop("Missing scoring checkpoint")
+if(!file.exists(file.path(output,"cumulative_decisions.csv") || !file.exists(file.path(output,"stable_decisions.csv")))stop("Missing scoring checkpoint")
 run("clusters",file.path(base,"update_clusters_by_identity.R"),
  c("--prior-map",prior,"--metadata",metadata,
  "--incremental-decisions",file.path(output,"stable_decisions.csv"),
@@ -177,7 +203,7 @@ if(delta_writer=="direct"){
  "--current-canonical",file.path(output,"production_canonical","records.jsonl"),
  "--current-canonical-manifest",file.path(output,"production_canonical","canonical_manifest.json"),
  "--previous-pointer",previous_pointer,
- "--new-decisions",file.path(output,"rescored","rescored_sample.csv"),
+ "--new-decisions",if(is.null(reviewed_root)) file.path(output,"rescored","rescored_sample.csv") else file.path(reviewed_root,"resolved_scoring.csv"),
  "--affected-map",file.path(output,"canonical_scope","affected_cluster_map.csv"),
  "--canonical-changes",file.path(output,"changed_canonical.jsonl"),
  "--affected-works",file.path(output,"affected","affected_works.csv"),
