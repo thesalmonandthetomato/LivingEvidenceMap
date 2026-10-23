@@ -27,6 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           Rscript -e 'parse(file="scripts/updater/experimental_w01_fast/identify_affected_works.R"); cat("PASS: repair selector parses\\n")' > /dev/null
+          Rscript scripts/updater/experimental_w01_fast/test_human_repair_merge.R
           Rscript scripts/updater/experimental_w01_fast/test_repair_affected_works.R
           Rscript scripts/updater/experimental_w01_fast/test_human_summary.R
           Rscript scripts/updater/experimental_w01_fast/test_production_pair_ledger.R
