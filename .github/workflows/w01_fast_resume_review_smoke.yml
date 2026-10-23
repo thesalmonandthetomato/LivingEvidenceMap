@@ -1,4 +1,4 @@
-name: W01-Fast verified repair manifest syntax regression
+name: W01-Fast repaired review adapter preflight and fixture
 on:
   push:
     branches: [w01-fast-direct-delta]
