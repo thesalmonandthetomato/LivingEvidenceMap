@@ -39,7 +39,7 @@ if(!is.null(attr(gate,"status"))&&attr(gate,"status")!=0L)
  stop("Production W01 human review integrity check failed: ",paste(gate,collapse=" | "))
 if(!file.exists(integrity)||!isTRUE(fromJSON(integrity)$resume_allowed))
  stop("Production W01 integrity gate did not approve review continuation")
-if(length(readj(repairs)))stop("Validated human repairs remain unsupported by Fast canonical delta; refusing to lose them")
+repair_count<-length(readj(repairs))
 ids<-vapply(q,function(z)as.character(z$review_case_id),character(1))
 did<-vapply(h,function(z)as.character(z$review_case_id),character(1))
 if(!length(ids)||length(ids)!=length(did)||anyDuplicated(ids)||anyDuplicated(did)||
@@ -96,9 +96,9 @@ status<-system2(file.path(R.home("bin"),"Rscript"),
  "--metadata",meta,"--output",ledger))
 if(status!=0L)stop("Cumulative ledger rejected human decisions")
 write_json(list(schema="w01-fast-reviewed-scoring-v1",status="VALIDATED_RESUME_READY",
-queue_sha256=sha,decision_count=length(h),repair_count=0L,
+queue_sha256=sha,decision_count=length(h),repair_count=repair_count,\nreview_repairs_sha256=digest(file=repairs,algo="sha256"),
 original_scoring_sha256=digest(file=scored,algo="sha256"),
 resolved_scoring_sha256=digest(file=resolved,algo="sha256"),
 publication_allowed=FALSE),file.path(out,"resume_manifest.json"),pretty=TRUE,auto_unbox=TRUE)
-if(!file.copy(verified,file.path(out,"shiny_return_verified.json")))stop("Cannot preserve verified Shiny return")
+if(!file.copy(repairs,file.path(out,"verified_new_repairs.jsonl")))stop("Cannot preserve approved repair edits")\nif(!file.copy(verified,file.path(out,"shiny_return_verified.json")))stop("Cannot preserve verified Shiny return")
 cat("PASS: checked human review and staged non-publishing continuation inputs\n")
