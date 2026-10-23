@@ -1,4 +1,4 @@
-name: W01-Fast repair affected-work regression
+name: W01-Fast repair selector argument regression
 on:
   push:
     branches: [w01-fast-direct-delta]
