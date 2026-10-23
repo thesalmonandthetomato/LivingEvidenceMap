@@ -15,4 +15,11 @@ assert "certify_zero_review_ledger.R" in shadow
 assert not any(x in shadow for x in ("workflow_01_archive_delta_to_zenodo.R","workflow_02_batched_production.yml","gh workflow run"))
 legacy=t.split("  adjudicate:\n",1)[1].split("  canonicalise:\n",1)[0]
 assert "ref: workflow01-final-architecture" in legacy
+prepare=t.split("  prepare:\n",1)[1].split("  fast_shadow:\n",1)[0]
+assert "--validate-index-only true" in prepare
+assert "if [ \"$W01_ENGINE\" = fast ]" in prepare
+assert "if [ \"${{ inputs.w01_engine || 'legacy' }}\" = legacy ]" in prepare
+assert "files+=(outputs/workflow01_candidates/all_candidate_pairs.csv)" in prepare
+assert "sha256sum \"${files[@]}\"" in prepare
+assert "ref: ${{ env.WORKFLOW01_BRANCH }}" in prepare
 print("PASS: legacy default, isolated Fast routing, no Fast publication or W02 dispatch")
