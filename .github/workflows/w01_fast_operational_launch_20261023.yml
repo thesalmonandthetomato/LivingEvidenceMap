@@ -1,0 +1,23 @@
+name: W01-Fast full operational update 2026-10-23
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths:
+      - '.github/workflows/w01_fast_operational_launch_20261023.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: w01-fast-operational-20261023
+  cancel-in-progress: false
+jobs:
+  run_full_fast:
+    name: Full incremental W01-Fast, gated restricted Zenodo publication and W02
+    uses: ./.github/workflows/workflow_01_production.yml
+    with:
+      workflow00_pointer_path: docs/search_record/zenodo/run-39298022062.json
+      previous_workflow01_pointer_path: docs/deduplication/zenodo/run-39140209398.json
+      w01_engine: fast
+      max_llm_cases: 5000
+    secrets: inherit
