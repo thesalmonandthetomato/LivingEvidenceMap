@@ -1,0 +1,24 @@
+name: W01-Fast human review resume fixture
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_resume_review_smoke.yml']
+permissions:
+  contents: read
+jobs:
+  review_fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install review adapter dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest'))
+      - name: Test reviewed scoring, queue hashes and identity checks
+        run: Rscript scripts/updater/experimental_w01_fast/test_resume_review_decisions.R
