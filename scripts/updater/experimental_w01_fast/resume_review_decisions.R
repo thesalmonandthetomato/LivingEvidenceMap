@@ -13,6 +13,14 @@ report<-file.path(root,"run_report.json")
 if(any(!file.exists(c(original,scored,report,meta,prior,old,queue,decisions,repairs))))
  stop("Missing original review checkpoint or signed input")
 readj<-function(p){z<-readLines(p,warn=FALSE);lapply(z[nzchar(trimws(z))],fromJSON,simplifyVector=FALSE)}
+vr<-fromJSON(verified)
+if(!identical(vr$status,"VERIFIED_SHINY_RETURN")||
+ !identical(vr$production_publication_allowed,FALSE)||
+ !identical(vr$workflow02_dispatch_allowed,FALSE)||
+ !identical(vr$queue_sha256,digest(file=queue,algo="sha256"))||
+ !identical(vr$decision_sha256,digest(file=decisions,algo="sha256"))||
+ !identical(vr$repair_sha256,digest(file=repairs,algo="sha256")))
+ stop("Shiny return certificate does not match reviewed inputs")
 if(!identical(fromJSON(report)$status,"AWAITING_HUMAN_REVIEW")||
  !identical(digest(file=original,algo="sha256"),digest(file=queue,algo="sha256")))
  stop("Review input differs from frozen pending checkpoint")
@@ -78,4 +86,5 @@ queue_sha256=sha,decision_count=length(h),repair_count=0L,
 original_scoring_sha256=digest(file=scored,algo="sha256"),
 resolved_scoring_sha256=digest(file=resolved,algo="sha256"),
 publication_allowed=FALSE),file.path(out,"resume_manifest.json"),pretty=TRUE,auto_unbox=TRUE)
+if(!file.copy(verified,file.path(out,"shiny_return_verified.json")))stop("Cannot preserve verified Shiny return")
 cat("PASS: checked human review and staged non-publishing continuation inputs\n")
