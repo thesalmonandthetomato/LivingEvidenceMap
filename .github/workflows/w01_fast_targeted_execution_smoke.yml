@@ -1,4 +1,4 @@
-name: W01-Fast nonpublishing Shiny queue handoff execution
+name: W01-Fast Shiny returned decisions ingestion execution
 on:
   push:
     branches: [w01-fast-direct-delta]
@@ -28,6 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           Rscript -e 'invisible(lapply(c("scripts/updater/experimental_w01_fast/identify_affected_works.R","scripts/updater/experimental_w01_fast/recombine_canonical_jsonl.R","scripts/updater/experimental_w01_fast/filter_canonical_directives.R","scripts/updater/experimental_w01_fast/run_full_incremental_update.R","scripts/updater/experimental_w01_fast/resume_review_decisions.R"),parse)); cat("PASS: all integration R files parse\\n")' > /dev/null
+          Rscript scripts/updater/experimental_w01_fast/test_shiny_return_ingestion.R
           Rscript scripts/updater/experimental_w01_fast/test_shiny_queue_handoff.R
           Rscript scripts/updater/experimental_w01_fast/test_human_repair_merge.R
           Rscript -e 'parse(file="scripts/updater/experimental_w01_fast/test_direct_repair_delta_replay.R")' > /dev/null
