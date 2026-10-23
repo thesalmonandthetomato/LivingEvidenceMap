@@ -1,4 +1,4 @@
-name: W01-Fast production review integrity gate regression
+name: W01-Fast verified review repair merge regression
 on:
   push:
     branches: [w01-fast-direct-delta]
