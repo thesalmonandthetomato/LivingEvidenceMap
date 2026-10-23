@@ -50,3 +50,8 @@ resume=Path("scripts/updater/experimental_w01_fast/resume_review_decisions.R").r
 assert 'Nonempty human repair provenance not yet supported' in resume
 assert 'Refusing overwrite' in resume
 assert 'VALIDATED_RESUME_READY' in resume
+
+assert 'shiny_return_verified.json' in orchestrator
+assert 'VERIFIED_SHINY_RETURN' in orchestrator
+assert 'mr$queue_sha256,vr$queue_sha256' in orchestrator
+assert 'mr$repair_count' in orchestrator
