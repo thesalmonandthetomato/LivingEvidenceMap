@@ -7,6 +7,7 @@ arg<-function(k,optional=FALSE){i<-match(k,args);if(is.na(i)){if(optional)return
 metadata<-arg("--metadata");prior<-arg("--prior-map")
 source_manifest<-arg("--source-manifest");prior_canonical<-arg("--prior-canonical")
 strips<-arg("--strip-actions");repairs<-arg("--repairs")
+previous_repair_ledger<-repairs
 previous_decisions<-arg("--previous-decisions");previous_root<-arg("--previous-root")
 previous_pointer<-arg("--previous-pointer");seed_root<-arg("--current-seed-root")
 output<-arg("--output-dir")
@@ -215,6 +216,7 @@ run("stage_canonical_contract",file.path(base,"stage_production_canonical_contra
  "--run-id","w01-fast-frozen-shadow",
  "--strip-actions",file.path(output,"production_final","abstract_strip_actions.jsonl"),
  "--repair-ledger",file.path(output,"production_final","cumulative_data_quality_repairs.jsonl"),
+ "--previous-repairs",previous_repair_ledger,
  "--repair-audit",file.path(output,"repair_audit.jsonl"),
  "--previous-canonical-manifest",file.path(previous_root,"canonical","canonical_manifest.json")))
 if(!file.exists(file.path(output,"production_canonical","canonical_manifest.json")))stop("Canonical phase did not produce production manifest")
