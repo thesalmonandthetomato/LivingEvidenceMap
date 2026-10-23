@@ -21,5 +21,5 @@ assert "if [ \"$W01_ENGINE\" = fast ]" in prepare
 assert "if [ \"${{ inputs.w01_engine || 'legacy' }}\" = legacy ]" in prepare
 assert "files+=(outputs/workflow01_candidates/all_candidate_pairs.csv)" in prepare
 assert "sha256sum \"${files[@]}\"" in prepare
-assert "ref: ${{ env.WORKFLOW01_BRANCH }}" in prepare
+assert "ref: ${{ inputs.w01_engine == 'fast' && 'w01-fast-direct-delta' || env.WORKFLOW01_BRANCH }}" in prepare
 print("PASS: legacy default, isolated Fast routing, no Fast publication or W02 dispatch")
