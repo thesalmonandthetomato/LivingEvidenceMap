@@ -1,0 +1,44 @@
+name: W01-Fast isolated routing contract smoke
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w01_fast_routing_contract_smoke.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - name: Verify YAML structure, legacy fallback and Fast isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          t=Path('.github/workflows/workflow_01_production.yml').read_text()
+          try:
+              import yaml
+              v=yaml.safe_load(t)
+              jobs=v['jobs']
+              assert set(('prepare','fast_shadow','adjudicate','canonicalise','publish')).issubset(jobs)
+          except ModuleNotFoundError:
+              jobs={}
+              assert all(f'  {j}:\n' in t for j in ('prepare','fast_shadow','adjudicate','canonicalise','publish'))
+          assert t.count("default: legacy")>=2
+          assert "if: ${{ inputs.w01_engine == 'fast' }}" in t
+          assert t.count("if: ${{ inputs.w01_engine != 'fast' }}")==2
+          assert "if: ${{ inputs.w01_engine != 'fast' && needs.adjudicate.outputs.pending_count == '0' }}" in t
+          shadow=t.split("  fast_shadow:\n",1)[1].split("  adjudicate:\n",1)[0]
+          assert 'ref: w01-fast-direct-delta' in shadow
+          assert '--delta-writer direct' in shadow
+          assert 'certify_zero_review_ledger.R' in shadow
+          assert not any(x in shadow for x in ('workflow_01_archive_delta_to_zenodo.R','workflow_02_batched_production.yml','gh workflow run'))
+          legacy=t.split("  adjudicate:\n",1)[1].split("  canonicalise:\n",1)[0]
+          assert 'ref: workflow01-final-architecture' in legacy
+          print('PASS: default legacy preserved; fast shadow independent; legacy publish and dispatch skipped when Fast selected')
+          PY
