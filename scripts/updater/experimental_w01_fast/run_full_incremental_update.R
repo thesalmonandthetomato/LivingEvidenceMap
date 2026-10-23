@@ -156,7 +156,8 @@ run("clusters",file.path(base,"update_clusters_by_identity.R"),
  "--output-dir",file.path(output,"clusters")))
 next_map<-file.path(output,"clusters","identity_cluster_map.csv")
 run("identify_affected",file.path(base,"identify_affected_works.R"),
- c("--prior-map",prior,"--next-map",next_map,"--output-dir",file.path(output,"affected")))
+ c("--prior-map",prior,"--next-map",next_map,
+ "--repairs",repairs,"--output-dir",file.path(output,"affected")))
 run("stage_canonical_scope",file.path(base,"prepare_affected_canonical_map.R"),
  c("--successor-map",next_map,"--affected-works",file.path(output,"affected","affected_works.csv"),
  "--output-dir",file.path(output,"canonical_scope")))
