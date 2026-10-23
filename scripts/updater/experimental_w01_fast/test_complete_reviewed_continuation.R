@@ -96,7 +96,9 @@ prior_map<-data.table(idx=1:2,source=c("a","b"),source_record_id=c("a1","b1"),
  cluster_id_origin=c("preserved","preserved"))
 fwrite(prior_map,at("oldmap.csv"))
 fwrite(prior_map,at("previous","workflow01_full_five_source","manifestation_cluster_map.csv"))
-fwrite(old,at("previous","workflow01_full_five_source","final_pair_decisions.csv"))
+historical_pair_ledger<-copy(old)
+historical_pair_ledger[,pair_key:="1::2"]
+fwrite(historical_pair_ledger,at("previous","workflow01_full_five_source","final_pair_decisions.csv"))
 file.create(at("previous","workflow01_full_five_source","abstract_strip_actions.jsonl"))
 file.create(at("previous","provenance","cumulative_data_quality_repairs.jsonl"))
 file.create(at("strips.jsonl"));file.create(at("original_repairs.jsonl"))
