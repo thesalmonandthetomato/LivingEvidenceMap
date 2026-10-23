@@ -542,6 +542,18 @@ jobs:
             --fast-root outputs/experimental_w01_fast/shadow \
             --prior-repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
             --output-dir outputs/experimental_w01_fast/verified_review
+      - name: Stage production-format Fast handoff without publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/assemble_publication_shadow.R \
+            --fast-root outputs/experimental_w01_fast/shadow \
+            --previous-root previous_state \
+            --current-seed-root outputs/workflow01_union \
+            --normalised-human-repairs outputs/experimental_w01_fast/verified_review/data_quality_repairs.normalised.jsonl \
+            --output-root outputs/experimental_w01_fast/publication_shadow
+          test -s outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json
+          echo 'PASS: non-publishing W01-Fast handoff; legacy publication and W02 remain disabled'
       - name: Upload isolated Fast evidence (never publish)
         if: always()
         uses: actions/upload-artifact@v4
@@ -553,6 +565,7 @@ jobs:
             outputs/experimental_w01_fast/shadow/production_canonical/canonical_manifest.json
             outputs/experimental_w01_fast/shadow/delta/delta_manifest.json
             outputs/experimental_w01_fast/verified_review/certificate.json
+            outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json
           retention-days: 7
           if-no-files-found: warn
 
