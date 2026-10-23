@@ -1,4 +1,4 @@
-name: W01-Fast frozen Shiny return checksum acceptance
+name: W01-Fast corrected frozen checkpoint acceptance
 on:
   push:
     branches: [w01-fast-direct-delta]
