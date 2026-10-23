@@ -12,6 +12,10 @@ shadow=t.split("  fast_shadow:\n",1)[1].split("  adjudicate:\n",1)[0]
 assert "ref: w01-fast-direct-delta" in shadow
 assert "--delta-writer direct" in shadow
 assert "certify_zero_review_ledger.R" in shadow
+assert "assemble_publication_shadow.R" in shadow
+assert "publication_shadow/publication_shadow_manifest.json" in shadow
+assert shadow.index("certify_zero_review_ledger.R") < shadow.index("assemble_publication_shadow.R")
+assert "workflow01-stage-canonicalise-" not in shadow
 assert not any(x in shadow for x in ("workflow_01_archive_delta_to_zenodo.R","workflow_02_batched_production.yml","gh workflow run"))
 legacy=t.split("  adjudicate:\n",1)[1].split("  canonicalise:\n",1)[0]
 assert "ref: workflow01-final-architecture" in legacy
