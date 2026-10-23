@@ -113,7 +113,7 @@ if(length(doi_idx)){
     req <- make_req("https://api.openalex.org/works",list(filter=paste0("doi:",filt),per_page=100,select="id,doi,is_retracted,type"))
     resp <- safe_perform(req)
     st <- if(inherits(resp,"openalex_transport_error")) NA_integer_ else resp_status(resp)
-    if(st!=200L){
+    if(is.na(st)||st!=200L){
       audit_n<-audit_n+1L;audit[[audit_n]]<-list(kind="doi_batch_error",http_status=st,error=if(inherits(resp,"openalex_transport_error"))resp$message else NULL,dois=dois)
       for(d in dois) oa_map[[paste0("doi:",d)]] <- list(
         work_id=NULL,is_retracted=NULL,type=NULL,lookup_status=if(is.na(st))"transport_error" else paste0("http_",st)
@@ -136,7 +136,7 @@ for(i in seq_along(meta)){
     req<-make_req(paste0("https://api.openalex.org/works/",URLencode(wid,reserved=TRUE)),list(select="id,doi,is_retracted,type"))
     resp<-safe_perform(req)
     st<-if(inherits(resp,"openalex_transport_error")) NA_integer_ else resp_status(resp)
-    if(st==200L){
+    if(!is.na(st)&&st==200L){
       w<-resp_body_json(resp,simplifyVector=FALSE)
       oa_map[[paste0("wid:",wid)]]<-list(work_id=sub("^https://openalex.org/","",clean(w$id)),is_retracted=isTRUE(w$is_retracted),type=clean(w$type),lookup_status="found")
     } else {
@@ -220,7 +220,7 @@ report<-list(
   output_sha256=digest(file=output_path,algo="sha256",serialize=FALSE),
   checked_at=checked_at
 )
-if(technical_lookup_errors>0L) report$status <- "PASS_WITH_PROVIDER_ERRORS"
+if(technical_lookup_errors>0L) report$provider_warning <- "unresolved_openalex_lookup_errors"
 writeLines(toJSON(report,auto_unbox=TRUE,pretty=TRUE,null="null",na="null"),report_path,useBytes=TRUE)
 if(technical_lookup_errors>0L) {
   warning(sprintf("Workflow 03 continuing: %d record(s) have unresolved OpenAlex technical lookup errors; see audit and needs_review flags",technical_lookup_errors),call.=FALSE)
