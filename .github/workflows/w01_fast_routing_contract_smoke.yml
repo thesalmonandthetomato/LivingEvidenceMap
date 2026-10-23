@@ -1,4 +1,4 @@
-name: W01-Fast isolated routing contract smoke
+name: W01-Fast isolated routing and preparation contract smoke
 on:
   push:
     branches: [w01-fast-direct-delta]
