@@ -1,0 +1,95 @@
+name: W04 protected human abstracts integrity audit
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w04_human_abstract_integrity_audit.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - name: Install read-only R download dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends r-base-core r-cran-jsonlite r-cran-httr2 r-cran-digest
+      - name: Restore immutable human abstract archive and current W04 prepared input
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w04-curr /tmp/w04-corr
+          gh run download 40019139120 --repo "$GITHUB_REPOSITORY" --name workflow04-prepared-40019139120 --dir /tmp/w04-curr
+          Rscript - <<'RS'
+          library(httr2);library(jsonlite);library(digest)
+          p<-fromJSON('docs/workflow04/human_abstract_corrections/run-37511638503.json')
+          token<-Sys.getenv('ZENODO_ACCESS_TOKEN')
+          stopifnot(nzchar(token),p$corrections==157,p$visibility=='restricted')
+          dep<-request(paste0('https://zenodo.org/api/deposit/depositions/',p$zenodo_record_id))|>
+            req_headers(Authorization=paste('Bearer',token))|>req_timeout(120)|>req_perform()|>resp_body_json()
+          fn<-'workflow04_human_abstract_corrections.jsonl'
+          dest<-file.path('/tmp/w04-corr',fn)
+          resp<-request(paste0(sub('/$','',dep$links$bucket),'/',fn))|>
+            req_headers(Authorization=paste('Bearer',token))|>req_timeout(600)|>req_perform(path=dest)
+          stopifnot(resp_status(resp)==200,digest(file=dest,algo='sha256',serialize=FALSE)==p$corrections_sha256)
+          cat('PASS: downloaded and verified original 157 protected human abstracts\n')
+          RS
+      - name: Match original edited abstracts to current canonical records
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,csv,collections,re
+          root=pathlib.Path('/tmp/w04-curr')
+          paths=list(root.rglob('canonical_lean.jsonl'))
+          if len(paths)!=1:raise RuntimeError(f'Expected one canonical input, got {paths}')
+          corr=pathlib.Path('/tmp/w04-corr/workflow04_human_abstract_corrections.jsonl')
+          def norm(x):return re.sub(r'\\s+',' ',str(x or '')).strip()
+          def doi(x):
+              x=norm(x).lower()
+              x=re.sub(r'^https?://(dx\\.)?doi\\.org/|^doi:\\s*','',x)
+              x=re.sub(r'[?#].*$|\\.(html?|pdf|xml)$','',x)
+              return re.sub(r'[.,;:]+$','',x)
+          def title(x):return norm(x).lower()
+          items=[];byid={};bydoi=collections.defaultdict(list);bytitle=collections.defaultdict(list)
+          for ln in paths[0].open():
+              if not ln.strip():continue
+              r=json.loads(ln);id=r['identity']['record_id'];c=r.get('canonical') or {}
+              v=(id,doi(c.get('doi')),title(c.get('title') or r.get('title')),norm(c.get('abstract') or r.get('abstract')))
+              byid[id]=v
+              if v[1]:bydoi[v[1]].append(v)
+              if v[2]:bytitle[v[2]].append(v)
+          rows=[];counts=collections.Counter()
+          for ln in corr.open():
+              if not ln.strip():continue
+              c=json.loads(ln);old=c.get('record_id_at_edit');d=doi(c.get('doi_normalized'));t=title(c.get('title_normalized'));abs=norm(c.get('edited_abstract'))
+              z=byid.get(old)
+              if z and not ((not d or z[1]==d) or (not t or z[2]==t)):z=None
+              if not z and d:
+                  options=bydoi[d]
+                  if len(options)==1:z=options[0]
+                  elif len(options)>1 and t:
+                      match=[v for v in options if v[2]==t]
+                      if len(match)==1:z=match[0]
+              if not z and t and len(bytitle[t])==1:z=bytitle[t][0]
+              status='unmatched' if not z else ('preserved_exact' if z[3]==abs else ('missing_current_abstract' if not z[3] else 'different_current_abstract'))
+              counts[status]+=1
+              rows.append({'record_id_at_edit':old,'current_record_id':z[0] if z else '', 'status':status,'edited_abstract_length':len(abs),'current_abstract_length':len(z[3]) if z else 0})
+          if len(rows)!=157:raise RuntimeError('Correction count wrong')
+          print(json.dumps(dict(counts),indent=2))
+          with open('/tmp/w04-human-integrity.csv','w') as f:
+              w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
+          pathlib.Path('/tmp/w04-human-integrity-summary.json').write_text(json.dumps({'corrections':157,**counts},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w04-human-abstract-integrity-audit
+          path: |
+            /tmp/w04-human-integrity.csv
+            /tmp/w04-human-integrity-summary.json
+          if-no-files-found: error
