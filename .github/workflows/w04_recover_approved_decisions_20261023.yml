@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
-  actions: read
+  actions: write
 jobs:
   recover:
     uses: ./.github/workflows/workflow_04_production.yml
