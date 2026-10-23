@@ -1,4 +1,4 @@
-name: W01-Fast reviewed continuation contract smoke
+name: W01-Fast recoverable review checkpoint contract
 on:
   push:
     branches: [w01-fast-direct-delta]
